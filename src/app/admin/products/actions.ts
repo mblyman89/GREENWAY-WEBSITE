@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { uploadMedia, recordUsage } from "@/lib/media/store";
+import { uploadMedia, recordUsage, clearUsage } from "@/lib/media/store";
 import { ensureEnrichment, updateEnrichment, getEnrichment } from "@/lib/enrichment/store";
 import {
   generateProductDescription,
@@ -19,7 +19,12 @@ import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getMedia } from "@/lib/media/store";
-import { attachImageToGallery } from "@/lib/ai/kb/product-images-core";
+import {
+  attachImageToGallery,
+  detachImageFromGallery,
+  setPrimaryImage,
+  moveImageInGallery,
+} from "@/lib/ai/kb/product-images-core";
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 
 const ALLOWED_TAGS = new Set([
@@ -417,5 +422,148 @@ export async function importVendorImage(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 71 — gallery management. The editor previously could only ADD images;
+// the actions below let a human REMOVE an image from this product, choose the
+// COVER, and REORDER the gallery. All three use the pure edit rules in
+// product-images-core (no-op edits never write), are permission-gated,
+// audited, and refresh both the editor and the live menu.
+// ---------------------------------------------------------------------------
+
+/** Remove an image from THIS product's gallery (media-library file untouched). */
+export async function removeProductImage(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  // The clicked button carries the media id (formAction inside the editor form).
+  const mediaId = String(formData.get("removeImage") ?? formData.get("mediaId") ?? "").trim();
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+
+  const current = await getEnrichment(key);
+  const edit = detachImageFromGallery(
+    {
+      image_media_ids: current?.image_media_ids ?? [],
+      primary_media_id: current?.primary_media_id ?? null,
+    },
+    mediaId,
+  );
+  if (!edit.changed) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  await updateEnrichment(
+    key,
+    { image_media_ids: edit.image_media_ids, primary_media_id: edit.primary_media_id },
+    session.userId,
+  );
+  // Keep the usage ledger honest: point the "image" slot at the (possibly new)
+  // cover, or clear it when the gallery emptied.
+  if (edit.primary_media_id) {
+    await recordUsage(edit.primary_media_id, "product", key, "image");
+  } else {
+    await clearUsage("product", key, "image");
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.image_removed",
+    entityType: "product",
+    entityId: key,
+    before: { mediaId, wasPrimary: current?.primary_media_id === mediaId },
+    after: { remaining: edit.image_media_ids.length, primary: edit.primary_media_id },
+  });
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  revalidatePath("/menu");
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+/** Make a gallery image the cover (primary) shown on the live menu card. */
+export async function setProductPrimaryImage(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  // The clicked button carries the media id (formAction inside the editor form).
+  const mediaId = String(formData.get("primaryImage") ?? formData.get("mediaId") ?? "").trim();
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+
+  const current = await getEnrichment(key);
+  const edit = setPrimaryImage(
+    {
+      image_media_ids: current?.image_media_ids ?? [],
+      primary_media_id: current?.primary_media_id ?? null,
+    },
+    mediaId,
+  );
+  if (!edit.changed) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  await updateEnrichment(key, { primary_media_id: edit.primary_media_id }, session.userId);
+  await recordUsage(mediaId, "product", key, "image");
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.image_primary_set",
+    entityType: "product",
+    entityId: key,
+    before: { primary: current?.primary_media_id ?? null },
+    after: { primary: mediaId },
+  });
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  revalidatePath("/menu");
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+/** Nudge a gallery image one slot left or right (curated order). */
+export async function moveProductImage(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  // The clicked button carries "mediaId|direction" (formAction inside the editor form).
+  const packed = String(formData.get("moveImage") ?? "").trim();
+  const sep = packed.lastIndexOf("|");
+  const mediaId = sep >= 0 ? packed.slice(0, sep).trim() : String(formData.get("mediaId") ?? "").trim();
+  const rawDir = sep >= 0 ? packed.slice(sep + 1) : String(formData.get("direction") ?? "");
+  const direction = rawDir === "left" ? "left" : "right";
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+
+  const current = await getEnrichment(key);
+  const edit = moveImageInGallery(
+    {
+      image_media_ids: current?.image_media_ids ?? [],
+      primary_media_id: current?.primary_media_id ?? null,
+    },
+    mediaId,
+    direction,
+  );
+  if (!edit.changed) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  await updateEnrichment(key, { image_media_ids: edit.image_media_ids }, session.userId);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.image_reordered",
+    entityType: "product",
+    entityId: key,
+    after: { mediaId, direction, order: edit.image_media_ids },
+  });
+
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  revalidatePath("/menu");
   redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
 }

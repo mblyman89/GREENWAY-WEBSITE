@@ -18,6 +18,9 @@ import {
   applyMatchedText,
   attachMatchedMedia,
   importVendorImage,
+  removeProductImage,
+  setProductPrimaryImage,
+  moveProductImage,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -504,20 +507,89 @@ export default async function ProductEditorPage({
           <div className="space-y-4">
             <div className="space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
               <p className="text-sm font-semibold text-white">Images</p>
+              {/* SLICE 71 — gallery management: each image can be removed from
+                  this product, promoted to cover, or nudged left/right. The
+                  buttons use formAction so they post to their own server
+                  action without nesting forms; removing an image never
+                  deletes the file from the media library. */}
               {galleryIds.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {galleryIds.map((id) => {
+                <div className="grid grid-cols-2 gap-2">
+                  {galleryIds.map((id, idx) => {
                     const url = urlMap.get(id);
+                    const isCover = (enrichment?.primary_media_id ?? galleryIds[0]) === id;
                     return (
-                      <div key={id} className="aspect-square overflow-hidden rounded-lg border border-white/10 bg-black">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        {url && <img src={url} alt="" className="h-full w-full object-cover" />}
+                      <div key={id} className="overflow-hidden rounded-lg border border-white/10 bg-black">
+                        <div className="relative aspect-square">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {url && <img src={url} alt="" className="h-full w-full object-cover" />}
+                          {isCover && (
+                            <span className="absolute left-1 top-1 rounded bg-[var(--admin-accent)] px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                              Cover
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-1 border-t border-white/10 px-1.5 py-1">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="submit"
+                              formAction={moveProductImage}
+                              name="moveImage"
+                              value={`${id}|left`}
+                              disabled={idx === 0}
+                              title="Move earlier in the gallery"
+                              className="rounded px-1 text-xs text-white/60 hover:text-white disabled:opacity-25"
+                            >
+                              ←
+                            </button>
+                            <button
+                              type="submit"
+                              formAction={moveProductImage}
+                              name="moveImage"
+                              value={`${id}|right`}
+                              disabled={idx === galleryIds.length - 1}
+                              title="Move later in the gallery"
+                              className="rounded px-1 text-xs text-white/60 hover:text-white disabled:opacity-25"
+                            >
+                              →
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {!isCover && (
+                              <button
+                                type="submit"
+                                formAction={setProductPrimaryImage}
+                                name="primaryImage"
+                                value={id}
+                                title="Use as the cover image on the menu card"
+                                className="rounded px-1 text-[10px] font-semibold text-[var(--admin-gold)] hover:brightness-125"
+                              >
+                                ★ Cover
+                              </button>
+                            )}
+                            <button
+                              type="submit"
+                              formAction={removeProductImage}
+                              name="removeImage"
+                              value={id}
+                              title="Remove this image from this product (the media library keeps the file)"
+                              className="rounded px-1 text-[10px] font-semibold text-[var(--admin-orange)] hover:brightness-125"
+                            >
+                              ✕ Remove
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
                 <p className="text-xs text-white/40">No images yet.</p>
+              )}
+              {galleryIds.length > 0 && (
+                <p className="text-[11px] text-white/40">
+                  The <span className="text-white/60">Cover</span> image is what shoppers see on the menu card.
+                  Removing an image only takes it off this product — the file stays in the media library.
+                </p>
               )}
               <label className="block">
                 <span className={label}>Add image</span>
