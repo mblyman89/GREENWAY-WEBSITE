@@ -10,6 +10,12 @@ import { listAllBrands } from "@/lib/vendors/store";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getEnrichmentCommandCenter } from "@/lib/enrichment/command-center";
+import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
+import {
+  buildWebSearchUrl,
+  parseImageDraftLines,
+  RESEARCH_IMAGES_FIELD,
+} from "@/lib/enrichment/research-core";
 import {
   updateProductEnrichment,
   setEnrichmentStatus,
@@ -22,9 +28,16 @@ import {
   removeProductImage,
   setProductPrimaryImage,
   moveProductImage,
+  researchProductAction,
+  importResearchImage,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
+// SLICE 74: the web-research server action submitted from this page calls the
+// crawl4ai worker for a SINGLE product page (fetch → GPT extract → verify →
+// compliance). That's much quicker than a full-site crawl but still a real
+// network round-trip, so give the action headroom on Vercel.
+export const maxDuration = 300;
 
 const field = "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]";
 const label = "mb-1 block text-xs font-medium text-white/50";
@@ -36,12 +49,12 @@ export default async function ProductEditorPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string }>;
 }) {
   const session = await requirePermission("products.enrich");
   const { key: rawKey } = await params;
   const key = decodeURIComponent(rawKey);
-  const { saved, error, ai, back } = await searchParams;
+  const { saved, error, ai, back, research } = await searchParams;
 
   const published = await getPublishedVersion();
   if (!published) notFound();
@@ -50,7 +63,13 @@ export default async function ProductEditorPage({
 
   const enrichment = await getEnrichment(key);
   const brands = await listAllBrands();
-  const suggestions = await listSuggestions("product", key, "pending");
+  const allSuggestions = await listSuggestions("product", key, "pending");
+  // SLICE 74: research_images drafts are reference data (image URL lists) —
+  // they get their own visual review block instead of the plain-text one.
+  const researchImageDrafts = allSuggestions.filter((s) => s.field_key === RESEARCH_IMAGES_FIELD);
+  const suggestions = allSuggestions.filter((s) => s.field_key !== RESEARCH_IMAGES_FIELD);
+  const crawlerOn = isCrawlerConfigured();
+  const searchUrl = buildWebSearchUrl(item.name, item.brand_name);
   const center = await getEnrichmentCommandCenter({ item });
 
   // Resolve gallery image URLs.
@@ -79,6 +98,7 @@ export default async function ProductEditorPage({
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {saved && <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">Saved.</div>}
         {ai && <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm text-[var(--admin-gold)]">AI draft generated — review it below.</div>}
+        {research && <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm text-[var(--admin-gold)]">{research}</div>}
         {error && <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">{error}</div>}
 
         {/* POS facts (read-only) */}
@@ -366,6 +386,93 @@ export default async function ProductEditorPage({
             )}
           </div>
         )}
+
+        {/* SLICE 74 — deep product web research (GPT + crawl4ai, drafts only) */}
+        <div id="research" className="scroll-mt-24 rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-[var(--admin-gold)]">
+              Web research {crawlerOn ? "" : "(crawler not set up)"}
+            </p>
+            <a
+              href={searchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white/70 transition-colors hover:border-[var(--admin-gold)] hover:text-white"
+              title="Opens a pre-filled web search for this product in a new tab — find the product's own page on the maker's site, then paste its URL below."
+            >
+              Search the web for this product ↗
+            </a>
+          </div>
+          <p className="mt-1 text-[11px] text-white/45">
+            Paste the product&apos;s own page URL (the maker&apos;s site works best). The crawler reads that
+            ONE page politely, GPT extracts a description verified against the real page text, and any
+            product photos it finds arrive as candidates — everything lands below as drafts for YOUR review.
+            Nothing is applied automatically.
+          </p>
+          {crawlerOn ? (
+            <form action={researchProductAction} className="mt-3 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="key" value={key} />
+              <input type="hidden" name="posName" value={item.name} />
+              <input
+                name="url"
+                type="url"
+                required
+                placeholder="https://the-makers-site.com/products/this-product"
+                className="min-w-[260px] flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-gold)]"
+              />
+              <Button type="submit" variant="confirm" size="sm">Research this page</Button>
+            </form>
+          ) : (
+            <p className="mt-3 text-xs text-white/45">
+              Set <code className="rounded bg-black/40 px-1">CRAWLER_BASE_URL</code> and{" "}
+              <code className="rounded bg-black/40 px-1">CRAWLER_SHARED_SECRET</code> to enable one-click
+              product research. The search link above still works.
+            </p>
+          )}
+
+          {/* Researched image candidates — visual review, one-click import. */}
+          {researchImageDrafts.length > 0 && (
+            <div className="mt-4 space-y-3 border-t border-[var(--admin-gold)]/15 pt-3">
+              <p className="text-xs font-semibold text-white/70">Researched image candidates</p>
+              {researchImageDrafts.map((s) => (
+                <div key={s.id} className="rounded-lg border border-white/10 bg-black p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 uppercase">web research</span>
+                    {s.source?.startsWith("crawl:") && (
+                      <span className="break-all">{s.source.slice("crawl:".length)}</span>
+                    )}
+                    <span>· {new Date(s.created_at).toLocaleString()}</span>
+                  </div>
+                  <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {parseImageDraftLines(s.suggested_value).map((u) => (
+                      <li key={u} className="overflow-hidden rounded-lg border border-white/10 bg-[#0a0a0a]">
+                        <a href={u} target="_blank" rel="noopener noreferrer" title={u}>
+                          <div className="aspect-square bg-black">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={u} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          </div>
+                        </a>
+                        <form action={importResearchImage} className="p-1.5">
+                          <input type="hidden" name="key" value={key} />
+                          <input type="hidden" name="imageUrl" value={u} />
+                          <input type="hidden" name="label" value={item.name} />
+                          <Button type="submit" variant="confirm" size="sm" className="w-full">
+                            Import
+                          </Button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                  <form action={rejectSuggestion} className="mt-2">
+                    <input type="hidden" name="id" value={s.id} />
+                    <input type="hidden" name="key" value={key} />
+                    <Button type="submit" variant="neutral" size="sm">Dismiss these candidates</Button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* AI panel */}
         <div id="ai" className="scroll-mt-24 rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
