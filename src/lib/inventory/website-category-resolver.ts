@@ -346,6 +346,13 @@ export function heuristicWebsiteCategory(
     }
     if (type.includes("cartridge") || type.includes("vape")) return "cartridge";
     if (type.includes("concentrate") || type.includes("extract") || type.includes("hash") || type.includes("rosin") || type.includes("resin")) {
+      // SLICE 63 (owner bug B4: "2727 Vape Cart" filed under Concentrate):
+      // vape hardware ships under the inhalation-concentrate LCB types
+      // ("Concentrate for Inhalation", "Hydrocarbon Concentrate", …), so the
+      // type alone cannot separate a cart from a dab — read the NAME for
+      // cart/pod/vape/disposable tokens before defaulting to concentrate.
+      if (/\bdisposables?\b/.test(name)) return "disposable-cartridge";
+      if (/\b(?:cart(?:ridge)?s?|vapes?|pods?)\b/.test(name)) return "cartridge";
       return "concentrate";
     }
     if (type.includes("capsule") || type.includes("edible") || type.includes("gummies") || type.includes("candy")) {
@@ -706,6 +713,32 @@ export function __runWebsiteCategoryResolverTests(): void {
   eq(websiteCategoryLabel("concentrate"), "Concentrate", "label concentrate");
   eq(websiteCategoryLabel("edible-solid"), "Edible (Solid)", "label edible-solid");
   eq(websiteCategoryLabel(null), "", "label null → empty");
+
+  // -------------------------------------------------------------------------
+  // SLICE 63 (owner bug B4): vape hardware under inhalation-concentrate LCB
+  // types must land in cartridge/disposable-cartridge, not concentrate — the
+  // NAME separates a cart from a dab. Dab-shaped names keep concentrate.
+  // -------------------------------------------------------------------------
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Concentrate for Inhalation", productName: "2727 - Live Resin Cart - GG4 1g" }).websiteCategory,
+    "cartridge",
+    "B4: cart token under Concentrate for Inhalation → cartridge",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Hydrocarbon Concentrate", productName: "Dank Czar Vape 0.5g" }).websiteCategory,
+    "cartridge",
+    "B4: vape token → cartridge",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Concentrate for Inhalation", productName: "Fairwinds Disposable 0.3g" }).websiteCategory,
+    "disposable-cartridge",
+    "B4: disposable token → disposable-cartridge",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Concentrate for Inhalation", productName: "GMO Live Resin 1g" }).websiteCategory,
+    "concentrate",
+    "B4: dab-shaped name stays concentrate",
+  );
 
   console.log(`website-category-resolver: ${pass} assertions passed`);
 }
