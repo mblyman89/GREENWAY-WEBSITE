@@ -11,7 +11,7 @@ import {
   getManifestById,
 } from "@/lib/inventory/store";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
-import { lotPotencyLabel } from "@/lib/inventory/lot-table-core";
+import { lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
 import { adjustLotAction, setLotStatusAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -140,6 +140,10 @@ export default async function LotDetailPage({
               <Row label="Vendor" value={lot.vendor_name ?? "—"} />
               <Row label="Brand" value={lot.brand_name ?? "—"} />
               <Row label="Strain" value={lot.strain_name ?? "—"} />
+              {/* SLICE 63 (E1): OUR product type on screen — house labeler
+                  reads the LCB type + name; raw CCRS values stay on the
+                  "LCB classification" row below, untouched. */}
+              <Row label="Type" value={lotTypeLabel(lot)} />
               <Row
                 label="Category"
                 value={

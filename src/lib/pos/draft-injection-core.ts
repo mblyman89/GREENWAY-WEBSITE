@@ -27,6 +27,7 @@ import {
   type PotencyUnit,
 } from "@/lib/pos/intake-potency-core";
 import { crossExamineRow, MG_FACT_TYPES } from "@/lib/inventory/fact-extraction-core";
+import { deriveHouseType, HOUSE_TYPE_MIN_AUTO_CONFIDENCE } from "@/lib/inventory/house-type-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
 export type ApprovedDraftForInjection = {
@@ -344,6 +345,38 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       }
     }
 
+    // SLICE 63 (owner bugs B2/E1): derive OUR house type ("Live Resin
+    // Cartridge", "Gummies") from the LCB inventory type + product NAME so
+    // the website card's type line shows a real product type instead of the
+    // generic website-category alias. AUTO-ASSIGN ONLY at ≥90 % confidence —
+    // below that the fields stay null (cardTypeLabel falls back honestly, and
+    // SLICE 64 puts a human picker on the approval card). The raw LCB values
+    // stay untouched on the draft/lot rows (CCRS under the hood).
+    const house = deriveHouseType({
+      productName: d.name,
+      inventoryType: d.inventory_type ?? null,
+      websiteCategory: enrich.websiteCategory,
+    });
+    const houseType =
+      house.houseType && house.confidence >= HOUSE_TYPE_MIN_AUTO_CONFIDENCE
+        ? house.houseType
+        : null;
+    if (houseType) {
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_house_type",
+        message: `“${d.name}” typed as “${houseType}” (${house.confidence}% via ${house.source}).`,
+        context: { draft_id: d.id, pos_product_key: key, house_type: houseType, confidence: house.confidence, source: house.source },
+      });
+    } else if (house.houseType) {
+      diagnostics.push({
+        severity: "warning",
+        code: "draft_inject_house_type_low_confidence",
+        message: `“${d.name}”: the type labeler read “${house.houseType}” from the name but its category disagrees with the resolved website category (${house.confidence}% < ${HOUSE_TYPE_MIN_AUTO_CONFIDENCE}%). No type was auto-assigned — set it manually.`,
+        context: { draft_id: d.id, pos_product_key: key, house_type: house.houseType, confidence: house.confidence, source: house.source },
+      });
+    }
+
     const brand = d.brand_name?.trim() || "";
     const priceLabel = [formatMoney(d.price_minor_units), enrich.packageLabel ?? ""]
       .filter(Boolean)
@@ -357,8 +390,12 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       vendor_name: d.vendor_name,
       category: enrich.websiteCategory,
       filter_categories: [enrich.websiteCategory],
-      pos_inventory_type: null,
-      pos_inventory_category: null,
+      // SLICE 63: pos_inventory_category is what cardTypeLabel reads for the
+      // card's type line (same column the Cultivera path fills from the POS
+      // "Category" column). pos_inventory_type carries the raw LCB type for
+      // CCRS/reporting parity. Null when confidence <90% — never guessed.
+      pos_inventory_type: d.inventory_type?.trim() || null,
+      pos_inventory_category: houseType,
       strain_type: enrich.strainType?.trim() || "unknown",
       strain_name: d.strain_name,
       thc: thcPct != null ? formatIntakePotency(thcPct, unit) : null,
@@ -663,6 +700,56 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
     assert(
       !p.diagnostics.some((d) => d.code === "fact_extraction_review"),
       "percent-mode rows never flagged by the mg examiner",
+    );
+  }
+
+  // SLICE 63 (owner bugs B2/B4/E1): the house type labeler fills
+  // pos_inventory_category so cardTypeLabel shows a REAL type ("Live Resin
+  // Cartridge") instead of the generic website-category alias — auto-assigned
+  // only at ≥90% confidence, disclosed via diagnostic.
+  {
+    const p = plan(
+      [
+        draft({
+          name: "2727 - Live Resin Cart - GG4 1g",
+          inventory_type: "Concentrate for Inhalation",
+        }),
+      ],
+      new Map([["d1", enrich({ websiteCategory: "cartridge" })]]),
+    );
+    const it = p.items[0];
+    assert(it.pos_inventory_category === "Live Resin Cartridge", "house type composed from the name (B2/B4)");
+    assert(it.pos_inventory_type === "Concentrate for Inhalation", "raw LCB type kept under the hood (E1)");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_house_type"),
+      "auto-assignment disclosed via info diagnostic",
+    );
+  }
+
+  // Below the 90% threshold (name signal disagrees with the resolved website
+  // category): NOTHING auto-assigned, a warning tells the human to pick.
+  {
+    const p = plan(
+      [draft({ name: "Lemon Balm Kush 3.5g", inventory_type: "Usable Marijuana" })],
+      new Map([["d1", enrich({ websiteCategory: "flower" })]]),
+    );
+    assert(p.items[0].pos_inventory_category === null, "low confidence never auto-assigns");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_house_type_low_confidence" && d.severity === "warning"),
+      "low-confidence read disclosed as a warning",
+    );
+  }
+
+  // No signal at all (plain strain name, coarse LCB type): null, no noise.
+  {
+    const p = plan(
+      [draft({ name: "Blue Dream 3.5g", inventory_type: "Usable Marijuana" })],
+      new Map([["d1", enrich({ websiteCategory: "flower" })]]),
+    );
+    assert(p.items[0].pos_inventory_category === null, "no signal = null, never guessed");
+    assert(
+      !p.diagnostics.some((d) => d.code.startsWith("draft_inject_house_type")),
+      "no house-type diagnostics when there is no signal",
     );
   }
 

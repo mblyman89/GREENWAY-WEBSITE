@@ -24,6 +24,11 @@
  * No I/O, no React — registered in the pure self-test runner.
  */
 import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
+import {
+  deriveHouseType,
+  isCcrsCategoryBlob,
+  HOUSE_TYPE_MIN_AUTO_CONFIDENCE,
+} from "@/lib/inventory/house-type-core";
 
 const EM_DASH = "\u2014";
 
@@ -45,10 +50,30 @@ export function lotReceivedDate(lot: Pick<LotTableFields, "created_at">): string
   return m ? m[1] : EM_DASH;
 }
 
-/** Human product type: stored category first, else the LCB inventory type. */
-export function lotTypeLabel(lot: Pick<LotTableFields, "category" | "inventory_type">): string {
+/**
+ * Human product type for the table (SLICE 63, owner bug B1: raw CCRS
+ * `EndProduct`/`IntermediateProduct` blobs were leaking into the TYPE column).
+ *
+ * Order: (1) the stored category, IF it is a human label and not a CCRS
+ * InventoryCategory blob (Cultivera lots store "Live Resin" here; intake lots
+ * store the manifest's raw "EndProduct" — screened out); (2) OUR house type
+ * derived from the LCB inventory type + product NAME when the labeler is
+ * ≥90 % confident; (3) the raw LCB inventory type — honest, never invented;
+ * (4) em-dash. The CCRS originals stay untouched on the row (E1: OUR labels
+ * on screen, LCB under the hood — the lot detail page shows the raw values).
+ */
+export function lotTypeLabel(
+  lot: Pick<LotTableFields, "category" | "inventory_type"> & { product_name?: string | null },
+): string {
   const category = String(lot.category ?? "").trim();
-  if (category) return category;
+  if (category && !isCcrsCategoryBlob(category)) return category;
+  const derived = deriveHouseType({
+    productName: lot.product_name ?? null,
+    inventoryType: lot.inventory_type ?? null,
+  });
+  if (derived.houseType && derived.confidence >= HOUSE_TYPE_MIN_AUTO_CONFIDENCE) {
+    return derived.houseType;
+  }
   const invType = String(lot.inventory_type ?? "").trim();
   return invType || EM_DASH;
 }
@@ -130,10 +155,29 @@ export function __runLotTableCoreTests(): void {
   ok(lotReceivedDate({ created_at: "2026-07-01" }) === "2026-07-01", "received: bare date passes through");
   ok(lotReceivedDate({ created_at: "" }) === EM_DASH, "received: blank yields em-dash");
 
-  // Type: category first, inventory_type fallback, never invented.
+  // Type: human category first, inventory_type fallback, never invented.
   ok(lotTypeLabel({ category: "Live Resin", inventory_type: "Concentrate for Inhalation" }) === "Live Resin", "type: category preferred");
   ok(lotTypeLabel({ category: "  ", inventory_type: "Usable Marijuana" }) === "Usable Marijuana", "type: falls back to LCB inventory type");
   ok(lotTypeLabel({ category: null, inventory_type: null }) === EM_DASH, "type: nothing stored yields em-dash");
+
+  // SLICE 63 (owner bug B1): raw CCRS InventoryCategory blobs never show in
+  // the TYPE column — the house labeler reads the LCB type + NAME instead.
+  ok(
+    lotTypeLabel({ category: "EndProduct", inventory_type: "Solid Edible", product_name: "Cantina Gummies - Guava 10 Pack 400mg" }) === "Gummies",
+    "type: EndProduct blob screened, house type from the name",
+  );
+  ok(
+    lotTypeLabel({ category: "IntermediateProduct", inventory_type: "Concentrate for Inhalation", product_name: "2727 - Live Resin Cart - GG4 1g" }) === "Live Resin Cartridge",
+    "type: IntermediateProduct blob screened, composed cart label",
+  );
+  ok(
+    lotTypeLabel({ category: "EndProduct", inventory_type: "Usable Marijuana", product_name: "Blue Dream 3.5g" }) === "Usable Marijuana",
+    "type: no house signal falls back to the honest LCB type, never guessed",
+  );
+  ok(
+    lotTypeLabel({ category: "EndProduct", inventory_type: null, product_name: null }) === EM_DASH,
+    "type: blob with nothing else yields em-dash",
+  );
 
   // Size: stored unit weight verbatim.
   ok(lotSizeLabel({ unit_weight: 3.5, unit_weight_uom: "g" }) === "3.5 g", "size: 3.5 g");
