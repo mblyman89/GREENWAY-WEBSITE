@@ -17,6 +17,7 @@ import {
   scoreVendorCandidate,
   rankMatches,
   buildAssetGuidance,
+  buildGuidanceActions,
   parseEnrichmentSort,
   parseEnrichmentStatusFilter,
   sortEnrichmentList,
@@ -262,5 +263,71 @@ describe("worklist intelligence — SLICE 72", () => {
     expect(sortEnrichmentList(legacy, "priority")).toHaveLength(1);
     expect(sortEnrichmentList(legacy, "priceHigh")).toHaveLength(1);
     expect(Number.isFinite(enrichmentPriorityScore(legacy[0]!))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SLICE 73 — jump-to buttons. Owner: "If we don't have the details we need for
+// a product, I want jump to buttons added to the detail page that takes me to
+// where I need to be to fetch/scrape that info."
+// ---------------------------------------------------------------------------
+describe("SLICE 73 — buildGuidanceActions (jump-to buttons)", () => {
+  const bare = buildGuidanceActions({
+    hasDescription: false, hasImage: false, kbMatches: 0, mediaMatches: 0,
+    vendorMatches: 0, substituteAvailable: true, hasBrandLink: false,
+    searchQuery: "Grape Gas 3.5g",
+  });
+
+  it("fully enriched product with a linked brand gets no buttons", () => {
+    expect(
+      buildGuidanceActions({
+        hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+        vendorMatches: 0, substituteAvailable: true, hasBrandLink: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it("missing image with no vendor matches offers the vendor-menu harvest jump", () => {
+    expect(bare.some((a) => a.href === "/admin/purchasing/menus")).toBe(true);
+  });
+
+  it("media-library jump pre-fills the search with the product name", () => {
+    expect(bare.some((a) => a.href === "/admin/media?q=Grape%20Gas%203.5g")).toBe(true);
+  });
+
+  it("offers KB harvest, in-page upload anchor and fallback manager for a missing image", () => {
+    expect(bare.some((a) => a.href === "/admin/knowledge-base/harvest")).toBe(true);
+    expect(bare.some((a) => a.href === "#upload")).toBe(true);
+    expect(bare.some((a) => a.href === "/admin/knowledge-base/images")).toBe(true);
+  });
+
+  it("missing description jumps to the AI panel; unlinked brand jumps to the brand panel last", () => {
+    expect(bare.some((a) => a.href === "#ai")).toBe(true);
+    expect(bare[bare.length - 1]!.href).toBe("#brand");
+  });
+
+  it("every button carries a label and a plain-English hint", () => {
+    expect(bare.every((a) => a.label.length > 0 && a.hint.length > 0)).toBe(true);
+  });
+
+  it("review-matches leads when suggestions exist, and satisfied needs drop their buttons", () => {
+    const withMatches = buildGuidanceActions({
+      hasDescription: false, hasImage: false, kbMatches: 2, mediaMatches: 0,
+      vendorMatches: 1, substituteAvailable: false,
+    });
+    expect(withMatches[0]!.href).toBe("#matches");
+    expect(withMatches.some((a) => a.href === "/admin/purchasing/menus")).toBe(false);
+    expect(withMatches.some((a) => a.href === "/admin/knowledge-base/images")).toBe(false);
+    // hasBrandLink omitted → legacy callers never see a brand nag.
+    expect(withMatches.some((a) => a.href === "#brand")).toBe(false);
+  });
+
+  it("blank search query falls back to a plain media-library link", () => {
+    const noQuery = buildGuidanceActions({
+      hasDescription: true, hasImage: false, kbMatches: 0, mediaMatches: 0,
+      vendorMatches: 0, substituteAvailable: false, searchQuery: "   ",
+    });
+    expect(noQuery.some((a) => a.href === "/admin/media")).toBe(true);
+    expect(noQuery.some((a) => a.href === "#ai")).toBe(false);
   });
 });

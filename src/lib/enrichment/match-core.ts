@@ -17,6 +17,13 @@
  * buildAssetGuidance() produces the owner-requested "no assets? here's how to
  * get them" checklist, ordered by effort, including the approved-substitute
  * fallback offer when one is available.
+ *
+ * SLICE 73 adds buildGuidanceActions(): the jump-to buttons for that
+ * checklist. Owner: "If we don't have the details we need for a product, I
+ * want jump to buttons added to the detail page that takes me to where I
+ * need to be to fetch/scrape that info." Each missing detail maps to a real
+ * admin destination (vendor menus, media library pre-searched, KB harvest,
+ * fallback manager) or an in-page anchor (#upload, #ai, #brand, #matches).
  */
 
 // ---------------------------------------------------------------------------
@@ -241,6 +248,95 @@ export function buildAssetGuidance(g: GuidanceInput): string[] {
   }
   if (!g.hasDescription) {
     out.push("Generate a compliant AI description draft below, or copy the vendor/KB description if one matched.");
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 73 — jump-to actions. Each plain-English guidance line above tells the
+// owner WHAT to do; these give a BUTTON that jumps straight to WHERE to do it
+// (an admin page or an in-page anchor). Additive: buildAssetGuidance keeps its
+// string[] shape so every existing consumer and test stays valid.
+// ---------------------------------------------------------------------------
+
+export type GuidanceAction = {
+  /** Short button text, e.g. "Harvest vendor menus". */
+  label: string;
+  /** Internal admin route ("/admin/…") or in-page anchor ("#ai"). */
+  href: string;
+  /** Plain-English tooltip: why this jump helps. */
+  hint: string;
+};
+
+export type GuidanceActionInput = GuidanceInput & {
+  /** Enrichment brand link state; omit (undefined) to skip the brand action. */
+  hasBrandLink?: boolean;
+  /** Pre-fill for the media-library search (usually the product-name tokens). */
+  searchQuery?: string | null;
+};
+
+/**
+ * Ordered jump-to buttons for the "How to finish enriching" panel. Mirrors the
+ * priority order of buildAssetGuidance. Empty when nothing is missing.
+ * Pure: only string building — no I/O, inputs never mutated.
+ */
+export function buildGuidanceActions(g: GuidanceActionInput): GuidanceAction[] {
+  const out: GuidanceAction[] = [];
+  const brandMissing = g.hasBrandLink === false;
+  if (g.hasDescription && g.hasImage && !brandMissing) return out;
+
+  if (g.kbMatches > 0 || g.mediaMatches > 0 || g.vendorMatches > 0) {
+    out.push({
+      label: "Review suggested matches",
+      href: "#matches",
+      hint: "Ranked matches from your knowledge base, media library and vendor menus — applying one takes a single click.",
+    });
+  }
+  if (!g.hasImage) {
+    if (g.vendorMatches === 0) {
+      out.push({
+        label: "Harvest vendor menus",
+        href: "/admin/purchasing/menus",
+        hint: "Import product photos straight from the vendor's Cultivera/GrowFlow menu into the media library.",
+      });
+    }
+    const q = (g.searchQuery ?? "").trim();
+    out.push({
+      label: "Search the media library",
+      href: q ? `/admin/media?q=${encodeURIComponent(q)}` : "/admin/media",
+      hint: "The photo may already be uploaded — the search box is pre-filled with this product's name.",
+    });
+    out.push({
+      label: "Run the KB harvest",
+      href: "/admin/knowledge-base/harvest",
+      hint: "The crawler chases brand and product images/descriptions from the web, worst-covered first.",
+    });
+    out.push({
+      label: "Upload a photo",
+      href: "#upload",
+      hint: "Jump to the Add image field — a phone photo on a neutral background works great.",
+    });
+    if (g.substituteAvailable) {
+      out.push({
+        label: "Manage fallback images",
+        href: "/admin/knowledge-base/images",
+        hint: "The approved category fallback already covers this card — swap or tune it here.",
+      });
+    }
+  }
+  if (!g.hasDescription) {
+    out.push({
+      label: "Draft an AI description",
+      href: "#ai",
+      hint: "Jump to the AI drafting panel — every draft is a suggestion you approve before it goes live.",
+    });
+  }
+  if (brandMissing) {
+    out.push({
+      label: "Link the brand",
+      href: "#brand",
+      hint: "Jump to the Brand link panel — linked brands unlock knowledge-base copy and vendor context.",
+    });
   }
   return out;
 }
@@ -526,6 +622,42 @@ export function __runEnrichmentMatchCoreTests(): void {
   ];
   ok(sortEnrichmentList(legacy, "priority").length === 1 && sortEnrichmentList(legacy, "priceHigh").length === 1, "legacy rows: SLICE 72 sorts degrade gracefully");
   ok(Number.isFinite(enrichmentPriorityScore(legacy[0]!)), "legacy rows: priority score stays finite");
+
+  // SLICE 73 — jump-to actions mirror the guidance priorities with real hrefs.
+  ok(
+    buildGuidanceActions({
+      hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+      vendorMatches: 0, substituteAvailable: true, hasBrandLink: true,
+    }).length === 0,
+    "actions: fully enriched + brand linked → no buttons",
+  );
+  const bareActs = buildGuidanceActions({
+    hasDescription: false, hasImage: false, kbMatches: 0, mediaMatches: 0,
+    vendorMatches: 0, substituteAvailable: true, hasBrandLink: false,
+    searchQuery: "Grape Gas 3.5g",
+  });
+  ok(bareActs.some((a) => a.href === "/admin/purchasing/menus"), "actions: no vendor matches → harvest vendor menus button");
+  ok(bareActs.some((a) => a.href === "/admin/media?q=Grape%20Gas%203.5g"), "actions: media search pre-filled with the product name");
+  ok(bareActs.some((a) => a.href === "/admin/knowledge-base/harvest"), "actions: KB harvest button offered for missing image");
+  ok(bareActs.some((a) => a.href === "#upload"), "actions: in-page jump to the upload field");
+  ok(bareActs.some((a) => a.href === "/admin/knowledge-base/images"), "actions: fallback manager offered when substitute exists");
+  ok(bareActs.some((a) => a.href === "#ai"), "actions: missing description → jump to AI panel");
+  ok(bareActs[bareActs.length - 1]?.href === "#brand", "actions: unlinked brand → jump to brand panel, last");
+  ok(bareActs.every((a) => a.label.length > 0 && a.hint.length > 0), "actions: every button carries a label and a plain-English hint");
+  const withMatches = buildGuidanceActions({
+    hasDescription: false, hasImage: false, kbMatches: 2, mediaMatches: 0,
+    vendorMatches: 1, substituteAvailable: false,
+  });
+  ok(withMatches[0]?.href === "#matches", "actions: suggestions exist → review-matches button leads");
+  ok(!withMatches.some((a) => a.href === "/admin/purchasing/menus"), "actions: vendor matches present → no harvest nag");
+  ok(!withMatches.some((a) => a.href === "/admin/knowledge-base/images"), "actions: no substitute → no fallback-manager button");
+  ok(!withMatches.some((a) => a.href === "#brand"), "actions: hasBrandLink undefined → brand action skipped (legacy callers safe)");
+  const noQuery = buildGuidanceActions({
+    hasDescription: true, hasImage: false, kbMatches: 0, mediaMatches: 0,
+    vendorMatches: 0, substituteAvailable: false, searchQuery: "   ",
+  });
+  ok(noQuery.some((a) => a.href === "/admin/media"), "actions: blank search query → plain media-library link (no dangling ?q=)");
+  ok(!noQuery.some((a) => a.href === "#ai"), "actions: description present → no AI button");
 
   if (fail > 0) throw new Error(`enrichment-match-core: ${fail} failure(s)`);
   console.log(`enrichment-match-core: ${pass} checks passed`);
