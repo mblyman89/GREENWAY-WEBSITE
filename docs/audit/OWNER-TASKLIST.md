@@ -48,7 +48,10 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0141** (the current last file — 0141 adds
+you haven't checked off through **0142** (the current last file — 0142 creates
+the private intake-docs storage bucket + manifest_documents table so every
+document harvested from a vendor intake email is archived under our own
+roof and downloadable from the email intake table; 0141 adds
 the classification-choice columns on product drafts, so the category/type
 you pick on the Product Onboarding approval card is saved and honored when
 the product goes on the menu; 0140 extends

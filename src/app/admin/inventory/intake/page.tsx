@@ -34,7 +34,9 @@ import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
 import {
   EmailIntakeTable,
   type ManifestDownloadLinks,
+  type ArchivedDocLink,
 } from "@/components/admin/inventory/EmailIntakeTable";
+import { listManifestDocLinks } from "@/lib/inventory/manifest-docs";
 import { ReceivingTabs } from "@/components/admin/inventory/ReceivingTabs";
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
@@ -111,6 +113,13 @@ export default async function IntakePage({
       linksByManifestId.set(r.manifest_id, links);
     }
   }
+
+  // SLICE 69 — OUR archived copies of every document each email carried
+  // (private bucket, signed URLs). Preferred over the vendor's links above,
+  // which expire within hours; these buttons work for EVERY row, forever.
+  const docsByManifestId: Map<string, ArchivedDocLink[]> = await listManifestDocLinks(
+    manifests.map((m) => m.id),
+  );
 
   const errorMsg =
     error === "empty"
@@ -275,7 +284,11 @@ export default async function IntakePage({
         {/* H15c — the hero table: one row per real manifest, moving badge,
             invoice # + downloads. The strict H15b gate guarantees only real
             manifests appear here. */}
-        <EmailIntakeTable rows={manifests} linksByManifestId={linksByManifestId} />
+        <EmailIntakeTable
+          rows={manifests}
+          linksByManifestId={linksByManifestId}
+          docsByManifestId={docsByManifestId}
+        />
 
         {/* The single "Incoming (email)" table above is the one source of
             truth — one row per manifest with a moving status badge, and the

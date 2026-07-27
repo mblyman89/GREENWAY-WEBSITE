@@ -36,13 +36,35 @@ export type ManifestDownloadLinks = {
   invoiceUrl: string | null;
 };
 
+/** One archived intake document with a fresh signed URL (SLICE 69). */
+export type ArchivedDocLink = {
+  role: "manifest" | "invoice" | "coa" | "transfer-json" | "other";
+  filename: string;
+  url: string;
+};
+
+const DOC_LABEL: Record<ArchivedDocLink["role"], string> = {
+  manifest: "Manifest",
+  invoice: "Invoice",
+  coa: "COA",
+  "transfer-json": "JSON",
+  other: "File",
+};
+
 export function EmailIntakeTable({
   rows,
   linksByManifestId,
+  docsByManifestId,
 }: {
   rows: InboundManifest[];
   /** manifest id → download links pulled from the email fetch trail. */
   linksByManifestId: Map<string, ManifestDownloadLinks>;
+  /**
+   * SLICE 69: manifest id → OUR archived copies of every document the email
+   * carried (signed URLs, private bucket). Preferred over the vendor's links,
+   * which expire within hours.
+   */
+  docsByManifestId?: Map<string, ArchivedDocLink[]>;
 }) {
   return (
     <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)]">
@@ -128,7 +150,19 @@ export function EmailIntakeTable({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="inline-flex items-center gap-3 text-xs">
-                        {links?.manifestUrl && (
+                        {(docsByManifestId?.get(m.id) ?? []).map((doc) => (
+                          <a
+                            key={doc.url}
+                            href={doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[var(--admin-accent)] hover:underline"
+                            title={`Download our archived copy: ${doc.filename}`}
+                          >
+                            ⬇ {DOC_LABEL[doc.role]}
+                          </a>
+                        ))}
+                        {!(docsByManifestId?.get(m.id)?.length) && links?.manifestUrl && (
                           <a
                             href={links.manifestUrl}
                             target="_blank"
@@ -139,7 +173,7 @@ export function EmailIntakeTable({
                             ⬇ Manifest
                           </a>
                         )}
-                        {links?.invoiceUrl && (
+                        {!(docsByManifestId?.get(m.id)?.length) && links?.invoiceUrl && (
                           <a
                             href={links.invoiceUrl}
                             target="_blank"

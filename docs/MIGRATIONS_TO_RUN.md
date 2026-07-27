@@ -457,3 +457,18 @@
   working exactly as before — but approving one where the form asked you
   to pick a category or type fails with a friendly message pointing at
   this migration. Run it before your next intake session.**
+
+## SLICE 69 — exhaustive email harvest + document archive
+
+- [ ] **`supabase/migrations/0142_intake_docs_archive.sql`** — creates the
+  private `intake-docs` storage bucket (staff-only read/write) and the
+  `public.manifest_documents` table that records every document harvested
+  from a vendor intake email — the transfer JSON, the transportation
+  manifest PDF, the invoice, the COA, and any extra PDFs — tied to the
+  staged manifest, so the email intake table can offer OUR OWN archived
+  downloads for every row instead of the vendor's expiring links.
+  Idempotent; safe to re-run.
+  **Until this is run, emails still stage manifests and the harvest
+  checklist still runs, but nothing is archived — the Docs column keeps
+  falling back to the vendor's short-lived links. Run it before your next
+  intake email arrives.**

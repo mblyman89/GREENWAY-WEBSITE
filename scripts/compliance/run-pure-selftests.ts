@@ -109,6 +109,7 @@ import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-st
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
+import { __runEmailHarvestTests } from "../../src/lib/inbound-email/email-harvest-core";
 import { __runIntakeChecklistCoreTests } from "../../src/lib/inventory/intake-checklist-core";
 import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
@@ -326,6 +327,7 @@ async function main() {
   __runVendorResolveCoreTests();
   __runCultiveraInvoiceTests();
   assertNoFailures("generic-pdf-transport", __runGenericPdfTransportTests());
+  assertNoFailures("email-harvest", __runEmailHarvestTests());
   __runIntakeChecklistCoreTests();
   __runIdCaptureCoreTests();
   __runCultiveraMenuCoreTests();

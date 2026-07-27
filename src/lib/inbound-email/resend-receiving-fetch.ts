@@ -46,6 +46,13 @@ import {
 } from "@/lib/inbound-email/resend-receiving-core";
 import { fetchTransferJson, fetchPdfBytes } from "@/lib/inventory/transfer-fetch";
 import { cleanUrl } from "@/lib/inventory/intake-parser";
+import {
+  harvestDocLinks,
+  assessEmailDocs,
+  checklistNote,
+  planSecondPassFetches,
+  dedupeAttachments,
+} from "@/lib/inbound-email/email-harvest-core";
 
 const RESEND_API = "https://api.resend.com";
 const FETCH_TIMEOUT_MS = 20_000;
@@ -347,13 +354,65 @@ export async function enrichResendInbound(
     }
   }
 
+  // 6) SECOND PASS — the "leave no stone unturned" harvest (SLICE 69). The
+  //    passes above follow the KNOWN vendor layouts; this one assumes nothing.
+  //    Assess what we actually HAVE against the checklist (transfer JSON /
+  //    manifest PDF / invoice PDF / COA), harvest EVERY role-tagged link the
+  //    body offers (keyword census over every anchor, plaintext line, and
+  //    URL path), and fetch every candidate for every still-missing role —
+  //    plus every unclaimed PDF, brought back under its own name. Every byte
+  //    still validates (PDF magic bytes / strict WCIA JSON downstream), so a
+  //    keyword false-positive costs one GET, never junk data.
+  {
+    const triedUrls: string[] = [];
+    for (const rawLink of allTransferLinks) triedUrls.push(cleanUrl(rawLink) ?? rawLink);
+    if (links.invoiceUrl) triedUrls.push(cleanUrl(links.invoiceUrl) ?? links.invoiceUrl);
+    if (links.manifestUrl) triedUrls.push(cleanUrl(links.manifestUrl) ?? links.manifestUrl);
+    if (links.coaUrl) triedUrls.push(cleanUrl(links.coaUrl) ?? links.coaUrl);
+
+    const preAssess = assessEmailDocs(attachments, text);
+    if (preAssess.missing.length > 0) {
+      const harvested = harvestDocLinks(html, text);
+      const plan = planSecondPassFetches(preAssess, harvested, triedUrls);
+      // Re-assess after each success so we stop as soon as a role is satisfied.
+      let assess = preAssess;
+      for (const p of plan) {
+        if (p.role === "manifest" && assess.manifestPdf) continue;
+        if (p.role === "invoice" && assess.invoicePdf) continue;
+        if (p.role === "coa" && assess.coa) continue;
+        const cleaned = cleanUrl(p.url) ?? p.url;
+        const pdf = await fetchPdfBytes(cleaned);
+        if (!pdf.ok) {
+          notes.push(`second-pass ${p.role} fetch failed (${pdf.error})`);
+          continue;
+        }
+        const filename = p.filename ?? filenameFromUrl(cleaned) ?? "document.pdf";
+        attachments.push({
+          filename,
+          contentType: pdf.contentType || "application/pdf",
+          text: null,
+          base64: pdf.base64,
+        });
+        notes.push(`second-pass fetched ${p.role} PDF from link (${pdf.bytes} bytes)`);
+        assess = assessEmailDocs(attachments, text);
+      }
+    }
+  }
+
+  // 7) De-dupe byte-identical documents (a file that arrived BOTH as a MIME
+  //    attachment and via a link fetch is kept once), then write the harvest
+  //    CHECKLIST into the fetch note — the validation trail: what we got,
+  //    what the email genuinely never offered.
+  const finalAttachments = dedupeAttachments(attachments);
+  notes.push(checklistNote(assessEmailDocs(finalAttachments, text)));
+
   const email: NormalizedInboundEmail = {
     provider: "resend",
     from: (from || "").trim(),
     to: to.length > 0 ? to : baseTo,
     subject: subject || baseSubject,
     receivedAt: baseReceivedAt,
-    attachments,
+    attachments: finalAttachments,
     // SLICE 37: carry the plain-text body so the Regulatory Watch funnel can
     // read forwarded LCB bulletins (they arrive as body text, not attachments).
     bodyText: text || null,
