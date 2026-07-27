@@ -27,6 +27,7 @@ import {
   importManifestBatchAction,
   listKbBackfillManifestIdsAction,
   promoteManifestChunkToKbAction,
+  reprocessIntelligenceAction,
 } from "./actions";
 import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
 import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
@@ -47,17 +48,22 @@ export default async function IntakePage({
     kbdone?: string;
     kbnew?: string;
     kberr?: string;
+    repdone?: string;
+    replots?: string;
+    repitems?: string;
+    reperr?: string;
     tab?: string;
     back?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
-  const { error, kbdone, kbnew, kberr, tab, back } = await searchParams;
+  const { error, kbdone, kbnew, kberr, repdone, replots, repitems, reperr, tab, back } =
+    await searchParams;
 
   // H15d — which tab is showing. Explicit ?tab= wins; a manual-form error
   // redirect (or a KB-backfill result banner) auto-opens Manual tools so its
   // banner lands next to the form that produced it; default is the email hero.
-  const activeTab = resolveReceivingTab({ tab, error, kbdone });
+  const activeTab = resolveReceivingTab({ tab, error, kbdone, repdone });
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -133,7 +139,9 @@ export default async function IntakePage({
                             ? "Something went wrong staging the manifest."
                             : error === "kbbackfill"
                               ? "The KB backfill couldn't run — check the server logs."
-                              : null;
+                              : error === "reprocess"
+                                ? "The re-run couldn't read your data — check the server logs."
+                                : null;
 
   const stageMeta = (s: ManifestStage) => STAGE_META[s];
 
@@ -245,6 +253,16 @@ export default async function IntakePage({
             {kbnew ?? 0} product fact{kbnew === "1" ? "" : "s"} promoted as KB drafts
             {kberr && kberr !== "0" ? ` (${kberr} manifest(s) had errors — see server logs)` : ""}.
             Nothing was published — validate the drafts in the KB review lanes.
+          </div>
+        )}
+
+        {repdone && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Re-run finished — {replots ?? 0} lot{replots === "1" ? "" : "s"} and{" "}
+            {repitems ?? 0} live menu item{repitems === "1" ? "" : "s"} were improved with verified
+            facts, product types, or cleaner display names
+            {reperr && reperr !== "0" ? ` (${reperr} row(s) failed to save — see server logs)` : ""}.
+            Everything else already had its facts or gave the engines nothing verifiable — no guesses were written.
           </div>
         )}
 
@@ -435,6 +453,26 @@ export default async function IntakePage({
             listIds={listKbBackfillManifestIdsAction}
             promoteChunk={promoteManifestChunkToKbAction}
           />
+        </div>
+
+        {/* SLICE 67 — re-run intelligence over existing lots + the live menu */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+            Re-run intelligence{" "}
+            <span className="text-[var(--admin-text-faint)]">(existing lots &amp; live menu)</span>
+          </h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            Products received before the latest smarts shipped never met the fact extractor, the
+            product-type labeler, or the display-name builder. This re-reads every lot and every
+            item on the live menu and fills in what they can PROVE — package totals, servings,
+            ratios, product types, cleaner names. Fill-only and safe to re-run: verified facts only,
+            nothing a reviewer set is ever overwritten, and uncertain rows are left alone.
+          </p>
+          <form action={reprocessIntelligenceAction}>
+            <Button type="submit" variant="save" size="sm">
+              Re-run intelligence now
+            </Button>
+          </form>
         </div>
           </>
         )}

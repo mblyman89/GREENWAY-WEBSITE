@@ -44,12 +44,15 @@ export const MANUAL_ERROR_CODES: ReadonlySet<string> = new Set([
   "pdfparse", // PDF form: no LCB shipping document found
   "save", // any form: staging the manifest failed
   "kbbackfill", // KB backfill: run failed
+  "reprocess", // SLICE 67: the re-run-intelligence pass failed
 ]);
 
 export type ReceivingTabParams = {
   tab?: string;
   error?: string;
   kbdone?: string;
+  /** SLICE 67: re-run-intelligence result banner (lives on Manual tools). */
+  repdone?: string;
 };
 
 /**
@@ -71,6 +74,7 @@ export function resolveReceivingTab(params: ReceivingTabParams): ReceivingTab {
   if (params.tab === "email") return "email";
   if (params.error && MANUAL_ERROR_CODES.has(params.error)) return "manual";
   if (params.kbdone) return "manual";
+  if (params.repdone) return "manual";
   return "email";
 }
 
