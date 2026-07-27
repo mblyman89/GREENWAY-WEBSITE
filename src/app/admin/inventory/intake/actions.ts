@@ -495,6 +495,31 @@ export async function backfillKbFromManifestsAction() {
 }
 
 /**
+ * SLICE 67 — re-run the intelligence engines (word-by-word fact
+ * extraction, house-type labeler, display-name builder) over the lots and
+ * published menu items that were received BEFORE those engines shipped.
+ * Fill-only and idempotent: the pure planner (reprocess-core.ts) writes a
+ * fact only when the column is NULL, the value is arithmetic-VERIFIED, and
+ * no reviewer has touched it — so re-running is always safe.
+ */
+export async function reprocessIntelligenceAction() {
+  await requirePermission("inventory.manage");
+  const { reprocessIntelligence } = await import("@/lib/inventory/reprocess-store");
+  const result = await reprocessIntelligence();
+  revalidatePath("/admin/inventory/intake");
+  if (!result.ok) {
+    console.error("[reprocess] pass failed:", result.message);
+    redirect(`/admin/inventory/intake?error=reprocess`);
+  }
+  // The published menu's rows may have changed — refresh the website.
+  revalidatePath("/menu");
+  revalidatePath("/", "layout");
+  redirect(
+    `/admin/inventory/intake?repdone=1&replots=${result.lotsPatched}&repitems=${result.itemsPatched}&reperr=${result.errors}`,
+  );
+}
+
+/**
  * Slice H12g — list the manifests the KB backfill would process (every
  * staged manifest except whole-manifest rejections, oldest first). The
  * client panel chunks these ids and promotes them a few at a time so every
