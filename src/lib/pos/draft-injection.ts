@@ -25,6 +25,7 @@ import {
   type DraftEnrichment,
   type InjectionDiagnostic,
 } from "@/lib/pos/draft-injection-core";
+import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
 
 export type DraftInjectionResult = {
   injected: number;
@@ -181,7 +182,13 @@ export async function injectApprovedDraftsIntoVersion(
       const rows = plan.items.map((it) => ({
         menu_version_id: versionId,
         source_item_id: it.source_item_id,
-        name: it.name,
+        // SLICE 65 (A1/A3/A4): customer-facing name is BUILT from the same
+        // family derivation the mastering/restock identity uses (strain for
+        // strain-led categories, noise-stripped name otherwise, mg dose kept
+        // for dose-led items, size/pack tokens stripped). NULL means "not
+        // confident" — the raw name is kept, never guessed. The raw manifest
+        // name always stays in product_name (compliance under the hood).
+        name: intakeDisplayName(it) ?? it.name,
         product_name: it.product_name,
         brand_name: it.brand_name,
         vendor_name: it.vendor_name,

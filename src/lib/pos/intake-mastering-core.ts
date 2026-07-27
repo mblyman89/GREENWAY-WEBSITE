@@ -56,6 +56,13 @@
  * category would merge every unparseable product of a category into one
  * card. Here an unconfident family yields NULL (standalone, never grouped).
  *
+ * SLICE 65 (owner bugs A1/A3/A4): the family display is ALSO the card's
+ * customer-facing name for singletons (grouped cards already used it), and
+ * `intakeDisplayName` exposes the same derivation to the Cultivera-import
+ * injection path — one brain for naming AND identity. The raw manifest name
+ * always stays in product_name (compliance under the hood); an unconfident
+ * family keeps the raw name on screen too (never guess).
+ *
  * PURE: no I/O. intake-menu-staging-core composes this into the staged
  * snapshot; its only imports are the equally pure draft-injection-core,
  * variant-lot-core, and format helpers.
@@ -280,6 +287,32 @@ export const PACK_CATEGORY_AXIS: Record<string, string> = {
 /** The category used for grouping identity (a pack folds to its single form). */
 export function groupingCategoryAxis(category: string): string {
   return PACK_CATEGORY_AXIS[category] ?? category;
+}
+
+/**
+ * SLICE 65: the customer-facing display name for ONE planned intake item —
+ * the SAME family derivation grouping and restock identity use (strain for
+ * strain-led categories; noise-stripped name otherwise, mg dose preserved
+ * for dose-led categories). Mirrors the mastering planner's per-item rules
+ * exactly: a blank vendor or an unconfident family returns NULL (the caller
+ * keeps the raw name — never guess).
+ */
+export function intakeDisplayName(
+  it: Pick<
+    PlannedInjectedItem,
+    "name" | "product_name" | "brand_name" | "vendor_name" | "category" | "strain_name"
+  >,
+): string | null {
+  const vendor = normalizeWhitespace(it.vendor_name);
+  if (!vendor) return null;
+  const fam = deriveFamily({
+    category: it.category,
+    vendor,
+    brand: it.brand_name,
+    name: it.product_name ?? it.name,
+    strainName: it.strain_name,
+  });
+  return fam ? fam.display : null;
 }
 
 /** vendor|categoryAxis|family — the owner's "same product, same vendor" identity. */
@@ -524,8 +557,30 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     const sorted = sortVariants(variants);
 
     if (group.items.length === 1 && liveMatches.length === 0) {
-      // Singleton with nothing to merge into — exactly the legacy shape.
-      newCards.push(standaloneCard(base));
+      // SLICE 65 (owner bugs A1/A3/A4): a singleton with a CONFIDENT family
+      // takes the family display as its customer-facing name — the SAME
+      // derivation grouped cards and restock identity already use, so the
+      // built name folds back onto its own identity. Sizes, pack tokens and
+      // vendor/brand prefixes are stripped; the mg dose stays for dose-led
+      // categories. The raw manifest name stays on the card's product_name
+      // (compliance under the hood). Unconfident families never reach here
+      // (standalone + warning above), so nothing is ever guessed.
+      const single = standaloneCard(base);
+      if (group.display && group.display !== single.name) {
+        diagnostics.push({
+          severity: "info",
+          code: "intake_display_name_built",
+          message: `“${single.name}” will appear on the menu as “${group.display}” — the manifest name stays on file.`,
+          context: {
+            card_key: single.source_item_id,
+            raw_name: single.product_name ?? single.name,
+            display_name: group.display,
+          },
+        });
+        single.name = group.display;
+        single.description = `${group.display} from ${normalizeWhitespace(single.brand_name) || group.vendor}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`;
+      }
+      newCards.push(single);
       continue;
     }
 
@@ -737,8 +792,13 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     );
     assert(p.newCards.length === 2, "edible dose split: two cards (doses never merge)");
     const names = p.newCards.map((c) => c.name).sort();
-    assert(names.includes("Fairwinds - Rainbow Chews 100mg pack"), "edible dose split: 100mg standalone keeps its draft name");
-    assert(names.includes("Rainbow_Chews_10mg_single"), "edible dose split: 10mg standalone keeps its draft name");
+    // SLICE 65: singletons now carry the BUILT display name — the dose stays
+    // (it sells the product), the pack/form noise goes, raw stays under the hood.
+    assert(names.includes("Rainbow Chews 100mg"), "edible dose split: 100mg standalone built name keeps the dose");
+    assert(names.includes("Rainbow Chews 10mg"), "edible dose split: 10mg standalone built name keeps the dose");
+    const raws = p.newCards.map((c) => c.product_name).sort();
+    assert(raws.includes("Fairwinds - Rainbow Chews 100mg pack"), "edible dose split: raw 100mg name kept under the hood");
+    assert(raws.includes("Rainbow_Chews_10mg_single"), "edible dose split: raw 10mg name kept under the hood");
   }
 
   // SLICE 49: SAME dose still rolls up — two lots of the identical 100mg product
@@ -826,6 +886,11 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
       ],
     );
     assert(p.newCards.length === 2, "ambiguous name: standalone cards, never grouped");
+    // SLICE 65: no confident family → the raw name is KEPT (never guess a name).
+    assert(
+      p.newCards.every((c) => c.name === "Fairwinds 1g" || c.name === "Fairwinds 3.5g"),
+      "ambiguous name: raw names kept, never rebuilt on a guess",
+    );
     assert(
       p.diagnostics.filter((d) => d.code === "intake_master_ambiguous_name").length === 2,
       "ambiguous name: warnings",
@@ -874,15 +939,65 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(p.diagnostics.some((d) => d.code === "draft_superseded_by_pos"), "eligibility: superseded");
   }
 
-  // Singleton with no live match keeps the exact legacy card shape.
+  // SLICE 65: a singleton with a confident family gets the BUILT display
+  // name (size stripped); the raw manifest name stays in product_name.
   {
     const p = plan([draft({})], [["d1", enrich({})]]);
     assert(p.newCards.length === 1, "singleton: one card");
     const card = p.newCards[0];
     assert(card.source_item_id === "LOT-A", "singleton: keyed on the lot");
-    assert(card.name === "Blue Dream 1g", "singleton: keeps the draft name verbatim");
+    assert(card.name === "Blue Dream", "singleton: display name built from the family (no size token)");
+    assert(card.product_name === "Blue Dream 1g", "singleton: raw manifest name kept under the hood");
+    assert(card.description.startsWith("Blue Dream from"), "singleton: description uses the built name");
+    assert(
+      p.diagnostics.some((d) => d.code === "intake_display_name_built" && d.severity === "info"),
+      "singleton: rename disclosed via diagnostic",
+    );
     assert(card.variants.length === 1 && card.variants[0].source_variant_id === "LOT-A-onboarded",
       "singleton: one -onboarded variant");
+  }
+
+  // SLICE 65: junk manifest wording on a strain-led singleton → the strain IS
+  // the name; ambiguous names below keep raw (never guess).
+  {
+    const p = plan(
+      [
+        draft({
+          id: "j1",
+          pos_product_key: "LOT-J1",
+          name: "2727 - Blunts - 2727 - DOH - Strawberry - Tropicana Cookies - 1.5g",
+          strain_name: "Tropicana Cookies",
+        }),
+      ],
+      [["j1", enrich({ websiteCategory: "blunt", packageLabel: "1.5g" })]],
+    );
+    assert(p.newCards.length === 1, "junk singleton: one card");
+    assert(p.newCards[0].name === "Tropicana Cookies", "junk singleton: strain-led built name");
+    assert(
+      p.newCards[0].product_name === "2727 - Blunts - 2727 - DOH - Strawberry - Tropicana Cookies - 1.5g",
+      "junk singleton: raw manifest name kept under the hood",
+    );
+  }
+
+  // SLICE 65: helper mirrors the planner — built name, or null when blank
+  // vendor / unconfident (caller keeps raw, never guesses).
+  {
+    assert(
+      intakeDisplayName({ name: "Blue Dream 1g", product_name: "Blue Dream 1g", brand_name: "Fairwinds", vendor_name: "Fairwinds LLC", category: "flower", strain_name: "Blue Dream" }) === "Blue Dream",
+      "helper: strain-led built name",
+    );
+    assert(
+      intakeDisplayName({ name: "Rainbow_Chews_100mg_single", product_name: "Rainbow_Chews_100mg_single", brand_name: "", vendor_name: "Fairwinds LLC", category: "edible-solid", strain_name: null }) === "Rainbow Chews 100mg",
+      "helper: dose-led keeps the mg dose, strips the pack/form noise",
+    );
+    assert(
+      intakeDisplayName({ name: "Blue Dream 1g", product_name: "Blue Dream 1g", brand_name: "Fairwinds", vendor_name: null, category: "flower", strain_name: "Blue Dream" }) === null,
+      "helper: blank vendor → null (never guess)",
+    );
+    assert(
+      intakeDisplayName({ name: "Fairwinds 3.5g", product_name: "Fairwinds 3.5g", brand_name: "Fairwinds", vendor_name: "Fairwinds LLC", category: "paraphernalia", strain_name: null }) === null,
+      "helper: unconfident family → null (never guess)",
+    );
   }
 
   // Family helpers: strain-led uses strain; underscores normalize; category
