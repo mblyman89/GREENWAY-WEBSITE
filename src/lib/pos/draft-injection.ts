@@ -176,6 +176,14 @@ export async function injectApprovedDraftsIntoVersion(
         total_thc_json: it.total_thc_json,
         total_cbd_json: it.total_cbd_json,
         compounds_json: it.compounds_json,
+        // SLICE 62: structured facts (migration 0138) — verified-only values
+        // from the word-by-word extraction engine; null means "not verified".
+        servings_per_pack: it.servings_per_pack,
+        mg_per_serving: it.mg_per_serving,
+        package_thc_mg: it.package_thc_mg,
+        package_cbd_mg: it.package_cbd_mg,
+        ratio_label: it.ratio_label,
+        fact_provenance: it.fact_provenance,
         description: it.description,
         price_label: it.price_label,
         price_minor_units: it.price_minor_units,

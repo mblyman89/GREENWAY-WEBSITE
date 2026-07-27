@@ -105,6 +105,16 @@ export type IntakeMasteringInputs = {
   liveCards: LiveCardCandidate[];
 };
 
+/** SLICE 62: per-lot verified facts (for inventory_lots persistence). */
+export type LotFactBundle = {
+  servings_per_pack: number | null;
+  mg_per_serving: number | null;
+  package_thc_mg: number | null;
+  package_cbd_mg: number | null;
+  ratio_label: string | null;
+  fact_provenance: Record<string, string>;
+};
+
 export type IntakeMasteringPlan = {
   /** New cards to append (within-invoice rollup already applied). */
   newCards: MasteredNewCard[];
@@ -120,6 +130,13 @@ export type IntakeMasteringPlan = {
   diagnostics: InjectionDiagnostic[];
   addedCardCount: number;
   mergedVariantCount: number;
+  /**
+   * SLICE 62: verified extraction facts per planned lot (keyed by the lot's
+   * pos_product_key / source_item_id), so the executor can also persist them
+   * on inventory_lots — the golden record lives on the lot, not just the card.
+   * Only lots with at least one non-null fact appear here.
+   */
+  lotFactsByKey: Map<string, LotFactBundle>;
 };
 
 // --- Family normalization (mirrors transform.ts :265-269 and :734-775) -----
@@ -320,6 +337,29 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     baseSortOrder: 0, // the snapshot composer reassigns sort orders
   });
   const diagnostics: InjectionDiagnostic[] = [...injection.diagnostics];
+
+  // SLICE 62: collect the verified per-lot facts BEFORE grouping — grouped
+  // cards keep only the base item's fields, but every lot's facts must reach
+  // inventory_lots regardless of how its card was mastered.
+  const lotFactsByKey = new Map<string, LotFactBundle>();
+  for (const it of injection.items) {
+    if (
+      it.servings_per_pack !== null ||
+      it.mg_per_serving !== null ||
+      it.package_thc_mg !== null ||
+      it.package_cbd_mg !== null ||
+      it.ratio_label !== null
+    ) {
+      lotFactsByKey.set(it.source_item_id, {
+        servings_per_pack: it.servings_per_pack,
+        mg_per_serving: it.mg_per_serving,
+        package_thc_mg: it.package_thc_mg,
+        package_cbd_mg: it.package_cbd_mg,
+        ratio_label: it.ratio_label,
+        fact_provenance: it.fact_provenance,
+      });
+    }
+  }
 
   // Lot keys already selling as a variant on some live card (restocked lot
   // that was ALREADY merged in a previous run, or a Slice-1-era card).
@@ -541,6 +581,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     diagnostics,
     addedCardCount: newCards.length,
     mergedVariantCount,
+    lotFactsByKey,
   };
 }
 
@@ -1004,6 +1045,35 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     );
     assert(p.newCards.length === 1, "rso: strain-led rollup");
     assert(p.newCards[0].variants.length === 2, "rso: two variants");
+  }
+
+  // --- SLICE 62: per-lot verified facts surface for inventory_lots ---
+  {
+    const p = plan(
+      [
+        draft({
+          id: "e1",
+          pos_product_key: "LOT-E1",
+          name: "Const HRG CBN 1:1:1 Blueberry 10 Pack 300mg",
+          total_thc_pct: 10,
+          thc_pct: null,
+          cbd_pct: 9.1,
+          potency_json: null,
+          inventory_type: "Solid Edible",
+          price_minor_units: 2500,
+        }),
+      ],
+      [["e1", enrich({ websiteCategory: "edible-solid", packageLabel: "10 Pack" })]],
+    );
+    const facts = p.lotFactsByKey.get("LOT-E1");
+    assert(facts !== undefined, "lot facts: verified edible carries a fact bundle");
+    assert(facts!.package_thc_mg === 100, "lot facts: verified package THC 100mg");
+    assert(facts!.servings_per_pack === 10, "lot facts: verified servings 10");
+    assert(facts!.ratio_label === "1:1:1", "lot facts: ratio label");
+  }
+  {
+    const p = plan([draft({})], [["d1", enrich({})]]);
+    assert(!p.lotFactsByKey.has("LOT-A"), "lot facts: flower has no mg bundle");
   }
 
   return { passed };
