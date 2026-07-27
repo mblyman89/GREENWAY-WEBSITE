@@ -55,35 +55,43 @@ export function CommandPalette({ items }: Props) {
     return scored.map((r) => r.it);
   }, [items, query]);
 
-  // Global keyboard shortcut to open + Escape to close.
+  // Keep the active index in range as results change (derived at render time
+  // instead of a setState-in-effect, per react-hooks/set-state-in-effect).
+  const activeIndex = Math.min(active, Math.max(results.length - 1, 0));
+
+  // Open with a fresh query/selection. Resets live in the event handlers
+  // (button click / keydown), not in an effect body.
+  function openPalette() {
+    setQuery("");
+    setActive(0);
+    setOpen(true);
+  }
+
+  // Global keyboard shortcut to toggle + Escape to close.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen((o) => !o);
+        if (open) {
+          setOpen(false);
+        } else {
+          openPalette();
+        }
       } else if (e.key === "Escape") {
         setOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open]);
 
-  // Focus + reset when opened.
+  // Focus the input after the palette paints.
   useEffect(() => {
     if (open) {
-      setQuery("");
-      setActive(0);
-      // focus after paint
       const id = window.setTimeout(() => inputRef.current?.focus(), 10);
       return () => window.clearTimeout(id);
     }
   }, [open]);
-
-  // Keep the active index in range as results change.
-  useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(results.length - 1, 0)));
-  }, [results.length]);
 
   function go(item: PaletteItem | undefined) {
     if (!item) return;
@@ -94,13 +102,13 @@ export function CommandPalette({ items }: Props) {
   function onInputKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((a) => Math.min(a + 1, results.length - 1));
+      setActive(Math.min(activeIndex + 1, results.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((a) => Math.max(a - 1, 0));
+      setActive(Math.max(activeIndex - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      go(results[active]);
+      go(results[activeIndex]);
     }
   }
 
@@ -111,7 +119,7 @@ export function CommandPalette({ items }: Props) {
           Accessible name kept via aria-label + title; ⌘K still works. */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => openPalette()}
         aria-label="Open quick search (Cmd/Ctrl + K)"
         title="Quick search (⌘K)"
         className="admin-chrome fixed bottom-[4.25rem] left-4 z-30 hidden h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-[#0a0a0a]/90 text-white/60 shadow-lg shadow-black/50 backdrop-blur transition hover:text-white lg:flex"
@@ -156,7 +164,7 @@ export function CommandPalette({ items }: Props) {
                       onMouseEnter={() => setActive(i)}
                       onClick={() => go(item)}
                       className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${
-                        i === active ? "bg-[var(--admin-accent)]/10" : "hover:bg-white/5"
+                        i === activeIndex ? "bg-[var(--admin-accent)]/10" : "hover:bg-white/5"
                       }`}
                     >
                       <span className="text-base">{item.icon}</span>
