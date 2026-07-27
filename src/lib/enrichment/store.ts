@@ -126,6 +126,13 @@ export type GapFlags = {
   hasImage: boolean;
   hasBrandLink: boolean;
   enrichmentStatus: string | null;
+  // SLICE 72 — extra worklist signals (additive; existing consumers unaffected).
+  /** Tags power site search/filtering; missing tags is a real gap. */
+  hasTags: boolean;
+  /** POS price in cents — lets the worklist sort by product value. */
+  priceMinorUnits: number;
+  /** POS stock status (in-stock / low-stock / unavailable) for worklist filtering. */
+  inventoryStatus: string;
 };
 
 /**
@@ -145,6 +152,10 @@ export function computeGaps(item: MenuItemRow, enrichment: ProductEnrichment | n
     hasImage,
     hasBrandLink,
     enrichmentStatus: enrichment?.status ?? null,
+    // SLICE 72 — worklist signals.
+    hasTags: (enrichment?.tags?.length ?? 0) > 0,
+    priceMinorUnits: item.price_minor_units,
+    inventoryStatus: item.inventory_status,
   };
 }
 

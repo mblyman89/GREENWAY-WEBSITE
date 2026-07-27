@@ -249,8 +249,19 @@ export function buildAssetGuidance(g: GuidanceInput): string[] {
 // Worklist sorting + status filter (the list page's controls).
 // ---------------------------------------------------------------------------
 
-export type EnrichmentSortKey = "gaps" | "name" | "brand" | "category" | "status";
-export const ENRICHMENT_SORT_KEYS: readonly EnrichmentSortKey[] = ["gaps", "name", "brand", "category", "status"];
+export type EnrichmentSortKey =
+  | "gaps"
+  | "name"
+  | "brand"
+  | "category"
+  | "status"
+  // SLICE 72 — worklist intelligence.
+  | "priority"
+  | "priceHigh"
+  | "priceLow";
+export const ENRICHMENT_SORT_KEYS: readonly EnrichmentSortKey[] = [
+  "gaps", "name", "brand", "category", "status", "priority", "priceHigh", "priceLow",
+];
 
 export function parseEnrichmentSort(raw: string | null | undefined): EnrichmentSortKey {
   return (ENRICHMENT_SORT_KEYS as readonly string[]).includes(raw ?? "") ? (raw as EnrichmentSortKey) : "gaps";
@@ -262,7 +273,18 @@ export function parseEnrichmentStatusFilter(raw: string | null | undefined): Enr
   return raw === "none" || raw === "draft" || raw === "published" || raw === "archived" ? raw : "";
 }
 
-/** The gap-flag subset the sorter needs (matches store.ts GapFlags). */
+/** SLICE 72 — stock filter for the worklist (POS inventory_status values). */
+export type EnrichmentStockFilter = "" | "in-stock" | "low-stock" | "unavailable";
+
+export function parseEnrichmentStockFilter(raw: string | null | undefined): EnrichmentStockFilter {
+  return raw === "in-stock" || raw === "low-stock" || raw === "unavailable" ? raw : "";
+}
+
+/**
+ * The gap-flag subset the sorter needs (matches store.ts GapFlags).
+ * SLICE 72 fields are OPTIONAL so older callers/tests stay valid; sorts that
+ * need them treat missing values defensively.
+ */
 export type SortableGapRow = {
   name: string;
   brand: string;
@@ -271,6 +293,9 @@ export type SortableGapRow = {
   hasImage: boolean;
   hasBrandLink: boolean;
   enrichmentStatus: string | null;
+  hasTags?: boolean;
+  priceMinorUnits?: number;
+  inventoryStatus?: string;
 };
 
 /** How many enrichment gaps a row has (image weighted first for ties). */
@@ -279,6 +304,34 @@ export function gapCount(g: SortableGapRow): number {
 }
 
 const STATUS_ORDER: Record<string, number> = { published: 0, draft: 1, archived: 2 };
+
+/**
+ * SLICE 72 — worklist PRIORITY score. "What should I enrich next?" answered
+ * with shopkeeper logic: a product that shoppers can actually BUY right now
+ * and that looks broken online outranks everything else.
+ *
+ *   • each gap counts (image weighted heaviest — it hurts the card most,
+ *     then description, then brand link, then tags),
+ *   • in-stock products outrank low-stock, which outrank sold-out (fixing a
+ *     card nobody can buy helps nobody today),
+ *   • pricier products get a small nudge (more revenue per fix).
+ *
+ * Pure and defensive: missing SLICE 72 fields degrade gracefully.
+ */
+export function enrichmentPriorityScore(g: SortableGapRow): number {
+  let score = 0;
+  if (!g.hasImage) score += 40;
+  if (!g.hasDescription) score += 30;
+  if (!g.hasBrandLink) score += 15;
+  if (g.hasTags === false) score += 10;
+  const stock = g.inventoryStatus ?? "";
+  if (stock === "in-stock") score += 20;
+  else if (stock === "low-stock") score += 10;
+  // Price nudge: 0–5 points, capped at $100 (10000 cents). Never dominates.
+  const price = Math.max(0, Math.trunc(Number(g.priceMinorUnits) || 0));
+  score += Math.min(5, Math.round((Math.min(price, 10000) / 10000) * 5));
+  return score;
+}
 
 /**
  * Sort the worklist. "gaps" (default) puts the most-broken products first —
@@ -300,6 +353,13 @@ export function sortEnrichmentList<T extends SortableGapRow>(rows: T[], sort: En
         (a, b) =>
           (STATUS_ORDER[a.enrichmentStatus ?? ""] ?? 3) - (STATUS_ORDER[b.enrichmentStatus ?? ""] ?? 3) || byName(a, b),
       );
+    case "priority":
+      // SLICE 72: sellable + broken first (see enrichmentPriorityScore).
+      return copy.sort((a, b) => enrichmentPriorityScore(b) - enrichmentPriorityScore(a) || byName(a, b));
+    case "priceHigh":
+      return copy.sort((a, b) => (b.priceMinorUnits ?? 0) - (a.priceMinorUnits ?? 0) || byName(a, b));
+    case "priceLow":
+      return copy.sort((a, b) => (a.priceMinorUnits ?? 0) - (b.priceMinorUnits ?? 0) || byName(a, b));
     case "gaps":
     default:
       return copy.sort((a, b) => gapCount(b) - gapCount(a) || Number(a.hasImage) - Number(b.hasImage) || byName(a, b));
@@ -311,6 +371,12 @@ export function filterByEnrichmentStatus<T extends SortableGapRow>(rows: T[], f:
   if (!f) return rows;
   if (f === "none") return rows.filter((r) => r.enrichmentStatus === null);
   return rows.filter((r) => r.enrichmentStatus === f);
+}
+
+/** SLICE 72 — apply the stock filter ("" = all). Unknown statuses never match. */
+export function filterByStock<T extends SortableGapRow>(rows: T[], f: EnrichmentStockFilter): T[] {
+  if (!f) return rows;
+  return rows.filter((r) => (r.inventoryStatus ?? "") === f);
 }
 
 // ---------------------------------------------------------------------------
@@ -433,6 +499,33 @@ export function __runEnrichmentMatchCoreTests(): void {
   ok(filterByEnrichmentStatus(rows, "none").length === 1 && filterByEnrichmentStatus(rows, "none")[0]?.name === "Bravo", "status filter 'none' = never enriched");
   ok(filterByEnrichmentStatus(rows, "").length === 3, "empty status filter keeps all");
   ok(rows[0]?.name === "Alpha", "sortEnrichmentList does not mutate input");
+
+  // SLICE 72 — priority score, price sorts, stock filter.
+  const worklist: SortableGapRow[] = [
+    // Fully broken but SOLD OUT — fixing it helps nobody today.
+    { name: "Dead", brand: "B", category: "flower", hasDescription: false, hasImage: false, hasBrandLink: false, enrichmentStatus: null, hasTags: false, priceMinorUnits: 4000, inventoryStatus: "unavailable" },
+    // Fully broken and IN STOCK — the top priority.
+    { name: "Hot", brand: "B", category: "flower", hasDescription: false, hasImage: false, hasBrandLink: false, enrichmentStatus: null, hasTags: false, priceMinorUnits: 4000, inventoryStatus: "in-stock" },
+    // Complete and in stock — bottom of the pile.
+    { name: "Done", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: "published", hasTags: true, priceMinorUnits: 9000, inventoryStatus: "in-stock" },
+  ];
+  ok(enrichmentPriorityScore(worklist[1]!) > enrichmentPriorityScore(worklist[0]!), "priority: in-stock broken beats sold-out broken");
+  ok(enrichmentPriorityScore(worklist[0]!) > enrichmentPriorityScore(worklist[2]!), "priority: any broken beats complete");
+  const prio = sortEnrichmentList(worklist, "priority");
+  ok(prio[0]?.name === "Hot" && prio[2]?.name === "Done", "priority sort: sellable+broken first, complete last");
+  ok(sortEnrichmentList(worklist, "priceHigh")[0]?.name === "Done", "priceHigh sort: dearest first");
+  ok(sortEnrichmentList(worklist, "priceLow")[0]?.priceMinorUnits === 4000, "priceLow sort: cheapest first");
+  ok(parseEnrichmentSort("priority") === "priority" && parseEnrichmentSort("priceHigh") === "priceHigh", "sort parser accepts SLICE 72 keys");
+  ok(filterByStock(worklist, "in-stock").length === 2, "stock filter: in-stock");
+  ok(filterByStock(worklist, "unavailable")[0]?.name === "Dead", "stock filter: unavailable");
+  ok(filterByStock(worklist, "").length === 3, "stock filter: empty keeps all");
+  ok(parseEnrichmentStockFilter("junk") === "" && parseEnrichmentStockFilter("low-stock") === "low-stock", "stock parser defensive");
+  // Defensive: legacy rows without SLICE 72 fields still sort without throwing.
+  const legacy: SortableGapRow[] = [
+    { name: "Old", brand: "B", category: "flower", hasDescription: false, hasImage: false, hasBrandLink: false, enrichmentStatus: null },
+  ];
+  ok(sortEnrichmentList(legacy, "priority").length === 1 && sortEnrichmentList(legacy, "priceHigh").length === 1, "legacy rows: SLICE 72 sorts degrade gracefully");
+  ok(Number.isFinite(enrichmentPriorityScore(legacy[0]!)), "legacy rows: priority score stays finite");
 
   if (fail > 0) throw new Error(`enrichment-match-core: ${fail} failure(s)`);
   console.log(`enrichment-match-core: ${pass} checks passed`);

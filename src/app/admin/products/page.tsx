@@ -21,8 +21,10 @@ import { DistributionBars } from "@/components/admin/insight/DistributionBars";
 import {
   parseEnrichmentSort,
   parseEnrichmentStatusFilter,
+  parseEnrichmentStockFilter,
   sortEnrichmentList,
   filterByEnrichmentStatus,
+  filterByStock,
 } from "@/lib/enrichment/match-core";
 
 function fmtMoney(minor: number | null): string {
@@ -35,13 +37,15 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; view?: string; sort?: string; status?: string; back?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
   const { q, gap, category, view } = sp;
+  const brandFilter = sp.brand ?? "";
   const sort = parseEnrichmentSort(sp.sort);
   const statusFilter = parseEnrichmentStatusFilter(sp.status);
+  const stockFilter = parseEnrichmentStockFilter(sp.stock);
   const isTable = view === "table";
   // GW-029: carry the current filters into detail links for BackLink restore.
   const detailHref = (posKey: string) =>
@@ -157,17 +161,21 @@ export default async function ProductsPage({
     filtered = filtered.filter((g) => g.name.toLowerCase().includes(ql) || g.brand.toLowerCase().includes(ql));
   }
   if (category) filtered = filtered.filter((g) => g.category === category);
+  if (brandFilter) filtered = filtered.filter((g) => g.brand === brandFilter);
   if (gap === "description") filtered = filtered.filter((g) => !g.hasDescription);
   else if (gap === "image") filtered = filtered.filter((g) => !g.hasImage);
   else if (gap === "brand") filtered = filtered.filter((g) => !g.hasBrandLink);
-  else if (gap === "any") filtered = filtered.filter((g) => !g.hasDescription || !g.hasImage || !g.hasBrandLink);
+  else if (gap === "tags") filtered = filtered.filter((g) => !g.hasTags);
+  else if (gap === "any") filtered = filtered.filter((g) => !g.hasDescription || !g.hasImage || !g.hasBrandLink || !g.hasTags);
   filtered = filterByEnrichmentStatus(filtered, statusFilter);
+  filtered = filterByStock(filtered, stockFilter);
   filtered = sortEnrichmentList(filtered, sort);
 
   const missingDesc = gaps.filter((g) => !g.hasDescription).length;
   const missingImg = gaps.filter((g) => !g.hasImage).length;
   const enriched = gaps.filter((g) => g.enrichmentStatus === "published").length;
   const categories = Array.from(new Set(gaps.map((g) => g.category))).sort();
+  const brandOptions = Array.from(new Set(gaps.map((g) => g.brand).filter(Boolean))).sort();
 
   // Slice 1 — richer read-only insight over the live menu (no source-of-truth change).
   const stats = computeProductStats(items, gaps);
@@ -201,9 +209,11 @@ export default async function ProductsPage({
   const baseQs = new URLSearchParams();
   if (q) baseQs.set("q", q);
   if (category) baseQs.set("category", category);
+  if (brandFilter) baseQs.set("brand", brandFilter);
   if (gap) baseQs.set("gap", gap);
   if (sp.sort) baseQs.set("sort", sort);
   if (statusFilter) baseQs.set("status", statusFilter);
+  if (stockFilter) baseQs.set("stock", stockFilter);
   const gridHref = `/admin/products?${baseQs.toString()}`;
   const tableQs = new URLSearchParams(baseQs);
   tableQs.set("view", "table");
@@ -361,12 +371,22 @@ export default async function ProductsPage({
               </option>
             ))}
           </Select>
+          {/* SLICE 72 — brand filter (values come from the live menu). */}
+          <Select name="brand" defaultValue={brandFilter} className="w-auto">
+            <option value="">All brands</option>
+            {brandOptions.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </Select>
           <Select name="gap" defaultValue={gap ?? ""} className="w-auto">
             <option value="">All products</option>
             <option value="any">Any gap</option>
             <option value="description">Missing description</option>
             <option value="image">Missing image</option>
             <option value="brand">Missing brand link</option>
+            <option value="tags">Missing tags</option>
           </Select>
           <Select name="status" defaultValue={statusFilter} className="w-auto">
             <option value="">Any enrichment status</option>
@@ -375,16 +395,34 @@ export default async function ProductsPage({
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </Select>
+          {/* SLICE 72 — stock filter: fix what shoppers can BUY first. */}
+          <Select name="stock" defaultValue={stockFilter} className="w-auto">
+            <option value="">Any stock</option>
+            <option value="in-stock">In stock</option>
+            <option value="low-stock">Low stock</option>
+            <option value="unavailable">Sold out</option>
+          </Select>
           <Select name="sort" defaultValue={sort} className="w-auto">
             <option value="gaps">Sort: most gaps first</option>
+            <option value="priority">Sort: smart priority (sellable + broken first)</option>
             <option value="name">Sort: name A–Z</option>
             <option value="brand">Sort: brand A–Z</option>
             <option value="category">Sort: category</option>
             <option value="status">Sort: enrichment status</option>
+            <option value="priceHigh">Sort: price high → low</option>
+            <option value="priceLow">Sort: price low → high</option>
           </Select>
           <Button type="submit" variant="neutral">
             Filter
           </Button>
+          {(q || category || brandFilter || gap || statusFilter || stockFilter) && (
+            <Link
+              href={view ? `/admin/products?view=${view}` : "/admin/products"}
+              className="text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            >
+              ✕ Clear filters
+            </Link>
+          )}
           {view && <input type="hidden" name="view" value={view} />}
           {/* Grid / Table view toggle */}
           <div className="ml-auto inline-flex overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)]">
@@ -416,8 +454,22 @@ export default async function ProductsPage({
           </div>
         )}
 
+        {/* SLICE 72 — honest result count so filtering feels responsive. */}
+        <p className="text-xs text-[var(--admin-text-faint)]">
+          Showing <span className="font-semibold text-[var(--admin-text-muted)]">{Math.min(filtered.length, 300)}</span> of{" "}
+          <span className="font-semibold text-[var(--admin-text-muted)]">{filtered.length}</span> matching products
+          {filtered.length !== gaps.length ? ` (${gaps.length} total on the live menu)` : ""}.
+        </p>
+
         {/* Visual grid (default) */}
         {!isTable && <ProductGrid cards={gridCards} hrefFor={detailHref} />}
+        {!isTable && filtered.length === 0 && (
+          <EmptyState
+            icon="🔍"
+            title="No products match your filter"
+            description="Try clearing the search box or choosing a different category, brand, gap, or stock filter."
+          />
+        )}
 
         {/* Table (power-user view) */}
         {isTable && (
@@ -428,9 +480,12 @@ export default async function ProductsPage({
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Brand</th>
                 <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3 text-right">Price</th>
+                <th className="px-4 py-3 text-center">Stock</th>
                 <th className="px-4 py-3 text-center">Desc</th>
                 <th className="px-4 py-3 text-center">Image</th>
                 <th className="px-4 py-3 text-center">Brand link</th>
+                <th className="px-4 py-3 text-center">Tags</th>
                 <th className="px-4 py-3 text-center">Status</th>
               </tr>
             </thead>
@@ -444,9 +499,20 @@ export default async function ProductsPage({
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">{g.brand || "—"}</td>
                   <td className="px-4 py-3 text-[var(--admin-text-faint)]">{g.category}</td>
+                  <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtMoney(g.priceMinorUnits)}</td>
+                  <td className="px-4 py-3 text-center">
+                    {g.inventoryStatus === "in-stock" ? (
+                      <span className="text-[var(--admin-accent)]">●</span>
+                    ) : g.inventoryStatus === "low-stock" ? (
+                      <span className="text-[var(--admin-gold)]">●</span>
+                    ) : (
+                      <span className="text-[var(--admin-text-faint)]">○</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">{g.hasDescription ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}</td>
                   <td className="px-4 py-3 text-center">{g.hasImage ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}</td>
                   <td className="px-4 py-3 text-center">{g.hasBrandLink ? "✅" : <span className="text-[var(--admin-text-faint)]">—</span>}</td>
+                  <td className="px-4 py-3 text-center">{g.hasTags ? "✅" : <span className="text-[var(--admin-text-faint)]">—</span>}</td>
                   <td className="px-4 py-3 text-center">
                     <StatusPill status={g.enrichmentStatus ?? undefined}>
                       {g.enrichmentStatus ?? "none"}
