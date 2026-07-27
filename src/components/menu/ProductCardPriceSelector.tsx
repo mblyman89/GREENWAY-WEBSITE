@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem, GreenwayMenuVariant } from "@/lib/leafly/types";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
+import { collapseVariantsForDisplay } from "@/lib/menu/variant-collapse-core";
 
 type ProductCardPriceSelectorProps = {
   item: GreenwayMenuItem;
@@ -95,10 +96,14 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
   // SLICE 40 (owner directive): the LOWEST package size shows first and the
   // list ascends (1g → 3.5g → 7g → 14g → 1oz). Sorted at render time so the
   // card never trusts upstream row order (mastered cards / legacy snapshots).
+  // SLICE 70 (restock readiness): a restocked lot with the SAME label+price
+  // is collapsed to ONE row for shoppers (the first in-stock lot represents
+  // the group — the oldest, FIFO-friendly). Display-only; every lot's row
+  // survives in the database, register, and admin.
   const variants = useMemo(
     () =>
       item.variants.length > 0
-        ? sortVariantsBySize(item.variants)
+        ? collapseVariantsForDisplay(sortVariantsBySize(item.variants))
         : [
             {
               id: `${item.id}-default`,
