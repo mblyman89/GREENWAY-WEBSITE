@@ -20,6 +20,12 @@
  * diagnostic — never injected with invented data.
  */
 import { formatMoney } from "@/lib/pos/format";
+import {
+  intakePotencyUnit,
+  capIntakePotency,
+  formatIntakePotency,
+  type PotencyUnit,
+} from "@/lib/pos/intake-potency-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
 export type ApprovedDraftForInjection = {
@@ -35,6 +41,13 @@ export type ApprovedDraftForInjection = {
   potency_json: Record<string, number> | null;
   price_minor_units: number | null;
   updated_at: string;
+  /**
+   * SLICE 61: the lot's LCB inventory type ("Solid Edible", "Topical
+   * Ointment", …) — one of the two signals that decide whether potency
+   * displays in mg or %. Optional so historical callers/tests keep compiling;
+   * both server callers already SELECT it.
+   */
+  inventory_type?: string | null;
 };
 
 /** Per-draft enrichment the SERVER gathers (resolver / kb / lot lookups). */
@@ -73,9 +86,9 @@ export type PlannedInjectedItem = {
   strain_name: string | null;
   thc: string | null;
   cbd: string | null;
-  total_thc_json: { type: "thc"; value: string; unit: "%" } | null;
-  total_cbd_json: { type: "cbd"; value: string; unit: "%" } | null;
-  compounds_json: { type: string; value: string; unit: "%" }[];
+  total_thc_json: { type: "thc"; value: string; unit: PotencyUnit } | null;
+  total_cbd_json: { type: "cbd"; value: string; unit: PotencyUnit } | null;
+  compounds_json: { type: string; value: string; unit: PotencyUnit }[];
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -114,10 +127,6 @@ export function statusForOnHand(level: number | null): "in-stock" | "low-stock" 
 }
 
 const COMPOUND_TYPES = new Set(["thc", "thca", "cbd", "cbda", "cbg", "cbn", "cbc", "cbdv"]);
-
-function pctString(v: number): string {
-  return `${Number(v.toFixed(2))}%`;
-}
 
 /**
  * Plan the injection. Deterministic and pure: dedupes approved drafts by POS
@@ -195,13 +204,37 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       continue;
     }
 
-    const thcPct = d.total_thc_pct ?? d.thc_pct;
-    const cbdPct = d.cbd_pct;
+    // SLICE 61 (owner bug: "THC: 3000%" on topicals/edibles): the display unit
+    // is DERIVED from the resolved website category + LCB inventory type —
+    // never hard-coded. mg-dosed products (edibles/drinks/topicals/tinctures)
+    // carry unit "mg"; flower/concentrates stay "%". Values get the same
+    // sanity caps as the Cultivera import path (percent hard-capped at 100;
+    // per-category mg ceilings), with a diagnostic whenever a cap fires so
+    // the human sees exactly what was reined in.
+    const unit = intakePotencyUnit(enrich.websiteCategory, d.inventory_type ?? null);
+    const capNote = (kind: string, rejected: number, used: number) => {
+      diagnostics.push({
+        severity: "warning",
+        code: "draft_inject_potency_capped",
+        message: `“${d.name}”: the source ${kind} value ${rejected} exceeded the ${unit === "%" ? "100% sanity cap" : "mg sanity ceiling"} and was capped at ${used}. Verify the true potency on the COA and enrich the product.`,
+        context: { draft_id: d.id, pos_product_key: key, kind, rejected, used, unit },
+      });
+    };
+    const capped = (kind: string, raw: number | null): number | null => {
+      if (raw == null || !Number.isFinite(raw) || raw <= 0) return raw == null ? null : raw;
+      const r = capIntakePotency(raw, unit, enrich.websiteCategory);
+      if (r.capped) capNote(kind, raw, r.value);
+      return r.value;
+    };
+    const thcPct = capped("THC", d.total_thc_pct ?? d.thc_pct);
+    const cbdPct = capped("CBD", d.cbd_pct);
     const compounds: PlannedInjectedItem["compounds_json"] = [];
     for (const [k, v] of Object.entries(d.potency_json ?? {})) {
       const type = k.trim().toLowerCase();
       if (COMPOUND_TYPES.has(type) && typeof v === "number" && Number.isFinite(v)) {
-        compounds.push({ type, value: String(Number(v.toFixed(2))), unit: "%" });
+        const cv = capIntakePotency(v, unit, enrich.websiteCategory);
+        if (cv.capped) capNote(type.toUpperCase(), v, cv.value);
+        compounds.push({ type, value: String(Number(cv.value.toFixed(2))), unit });
       }
     }
 
@@ -222,12 +255,12 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       pos_inventory_category: null,
       strain_type: enrich.strainType?.trim() || "unknown",
       strain_name: d.strain_name,
-      thc: thcPct != null ? pctString(thcPct) : null,
-      cbd: cbdPct != null ? pctString(cbdPct) : null,
+      thc: thcPct != null ? formatIntakePotency(thcPct, unit) : null,
+      cbd: cbdPct != null ? formatIntakePotency(cbdPct, unit) : null,
       total_thc_json:
-        thcPct != null ? { type: "thc", value: String(Number(thcPct.toFixed(2))), unit: "%" } : null,
+        thcPct != null ? { type: "thc", value: String(Number(thcPct.toFixed(2))), unit } : null,
       total_cbd_json:
-        cbdPct != null ? { type: "cbd", value: String(Number(cbdPct.toFixed(2))), unit: "%" } : null,
+        cbdPct != null ? { type: "cbd", value: String(Number(cbdPct.toFixed(2))), unit } : null,
       compounds_json: compounds,
       // Same copy shape as transform.ts genericDescription (verified :586).
       description: `${d.name}${brand ? ` from ${brand}` : ""}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
@@ -380,6 +413,60 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
     assert(statusForOnHand(0) === "unavailable", "0 unavailable");
     assert(statusForOnHand(3) === "low-stock", "3 low-stock");
     assert(statusForOnHand(4) === "in-stock", "4 in-stock");
+  }
+
+  // --- SLICE 61: mg-aware potency (owner bug "THC: 3000%" on topicals) ---
+
+  // A 100 mg drink: unit derives from the edible-liquid category → "100mg".
+  {
+    const p = plan(
+      [draft({ total_thc_pct: 100, thc_pct: null, cbd_pct: null, potency_json: { thc: 100 }, inventory_type: "Liquid Edible" })],
+      new Map([["d1", enrich({ websiteCategory: "edible-liquid" })]]),
+    );
+    const it = p.items[0];
+    assert(it.thc === "100mg", "mg drink displays 100mg (not 100%)");
+    assert(it.total_thc_json?.unit === "mg", "total_thc_json carries mg unit");
+    assert(it.compounds_json[0]?.unit === "mg", "compounds carry mg unit");
+    assert(it.cbd === null, "no CBD value -> no CBD display");
+  }
+
+  // A 3000 mg topical: under the 5000 mg topical ceiling → shown as mg, uncapped.
+  {
+    const p = plan(
+      [draft({ total_thc_pct: 3000, thc_pct: null, potency_json: null, inventory_type: "Topical Ointment" })],
+      new Map([["d1", enrich({ websiteCategory: "topical" })]]),
+    );
+    assert(p.items[0].thc === "3000mg", "3000mg topical honest (was 3000%)");
+    assert(!p.diagnostics.some((d) => d.code === "draft_inject_potency_capped"), "sane mg not capped");
+  }
+
+  // The LCB inventory type alone flips to mg when the category is dose-blind.
+  {
+    const p = plan(
+      [draft({ total_thc_pct: 10, thc_pct: null, potency_json: null, inventory_type: "Solid Edible" })],
+      new Map([["d1", enrich({ websiteCategory: "edible-solid" })]]),
+    );
+    assert(p.items[0].total_thc_json?.unit === "mg", "Solid Edible type -> mg");
+  }
+
+  // A corrupt 3000 "%" on flower is hard-capped at 100 with a warning.
+  {
+    const p = plan(
+      [draft({ total_thc_pct: 3000, thc_pct: null, potency_json: null, inventory_type: "Usable Marijuana" })],
+      new Map([["d1", enrich({ websiteCategory: "flower" })]]),
+    );
+    assert(p.items[0].thc === "100%", "3000% flower capped at 100%");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_potency_capped" && d.severity === "warning"),
+      "cap emits warning diagnostic",
+    );
+  }
+
+  // Flower stays percent (no mg invented) — same output as before this slice.
+  {
+    const p = plan([draft({})], new Map([["d1", enrich({})]]));
+    assert(p.items[0].thc === "24.11%", "flower percent output unchanged");
+    assert(p.items[0].total_thc_json?.unit === "%", "flower unit stays %");
   }
 
   return { passed };
