@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -140,6 +141,23 @@ export default async function ProductEditorPage({
                     <li key={g}>{g}</li>
                   ))}
                 </ol>
+                {/* SLICE 73 — jump-to buttons: each guidance step gets a button
+                    that takes you straight to WHERE that step happens (an admin
+                    page or an anchor further down this page). */}
+                {center.guidanceActions.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--admin-gold)]/15 pt-3">
+                    {center.guidanceActions.map((a) => (
+                      <Link
+                        key={a.href}
+                        href={a.href}
+                        title={a.hint}
+                        className="rounded-lg border border-[var(--admin-gold)]/35 bg-black/30 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--admin-gold)] transition-colors hover:bg-[var(--admin-gold)]/15"
+                      >
+                        {a.label} →
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -213,7 +231,7 @@ export default async function ProductEditorPage({
 
         {/* Suggested matches (KB products / media library / vendor menus) */}
         {(center.kbSuggestions.length > 0 || center.mediaSuggestions.length > 0 || center.vendorSuggestions.length > 0) && (
-          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <div id="matches" className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
             <p className="text-sm font-semibold text-white">Suggested matches</p>
             <p className="mt-1 text-[11px] text-white/45">
               Conservative name + brand matching — every suggestion shows WHY it matched. Nothing is applied until you click.
@@ -350,7 +368,7 @@ export default async function ProductEditorPage({
         )}
 
         {/* AI panel */}
-        <div id="ai" className="rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
+        <div id="ai" className="scroll-mt-24 rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-[var(--admin-gold)]">AI assist {isAiConfigured ? "" : "(disabled)"}</p>
             {isAiConfigured && (
@@ -591,13 +609,13 @@ export default async function ProductEditorPage({
                   Removing an image only takes it off this product — the file stays in the media library.
                 </p>
               )}
-              <label className="block">
+              <label id="upload" className="block scroll-mt-24">
                 <span className={label}>Add image</span>
                 <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" className="block w-full text-xs text-white/70 file:mr-2 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-black" />
               </label>
             </div>
 
-            <div className="space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+            <div id="brand" className="scroll-mt-24 space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
               <p className="text-sm font-semibold text-white">Brand link</p>
               <select name="brand_id" defaultValue={enrichment?.brand_id ?? ""} className={field}>
                 <option value="">— not linked —</option>

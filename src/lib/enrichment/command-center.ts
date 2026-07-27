@@ -35,6 +35,8 @@ import { resolveSubstituteFor } from "@/lib/ai/kb/image-substitutes";
 import { listMedia, resolveMediaUrls } from "@/lib/media/store";
 import {
   buildAssetGuidance,
+  buildGuidanceActions,
+  type GuidanceAction,
   rankMatches,
   scoreKbCandidate,
   scoreMediaCandidate,
@@ -93,6 +95,8 @@ export type EnrichmentCommandCenter = {
   substitute: { url: string; scope: string; key: string } | null;
   /** Plain-English "how to get assets" checklist (empty = fully enriched). */
   guidance: string[];
+  /** SLICE 73 — jump-to buttons that take you WHERE each guidance step happens. */
+  guidanceActions: GuidanceAction[];
 };
 
 // ---------------------------------------------------------------------------
@@ -301,6 +305,21 @@ export async function getEnrichmentCommandCenter(
     brand: pos.brand,
   });
 
+  // SLICE 73 — jump-to buttons mirroring the guidance, with the media-library
+  // search pre-filled from the product's name tokens (same tokens the vendor
+  // candidate finder uses, so the search lands on the right shelf).
+  const guidanceActions = buildGuidanceActions({
+    hasDescription: gaps.hasDescription,
+    hasImage: gaps.hasImage,
+    kbMatches: kbSuggestions.length,
+    mediaMatches: mediaSuggestions.length,
+    vendorMatches: vendorSuggestions.length,
+    substituteAvailable: Boolean(substitute),
+    brand: pos.brand,
+    hasBrandLink: gaps.hasBrandLink,
+    searchQuery: tokenizeEnrichment(pos.name).slice(0, 3).join(" ") || pos.name,
+  });
+
   return {
     enrichment,
     gaps,
@@ -311,5 +330,6 @@ export async function getEnrichmentCommandCenter(
     liveImage,
     substitute,
     guidance,
+    guidanceActions,
   };
 }
