@@ -14,7 +14,33 @@
  *     steps={["Export the two files from your POS", "Upload them here", "Review", "Publish"]}
  *   />
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useSyncExternalStore, type ReactNode } from "react";
+
+// Panel open/closed preference store. localStorage-backed with an in-memory
+// fallback (so toggling still works when storage is unavailable), plus a
+// module-level pub/sub so same-tab writes re-render subscribed panels.
+// Read via useSyncExternalStore — hydration-safe and effect-free.
+const memoryStore = new Map<string, string>();
+const listeners = new Set<() => void>();
+
+function readPref(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    // localStorage may be unavailable; fall back to the in-memory store.
+    return memoryStore.get(key) ?? null;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore storage write failures; remember in-memory for this session
+  }
+  memoryStore.set(key, value);
+  for (const notify of listeners) notify();
+}
 
 export function HelpPanel({
   id,
@@ -30,28 +56,35 @@ export function HelpPanel({
   defaultOpen?: boolean;
 }) {
   const storageKey = `gw-help-${id}`;
-  const [open, setOpen] = useState(defaultOpen);
 
-  // Restore remembered open/closed state on mount.
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      if (saved !== null) setOpen(saved === "1");
-    } catch {
-      // localStorage may be unavailable; fall back to defaultOpen.
-    }
-  }, [storageKey]);
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      listeners.add(onChange);
+      const onStorage = (e: StorageEvent) => {
+        if (e.key === storageKey) onChange();
+      };
+      window.addEventListener("storage", onStorage);
+      return () => {
+        listeners.delete(onChange);
+        window.removeEventListener("storage", onStorage);
+      };
+    },
+    [storageKey],
+  );
+
+  const getSnapshot = useCallback(() => {
+    const saved = memoryStore.get(storageKey) ?? readPref(storageKey);
+    return saved !== null && saved !== undefined ? saved === "1" : defaultOpen;
+  }, [storageKey, defaultOpen]);
+
+  const getServerSnapshot = useCallback(() => defaultOpen, [defaultOpen]);
+
+  // Remembered open/closed state (server renders defaultOpen, the browser
+  // then applies the saved preference — same behavior as before).
+  const open = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   function toggle() {
-    setOpen((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(storageKey, next ? "1" : "0");
-      } catch {
-        // ignore storage write failures
-      }
-      return next;
-    });
+    writePref(storageKey, open ? "0" : "1");
   }
 
   return (
