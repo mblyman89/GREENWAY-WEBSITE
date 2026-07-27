@@ -206,3 +206,61 @@ describe("worklist sorting + filtering", () => {
     expect(filterByEnrichmentStatus(rows, "")).toHaveLength(3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SLICE 72 — worklist intelligence: smart priority, price sorts, stock filter.
+// Mirrors the embedded self-tests in match-core.ts.
+// ---------------------------------------------------------------------------
+
+import {
+  enrichmentPriorityScore,
+  parseEnrichmentStockFilter,
+  filterByStock,
+} from "@/lib/enrichment/match-core";
+
+describe("worklist intelligence — SLICE 72", () => {
+  const worklist: SortableGapRow[] = [
+    { name: "Dead", brand: "B", category: "flower", hasDescription: false, hasImage: false, hasBrandLink: false, enrichmentStatus: null, hasTags: false, priceMinorUnits: 4000, inventoryStatus: "unavailable" },
+    { name: "Hot", brand: "B", category: "flower", hasDescription: false, hasImage: false, hasBrandLink: false, enrichmentStatus: null, hasTags: false, priceMinorUnits: 4000, inventoryStatus: "in-stock" },
+    { name: "Done", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: "published", hasTags: true, priceMinorUnits: 9000, inventoryStatus: "in-stock" },
+  ];
+
+  it("priority score: in-stock broken beats sold-out broken beats complete", () => {
+    expect(enrichmentPriorityScore(worklist[1]!)).toBeGreaterThan(enrichmentPriorityScore(worklist[0]!));
+    expect(enrichmentPriorityScore(worklist[0]!)).toBeGreaterThan(enrichmentPriorityScore(worklist[2]!));
+  });
+
+  it("priority sort puts sellable + broken first and complete last", () => {
+    const sorted = sortEnrichmentList(worklist, "priority");
+    expect(sorted[0]!.name).toBe("Hot");
+    expect(sorted[2]!.name).toBe("Done");
+  });
+
+  it("price sorts work both directions", () => {
+    expect(sortEnrichmentList(worklist, "priceHigh")[0]!.name).toBe("Done");
+    expect(sortEnrichmentList(worklist, "priceLow")[0]!.priceMinorUnits).toBe(4000);
+  });
+
+  it("stock filter matches POS inventory_status exactly; empty keeps all", () => {
+    expect(filterByStock(worklist, "in-stock")).toHaveLength(2);
+    expect(filterByStock(worklist, "unavailable").map((r) => r.name)).toEqual(["Dead"]);
+    expect(filterByStock(worklist, "")).toHaveLength(3);
+  });
+
+  it("parsers accept the new keys and stay defensive", () => {
+    expect(parseEnrichmentSort("priority")).toBe("priority");
+    expect(parseEnrichmentSort("priceHigh")).toBe("priceHigh");
+    expect(parseEnrichmentSort("priceLow")).toBe("priceLow");
+    expect(parseEnrichmentStockFilter("low-stock")).toBe("low-stock");
+    expect(parseEnrichmentStockFilter("junk")).toBe("");
+  });
+
+  it("legacy rows without SLICE 72 fields degrade gracefully", () => {
+    const legacy: SortableGapRow[] = [
+      { name: "Old", brand: "B", category: "flower", hasDescription: false, hasImage: false, hasBrandLink: false, enrichmentStatus: null },
+    ];
+    expect(sortEnrichmentList(legacy, "priority")).toHaveLength(1);
+    expect(sortEnrichmentList(legacy, "priceHigh")).toHaveLength(1);
+    expect(Number.isFinite(enrichmentPriorityScore(legacy[0]!))).toBe(true);
+  });
+});
