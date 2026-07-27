@@ -177,6 +177,12 @@ export async function recordUsage(mediaAssetId: string, entityType: string, enti
   await admin.from("media_usages").insert({ media_asset_id: mediaAssetId, entity_type: entityType, entity_id: entityId, field_key: fieldKey });
 }
 
+/** SLICE 71: clear the usage ledger for a slot (e.g. a product removed its last image). */
+export async function clearUsage(entityType: string, entityId: string, fieldKey: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  await admin.from("media_usages").delete().match({ entity_type: entityType, entity_id: entityId, field_key: fieldKey });
+}
+
 export async function whereUsed(mediaAssetId: string): Promise<{ entity_type: string; entity_id: string; field_key: string | null }[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();

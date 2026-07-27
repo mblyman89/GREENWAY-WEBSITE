@@ -81,3 +81,80 @@ describe("attachImageToGallery — H9c", () => {
     expect(r.primary_media_id).toBe("z");
   });
 });
+
+// ---------------------------------------------------------------------------
+// SLICE 71 — explicit gallery edits (remove / set cover / reorder). Mirrors
+// __runProductImageEditTests in product-images-core.ts. These are the edits
+// the owner asked for: "no way to unselect an image, first one you attach is
+// forever stuck attached" — now it isn't.
+// ---------------------------------------------------------------------------
+
+import {
+  detachImageFromGallery,
+  setPrimaryImage,
+  moveImageInGallery,
+  __runProductImageEditTests,
+} from "@/lib/ai/kb/product-images-core";
+
+describe("gallery edits — SLICE 71", () => {
+  it("embedded self-tests all pass", () => {
+    const r = __runProductImageEditTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(20);
+  });
+
+  it("detach removes a non-cover image and keeps the cover", () => {
+    const r = detachImageFromGallery({ image_media_ids: ["a", "b", "c"], primary_media_id: "a" }, "b");
+    expect(r.changed).toBe(true);
+    expect(r.image_media_ids).toEqual(["a", "c"]);
+    expect(r.primary_media_id).toBe("a");
+  });
+
+  it("detaching the cover promotes the next remaining image", () => {
+    const r = detachImageFromGallery({ image_media_ids: ["a", "b"], primary_media_id: "a" }, "a");
+    expect(r.image_media_ids).toEqual(["b"]);
+    expect(r.primary_media_id).toBe("b");
+  });
+
+  it("detaching the LAST image clears the cover to null (nothing stuck forever)", () => {
+    const r = detachImageFromGallery({ image_media_ids: ["only"], primary_media_id: "only" }, "only");
+    expect(r.image_media_ids).toEqual([]);
+    expect(r.primary_media_id).toBeNull();
+  });
+
+  it("detach of an unknown id is a no-op (changed=false, no write)", () => {
+    const r = detachImageFromGallery({ image_media_ids: ["a"], primary_media_id: "a" }, "ghost");
+    expect(r.changed).toBe(false);
+  });
+
+  it("setPrimaryImage picks a gallery member as cover without reordering", () => {
+    const r = setPrimaryImage({ image_media_ids: ["a", "b", "c"], primary_media_id: "a" }, "c");
+    expect(r.changed).toBe(true);
+    expect(r.primary_media_id).toBe("c");
+    expect(r.image_media_ids).toEqual(["a", "b", "c"]);
+  });
+
+  it("setPrimaryImage refuses an id that is not in the gallery", () => {
+    const r = setPrimaryImage({ image_media_ids: ["a"], primary_media_id: "a" }, "ghost");
+    expect(r.changed).toBe(false);
+    expect(r.primary_media_id).toBe("a");
+  });
+
+  it("move swaps neighbours; edges are no-ops; cover never changes", () => {
+    const right = moveImageInGallery({ image_media_ids: ["a", "b", "c"], primary_media_id: "a" }, "a", "right");
+    expect(right.image_media_ids).toEqual(["b", "a", "c"]);
+    expect(right.primary_media_id).toBe("a");
+    const edge = moveImageInGallery({ image_media_ids: ["a", "b"], primary_media_id: "a" }, "a", "left");
+    expect(edge.changed).toBe(false);
+  });
+
+  it("inputs are never mutated by any edit", () => {
+    const ids = ["a", "b", "c"];
+    const s = { image_media_ids: ids, primary_media_id: "a" as string | null };
+    detachImageFromGallery(s, "b");
+    setPrimaryImage(s, "c");
+    moveImageInGallery(s, "a", "right");
+    expect(ids).toEqual(["a", "b", "c"]);
+    expect(s.primary_media_id).toBe("a");
+  });
+});
