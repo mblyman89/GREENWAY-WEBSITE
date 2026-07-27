@@ -203,6 +203,35 @@ export async function stageIntakeMenuVersionForManifest(
       enrichmentByDraftId,
     });
 
+    // SLICE 62: persist the VERIFIED extraction facts on the source lots —
+    // the golden record lives on inventory_lots (migration 0138 columns), so
+    // COAs, audits, and future re-processing see the same facts the menu
+    // shows. Best-effort: a failed lot update never blocks the staging.
+    if (plan.lotFactsByKey.size > 0) {
+      const lotIdByKey = new Map<string, string>();
+      for (const d of drafts) {
+        if (d.pos_product_key && d.lot_id) lotIdByKey.set(d.pos_product_key, d.lot_id);
+      }
+      for (const [key, facts] of plan.lotFactsByKey) {
+        const lotId = lotIdByKey.get(key);
+        if (!lotId) continue;
+        const { error: lfErr } = await admin
+          .from("inventory_lots")
+          .update({
+            servings_per_pack: facts.servings_per_pack,
+            mg_per_serving: facts.mg_per_serving,
+            package_thc_mg: facts.package_thc_mg,
+            package_cbd_mg: facts.package_cbd_mg,
+            ratio_label: facts.ratio_label,
+            fact_provenance: facts.fact_provenance,
+          })
+          .eq("id", lotId);
+        if (lfErr) {
+          console.error(`[intake-menu-staging] lot fact update failed for ${lotId}:`, lfErr.message);
+        }
+      }
+    }
+
     // Nothing NEW to carry (every approved draft was superseded/skipped): do not
     // create a redundant staged version. The diagnostics still tell the human why
     // via the timeline note in the caller.
@@ -252,6 +281,34 @@ export async function stageIntakeMenuVersionForManifest(
     //    live immediately via the same atomic RPC the Menu Imports publish
     //    button uses. Best-effort: on ANY failure the STAGED version remains
     //    and surfaces on Menu Imports as the manual-publish fallback.
+    // SLICE 62 review gate (Rule 3.1: uncertain facts go to a human, never to
+    // customers): when the word-by-word extraction engine could NOT verify
+    // every fact on an mg-dosed line, the fresh snapshot stays STAGED — the
+    // human reviews the flagged reasons on Menu Imports and presses Publish
+    // there. Same principle as the SLICE 58 import commit gate.
+    const factFlags = plan.diagnostics.filter((d) => d.code === "fact_extraction_review");
+    if (factFlags.length > 0) {
+      try {
+        await admin.from("manifest_events").insert({
+          manifest_id: manifestId,
+          event_type: "menu_publish_held_for_fact_review",
+          note: `Menu update staged but NOT auto-published: the extraction engine could not verify every fact on ${factFlags.length} product(s). Review the flagged reasons on Menu Imports and publish from there.`,
+          actor_id: actorId,
+        });
+      } catch (err) {
+        console.error("[intake-menu-staging] fact-review hold event insert failed:", err);
+      }
+      return {
+        staged: true,
+        published: false,
+        versionId: version.id,
+        carried: plan.carriedCount,
+        added: plan.addedCount,
+        merged: plan.mergedCount,
+        reason: "held-for-fact-review",
+      };
+    }
+
     const publishedOk = await autoPublishIntakeVersion(version.id, actorId, manifestId);
 
     return {
@@ -465,6 +522,16 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardIte
     total_thc_json: it.total_thc_json,
     total_cbd_json: it.total_cbd_json,
     compounds_json: it.compounds_json,
+    // SLICE 62: carry the structured facts (migration 0138) forward so a new
+    // intake snapshot never wipes facts an earlier import/intake run earned.
+    servings_per_pack: it.servings_per_pack,
+    mg_per_serving: it.mg_per_serving,
+    package_thc_mg: it.package_thc_mg,
+    package_cbd_mg: it.package_cbd_mg,
+    ratio_label: it.ratio_label,
+    net_weight_grams: it.net_weight_grams,
+    net_volume_ml: it.net_volume_ml,
+    fact_provenance: (it.fact_provenance ?? {}) as Record<string, string>,
     description: it.description,
     price_label: it.price_label,
     price_minor_units: it.price_minor_units,
@@ -520,6 +587,16 @@ async function persistSnapshotItems(
       total_thc_json: it.total_thc_json,
       total_cbd_json: it.total_cbd_json,
       compounds_json: it.compounds_json,
+      // SLICE 62: structured facts (migration 0138) — verified-only values
+      // from the word-by-word extraction engine; null means "not verified".
+      servings_per_pack: it.servings_per_pack,
+      mg_per_serving: it.mg_per_serving,
+      package_thc_mg: it.package_thc_mg,
+      package_cbd_mg: it.package_cbd_mg,
+      ratio_label: it.ratio_label,
+      net_weight_grams: it.net_weight_grams,
+      net_volume_ml: it.net_volume_ml,
+      fact_provenance: it.fact_provenance,
       description: it.description,
       price_label: it.price_label,
       price_minor_units: it.price_minor_units,

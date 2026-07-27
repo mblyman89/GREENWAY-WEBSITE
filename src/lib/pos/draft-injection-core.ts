@@ -26,6 +26,7 @@ import {
   formatIntakePotency,
   type PotencyUnit,
 } from "@/lib/pos/intake-potency-core";
+import { crossExamineRow, MG_FACT_TYPES } from "@/lib/inventory/fact-extraction-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
 export type ApprovedDraftForInjection = {
@@ -89,6 +90,17 @@ export type PlannedInjectedItem = {
   total_thc_json: { type: "thc"; value: string; unit: PotencyUnit } | null;
   total_cbd_json: { type: "cbd"; value: string; unit: PotencyUnit } | null;
   compounds_json: { type: string; value: string; unit: PotencyUnit }[];
+  /**
+   * SLICE 62: structured facts (migration 0138 columns on menu_items) from
+   * the SLICE 55 word-by-word extraction engine, VERIFIED-only — null means
+   * "not verified", never "zero". Same rule as the Cultivera import path.
+   */
+  servings_per_pack: number | null;
+  mg_per_serving: number | null;
+  package_thc_mg: number | null;
+  package_cbd_mg: number | null;
+  ratio_label: string | null;
+  fact_provenance: Record<string, string>;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -226,7 +238,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       if (r.capped) capNote(kind, raw, r.value);
       return r.value;
     };
-    const thcPct = capped("THC", d.total_thc_pct ?? d.thc_pct);
+    let thcPct = capped("THC", d.total_thc_pct ?? d.thc_pct);
     const cbdPct = capped("CBD", d.cbd_pct);
     const compounds: PlannedInjectedItem["compounds_json"] = [];
     for (const [k, v] of Object.entries(d.potency_json ?? {})) {
@@ -235,6 +247,100 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
         const cv = capIntakePotency(v, unit, enrich.websiteCategory);
         if (cv.capped) capNote(type.toUpperCase(), v, cv.value);
         compounds.push({ type, value: String(Number(cv.value.toFixed(2))), unit });
+      }
+    }
+
+    // SLICE 62: run the SLICE 55 word-by-word extraction engine on every
+    // mg-dosed manifest line — the SAME engine the Cultivera workbook path
+    // uses (transform.ts SLICE 56). The raw manifest name is cross-examined
+    // against the lab THC/CBD numbers; only arithmetic-VERIFIED facts are
+    // used, and anything the engine could not verify feeds the exception
+    // queue via a fact_extraction_review diagnostic (Rule 3.1: uncertain
+    // facts go to a human, never to customers).
+    const factProvenance: Record<string, string> = {};
+    let servingsPerPack: number | null = null;
+    let mgPerServing: number | null = null;
+    let packageThcMg: number | null = null;
+    let packageCbdMg: number | null = null;
+    let ratioLabel: string | null = null;
+    const invType = (d.inventory_type ?? "").trim();
+    const exam = MG_FACT_TYPES.has(invType)
+      ? crossExamineRow({
+          productText: d.name,
+          inventoryType: invType,
+          thcColumn: d.total_thc_pct ?? d.thc_pct,
+          cbdColumn: d.cbd_pct,
+        })
+      : null;
+    if (exam) {
+      if (exam.needsReview) {
+        diagnostics.push({
+          severity: "warning",
+          code: "fact_extraction_review",
+          message: exam.reviewReasons[0] ?? "Extraction needs review.",
+          context: {
+            draft_id: d.id,
+            pos_product_key: key,
+            productName: d.name,
+            displayName: d.name,
+            inventoryType: invType,
+            reasons: exam.reviewReasons,
+          },
+        });
+      }
+      if (unit === "mg") {
+        // PACKAGE-TOTAL-FIRST (same policy as transform.ts): a VERIFIED
+        // package total outranks the raw column value.
+        if (exam.packageThcMg?.confidence === "verified") {
+          const cv = capIntakePotency(exam.packageThcMg.value, unit, enrich.websiteCategory);
+          if (cv.capped) capNote("THC", exam.packageThcMg.value, cv.value);
+          packageThcMg = cv.value;
+          factProvenance.package_thc_mg = exam.packageThcMg.source;
+          if (thcPct !== null && thcPct !== cv.value) {
+            diagnostics.push({
+              severity: "info",
+              code: "thc_package_total_override",
+              message:
+                "Displayed THC now uses the verified package total; the inconsistent source value was set aside.",
+              context: {
+                draft_id: d.id,
+                pos_product_key: key,
+                productName: d.name,
+                inventoryType: invType,
+                totalColumnDisplay: formatIntakePotency(thcPct, unit),
+                verifiedPackageTotal: formatIntakePotency(cv.value, unit),
+                how: exam.packageThcMg.note,
+              },
+            });
+          }
+          thcPct = cv.value;
+        }
+        if (exam.packageCbdMg?.confidence === "verified") {
+          const cv = capIntakePotency(exam.packageCbdMg.value, unit, enrich.websiteCategory);
+          packageCbdMg = cv.value;
+          factProvenance.package_cbd_mg = exam.packageCbdMg.source;
+        }
+        if (exam.servingsPerPack?.confidence === "verified") {
+          servingsPerPack = exam.servingsPerPack.value;
+          factProvenance.servings_per_pack = exam.servingsPerPack.source;
+        }
+        if (exam.mgPerServing?.confidence === "verified") {
+          mgPerServing = exam.mgPerServing.value;
+          factProvenance.mg_per_serving = exam.mgPerServing.source;
+        }
+        // Minor cannabinoids (CBG/CBN/CBC/CBDV) live ONLY in product names —
+        // no manifest columns exist for them. VERIFIED-only, never duplicated.
+        for (const minor of exam.minorCannabinoids) {
+          if (minor.confidence !== "verified" || minor.mg === null) continue;
+          const type = minor.cannabinoid.toLowerCase();
+          if (type !== "cbg" && type !== "cbn" && type !== "cbc" && type !== "cbdv") continue;
+          if (compounds.some((c) => c.type === type)) continue;
+          compounds.push({ type, value: String(Number(minor.mg.toFixed(2))), unit: "mg" });
+        }
+      }
+      if (exam.ratioLabel?.value) {
+        ratioLabel = exam.ratioLabel.value;
+        factProvenance.ratio_label = exam.ratioLabel.source;
       }
     }
 
@@ -262,6 +368,12 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       total_cbd_json:
         cbdPct != null ? { type: "cbd", value: String(Number(cbdPct.toFixed(2))), unit } : null,
       compounds_json: compounds,
+      servings_per_pack: servingsPerPack,
+      mg_per_serving: mgPerServing,
+      package_thc_mg: packageThcMg,
+      package_cbd_mg: packageCbdMg,
+      ratio_label: ratioLabel,
+      fact_provenance: factProvenance,
       // Same copy shape as transform.ts genericDescription (verified :586).
       description: `${d.name}${brand ? ` from ${brand}` : ""}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
       price_label: priceLabel,
@@ -467,6 +579,91 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
     const p = plan([draft({})], new Map([["d1", enrich({})]]));
     assert(p.items[0].thc === "24.11%", "flower percent output unchanged");
     assert(p.items[0].total_thc_json?.unit === "%", "flower unit stays %");
+    assert(p.items[0].package_thc_mg === null, "flower carries no mg facts");
+    assert(Object.keys(p.items[0].fact_provenance).length === 0, "flower provenance empty");
+  }
+
+  // --- SLICE 62: word-by-word fact extraction at intake ---
+
+  // A fully reconcilable edible: name facts verified by column arithmetic —
+  // package total, servings, per-serving dose, minor cannabinoid — and the
+  // verified package total OVERRIDES the raw per-serving column value.
+  {
+    const p = plan(
+      [
+        draft({
+          name: "Const HRG CBN 1:1:1 Blueberry 10 Pack 300mg",
+          total_thc_pct: 10,
+          thc_pct: null,
+          cbd_pct: 9.1,
+          potency_json: null,
+          inventory_type: "Solid Edible",
+        }),
+      ],
+      new Map([["d1", enrich({ websiteCategory: "edible-solid" })]]),
+    );
+    const it = p.items[0];
+    assert(it.package_thc_mg === 100, "verified package THC 100mg persisted");
+    assert(it.servings_per_pack === 10, "verified servings 10 persisted");
+    assert(it.mg_per_serving === 10, "verified 10mg per serving persisted");
+    assert(it.package_cbd_mg === 100, "verified package CBD 100mg persisted");
+    assert(it.ratio_label === "1:1:1", "ratio label extracted from the name");
+    assert(it.thc === "100mg", "verified package total overrides the 10 column value");
+    assert(typeof it.fact_provenance.package_thc_mg === "string", "provenance recorded");
+    assert(
+      it.compounds_json.some((c) => c.type === "cbn" && c.value === "100" && c.unit === "mg"),
+      "verified minor cannabinoid CBN 100mg surfaced",
+    );
+    assert(
+      p.diagnostics.some((d) => d.code === "thc_package_total_override"),
+      "override disclosed via diagnostic",
+    );
+    assert(
+      !p.diagnostics.some((d) => d.code === "fact_extraction_review"),
+      "fully reconciled row does NOT feed the review queue",
+    );
+  }
+
+  // An UNVERIFIABLE row (zero potency columns): the stated 100mg is only
+  // single-source, so it is NOT persisted as a verified fact and the row
+  // feeds the fact-review exception queue (Rule 3.1).
+  {
+    const p = plan(
+      [
+        draft({
+          name: "Kelly's Sweet Hash Edibles - Kellys - 10pk Cookie Dough - 100mg THC - Peanut Butter",
+          total_thc_pct: null,
+          thc_pct: null,
+          cbd_pct: null,
+          potency_json: null,
+          inventory_type: "Solid Edible",
+        }),
+      ],
+      new Map([["d1", enrich({ websiteCategory: "edible-solid" })]]),
+    );
+    const it = p.items[0];
+    assert(it.package_thc_mg === null, "single-source THC never persisted as verified");
+    assert(it.servings_per_pack === 10, "pack count stated in the name IS verified");
+    assert(
+      p.diagnostics.some(
+        (d) => d.code === "fact_extraction_review" && d.severity === "warning",
+      ),
+      "unverifiable row feeds the exception queue",
+    );
+  }
+
+  // Percent-mode types never run mg extraction — flower stays fact-free even
+  // when its name happens to carry an mg token.
+  {
+    const p = plan(
+      [draft({ name: "Blue Dream 100mg Special 1g", inventory_type: "Usable Marijuana" })],
+      new Map([["d1", enrich({})]]),
+    );
+    assert(p.items[0].package_thc_mg === null, "percent-mode: no mg facts invented");
+    assert(
+      !p.diagnostics.some((d) => d.code === "fact_extraction_review"),
+      "percent-mode rows never flagged by the mg examiner",
+    );
   }
 
   return { passed };

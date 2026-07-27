@@ -58,6 +58,7 @@ import type {
 } from "@/lib/pos/draft-injection-core";
 import {
   buildIntakeMasteringPlan,
+  type LotFactBundle,
   type MasteredNewCard,
   type MasteredVariant,
 } from "@/lib/pos/intake-mastering-core";
@@ -84,6 +85,19 @@ export type CarryForwardItem = {
   total_thc_json: unknown | null;
   total_cbd_json: unknown | null;
   compounds_json: unknown;
+  /**
+   * SLICE 62: structured facts (migration 0138) carried forward VERBATIM so
+   * a new intake snapshot never wipes facts the import path already earned.
+   * Optional so historical fixtures keep compiling; missing means null.
+   */
+  servings_per_pack?: number | null;
+  mg_per_serving?: number | null;
+  package_thc_mg?: number | null;
+  package_cbd_mg?: number | null;
+  ratio_label?: string | null;
+  net_weight_grams?: number | null;
+  net_volume_ml?: number | null;
+  fact_provenance?: Record<string, string> | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -121,6 +135,15 @@ export type StagedSnapshotItem = {
   total_thc_json: unknown | null;
   total_cbd_json: unknown | null;
   compounds_json: unknown;
+  /** SLICE 62: structured facts persisted to menu_items (migration 0138). */
+  servings_per_pack: number | null;
+  mg_per_serving: number | null;
+  package_thc_mg: number | null;
+  package_cbd_mg: number | null;
+  ratio_label: string | null;
+  net_weight_grams: number | null;
+  net_volume_ml: number | null;
+  fact_provenance: Record<string, string>;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -159,6 +182,8 @@ export type IntakeStagingPlan = {
   /** True when there is at least one new card OR merged restock variant. */
   hasChanges: boolean;
   diagnostics: InjectionDiagnostic[];
+  /** SLICE 62: verified extraction facts per lot key (for inventory_lots). */
+  lotFactsByKey: Map<string, LotFactBundle>;
 };
 
 /** Convert a mastered new card into a staged snapshot item. */
@@ -181,6 +206,14 @@ function masteredToSnapshot(it: MasteredNewCard, sortOrder: number): StagedSnaps
     total_thc_json: it.total_thc_json,
     total_cbd_json: it.total_cbd_json,
     compounds_json: it.compounds_json,
+    servings_per_pack: it.servings_per_pack,
+    mg_per_serving: it.mg_per_serving,
+    package_thc_mg: it.package_thc_mg,
+    package_cbd_mg: it.package_cbd_mg,
+    ratio_label: it.ratio_label,
+    net_weight_grams: null,
+    net_volume_ml: null,
+    fact_provenance: it.fact_provenance,
     description: it.description,
     price_label: it.price_label,
     price_minor_units: it.price_minor_units,
@@ -247,6 +280,14 @@ function carryForward(item: CarryForwardItem, sortOrder: number): StagedSnapshot
     total_thc_json: item.total_thc_json,
     total_cbd_json: item.total_cbd_json,
     compounds_json: item.compounds_json,
+    servings_per_pack: item.servings_per_pack ?? null,
+    mg_per_serving: item.mg_per_serving ?? null,
+    package_thc_mg: item.package_thc_mg ?? null,
+    package_cbd_mg: item.package_cbd_mg ?? null,
+    ratio_label: item.ratio_label ?? null,
+    net_weight_grams: item.net_weight_grams ?? null,
+    net_volume_ml: item.net_volume_ml ?? null,
+    fact_provenance: item.fact_provenance ?? {},
     description: item.description,
     price_label: item.price_label,
     price_minor_units: item.price_minor_units,
@@ -355,6 +396,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     mergedCount,
     hasChanges: addedCount > 0 || mergedCount > 0,
     diagnostics: mastering.diagnostics,
+    lotFactsByKey: mastering.lotFactsByKey,
   };
 }
 
