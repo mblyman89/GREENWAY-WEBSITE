@@ -89,13 +89,30 @@ export async function stageIntakeMenuVersionForManifest(
     // 1) APPROVED onboarding drafts for THIS manifest. Only human-approved,
     //    priced products are eligible (price set at approval from intake data);
     //    unapproved/dismissed drafts are ignored.
-    const { data: draftRows, error: dErr } = await admin
+    // SLICE 64: also read the approver's classification picks (migration
+    // 0141); on databases where 0141 hasn't run yet retry WITHOUT them.
+    const DRAFT_COLS =
+      "id, pos_product_key, name, brand_name, vendor_name, strain_name, thc_pct, cbd_pct, total_thc_pct, potency_json, price_minor_units, updated_at, lot_id, inventory_type, category";
+    const firstTry = await admin
       .from("catalog_product_drafts")
-      .select(
-        "id, pos_product_key, name, brand_name, vendor_name, strain_name, thc_pct, cbd_pct, total_thc_pct, potency_json, price_minor_units, updated_at, lot_id, inventory_type, category",
-      )
+      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type")
       .eq("manifest_id", manifestId)
       .eq("status", "approved");
+    let draftRows: unknown = firstTry.data;
+    let dErr = firstTry.error;
+    if (
+      dErr &&
+      (dErr.code === "42703" ||
+        /column .* does not exist|could not find .* column/i.test(dErr.message ?? ""))
+    ) {
+      const retry = await admin
+        .from("catalog_product_drafts")
+        .select(DRAFT_COLS)
+        .eq("manifest_id", manifestId)
+        .eq("status", "approved");
+      draftRows = retry.data;
+      dErr = retry.error;
+    }
     if (dErr) {
       console.error("[intake-menu-staging] drafts read failed:", dErr.message);
       return skip("drafts-read-failed");
@@ -104,6 +121,8 @@ export async function stageIntakeMenuVersionForManifest(
       lot_id: string | null;
       inventory_type: string | null;
       category: string | null;
+      chosen_website_category?: string | null;
+      chosen_house_type?: string | null;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,

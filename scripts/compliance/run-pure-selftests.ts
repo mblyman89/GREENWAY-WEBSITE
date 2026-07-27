@@ -78,6 +78,7 @@ import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directo
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
 import { __runHouseTypeCoreTests } from "../../src/lib/inventory/house-type-core";
+import { __runDraftApprovalGateTests } from "../../src/lib/inventory/draft-approval-gate-core";
 import { __runStrainFieldsCoreTests } from "../../src/lib/inventory/strain-fields-core";
 import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extraction-core";
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
@@ -282,6 +283,7 @@ async function main() {
   __runCardTypeCoreTests();
   __runLotTableCoreTests();
   __runHouseTypeCoreTests();
+  __runDraftApprovalGateTests();
   __runStrainFieldsCoreTests();
   __runFactExtractionCoreTests();
   __runFactReviewCoreTests();

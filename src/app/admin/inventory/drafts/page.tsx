@@ -5,12 +5,20 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button, Input } from "@/components/admin/ui";
+import { Button, Input, Select } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listCatalogDrafts, countCatalogDrafts } from "@/lib/inventory/catalog-drafts";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
+import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
+import {
+  assessDraftClassification,
+  websiteCategoryLabel,
+  type DraftClassificationAssessment,
+} from "@/lib/inventory/draft-approval-gate-core";
+import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
+import { groupCatalogByCategory } from "@/lib/pos/inventory-type-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +56,33 @@ export default async function CatalogDraftsPage({
 
   const [drafts, counts] = await Promise.all([listCatalogDrafts(view), countCatalogDrafts()]);
 
+  // SLICE 64 (owner bug B3): resolve OUR website category + run the SLICE 63
+  // type labeler for every row, so the table shows OUR labels (never the raw
+  // CCRS blob) and the approval card KNOWS what the human must pick. One
+  // batched resolver call; the raw LCB values stay visible in fine print so
+  // the approver can decide with full information.
+  const resolutions = await resolveWebsiteCategories(
+    drafts.map((d) => ({
+      posProductKey: d.pos_product_key,
+      productName: d.name,
+      inventoryType: d.inventory_type,
+      category: d.category,
+    })),
+  );
+  const assessments = new Map<string, DraftClassificationAssessment>();
+  drafts.forEach((d, i) => {
+    assessments.set(
+      d.id,
+      assessDraftClassification({
+        productName: d.name,
+        inventoryType: d.inventory_type,
+        resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+      }),
+    );
+  });
+
+  const typeGroups = groupCatalogByCategory();
+
   const banner =
     approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
       : dismissed ? "Draft dismissed."
@@ -79,6 +114,7 @@ export default async function CatalogDraftsPage({
               "On accepting a manifest, we match each lot to the published menu by its POS key.",
               "Lots that don't match get a DRAFT product, pre-filled from the JSON + COA potency.",
               "Review the details, then Approve (validated) or Dismiss (not a new product).",
+              "If we couldn't classify a product at 90% confidence or better, the approve form asks you to pick its category or type from our own list — no product is ever guessed onto the menu.",
               "Approved drafts are added automatically to the next menu import you stage — the import review screen lists each one, and they go live when you publish that version.",
             ]}
           >
@@ -157,7 +193,7 @@ export default async function CatalogDraftsPage({
               <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                 <tr>
                   <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Category &amp; Type</th>
                   <th className="px-4 py-3 text-right">THC</th>
                   <th className="px-4 py-3 text-right">Cost</th>
                   <th className="px-4 py-3 text-right">Pricing</th>
@@ -172,6 +208,16 @@ export default async function CatalogDraftsPage({
                   const defaultPrice =
                     (d.price_minor_units ?? d.suggested_price_minor_units ?? d.price_floor_minor_units ?? 0) / 100;
                   const floorDollars = d.price_floor_minor_units != null ? d.price_floor_minor_units / 100 : undefined;
+                  // SLICE 64: OUR classification verdict for this row. The
+                  // approver's own picks (approved rows) outrank the machine.
+                  const a = assessments.get(d.id);
+                  const displayCategory =
+                    d.chosen_website_category ?? a?.resolvedWebsiteCategory ?? null;
+                  const autoType =
+                    a && a.house.houseType && !a.needsTypePick ? a.house.houseType : null;
+                  const displayType = d.chosen_house_type ?? autoType;
+                  const needsCategoryPick = view === "draft" && Boolean(a?.needsCategoryPick);
+                  const needsTypePick = view === "draft" && Boolean(a?.needsTypePick);
                   return (
                     <tr key={d.id} className="bg-[var(--admin-surface)] align-top">
                       <td className="px-4 py-3">
@@ -180,7 +226,36 @@ export default async function CatalogDraftsPage({
                           {[d.brand_name, d.vendor_name, d.strain_name].filter(Boolean).join(" · ") || "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{d.category ?? "—"}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
+                        {/* OUR labels on screen — never the raw CCRS blob. */}
+                        <div>
+                          {displayCategory ? (
+                            websiteCategoryLabel(displayCategory)
+                          ) : (
+                            <span className="font-semibold text-[var(--admin-gold)]">Needs category</span>
+                          )}
+                        </div>
+                        <div className="text-xs">
+                          {displayType ? (
+                            <span>
+                              {displayType}
+                              {d.chosen_house_type ? (
+                                <span className="text-[var(--admin-text-faint)]"> · your pick</span>
+                              ) : a ? (
+                                <span className="text-[var(--admin-text-faint)]"> · {a.house.confidence}% confident</span>
+                              ) : null}
+                            </span>
+                          ) : view === "draft" ? (
+                            <span className="font-semibold text-[var(--admin-gold)]">Needs type</span>
+                          ) : (
+                            <span className="text-[var(--admin-text-faint)]">—</span>
+                          )}
+                        </div>
+                        {/* CCRS under the hood — fine print so the approver can decide. */}
+                        <div className="mt-0.5 text-[10px] text-[var(--admin-text-faint)]">
+                          LCB: {[d.inventory_type, d.category].filter(Boolean).join(" · ") || "—"}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {fmtPct(d.total_thc_pct ?? d.thc_pct)}
                       </td>
@@ -204,19 +279,64 @@ export default async function CatalogDraftsPage({
                         <div className="flex flex-col items-end gap-2">
                           {view === "draft" && (
                             <>
-                              <form action={approve} className="flex items-center gap-2">
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[var(--admin-text-faint)]">$</span>
-                                  <Input
-                                    name="price"
-                                    type="number"
-                                    step="0.01"
-                                    min={floorDollars}
-                                    defaultValue={defaultPrice ? defaultPrice.toFixed(2) : ""}
-                                    className="w-24"
-                                  />
+                              <form action={approve} className="flex flex-col items-end gap-2">
+                                {/* SLICE 64: required picks when we couldn't
+                                    classify at >=90% confidence. The server
+                                    re-checks — this is UX, not the gate. */}
+                                {needsCategoryPick && (
+                                  <Select
+                                    name="website_category"
+                                    required
+                                    defaultValue=""
+                                    className="w-48 text-xs"
+                                    aria-label="Website category"
+                                  >
+                                    <option value="" disabled>
+                                      Pick a category…
+                                    </option>
+                                    {websiteCategoryDefinitions.map((c) => (
+                                      <option key={c.value} value={c.value}>
+                                        {c.label}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                )}
+                                {needsTypePick && (
+                                  <Select
+                                    name="house_type"
+                                    required
+                                    defaultValue={a?.suggestedHouseType ?? ""}
+                                    className="w-48 text-xs"
+                                    aria-label="Product type"
+                                  >
+                                    <option value="" disabled>
+                                      Pick a product type…
+                                    </option>
+                                    {typeGroups.map((g) => (
+                                      <optgroup key={g.category} label={g.categoryLabel}>
+                                        {g.types.map((t) => (
+                                          <option key={t.label} value={t.label}>
+                                            {t.label}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </Select>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[var(--admin-text-faint)]">$</span>
+                                    <Input
+                                      name="price"
+                                      type="number"
+                                      step="0.01"
+                                      min={floorDollars}
+                                      defaultValue={defaultPrice ? defaultPrice.toFixed(2) : ""}
+                                      className="w-24"
+                                    />
+                                  </div>
+                                  <Button type="submit" variant="save" size="sm">✓ Approve</Button>
                                 </div>
-                                <Button type="submit" variant="save" size="sm">✓ Approve</Button>
                               </form>
                               <form action={dismiss}>
                                 <Button type="submit" variant="neutral" size="sm">Dismiss</Button>

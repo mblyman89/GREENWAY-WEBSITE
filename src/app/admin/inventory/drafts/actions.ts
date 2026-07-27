@@ -14,10 +14,19 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
     redirect("/admin/inventory/drafts?error=price");
   }
   const priceMinor = Math.round(dollars * 100);
-  const result = await approveDraftWithPrice(draftId, priceMinor, session.userId);
+  // SLICE 64: the approver's classification picks. The server re-derives what
+  // was actually REQUIRED (resolver + labeler) and validates every pick
+  // against the closed vocabularies inside approveDraftWithPrice - the form
+  // is never trusted.
+  const chosenWebsiteCategory = (formData.get("website_category") as string | null)?.trim() || null;
+  const chosenHouseType = (formData.get("house_type") as string | null)?.trim() || null;
+  const result = await approveDraftWithPrice(draftId, priceMinor, session.userId, {
+    chosenWebsiteCategory,
+    chosenHouseType,
+  });
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    // Surface the floor-violation message.
+    // Surface the floor-violation / classification-gate message.
     redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(result.error ?? "")}`);
   }
   redirect("/admin/inventory/drafts?approved=1");

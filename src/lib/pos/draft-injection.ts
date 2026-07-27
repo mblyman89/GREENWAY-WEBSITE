@@ -46,12 +46,30 @@ export async function injectApprovedDraftsIntoVersion(
 
   try {
     // 1) Approved drafts (the queue of validated-but-not-yet-on-menu products).
-    const { data: draftRows, error: dErr } = await admin
+    //    SLICE 64: also read the approver's classification picks (migration
+    //    0141). On databases where 0141 hasn't run yet (42703 / missing
+    //    column), retry WITHOUT the chosen_* columns so injection keeps
+    //    working exactly as before the slice.
+    const DRAFT_COLS =
+      "id, pos_product_key, name, brand_name, vendor_name, strain_name, thc_pct, cbd_pct, total_thc_pct, potency_json, price_minor_units, updated_at, lot_id, inventory_type, category";
+    const firstTry = await admin
       .from("catalog_product_drafts")
-      .select(
-        "id, pos_product_key, name, brand_name, vendor_name, strain_name, thc_pct, cbd_pct, total_thc_pct, potency_json, price_minor_units, updated_at, lot_id, inventory_type, category",
-      )
+      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type")
       .eq("status", "approved");
+    let draftRows: unknown = firstTry.data;
+    let dErr = firstTry.error;
+    if (
+      dErr &&
+      (dErr.code === "42703" ||
+        /column .* does not exist|could not find .* column/i.test(dErr.message ?? ""))
+    ) {
+      const retry = await admin
+        .from("catalog_product_drafts")
+        .select(DRAFT_COLS)
+        .eq("status", "approved");
+      draftRows = retry.data;
+      dErr = retry.error;
+    }
     if (dErr) {
       console.error("[draft-injection] drafts read failed:", dErr.message);
       return none;
@@ -60,6 +78,8 @@ export async function injectApprovedDraftsIntoVersion(
       lot_id: string | null;
       inventory_type: string | null;
       category: string | null;
+      chosen_website_category?: string | null;
+      chosen_house_type?: string | null;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
