@@ -26,6 +26,14 @@ import {
   moveImageInGallery,
 } from "@/lib/ai/kb/product-images-core";
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
+import { researchUrl, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
+import { persistSuggestion } from "@/lib/ai/suggestions";
+import {
+  validateResearchUrl,
+  packImageCandidates,
+  researchOutcomeMessage,
+  RESEARCH_IMAGES_FIELD,
+} from "@/lib/enrichment/research-core";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -566,4 +574,160 @@ export async function moveProductImage(formData: FormData): Promise<void> {
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   revalidatePath("/menu");
   redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 74 — deep product web research. Owner: "a specific product lookup from
+// the internet using gpt or crawl4ai in the product detail page… deep
+// researching the web intelligently."
+//
+// The owner pastes the product's OWN page URL (a pre-filled web search helps
+// find it); the Python crawl4ai worker fetches that ONE page politely, GPT
+// extracts a description VERIFIED against the real page text, the compliance
+// scan runs, and a DRAFT lands in ai_suggestions. Image URLs the page showed
+// are saved as ONE reviewable research_images draft. DRAFTS ONLY — nothing
+// touches the enrichment until the owner clicks Accept / Import.
+// ---------------------------------------------------------------------------
+
+/** Research a pasted product-page URL with the crawler → pending drafts. */
+export async function researchProductAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  const name = String(formData.get("posName") ?? "").trim() || "Product";
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  const back = `/admin/products/${encodeURIComponent(key)}`;
+
+  const check = validateResearchUrl(String(formData.get("url") ?? ""));
+  if (!check.ok) redirect(`${back}?error=${encodeURIComponent(check.reason)}#research`);
+  if (!isCrawlerConfigured()) {
+    redirect(`${back}?error=` + encodeURIComponent(
+      "Crawler isn't set up yet (CRAWLER_BASE_URL / CRAWLER_SHARED_SECRET).",
+    ) + "#research");
+  }
+
+  const url = (check as { ok: true; url: string }).url;
+  let outcome: string;
+  try {
+    // Product research is a SINGLE-PAGE lookup (the worker never spiders for
+    // entity_type "product"), so the synchronous call finishes quickly —
+    // unlike full-site vendor crawls, which go through the async harvest path.
+    const result = await researchUrl({
+      url,
+      entityType: "product",
+      entityId: key,
+      displayName: name,
+      write: true, // description draft lands in ai_suggestions with source=crawl:<url>
+      // Stay under the Cloudflare Tunnel's ~100 s ceiling — a single-page
+      // product lookup (no spidering) comfortably finishes inside this.
+      timeoutMs: 90_000,
+    });
+
+    // Persist the page's image URLs as ONE reviewable reference draft.
+    const packed = packImageCandidates(result.image_candidates ?? []);
+    let imageCount = 0;
+    if (packed) {
+      imageCount = packed.split("\n").length;
+      await persistSuggestion({
+        entity_type: "product",
+        entity_id: key,
+        field_key: RESEARCH_IMAGES_FIELD,
+        suggested_value: packed,
+        input_summary: `web research of ${url} · ${imageCount} image candidate(s)`,
+        generated_by: session.userId,
+        confidence: 0.9,
+        source: `crawl:${url}`,
+      });
+    }
+
+    outcome = researchOutcomeMessage({
+      draftsWritten: result.drafts_written,
+      imageCandidates: imageCount,
+      error: result.error,
+    });
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "product.web_researched",
+      entityType: "product",
+      entityId: key,
+      after: {
+        url,
+        draftsWritten: result.drafts_written,
+        imageCandidates: imageCount,
+        error: result.error || undefined,
+      },
+    });
+  } catch (err) {
+    const msg =
+      err instanceof CrawlerNotConfiguredError
+        ? "Crawler isn't set up yet."
+        : `Research failed: ${err instanceof Error ? err.message : "please try again"}`;
+    redirect(`${back}?error=${encodeURIComponent(msg)}#research`);
+    return;
+  }
+
+  revalidatePath(back);
+  redirect(`${back}?research=${encodeURIComponent(outcome)}#ai`);
+}
+
+/** Import ONE researched image URL into the media library + this product's gallery. */
+export async function importResearchImage(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  const label = String(formData.get("label") ?? "Product").trim() || "Product";
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  const back = `/admin/products/${encodeURIComponent(key)}`;
+
+  const check = validateResearchUrl(String(formData.get("imageUrl") ?? ""));
+  if (!check.ok) redirect(`${back}?error=${encodeURIComponent(check.reason)}#ai`);
+  const imageUrl = (check as { ok: true; url: string }).url;
+
+  let assetId: string;
+  try {
+    const { asset } = await importImageFromUrl({
+      imageUrl,
+      usageType: "product",
+      title: `${label} (web research)`,
+      altText: label,
+      uploadedBy: session.userId,
+      tags: ["web-research", "enrichment-import"],
+    });
+    assetId = asset.id;
+  } catch (err) {
+    const msg = err instanceof HarvestImageError ? err.message : "Could not import that image.";
+    redirect(`${back}?error=${encodeURIComponent(msg)}#ai`);
+    return;
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  const current = await getEnrichment(key);
+  const merge = attachImageToGallery(
+    {
+      image_media_ids: current?.image_media_ids ?? [],
+      primary_media_id: current?.primary_media_id ?? null,
+    },
+    assetId,
+  );
+  if (!merge.alreadyPresent) {
+    await updateEnrichment(
+      key,
+      { image_media_ids: merge.image_media_ids, primary_media_id: merge.primary_media_id },
+      session.userId,
+    );
+    await recordUsage(assetId, "product", key, "image");
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.research_image_imported",
+    entityType: "product",
+    entityId: key,
+    after: { assetId, imageUrl, becamePrimary: merge.becamePrimary },
+  });
+
+  revalidatePath(back);
+  revalidatePath("/menu");
+  redirect(`${back}?saved=1`);
 }

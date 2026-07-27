@@ -160,6 +160,7 @@ import { __runMobileCoreTests } from "../../src/lib/admin/mobile-core";
 import { __runStoreProfileTests } from "../../src/lib/admin/store-profile-core";
 import { __runKbNotesTests } from "../../src/lib/ai/kb/kb-notes-core";
 import { __runProductImageEditTests } from "../../src/lib/ai/kb/product-images-core";
+import { __runProductResearchCoreTests } from "../../src/lib/enrichment/research-core";
 import { __runWebauthnCoreTests } from "../../src/lib/auth/webauthn-core";
 import { __runNormalizeTests } from "../../src/lib/cms/email-events/normalize-core";
 import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
@@ -372,6 +373,7 @@ async function main() {
   __runStoreProfileTests();
   assertNoFailures("kb-notes-core", __runKbNotesTests());
   assertNoFailures("product-image-edit", __runProductImageEditTests());
+  __runProductResearchCoreTests();
   assertNoFailures("webauthn-core", __runWebauthnCoreTests());
   __runNormalizeTests();
   __runVerifyTests();
