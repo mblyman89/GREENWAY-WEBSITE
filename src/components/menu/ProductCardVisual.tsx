@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-core";
-import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
+import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 
@@ -347,8 +347,11 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
           ) : null}
           {showCannabinoids && cannabinoids ? (
             <div className="grid gap-2">
-              {/* Profile badge — mirrors the compliance naming tag (THC / 1:1 / THC:CBD:CBN / CBD). */}
-              {cannabinoids.profile ? (
+              {/* Profile badge — mirrors the compliance naming tag (1:1 /
+                  THC:CBD:CBN / CBD). SLICE 66 (owner C3): only rendered when
+                  it ADDS information — a lone "THC" pill is redundant noise
+                  and is suppressed by showProfilePill. */}
+              {showProfilePill(cannabinoids.profile) && cannabinoids.profile ? (
                 <span className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-3 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-sm">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
                   {cannabinoids.profile.kind === "thc"

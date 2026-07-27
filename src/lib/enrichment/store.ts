@@ -158,6 +158,10 @@ export function mergeForDisplay(
   item: MenuItemRow,
   enrichment: ProductEnrichment | null,
   imageUrlResolver: (mediaId: string) => string | null,
+  // SLICE 66 (owner D2): a published enrichment's linked brand finally WINS on
+  // display. Callers pass a brand_id -> display-name resolver (batched like
+  // imageUrlResolver); omitted/unresolved -> the POS row's brand_name stands.
+  brandNameResolver?: (brandId: string) => string | null,
 ): EnrichedMenuItem {
   const e = enrichment && enrichment.status === "published" ? enrichment : null;
 
@@ -177,7 +181,7 @@ export function mergeForDisplay(
     name: e?.display_name || item.name,
     description: e?.description || item.description,
     shortDescription: e?.short_description ?? null,
-    brandName: item.brand_name,
+    brandName: (e?.brand_id && brandNameResolver?.(e.brand_id)) || item.brand_name,
     category: item.category,
     tags: e?.tags ?? [],
     staffPick: e?.staff_pick ?? false,

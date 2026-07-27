@@ -27,6 +27,8 @@ import {
   normalizeLicense,
   pickVendorByNormalizedName,
   vendorSlugCandidate,
+  stripLicenseSuffix,
+  extractLicenseFromLabel,
   type VendorNameCandidate,
 } from "@/lib/inventory/vendor-resolve-core";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
@@ -186,7 +188,14 @@ export async function resolveOrCreateVendor(
 
   // 5) Auto-create a DRAFT vendor from the manifest header.
   try {
-    const baseSlug = vendorSlugCandidate(cleanLabel) || "vendor";
+    // SLICE 66 (owner D1): the row is born CLEAN — a manifest header like
+    // "CERES - 435011" becomes display_name "CERES", and the trailing digits
+    // land in license_number when the document itself carried none. The
+    // verbatim header is still preserved as the vendor_aliases source_name
+    // below, so future manifests keep matching at step 3.
+    const displayLabel = stripLicenseSuffix(cleanLabel) || cleanLabel;
+    const labelLicense = licenseKey ?? normalizeLicense(extractLicenseFromLabel(cleanLabel));
+    const baseSlug = vendorSlugCandidate(displayLabel) || "vendor";
     let slug = baseSlug;
     {
       const { data } = await admin.from("vendors").select("id").eq("slug", slug).limit(1);
@@ -197,9 +206,9 @@ export async function resolveOrCreateVendor(
     const { data: created, error } = await admin
       .from("vendors")
       .insert({
-        display_name: cleanLabel,
+        display_name: displayLabel,
         slug,
-        license_number: licenseKey,
+        license_number: labelLicense,
         status: "draft",
         internal_notes:
           "Auto-created from an inbound manifest header (intake vendor resolution). Verify details, then publish when ready.",

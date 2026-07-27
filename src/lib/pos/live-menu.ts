@@ -34,6 +34,7 @@ import type {
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { withCardIdentity } from "@/lib/menu/card-identity";
 
 type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
 
@@ -114,7 +115,13 @@ export async function loadLiveMenuAll(): Promise<GreenwayMenuItem[]> {
   const version = await getPublishedVersion();
   if (!version) return [];
   const rows = await getVersionItems(version.id);
-  return rows.map(menuRowToGreenwayItem);
+  // SLICE 66 (owner D1/D2/D3): overlay DISPLAY identity — a brand linked in
+  // Product Enrichment (published) replaces the row's brand for the card
+  // label, and vendors show their short/dba name with any trailing license
+  // number stripped ("CERES", never "CERES - 435011"). Display-only: the
+  // stored menu rows keep the full brand/vendor text (search, admin, carts,
+  // receipts, CCRS). Degrades to the raw rows on any read failure.
+  return withCardIdentity(rows.map(menuRowToGreenwayItem));
 }
 
 /** Visible items only (hidden excluded) — the standard site menu. */

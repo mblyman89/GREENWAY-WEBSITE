@@ -176,6 +176,7 @@ import { __runLotActivationGateTests } from "../../src/lib/inventory/lot-activat
 import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pipeline-core";
 import { __runSampleGuardrailTests } from "../../src/lib/inventory/sample-guardrails";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
+import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
 import { __runTransformCoreTests } from "../../src/lib/pos/transform";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
@@ -383,6 +384,7 @@ async function main() {
   assertNoFailures("manifest-pipeline-core", __runManifestPipelineTests());
   __runSampleGuardrailTests();
   __runCardCannabinoidTests();
+  __runCardIdentityCoreTests();
   __runTransformCoreTests();
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("variant-sort", __runVariantSortTests());
