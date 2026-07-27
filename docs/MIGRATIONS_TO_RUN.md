@@ -443,3 +443,17 @@
   **Until this is run, "Reset operational data" still works but leaves
   test activity behind in those newer tables — run it BEFORE your final
   pre-go-live reset so the November 1st start is truly clean.**
+
+## SLICE 64 — manual classification at draft approval
+
+- [ ] **`supabase/migrations/0141_draft_classification_choice.sql`** — adds
+  two columns to `catalog_product_drafts`: `chosen_website_category` and
+  `chosen_house_type`. These record the category/type YOU pick on the
+  Product Onboarding approval card whenever the system can't classify a
+  product at 90% confidence or better — your pick then outranks the
+  machine when the product is placed on the menu, and the raw LCB/CCRS
+  values stay untouched under the hood. Idempotent; safe to re-run.
+  **Until this is run, approving a product that needs no picks keeps
+  working exactly as before — but approving one where the form asked you
+  to pick a category or type fails with a friendly message pointing at
+  this migration. Run it before your next intake session.**

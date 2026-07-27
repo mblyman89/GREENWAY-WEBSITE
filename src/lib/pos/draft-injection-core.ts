@@ -50,6 +50,13 @@ export type ApprovedDraftForInjection = {
    * both server callers already SELECT it.
    */
   inventory_type?: string | null;
+  /**
+   * SLICE 64: the HUMAN's classification picks from the Product Onboarding
+   * approval card (migration 0141 columns). The approver's choice OUTRANKS
+   * the resolver/labeler. Optional so historical callers/tests keep compiling.
+   */
+  chosen_website_category?: string | null;
+  chosen_house_type?: string | null;
 };
 
 /** Per-draft enrichment the SERVER gathers (resolver / kb / lot lookups). */
@@ -194,8 +201,22 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       packageLabel: null,
     };
 
+    // SLICE 64 (owner bug B3): the category the APPROVER picked on the
+    // onboarding card outranks the resolver — a human choice means no more
+    // silent refusals. Disclosed with a diagnostic either way.
+    const chosenCategory = d.chosen_website_category?.trim() || null;
+    const websiteCategory = chosenCategory ?? enrich.websiteCategory;
+    if (chosenCategory && chosenCategory !== enrich.websiteCategory) {
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_category_human",
+        message: `“${d.name}” filed under “${chosenCategory}” — chosen by the approver${enrich.websiteCategory ? ` (the resolver said “${enrich.websiteCategory}”)` : " (the resolver had no mapping)"}.`,
+        context: { draft_id: d.id, pos_product_key: key, chosen: chosenCategory, resolved: enrich.websiteCategory },
+      });
+    }
+
     // Never guess a category — unmapped means SKIP + tell the human where to fix it.
-    if (!enrich.websiteCategory) {
+    if (!websiteCategory) {
       diagnostics.push({
         severity: "warning",
         code: "draft_inject_unmapped_category",
@@ -224,7 +245,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     // sanity caps as the Cultivera import path (percent hard-capped at 100;
     // per-category mg ceilings), with a diagnostic whenever a cap fires so
     // the human sees exactly what was reined in.
-    const unit = intakePotencyUnit(enrich.websiteCategory, d.inventory_type ?? null);
+    const unit = intakePotencyUnit(websiteCategory, d.inventory_type ?? null);
     const capNote = (kind: string, rejected: number, used: number) => {
       diagnostics.push({
         severity: "warning",
@@ -235,7 +256,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     };
     const capped = (kind: string, raw: number | null): number | null => {
       if (raw == null || !Number.isFinite(raw) || raw <= 0) return raw == null ? null : raw;
-      const r = capIntakePotency(raw, unit, enrich.websiteCategory);
+      const r = capIntakePotency(raw, unit, websiteCategory);
       if (r.capped) capNote(kind, raw, r.value);
       return r.value;
     };
@@ -245,7 +266,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     for (const [k, v] of Object.entries(d.potency_json ?? {})) {
       const type = k.trim().toLowerCase();
       if (COMPOUND_TYPES.has(type) && typeof v === "number" && Number.isFinite(v)) {
-        const cv = capIntakePotency(v, unit, enrich.websiteCategory);
+        const cv = capIntakePotency(v, unit, websiteCategory);
         if (cv.capped) capNote(type.toUpperCase(), v, cv.value);
         compounds.push({ type, value: String(Number(cv.value.toFixed(2))), unit });
       }
@@ -293,7 +314,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
         // PACKAGE-TOTAL-FIRST (same policy as transform.ts): a VERIFIED
         // package total outranks the raw column value.
         if (exam.packageThcMg?.confidence === "verified") {
-          const cv = capIntakePotency(exam.packageThcMg.value, unit, enrich.websiteCategory);
+          const cv = capIntakePotency(exam.packageThcMg.value, unit, websiteCategory);
           if (cv.capped) capNote("THC", exam.packageThcMg.value, cv.value);
           packageThcMg = cv.value;
           factProvenance.package_thc_mg = exam.packageThcMg.source;
@@ -317,7 +338,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
           thcPct = cv.value;
         }
         if (exam.packageCbdMg?.confidence === "verified") {
-          const cv = capIntakePotency(exam.packageCbdMg.value, unit, enrich.websiteCategory);
+          const cv = capIntakePotency(exam.packageCbdMg.value, unit, websiteCategory);
           packageCbdMg = cv.value;
           factProvenance.package_cbd_mg = exam.packageCbdMg.source;
         }
@@ -355,13 +376,23 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     const house = deriveHouseType({
       productName: d.name,
       inventoryType: d.inventory_type ?? null,
-      websiteCategory: enrich.websiteCategory,
+      websiteCategory,
     });
-    const houseType =
+    const autoHouseType =
       house.houseType && house.confidence >= HOUSE_TYPE_MIN_AUTO_CONFIDENCE
         ? house.houseType
         : null;
-    if (houseType) {
+    // SLICE 64: the type the APPROVER picked on the onboarding card wins.
+    const chosenType = d.chosen_house_type?.trim() || null;
+    const houseType = chosenType ?? autoHouseType;
+    if (chosenType) {
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_house_type_human",
+        message: `“${d.name}” typed as “${chosenType}” — chosen by the approver.`,
+        context: { draft_id: d.id, pos_product_key: key, house_type: chosenType, source: "human" },
+      });
+    } else if (houseType) {
       diagnostics.push({
         severity: "info",
         code: "draft_inject_house_type",
@@ -388,8 +419,8 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       product_name: d.name,
       brand_name: brand,
       vendor_name: d.vendor_name,
-      category: enrich.websiteCategory,
-      filter_categories: [enrich.websiteCategory],
+      category: websiteCategory,
+      filter_categories: [websiteCategory],
       // SLICE 63: pos_inventory_category is what cardTypeLabel reads for the
       // card's type line (same column the Cultivera path fills from the POS
       // "Category" column). pos_inventory_type carries the raw LCB type for
@@ -750,6 +781,81 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
     assert(
       !p.diagnostics.some((d) => d.code.startsWith("draft_inject_house_type")),
       "no house-type diagnostics when there is no signal",
+    );
+  }
+
+  // SLICE 64: the approver's category pick rescues an UNMAPPED draft (the
+  // old silent refusal) and is disclosed as a human decision.
+  {
+    const p = plan(
+      [draft({ chosen_website_category: "cartridge" })],
+      new Map([["d1", enrich({ websiteCategory: null })]]),
+    );
+    assert(p.items.length === 1, "human category pick rescues an unmapped draft");
+    assert(p.items[0].category === "cartridge", "human category used");
+    assert(p.items[0].filter_categories[0] === "cartridge", "filter follows human category");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_category_human" && d.severity === "info"),
+      "human category disclosed",
+    );
+    assert(
+      !p.diagnostics.some((d) => d.code === "draft_inject_unmapped_category"),
+      "no unmapped warning once the human decided",
+    );
+  }
+
+  // SLICE 64: the approver's category pick OUTRANKS the resolver's mapping.
+  {
+    const p = plan(
+      [draft({ chosen_website_category: "popcorn-bud" })],
+      new Map([["d1", enrich({ websiteCategory: "flower" })]]),
+    );
+    assert(p.items[0].category === "popcorn-bud", "human pick outranks the resolver");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_category_human"),
+      "override disclosed",
+    );
+  }
+
+  // SLICE 64: the approver's TYPE pick fills pos_inventory_category where the
+  // labeler could not (plain strain name), silencing the low-confidence path.
+  {
+    const p = plan(
+      [draft({ name: "Blue Dream 3.5g", inventory_type: "Usable Marijuana", chosen_house_type: "Popcorn Bud" })],
+      new Map([["d1", enrich({ websiteCategory: "flower" })]]),
+    );
+    assert(p.items[0].pos_inventory_category === "Popcorn Bud", "human type pick lands on the card");
+    assert(p.items[0].pos_inventory_type === "Usable Marijuana", "raw LCB type still under the hood");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_house_type_human"),
+      "human type disclosed",
+    );
+    assert(
+      !p.diagnostics.some((d) => d.code === "draft_inject_house_type_low_confidence"),
+      "no low-confidence warning once the human decided",
+    );
+  }
+
+  // SLICE 64: a human type pick also outranks the labeler's own auto-assign.
+  {
+    const p = plan(
+      [draft({ name: "2727 - Live Resin Cart - GG4 1g", inventory_type: "Concentrate for Inhalation", chosen_house_type: "Cartridge" })],
+      new Map([["d1", enrich({ websiteCategory: "cartridge" })]]),
+    );
+    assert(p.items[0].pos_inventory_category === "Cartridge", "human type outranks the labeler");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_house_type_human"),
+      "override disclosed as human",
+    );
+  }
+
+  // SLICE 64: no picks -> behavior identical to before (regression pin).
+  {
+    const p = plan([draft({})], new Map([["d1", enrich({})]]));
+    assert(p.items.length === 1 && p.items[0].category === "flower", "no picks = resolver verdict");
+    assert(
+      !p.diagnostics.some((d) => d.code === "draft_inject_category_human" || d.code === "draft_inject_house_type_human"),
+      "no human diagnostics without picks",
     );
   }
 

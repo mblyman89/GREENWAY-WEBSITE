@@ -16,6 +16,11 @@ import {
   type SeedLotInput,
 } from "@/lib/inventory/draft-seed-core";
 import {
+  assessDraftClassification,
+  validateClassificationChoice,
+} from "@/lib/inventory/draft-approval-gate-core";
+import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
+import {
   getPricingSettings,
   getVelocityForProduct,
   suggestPrice,
@@ -47,6 +52,12 @@ export type CatalogDraft = {
   price_rationale: string | null;
   status: string; // draft | approved | dismissed
   notes: string | null;
+  /**
+   * SLICE 64 (migration 0141): the HUMAN's classification picks from the
+   * approval card. Optional - absent on databases where 0141 hasn't run.
+   */
+  chosen_website_category?: string | null;
+  chosen_house_type?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -357,16 +368,27 @@ export async function approveDraftWithPrice(
   draftId: string,
   priceMinor: number,
   actorId: string | null,
+  classification?: {
+    chosenWebsiteCategory?: string | null;
+    chosenHouseType?: string | null;
+  },
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
   const admin = createSupabaseAdminClient();
 
   const { data } = await admin
     .from("catalog_product_drafts")
-    .select("unit_cost_minor_units, manifest_id")
+    .select("unit_cost_minor_units, manifest_id, pos_product_key, name, inventory_type, category")
     .eq("id", draftId)
     .maybeSingle();
-  const row = data as { unit_cost_minor_units: number | null; manifest_id: string | null } | null;
+  const row = data as {
+    unit_cost_minor_units: number | null;
+    manifest_id: string | null;
+    pos_product_key: string | null;
+    name: string;
+    inventory_type: string | null;
+    category: string | null;
+  } | null;
   const cost = row?.unit_cost_minor_units ?? null;
 
   const settings = await getPricingSettings();
@@ -375,11 +397,61 @@ export async function approveDraftWithPrice(
     return { ok: false, error: check.error };
   }
 
+  // SLICE 64 (owner bug B3): the classification GATE. Re-run the resolver +
+  // labeler server-side (NEVER trust the form's idea of what was needed):
+  // when the resolver has no website category, or the type labeler is below
+  // 90% confidence, the approval must carry a human pick from OUR closed
+  // taxonomy - otherwise the approved product would be silently refused at
+  // injection time. Picks are validated against the closed vocabularies.
+  const resolution = await resolveWebsiteCategoryForLot({
+    posProductKey: row?.pos_product_key ?? null,
+    productName: row?.name ?? null,
+    inventoryType: row?.inventory_type ?? null,
+    category: row?.category ?? null,
+  });
+  const assessment = assessDraftClassification({
+    productName: row?.name ?? null,
+    inventoryType: row?.inventory_type ?? null,
+    resolvedWebsiteCategory: resolution.websiteCategory,
+  });
+  const choice = validateClassificationChoice({
+    assessment,
+    chosenWebsiteCategory: classification?.chosenWebsiteCategory ?? null,
+    chosenHouseType: classification?.chosenHouseType ?? null,
+  });
+  if (!choice.ok) {
+    return { ok: false, error: choice.error };
+  }
+
+  // Persist the picks ONLY when the human made one - on a pre-0141 database
+  // an approval without picks keeps working exactly as before, and an
+  // approval WITH picks fails with a friendly pointer at the migration.
+  const update: Record<string, unknown> = {
+    price_minor_units: priceMinor,
+    status: "approved",
+    updated_by: actorId,
+  };
+  if (choice.chosenWebsiteCategory !== null) update.chosen_website_category = choice.chosenWebsiteCategory;
+  if (choice.chosenHouseType !== null) update.chosen_house_type = choice.chosenHouseType;
+
   const { error } = await admin
     .from("catalog_product_drafts")
-    .update({ price_minor_units: priceMinor, status: "approved", updated_by: actorId })
+    .update(update)
     .eq("id", draftId);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (
+      (error.code === "42703" ||
+        /column .* does not exist|could not find .* column/i.test(error.message ?? "")) &&
+      (update.chosen_website_category !== undefined || update.chosen_house_type !== undefined)
+    ) {
+      return {
+        ok: false,
+        error:
+          "Saving your category/type pick needs database migration 0141 (supabase/migrations/0141_draft_classification_choice.sql). Run it, then approve again.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
 
   // Intake auto-carry + auto-publish (owner-approved Option 1): the moment a
   // received product is APPROVED with a price, stage an intake-origin menu
