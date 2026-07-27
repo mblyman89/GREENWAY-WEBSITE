@@ -19,6 +19,7 @@ import {
 } from "@/lib/inventory/draft-approval-gate-core";
 import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
 import { groupCatalogByCategory } from "@/lib/pos/inventory-type-catalog";
+import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
 
 export const dynamic = "force-dynamic";
 
@@ -218,13 +219,32 @@ export default async function CatalogDraftsPage({
                   const displayType = d.chosen_house_type ?? autoType;
                   const needsCategoryPick = view === "draft" && Boolean(a?.needsCategoryPick);
                   const needsTypePick = view === "draft" && Boolean(a?.needsTypePick);
+                  // SLICE 65 (A1/A3/A4): the name shown here is the BUILT
+                  // customer name — the same family derivation the menu card
+                  // will use (size/pack noise stripped, mg dose kept for
+                  // dose-led items). NULL means "not confident": the raw
+                  // manifest name stays on screen, never a guess. The raw
+                  // string drops to fine print when a built name exists.
+                  const builtName = displayCategory
+                    ? intakeDisplayName({
+                        name: d.name || "",
+                        product_name: d.name || null,
+                        brand_name: d.brand_name ?? "",
+                        vendor_name: d.vendor_name,
+                        category: displayCategory,
+                        strain_name: d.strain_name,
+                      })
+                    : null;
                   return (
                     <tr key={d.id} className="bg-[var(--admin-surface)] align-top">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-[var(--admin-text)]">{d.name || "(unnamed)"}</div>
+                        <div className="font-medium text-[var(--admin-text)]">{builtName ?? (d.name || "(unnamed)")}</div>
                         <div className="text-xs text-[var(--admin-text-faint)]">
                           {[d.brand_name, d.vendor_name, d.strain_name].filter(Boolean).join(" · ") || "—"}
                         </div>
+                        {builtName && builtName !== d.name ? (
+                          <div className="text-[10px] text-[var(--admin-text-faint)]">Manifest: {d.name}</div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {/* OUR labels on screen — never the raw CCRS blob. */}
