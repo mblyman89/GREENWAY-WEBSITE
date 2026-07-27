@@ -13,7 +13,7 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { cardTypeLabel } from "@/lib/menu/card-type-core";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
-import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
+import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
@@ -288,7 +288,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     : await withMenuProfile(await withResolvedImages([baseItem]));
 
   // 7b.1: KB-first curated knowledge, compliance-filtered for public display.
-  // Merch/accessories are non-cannabis \u2192 the helper returns an empty result.
+  // Merch/accessories are non-cannabis → the helper returns an empty result.
   const knowledge = isMerchItem(item) ? null : await resolveDisplayKnowledge(item);
 
   const tone = toneForItem(item);
@@ -395,7 +395,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   {displayStrain(item)}
                 </span>
               ) : null}
-              {showCannabinoids && detailCannabinoids?.profile ? (
+              {/* SLICE 66 (owner C3): pill only when informative — a lone
+                  "THC" tag is suppressed by showProfilePill. */}
+              {showCannabinoids && detailCannabinoids?.profile && showProfilePill(detailCannabinoids.profile) ? (
                 <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[0.66rem] font-black uppercase tracking-[0.1em] text-white/90">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
                   {detailCannabinoids.profile.kind === "thc"
@@ -440,7 +442,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
               {/* 7b.1: KB sensory + experiential profile (compliance-filtered).
                   Experiential descriptors are legal EXPERIENCE words (relaxing,
-                  uplifting, etc.) \u2014 never medical claims (the resolver drops those). */}
+                  uplifting, etc.) — never medical claims (the resolver drops those). */}
               {hasSensory ? (
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   {kbEffects.length > 0 ? (
@@ -460,7 +462,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
               {kbEffects.length > 0 ? (
                 <p className="mt-4 text-[0.68rem] leading-5 text-zinc-500">
-                  Experiential character only \u2014 general descriptors of the experience adults
+                  Experiential character only — general descriptors of the experience adults
                   commonly report, not a health, medical, or therapeutic claim.
                 </p>
               ) : null}

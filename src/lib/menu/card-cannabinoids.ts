@@ -160,6 +160,20 @@ export function deriveProfile(item: Pick<GreenwayMenuItem, "compounds" | "totalT
   return { kind: "multi", label: tag };
 }
 
+/**
+ * SLICE 66 (owner C3 — "weird THC pill"): the profile pill only renders when
+ * it ADDS information — a ratio ("1:1 THC:CBD"), a multi-cannabinoid tag
+ * ("THC:CBD:CBN"), or a CBD-dominant product. A lone "THC" pill on a THC-only
+ * product is redundant noise (nearly everything in the store is THC) and
+ * appeared inconsistently depending on which potency fields survived intake.
+ * deriveProfile still REPORTS the THC-only profile (data model unchanged);
+ * this predicate is the single display gate both the card and the product
+ * detail page use.
+ */
+export function showProfilePill(profile: CardProfile | null): boolean {
+  return profile !== null && profile.kind !== "thc" && profile.kind !== "none";
+}
+
 /* ------------------------------------------------------------------ *
  *  Info boxes (SLICE 43)
  * ------------------------------------------------------------------ */
@@ -388,7 +402,16 @@ export function __runCardCannabinoidTests(): void {
   check("cbg box present", g.boxes.some((x) => x.label === "CBG" && x.display === "1.2%"), g.boxes);
   check("cbg after THC", g.boxes[0]?.label === "THC" && g.boxes[1]?.label === "CBG", g.boxes);
 
-  // 8) parseNetMeasure edge cases.
+  // 8) SLICE 66 (owner C3): the pill display gate — lone "THC" never renders;
+  //    ratios, multi tags, and CBD-dominant profiles still do.
+  check("pill hidden for lone THC", showProfilePill(l.profile) === false, l.profile);
+  check("pill shown for 1:1 ratio", showProfilePill(o.profile) === true, o.profile);
+  check("pill shown for multi blend", showProfilePill(b.profile) === true, b.profile);
+  check("pill shown for CBD-dominant", showProfilePill({ kind: "cbd", label: "CBD" }) === true, null);
+  check("pill hidden for null profile", showProfilePill(null) === false, null);
+  check("pill hidden for none kind", showProfilePill({ kind: "none", label: "" }) === false, null);
+
+  // 9) parseNetMeasure edge cases.
   check("parse 1oz", JSON.stringify(parseNetMeasure("1oz")) === JSON.stringify({ grams: 28.3495, ml: null }), parseNetMeasure("1oz"));
   check("parse 100mg is null (potency)", parseNetMeasure("100mg") === null, parseNetMeasure("100mg"));
   check("parse 10pk is null", parseNetMeasure("10pk") === null, parseNetMeasure("10pk"));

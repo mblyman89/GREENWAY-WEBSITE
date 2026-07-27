@@ -6,9 +6,9 @@
  * manifests carry the sender at the DOCUMENT level ("from_license_name":
  * "Seattles Private Reserve", "from_license_number": "417068"), and
  * intake-store matched it against vendors.display_name with a bare `ilike`
- * (case-insensitive EQUALITY \u2014 no wildcards). Any spelling drift
- * ("Seattle's" vs "Seattles", "SPR LLC", extra punctuation) \u2014 or simply no
- * vendors row yet \u2014 left vendor_id NULL, so lots and catalog drafts carried no
+ * (case-insensitive EQUALITY — no wildcards). Any spelling drift
+ * ("Seattle's" vs "Seattles", "SPR LLC", extra punctuation) — or simply no
+ * vendors row yet — left vendor_id NULL, so lots and catalog drafts carried no
  * vendor and the vendor-axis product mastering had nothing to group on.
  *
  * This core provides:
@@ -21,7 +21,7 @@
  *     (same rules as vendors/import slugifyName, re-stated here because that
  *     module is server-only).
  *
- * The DB walk (license match \u2192 exact ilike \u2192 alias \u2192 normalized scan \u2192
+ * The DB walk (license match → exact ilike → alias → normalized scan →
  * auto-create DRAFT vendor) lives in intake-store.resolveOrCreateVendor; this
  * module stays pure so every decision is unit-testable.
  *
@@ -30,9 +30,9 @@
  */
 
 /**
- * Normalize a vendor label to a comparison key: lowercase, "&" \u2192 "and",
+ * Normalize a vendor label to a comparison key: lowercase, "&" → "and",
  * apostrophes DROPPED (so "Seattle's" === "Seattles"), every other
- * non-alphanumeric run collapsed to a single space, trimmed. Empty/null \u2192 "".
+ * non-alphanumeric run collapsed to a single space, trimmed. Empty/null → "".
  */
 export function normalizeVendorKey(raw: string | null | undefined): string {
   if (typeof raw !== "string") return "";
@@ -84,6 +84,45 @@ export function pickVendorByNormalizedName(
 }
 
 /**
+ * SLICE 66 (owner D1 — "CERES - 435011" on every card): strip a trailing
+ * license-number decoration from a vendor/brand label. "CERES - 435011" →
+ * "CERES", "CERES (435011)" → "CERES", "CERES 435011" → "CERES".
+ * Deliberately conservative:
+ *  - the digit run must be 5+ digits (WA licenses are 6; "Farm 2020" and
+ *    "Cloud 9" are left alone);
+ *  - the remainder must be non-empty and contain a letter (a label that IS a
+ *    number, like brand "2727", is never emptied);
+ *  - only the END of the label is considered — digits mid-name are kept.
+ * Used at intake vendor auto-create (the row is born clean) AND at display
+ * time for vendors that predate the fix.
+ */
+export function stripLicenseSuffix(raw: string | null | undefined): string {
+  const label = (raw ?? "").trim();
+  if (!label) return "";
+  const m = label.match(/^(.*?)(?:\s*[-–—:|,]\s*|\s+)\(?(\d{5,})\)?\s*$/);
+  if (!m) return label;
+  const remainder = m[1].trim().replace(/[-–—:|,]+$/, "").trim();
+  if (!remainder || !/[a-z]/i.test(remainder)) return label;
+  return remainder;
+}
+
+/**
+ * Extract the trailing license number a label carries (the digits
+ * stripLicenseSuffix would remove), or null. Lets intake vendor auto-creation
+ * land "CERES - 435011"'s license in vendors.license_number even when the
+ * manifest document carries none.
+ */
+export function extractLicenseFromLabel(raw: string | null | undefined): string | null {
+  const label = (raw ?? "").trim();
+  if (!label) return null;
+  const m = label.match(/^(.*?)(?:\s*[-–—:|,]\s*|\s+)\(?(\d{5,})\)?\s*$/);
+  if (!m) return null;
+  const remainder = m[1].trim().replace(/[-–—:|,]+$/, "").trim();
+  if (!remainder || !/[a-z]/i.test(remainder)) return null;
+  return m[2];
+}
+
+/**
  * Deterministic slug for an auto-created vendor (mirrors vendors/import
  * slugifyName, which is server-only and can't be imported here). intake-store
  * appends a short suffix on a rare collision.
@@ -113,7 +152,7 @@ export function __runVendorResolveCoreTests(): { passed: number; failed: number 
     }
   };
 
-  // normalizeVendorKey \u2014 the real-world drift cases.
+  // normalizeVendorKey — the real-world drift cases.
   ok(
     normalizeVendorKey("Seattle's Private Reserve") === normalizeVendorKey("Seattles Private Reserve"),
     "apostrophe drift matches",
@@ -147,6 +186,22 @@ export function __runVendorResolveCoreTests(): { passed: number; failed: number 
   // vendorSlugCandidate
   ok(vendorSlugCandidate("Seattles Private Reserve") === "seattles-private-reserve", "slug basic");
   ok(vendorSlugCandidate("A & B Farms!") === "a-and-b-farms", "slug & + punctuation");
+
+  // stripLicenseSuffix (SLICE 66 D1 — pinned on the owner's real CERES card)
+  ok(stripLicenseSuffix("CERES - 435011") === "CERES", "dash-separated license stripped (real data)");
+  ok(stripLicenseSuffix("CERES (435011)") === "CERES", "parenthesized license stripped");
+  ok(stripLicenseSuffix("CERES 435011") === "CERES", "space-separated license stripped");
+  ok(stripLicenseSuffix("2727") === "2727", "all-digit brand kept (never emptied)");
+  ok(stripLicenseSuffix("Cloud 9") === "Cloud 9", "short trailing number kept");
+  ok(stripLicenseSuffix("Farm 2020") === "Farm 2020", "4-digit year kept (5+ digit floor)");
+  ok(stripLicenseSuffix("435011 Farms") === "435011 Farms", "leading digits kept (suffix only)");
+  ok(stripLicenseSuffix(null) === "", "null -> empty");
+
+  // extractLicenseFromLabel (SLICE 66 — auto-created vendors keep the license)
+  ok(extractLicenseFromLabel("CERES - 435011") === "435011", "license extracted from label");
+  ok(extractLicenseFromLabel("CERES") === null, "no license -> null");
+  ok(extractLicenseFromLabel("2727") === null, "all-digit label -> null (not a suffix)");
+  ok(extractLicenseFromLabel("Farm 2020") === null, "4-digit year -> null");
 
   if (failed === 0) console.log(`vendor-resolve-core: all ${passed} tests passed`);
   return { passed, failed };
