@@ -11,6 +11,7 @@ import {
   getManifestById,
 } from "@/lib/inventory/store";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
+import { lotPotencyLabel } from "@/lib/inventory/lot-table-core";
 import { adjustLotAction, setLotStatusAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -195,21 +196,22 @@ export default async function LotDetailPage({
                   value={lot.lab.labtest_external_identifier ?? "—"}
                 />
                 <Row label="Lab" value={lot.lab.lab_name ?? "—"} />
+                {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
                 <Row
                   label="Total THC"
-                  value={lot.lab.total_thc_pct != null ? `${lot.lab.total_thc_pct}%` : "—"}
+                  value={lotPotencyLabel(lot.lab.total_thc_pct, lot)}
                 />
                 <Row
                   label="THCA"
-                  value={lot.lab.thca_pct != null ? `${lot.lab.thca_pct}%` : "—"}
+                  value={lotPotencyLabel(lot.lab.thca_pct, lot)}
                 />
                 <Row
                   label="Total cannabinoids"
-                  value={lot.lab.total_cannabinoids_pct != null ? `${lot.lab.total_cannabinoids_pct}%` : "—"}
+                  value={lotPotencyLabel(lot.lab.total_cannabinoids_pct, lot)}
                 />
                 <Row
                   label="CBD"
-                  value={lot.lab.total_cbd_pct != null ? `${lot.lab.total_cbd_pct}%` : lot.lab.cbd_pct != null ? `${lot.lab.cbd_pct}%` : "—"}
+                  value={lotPotencyLabel(lot.lab.total_cbd_pct ?? lot.lab.cbd_pct, lot)}
                 />
                 <Row
                   label="Result"

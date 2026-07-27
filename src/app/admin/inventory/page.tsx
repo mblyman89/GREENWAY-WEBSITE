@@ -9,7 +9,7 @@ import { Input, Select, Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listLotsPaged, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
-import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel, lotStrainTypeLabel } from "@/lib/inventory/lot-table-core";
+import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel, lotStrainTypeLabel, lotPotencyLabel } from "@/lib/inventory/lot-table-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
@@ -414,7 +414,8 @@ export default async function InventoryPage({
                         {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
-                        {l.lab?.total_thc_pct != null ? `${l.lab.total_thc_pct}%` : "—"}
+                        {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
+                        {lotPotencyLabel(l.lab?.total_thc_pct, l)}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotReceivedDate(l)}</td>
                       <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">

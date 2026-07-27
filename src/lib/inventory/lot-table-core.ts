@@ -23,6 +23,7 @@
  *
  * No I/O, no React — registered in the pure self-test runner.
  */
+import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
 
 const EM_DASH = "\u2014";
 
@@ -79,6 +80,25 @@ export function lotStrainLabel(lot: Pick<LotTableFields, "strain_name">): string
 }
 
 /**
+ * SLICE 61 — potency label for the back-office THC/CBD columns, honest about
+ * units. The lab *_pct columns hold the raw manifest NUMBERS, but for mg-dosed
+ * LCB inventory types ("Solid Edible", "Liquid Edible", "Tincture", "Topical
+ * Ointment") those numbers are package-total MILLIGRAMS, not percentages —
+ * rendering them with a "%" suffix produced the owner-reported "3000%"
+ * garbage. The unit derives from the lot's stored inventory_type via the same
+ * vocabulary as the extraction engine (intakePotencyUnit); nothing is guessed
+ * per-row. Em-dash when there is no stored value.
+ */
+export function lotPotencyLabel(
+  value: number | null | undefined,
+  lot: Pick<LotTableFields, "inventory_type">,
+): string {
+  if (value == null || !Number.isFinite(Number(value))) return EM_DASH;
+  const unit = intakePotencyUnit(null, lot.inventory_type);
+  return unit === "mg" ? `${value} mg` : `${value}%`;
+}
+
+/**
  * Strain type from its OWN column (migration 0138 — Rule 1.4), title-cased
  * for display; em-dash when unset/unknown. Never derived here — the
  * splitting happens at the intake door / migration, not at render time.
@@ -131,6 +151,16 @@ export function __runLotTableCoreTests(): void {
   ok(lotStrainLabel({ strain_name: "Blue Dream" }) === "Blue Dream", "strain: verbatim");
   ok(lotStrainLabel({ strain_name: "  " }) === EM_DASH, "strain: blank yields em-dash");
   ok(lotStrainLabel({ strain_name: null }) === EM_DASH, "strain: null yields em-dash");
+
+  // Potency label (SLICE 61): unit honest per LCB inventory type.
+  ok(lotPotencyLabel(21.66, { inventory_type: "Usable Marijuana" }) === "21.66%", "potency: flower percent");
+  ok(lotPotencyLabel(85.59, { inventory_type: "Concentrate for Inhalation" }) === "85.59%", "potency: concentrate percent");
+  ok(lotPotencyLabel(3000, { inventory_type: "Topical Ointment" }) === "3000 mg", "potency: topical shows mg (owner bug)");
+  ok(lotPotencyLabel(100, { inventory_type: "Liquid Edible" }) === "100 mg", "potency: drink shows mg");
+  ok(lotPotencyLabel(200, { inventory_type: "Solid Edible" }) === "200 mg", "potency: edible shows mg");
+  ok(lotPotencyLabel(500, { inventory_type: "Tincture" }) === "500 mg", "potency: tincture shows mg");
+  ok(lotPotencyLabel(null, { inventory_type: "Solid Edible" }) === EM_DASH, "potency: null yields em-dash");
+  ok(lotPotencyLabel(22, { inventory_type: null }) === "22%", "potency: unknown type defaults percent");
 
   // Strain type (SLICE 54): own column, display title-cased, never derived.
   ok(lotStrainTypeLabel({ strain_type: "indica" }) === "Indica", "strain type: indica title-cased");
