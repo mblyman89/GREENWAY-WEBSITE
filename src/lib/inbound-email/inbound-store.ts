@@ -69,6 +69,8 @@ import {
 import { extractCultiveraInvoiceTransport } from "@/lib/inventory/pdf-cultivera-invoice-core";
 import { extractGenericPdfTransport } from "@/lib/inventory/pdf-generic-transport-core";
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
+import { archiveManifestDocuments } from "@/lib/inventory/manifest-docs";
+import { mergeTransportFillEmpty } from "@/lib/inventory/manifest-merge-core";
 
 export type InboundDisposition =
   | "received"
@@ -263,9 +265,21 @@ export async function stageManifestsFromEmail(
       if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
       const parsed = await parsePdfManifestFromBase64(att.base64 as string);
       if (parsed.ok) {
+        // SLICE 69: a layout parser can read the LINES perfectly yet miss
+        // transport fields its layout doesn't print where expected (the
+        // owner's real failure: driver/vehicle sit in the document but never
+        // reached the form). Run the field-LABEL extractor over the SAME text
+        // and fill any transport blanks the layout parser left — fill-only-
+        // when-empty, arrived_at never doc-sourced, same manifest so no
+        // cross-pollination risk.
+        let donorTransport = parsed.manifest.transport ?? null;
+        const extra = extractGenericPdfTransport(parsed.text);
+        if (extra) {
+          donorTransport = mergeTransportFillEmpty(donorTransport, extra.transport).transport;
+        }
         pdfDonors.push({
           manifest_number: parsed.manifest.manifest_number,
-          transport: parsed.manifest.transport ?? null,
+          transport: donorTransport,
         });
       } else if (parsed.text) {
         // H18: a PDF that is NOT a manifest can still carry transport. The
@@ -296,6 +310,22 @@ export async function stageManifestsFromEmail(
     pdfDonors.push(...invoiceDonors);
   }
 
+  // SLICE 69: the EMAIL BODY itself can print the transport details (some
+  // vendors write driver/vehicle/ETA straight into the message). Run the same
+  // field-label extractor over the body text as a LAST-RESORT donor — it goes
+  // after every PDF donor so a real shipping document always outranks it, and
+  // chooseTransportDonor's manifest-number matching still gates it.
+  const bodyDonor =
+    typeof email.bodyText === "string" && email.bodyText.trim().length > 0
+      ? extractGenericPdfTransport(email.bodyText)
+      : null;
+  if (bodyDonor) {
+    pdfDonors.push({
+      manifest_number: bodyDonor.manifest_number,
+      transport: bodyDonor.transport,
+    });
+  }
+
   // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
   //    verifiable manifests stage; junk (tracking exports, receipts, random
   //    JSON) is skipped WITHOUT counting as a failure — it's logged on the
@@ -320,6 +350,15 @@ export async function stageManifestsFromEmail(
     if (staged.ok) {
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
+      // SLICE 69: archive EVERY document the email carried (manifest PDF,
+      // invoice PDF, COA, transfer JSON, extras) into private storage linked
+      // to this manifest — permanent download buttons for every row.
+      // Best-effort; an archive hiccup never fails staging.
+      try {
+        await archiveManifestDocuments(staged.manifestId, email.attachments, "email");
+      } catch (err) {
+        console.warn("[inbound-email] document archive skipped:", err);
+      }
       await autoAdvanceInTransit(staged.manifestId, actorId);
     } else if (staged.duplicate) {
       // Re-sent / duplicate manifest already live in intake: don't re-stage,
@@ -432,6 +471,12 @@ export async function stageManifestsFromEmail(
       if (staged.ok) {
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);
+        // SLICE 69: archive EVERY document the email carried (see JSON path).
+        try {
+          await archiveManifestDocuments(staged.manifestId, email.attachments, "email");
+        } catch (err) {
+          console.warn("[inbound-email] document archive skipped:", err);
+        }
         // H16b-2: retain the emailed COA PDF (bytes → private `coa` bucket)
         // linked to the manifest's lab rows. Best-effort — never fail staging.
         if (coaArchiveBase64) {

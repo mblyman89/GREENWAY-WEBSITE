@@ -37,7 +37,7 @@
     Resend §4, crawler §5, printer §6, deployment roadmap §7).
   - `docs/CCRS_SELF_REPORTING_GUIDE.md` — how self-reporting to the LCB works,
     including the dual-run plan this checklist schedules (its Part B).
-  - `docs/MIGRATIONS_TO_RUN.md` — the manual migration checklist (files 0054 → 0141).
+  - `docs/MIGRATIONS_TO_RUN.md` — the manual migration checklist (files 0054 → 0142).
   - `docs/audit/FINDINGS.md` — all 35 findings (GW-001…GW-035) and their statuses.
 - **NEVER GUESS applies to you too:** if a screen doesn't match what a step says,
   stop, photograph it, and bring it to a session. Don't improvise on the live system.
@@ -171,7 +171,7 @@ Target: done by **Sunday, September 6, 2026**. Source of truth for every item:
 ### Database (Supabase)
 
 - [ ] **C-040 👤 Migration sweep:** open `docs/MIGRATIONS_TO_RUN.md` and confirm
-  every box through **0141** (the current last file; 0141 = draft classification choice (saves the category/type you pick on the Product Onboarding approval card when the system can't classify a product at 90% confidence — your pick outranks the machine, raw LCB/CCRS values stay under the hood), 0140 = reset coverage sweep (extends "Reset operational data" to the newer operational tables it missed — register sale events, receipt print jobs, safe counts/swaps, special-discount uses, customer returns, non-cannabis invoices/adjustments, CCRS week submissions, sample JSON imports, payroll source documents, fact-review decisions — so the pre-go-live reset is truly clean), 0139 = golden-record fact-review queue (decision log for the import Fact Review screen: approve/fix/reject flagged products, corrections carry provenance "reviewer"), 0138 = structured product facts (golden-record boxes: strain type in its own column, servings/mg-per-serving/package-total mg, ratio, net weight/volume, fact provenance + strain-name cleanup), 0137 = regulatory watch (rule-change radar: WSLCB bulletin tracking, AI briefings, compliance roadmap), 0136 = handbook acknowledgments (staff must read the employee handbook and check the box before back-office or register access; owner exempt), 0135 = store safe (twice-daily manager counts + register change swaps, $1,000 target), 0134 = tips-at-close on drawer sessions (employee money, kept out of over/short math), 0133 = special discount programs (employee/industry/veteran settings + use tracking), 0132 = GW-027 rejected-rows visibility columns, 0131 = GW-009 Pacific-day medical ledger default, 0130 = GW-019/GW-020 RLS + insider-threat hardening, 0129 = GW-011/GW-012 concurrency guards, 0128 = GW-023 stranded-sale recovery, 0127 = GW-018 inactive-by-default staff profiles) is checked as run. Special
+  every box through **0142** (the current last file; 0142 = intake document archive (private intake-docs bucket + manifest_documents table — every document harvested from a vendor intake email is stored under our own roof and downloadable from the email intake table), 0141 = draft classification choice (saves the category/type you pick on the Product Onboarding approval card when the system can't classify a product at 90% confidence — your pick outranks the machine, raw LCB/CCRS values stay under the hood), 0140 = reset coverage sweep (extends "Reset operational data" to the newer operational tables it missed — register sale events, receipt print jobs, safe counts/swaps, special-discount uses, customer returns, non-cannabis invoices/adjustments, CCRS week submissions, sample JSON imports, payroll source documents, fact-review decisions — so the pre-go-live reset is truly clean), 0139 = golden-record fact-review queue (decision log for the import Fact Review screen: approve/fix/reject flagged products, corrections carry provenance "reviewer"), 0138 = structured product facts (golden-record boxes: strain type in its own column, servings/mg-per-serving/package-total mg, ratio, net weight/volume, fact provenance + strain-name cleanup), 0137 = regulatory watch (rule-change radar: WSLCB bulletin tracking, AI briefings, compliance roadmap), 0136 = handbook acknowledgments (staff must read the employee handbook and check the box before back-office or register access; owner exempt), 0135 = store safe (twice-daily manager counts + register change swaps, $1,000 target), 0134 = tips-at-close on drawer sessions (employee money, kept out of over/short math), 0133 = special discount programs (employee/industry/veteran settings + use tracking), 0132 = GW-027 rejected-rows visibility columns, 0131 = GW-009 Pacific-day medical ledger default, 0130 = GW-019/GW-020 RLS + insider-threat hardening, 0129 = GW-011/GW-012 concurrency guards, 0128 = GW-023 stranded-sale recovery, 0127 = GW-018 inactive-by-default staff profiles) is checked as run. Special
   attention (verified in the task list §1): **0123** (pin_throttle — the durable
   PIN rate-limit behind GW-005), **0120–0122** (the POS foundation), and re-run
   **0061** once (it was rewritten to an idempotent form; re-running is safe and
@@ -363,7 +363,7 @@ this stage adds no new work; it is the formal look-back.
   - Stage 1: C-005 green (zero open Critical/Moderate findings).
   - Stage 2: CCRS + WA.gov logins proven; compliance calendar entries live;
     Cultivera contract facts written down (C-020); medical decision recorded.
-  - Stage 3: migrations swept through 0141; Supabase auth/backups/PITR set;
+  - Stage 3: migrations swept through 0142; Supabase auth/backups/PITR set;
     practice restore DONE and written down (C-045); env vars complete; cron
     visible and running; Resend verified.
   - Stage 4: registers provisioned and in Guided Access; printer polling;
@@ -464,7 +464,7 @@ is guessed; calendar dates were computed against the real 2026 calendar.
 | Dual-run 2–4 weeks, Sunday boundary, only Cultivera submits; reconcile KB; stop Cultivera only after clean cycle; LIQ-1295 never pauses | same, Part B |
 | GW-010 (tax overstatement ~46%) must be fixed before ANY real upload | `docs/audit/FINDINGS.md` GW-010; `OWNER-TASKLIST.md` §7 |
 | 35 findings; severity/status conventions; ACCEPTED-RISK requires owner sign-off | `docs/audit/FINDINGS.md`; `docs/audit/README.md` |
-| Migrations manual, 141 files, only 0061 re-run needed; 0123/0120–0122 critical | `docs/audit/OWNER-TASKLIST.md` §1; `docs/MIGRATIONS_TO_RUN.md`; `supabase/migrations/` (last file 0141) |
+| Migrations manual, 142 files, only 0061 re-run needed; 0123/0120–0122 critical | `docs/audit/OWNER-TASKLIST.md` §1; `docs/MIGRATIONS_TO_RUN.md`; `supabase/migrations/` (last file 0142) |
 | Supabase/Vercel/Resend settings incl. sign-ups off (GW-018 seal), PITR, env-var table, cron 16:00 UTC | `OWNER-TASKLIST.md` §2–4; `vercel.json` (cron declared) |
 | PWA + Guided Access launch path; GW-006/007/001 limits; Capacitor later | `OWNER-TASKLIST.md` §7; `FINDINGS.md` |
 | Printer needs `NEXT_PUBLIC_SITE_URL` + poll token (refused without in prod) | `OWNER-TASKLIST.md` §6 |
