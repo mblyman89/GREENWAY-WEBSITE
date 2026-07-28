@@ -19,7 +19,8 @@ import {
   type WaTaxCategoryRow,
   type WaTaxTypeRow,
 } from "@/lib/reports/wa-tax";
-import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+// SLICE 78: DB-backed category labels (owner renames propagate to reports).
+import { getCategoryLabeler } from "@/lib/pos/category-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -57,8 +58,8 @@ const monthColumns: ReportColumn<WaTaxMonthRow & Record<string, unknown>>[] = [
   { key: "totalTaxMinor", header: "Total tax", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.totalTaxMinor) },
 ];
 
-const catColumns: ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] = [
-  { key: "category", header: "Category", emphasis: true, render: (r) => formatWebsiteCategory(r.category) },
+const catColumnsFor = (categoryLabel: (s: string) => string): ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] => [
+  { key: "category", header: "Category", emphasis: true, render: (r) => categoryLabel(r.category) },
   { key: "isCannabis", header: "Cannabis?", render: (r) => (r.isCannabis ? "Yes" : "No") },
   { key: "baseMinor", header: "Taxable sales", align: "right", render: (r) => formatMinorCurrency(r.baseMinor) },
   { key: "salesTaxMinor", header: "Sales tax", align: "right", render: (r) => formatMinorCurrency(r.salesTaxMinor) },
@@ -76,8 +77,8 @@ const typeColumns: ReportColumn<WaTaxTypeRow & Record<string, unknown>>[] = [
 ];
 
 // Non-cannabis-only category rows for the dedicated taxable non-cannabis section.
-const nonCannabisCatColumns: ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] = [
-  { key: "category", header: "Category", emphasis: true, render: (r) => formatWebsiteCategory(r.category) },
+const nonCannabisCatColumnsFor = (categoryLabel: (s: string) => string): ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] => [
+  { key: "category", header: "Category", emphasis: true, render: (r) => categoryLabel(r.category) },
   { key: "baseMinor", header: "Taxable sales", align: "right", render: (r) => formatMinorCurrency(r.baseMinor) },
   { key: "salesTaxMinor", header: "Sales tax (9.3%)", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.salesTaxMinor) },
   { key: "units", header: "Units", align: "right", render: (r) => r.units.toLocaleString() },
@@ -101,6 +102,10 @@ export default async function TaxReportPage({
   }
 
   const report = await getWaTaxReport(range.fromISO, range.toISO);
+  // SLICE 78: owner's live category labels (renames at Settings → Types show here).
+  const categoryLabel = await getCategoryLabeler();
+  const catColumns = catColumnsFor(categoryLabel);
+  const nonCannabisCatColumns = nonCannabisCatColumnsFor(categoryLabel);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
 
   return (

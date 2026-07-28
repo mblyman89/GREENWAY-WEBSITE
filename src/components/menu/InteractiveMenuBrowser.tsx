@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
-import { formatWebsiteCategory, websiteCategories } from "@/lib/pos/category-taxonomy";
+// SLICE 78: owner-managed category labels. The server passes the DB-backed
+// value→label map; categoryLabel() prefers it and falls back to the hardcoded
+// taxonomy, so renames/additions at /admin/settings/types reach shoppers.
+import { allKnownCategories, categoryLabel, isKnownCategory, setCategoryLabelOverrides } from "@/lib/menu/category-labels-client";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
 import { FilterTags } from "./FilterTags";
@@ -155,7 +158,7 @@ function hasAny(sourceText: string, patterns: RegExp[]) {
 function rawCategorySectionLabel(item: GreenwayMenuItem) {
   const sourceText = itemSourceText(item);
   if (item.category === "cartridge" && sourceText.includes("live resin cartridge")) return "Live Resin Cartridge";
-  return item.posInventoryCategory?.trim() || formatWebsiteCategory(item.category);
+  return item.posInventoryCategory?.trim() || categoryLabel(item.category);
 }
 
 function cartridgeSubtypeLabel(item: GreenwayMenuItem) {
@@ -231,7 +234,7 @@ function filteredSectionLabel(activeCategory: GreenwayCategory, item: GreenwayMe
   if (activeCategory === "edible-solid") return edibleSolidSectionLabel(item);
   if (activeCategory === "edible-liquid") return edibleLiquidSectionLabel(item);
   if (["preroll", "blunt", "infused-preroll", "infused-blunt", "preroll-pack", "infused-preroll-pack"].includes(activeCategory)) return prerollPackSectionLabel(item);
-  return formatWebsiteCategory(item.category);
+  return categoryLabel(item.category);
 }
 
 function groupedByActiveFilter(activeCategory: GreenwayCategory, filteredItems: GreenwayMenuItem[]): MenuItemGroup[] {
@@ -321,7 +324,7 @@ type FilterCriteria = {
 };
 
 function matchesSearch(item: GreenwayMenuItem, query: string) {
-  const categoryLabels = [item.category, ...(item.filterCategories ?? [])].map(formatWebsiteCategory).join(" ");
+  const categoryLabels = [item.category, ...(item.filterCategories ?? [])].map(categoryLabel).join(" ");
   const sourceClassifications = `${item.posInventoryType ?? ""} ${item.posInventoryCategory ?? ""}`;
   const variantLabels = item.variants.map((variant) => variant.label).join(" ");
   const haystack = `${item.name} ${item.productName ?? ""} ${item.strainName ?? ""} ${item.brand} ${item.category} ${categoryLabels} ${sourceClassifications} ${item.strainType} ${variantLabels}`.toLowerCase();
@@ -397,7 +400,9 @@ function toggleValue<T extends string>(values: T[], value: T) {
 }
 
 function isWebsiteCategory(value: string): value is GreenwayCategory {
-  return websiteCategories.includes(value as GreenwayCategory);
+  // SLICE 78: owner-created DB categories count too (isKnownCategory), so a
+  // brand-new category is filterable/linkable the moment it's created.
+  return isKnownCategory(value);
 }
 
 function itemWeightLabels(item: GreenwayMenuItem) {
@@ -597,9 +602,15 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
 type InteractiveMenuBrowserProps = {
   items: GreenwayMenuItem[];
   initialSearchParams?: InitialMenuSearchParams;
+  /** SLICE 78: DB-backed value→label map from /admin/settings/types. */
+  categoryLabels?: Record<string, string>;
 };
 
-export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: InteractiveMenuBrowserProps) {
+export function InteractiveMenuBrowser({ items, initialSearchParams = {}, categoryLabels }: InteractiveMenuBrowserProps) {
+  // SLICE 78: register the owner's labels BEFORE any lookup below runs. This
+  // happens during render on both server and client with the same map, so
+  // hydration stays consistent; an absent map = hardcoded behavior.
+  setCategoryLabelOverrides(categoryLabels);
   // Lazy initializer reads the LIVE browser URL (merged with server params) so a
   // cache-restored return navigation rehydrates every filter. On first paint the
   // live URL equals the server URL, so server and client agree (no mismatch).
@@ -803,7 +814,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         ...Array(merchProductDefs.length).fill("merch"),
       ],
       selectedCategories,
-      formatWebsiteCategory,
+      categoryLabel,
     );
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedCategories]);
 
@@ -893,12 +904,21 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
     if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
 
-    return websiteCategories
+    // SLICE 78: iterate the full registry (hardcoded taxonomy + owner-created
+    // DB categories) so a brand-new category renders its own section instead
+    // of silently disappearing from the customer menu. Orphan-safe: any
+    // category value present on a live item ALWAYS gets a section (title-case
+    // label fallback), so hiding/deleting a registry row never hides products.
+    const known = allKnownCategories();
+    const fromItems = Array.from(new Set(filteredItems.map((item) => item.category))).filter(
+      (category) => !known.includes(category),
+    );
+    return [...known, ...fromItems]
       .map((category) => ({
         key: category,
         id: category,
         eyebrow: "Category",
-        label: formatWebsiteCategory(category),
+        label: categoryLabel(category),
         items: filteredItems.filter((item) => item.category === category),
       }))
       .filter((group) => group.items.length > 0);
@@ -944,7 +964,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     ...selectedCategories.map((category) => ({
       key: `category-${category}`,
       label: "Category",
-      value: formatWebsiteCategory(category),
+      value: categoryLabel(category),
       onRemove: () => setSelectedCategories((current) => current.filter((value) => value !== category)),
     })),
     ...selectedBrands.map((brand) => ({

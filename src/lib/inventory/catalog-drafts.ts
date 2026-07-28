@@ -20,6 +20,7 @@ import {
   validateClassificationChoice,
 } from "@/lib/inventory/draft-approval-gate-core";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
+import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import {
   getPricingSettings,
   getVelocityForProduct,
@@ -414,10 +415,14 @@ export async function approveDraftWithPrice(
     inventoryType: row?.inventory_type ?? null,
     resolvedWebsiteCategory: resolution.websiteCategory,
   });
+  // SLICE 78: owner-created categories (DB registry) are legal picks too —
+  // the closed set becomes hardcoded taxonomy ∪ active registry values.
+  const registryLabels = await loadCategoryLabelMap();
   const choice = validateClassificationChoice({
     assessment,
     chosenWebsiteCategory: classification?.chosenWebsiteCategory ?? null,
     chosenHouseType: classification?.chosenHouseType ?? null,
+    extraCategoryValues: Object.keys(registryLabels),
   });
   if (!choice.ok) {
     return { ok: false, error: choice.error };

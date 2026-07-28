@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { setCatalogDraftStatus, approveDraftWithPrice } from "@/lib/inventory/catalog-drafts";
+// SLICE 78: create a website category during onboarding ("__new__" pick).
+import { recordAudit } from "@/lib/auth/audit";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { listWebsiteCategoryTypes } from "@/lib/pos/types-store";
+import { validateCategoryDraft } from "@/lib/pos/category-registry-core";
 
 export async function approveDraftAction(draftId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
@@ -18,8 +23,44 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   // was actually REQUIRED (resolver + labeler) and validates every pick
   // against the closed vocabularies inside approveDraftWithPrice - the form
   // is never trusted.
-  const chosenWebsiteCategory = (formData.get("website_category") as string | null)?.trim() || null;
+  let chosenWebsiteCategory = (formData.get("website_category") as string | null)?.trim() || null;
   const chosenHouseType = (formData.get("house_type") as string | null)?.trim() || null;
+
+  // SLICE 78: "__new__" = create the category right here, mid-onboarding.
+  // Same pure gatekeeper as Settings → Types (label required, slug derivation,
+  // duplicate refusal), same audit trail, then the new value becomes the pick.
+  if (chosenWebsiteCategory === "__new__") {
+    const newLabel = (formData.get("new_category_label") as string | null)?.trim() || "";
+    const registry = await listWebsiteCategoryTypes({ includeInactive: true });
+    const parsed = validateCategoryDraft({
+      label: newLabel,
+      existingValues: registry.map((r) => r.value),
+    });
+    if (!parsed.ok) {
+      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(parsed.error)}`);
+    }
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("website_category_types").insert({
+      value: parsed.value,
+      label: parsed.label,
+      helper: "",
+      sort_order: parsed.sort_order,
+      is_active: true,
+      is_system: false,
+    });
+    if (error) {
+      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(error.message)}`);
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "website_category.created",
+      entityType: "website_category_type",
+      entityId: parsed.value,
+      after: { value: parsed.value, label: parsed.label, created_during: "draft_onboarding" },
+    });
+    chosenWebsiteCategory = parsed.value;
+  }
   const result = await approveDraftWithPrice(draftId, priceMinor, session.userId, {
     chosenWebsiteCategory,
     chosenHouseType,

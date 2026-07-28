@@ -17,7 +17,10 @@ import {
   websiteCategoryLabel,
   type DraftClassificationAssessment,
 } from "@/lib/inventory/draft-approval-gate-core";
-import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
+// SLICE 78: the category picker lists the DB-backed registry (owner's
+// categories from /admin/settings/types), not the hardcoded taxonomy — the
+// registry falls back to the hardcoded list on an empty/unconfigured DB.
+import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { groupCatalogByCategory } from "@/lib/pos/inventory-type-catalog";
 import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
 
@@ -55,7 +58,14 @@ export default async function CatalogDraftsPage({
     );
   }
 
-  const [drafts, counts] = await Promise.all([listCatalogDrafts(view), countCatalogDrafts()]);
+  const [drafts, counts, categoryLabelMap] = await Promise.all([
+    listCatalogDrafts(view),
+    countCatalogDrafts(),
+    loadCategoryLabelMap(),
+  ]);
+  // SLICE 78: [value, label] pairs for the "Pick a category" select — the
+  // owner's live registry, sorted by the same order the settings page uses.
+  const categoryChoices = Object.entries(categoryLabelMap);
 
   // SLICE 64 (owner bug B3): resolve OUR website category + run the SLICE 63
   // type labeler for every row, so the table shows OUR labels (never the raw
@@ -314,12 +324,23 @@ export default async function CatalogDraftsPage({
                                     <option value="" disabled>
                                       Pick a category…
                                     </option>
-                                    {websiteCategoryDefinitions.map((c) => (
-                                      <option key={c.value} value={c.value}>
-                                        {c.label}
+                                    {categoryChoices.map(([value, label]) => (
+                                      <option key={value} value={value}>
+                                        {label}
                                       </option>
                                     ))}
+                                    {/* SLICE 78: create a category without leaving
+                                        onboarding — name it in the box below. */}
+                                    <option value="__new__">➕ Create a new category…</option>
                                   </Select>
+                                )}
+                                {needsCategoryPick && (
+                                  <Input
+                                    name="new_category_label"
+                                    placeholder="New category name (only if creating one)"
+                                    className="w-48 text-xs"
+                                    aria-label="New category name"
+                                  />
                                 )}
                                 {needsTypePick && (
                                   <Select

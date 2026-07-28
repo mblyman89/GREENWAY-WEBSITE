@@ -11,6 +11,9 @@ import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
+// SLICE 78: the DB-backed category registry — renames/additions made at
+// /admin/settings/types propagate to the customer menu through this map.
+import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 
 export const metadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
@@ -39,6 +42,9 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   const menuItems = await withDisplayKnowledge(
     await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
   );
+  // SLICE 78: owner-managed category labels (value → label). Serializable, so
+  // the client menu can render the owner's names; empty map = old behavior.
+  const categoryLabels = await loadCategoryLabelMap();
   // Pages-builder banners for /menu: the primary menu.hero is editable via the
   // existing SiteText hero below; any extra banners staff add render under it.
   const banners = await getPageBanners("menu", ["menu.hero"]);
@@ -146,7 +152,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
 
       <section id="products">
         <Suspense fallback={<div className="mx-auto max-w-[88rem] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
-          <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} />
+          <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} categoryLabels={categoryLabels} />
         </Suspense>
       </section>
       <Footer />
