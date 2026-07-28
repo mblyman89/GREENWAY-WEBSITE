@@ -6,6 +6,11 @@ import { Badge, Button, Section } from "@/components/admin/ui";
 import { getSnapshot, getSnapshotItem } from "@/lib/purchasing/cultivera-store";
 import { detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
 import { strainImagesToSave } from "@/lib/purchasing/cultivera-kb-link-core";
+import {
+  resolveMenuDescription,
+  DESCRIPTION_FALLBACK_BADGE,
+  DESCRIPTION_FALLBACK_TITLE,
+} from "@/lib/purchasing/menu-description-core";
 import { priceLabel } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { VARIANT_QTY_PARAM_PREFIX } from "@/lib/purchasing/cultivera-po-core";
 import { FetchSizesButton } from "./fetch-sizes-button";
@@ -45,14 +50,18 @@ export default async function CultiveraItemDetailPage({
   // CV-7b: distinct strains on THIS detail page that have a saveable image
   // (own photo, else the product-card image as a flagged fallback). This is the
   // exact set the "Save all strain images to KB" button will save.
+  const lineDescription = detail?.description ?? item.description;
   const saveableStrains = strainImagesToSave(variants, {
     brand: item.brand ?? null,
     lineImageUrl: item.image_url ?? null,
+    // SLICE 85 — the product-line description stands in (flagged) for strains
+    // whose sizes carry no lineage/description of their own; KB saves record it.
+    lineDescription: lineDescription ?? null,
   });
   const vendorLabel = snap.seller_name ?? snap.cultivera_market_slug ?? "Unknown vendor";
   const itemLabel = item.name ?? detail?.name ?? "(unnamed item)";
   const canFetch = Boolean((snap.cultivera_market_id ?? "").trim() && (item.cultivera_item_id ?? "").trim());
-  const description = detail?.description ?? item.description;
+  const description = lineDescription;
 
   return (
     <div>
@@ -182,6 +191,10 @@ export default async function CultiveraItemDetailPage({
                   <tbody>
                     {variants.map((v) => {
                       const soldOut = v.availableQty !== null && v.availableQty <= 0;
+                      // SLICE 85 — this size's OWN lineage/description first;
+                      // else the product-line description as a flagged
+                      // stand-in (mirrors the placeholder-image badge).
+                      const vDesc = resolveMenuDescription(v.description, description ?? null);
                       const inputMax = Math.min(
                         v.maxOrderLimit ?? Number.MAX_SAFE_INTEGER,
                         v.availableQty ?? Number.MAX_SAFE_INTEGER,
@@ -221,9 +234,9 @@ export default async function CultiveraItemDetailPage({
                                 <div className="truncate font-semibold text-[var(--admin-text)]" title={v.name ?? undefined}>
                                   {v.cleanName ?? v.name ?? "(unnamed)"}
                                 </div>
-                                {v.description && (
-                                  <div className="truncate text-xs text-[var(--admin-text-faint)]" title={v.description}>
-                                    {v.description}
+                                {vDesc.text && (
+                                  <div className="truncate text-xs text-[var(--admin-text-faint)]" title={vDesc.text}>
+                                    {vDesc.text}
                                   </div>
                                 )}
                               </div>
@@ -231,6 +244,13 @@ export default async function CultiveraItemDetailPage({
                               {v.imageIsFallback && (
                                 <span title="This size has no photo of its own — showing the product-card image as a placeholder. Source a strain-specific image when available.">
                                   <Badge tone="gold">placeholder image</Badge>
+                                </span>
+                              )}
+                              {vDesc.isFallback && (
+                                // SLICE 85 — the product-line description is
+                                // standing in for this size's own prose.
+                                <span title={DESCRIPTION_FALLBACK_TITLE}>
+                                  <Badge tone="gold">{DESCRIPTION_FALLBACK_BADGE}</Badge>
                                 </span>
                               )}
                             </div>

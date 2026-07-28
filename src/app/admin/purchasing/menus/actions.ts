@@ -536,7 +536,14 @@ export async function saveCultiveraDetailStrainsToKbAction(
   const vendorLabel = (snap.seller_name ?? "").trim() || (snap.cultivera_market_slug ?? "").trim() || "";
   const res = await saveCultiveraDetailStrainsToKb(
     variants,
-    { brand: item.brand ?? null, lineImageUrl: item.image_url ?? null, category: item.category ?? null },
+    {
+      brand: item.brand ?? null,
+      lineImageUrl: item.image_url ?? null,
+      category: item.category ?? null,
+      // SLICE 85 — the product-line description stands in (flagged) for
+      // strains whose sizes carry no lineage/description of their own.
+      lineDescription: detail?.description ?? item.description ?? null,
+    },
     vendorLabel,
     session.userId,
   );
@@ -558,6 +565,7 @@ export async function saveCultiveraDetailStrainsToKbAction(
       deduped: res.deduped,
       boundToKb: res.boundToKb,
       fallbacks: res.fallbacks,
+      descriptionFallbacks: res.descriptionFallbacks,
       failed: res.failed,
     },
   });
@@ -976,7 +984,14 @@ export async function saveLeaflinkItemMediaAction(formData: FormData): Promise<S
     action: "leaflink.media.saved",
     entityType: "leaflink_menu_item",
     entityId: itemId,
-    after: { kind, assetId: res.assetId, deduped: res.deduped, snapshotId },
+    after: {
+      kind,
+      assetId: res.assetId,
+      deduped: res.deduped,
+      // SLICE 85 — flags saves whose KB description was the category stand-in.
+      descriptionWasFallback: res.descriptionWasFallback,
+      snapshotId,
+    },
   });
 
   revalidatePath(`${BASE}/leaflink/${snapshotId}`);

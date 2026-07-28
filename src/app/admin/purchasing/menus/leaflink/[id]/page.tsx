@@ -14,6 +14,12 @@ import {
   agoLabel,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
+import { leaflinkCategoryDescription } from "@/lib/purchasing/leaflink-menu-core";
+import {
+  resolveMenuDescription,
+  DESCRIPTION_FALLBACK_BADGE,
+  DESCRIPTION_FALLBACK_TITLE,
+} from "@/lib/purchasing/menu-description-core";
 import { SaveLeaflinkItemMediaButton } from "./media-buttons";
 import { AutoSaveAllButton } from "../../auto-save-all-button";
 import { saveAllLeaflinkSnapshotMediaAction } from "../../actions";
@@ -197,6 +203,13 @@ export default async function LeaflinkSnapshotPage({
               {visible.map((it) => {
                 const potency = potencyLabel(it);
                 const displayName = (it.name ?? "").trim() || "Unnamed item";
+                // SLICE 85 — own description first; when the product has none,
+                // the pinned category description (raw.category.description)
+                // stands in with a flagged badge, mirroring the image fallback.
+                const desc = resolveMenuDescription(
+                  it.description,
+                  leaflinkCategoryDescription(it.raw),
+                );
                 return (
                   <div
                     key={it.id}
@@ -234,10 +247,17 @@ export default async function LeaflinkSnapshotPage({
                         {it.strain_type && <Badge tone="neutral">{it.strain_type}</Badge>}
                         {potency && <Badge tone="gold">{potency}</Badge>}
                       </div>
-                      {it.description && (
-                        <p className="line-clamp-3 text-xs leading-relaxed text-[var(--admin-text-faint)]">
-                          {it.description}
-                        </p>
+                      {desc.text && (
+                        <div className="space-y-1">
+                          {desc.isFallback && (
+                            <span title={DESCRIPTION_FALLBACK_TITLE}>
+                              <Badge tone="gold">{DESCRIPTION_FALLBACK_BADGE}</Badge>
+                            </span>
+                          )}
+                          <p className="line-clamp-3 text-xs leading-relaxed text-[var(--admin-text-faint)]">
+                            {desc.text}
+                          </p>
+                        </div>
                       )}
                       <div className="mt-auto flex items-center justify-between pt-2">
                         <span className="text-sm font-semibold text-[var(--admin-text)]">

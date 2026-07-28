@@ -231,6 +231,8 @@ export type SaveDetailStrainsResult = {
   boundToKb: number;
   /** Strains that used the product-card image as a flagged fallback. */
   fallbacks: number;
+  /** SLICE 85 — strains whose saved description was the product-line stand-in. */
+  descriptionFallbacks: number;
   /** Strains that failed to save. */
   failed: number;
   error: string | null;
@@ -252,11 +254,21 @@ export type SaveDetailStrainsResult = {
  */
 export async function saveCultiveraDetailStrainsToKb(
   variants: StrainVariantLike[],
-  line: { brand: string | null; lineImageUrl: string | null; category: string | null },
+  line: {
+    brand: string | null;
+    lineImageUrl: string | null;
+    category: string | null;
+    /** SLICE 85 — the product-line description, used as a flagged stand-in. */
+    lineDescription?: string | null;
+  },
   vendorLabel: string,
   uploadedBy: string | null,
 ): Promise<SaveDetailStrainsResult> {
-  const plan = strainImagesToSave(variants, { brand: line.brand, lineImageUrl: line.lineImageUrl });
+  const plan = strainImagesToSave(variants, {
+    brand: line.brand,
+    lineImageUrl: line.lineImageUrl,
+    lineDescription: line.lineDescription ?? null,
+  });
   const result: SaveDetailStrainsResult = {
     ok: true,
     strains: plan.length,
@@ -264,6 +276,7 @@ export async function saveCultiveraDetailStrainsToKb(
     deduped: 0,
     boundToKb: 0,
     fallbacks: 0,
+    descriptionFallbacks: 0,
     failed: 0,
     error: null,
   };
@@ -276,6 +289,7 @@ export async function saveCultiveraDetailStrainsToKb(
 
   for (const strain of plan) {
     if (strain.imageIsFallback) result.fallbacks += 1;
+    if (strain.descriptionIsFallback) result.descriptionFallbacks += 1;
     try {
       const { asset, deduped } = await importImageFromUrl({
         imageUrl: strain.imageUrl,
@@ -298,6 +312,10 @@ export async function saveCultiveraDetailStrainsToKb(
             brandName: line.brand,
             category: line.category,
             variantLabel: strain.identity.variantLabel,
+            // SLICE 85 — own description first, else the product-line stand-in
+            // (flagged in descriptionFallbacks). Gap-fill: a curated KB
+            // description is never overwritten by a stand-in.
+            description: strain.description,
             imageMediaIds: [asset.id],
             primaryMediaId: asset.id,
             source: `crawl:${strain.imageUrl}`,
