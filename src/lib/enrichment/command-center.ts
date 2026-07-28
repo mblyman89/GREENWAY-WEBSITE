@@ -35,7 +35,9 @@ import { resolveSubstituteFor } from "@/lib/ai/kb/image-substitutes";
 import { listMedia, resolveMediaUrls } from "@/lib/media/store";
 import {
   buildAssetGuidance,
+  buildEnrichmentChecklist,
   buildGuidanceActions,
+  type ChecklistItem,
   type GuidanceAction,
   rankMatches,
   scoreKbCandidate,
@@ -97,6 +99,8 @@ export type EnrichmentCommandCenter = {
   guidance: string[];
   /** SLICE 73 — jump-to buttons that take you WHERE each guidance step happens. */
   guidanceActions: GuidanceAction[];
+  /** SLICE 75 — permanent ✓/○ scorecard (photo/description/brand/tags). */
+  checklist: ChecklistItem[];
 };
 
 // ---------------------------------------------------------------------------
@@ -317,7 +321,16 @@ export async function getEnrichmentCommandCenter(
     substituteAvailable: Boolean(substitute),
     brand: pos.brand,
     hasBrandLink: gaps.hasBrandLink,
+    hasTags: gaps.hasTags,
     searchQuery: tokenizeEnrichment(pos.name).slice(0, 3).join(" ") || pos.name,
+  });
+
+  // SLICE 75 — the permanent ✓/○ scorecard (the panel never disappears now).
+  const checklist = buildEnrichmentChecklist({
+    hasDescription: gaps.hasDescription,
+    hasImage: gaps.hasImage,
+    hasBrandLink: gaps.hasBrandLink,
+    hasTags: gaps.hasTags,
   });
 
   return {
@@ -331,5 +344,6 @@ export async function getEnrichmentCommandCenter(
     substitute,
     guidance,
     guidanceActions,
+    checklist,
   };
 }

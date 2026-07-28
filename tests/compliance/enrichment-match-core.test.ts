@@ -17,7 +17,9 @@ import {
   scoreVendorCandidate,
   rankMatches,
   buildAssetGuidance,
+  buildEnrichmentChecklist,
   buildGuidanceActions,
+  checklistComplete,
   parseEnrichmentSort,
   parseEnrichmentStatusFilter,
   sortEnrichmentList,
@@ -329,5 +331,58 @@ describe("SLICE 73 — buildGuidanceActions (jump-to buttons)", () => {
     });
     expect(noQuery.some((a) => a.href === "/admin/media")).toBe(true);
     expect(noQuery.some((a) => a.href === "#ai")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SLICE 75 — permanent checklist + tags action.
+// Mirrors the embedded self-tests in match-core.ts.
+// ---------------------------------------------------------------------------
+
+describe("SLICE 75 — permanent enrichment checklist + tags jump", () => {
+  it("only tags missing yields a single jump to the tags picker", () => {
+    const acts = buildGuidanceActions({
+      hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+      vendorMatches: 0, substituteAvailable: false, hasBrandLink: true, hasTags: false,
+    });
+    expect(acts).toHaveLength(1);
+    expect(acts[0]!.href).toBe("#tags");
+  });
+
+  it("everything satisfied including tags still yields zero buttons", () => {
+    expect(
+      buildGuidanceActions({
+        hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+        vendorMatches: 0, substituteAvailable: false, hasBrandLink: true, hasTags: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it("hasTags omitted skips the tags action (legacy callers safe)", () => {
+    expect(
+      buildGuidanceActions({
+        hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+        vendorMatches: 0, substituteAvailable: false, hasBrandLink: true,
+      }).some((a) => a.href === "#tags"),
+    ).toBe(false);
+  });
+
+  it("full checklist has four done rows ordered photo → description → brand → tags", () => {
+    const list = buildEnrichmentChecklist({ hasDescription: true, hasImage: true, hasBrandLink: true, hasTags: true });
+    expect(list.map((i) => i.label)).toEqual(["Photo", "Description", "Brand link", "Tags"]);
+    expect(checklistComplete(list)).toBe(true);
+  });
+
+  it("bare product checklist has nothing done and plain-English detail on every row", () => {
+    const list = buildEnrichmentChecklist({ hasDescription: false, hasImage: false, hasBrandLink: false, hasTags: false });
+    expect(list.every((i) => !i.done)).toBe(true);
+    expect(checklistComplete(list)).toBe(false);
+    expect(list.every((i) => i.detail.length > 0)).toBe(true);
+  });
+
+  it("brand/tags omitted hides those rows; one open row blocks complete", () => {
+    const list = buildEnrichmentChecklist({ hasDescription: true, hasImage: false });
+    expect(list).toHaveLength(2);
+    expect(checklistComplete(list)).toBe(false);
   });
 });

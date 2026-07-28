@@ -10,6 +10,7 @@ import { listAllBrands } from "@/lib/vendors/store";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getEnrichmentCommandCenter } from "@/lib/enrichment/command-center";
+import { checklistComplete } from "@/lib/enrichment/match-core";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import {
   buildWebSearchUrl,
@@ -71,6 +72,9 @@ export default async function ProductEditorPage({
   const crawlerOn = isCrawlerConfigured();
   const searchUrl = buildWebSearchUrl(item.name, item.brand_name);
   const center = await getEnrichmentCommandCenter({ item });
+  // SLICE 75 — the guidance panel is permanent; this flips it to its green
+  // "fully enriched" state when every checklist row is done.
+  const checklistDone = checklistComplete(center.checklist);
 
   // Resolve gallery image URLs.
   const galleryIds = enrichment?.image_media_ids ?? [];
@@ -153,33 +157,64 @@ export default async function ProductEditorPage({
 
           {/* Guidance + KB knowledge */}
           <div className="space-y-4">
-            {center.guidance.length > 0 && (
-              <div className="rounded-xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/5 p-4">
-                <p className="text-sm font-semibold text-[var(--admin-gold)]">How to finish enriching this product</p>
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-white/70">
-                  {center.guidance.map((g) => (
-                    <li key={g}>{g}</li>
-                  ))}
-                </ol>
-                {/* SLICE 73 — jump-to buttons: each guidance step gets a button
-                    that takes you straight to WHERE that step happens (an admin
-                    page or an anchor further down this page). */}
-                {center.guidanceActions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--admin-gold)]/15 pt-3">
-                    {center.guidanceActions.map((a) => (
-                      <Link
-                        key={a.href}
-                        href={a.href}
-                        title={a.hint}
-                        className="rounded-lg border border-[var(--admin-gold)]/35 bg-black/30 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--admin-gold)] transition-colors hover:bg-[var(--admin-gold)]/15"
-                      >
-                        {a.label} →
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* SLICE 75 — the panel is PERMANENT now (owner: "I would like for
+                it to stay in the page forever"). It always shows the ✓/○
+                scorecard; the how-to checklist + jump-to buttons appear only
+                while something is still missing, and a green "fully enriched"
+                line takes their place when everything is done. */}
+            <div className="rounded-xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/5 p-4">
+              <p className="text-sm font-semibold text-[var(--admin-gold)]">How to finish enriching this product</p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {center.checklist.map((c) => (
+                  <li key={c.label} className="flex items-start gap-2">
+                    <span
+                      aria-hidden
+                      className={`mt-px font-bold ${c.done ? "text-[var(--admin-accent)]" : "text-white/35"}`}
+                    >
+                      {c.done ? "✓" : "○"}
+                    </span>
+                    <span className={c.done ? "text-white/70" : "text-white/60"}>
+                      <span className={`font-semibold ${c.done ? "text-white/80" : "text-[var(--admin-gold)]"}`}>{c.label}</span>
+                      {" — "}
+                      {c.detail}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {checklistDone ? (
+                <p className="mt-3 border-t border-[var(--admin-gold)]/15 pt-3 text-xs font-semibold text-[var(--admin-accent)]">
+                  ✓ Fully enriched — every detail is in place. This panel stays here so you can
+                  see the scorecard at a glance; it will light up again if anything goes missing.
+                </p>
+              ) : (
+                <>
+                  {center.guidance.length > 0 && (
+                    <ol className="mt-3 list-decimal space-y-1 border-t border-[var(--admin-gold)]/15 pl-5 pt-3 text-xs text-white/70">
+                      {center.guidance.map((g) => (
+                        <li key={g}>{g}</li>
+                      ))}
+                    </ol>
+                  )}
+                  {/* SLICE 73 — jump-to buttons: each guidance step gets a button
+                      that takes you straight to WHERE that step happens (an admin
+                      page or an anchor further down this page). */}
+                  {center.guidanceActions.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--admin-gold)]/15 pt-3">
+                      {center.guidanceActions.map((a) => (
+                        <Link
+                          key={a.href}
+                          href={a.href}
+                          title={a.hint}
+                          className="rounded-lg border border-[var(--admin-gold)]/35 bg-black/30 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--admin-gold)] transition-colors hover:bg-[var(--admin-gold)]/15"
+                        >
+                          {a.label} →
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
 
             {/* KB knowledge ladder result */}
             <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
@@ -600,7 +635,7 @@ export default async function ProductEditorPage({
               <input name="staff_note" defaultValue={enrichment?.staff_note ?? ""} className={field} />
             </label>
 
-            <div className="border-t border-white/10 pt-4">
+            <div id="tags" className="scroll-mt-24 border-t border-white/10 pt-4">
               <span className={label}>Tags</span>
               <div className="flex flex-wrap gap-2">
                 {TAG_OPTIONS.map((t) => (
@@ -636,7 +671,12 @@ export default async function ProductEditorPage({
                   this product, promoted to cover, or nudged left/right. The
                   buttons use formAction so they post to their own server
                   action without nesting forms; removing an image never
-                  deletes the file from the media library. */}
+                  deletes the file from the media library.
+                  SLICE 75 fix: each button BINDS its media id as a server-action
+                  argument (`action.bind(null, id)`). React 19 drops a submit
+                  button's own name/value when the button carries a function
+                  formAction, so the old name/value payload never reached the
+                  action — that was the "Missing media id" error. */}
               {galleryIds.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2">
                   {galleryIds.map((id, idx) => {
@@ -657,9 +697,7 @@ export default async function ProductEditorPage({
                           <div className="flex items-center gap-1">
                             <button
                               type="submit"
-                              formAction={moveProductImage}
-                              name="moveImage"
-                              value={`${id}|left`}
+                              formAction={moveProductImage.bind(null, `${id}|left`)}
                               disabled={idx === 0}
                               title="Move earlier in the gallery"
                               className="rounded px-1 text-xs text-white/60 hover:text-white disabled:opacity-25"
@@ -668,9 +706,7 @@ export default async function ProductEditorPage({
                             </button>
                             <button
                               type="submit"
-                              formAction={moveProductImage}
-                              name="moveImage"
-                              value={`${id}|right`}
+                              formAction={moveProductImage.bind(null, `${id}|right`)}
                               disabled={idx === galleryIds.length - 1}
                               title="Move later in the gallery"
                               className="rounded px-1 text-xs text-white/60 hover:text-white disabled:opacity-25"
@@ -682,9 +718,7 @@ export default async function ProductEditorPage({
                             {!isCover && (
                               <button
                                 type="submit"
-                                formAction={setProductPrimaryImage}
-                                name="primaryImage"
-                                value={id}
+                                formAction={setProductPrimaryImage.bind(null, id)}
                                 title="Use as the cover image on the menu card"
                                 className="rounded px-1 text-[10px] font-semibold text-[var(--admin-gold)] hover:brightness-125"
                               >
@@ -693,9 +727,7 @@ export default async function ProductEditorPage({
                             )}
                             <button
                               type="submit"
-                              formAction={removeProductImage}
-                              name="removeImage"
-                              value={id}
+                              formAction={removeProductImage.bind(null, id)}
                               title="Remove this image from this product (the media library keeps the file)"
                               className="rounded px-1 text-[10px] font-semibold text-[var(--admin-orange)] hover:brightness-125"
                             >

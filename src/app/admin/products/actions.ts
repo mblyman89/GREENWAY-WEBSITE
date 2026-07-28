@@ -441,12 +441,20 @@ export async function importVendorImage(formData: FormData): Promise<void> {
 // audited, and refresh both the editor and the live menu.
 // ---------------------------------------------------------------------------
 
-/** Remove an image from THIS product's gallery (media-library file untouched). */
-export async function removeProductImage(formData: FormData): Promise<void> {
+/**
+ * Remove an image from THIS product's gallery (media-library file untouched).
+ *
+ * SLICE 75 fix: the media id arrives as a BOUND argument
+ * (`removeProductImage.bind(null, id)` on the button's formAction). React 19
+ * drops the submitter's own name/value when the button carries a function
+ * formAction (react-dom `extractEvents$1` nulls the submitter), so the old
+ * name/value payload never reached FormData — that was the owner's
+ * "Missing media id" bug. The legacy formData reads stay as a fallback.
+ */
+export async function removeProductImage(boundMediaId: string, formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
-  // The clicked button carries the media id (formAction inside the editor form).
-  const mediaId = String(formData.get("removeImage") ?? formData.get("mediaId") ?? "").trim();
+  const mediaId = (boundMediaId || String(formData.get("removeImage") ?? formData.get("mediaId") ?? "")).trim();
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
 
@@ -492,12 +500,14 @@ export async function removeProductImage(formData: FormData): Promise<void> {
   redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
 }
 
-/** Make a gallery image the cover (primary) shown on the live menu card. */
-export async function setProductPrimaryImage(formData: FormData): Promise<void> {
+/**
+ * Make a gallery image the cover (primary) shown on the live menu card.
+ * SLICE 75 fix: media id bound as an argument (see removeProductImage).
+ */
+export async function setProductPrimaryImage(boundMediaId: string, formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
-  // The clicked button carries the media id (formAction inside the editor form).
-  const mediaId = String(formData.get("primaryImage") ?? formData.get("mediaId") ?? "").trim();
+  const mediaId = (boundMediaId || String(formData.get("primaryImage") ?? formData.get("mediaId") ?? "")).trim();
   if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
   if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
 
@@ -533,12 +543,14 @@ export async function setProductPrimaryImage(formData: FormData): Promise<void> 
   redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
 }
 
-/** Nudge a gallery image one slot left or right (curated order). */
-export async function moveProductImage(formData: FormData): Promise<void> {
+/**
+ * Nudge a gallery image one slot left or right (curated order).
+ * SLICE 75 fix: "mediaId|direction" bound as an argument (see removeProductImage).
+ */
+export async function moveProductImage(boundPacked: string, formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const key = String(formData.get("key") ?? "");
-  // The clicked button carries "mediaId|direction" (formAction inside the editor form).
-  const packed = String(formData.get("moveImage") ?? "").trim();
+  const packed = (boundPacked || String(formData.get("moveImage") ?? "")).trim();
   const sep = packed.lastIndexOf("|");
   const mediaId = sep >= 0 ? packed.slice(0, sep).trim() : String(formData.get("mediaId") ?? "").trim();
   const rawDir = sep >= 0 ? packed.slice(sep + 1) : String(formData.get("direction") ?? "");

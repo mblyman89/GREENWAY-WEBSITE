@@ -271,6 +271,8 @@ export type GuidanceAction = {
 export type GuidanceActionInput = GuidanceInput & {
   /** Enrichment brand link state; omit (undefined) to skip the brand action. */
   hasBrandLink?: boolean;
+  /** Tags state (SLICE 75 checklist); omit (undefined) to skip the tags row. */
+  hasTags?: boolean;
   /** Pre-fill for the media-library search (usually the product-name tokens). */
   searchQuery?: string | null;
 };
@@ -283,7 +285,8 @@ export type GuidanceActionInput = GuidanceInput & {
 export function buildGuidanceActions(g: GuidanceActionInput): GuidanceAction[] {
   const out: GuidanceAction[] = [];
   const brandMissing = g.hasBrandLink === false;
-  if (g.hasDescription && g.hasImage && !brandMissing) return out;
+  const tagsMissing = g.hasTags === false;
+  if (g.hasDescription && g.hasImage && !brandMissing && !tagsMissing) return out;
 
   if (g.kbMatches > 0 || g.mediaMatches > 0 || g.vendorMatches > 0) {
     out.push({
@@ -338,7 +341,90 @@ export function buildGuidanceActions(g: GuidanceActionInput): GuidanceAction[] {
       hint: "Jump to the Brand link panel — linked brands unlock knowledge-base copy and vendor context.",
     });
   }
+  if (tagsMissing) {
+    out.push({
+      label: "Pick tags",
+      href: "#tags",
+      hint: "Jump to the Tags picker — tags power search and filtering on the public menu.",
+    });
+  }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 75 — permanent enrichment checklist. The owner asked for the "How to
+// finish enriching this product" panel to STAY on the page forever, so the
+// panel now always renders and this pure helper turns the real gap flags into
+// ✓/○ checklist rows (done items confirm the work; open items link to the
+// guidance + jump-to buttons below). Additive: buildAssetGuidance and
+// buildGuidanceActions keep their shapes and their "empty when satisfied"
+// contracts — the PAGE decides to render the panel unconditionally.
+// ---------------------------------------------------------------------------
+
+export type ChecklistItem = {
+  /** Plain-English name of the detail, e.g. "Photo". */
+  label: string;
+  /** True when the live data already has this detail. */
+  done: boolean;
+  /** One-line plain-English status shown next to the label. */
+  detail: string;
+};
+
+export type ChecklistInput = {
+  hasDescription: boolean;
+  hasImage: boolean;
+  /** Omit (undefined) to hide the brand row (legacy callers). */
+  hasBrandLink?: boolean;
+  /** Omit (undefined) to hide the tags row (legacy callers). */
+  hasTags?: boolean;
+};
+
+/**
+ * The always-visible enrichment scorecard. Pure: only string building — no
+ * I/O, inputs never mutated. Order mirrors the worklist gap weights
+ * (image > description > brand > tags).
+ */
+export function buildEnrichmentChecklist(g: ChecklistInput): ChecklistItem[] {
+  const out: ChecklistItem[] = [
+    {
+      label: "Photo",
+      done: g.hasImage,
+      detail: g.hasImage
+        ? "The menu card shows this product's own photo."
+        : "No photo yet — the menu falls back to a category image or mockup.",
+    },
+    {
+      label: "Description",
+      done: g.hasDescription,
+      detail: g.hasDescription
+        ? "Shoppers see real copy on the product page."
+        : "No description yet — the product page reads bare.",
+    },
+  ];
+  if (g.hasBrandLink !== undefined) {
+    out.push({
+      label: "Brand link",
+      done: g.hasBrandLink,
+      detail: g.hasBrandLink
+        ? "Connected to its brand page."
+        : "Not linked — brand page and KB copy stay disconnected.",
+    });
+  }
+  if (g.hasTags !== undefined) {
+    out.push({
+      label: "Tags",
+      done: g.hasTags,
+      detail: g.hasTags
+        ? "Tagged for search and filtering."
+        : "No tags yet — harder to find in search and filters.",
+    });
+  }
+  return out;
+}
+
+/** True when every checklist row is done (drives the "fully enriched" state). */
+export function checklistComplete(items: ChecklistItem[]): boolean {
+  return items.every((i) => i.done);
 }
 
 // ---------------------------------------------------------------------------
@@ -658,6 +744,37 @@ export function __runEnrichmentMatchCoreTests(): void {
   });
   ok(noQuery.some((a) => a.href === "/admin/media"), "actions: blank search query → plain media-library link (no dangling ?q=)");
   ok(!noQuery.some((a) => a.href === "#ai"), "actions: description present → no AI button");
+
+  // SLICE 75 — tags action + the permanent checklist.
+  const tagsOnly = buildGuidanceActions({
+    hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+    vendorMatches: 0, substituteAvailable: false, hasBrandLink: true, hasTags: false,
+  });
+  ok(tagsOnly.length === 1 && tagsOnly[0]?.href === "#tags", "actions: only tags missing → single jump to the tags picker");
+  ok(
+    buildGuidanceActions({
+      hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+      vendorMatches: 0, substituteAvailable: false, hasBrandLink: true, hasTags: true,
+    }).length === 0,
+    "actions: everything satisfied incl. tags → still zero buttons",
+  );
+  ok(
+    !buildGuidanceActions({
+      hasDescription: true, hasImage: true, kbMatches: 0, mediaMatches: 0,
+      vendorMatches: 0, substituteAvailable: false, hasBrandLink: true,
+    }).some((a) => a.href === "#tags"),
+    "actions: hasTags undefined → tags action skipped (legacy callers safe)",
+  );
+  const listFull = buildEnrichmentChecklist({ hasDescription: true, hasImage: true, hasBrandLink: true, hasTags: true });
+  ok(listFull.length === 4 && checklistComplete(listFull), "checklist: all four rows done → complete");
+  ok(listFull[0]?.label === "Photo" && listFull[1]?.label === "Description",
+    "checklist: order mirrors gap weights (photo first, then description)");
+  const listBare = buildEnrichmentChecklist({ hasDescription: false, hasImage: false, hasBrandLink: false, hasTags: false });
+  ok(listBare.every((i) => !i.done) && !checklistComplete(listBare), "checklist: bare product → nothing done");
+  ok(listBare.every((i) => i.detail.length > 0), "checklist: every row carries a plain-English status line");
+  const listLegacy = buildEnrichmentChecklist({ hasDescription: true, hasImage: false });
+  ok(listLegacy.length === 2, "checklist: brand/tags omitted → rows hidden (legacy callers safe)");
+  ok(!checklistComplete(listLegacy) && checklistComplete([]), "checklist: one open row blocks complete; empty list is trivially complete");
 
   if (fail > 0) throw new Error(`enrichment-match-core: ${fail} failure(s)`);
   console.log(`enrichment-match-core: ${pass} checks passed`);
