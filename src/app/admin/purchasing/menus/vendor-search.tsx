@@ -4,11 +4,11 @@
  * VendorSearch — client island for the UNIFIED vendor menus command center
  * (GF-5, evolving the CV-4 Cultivera-only island).
  *
- * ONE search box, BOTH marketplaces. The server action runs the smart
- * sequential search: the vendor's remembered / preferred platform is queried
- * FIRST, the other only when the first finds nothing. Every result carries a
- * platform badge (Cultivera / GrowFlow) and the fetch button routes to the
- * right per-platform menu action.
+ * ONE search box, ALL marketplaces (Cultivera, GrowFlow, LeafLink). The
+ * server action runs the smart sequential search: the vendor's remembered /
+ * preferred platform is queried FIRST, the others only when the earlier ones
+ * find nothing. Every result carries a platform badge (Cultivera / GrowFlow /
+ * LeafLink) and the fetch button routes to the right per-platform menu action.
  *
  * Talks to typed server actions (PoReviewPanel pattern: useTransition + local
  * state, programmatically-built FormData). The actions map every raw record
@@ -32,6 +32,7 @@ import {
   unifiedVendorSearchAction,
   fetchCultiveraMenuAction,
   fetchGrowflowMenuAction,
+  fetchLeaflinkMenuAction,
 } from "./actions";
 
 /** Stable per-row key for busy tracking (platform + ref/slug). */
@@ -59,7 +60,7 @@ export function VendorSearch() {
       if (res.ok) {
         setHits(res.hits);
         const where = res.searchedSecond
-          ? "both marketplaces"
+          ? "all marketplaces"
           : `${platformLabel(res.searchedFirst)} (remembered platform)`;
         if (res.hits.length === 0) {
           setNotice(`No vendors matched on ${where}. Try a shorter name, or leave the box empty to list everything.`);
@@ -85,6 +86,11 @@ export function VendorSearch() {
         fd.set("store_name", h.name);
         fd.set("license_number", h.license);
         res = await fetchGrowflowMenuAction(fd);
+      } else if (h.platform === "leaflink") {
+        fd.set("brand_id", h.refId);
+        fd.set("brand_name", h.name);
+        fd.set("company_name", "");
+        res = await fetchLeaflinkMenuAction(fd);
       } else {
         fd.set("market_id", h.refId);
         fd.set("slug", h.slug);
@@ -94,7 +100,12 @@ export function VendorSearch() {
       setFetchingKey(null);
       if (res.ok && res.snapshotId) {
         setNotice(`Saved ${res.itemCount} item${res.itemCount === 1 ? "" : "s"} from ${h.name}.`);
-        const base = h.platform === "growflow" ? "/admin/purchasing/menus/growflow" : "/admin/purchasing/menus";
+        const base =
+          h.platform === "growflow"
+            ? "/admin/purchasing/menus/growflow"
+            : h.platform === "leaflink"
+              ? "/admin/purchasing/menus/leaflink"
+              : "/admin/purchasing/menus";
         router.push(`${base}/${res.snapshotId}`);
       } else {
         setError(res.error || "Menu fetch failed.");
@@ -114,7 +125,7 @@ export function VendorSearch() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Vendor name — searches Cultivera + GrowFlow (their platform is remembered)"
+          placeholder="Vendor name — searches Cultivera + GrowFlow + LeafLink (their platform is remembered)"
           aria-label="Vendor name"
           className="sm:max-w-md"
         />

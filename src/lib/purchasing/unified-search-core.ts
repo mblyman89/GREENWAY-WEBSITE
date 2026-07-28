@@ -28,12 +28,14 @@ import {
   isFetchableMarket,
 } from "./cultivera-menus-ui-core";
 import { normalizeStore, type VendorPlatform } from "./growflow-menu-core";
+import { normalizeBrandHit } from "./leaflink-menu-core";
 
 export type { VendorPlatform } from "./growflow-menu-core";
 
-/** Both platforms, in the DEFAULT search order (no memory: Cultivera first —
- * it was the first integration and most of the owner's vendors live there). */
-export const ALL_PLATFORMS: readonly VendorPlatform[] = ["cultivera", "growflow"] as const;
+/** All platforms, in the DEFAULT search order (no memory: Cultivera first —
+ * it was the first integration and most of the owner's vendors live there;
+ * LeafLink last — its brand discovery is a broader product-catalog search). */
+export const ALL_PLATFORMS: readonly VendorPlatform[] = ["cultivera", "growflow", "leaflink"] as const;
 
 /* --------------------------------------------------------------------------
  * Vendor key normalization (the memory's lookup key)
@@ -61,7 +63,7 @@ export type PlatformMemoryLike = {
 };
 
 function isKnownPlatform(p: string): p is VendorPlatform {
-  return p === "cultivera" || p === "growflow";
+  return p === "cultivera" || p === "growflow" || p === "leaflink";
 }
 
 /**
@@ -88,17 +90,18 @@ export function choosePreferredPlatform(rows: PlatformMemoryLike[]): VendorPlatf
 
 /**
  * The sequential search order: preferred platform first (when remembered),
- * then the other. With no memory, the default order (ALL_PLATFORMS).
+ * then the others in their default relative order. With no memory, the
+ * default order (ALL_PLATFORMS).
  */
 export function searchOrder(preferred: VendorPlatform | null): VendorPlatform[] {
-  if (preferred === "growflow") return ["growflow", "cultivera"];
-  if (preferred === "cultivera") return ["cultivera", "growflow"];
-  return [...ALL_PLATFORMS];
+  if (!preferred) return [...ALL_PLATFORMS];
+  return [preferred, ...ALL_PLATFORMS.filter((p) => p !== preferred)];
 }
 
 /**
- * Sequential-search rule: only hit the SECOND platform when the first found
- * nothing. (One platform answering means the vendor was found — stop there.)
+ * Sequential-search rule: only hit the NEXT platform when everything searched
+ * so far found nothing. (One platform answering means the vendor was found —
+ * stop there.)
  */
 export function shouldSearchSecondary(primaryHitCount: number): boolean {
   return primaryHitCount <= 0;
@@ -151,6 +154,34 @@ export function growflowHit(rec: Record<string, unknown>): UnifiedVendorHit {
     city: store.city ?? "",
     locked: (store.accessStatus ?? "").toLowerCase() === "locked",
     fetchable: Boolean(store.storeId),
+  };
+}
+
+/**
+ * Map ONE LeafLink brand hit (the worker's grouped product-search record:
+ * brand_id/brand_name/company_name/product_count — see crawler leaflink_api
+ * group_products_by_brand, pinned in LEAFLINK_PINNED.md) into the unified hit.
+ * LeafLink search rows don't carry the seller's license or city, so those are
+ * blank; the brand name is suffixed with the selling company when it differs
+ * (e.g. a house brand sold by a distributor).
+ */
+export function leaflinkHit(rec: Record<string, unknown>): UnifiedVendorHit {
+  const hit = normalizeBrandHit(rec);
+  const brand = (hit.brandName ?? "").trim();
+  const company = (hit.companyName ?? "").trim();
+  const name =
+    brand && company && brand.toLowerCase() !== company.toLowerCase()
+      ? `${brand} — ${company}`
+      : brand || company || "(unnamed vendor)";
+  return {
+    platform: "leaflink",
+    name,
+    refId: hit.brandId ?? "",
+    slug: "",
+    license: "",
+    city: "",
+    locked: false,
+    fetchable: Boolean(hit.brandId),
   };
 }
 
@@ -255,7 +286,11 @@ export function __runUnifiedSearchCoreTests(): void {
   assert(choosePreferredPlatform([tieA, tieB]) === "growflow", "hit_count tie-break");
   assert(choosePreferredPlatform([]) === null, "no rows -> null");
   assert(
-    choosePreferredPlatform([{ platform: "leaflink", last_seen_at: "2026-02-01T00:00:00Z", hit_count: 2 }]) === null,
+    choosePreferredPlatform([{ platform: "leaflink", last_seen_at: "2026-02-01T00:00:00Z", hit_count: 2 }]) === "leaflink",
+    "leaflink is a known platform (SLICE 84)",
+  );
+  assert(
+    choosePreferredPlatform([{ platform: "weedmaps", last_seen_at: "2026-02-01T00:00:00Z", hit_count: 2 }]) === null,
     "unknown platform skipped",
   );
   assert(
@@ -266,10 +301,11 @@ export function __runUnifiedSearchCoreTests(): void {
     "invalid date loses to valid",
   );
 
-  // searchOrder — preferred first, default when null
-  assert(JSON.stringify(searchOrder("growflow")) === JSON.stringify(["growflow", "cultivera"]), "order growflow first");
-  assert(JSON.stringify(searchOrder("cultivera")) === JSON.stringify(["cultivera", "growflow"]), "order cultivera first");
-  assert(JSON.stringify(searchOrder(null)) === JSON.stringify(["cultivera", "growflow"]), "order default");
+  // searchOrder — preferred first, others keep default relative order
+  assert(JSON.stringify(searchOrder("growflow")) === JSON.stringify(["growflow", "cultivera", "leaflink"]), "order growflow first");
+  assert(JSON.stringify(searchOrder("cultivera")) === JSON.stringify(["cultivera", "growflow", "leaflink"]), "order cultivera first");
+  assert(JSON.stringify(searchOrder("leaflink")) === JSON.stringify(["leaflink", "cultivera", "growflow"]), "order leaflink first");
+  assert(JSON.stringify(searchOrder(null)) === JSON.stringify(["cultivera", "growflow", "leaflink"]), "order default");
 
   // shouldSearchSecondary — only when the first platform found nothing
   assert(shouldSearchSecondary(0) === true, "secondary when 0");
@@ -316,6 +352,28 @@ export function __runUnifiedSearchCoreTests(): void {
   const gfEmpty = growflowHit({});
   assert(gfEmpty.fetchable === false, "gf empty not fetchable");
   assert(gfEmpty.name === "(unnamed vendor)", "gf unnamed fallback");
+
+  // leaflinkHit — from the worker's grouped brand record (pinned live shape)
+  const llRec = {
+    brand_id: 11765,
+    brand_name: "Blazy Susan",
+    company_id: 20774,
+    company_name: "Blazy Susan LLC",
+    product_count: 16,
+    sample_image: "https://d3nec6hp1jgjd8.cloudfront.net/media/x.png",
+  };
+  const ll = leaflinkHit(llRec);
+  assert(ll.platform === "leaflink", "ll platform");
+  assert(ll.name === "Blazy Susan — Blazy Susan LLC", "ll brand + company name");
+  assert(ll.refId === "11765", "ll refId is brand id");
+  assert(ll.slug === "" && ll.license === "" && ll.city === "", "ll no slug/license/city");
+  assert(ll.locked === false, "ll never locked");
+  assert(ll.fetchable === true, "ll fetchable");
+  const llSame = leaflinkHit({ brand_id: 1, brand_name: "Wyld", company_name: "wyld" });
+  assert(llSame.name === "Wyld", "ll no suffix when brand == company");
+  const llEmpty = leaflinkHit({});
+  assert(llEmpty.name === "(unnamed vendor)", "ll unnamed fallback");
+  assert(llEmpty.fetchable === false, "ll empty not fetchable");
 
   // mergeHits — primary first; secondary deduped by license; no-license kept
   const p1: UnifiedVendorHit = { ...gf };

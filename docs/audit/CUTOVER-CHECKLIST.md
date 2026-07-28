@@ -37,7 +37,7 @@
     Resend §4, crawler §5, printer §6, deployment roadmap §7).
   - `docs/CCRS_SELF_REPORTING_GUIDE.md` — how self-reporting to the LCB works,
     including the dual-run plan this checklist schedules (its Part B).
-  - `docs/MIGRATIONS_TO_RUN.md` — the manual migration checklist (files 0054 → 0144).
+  - `docs/MIGRATIONS_TO_RUN.md` — the manual migration checklist (files 0054 → 0145).
   - `docs/audit/FINDINGS.md` — all 35 findings (GW-001…GW-035) and their statuses.
 - **NEVER GUESS applies to you too:** if a screen doesn't match what a step says,
   stop, photograph it, and bring it to a session. Don't improvise on the live system.
@@ -171,7 +171,7 @@ Target: done by **Sunday, September 6, 2026**. Source of truth for every item:
 ### Database (Supabase)
 
 - [ ] **C-040 👤 Migration sweep:** open `docs/MIGRATIONS_TO_RUN.md` and confirm
-  every box through **0144** (the current last file; 0144 = emailed vendor menus (snapshot + item tables for menus vendors email to the `vendor_menu@` inbox — parsed from the body or attachments, browsable on the Vendor menus page, with a hand-off straight into the purchase-order builder), 0143 = payee banking vault
+  every box through **0145** (the current last file; 0145 = LeafLink vendor menus (snapshot + item tables that make LeafLink the third marketplace in the unified vendor-menu search — live brand menus fetched with your own buyer login, browsable with an orange platform badge, media-library saves, and a hand-off straight into the purchase-order builder), 0144 = emailed vendor menus (snapshot + item tables for menus vendors email to the `vendor_menu@` inbox — parsed from the body or attachments, browsable on the Vendor menus page, with a hand-off straight into the purchase-order builder), 0143 = payee banking vault
   (admin-only `vendor_bank_details` table — vendor bank routing/account numbers
   stored encrypted with owner/admin-only access, so vendor ACH payments pull
   banking from the vault instead of hand-typed form fields, per WA State
@@ -367,7 +367,7 @@ this stage adds no new work; it is the formal look-back.
   - Stage 1: C-005 green (zero open Critical/Moderate findings).
   - Stage 2: CCRS + WA.gov logins proven; compliance calendar entries live;
     Cultivera contract facts written down (C-020); medical decision recorded.
-  - Stage 3: migrations swept through 0144; Supabase auth/backups/PITR set;
+  - Stage 3: migrations swept through 0145; Supabase auth/backups/PITR set;
     practice restore DONE and written down (C-045); env vars complete; cron
     visible and running; Resend verified.
   - Stage 4: registers provisioned and in Guided Access; printer polling;
@@ -468,7 +468,7 @@ is guessed; calendar dates were computed against the real 2026 calendar.
 | Dual-run 2–4 weeks, Sunday boundary, only Cultivera submits; reconcile KB; stop Cultivera only after clean cycle; LIQ-1295 never pauses | same, Part B |
 | GW-010 (tax overstatement ~46%) must be fixed before ANY real upload | `docs/audit/FINDINGS.md` GW-010; `OWNER-TASKLIST.md` §7 |
 | 35 findings; severity/status conventions; ACCEPTED-RISK requires owner sign-off | `docs/audit/FINDINGS.md`; `docs/audit/README.md` |
-| Migrations manual, 144 files, only 0061 re-run needed; 0123/0120–0122 critical | `docs/audit/OWNER-TASKLIST.md` §1; `docs/MIGRATIONS_TO_RUN.md`; `supabase/migrations/` (last file 0144) |
+| Migrations manual, 145 files, only 0061 re-run needed; 0123/0120–0122 critical | `docs/audit/OWNER-TASKLIST.md` §1; `docs/MIGRATIONS_TO_RUN.md`; `supabase/migrations/` (last file 0145) |
 | Supabase/Vercel/Resend settings incl. sign-ups off (GW-018 seal), PITR, env-var table, cron 16:00 UTC | `OWNER-TASKLIST.md` §2–4; `vercel.json` (cron declared) |
 | PWA + Guided Access launch path; GW-006/007/001 limits; Capacitor later | `OWNER-TASKLIST.md` §7; `FINDINGS.md` |
 | Printer needs `NEXT_PUBLIC_SITE_URL` + poll token (refused without in prod) | `OWNER-TASKLIST.md` §6 |

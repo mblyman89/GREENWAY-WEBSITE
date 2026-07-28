@@ -116,6 +116,7 @@ import { __runIntakeChecklistCoreTests } from "../../src/lib/inventory/intake-ch
 import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
 import { __runGrowflowMenuCoreTests } from "../../src/lib/purchasing/growflow-menu-core";
+import { __runLeaflinkMenuCoreTests } from "../../src/lib/purchasing/leaflink-menu-core";
 import { __runUnifiedSearchCoreTests } from "../../src/lib/purchasing/unified-search-core";
 import { __runUnifiedMenusUiCoreTests } from "../../src/lib/purchasing/unified-menus-ui-core";
 import { __runEmailMenuCoreTests } from "../../src/lib/purchasing/email-menu-core";
@@ -124,6 +125,8 @@ import { __runCultiveraMediaCoreTests } from "../../src/lib/purchasing/cultivera
 import { __runCultiveraPoCoreTests } from "../../src/lib/purchasing/cultivera-po-core";
 import { __runGrowflowMediaCoreTests } from "../../src/lib/purchasing/growflow-media-core";
 import { __runGrowflowKbLinkCoreTests } from "../../src/lib/purchasing/growflow-kb-link-core";
+import { __runLeaflinkMediaCoreTests } from "../../src/lib/purchasing/leaflink-media-core";
+import { __runLeaflinkKbLinkCoreTests } from "../../src/lib/purchasing/leaflink-kb-link-core";
 import { __runCultiveraKbLinkCoreTests } from "../../src/lib/purchasing/cultivera-kb-link-core";
 import { __runGrowflowMenuUiCoreTests } from "../../src/lib/purchasing/growflow-menu-ui-core";
 import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-autosave-core";
@@ -344,6 +347,7 @@ async function main() {
   __runIdCaptureCoreTests();
   __runCultiveraMenuCoreTests();
   __runGrowflowMenuCoreTests();
+  __runLeaflinkMenuCoreTests();
   __runUnifiedSearchCoreTests();
   __runUnifiedMenusUiCoreTests();
   __runEmailMenuCoreTests();
@@ -352,6 +356,8 @@ async function main() {
   __runCultiveraPoCoreTests();
   __runGrowflowMediaCoreTests();
   __runGrowflowKbLinkCoreTests();
+  __runLeaflinkMediaCoreTests();
+  __runLeaflinkKbLinkCoreTests();
   __runCultiveraKbLinkCoreTests();
   __runGrowflowMenuUiCoreTests();
   __runMediaAutosaveCoreTests();

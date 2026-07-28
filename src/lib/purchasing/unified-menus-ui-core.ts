@@ -19,15 +19,20 @@ import type { VendorPlatform } from "./growflow-menu-core";
 
 /** Human label for the platform badge next to a result or snapshot. */
 export function platformLabel(platform: VendorPlatform): string {
-  return platform === "growflow" ? "GrowFlow" : "Cultivera";
+  if (platform === "growflow") return "GrowFlow";
+  if (platform === "leaflink") return "LeafLink";
+  return "Cultivera";
 }
 
 /**
  * Badge tone per platform (matches the admin Badge component's tones):
- * Cultivera = green (its brand accent here), GrowFlow = gold.
+ * Cultivera = green (its brand accent here), GrowFlow = gold,
+ * LeafLink = orange (the third distinct tone the Badge component ships).
  */
-export function platformTone(platform: VendorPlatform): "green" | "gold" {
-  return platform === "growflow" ? "gold" : "green";
+export function platformTone(platform: VendorPlatform): "green" | "gold" | "orange" {
+  if (platform === "growflow") return "gold";
+  if (platform === "leaflink") return "orange";
+  return "green";
 }
 
 /* ------------------------------------------------------------------
@@ -49,6 +54,16 @@ export type GrowflowSnapshotLike = {
   id: string;
   store_name: string | null;
   license_number: string | null;
+  status: string;
+  item_count: number;
+  fetched_at: string;
+};
+
+/** The subset of a LeafLink snapshot row these helpers need (structural). */
+export type LeaflinkSnapshotLike = {
+  id: string;
+  brand_name: string | null;
+  company_name: string | null;
   status: string;
   item_count: number;
   fetched_at: string;
@@ -100,18 +115,39 @@ export function growflowSnapshotRow(s: GrowflowSnapshotLike): UnifiedSnapshotRow
   };
 }
 
+/** Map one saved LeafLink snapshot into the unified table row. */
+export function leaflinkSnapshotRow(s: LeaflinkSnapshotLike): UnifiedSnapshotRow {
+  const brand = (s.brand_name ?? "").trim();
+  const company = (s.company_name ?? "").trim();
+  return {
+    platform: "leaflink",
+    id: s.id,
+    vendorLabel: brand || company || "Unknown vendor",
+    // Show the selling company under the brand when it adds information.
+    subLabel: brand && company && brand.toLowerCase() !== company.toLowerCase() ? company : "",
+    status: s.status,
+    itemCount: s.item_count,
+    fetchedAt: s.fetched_at,
+    href: `/admin/purchasing/menus/leaflink/${s.id}`,
+  };
+}
+
 /**
- * Merge both platforms' snapshot lists into ONE, newest fetch first.
+ * Merge all platforms' snapshot lists into ONE, newest fetch first.
  * Invalid dates sort as oldest (timestamp 0). Stable for equal times
- * (cultivera rows keep their relative order before growflow's at same ms).
+ * (cultivera rows keep their relative order before growflow's, then
+ * leaflink's, at the same ms). `leaflink` is optional so existing callers
+ * keep compiling while the third platform rolls out.
  */
 export function mergeSnapshotRows(
   cultivera: CultiveraSnapshotLike[],
   growflow: GrowflowSnapshotLike[],
+  leaflink: LeaflinkSnapshotLike[] = [],
 ): UnifiedSnapshotRow[] {
   const rows: UnifiedSnapshotRow[] = [
     ...cultivera.map(cultiveraSnapshotRow),
     ...growflow.map(growflowSnapshotRow),
+    ...leaflink.map(leaflinkSnapshotRow),
   ];
   const ts = (iso: string): number => {
     const t = Date.parse(iso);
@@ -138,8 +174,10 @@ export function __runUnifiedMenusUiCoreTests(): void {
   // platformLabel / platformTone
   assert(platformLabel("cultivera") === "Cultivera", "label cultivera");
   assert(platformLabel("growflow") === "GrowFlow", "label growflow");
+  assert(platformLabel("leaflink") === "LeafLink", "label leaflink");
   assert(platformTone("cultivera") === "green", "tone cultivera");
   assert(platformTone("growflow") === "gold", "tone growflow");
+  assert(platformTone("leaflink") === "orange", "tone leaflink");
 
   // cultiveraSnapshotRow — name preferred, slug as sub; slug fallback
   const cv = cultiveraSnapshotRow({
@@ -197,6 +235,38 @@ export function __runUnifiedMenusUiCoreTests(): void {
   });
   assert(gfNoName.vendorLabel === "413541", "gf license fallback");
 
+  // leaflinkSnapshotRow — brand preferred, company as sub when different
+  const ll = leaflinkSnapshotRow({
+    id: "l1",
+    brand_name: "Blazy Susan",
+    company_name: "Blazy Susan LLC",
+    status: "fetched",
+    item_count: 16,
+    fetched_at: "2026-01-04T00:00:00Z",
+  });
+  assert(ll.platform === "leaflink", "ll platform");
+  assert(ll.vendorLabel === "Blazy Susan", "ll vendorLabel");
+  assert(ll.subLabel === "Blazy Susan LLC", "ll subLabel company");
+  assert(ll.href === "/admin/purchasing/menus/leaflink/l1", "ll href");
+  const llSame = leaflinkSnapshotRow({
+    id: "l2",
+    brand_name: "Wyld",
+    company_name: "wyld",
+    status: "fetched",
+    item_count: 3,
+    fetched_at: "2026-01-01T00:00:00Z",
+  });
+  assert(llSame.subLabel === "", "ll no dup sub when same name");
+  const llNoBrand = leaflinkSnapshotRow({
+    id: "l3",
+    brand_name: null,
+    company_name: "Fallback Co",
+    status: "empty",
+    item_count: 0,
+    fetched_at: "2026-01-01T00:00:00Z",
+  });
+  assert(llNoBrand.vendorLabel === "Fallback Co", "ll company fallback");
+
   // mergeSnapshotRows — newest first across platforms; bad dates sink
   const merged = mergeSnapshotRows(
     [
@@ -206,11 +276,17 @@ export function __runUnifiedMenusUiCoreTests(): void {
     [
       { id: "g1", store_name: "B", license_number: "", status: "fetched", item_count: 2, fetched_at: "2026-01-03T00:00:00Z" },
     ],
+    [
+      { id: "l1", brand_name: "L", company_name: "", status: "fetched", item_count: 4, fetched_at: "2026-01-05T00:00:00Z" },
+    ],
   );
-  assert(merged.length === 3, "merge count");
-  assert(merged[0].id === "g1", "merge newest first");
-  assert(merged[1].id === "c1", "merge second");
-  assert(merged[2].id === "c3", "merge bad date last");
+  assert(merged.length === 4, "merge count");
+  assert(merged[0].id === "l1", "merge leaflink newest first");
+  assert(merged[1].id === "g1", "merge growflow second");
+  assert(merged[2].id === "c1", "merge cultivera third");
+  assert(merged[3].id === "c3", "merge bad date last");
+  // Two-arg call still works (leaflink optional — existing callers compile).
+  assert(mergeSnapshotRows([], []).length === 0, "merge optional third arg");
 
   // distinctVendorCount — platform-scoped, case-insensitive
   assert(

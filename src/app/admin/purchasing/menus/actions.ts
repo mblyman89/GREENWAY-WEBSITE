@@ -33,6 +33,13 @@ import {
   getGrowflowSnapshotItems,
 } from "@/lib/purchasing/growflow-store";
 import { saveGrowflowItemMedia } from "@/lib/purchasing/growflow-media";
+import { fetchLeaflinkMenu } from "@/lib/purchasing/leaflink-client";
+import {
+  saveLeaflinkSnapshot,
+  getLeaflinkSnapshot,
+  getLeaflinkSnapshotItems,
+} from "@/lib/purchasing/leaflink-store";
+import { saveLeaflinkItemMedia } from "@/lib/purchasing/leaflink-media";
 import { unifiedVendorSearch } from "@/lib/purchasing/unified-search";
 import {
   buildMemoryUpsert,
@@ -822,6 +829,223 @@ export async function saveAllGrowflowSnapshotMediaAction(formData: FormData): Pr
   });
 
   revalidatePath(`${BASE}/growflow/${snapshotId}`);
+  return {
+    ok: failed === 0,
+    message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
+    remaining,
+    done: remaining === 0,
+  };
+}
+
+/* ------------------------------------------------------------------
+ * SLICE 84 — LeafLink: fetch a brand menu + save its media.
+ * Mirrors the GrowFlow actions above; same permission, same chunked
+ * bulk runs, same smart-memory + audit + revalidate pattern.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Fetch ONE LeafLink brand's LIVE menu via the worker, persist the RAW
+ * {brand, products} payload with leaflink-store.saveLeaflinkSnapshot()
+ * (LL-1 normalizers; money strings/objects → integer cents), remember the
+ * platform in the smart memory, audit it, and revalidate the menus page.
+ */
+export async function fetchLeaflinkMenuAction(
+  formData: FormData,
+): Promise<FetchMenuResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const brandId = str(formData, "brand_id");
+  const brandName = str(formData, "brand_name");
+  const companyName = str(formData, "company_name");
+
+  if (!brandId) {
+    return {
+      ok: false,
+      configured: true,
+      snapshotId: null,
+      itemCount: 0,
+      error: "Pick a vendor first — a LeafLink menu fetch needs the brand id.",
+    };
+  }
+
+  const result = await fetchLeaflinkMenu({ brandId });
+
+  if (!result.configured) {
+    return { ok: false, configured: false, snapshotId: null, itemCount: 0, error: result.error };
+  }
+  if (!result.ok) {
+    return {
+      ok: false,
+      configured: true,
+      snapshotId: null,
+      itemCount: 0,
+      error: result.error || `LeafLink answered ${result.status}.`,
+    };
+  }
+
+  const saved = await saveLeaflinkSnapshot({
+    payload: result.raw,
+    brandId,
+    brandName: brandName || null,
+    companyName: companyName || null,
+    fetchedBy: session.userId,
+  });
+
+  if (!saved.ok) {
+    return {
+      ok: false,
+      configured: true,
+      snapshotId: saved.snapshotId,
+      itemCount: saved.itemCount,
+      error:
+        saved.error === "supabase-not-configured"
+          ? `Fetched ${saved.itemCount} items, but Supabase isn't configured so the snapshot wasn't saved.`
+          : `Fetched the menu but saving failed: ${saved.error ?? "unknown error"}`,
+    };
+  }
+
+  // Smart memory: remember this vendor's menu came from LeafLink so the
+  // unified search hits LeafLink FIRST for this vendor next time.
+  const memory = buildMemoryUpsert({
+    vendorName: brandName,
+    platform: "leaflink",
+    nowIso: new Date().toISOString(),
+    licenseNumber: null,
+    platformRef: brandId,
+  });
+  if (memory) await rememberPlatform(memory);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "leaflink.menu.fetched",
+    entityType: "leaflink_menu_snapshot",
+    entityId: saved.snapshotId,
+    after: {
+      brand_name: brandName || null,
+      brand_id: brandId,
+      company_name: companyName || null,
+      item_count: saved.itemCount,
+      status: saved.status,
+    },
+  });
+
+  revalidatePath(BASE);
+
+  return {
+    ok: true,
+    configured: true,
+    snapshotId: saved.snapshotId,
+    itemCount: saved.itemCount,
+    error: "",
+  };
+}
+
+/** Vendor label for a LeafLink snapshot: brand name, falling back to company. */
+function leaflinkVendorLabelOf(snap: { brand_name: string | null; company_name: string | null }): string {
+  return (snap.brand_name ?? "").trim() || (snap.company_name ?? "").trim() || "";
+}
+
+/**
+ * Save ONE LeafLink item's image or COA into the media library (drafts,
+ * tagged "leaflink" + vendor, provenance kept), link it back to the item.
+ */
+export async function saveLeaflinkItemMediaAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  const itemId = str(formData, "item_id");
+  const kind = str(formData, "kind");
+  if (!snapshotId || !itemId || (kind !== "image" && kind !== "coa")) {
+    return { ok: false, message: "Missing snapshot, item, or media kind." };
+  }
+
+  const snap = await getLeaflinkSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const items = await getLeaflinkSnapshotItems(snapshotId);
+  const item = items.find((it) => it.id === itemId);
+  if (!item) return { ok: false, message: "Menu item not found in this snapshot." };
+
+  const res = await saveLeaflinkItemMedia(item, kind, leaflinkVendorLabelOf(snap), session.userId);
+
+  if (!res.ok) return { ok: false, message: res.error ?? "Save failed." };
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "leaflink.media.saved",
+    entityType: "leaflink_menu_item",
+    entityId: itemId,
+    after: { kind, assetId: res.assetId, deduped: res.deduped, snapshotId },
+  });
+
+  revalidatePath(`${BASE}/leaflink/${snapshotId}`);
+  return {
+    ok: true,
+    message: res.deduped
+      ? `Already in the library — reused the existing ${kind === "coa" ? "COA" : "image"}.`
+      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).`,
+  };
+}
+
+/**
+ * Bulk-save every unsaved image + COA in a LeafLink snapshot (chunked: up to
+ * BULK_MEDIA_LIMIT downloads per run; the summary says when to run again).
+ */
+export async function saveAllLeaflinkSnapshotMediaAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  if (!snapshotId) return { ok: false, message: "Missing snapshot id." };
+
+  const snap = await getLeaflinkSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const items = await getLeaflinkSnapshotItems(snapshotId);
+  const vendorLabel = leaflinkVendorLabelOf(snap);
+
+  const plan = planMediaSaves(items, BULK_MEDIA_LIMIT);
+  if (plan.length === 0) {
+    return {
+      ok: true,
+      message: "Everything on this menu is already saved to the library.",
+      remaining: 0,
+      done: true,
+    };
+  }
+
+  const byId = new Map(items.map((it) => [it.id, it]));
+  let images = 0;
+  let coas = 0;
+  let deduped = 0;
+  let failed = 0;
+
+  for (const task of plan) {
+    const item = byId.get(task.itemId);
+    if (!item) continue;
+    const res = await saveLeaflinkItemMedia(item, task.kind, vendorLabel, session.userId);
+    if (!res.ok) {
+      failed += 1;
+      continue;
+    }
+    if (res.deduped) deduped += 1;
+    else if (task.kind === "image") images += 1;
+    else coas += 1;
+  }
+
+  // Remaining work AFTER this run: what the plan couldn't fit, plus failures.
+  const fresh = await getLeaflinkSnapshotItems(snapshotId);
+  const remaining = remainingMediaCount(fresh);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "leaflink.media.bulk_saved",
+    entityType: "leaflink_menu_snapshot",
+    entityId: snapshotId,
+    after: { images, coas, deduped, failed, remaining },
+  });
+
+  revalidatePath(`${BASE}/leaflink/${snapshotId}`);
   return {
     ok: failed === 0,
     message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),

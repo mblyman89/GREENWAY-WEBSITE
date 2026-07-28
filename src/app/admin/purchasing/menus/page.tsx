@@ -7,6 +7,7 @@ import { Badge, Section } from "@/components/admin/ui";
 import { isCultiveraClientConfigured } from "@/lib/purchasing/cultivera-client";
 import { listSnapshots } from "@/lib/purchasing/cultivera-store";
 import { listGrowflowSnapshots } from "@/lib/purchasing/growflow-store";
+import { listLeaflinkSnapshots } from "@/lib/purchasing/leaflink-store";
 import { agoLabel } from "@/lib/purchasing/cultivera-menus-ui-core";
 import {
   mergeSnapshotRows,
@@ -48,12 +49,13 @@ export default async function VendorMenusPage() {
   // per-platform credentials degrade inside the search itself (worker 503s).
   const configured = isCultiveraClientConfigured();
 
-  const [cultiveraSnaps, growflowSnaps, emailedSnaps] = await Promise.all([
+  const [cultiveraSnaps, growflowSnaps, emailedSnaps, leaflinkSnaps] = await Promise.all([
     listSnapshots({ limit: 50 }),
     listGrowflowSnapshots({ limit: 50 }),
     listEmailedMenus({ limit: 50 }),
+    listLeaflinkSnapshots({ limit: 50 }),
   ]);
-  const rows = mergeSnapshotRows(cultiveraSnaps, growflowSnaps);
+  const rows = mergeSnapshotRows(cultiveraSnaps, growflowSnaps, leaflinkSnaps);
   // SLICE 83: menus that arrived by email (vendor_menu@), newest first.
   const emailedRows = sortEmailedRows(emailedSnaps);
 
@@ -65,7 +67,7 @@ export default async function VendorMenusPage() {
     <div>
       <AdminPageHeader
         title="Vendor Menus"
-        subtitle="Live wholesale menus from Cultivera + GrowFlow — one search, smart platform memory, snapshots for your next PO"
+        subtitle="Live wholesale menus from Cultivera + GrowFlow + LeafLink — one search, smart platform memory, snapshots for your next PO"
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -82,10 +84,10 @@ export default async function VendorMenusPage() {
           id="vendor-menus-help"
           title="How vendor menus work"
           steps={[
-            "Type a vendor's name in the ONE search box. We search the platform their menu last came from FIRST (smart memory), and only check the other marketplace if they're not found.",
-            "Every result shows a platform badge — Cultivera or GrowFlow — so you always know where a menu lives.",
+            "Type a vendor's name in the ONE search box. We search the platform their menu last came from FIRST (smart memory), and only check the other marketplaces if they're not found.",
+            "Every result shows a platform badge — Cultivera, GrowFlow, or LeafLink — so you always know where a menu lives.",
             "Click 'Fetch menu' to pull that vendor's LIVE menu. It's saved as a snapshot — a dated copy with every product, price, and potency number.",
-            "Open a snapshot to browse the items: photos, descriptions, THC/CBD, wholesale prices, case sizes — identical for both platforms.",
+            "Open a snapshot to browse the items: photos, descriptions, THC/CBD, wholesale prices, case sizes — identical for every platform.",
           ]}
         >
           <p>
