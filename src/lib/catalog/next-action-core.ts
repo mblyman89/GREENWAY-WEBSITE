@@ -38,16 +38,16 @@ export function poWhatDoIDoHere(status: string, hasVendorEmail: boolean): NextAc
     case "draft":
       return {
         text: hasVendorEmail
-          ? "This PO is a draft — the vendor hasn't seen it. Check the lines and quantities below, then press “Send to vendor” to email it and move it along."
-          : "This PO is a draft — the vendor hasn't seen it. Check the lines below, then press “Send to vendor.” Heads up: no vendor email is on file, so it will only be marked Sent — export or print it to deliver it yourself.",
-        primaryAction: "Send to vendor",
+          ? "This PO is a draft — the vendor hasn't seen it. Check the lines and quantities below, preview the document, confirm the send-to email, then press “Verify & send” to email it and move it along."
+          : "This PO is a draft — the vendor hasn't seen it. Check the lines below, then press “Verify & send.” Heads up: no vendor email is on file, so type one in the send-to box or it will only be marked Sent — use Download to deliver it yourself.",
+        primaryAction: "Verify & send",
       };
     case "submitted":
       return {
         text: hasVendorEmail
-          ? "Submitted internally, but the vendor still hasn't seen it. Press “Send to vendor” to email it out."
-          : "Submitted internally, but the vendor still hasn't seen it. Press “Send to vendor” to mark it Sent (no vendor email on file — export or print to deliver it yourself).",
-        primaryAction: "Send to vendor",
+          ? "Submitted internally, but the vendor still hasn't seen it. Confirm the send-to email, then press “Verify & send” to email it out."
+          : "Submitted internally, but the vendor still hasn't seen it. Press “Verify & send” to mark it Sent (no vendor email on file — type one in the send-to box, or use Download to deliver it yourself).",
+        primaryAction: "Verify & send",
       };
     case "sent":
       return {
@@ -153,8 +153,8 @@ export function __runNextActionCoreTests(): { passed: number } {
   };
 
   // PO chain — every real status has copy; the actionable ones name a button.
-  assert(poWhatDoIDoHere("draft", true).primaryAction === "Send to vendor", "draft → send");
-  assert(poWhatDoIDoHere("submitted", true).primaryAction === "Send to vendor", "submitted → send");
+  assert(poWhatDoIDoHere("draft", true).primaryAction === "Verify & send", "draft → send");
+  assert(poWhatDoIDoHere("submitted", true).primaryAction === "Verify & send", "submitted → send");
   assert(poWhatDoIDoHere("sent", true).primaryAction === "Receive", "sent → receive");
   assert(poWhatDoIDoHere("partial", true).primaryAction === "Receive", "partial → receive");
   assert(poWhatDoIDoHere("received", true).primaryAction === null, "received terminal");

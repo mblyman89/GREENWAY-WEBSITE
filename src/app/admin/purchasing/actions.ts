@@ -16,6 +16,12 @@ import {
   type NewPoLine,
 } from "@/lib/purchasing/po-store";
 import { sendPurchaseOrderEmail } from "@/lib/purchasing/po-notify";
+import {
+  normalizeRecipientEmail,
+  renderPoEmailHtml,
+  poCodename,
+} from "@/lib/purchasing/po-document-core";
+import { greenwayStoreFacts } from "@/lib/purchasing/po-document-store";
 import { interpretPlanRequest } from "@/lib/purchasing/ai-assist";
 import { listVendors } from "@/lib/vendors/store";
 import { markProductLeadPromoted } from "@/lib/discovery/store";
@@ -203,10 +209,28 @@ export async function createAndSendPurchaseOrderAction(formData: FormData): Prom
         unit_cost_minor_units: l.unit_cost_minor_units,
       })),
     });
+    // SLICE 81: the one-step "create & send" path sends the SAME branded
+    // Greenway HTML body as the Verify & send flow on the detail page.
+    const bodyHtml = renderPoEmailHtml({
+      poNumber: po.po_number ?? "PO",
+      vendorName: po.vendor_name,
+      expectedDate: po.expected_date,
+      note: po.note,
+      lines: po.lines.map((l) => ({
+        productName: l.product_name,
+        brand: l.brand,
+        category: l.category,
+        orderQty: l.order_qty,
+        unit: l.unit,
+        unitCostMinor: l.unit_cost_minor_units,
+      })),
+      store: greenwayStoreFacts(),
+    });
     sent = await sendPurchaseOrderEmail({
-      to: po.vendor_email,
+      to: normalizeRecipientEmail(po.vendor_email),
       poNumber: po.po_number ?? "PO",
       bodyText: body,
+      html: bodyHtml,
     });
     await setPurchaseOrderStatus(poId, "sent");
     await recordAudit({
@@ -260,7 +284,15 @@ export async function setStatusAction(formData: FormData): Promise<void> {
   redirect(`${BASE}/${id}`);
 }
 
-/** Send the PO to the vendor by email (best-effort, env-gated). */
+/**
+ * SLICE 81 — "Verify & send": email the BRANDED purchase order to a recipient
+ * the manager has just confirmed on screen. The send-to address is prefilled
+ * from the vendor record but editable; an invalid address refuses with a
+ * plain-English message instead of silently "marking sent". The email body is
+ * the Greenway-branded HTML from the PURE po-document-core (with the legacy
+ * plain-text rendering as the text fallback), and the audit entry records
+ * exactly who it went to.
+ */
 export async function sendPurchaseOrderAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "po_id");
@@ -269,7 +301,26 @@ export async function sendPurchaseOrderAction(formData: FormData): Promise<void>
   const po = await getPurchaseOrder(id);
   if (!po) redirect(BASE);
 
-  const body = renderPoText({
+  // Verified recipient: the send_to field wins; fall back to the PO snapshot.
+  const rawSendTo = str(formData, "send_to");
+  const recipient = normalizeRecipientEmail(rawSendTo ?? po.vendor_email);
+  if (rawSendTo && !recipient) {
+    redirect(
+      `${BASE}/${id}?error=${encodeURIComponent(
+        `"${rawSendTo}" doesn't look like a valid email address. Fix it and press Verify & send again.`,
+      )}`,
+    );
+  }
+
+  const docLines = po.lines.map((l) => ({
+    productName: l.product_name,
+    brand: l.brand,
+    category: l.category,
+    orderQty: l.order_qty,
+    unit: l.unit,
+    unitCostMinor: l.unit_cost_minor_units,
+  }));
+  const bodyText = renderPoText({
     poNumber: po.po_number ?? "PO",
     vendorName: po.vendor_name,
     expectedDate: po.expected_date,
@@ -282,11 +333,20 @@ export async function sendPurchaseOrderAction(formData: FormData): Promise<void>
       unit_cost_minor_units: l.unit_cost_minor_units,
     })),
   });
+  const bodyHtml = renderPoEmailHtml({
+    poNumber: po.po_number ?? "PO",
+    vendorName: po.vendor_name,
+    expectedDate: po.expected_date,
+    note: po.note,
+    lines: docLines,
+    store: greenwayStoreFacts(),
+  });
 
   const sent = await sendPurchaseOrderEmail({
-    to: po.vendor_email,
+    to: recipient,
     poNumber: po.po_number ?? "PO",
-    bodyText: body,
+    bodyText,
+    html: bodyHtml,
   });
 
   await setPurchaseOrderStatus(id, "sent");
@@ -296,7 +356,11 @@ export async function sendPurchaseOrderAction(formData: FormData): Promise<void>
     action: "purchase_order.send",
     entityType: "purchase_orders",
     entityId: id,
-    after: { emailed: sent },
+    after: {
+      emailed: sent,
+      recipient: recipient ?? null,
+      codename: poCodename(po.po_number),
+    },
   });
 
   revalidatePath(`${BASE}/${id}`);
