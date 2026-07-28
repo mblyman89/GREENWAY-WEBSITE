@@ -416,6 +416,9 @@ export async function enrichResendInbound(
     // SLICE 37: carry the plain-text body so the Regulatory Watch funnel can
     // read forwarded LCB bulletins (they arrive as body text, not attachments).
     bodyText: text || null,
+    // SLICE 83: carry the HTML body too — emailed vendor menus are often HTML
+    // tables, which the vendor_menu@ parser converts to parseable lines.
+    bodyHtml: html || null,
   };
 
   return {

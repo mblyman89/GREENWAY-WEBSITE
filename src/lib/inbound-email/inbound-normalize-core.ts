@@ -51,6 +51,12 @@ export type NormalizedInboundEmail = {
    * attachments). Optional — older payload shapes simply omit it.
    */
   bodyText?: string | null;
+  /**
+   * Raw HTML body when the provider supplied one (SLICE 83: emailed vendor
+   * menus often arrive as HTML tables — the vendor_menu@ parser converts them
+   * to parseable lines). Optional — older payload shapes simply omit it.
+   */
+  bodyHtml?: string | null;
 };
 
 function lc(v: unknown): string {
@@ -146,6 +152,7 @@ export function normalizeResendInbound(raw: Record<string, unknown>): Normalized
     receivedAt,
     attachments,
     bodyText: str(data.text) || null,
+    bodyHtml: str(data.html) || null,
   };
 }
 
@@ -182,6 +189,7 @@ export function normalizeSendgridInbound(raw: Record<string, unknown>): Normaliz
     receivedAt: new Date().toISOString(),
     attachments,
     bodyText: str(raw.text) || null,
+    bodyHtml: str(raw.html) || null,
   };
 }
 
