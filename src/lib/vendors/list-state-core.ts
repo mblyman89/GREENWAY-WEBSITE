@@ -72,6 +72,52 @@ export function vendorDetailHref(vendorId: string, params: VendorListParams): st
   return `${base}?from=${encodeURIComponent(qs.slice(1))}`;
 }
 
+// ---------------------------------------------------------------------------
+// SLICE 79 — default scope: current vendors only
+// ---------------------------------------------------------------------------
+
+/**
+ * The vendors directory holds every licensed vendor in the state (~1,775 from
+ * the Cultivera seed), but the owner works with a handful. SLICE 79 makes the
+ * DEFAULT view "current vendors" — suppliers with product actually in
+ * inventory — and puts the rest behind an explicit filter.
+ */
+export type VendorScope = "current" | "all" | "unused";
+
+export type VendorScopeResolution = {
+  /** What the URL asked for (junk / legacy values normalized). */
+  requested: VendorScope;
+  /** What the page should actually show. */
+  effective: VendorScope;
+  /**
+   * True when the request fell back to "all" because there are no inventory
+   * vendors yet (fresh database) — a "current" view would be empty and look
+   * broken, so the page shows everyone and explains why.
+   */
+  fallback: boolean;
+};
+
+/**
+ * Resolve the `scope` URL param to a view. Rules:
+ *   - absent / "" / junk  → "current" (the new default)
+ *   - "mine" (legacy)     → "current" (old bookmarks keep working)
+ *   - "all"               → the whole statewide directory
+ *   - "unused"            → directory-only vendors (nothing in inventory)
+ *   - no inventory at all → "current"/"unused" fall back to "all" (disclosed)
+ */
+export function resolveVendorScope(
+  raw: string | null | undefined,
+  hasInventoryVendors: boolean,
+): VendorScopeResolution {
+  const v = (raw ?? "").trim();
+  const requested: VendorScope =
+    v === "all" ? "all" : v === "unused" ? "unused" : "current";
+  if (!hasInventoryVendors && requested !== "all") {
+    return { requested, effective: "all", fallback: true };
+  }
+  return { requested, effective: requested, fallback: false };
+}
+
 /**
  * Reconstruct the list "back" href from the detail page's `from` token.
  * Falls back to the bare list page when absent/blank. Defensive: only the

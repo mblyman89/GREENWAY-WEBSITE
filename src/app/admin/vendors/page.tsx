@@ -10,7 +10,7 @@ import { vendorCompleteness } from "@/lib/vendors/completeness";
 import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter";
 import { computeVendorStats, vendorGapInsights } from "@/lib/insight/vendors";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
-import { pickVendorListParams, vendorDetailHref } from "@/lib/vendors/list-state-core";
+import { pickVendorListParams, vendorDetailHref, resolveVendorScope } from "@/lib/vendors/list-state-core";
 import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ const PAGE_SIZE = 60;
 type Params = {
   q?: string;
   status?: string;
-  scope?: string; // "mine" | ""
+  scope?: string; // "" = current (default) | "all" | "unused" | legacy "mine"
   active?: string; // "true" | "false" | ""
   license?: string; // "has" | "missing" | ""
   itype?: string; // inventory_type filter
@@ -65,7 +65,16 @@ export default async function VendorsPage({
   if (active === "false") filtered = filtered.filter((v) => v.is_active === false);
   if (license === "has") filtered = filtered.filter((v) => Boolean(v.license_number));
   if (license === "missing") filtered = filtered.filter((v) => !v.license_number);
-  if (scope === "mine") filtered = filtered.filter((v) => inv.vendorIds.has(v.id));
+  // SLICE 79: the default view is CURRENT vendors (product in inventory);
+  // the full statewide directory and never-used vendors sit behind the filter.
+  // Legacy "mine" URLs map to "current"; with zero inventory the page falls
+  // back to "all" so the default view is never a confusing blank list.
+  const scopeResolution = resolveVendorScope(scope, inv.vendorIds.size > 0);
+  if (scopeResolution.effective === "current") {
+    filtered = filtered.filter((v) => inv.vendorIds.has(v.id));
+  } else if (scopeResolution.effective === "unused") {
+    filtered = filtered.filter((v) => !inv.vendorIds.has(v.id));
+  }
   if (itype) filtered = filtered.filter((v) => inv.typesByVendor.get(v.id)?.has(itype));
   if (icat) filtered = filtered.filter((v) => inv.categoriesByVendor.get(v.id)?.has(icat));
   if (q) {
@@ -118,7 +127,7 @@ export default async function VendorsPage({
             id="vendors"
             title="How vendor profiles work"
             steps={[
-              "Filter to “My vendors” to see suppliers you actually stock.",
+              "The list opens on your current vendors — suppliers you actually stock.",
               "Open a vendor or brand.",
               "Add a logo, short mission, and contact details.",
               "Publish so it appears on your vendors page.",
@@ -159,7 +168,7 @@ export default async function VendorsPage({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total vendors" value={all.length} hint={`${stats.totalBrands} brands · ${stats.totalProducts} products`} accent="muted" />
-          <StatCard label="My vendors" value={inv.vendorIds.size} hint="have product in inventory" accent="green" />
+          <StatCard label="Current vendors" value={inv.vendorIds.size} hint="have product in inventory" accent="green" />
           <StatCard label="Published" value={publishedCount} hint={`${all.length - publishedCount} drafts`} accent="orange" />
           <StatCard label="Avg completeness" value={`${stats.avgCompleteness}%`} hint={`${stats.missing.logo} missing a logo`} accent={stats.avgCompleteness >= 70 ? "green" : "gold"} />
         </div>
@@ -187,9 +196,14 @@ export default async function VendorsPage({
             <div className="min-w-48 flex-1">
               <Input name="q" defaultValue={q ?? ""} placeholder="Search name, DBA, or license…" />
             </div>
-            <Select name="scope" defaultValue={scope ?? ""} aria-label="Scope">
-              <option value="">All vendors</option>
-              <option value="mine">My vendors (in inventory)</option>
+            <Select
+              name="scope"
+              defaultValue={scopeResolution.requested === "current" ? "" : scopeResolution.requested}
+              aria-label="Scope"
+            >
+              <option value="">Current vendors (in inventory)</option>
+              <option value="all">All vendors (statewide directory)</option>
+              <option value="unused">Unused (directory only)</option>
             </Select>
             <Select name="status" defaultValue={status ?? ""} aria-label="Status">
               <option value="">All statuses</option>
@@ -231,12 +245,14 @@ export default async function VendorsPage({
           </form>
         )}
 
-        {/* Inventory-driven filters explainer when inventory is empty */}
-        {all.length > 0 && inv.vendorIds.size === 0 && (
-          <p className="text-xs text-white/40">
-            “My vendors” and the product type/category filters activate
-            automatically once inventory lots are received — they read what each
-            vendor actually supplies you.
+        {/* SLICE 79: disclosed fallback — no inventory yet, so the "current
+            vendors" default would be empty. Show everyone and say why. */}
+        {scopeResolution.fallback && (
+          <p className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]">
+            Showing the full statewide directory: no inventory lots have been
+            received yet, so there are no “current vendors” to display. Once
+            product is received, this page opens on just the vendors you
+            actually stock.
           </p>
         )}
 
@@ -315,7 +331,7 @@ export default async function VendorsPage({
 
         {filtered.length === 0 && all.length > 0 && (
           <p className="text-sm text-white/50">
-            No vendors match your filter.{scope === "mine" && inv.vendorIds.size === 0 ? " (You have no inventory lots yet — “My vendors” will populate as product is received.)" : ""}
+            No vendors match your filter.{scopeResolution.effective === "current" ? " (Scope is “Current vendors” — switch it to “All vendors” to search the whole statewide directory.)" : ""}
           </p>
         )}
 

@@ -15,6 +15,7 @@ import {
   vendorDetailHref,
   vendorListBackHref,
   VENDOR_LIST_KEYS,
+  resolveVendorScope,
 } from "@/lib/vendors/list-state-core";
 
 describe("pickVendorListParams", () => {
@@ -124,5 +125,55 @@ describe("VENDOR_LIST_KEYS", () => {
       "icat",
       "page",
     ]);
+  });
+});
+
+// ── SLICE 79: default scope = current vendors only ──────────────────────────
+describe("resolveVendorScope", () => {
+  it("defaults to 'current' when the param is absent, empty, or junk", () => {
+    for (const raw of [undefined, null, "", "  ", "banana"]) {
+      const r = resolveVendorScope(raw, true);
+      expect(r).toEqual({ requested: "current", effective: "current", fallback: false });
+    }
+  });
+
+  it("maps the legacy 'mine' value to 'current' so old bookmarks keep working", () => {
+    expect(resolveVendorScope("mine", true)).toEqual({
+      requested: "current",
+      effective: "current",
+      fallback: false,
+    });
+  });
+
+  it("honours explicit 'all' and 'unused' requests", () => {
+    expect(resolveVendorScope("all", true)).toEqual({
+      requested: "all",
+      effective: "all",
+      fallback: false,
+    });
+    expect(resolveVendorScope("unused", true)).toEqual({
+      requested: "unused",
+      effective: "unused",
+      fallback: false,
+    });
+  });
+
+  it("falls back to 'all' (disclosed) when there are no inventory vendors", () => {
+    expect(resolveVendorScope(undefined, false)).toEqual({
+      requested: "current",
+      effective: "all",
+      fallback: true,
+    });
+    expect(resolveVendorScope("unused", false)).toEqual({
+      requested: "unused",
+      effective: "all",
+      fallback: true,
+    });
+    // Explicit "all" with no inventory is NOT a fallback — it's what was asked for.
+    expect(resolveVendorScope("all", false)).toEqual({
+      requested: "all",
+      effective: "all",
+      fallback: false,
+    });
   });
 });
