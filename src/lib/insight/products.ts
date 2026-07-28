@@ -135,9 +135,9 @@ export function computeProductStats(items: MenuItemRow[], gaps: GapFlags[]): Pro
 /** Build the ranked "what's missing" gap list for the product menu. */
 export function productGapInsights(stats: ProductStats): GapInsight[] {
   const gaps: GapInsight[] = [
-    { key: "image", label: "missing a photo", count: stats.missing.image, href: "/admin/products?gap=image", weight: 3 },
-    { key: "description", label: "missing a description", count: stats.missing.description, href: "/admin/products?gap=description", weight: 3 },
-    { key: "brand", label: "missing a brand link", count: stats.missing.brandLink, href: "/admin/products?gap=brand", weight: 1 },
+    { key: "image", label: "missing a photo", count: stats.missing.image, href: "/admin/products?gap=image#worklist", weight: 3 },
+    { key: "description", label: "missing a description", count: stats.missing.description, href: "/admin/products?gap=description#worklist", weight: 3 },
+    { key: "brand", label: "missing a brand link", count: stats.missing.brandLink, href: "/admin/products?gap=brand#worklist", weight: 1 },
   ];
   return gaps
     .filter((g) => g.count > 0)

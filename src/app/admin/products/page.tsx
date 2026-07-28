@@ -173,6 +173,7 @@ export default async function ProductsPage({
 
   const missingDesc = gaps.filter((g) => !g.hasDescription).length;
   const missingImg = gaps.filter((g) => !g.hasImage).length;
+  const missingTags = gaps.filter((g) => !g.hasTags).length;
   const enriched = gaps.filter((g) => g.enrichmentStatus === "published").length;
   const categories = Array.from(new Set(gaps.map((g) => g.category))).sort();
   const brandOptions = Array.from(new Set(gaps.map((g) => g.brand).filter(Boolean))).sort();
@@ -283,15 +284,24 @@ export default async function ProductsPage({
                 </li>
               </ul>
             </div>
+            {/* SLICE 75 fix: these buttons filter THIS page, but the results
+                live several screens down and the filter dropdowns (uncontrolled
+                defaultValue) didn't visually update on same-page navigation —
+                so they looked dead. Every gap link now jumps straight to the
+                filtered #worklist, and the filter form remounts (key) so the
+                dropdowns always show the active filter. */}
             <div className="flex flex-col gap-2">
-              <Button href="/admin/products?gap=description" variant="save" size="sm">
+              <Button href="/admin/products?gap=description#worklist" variant="save" size="sm">
                 Fix missing descriptions{missingDesc > 0 ? ` (${missingDesc})` : ""} →
               </Button>
-              <Button href="/admin/products?gap=image" variant="neutral" size="sm">
+              <Button href="/admin/products?gap=image#worklist" variant="neutral" size="sm">
                 Fix missing images{missingImg > 0 ? ` (${missingImg})` : ""} →
               </Button>
-              <Button href="/admin/products?gap=brand" variant="neutral" size="sm">
+              <Button href="/admin/products?gap=brand#worklist" variant="neutral" size="sm">
                 Fix brand links{stats.missing.brandLink > 0 ? ` (${stats.missing.brandLink})` : ""} →
+              </Button>
+              <Button href="/admin/products?gap=tags#worklist" variant="neutral" size="sm">
+                Fix missing tags{missingTags > 0 ? ` (${missingTags})` : ""} →
               </Button>
               {isAiConfigured && (
                 <Button href="/admin/products/bulk-ai" variant="neutral" size="sm">
@@ -322,8 +332,8 @@ export default async function ProductsPage({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />
           <StatCard label="Enriched & live" value={enriched} hint={`avg ${stats.avgCompleteness}% complete`} accent="green" />
-          <StatCard label="Missing description" value={missingDesc} accent="orange" href="/admin/products?gap=description" />
-          <StatCard label="Missing image" value={missingImg} accent="orange" href="/admin/products?gap=image" />
+          <StatCard label="Missing description" value={missingDesc} accent="orange" href="/admin/products?gap=description#worklist" />
+          <StatCard label="Missing image" value={missingImg} accent="orange" href="/admin/products?gap=image#worklist" />
         </div>
 
         {/* Secondary metrics: price range + brand-link gap */}
@@ -331,7 +341,7 @@ export default async function ProductsPage({
           <StatCard label="Lowest price" value={fmtMoney(stats.price.minMinor)} accent="muted" />
           <StatCard label="Median price" value={fmtMoney(stats.price.medianMinor)} accent="muted" />
           <StatCard label="Highest price" value={fmtMoney(stats.price.maxMinor)} accent="muted" />
-          <StatCard label="Missing brand link" value={stats.missing.brandLink} accent="orange" href="/admin/products?gap=brand" />
+          <StatCard label="Missing brand link" value={stats.missing.brandLink} accent="orange" href="/admin/products?gap=brand#worklist" />
         </div>
 
         {/* What's missing + distributions */}
@@ -355,8 +365,16 @@ export default async function ProductsPage({
           </div>
         )}
 
-        {/* Filters */}
-        <form className="flex flex-wrap items-center gap-3" method="get">
+        {/* Filters. SLICE 75: #worklist is the jump target for the helper
+            buttons up top; the key remounts the form whenever the URL filters
+            change so the UNCONTROLLED dropdowns (defaultValue) always show the
+            filter a link just applied. */}
+        <form
+          id="worklist"
+          key={`${q ?? ""}|${category ?? ""}|${brandFilter}|${gap ?? ""}|${statusFilter}|${stockFilter}|${sort}`}
+          className="scroll-mt-24 flex flex-wrap items-center gap-3"
+          method="get"
+        >
           <Input
             name="q"
             defaultValue={q ?? ""}
