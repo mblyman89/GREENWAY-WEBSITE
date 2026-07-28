@@ -30,6 +30,10 @@
  *     trim -> lowercase -> [^a-z0-9]+ => '-' -> strip leading/trailing '-'.
  */
 
+import {
+  resolveMenuDescription,
+} from "./menu-description-core";
+
 /** The subset of a Cultivera menu-item row this module reads (structural, so it
  *  works for both the DB row and any normalized shape carrying these fields). */
 export type CultiveraKbLinkItemLike = {
@@ -117,6 +121,8 @@ export type StrainVariantLike = {
   name?: string | null;
   /** The variant's OWN image (real strain photo) — preferred when present. */
   imageUrl?: string | null;
+  /** The variant's OWN description (Cultivera lineage text) — preferred. */
+  description?: string | null;
   position?: number | null;
 };
 
@@ -130,6 +136,14 @@ export type StrainImageSaveItem = {
   imageUrl: string;
   /** True when we had to fall back to the product-line/card image (no own photo). */
   imageIsFallback: boolean;
+  /**
+   * SLICE 85 — the description to bind to the KB row: the strain's OWN
+   * lineage/description when any size has one, else the product-line
+   * description as a flagged stand-in, else null.
+   */
+  description: string | null;
+  /** True when `description` came from the product-line/category fallback. */
+  descriptionIsFallback: boolean;
 };
 
 /**
@@ -154,13 +168,13 @@ export function normalizeStrainKey(value: string | null | undefined): string {
  */
 export function strainImagesToSave(
   variants: StrainVariantLike[],
-  line: { brand?: string | null; lineImageUrl?: string | null },
+  line: { brand?: string | null; lineImageUrl?: string | null; lineDescription?: string | null },
 ): StrainImageSaveItem[] {
   const lineImageUrl = (line.lineImageUrl ?? "").trim() || null;
   const order: string[] = [];
   const byKey = new Map<
     string,
-    { strainName: string; ownImage: string | null }
+    { strainName: string; ownImage: string | null; ownDescription: string | null }
   >();
 
   for (const v of variants) {
@@ -168,13 +182,22 @@ export function strainImagesToSave(
     const key = normalizeStrainKey(rawName) || "(unnamed strain)";
     if (!byKey.has(key)) {
       order.push(key);
-      byKey.set(key, { strainName: rawName || "(unnamed strain)", ownImage: null });
+      byKey.set(key, {
+        strainName: rawName || "(unnamed strain)",
+        ownImage: null,
+        ownDescription: null,
+      });
     }
     const entry = byKey.get(key)!;
     // First own image wins (menu order preserved by iteration order).
     if (!entry.ownImage) {
       const own = (v.imageUrl ?? "").trim();
       if (own) entry.ownImage = own;
+    }
+    // SLICE 85 — first own description wins, same rule as the image.
+    if (!entry.ownDescription) {
+      const desc = (v.description ?? "").trim();
+      if (desc) entry.ownDescription = desc;
     }
   }
 
@@ -183,11 +206,16 @@ export function strainImagesToSave(
     const entry = byKey.get(key)!;
     const imageUrl = entry.ownImage ?? lineImageUrl;
     if (!imageUrl) continue; // nothing to save for this strain
+    // SLICE 85 — own description first, else the product-line description as
+    // a FLAGGED stand-in (mirrors the image fallback exactly).
+    const desc = resolveMenuDescription(entry.ownDescription, line.lineDescription ?? null);
     out.push({
       strainName: entry.strainName,
       identity: kbIdentityForItem({ name: entry.strainName, brand: line.brand ?? null }),
       imageUrl,
       imageIsFallback: entry.ownImage == null,
+      description: desc.text,
+      descriptionIsFallback: desc.isFallback,
     });
   }
   return out;
@@ -256,13 +284,17 @@ export function __runCultiveraKbLinkCoreTests(): void {
 
   // strainImagesToSave — one image per distinct strain, sizes collapsed.
   const variants: StrainVariantLike[] = [
-    { cleanName: "Colorado Nightshifter", imageUrl: "https://c/cn.png", position: 0 },
+    { cleanName: "Colorado Nightshifter", imageUrl: "https://c/cn.png", description: "GMO x Nightshift", position: 0 },
     { cleanName: "Colorado Nightshifter", imageUrl: null, position: 1 }, // 3.5g, no own image
     { cleanName: "Colorado Nightshifter", imageUrl: "https://c/cn2.png", position: 2 }, // later image ignored
     { cleanName: "Super Zulu", imageUrl: null, position: 3 }, // no own image at all
     { cleanName: "Super Zulu", imageUrl: null, position: 4 },
   ];
-  const saves = strainImagesToSave(variants, { brand: "SubX", lineImageUrl: "https://c/card.png" });
+  const saves = strainImagesToSave(variants, {
+    brand: "SubX",
+    lineImageUrl: "https://c/card.png",
+    lineDescription: "Our signature flower line.",
+  });
   ok(saves.length === 2, `two distinct strains (got ${saves.length})`);
   ok(saves[0].strainName === "Colorado Nightshifter", "first strain preserved (menu order)");
   ok(saves[0].imageUrl === "https://c/cn.png", "uses first OWN image, not later ones");
@@ -271,6 +303,19 @@ export function __runCultiveraKbLinkCoreTests(): void {
   ok(saves[1].strainName === "Super Zulu", "second strain");
   ok(saves[1].imageUrl === "https://c/card.png", "no own image -> falls back to card image");
   ok(saves[1].imageIsFallback === true, "fallback flagged");
+
+  // SLICE 85 — descriptions follow the same own-first / flagged-fallback rule.
+  ok(saves[0].description === "GMO x Nightshift", "own description wins");
+  ok(saves[0].descriptionIsFallback === false, "own description not flagged");
+  ok(saves[1].description === "Our signature flower line.", "line description stands in");
+  ok(saves[1].descriptionIsFallback === true, "description stand-in flagged");
+
+  // No line description + no own -> null, unflagged.
+  const noDesc = strainImagesToSave(
+    [{ cleanName: "Ghosted", imageUrl: "https://c/g.png" }],
+    { brand: "SubX", lineImageUrl: null },
+  );
+  ok(noDesc[0].description === null && noDesc[0].descriptionIsFallback === false, "no descriptions -> null");
 
   // A strain with no own image AND no line image is skipped (nothing to save).
   const noneToSave = strainImagesToSave(

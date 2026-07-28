@@ -248,6 +248,19 @@ export function normalizeMenuItem(raw: unknown, position: number): LeaflinkMenuI
   };
 }
 
+/**
+ * SLICE 85 — pull the CATEGORY description out of a raw LeafLink product row.
+ * Pinned live: list rows carry `category {id, name, slug, description}`; the
+ * description is prose about the whole category ("Edibles"), which stands in
+ * (flagged) when a product has no description of its own. HTML-stripped like
+ * every other LeafLink description. Missing/junk -> null.
+ */
+export function leaflinkCategoryDescription(raw: unknown): string | null {
+  const o = asObject(raw);
+  const category = asObject(o.category);
+  return htmlToPlainText(category.description);
+}
+
 /* --------------------------------------------------------------------------
  * Snapshot normalizer — from the worker's {brand, products} payload
  * ------------------------------------------------------------------------ */
@@ -424,6 +437,20 @@ export function __runLeaflinkMenuCoreTests(): void {
   assert(normalizeSnapshot({}).itemCount === 0, "empty snapshot");
   assert(normalizeSnapshot(null).items.length === 0, "null snapshot");
   assert(normalizeMenuItem(null, 0).leaflinkItemId === null, "null item tolerated");
+
+  // --- SLICE 85: leaflinkCategoryDescription ----------------------------------
+  assert(
+    leaflinkCategoryDescription({
+      category: { id: 7, name: "Edibles", slug: "edibles", description: "<p>Edibles for every occasion.</p>" },
+    }) === "Edibles for every occasion.",
+    "category description extracted + HTML stripped",
+  );
+  assert(
+    leaflinkCategoryDescription({ category: { id: 7, name: "Edibles" } }) === null,
+    "category without description -> null",
+  );
+  assert(leaflinkCategoryDescription({}) === null, "no category -> null");
+  assert(leaflinkCategoryDescription(null) === null, "null row -> null");
 
   console.log("leaflink-menu-core: self-tests passed");
 }

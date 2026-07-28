@@ -127,6 +127,7 @@ import { __runGrowflowMediaCoreTests } from "../../src/lib/purchasing/growflow-m
 import { __runGrowflowKbLinkCoreTests } from "../../src/lib/purchasing/growflow-kb-link-core";
 import { __runLeaflinkMediaCoreTests } from "../../src/lib/purchasing/leaflink-media-core";
 import { __runLeaflinkKbLinkCoreTests } from "../../src/lib/purchasing/leaflink-kb-link-core";
+import { __runMenuDescriptionCoreTests } from "../../src/lib/purchasing/menu-description-core";
 import { __runCultiveraKbLinkCoreTests } from "../../src/lib/purchasing/cultivera-kb-link-core";
 import { __runGrowflowMenuUiCoreTests } from "../../src/lib/purchasing/growflow-menu-ui-core";
 import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-autosave-core";
@@ -358,6 +359,7 @@ async function main() {
   __runGrowflowKbLinkCoreTests();
   __runLeaflinkMediaCoreTests();
   __runLeaflinkKbLinkCoreTests();
+  __runMenuDescriptionCoreTests();
   __runCultiveraKbLinkCoreTests();
   __runGrowflowMenuUiCoreTests();
   __runMediaAutosaveCoreTests();

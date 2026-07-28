@@ -33,6 +33,8 @@ import {
   leaflinkMediaAltForItem,
 } from "@/lib/purchasing/leaflink-media-core";
 import { leaflinkKbIdentityForItem } from "@/lib/purchasing/leaflink-kb-link-core";
+import { leaflinkCategoryDescription } from "@/lib/purchasing/leaflink-menu-core";
+import { resolveMenuDescription } from "@/lib/purchasing/menu-description-core";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
 
 export type SaveLeaflinkItemMediaResult = {
@@ -40,6 +42,8 @@ export type SaveLeaflinkItemMediaResult = {
   kind: MediaSaveKind;
   assetId: string | null;
   deduped: boolean;
+  /** SLICE 85 — true when the KB description saved was the category stand-in. */
+  descriptionWasFallback: boolean;
   error: string | null;
 };
 
@@ -56,11 +60,11 @@ export async function saveLeaflinkItemMedia(
 ): Promise<SaveLeaflinkItemMediaResult> {
   const url = kind === "image" ? item.image_url : item.coa_url;
   if (!url) {
-    return { ok: false, kind, assetId: null, deduped: false, error: "No URL on this item." };
+    return { ok: false, kind, assetId: null, deduped: false, descriptionWasFallback: false, error: "No URL on this item." };
   }
   const alreadyLinked = kind === "image" ? item.media_asset_id : item.coa_media_asset_id;
   if (alreadyLinked) {
-    return { ok: true, kind, assetId: alreadyLinked, deduped: true, error: null };
+    return { ok: true, kind, assetId: alreadyLinked, deduped: true, descriptionWasFallback: false, error: null };
   }
 
   try {
@@ -97,9 +101,18 @@ export async function saveLeaflinkItemMedia(
     // only sets primary_media_id / description when the KB row hasn't already
     // got one (a human's manual choice always wins), and never auto-publishes
     // (drafts only). A failure here must not fail the media save.
+    let descriptionWasFallback = false;
     if (kind === "image") {
       try {
         const identity = leaflinkKbIdentityForItem(item);
+        // SLICE 85 — the product's OWN description first; when it has none,
+        // the pinned category description (rides in raw.category.description)
+        // stands in and is FLAGGED, mirroring the image-fallback pattern.
+        const resolvedDescription = resolveMenuDescription(
+          item.description ?? null,
+          leaflinkCategoryDescription(item.raw),
+        );
+        descriptionWasFallback = resolvedDescription.isFallback;
         await writeBackProductFacts(
           {
             posProductKey: identity.posProductKey,
@@ -109,7 +122,7 @@ export async function saveLeaflinkItemMedia(
             brandName: item.brand ?? null,
             category: item.category ?? null,
             variantLabel: identity.variantLabel,
-            description: item.description ?? null,
+            description: resolvedDescription.text,
             imageMediaIds: [asset.id],
             primaryMediaId: asset.id,
             source: `crawl:${url}`,
@@ -123,16 +136,17 @@ export async function saveLeaflinkItemMedia(
       }
     }
 
-    return { ok: true, kind, assetId: asset.id, deduped, error: null };
+    return { ok: true, kind, assetId: asset.id, deduped, descriptionWasFallback, error: null };
   } catch (err) {
     if (err instanceof HarvestImageError) {
-      return { ok: false, kind, assetId: null, deduped: false, error: err.message };
+      return { ok: false, kind, assetId: null, deduped: false, descriptionWasFallback: false, error: err.message };
     }
     return {
       ok: false,
       kind,
       assetId: null,
       deduped: false,
+      descriptionWasFallback: false,
       error: err instanceof Error ? err.message : "Unexpected error saving media.",
     };
   }
