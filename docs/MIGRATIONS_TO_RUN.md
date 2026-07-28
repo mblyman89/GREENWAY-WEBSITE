@@ -472,3 +472,19 @@
   checklist still runs, but nothing is archived — the Docs column keeps
   falling back to the vendor's short-lived links. Run it before your next
   intake email arrives.**
+
+## SLICE 80 — payee banking vault
+
+- [ ] **`supabase/migrations/0143_payee_banking_vault.sql`** — creates the
+  `public.vendor_bank_details` table: one bank record per vendor (routing
+  and account numbers encrypted at rest when `DATA_ENCRYPTION_KEY` is set),
+  with an active/on-hold status and an out-of-band verification stamp.
+  Owner/admin-only at the database level (RLS uses `is_admin()` for both
+  read and write, plus explicit revokes) — managers and budtenders can
+  never read a bank number even with a direct database connection. This is
+  the tamper-proof source of truth: vendor ACH payments pull banking from
+  this vault instead of hand-typed form fields, per WA State Auditor
+  vendor-master-file fraud guidance. Idempotent; safe to re-run.
+  **Until this is run, the Payee Banking page shows a friendly banner and
+  the vendor payments page keeps the old manual bank-entry fields. Run it
+  before paying your next vendor so the vault protections switch on.**

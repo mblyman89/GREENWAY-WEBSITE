@@ -88,11 +88,13 @@ export default async function PayrollRunPage({
 
   const rows: EmployeeRow[] = employees.map((emp) => {
     const line = linesByEmployee.get(emp.id);
+    // SLICE 80: banking is READ-ONLY from the employee's saved direct deposit
+    // (the payee vault). The payroll editor never accepts bank numbers — both
+    // routing and account render MASKED and are resolved server-side at save.
     const saved = bankingByEmployee.get(emp.id);
-    const routing = line?.bank_routing ?? saved?.bank_routing ?? "";
-    const account = line?.bank_account_number ?? saved?.bank_account_number ?? "";
-    const accountType =
-      line?.bank_account_type ?? saved?.bank_account_type ?? "checking";
+    const routing = saved?.bank_routing ?? "";
+    const account = saved?.bank_account_number ?? "";
+    const accountType = saved?.bank_account_type ?? "checking";
     return {
       id: emp.id,
       name: emp.full_name,
@@ -101,11 +103,10 @@ export default async function PayrollRunPage({
       taxes: line?.taxes_cents != null ? centsToDollars(line.taxes_cents) : "",
       deductions:
         line?.deductions_cents != null ? centsToDollars(line.deductions_cents) : "",
-      routing,
-      // S-10: account numbers render MASKED (••••1234). Submitting the mask
-      // keeps the stored value; typing a new number replaces it.
-      account: maskAccountTail(account),
+      routing: routing ? maskAccountTail(routing) : "",
+      account: account ? maskAccountTail(account) : "",
       accountType: accountType as "checking" | "savings",
+      hasBanking: !!(routing && account),
     };
   });
 
@@ -233,7 +234,7 @@ export default async function PayrollRunPage({
         steps={[
           "Run payroll in Sage as you normally do and print/open each employee's paystub.",
           "Type each employee's net pay (required) here. Gross, taxes and deductions are optional but let the row self-check against net pay.",
-          "Enter each employee's bank routing and account number once — it is saved to their record and prefilled on future runs.",
+          "Bank details come from Settings → Payee Banking (owner/admin only) — they show read-only here and can't be changed at pay time.",
           "Click Save entries, confirm the totals match Sage, then Generate ACH file.",
           "Download the .ach file and upload it to Timberland Bank's Jack Henry portal for direct deposit.",
         ]}

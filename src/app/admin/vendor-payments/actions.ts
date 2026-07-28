@@ -53,6 +53,12 @@ import {
   listNonCannabisInvoicePayables,
   recordNonCannabisInvoicePayment,
 } from "@/lib/noncannabis/invoice-store";
+import {
+  canPayWithVaultRecord,
+  detectBankTamper,
+} from "@/lib/payments/payee-banking-core";
+import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
+import { maskAccountTail } from "@/lib/security/at-rest-crypto";
 
 export type PayableOption = {
   /**
@@ -76,6 +82,21 @@ export type PayableOption = {
    * when the manifest isn't linked to a PO or migration 0102 isn't applied.
    */
   poComparison: InvoicePoComparison;
+  /**
+   * SLICE 80 — banking vault status. When the vault table (migration 0143)
+   * is live, payments PULL banking from the vault: the form shows it masked
+   * and manual bank entry disappears. Pre-0143 both stay null/false and the
+   * legacy manual path runs unchanged.
+   */
+  vaultReady: boolean;
+  vaultBank: {
+    bankName: string;
+    routingTail: string;
+    accountTail: string;
+    accountType: string;
+    status: string;
+    verified: boolean;
+  } | null;
 };
 
 export type VendorPayFormResult = {
@@ -100,6 +121,22 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
   // W5 link exists) so the human sees "invoice vs ordered" before paying.
   // Best-effort — an empty map (pre-0102 or any failure) just means no chips.
   const poFacts = await getLinkedPoFactsForManifests(rows.map((r) => r.manifestId));
+  // SLICE 80: masked vault banking per vendor (null pre-0143 / no record).
+  const vault = await listVendorBankDetails();
+  const vaultMap = new Map(vault.records.map((v) => [v.vendor_id, v]));
+  const vaultInfo = (vendorId: string | null) => {
+    if (!vault.tableReady || !vendorId) return null;
+    const rec = vaultMap.get(vendorId);
+    if (!rec) return null;
+    return {
+      bankName: rec.bank_name,
+      routingTail: maskAccountTail(rec.routing),
+      accountTail: maskAccountTail(rec.account_number),
+      accountType: rec.account_type,
+      status: rec.status,
+      verified: !!rec.verified_at,
+    };
+  };
   const manifestOptions: PayableOption[] = rows.map((r) => ({
     key: encodePayableKey("manifest", r.manifestId),
     source: "manifest" as const,
@@ -113,6 +150,8 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
     acceptedAt: r.acceptedAt,
     lotCount: r.lotCount,
     poComparison: compareInvoiceToPo(r.owedMinorUnits, poFacts.get(r.manifestId) ?? null),
+    vaultReady: vault.tableReady,
+    vaultBank: vaultInfo(r.vendorId),
   }));
 
   // Non-cannabis paper invoices (merch). [] pre-migration-0112 — no forks.
@@ -130,6 +169,8 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
     acceptedAt: r.invoiceDate,
     lotCount: r.lineCount,
     poComparison: { hasPo: false },
+    vaultReady: vault.tableReady,
+    vaultBank: vaultInfo(r.vendorId),
   }));
 
   return [...manifestOptions, ...ncOptions];
@@ -288,6 +329,14 @@ export async function buildVendorAchAction(
     return { problems: [{ index: null, vendorName: null, message: "No vendor payments to pay." }] };
   }
 
+  // SLICE 80: when the banking vault (migration 0143) is live, banking comes
+  // FROM THE VAULT — form-submitted bank fields are ignored, and any submitted
+  // values that differ from the vault are blocked AND audited as tampering
+  // (WA State Auditor vendor-master-file fraud guidance). Pre-0143 the legacy
+  // manual-entry path below runs unchanged.
+  const vault = await listVendorBankDetails();
+  const vaultMap = new Map(vault.records.map((v) => [v.vendor_id, v]));
+
   // Resolve every referenced payable (fresh owed/paid at submit time).
   // Task N: a row may reference an accepted manifest OR a non-cannabis paper
   // invoice — resolvePayable + checkPayablePayment keep one code path.
@@ -332,18 +381,65 @@ export async function buildVendorAchAction(
       continue;
     }
 
-    // Bank fields still required.
-    if (!isValidRouting(row.routing)) {
-      problems.push({
-        index: row.index,
-        vendorName: payable.vendorName,
-        message: `Routing number "${row.routing}" fails the ABA check digit.`,
-      });
-    }
-    if (!row.accountNumber) {
-      problems.push({ index: row.index, vendorName: payable.vendorName, message: "Account number is required." });
-    } else if (row.accountNumber.length > 17) {
-      problems.push({ index: row.index, vendorName: payable.vendorName, message: "Account number exceeds 17 characters." });
+    if (vault.tableReady) {
+      // Vault path: banking must exist, be complete, and not be on hold.
+      const rec = payable.vendorId ? vaultMap.get(payable.vendorId) ?? null : null;
+      if (!payable.vendorId) {
+        problems.push({
+          index: row.index,
+          vendorName: payable.vendorName,
+          message: `${payable.vendorName} isn't matched to a vendor record, so vault banking can't be resolved. Match the vendor first (or record a manual check/cash payment).`,
+        });
+      } else {
+        const verdict = canPayWithVaultRecord(
+          rec ? { status: rec.status, routing: rec.routing, accountNumber: rec.account_number } : null,
+          payable.vendorName,
+        );
+        if (!verdict.ok) {
+          problems.push({ index: row.index, vendorName: payable.vendorName, message: verdict.refusal });
+        }
+      }
+      // Tamper watch: the form renders NO bank fields on the vault path, so
+      // any submitted values that differ from the vault mean someone is
+      // poking at the request. Block AND log — the deviation is the evidence.
+      if (rec) {
+        const tamper = detectBankTamper({
+          submittedRouting: row.routing,
+          submittedAccount: row.accountNumber,
+          vaultRouting: rec.routing,
+          vaultAccount: rec.account_number,
+        });
+        if (tamper) {
+          problems.push({
+            index: row.index,
+            vendorName: payable.vendorName,
+            message:
+              "Submitted bank details do not match the vault. Payments always use the vault's banking — this attempt has been logged.",
+          });
+          await recordAudit({
+            actorId: session.userId,
+            actorEmail: session.email,
+            action: "payee_banking.tamper_attempt",
+            entityType: "vendor_bank_details",
+            entityId: payable.vendorId,
+            after: { mismatchedFields: tamper.mismatchedFields, payableKey: row.manifestId },
+          }).catch(() => {});
+        }
+      }
+    } else {
+      // Legacy pre-0143 path: bank fields still typed by hand.
+      if (!isValidRouting(row.routing)) {
+        problems.push({
+          index: row.index,
+          vendorName: payable.vendorName,
+          message: `Routing number "${row.routing}" fails the ABA check digit.`,
+        });
+      }
+      if (!row.accountNumber) {
+        problems.push({ index: row.index, vendorName: payable.vendorName, message: "Account number is required." });
+      } else if (row.accountNumber.length > 17) {
+        problems.push({ index: row.index, vendorName: payable.vendorName, message: "Account number exceeds 17 characters." });
+      }
     }
 
     // THE GUARDRAIL: payable status + over/under check (source-appropriate).
@@ -362,12 +458,15 @@ export async function buildVendorAchAction(
   // Build the VendorPayment[] for the NACHA file (uses the payable's vendor name).
   const payments: VendorPayment[] = rows.map((row) => {
     const payable = payableByKey.get(row.manifestId)!;
+    // SLICE 80: on the vault path the NACHA entry uses VAULT banking — the
+    // form values never reach the file. (Problems above guarantee rec exists.)
+    const rec = vault.tableReady && payable.vendorId ? vaultMap.get(payable.vendorId) ?? null : null;
     return {
       vendorId: payable.vendorId || `${payable.source === "noncannabis_invoice" ? "ncinv" : "manifest"}-${payable.id}`,
       vendorName: payable.vendorName,
-      routing: row.routing,
-      accountNumber: row.accountNumber,
-      accountType: row.accountType,
+      routing: rec ? rec.routing : row.routing,
+      accountNumber: rec ? rec.account_number : row.accountNumber,
+      accountType: rec ? rec.account_type : row.accountType,
       amountCents: row.amountCents,
     };
   });
