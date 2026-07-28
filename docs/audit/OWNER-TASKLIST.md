@@ -48,7 +48,11 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0144** (the current last file — 0144 creates
+you haven't checked off through **0145** (the current last file — 0145 creates
+the LeafLink vendor menu tables: snapshot + item tables that make LeafLink the
+third marketplace in the unified vendor-menu search, with saved menus browsable
+on the Vendor menus page, media-library saves, and a hand-off straight into the
+purchase-order builder; 0144 creates
 the emailed vendor menu tables: snapshot + item tables for menus that vendors
 email to the `vendor_menu@` inbox, parsed from the message body or attachments
 and browsable on the Vendor menus page with a hand-off straight into the

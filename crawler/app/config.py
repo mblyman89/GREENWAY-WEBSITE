@@ -227,6 +227,38 @@ class Settings(BaseSettings):
     # Where the cached session JSON lives (relative to crawler/). Gitignored.
     growflow_session_file: str = Field(default=".cache/growflow_session.json", alias="GROWFLOW_SESSION_FILE")
 
+    # --- LeafLink (third wholesale marketplace) -------------------------------
+    # The owner is ALSO an authenticated LeafLink retail BUYER (Greenway
+    # Marijuana, company slug greenway-marijuana / id 3053). LeafLink
+    # (app.leaflink.com) uses an Auth0-hosted login (auth.leaflink.com) and a
+    # COOKIE-authenticated internal API (verified live: the same fetch answers
+    # 200 with cookies, 403 without \u2014 see docs/LEAFLINK_PINNED.md). The worker
+    # logs in ONCE with these credentials via a real browser, captures the
+    # app.leaflink.com cookies, caches/reuses them, and re-logs on 401/403 \u2014
+    # then calls the internal REST API politely (slow, human-paced). These are
+    # the buyer's OWN credentials; leave empty to keep LeafLink disabled.
+    #   Login page: https://www.leaflink.com/accounts/login/ (Auth0: auth.leaflink.com)
+    leaflink_email: str = Field(default="", alias="LEAFLINK_EMAIL")
+    leaflink_password: str = Field(default="", alias="LEAFLINK_PASSWORD")
+    # The app origin the cookies belong to (the SPA the buyer logs into).
+    leaflink_site_url: str = Field(
+        default="https://app.leaflink.com",
+        alias="LEAFLINK_SITE_URL",
+    )
+    # The buyer company's URL slug \u2014 every internal API path is scoped by it
+    # (e.g. /api/internal/greenway-marijuana/shop/products/). Pinned live.
+    leaflink_company_slug: str = Field(
+        default="greenway-marijuana", alias="LEAFLINK_COMPANY_SLUG"
+    )
+    # Politeness for the authenticated REST calls: a human-paced pause
+    # (seconds) BEFORE each request, jittered up to +50%. Polite, not stealth.
+    leaflink_min_delay_seconds: float = Field(default=3.0, alias="LEAFLINK_MIN_DELAY_SECONDS")
+    # How long a cached cookie session is trusted before a proactive re-login
+    # (seconds). A 401/403 always forces a re-login; this is the fallback.
+    leaflink_session_ttl_seconds: int = Field(default=2_700, alias="LEAFLINK_SESSION_TTL_SECONDS")
+    # Where the cached session JSON lives (relative to crawler/). Gitignored.
+    leaflink_session_file: str = Field(default=".cache/leaflink_session.json", alias="LEAFLINK_SESSION_FILE")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")
@@ -290,6 +322,31 @@ class Settings(BaseSettings):
     def growflow_session_path(self) -> Path:
         """Absolute path to the cached GrowFlow session file (parent dir ensured)."""
         raw = self.growflow_session_file.strip() or ".cache/growflow_session.json"
+        p = Path(raw)
+        if not p.is_absolute():
+            p = Path(__file__).resolve().parent.parent / p
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def leaflink_enabled(self) -> bool:
+        """LeafLink menu fetch runs only when the buyer's credentials are set."""
+        return bool(self.leaflink_email.strip() and self.leaflink_password.strip())
+
+    @property
+    def leaflink_site(self) -> str:
+        """The LeafLink app origin, normalized (no trailing slash)."""
+        return self.leaflink_site_url.strip().rstrip("/")
+
+    @property
+    def leaflink_slug(self) -> str:
+        """The buyer company's URL slug, normalized (no slashes)."""
+        return self.leaflink_company_slug.strip().strip("/")
+
+    @property
+    def leaflink_session_path(self) -> Path:
+        """Absolute path to the cached LeafLink session file (parent dir ensured)."""
+        raw = self.leaflink_session_file.strip() or ".cache/leaflink_session.json"
         p = Path(raw)
         if not p.is_absolute():
             p = Path(__file__).resolve().parent.parent / p

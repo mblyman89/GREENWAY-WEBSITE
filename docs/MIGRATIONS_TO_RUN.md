@@ -504,3 +504,21 @@
   **Until this is run, emails to `vendor_menu@` are still logged in the
   inbound email log, but menu parsing fails with a friendly note and no
   snapshots appear on the Vendor menus page.**
+
+## SLICE 84 — LeafLink vendor menus
+
+- [ ] **`supabase/migrations/0145_leaflink_menus.sql`** — creates the
+  `public.leaflink_menu_snapshots` and `public.leaflink_menu_items` tables:
+  LeafLink becomes the THIRD marketplace in the unified vendor-menu search
+  (next to Cultivera and GrowFlow). A brand's live LeafLink menu is fetched
+  through the crawler worker with your own buyer login and saved here as a
+  browsable snapshot — items priced in integer cents, potency, quantities,
+  images, product lines, descriptions. The Vendor menus page lists these
+  snapshots with an orange LeafLink badge, each snapshot's detail page can
+  save product photos/COAs into the media library, and ticked items hand off
+  straight into the purchase-order builder. Staff-only RLS (`is_staff()`);
+  idempotent; safe to re-run. Run it AFTER 0144. No `vendor_platform_map`
+  change is needed (the platform column is free text).
+  **Until this is run, LeafLink search results still appear in the unified
+  search, but fetching a brand's menu fails with a friendly note and no
+  LeafLink snapshots appear on the Vendor menus page.**

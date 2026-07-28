@@ -23,8 +23,10 @@ describe("unified-menus-ui-core (GF-5)", () => {
   it("labels and tones the platforms", () => {
     expect(platformLabel("cultivera")).toBe("Cultivera");
     expect(platformLabel("growflow")).toBe("GrowFlow");
+    expect(platformLabel("leaflink")).toBe("LeafLink");
     expect(platformTone("cultivera")).toBe("green");
     expect(platformTone("growflow")).toBe("gold");
+    expect(platformTone("leaflink")).toBe("orange");
   });
 
   it("maps a Cultivera snapshot row (name + slug, per-platform href)", () => {

@@ -41,6 +41,8 @@ import {
 import { growflowMenuPrefillBanner } from "@/lib/purchasing/growflow-media-core";
 import { getEmailedMenu, getEmailedMenuItems } from "@/lib/purchasing/emailed-menu-store";
 import { emailMenuPrefillBanner } from "@/lib/purchasing/email-menu-core";
+import { getLeaflinkSnapshot, getLeaflinkSnapshotItems } from "@/lib/purchasing/leaflink-store";
+import { leaflinkMenuPrefillBanner } from "@/lib/purchasing/leaflink-media-core";
 import { PoMarketContextCard } from "../PoMarketContextCard";
 import type { PoLineLike } from "@/lib/purchasing/po-market-context-core";
 import { PoCockpitSection } from "@/app/admin/discovery/PoCockpitSection";
@@ -349,6 +351,25 @@ export default async function NewPurchaseOrderPage({
     }
   }
 
+  // SLICE 84 — LeafLink menu hand-off: same W11-safe contract as fromMenu, but
+  // the ids resolve against OUR saved leaflink_menu_* rows. The saved rows
+  // share the MenuPrefillItemLike columns, so buildMenuPrefills is reused.
+  const fromLeaflinkMenu = one(sp, "fromLeaflinkMenu");
+  let leaflinkPrefills: SuggestionRow[] = [];
+  let leaflinkVendorLabel: string | null = null;
+  if (fromLeaflinkMenu && menuItemIds.length > 0) {
+    const llSnap = await getLeaflinkSnapshot(fromLeaflinkMenu);
+    if (llSnap) {
+      const llItems = await getLeaflinkSnapshotItems(fromLeaflinkMenu);
+      const llVendorId =
+        llSnap.vendor_id && vendors.some((v) => v.id === llSnap.vendor_id)
+          ? llSnap.vendor_id
+          : null;
+      leaflinkVendorLabel = llSnap.brand_name ?? llSnap.company_name ?? null;
+      leaflinkPrefills = buildMenuPrefills(llItems, menuItemIds, llVendorId, leaflinkVendorLabel);
+    }
+  }
+
   // Task I (I6): candidate rows in PoLineLike shape for the market check —
   // suggested qty as the order qty, real unit costs (wholesale, minor units).
   const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...variantPrefills, ...growflowPrefills, ...rows].map((r) => ({
@@ -444,6 +465,11 @@ export default async function NewPurchaseOrderPage({
         {emailMenuPrefills.length > 0 ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
             {emailMenuPrefillBanner(emailMenuPrefills.length, emailMenuVendorLabel)}
+          </div>
+        ) : null}
+        {leaflinkPrefills.length > 0 ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            {leaflinkMenuPrefillBanner(leaflinkPrefills.length, leaflinkVendorLabel)}
           </div>
         ) : null}
 
@@ -597,8 +623,8 @@ export default async function NewPurchaseOrderPage({
                 planSummary={planSummary}
                 prefill={prefill}
                 menuPrefills={
-                  menuPrefills.length > 0 || variantPrefills.length > 0 || growflowPrefills.length > 0 || emailMenuPrefills.length > 0
-                    ? [...menuPrefills, ...variantPrefills, ...growflowPrefills, ...emailMenuPrefills]
+                  menuPrefills.length > 0 || variantPrefills.length > 0 || growflowPrefills.length > 0 || emailMenuPrefills.length > 0 || leaflinkPrefills.length > 0
+                    ? [...menuPrefills, ...variantPrefills, ...growflowPrefills, ...emailMenuPrefills, ...leaflinkPrefills]
                     : undefined
                 }
                 fromLeadId={fromLead}

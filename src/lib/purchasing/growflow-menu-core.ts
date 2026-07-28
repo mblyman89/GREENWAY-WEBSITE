@@ -28,7 +28,7 @@ import {
 } from "./cultivera-menu-core";
 
 /** Which marketplace a menu / vendor came from. */
-export type VendorPlatform = "cultivera" | "growflow";
+export type VendorPlatform = "cultivera" | "growflow" | "leaflink";
 
 /**
  * One normalized GrowFlow product line. Structurally compatible with

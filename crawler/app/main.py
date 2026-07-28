@@ -30,6 +30,8 @@ from .cultivera_api import CultiveraApiError, CultiveraApiResult, CultiveraClien
 from .cultivera_auth import CultiveraAuthError
 from .growflow_api import GrowflowApiError, GrowflowApiResult, GrowflowClient
 from .growflow_auth import GrowflowAuthError
+from .leaflink_api import LeaflinkApiError, LeaflinkApiResult, LeaflinkClient
+from .leaflink_auth import LeaflinkAuthError
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
@@ -656,3 +658,93 @@ async def growflow_menu(
     except GrowflowAuthError as exc:
         raise HTTPException(status_code=502, detail=f"GrowFlow login failed: {exc}") from exc
     return _growflow_result_out(result)
+
+
+# ---------------------------------------------------------------------------
+# Slice LL-2 LeafLink vendor menus (authenticated, polite, cookie REST).
+# Mirrors the GrowFlow pair: (1) discover sellers/brands by searching the shop
+# catalog (grouped by brand — pinned: retailers have no brand-search endpoint)
+# and (2) fetch ONE brand's full menu (header + product-line rows). Same
+# X-Crawler-Secret auth. LeafLink's internal API is COOKIE-authenticated (no
+# Bearer token — pinned); the client captures the Auth0 cookie session via
+# Playwright and re-logs in on 401/403. We return the RAW payload (never a
+# guessed shape) so the Next app normalizes/persists in ONE place.
+# ---------------------------------------------------------------------------
+
+class LeaflinkBrandsRequest(BaseModel):
+    query: str = Field(default="", description="Brand/company name to search for.")
+
+
+class LeaflinkMenuRequest(BaseModel):
+    brand_id: str = Field(default="", description="LeafLink brand id (integer).")
+
+
+class LeaflinkApiOut(BaseModel):
+    ok: bool
+    url: str = ""
+    status: int = 0
+    raw: object | None = None
+    records: list[dict] = []
+    count: int = 0
+    error: str = ""
+
+
+def _leaflink_result_out(result: LeaflinkApiResult) -> LeaflinkApiOut:
+    records = result.records or []
+    return LeaflinkApiOut(
+        ok=result.ok,
+        url=result.url,
+        status=result.status,
+        raw=result.raw,
+        records=records,
+        count=len(records),
+        error=result.error,
+    )
+
+
+@app.post("/leaflink/brands", response_model=LeaflinkApiOut)
+async def leaflink_brands(
+    req: LeaflinkBrandsRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> LeaflinkApiOut:
+    """Discover LeafLink sellers/brands by product search (grouped by brand)."""
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.leaflink_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="LeafLink disabled (set LEAFLINK_EMAIL/LEAFLINK_PASSWORD).",
+        )
+    log.info("leaflink brands query=%r", req.query)
+    client = LeaflinkClient(s)
+    try:
+        result = await client.search_brands(req.query)
+    except LeaflinkAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"LeafLink login failed: {exc}") from exc
+    return _leaflink_result_out(result)
+
+
+@app.post("/leaflink/menu", response_model=LeaflinkApiOut)
+async def leaflink_menu(
+    req: LeaflinkMenuRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> LeaflinkApiOut:
+    """Fetch ONE brand's full menu (header + product-line rows) by brand id."""
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.leaflink_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="LeafLink disabled (set LEAFLINK_EMAIL/LEAFLINK_PASSWORD).",
+        )
+    if not req.brand_id.strip():
+        raise HTTPException(status_code=422, detail="Provide brand_id.")
+    log.info("leaflink menu brand_id=%r", req.brand_id)
+    client = LeaflinkClient(s)
+    try:
+        result = await client.fetch_menu(brand_id=req.brand_id)
+    except LeaflinkApiError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except LeaflinkAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"LeafLink login failed: {exc}") from exc
+    return _leaflink_result_out(result)

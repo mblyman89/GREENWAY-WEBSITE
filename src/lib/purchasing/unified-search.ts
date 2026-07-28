@@ -6,27 +6,32 @@
  * One query in → platform-tagged vendor hits out:
  *   1. Look up the smart memory (vendor_platform_map) for the query.
  *   2. Search the preferred / last-seen platform FIRST.
- *   3. Search the OTHER platform only when the first found nothing
- *      (sequential search — polite to both marketplaces).
+ *   3. Walk the REMAINING platforms one at a time, but only while nothing
+ *      has been found yet (sequential search — polite to every marketplace).
  *   4. Tag every hit with its platform so the UI badges it and the menu
  *      fetch routes to the right worker endpoint.
  *
+ * Platforms today: Cultivera, GrowFlow, LeafLink (SLICE 84).
+ *
  * All decisions (order, mapping, dedupe, upsert shape) are PURE functions in
  * unified-search-core.ts; this file only wires HTTP (cultivera-client /
- * growflow-client) and Supabase (vendor-platform-store) around them.
+ * growflow-client / leaflink-client) and Supabase (vendor-platform-store)
+ * around them.
  *
  * Degrades gracefully per platform: a platform whose worker credentials are
  * missing (its 503 → configured:false) simply contributes zero hits and is
- * reported in `notes` — the other platform still works. Never a crash.
+ * reported in `notes` — the other platforms still work. Never a crash.
  */
 import "server-only";
 
 import { searchCultiveraMarkets } from "@/lib/purchasing/cultivera-client";
 import { searchGrowflowStores } from "@/lib/purchasing/growflow-client";
+import { searchLeaflinkBrands } from "@/lib/purchasing/leaflink-client";
 import {
   choosePreferredPlatform,
   cultiveraHit,
   growflowHit,
+  leaflinkHit,
   mergeHits,
   searchOrder,
   shouldSearchSecondary,
@@ -37,12 +42,12 @@ import { findMemories } from "@/lib/purchasing/vendor-platform-store";
 
 export type UnifiedSearchResult = {
   ok: boolean;
-  /** False only when NEITHER platform could run (crawler env missing). */
+  /** False only when NO platform could run (crawler env missing). */
   configured: boolean;
   hits: UnifiedVendorHit[];
   /** Which platform was searched first (memory-driven or default). */
   searchedFirst: VendorPlatform;
-  /** Whether the second platform was also searched (first found nothing). */
+  /** Whether any later platform was also searched (earlier found nothing). */
   searchedSecond: boolean;
   /** Human notes: per-platform degradations (missing creds, errors). */
   notes: string[];
@@ -64,6 +69,16 @@ async function searchPlatform(
     }
     return { hits: res.records.map(growflowHit), configured: true, note: "" };
   }
+  if (platform === "leaflink") {
+    const res = await searchLeaflinkBrands(query);
+    if (!res.configured) {
+      return { hits: [], configured: false, note: `LeafLink: ${res.error}` };
+    }
+    if (!res.ok) {
+      return { hits: [], configured: true, note: `LeafLink: ${res.error || `answered ${res.status}`}` };
+    }
+    return { hits: res.records.map(leaflinkHit), configured: true, note: "" };
+  }
   const res = await searchCultiveraMarkets(query);
   if (!res.configured) {
     return { hits: [], configured: false, note: `Cultivera: ${res.error}` };
@@ -75,14 +90,15 @@ async function searchPlatform(
 }
 
 /**
- * The unified smart search. Sequential: preferred platform first, the other
- * only when the first finds nothing. Returns platform-tagged hits.
+ * The unified smart search. Sequential: preferred platform first, each of the
+ * remaining platforms only while nothing has been found yet. Returns
+ * platform-tagged hits.
  */
 export async function unifiedVendorSearch(query: string): Promise<UnifiedSearchResult> {
   const memories = await findMemories(query);
   const preferred = choosePreferredPlatform(memories);
   const order = searchOrder(preferred);
-  const [first, second] = order;
+  const [first, ...rest] = order;
 
   const notes: string[] = [];
 
@@ -91,19 +107,20 @@ export async function unifiedVendorSearch(query: string): Promise<UnifiedSearchR
 
   let hits = primary.hits;
   let searchedSecond = false;
-  let secondaryConfigured = true;
+  let anyConfigured = primary.configured;
 
-  // Sequential rule: only hit the second platform when the first found
-  // nothing (including when the first platform wasn't configured at all).
-  if (shouldSearchSecondary(primary.hits.length)) {
+  // Sequential rule: only walk to the next platform while every platform
+  // searched so far found nothing (including unconfigured platforms).
+  for (const platform of rest) {
+    if (!shouldSearchSecondary(hits.length)) break;
     searchedSecond = true;
-    const secondary = await searchPlatform(second, query);
+    const secondary = await searchPlatform(platform, query);
     if (secondary.note) notes.push(secondary.note);
-    secondaryConfigured = secondary.configured;
-    hits = mergeHits(primary.hits, secondary.hits);
+    anyConfigured = anyConfigured || secondary.configured;
+    hits = mergeHits(hits, secondary.hits);
   }
 
-  const configured = primary.configured || (searchedSecond && secondaryConfigured);
+  const configured = anyConfigured;
 
   return {
     ok: configured,
