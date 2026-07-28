@@ -193,6 +193,7 @@ import { __runNamingConventionTests } from "../../src/lib/naming/convention-core
 import { __runCcrsProductNameCoreTests } from "../../src/lib/compliance/ccrs-product-name-core";
 import { __runNachaCoreTests } from "../../src/lib/payments/nacha-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
+import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
 import { __runPayrollGuardrailsCoreTests } from "../../src/lib/payroll/payroll-guardrails-core";
 import { __runInventoryCatalogTests } from "../../src/lib/pos/inventory-type-catalog";
@@ -409,6 +410,7 @@ async function main() {
   __runCcrsProductNameCoreTests();
   assertNoFailures("nacha-core", __runNachaCoreTests());
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
+  __runPayeeBankingCoreTests();
   assertNoFailures("payroll-core", __runPayrollCoreTests());
   assertNoFailures("payroll-guardrails-core", __runPayrollGuardrailsCoreTests());
   __runInventoryCatalogTests();

@@ -6,9 +6,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createHash } from "node:crypto";
 import {
-  saveEmployeeBanking,
   createPayrollRun,
-  getPayrollRun,
   savePayrollLines,
   generatePayrollNacha,
   createPayrollSourceDocument,
@@ -19,15 +17,7 @@ import { listEmployeeBanking } from "@/lib/staffing/store";
 
 const ROOT = "/admin/payroll";
 
-function accountType(v: FormDataEntryValue | null): "checking" | "savings" {
-  return String(v ?? "checking") === "savings" ? "savings" : "checking";
-}
 
-/** S-10: a still-masked submission (••••1234) means "keep the stored number". */
-function resolveAccount(submitted: string, stored: string): string {
-  if (submitted.startsWith("••••")) return stored || "";
-  return submitted;
-}
 
 // The originating bank / company ACH settings now live on their own Banking
 // settings page (/admin/settings/banking, saveBankingSettingsAction) so they
@@ -49,33 +39,27 @@ export async function createRunAction(formData: FormData): Promise<void> {
 
 /**
  * Save all the manually-typed lines for a run. Form fields are indexed arrays
- * keyed by employee id, e.g. net_<id>, gross_<id>, routing_<id>, etc.
- * `emp_ids` is a hidden comma-separated list of the employees on this run.
+ * keyed by employee id, e.g. net_<id>, gross_<id>. `emp_ids` is a hidden
+ * comma-separated list of the employees on this run.
+ *
+ * SLICE 80: banking is resolved SERVER-SIDE from the employee's saved direct
+ * deposit (the payee vault — Settings → Payee Banking is the ONLY editing
+ * surface). The form posts no bank fields, and any that arrive are ignored,
+ * so nobody can redirect a paycheck from the payroll screen.
  */
 export async function saveRunLinesAction(runId: string, formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const ids = String(formData.get("emp_ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
-  // S-10: account numbers render MASKED (••••1234) in the editor. A submitted
-  // value that is still masked means "keep the stored number" — resolved in
-  // the same order the editor prefills: this run's saved line snapshot first,
-  // then the employee's stored banking.
-  const [employeeBanking, runDetail] = await Promise.all([
-    listEmployeeBanking(),
-    getPayrollRun(runId),
-  ]);
+  const employeeBanking = await listEmployeeBanking();
   const savedBanking = new Map(employeeBanking.map((b) => [b.employee_id, b]));
-  const lineAccounts = new Map(
-    (runDetail?.lines ?? [])
-      .filter((l) => l.employee_id)
-      .map((l) => [l.employee_id as string, l.bank_account_number ?? ""]),
-  );
 
   const lines: PayrollLineInput[] = [];
   for (const id of ids) {
     const net = dollarsToCents(String(formData.get(`net_${id}`) ?? ""));
     // Skip employees left entirely blank (no net pay typed).
     if (net == null) continue;
+    const saved = savedBanking.get(id);
     const line: PayrollLineInput = {
       employeeId: id,
       employeeName: String(formData.get(`name_${id}`) ?? "").trim(),
@@ -83,23 +67,11 @@ export async function saveRunLinesAction(runId: string, formData: FormData): Pro
       grossPayCents: dollarsToCents(String(formData.get(`gross_${id}`) ?? "")),
       taxesCents: dollarsToCents(String(formData.get(`taxes_${id}`) ?? "")),
       deductionsCents: dollarsToCents(String(formData.get(`deductions_${id}`) ?? "")),
-      accountType: accountType(formData.get(`acct_type_${id}`)),
-      routing: String(formData.get(`routing_${id}`) ?? "").replace(/\D/g, ""),
-      accountNumber: resolveAccount(
-        String(formData.get(`account_${id}`) ?? "").trim(),
-        lineAccounts.get(id) || (savedBanking.get(id)?.bank_account_number ?? ""),
-      ),
+      accountType: saved?.bank_account_type ?? "checking",
+      routing: saved?.bank_routing ?? "",
+      accountNumber: saved?.bank_account_number ?? "",
     };
     lines.push(line);
-
-    // Reuse: persist this employee's banking so it prefills next time.
-    if (line.routing || line.accountNumber) {
-      await saveEmployeeBanking(id, {
-        routing: line.routing,
-        accountNumber: line.accountNumber,
-        accountType: line.accountType,
-      }).catch(() => {});
-    }
   }
 
   const res = await savePayrollLines(runId, lines);

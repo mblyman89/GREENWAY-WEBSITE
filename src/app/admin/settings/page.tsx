@@ -136,6 +136,13 @@ export default async function SettingsHomePage() {
           icon: "🏦",
         },
         {
+          href: "/admin/settings/payees",
+          title: "Payee banking",
+          description:
+            "The vault: bank details for everyone we pay — vendors and employees. Owner/admin only; payments pull from here and can't be tampered with at pay time.",
+          icon: "🔐",
+        },
+        {
           href: "/admin/reports/accounting",
           title: "Accounting settings",
           description: "General-ledger account mapping and Sage 50 export options.",

@@ -162,24 +162,57 @@ export function VendorAchForm({
                     </Select>
                   </Field>
                 </div>
-                <div className="sm:col-span-2">
-                  <Field label="Routing #">
-                    <Input name="routing" inputMode="numeric" placeholder="9-digit ABA" />
-                  </Field>
-                </div>
-                <div className="sm:col-span-2">
-                  <Field label="Account #">
-                    <Input name="accountNumber" placeholder="≤ 17 chars" />
-                  </Field>
-                </div>
-                <div className="sm:col-span-1">
-                  <Field label="Type">
-                    <Select name="accountType" defaultValue="checking">
-                      <option value="checking">Checking</option>
-                      <option value="savings">Savings</option>
-                    </Select>
-                  </Field>
-                </div>
+                {/* SLICE 80: vault-aware banking. When the vault (migration
+                    0143) is live, banking is pulled server-side from Settings →
+                    Payee Banking — shown masked here, never editable. Pre-0143
+                    the legacy manual fields render unchanged. */}
+                {p?.vaultReady ? (
+                  <div className="sm:col-span-5">
+                    <Field label="Bank details (from vault)">
+                      {p.vaultBank ? (
+                        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-raised,rgba(255,255,255,0.03))] px-3 py-2 text-xs">
+                          <span className="font-semibold">{p.vaultBank.bankName || "Bank"}</span>{" "}
+                          · routing <span className="font-mono">{p.vaultBank.routingTail}</span>{" "}
+                          · acct <span className="font-mono">{p.vaultBank.accountTail}</span>{" "}
+                          · {p.vaultBank.accountType}
+                          {p.vaultBank.status === "on_hold" ? (
+                            <span className="ml-2 font-semibold text-[var(--admin-gold)]">ON HOLD — payment blocked</span>
+                          ) : p.vaultBank.verified ? (
+                            <span className="ml-2 text-[var(--admin-accent)]">✓ verified</span>
+                          ) : (
+                            <span className="ml-2 text-[var(--admin-gold)]">not yet verified</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]">
+                          No banking on file — an admin must add it in Settings → Payee Banking before this
+                          invoice can be paid by ACH.
+                        </div>
+                      )}
+                    </Field>
+                  </div>
+                ) : (
+                  <>
+                    <div className="sm:col-span-2">
+                      <Field label="Routing #">
+                        <Input name="routing" inputMode="numeric" placeholder="9-digit ABA" />
+                      </Field>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Field label="Account #">
+                        <Input name="accountNumber" placeholder="≤ 17 chars" />
+                      </Field>
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Field label="Type">
+                        <Select name="accountType" defaultValue="checking">
+                          <option value="checking">Checking</option>
+                          <option value="savings">Savings</option>
+                        </Select>
+                      </Field>
+                    </div>
+                  </>
+                )}
                 <div className="sm:col-span-2">
                   <Field label="Amount ($)" help={p ? `Owe ${centsToUsd(p.remainingMinorUnits)}` : undefined}>
                     <Input

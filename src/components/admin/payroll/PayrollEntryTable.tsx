@@ -14,9 +14,15 @@ export type EmployeeRow = {
   gross: string;
   taxes: string;
   deductions: string;
+  /**
+   * SLICE 80: banking is READ-ONLY here — masked display straight from the
+   * employee's saved direct deposit (edited only in Settings → Payee
+   * Banking). No bank fields are posted from this form.
+   */
   routing: string;
   account: string;
   accountType: "checking" | "savings";
+  hasBanking: boolean;
 };
 
 export function PayrollEntryTable({
@@ -75,9 +81,7 @@ export function PayrollEntryTable({
               <th className="px-3 py-2">Gross</th>
               <th className="px-3 py-2">Taxes</th>
               <th className="px-3 py-2">Deductions</th>
-              <th className="px-3 py-2">Routing</th>
-              <th className="px-3 py-2">Account</th>
-              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Direct deposit (from vault)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--admin-border)]">
@@ -109,17 +113,19 @@ export function PayrollEntryTable({
                   <td className="px-3 py-2">
                     <input className={inputCls} name={`deductions_${r.id}`} value={r.deductions} inputMode="decimal" placeholder="0.00" readOnly={readOnly} onChange={(e) => update(r.id, "deductions", e.target.value)} />
                   </td>
-                  <td className="px-3 py-2">
-                    <input className={inputCls} name={`routing_${r.id}`} value={r.routing} inputMode="numeric" placeholder="9 digits" readOnly={readOnly} onChange={(e) => update(r.id, "routing", e.target.value)} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input className={inputCls} name={`account_${r.id}`} value={r.account} placeholder="Account #" readOnly={readOnly} onChange={(e) => update(r.id, "account", e.target.value)} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select className={inputCls} name={`acct_type_${r.id}`} value={r.accountType} disabled={readOnly} onChange={(e) => update(r.id, "accountType", e.target.value)}>
-                      <option value="checking">Checking</option>
-                      <option value="savings">Savings</option>
-                    </select>
+                  {/* SLICE 80: read-only banking pulled from the payee vault —
+                      nobody can redirect a paycheck from the payroll screen. */}
+                  <td className="px-3 py-2 text-xs text-[var(--admin-text-muted)]">
+                    {r.hasBanking ? (
+                      <span>
+                        <span className="font-mono">{r.routing}</span> ·{" "}
+                        <span className="font-mono">{r.account}</span> · {r.accountType}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--admin-gold)]">
+                        No banking on file — add it in Settings → Payee Banking
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -132,7 +138,7 @@ export function PayrollEntryTable({
               <td className="px-3 py-2">${centsToDollars(totals.gross)}</td>
               <td className="px-3 py-2">${centsToDollars(totals.taxes)}</td>
               <td className="px-3 py-2">${centsToDollars(totals.deductions)}</td>
-              <td className="px-3 py-2" colSpan={3} />
+              <td className="px-3 py-2" />
             </tr>
           </tfoot>
         </table>

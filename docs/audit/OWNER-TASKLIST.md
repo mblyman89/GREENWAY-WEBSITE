@@ -48,7 +48,10 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0142** (the current last file — 0142 creates
+you haven't checked off through **0143** (the current last file — 0143 creates
+the payee banking vault: an admin-only `vendor_bank_details` table where
+vendor bank routing/account numbers live encrypted, so payments pull
+banking from the vault instead of hand-typed fields; 0142 creates
 the private intake-docs storage bucket + manifest_documents table so every
 document harvested from a vendor intake email is archived under our own
 roof and downloadable from the email intake table; 0141 adds
