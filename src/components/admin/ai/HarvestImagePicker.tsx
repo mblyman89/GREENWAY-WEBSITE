@@ -10,11 +10,14 @@
  *     logo (the explicit human publish decision).
  *
  * Server component: each button is a form posting to the caller's server
- * action. Thumbnails are plain <img> pointing at the remote URL — nothing is
- * fetched by our servers until the human clicks Save.
+ * action. Thumbnails render via <SmartImage> (R2 "never a black box"):
+ * no-referrer direct load first, admin-only proxy fallback second, and an
+ * honest "preview blocked" chip when both fail — nothing is STORED until the
+ * human clicks Save.
  */
 
 import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
+import { SmartImage } from "./SmartImage";
 
 export type HarvestImageItem = {
   url: string;
@@ -71,12 +74,12 @@ export function HarvestImagePicker({
             className="flex h-24 items-center justify-center overflow-hidden bg-[#111] p-1"
             title="Open full size in a new tab"
           >
-            {/* Remote preview only — nothing is stored until Save is clicked. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {/* Remote preview only — nothing is stored until Save is clicked.
+                R2: SmartImage never leaves a black box — no-referrer direct
+                load → admin proxy fallback → honest "preview blocked" chip. */}
+            <SmartImage
               src={item.url}
               alt={item.caption || "candidate image"}
-              loading="lazy"
               className="max-h-full max-w-full object-contain"
             />
           </a>

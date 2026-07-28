@@ -36,8 +36,24 @@ const ALLOWED_MIME = new Set([
   "image/vnd.microsoft.icon",
 ]);
 
+/**
+ * Slice R2 ("never a black box"): formats we can't store as-is but CAN
+ * convert to PNG with the installed sharp build (verified: AVIF and TIFF
+ * decode; HEIC and BMP do NOT — those fail with an honest message instead of
+ * a silent black box).
+ */
+const CONVERTIBLE_MIME = new Set(["image/avif", "image/tiff"]);
+
+/** Detected but NOT convertible here — refused with a plain-English reason. */
+const KNOWN_UNSUPPORTED: Record<string, string> = {
+  "image/heic":
+    "This is an iPhone HEIC photo — this server can't convert it. Open the original and re-save it as JPEG/PNG, then upload manually.",
+  "image/bmp":
+    "This is a BMP bitmap — this server can't convert it. Open the original and re-save it as PNG, then upload manually.",
+};
+
 /** Hosts we refuse to fetch from (loopback / link-local / RFC-1918). */
-function isForbiddenHost(hostname: string): boolean {
+export function isForbiddenHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return true;
   // Literal IPv4 checks (private + loopback + link-local + metadata).
@@ -92,6 +108,27 @@ export function sniffImageMime(buf: Buffer): string | null {
     buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
   ) {
     return "image/webp";
+  }
+  // R2: ISO-BMFF "ftyp" box (bytes 4-7) — AVIF and HEIC live here. The brand
+  // (bytes 8-11) says which. Detecting these lets us CONVERT (AVIF/via sharp)
+  // or explain honestly (HEIC) instead of showing a black box.
+  if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) {
+    const brand = buf.slice(8, 12).toString("latin1");
+    if (brand === "avif" || brand === "avis") return "image/avif";
+    if (brand === "heic" || brand === "heix" || brand === "hevc" || brand === "mif1" || brand === "msf1") {
+      return "image/heic";
+    }
+  }
+  // R2: TIFF — "II*\0" (little-endian) or "MM\0*" (big-endian).
+  if (
+    (buf[0] === 0x49 && buf[1] === 0x49 && buf[2] === 0x2a && buf[3] === 0x00) ||
+    (buf[0] === 0x4d && buf[1] === 0x4d && buf[2] === 0x00 && buf[3] === 0x2a)
+  ) {
+    return "image/tiff";
+  }
+  // R2: BMP — "BM".
+  if (buf[0] === 0x42 && buf[1] === 0x4d) {
+    return "image/bmp";
   }
   return null;
 }
@@ -177,19 +214,34 @@ export async function importImageFromUrl(input: ImportImageInput): Promise<Impor
     throw new HarvestImageError("That host can't be fetched.");
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const fetchOnce = async (withReferer: boolean): Promise<Response> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const headers: Record<string, string> = { Accept: "image/*" };
+      // R2: hotlink-protected CDNs return 403/401 unless the request looks
+      // like it came from the image's own site. Retrying WITH the site's own
+      // origin as Referer is exactly what the vendor's site does — we only
+      // ever send the image host's origin, never our own or a fabricated one.
+      if (withReferer) headers.Referer = `${parsed.protocol}//${parsed.host}/`;
+      return await fetch(parsed.toString(), {
+        signal: controller.signal,
+        redirect: "follow",
+        headers,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
   let res: Response;
   try {
-    res = await fetch(parsed.toString(), {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { Accept: "image/*" },
-    });
+    res = await fetchOnce(false);
+    if (res.status === 403 || res.status === 401) {
+      res = await fetchOnce(true); // R2: hotlink-protection retry
+    }
   } catch {
     throw new HarvestImageError("Couldn't download the image (network error or timeout).");
-  } finally {
-    clearTimeout(timeout);
   }
   if (!res.ok) {
     throw new HarvestImageError(`Couldn't download the image (HTTP ${res.status}).`);
@@ -200,11 +252,18 @@ export async function importImageFromUrl(input: ImportImageInput): Promise<Impor
   // to avoid downloading a page. A generic/absent type is tolerated here and
   // resolved by a magic-byte sniff after the bytes arrive (some CDNs — e.g.
   // GrowFlow's Azure blob — serve real images as application/octet-stream).
-  if (declaredMime && !ALLOWED_MIME.has(declaredMime) && !isGenericContentType(declaredMime)) {
+  // R2: convertible types (AVIF/TIFF) pass through to the conversion step.
+  if (
+    declaredMime &&
+    !ALLOWED_MIME.has(declaredMime) &&
+    !CONVERTIBLE_MIME.has(declaredMime) &&
+    !isGenericContentType(declaredMime) &&
+    !(declaredMime in KNOWN_UNSUPPORTED)
+  ) {
     throw new HarvestImageError(`Not a supported image type (${declaredMime}).`);
   }
 
-  const raw = Buffer.from(await res.arrayBuffer());
+  let raw = Buffer.from(await res.arrayBuffer());
   if (raw.length === 0) throw new HarvestImageError("The image was empty.");
   if (raw.length > MAX_IMAGE_BYTES) {
     throw new HarvestImageError("Image exceeds the 5 MB import limit.");
@@ -216,9 +275,30 @@ export async function importImageFromUrl(input: ImportImageInput): Promise<Impor
   let mime = declaredMime;
   if (!ALLOWED_MIME.has(mime)) {
     const sniffed = sniffImageMime(raw);
-    if (sniffed && ALLOWED_MIME.has(sniffed)) {
-      mime = sniffed;
-    } else {
+    if (sniffed) {
+      mime = sniffed; // may be an ALLOWED, CONVERTIBLE, or KNOWN_UNSUPPORTED type
+    }
+    // R2: a format browsers can't reliably render (AVIF works in modern
+    // browsers but not in every email/preview surface; TIFF renders nowhere)
+    // is converted to PNG so it can NEVER show up as a black box.
+    if (CONVERTIBLE_MIME.has(mime)) {
+      try {
+        const sharp = (await import("sharp")).default;
+        raw = Buffer.from(await sharp(raw).png().toBuffer());
+        mime = "image/png";
+      } catch {
+        throw new HarvestImageError(
+          `Downloaded a ${mime.replace("image/", "").toUpperCase()} image but couldn't convert it to PNG.`,
+        );
+      }
+      if (raw.length > MAX_IMAGE_BYTES) {
+        throw new HarvestImageError("Image exceeds the 5 MB import limit after conversion.");
+      }
+    }
+    if (mime in KNOWN_UNSUPPORTED) {
+      throw new HarvestImageError(KNOWN_UNSUPPORTED[mime]);
+    }
+    if (!ALLOWED_MIME.has(mime)) {
       throw new HarvestImageError(`Not a supported image type (${declaredMime || "unknown"}).`);
     }
   }

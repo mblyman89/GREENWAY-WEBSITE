@@ -41,6 +41,46 @@ describe("sniffImageMime", () => {
     ).toBe("image/webp");
   });
 
+  it("detects AVIF via the ISO-BMFF ftyp brand (R2)", () => {
+    // 4 size bytes + "ftyp" + "avif"
+    expect(
+      sniffImageMime(
+        bytes(0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66),
+      ),
+    ).toBe("image/avif");
+    // "avis" (AVIF sequence) is AVIF too
+    expect(
+      sniffImageMime(
+        bytes(0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x73),
+      ),
+    ).toBe("image/avif");
+  });
+
+  it("detects HEIC brands so the refusal can be honest (R2)", () => {
+    for (const brand of ["heic", "heix", "hevc", "mif1", "msf1"]) {
+      const b = [0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, ...[...brand].map((c) => c.charCodeAt(0))];
+      expect(sniffImageMime(bytes(...b))).toBe("image/heic");
+    }
+  });
+
+  it("detects TIFF in both byte orders (R2)", () => {
+    expect(sniffImageMime(bytes(0x49, 0x49, 0x2a, 0x00))).toBe("image/tiff"); // II*\0
+    expect(sniffImageMime(bytes(0x4d, 0x4d, 0x00, 0x2a))).toBe("image/tiff"); // MM\0*
+  });
+
+  it("detects BMP (R2)", () => {
+    expect(sniffImageMime(bytes(0x42, 0x4d, 0x36, 0x00))).toBe("image/bmp");
+  });
+
+  it("does not misread an ftyp box with an unknown brand (e.g. mp4 video)", () => {
+    // "ftyp" + "isom" — an MP4, not an image.
+    expect(
+      sniffImageMime(
+        bytes(0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d),
+      ),
+    ).toBeNull();
+  });
+
   it("returns null for non-image bytes (fails closed)", () => {
     // "%PDF" — a PDF must NOT be sniffed as an image.
     expect(sniffImageMime(bytes(0x25, 0x50, 0x44, 0x46, 0x2d))).toBeNull();
