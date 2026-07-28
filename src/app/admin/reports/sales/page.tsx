@@ -14,7 +14,8 @@ import { ReportTable, type ReportColumn } from "@/components/admin/reports/Repor
 import { DateRangePicker } from "@/components/admin/reports/DateRangePicker";
 import { resolveRange } from "@/lib/reports/range";
 import { getSalesReport, type SalesGroupRow } from "@/lib/reports/sales";
-import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+// SLICE 78: DB-backed category labels (owner renames propagate to reports).
+import { getCategoryLabeler } from "@/lib/pos/category-registry";
 import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,8 @@ export default async function SalesReportPage({
   }
 
   const report = await getSalesReport(range.fromISO, range.toISO);
+  // SLICE 78: owner's live category labels (renames at Settings → Types show here).
+  const categoryLabel = await getCategoryLabeler();
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
 
   if (!report.hasData) {
@@ -132,7 +135,7 @@ export default async function SalesReportPage({
         <Section title="Revenue by category" exportHref={`/admin/reports/sales/export?group=category&${qs}`}>
           <BarList
             data={report.byCategory.slice(0, 10).map((r) => ({
-              label: formatWebsiteCategory(r.label),
+              label: categoryLabel(r.label),
               value: r.revenueMinorUnits,
             }))}
             valueFormatter={formatMinorCurrency}
@@ -197,7 +200,7 @@ export default async function SalesReportPage({
               <div key={cat.category} className="rounded-xl border border-white/10 bg-black/30 p-4">
                 <div className="mb-2 flex items-baseline justify-between gap-3">
                   <span className="text-sm font-bold text-white/80">
-                    {formatWebsiteCategory(cat.category)}
+                    {categoryLabel(cat.category)}
                   </span>
                   <span className="text-xs text-white/45">
                     {formatMinorCurrency(cat.revenueMinorUnits)} · {(cat.revenueShare * 100).toFixed(1)}% ·{" "}
@@ -230,7 +233,7 @@ export default async function SalesReportPage({
         exportHref={`/admin/reports/sales/export?group=category&${qs}`}
       >
         <ReportTable
-          columns={groupColumns("Category", formatWebsiteCategory)}
+          columns={groupColumns("Category", categoryLabel)}
           rows={report.byCategory as (SalesGroupRow & Record<string, unknown>)[]}
           totals={{
             label: "Total",

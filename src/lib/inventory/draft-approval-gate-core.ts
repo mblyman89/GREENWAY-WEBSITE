@@ -117,11 +117,21 @@ export function validateClassificationChoice(input: {
   assessment: Pick<DraftClassificationAssessment, "needsCategoryPick" | "needsTypePick">;
   chosenWebsiteCategory?: string | null;
   chosenHouseType?: string | null;
+  /**
+   * SLICE 78: owner-created website categories (DB registry values) the server
+   * loaded for this request. The closed set becomes hardcoded ∪ these, so a
+   * category the owner just created at /admin/settings/types is a legal pick
+   * during onboarding. Stays pure: values are passed IN, never fetched here.
+   */
+  extraCategoryValues?: readonly string[];
 }): ClassificationChoiceResult {
   const cat = input.chosenWebsiteCategory?.trim() || null;
   const type = input.chosenHouseType?.trim() || null;
+  const allowedCategories = input.extraCategoryValues?.length
+    ? new Set<string>([...CATEGORY_VALUES, ...input.extraCategoryValues])
+    : CATEGORY_VALUES;
 
-  if (cat && !CATEGORY_VALUES.has(cat)) {
+  if (cat && !allowedCategories.has(cat)) {
     return {
       ok: false,
       code: "category_invalid",
@@ -277,6 +287,26 @@ export function __runDraftApprovalGateTests(): { passed: number } {
     // Whitespace-only input treated as absent.
     r = validateClassificationChoice({ assessment: none, chosenWebsiteCategory: "   " });
     ok(r.ok && r.chosenWebsiteCategory === null, "whitespace normalized to null");
+
+    // SLICE 78: owner-created DB categories widen the closed set when passed in.
+    r = validateClassificationChoice({
+      assessment: none,
+      chosenWebsiteCategory: "owner-special",
+      extraCategoryValues: ["owner-special"],
+    });
+    ok(r.ok && r.chosenWebsiteCategory === "owner-special", "owner-created category accepted");
+
+    // ...but WITHOUT the extra list the same pick is still refused (closed set).
+    r = validateClassificationChoice({ assessment: none, chosenWebsiteCategory: "owner-special" });
+    ok(!r.ok && r.code === "category_invalid", "unknown category still refused without extras");
+
+    // Extras never smuggle in an unrelated junk value.
+    r = validateClassificationChoice({
+      assessment: none,
+      chosenWebsiteCategory: "junk-cat",
+      extraCategoryValues: ["owner-special"],
+    });
+    ok(!r.ok && r.code === "category_invalid", "extras don't open the gate for junk");
   }
 
   // 7) Label helper stays on the taxonomy.

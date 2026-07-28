@@ -21,7 +21,8 @@ import {
   type AgingBucketWithTypes,
   type MissingCostRow,
 } from "@/lib/reports/cogs";
-import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+// SLICE 78: DB-backed category labels (owner renames propagate to reports).
+import { getCategoryLabeler } from "@/lib/pos/category-registry";
 import { isAiConfigured } from "@/lib/reports/cogs-ai";
 import { MissingCostInsightsPanel } from "@/components/admin/reports/MissingCostInsightsPanel";
 
@@ -83,7 +84,6 @@ const valuationColumnsFor = (
   { key: "onHandUnits", header: "On-hand units", align: "right", render: (r) => r.onHandUnits.toLocaleString() },
   { key: "lots", header: "Lots", align: "right", render: (r) => r.lots.toLocaleString() },
 ];
-const valuationColumns = valuationColumnsFor("Category", formatWebsiteCategory);
 const valuationTypeColumns = valuationColumnsFor("Type");
 
 const missingCostColumns: ReportColumn<MissingCostRow & Record<string, unknown>>[] = [
@@ -132,6 +132,9 @@ export default async function CogsReportPage({
 
   const report = await getCogsReport(range.fromISO, range.toISO);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
+  // SLICE 78: owner's live category labels (renames at Settings → Types show here).
+  const categoryLabel = await getCategoryLabeler();
+  const valuationColumns = valuationColumnsFor("Category", categoryLabel);
 
   return (
     <div className="space-y-5">
@@ -166,7 +169,7 @@ export default async function CogsReportPage({
         <Section title="Gross profit by category" exportHref={`/admin/reports/cogs/export?group=category&${qs}`}>
           <BarList
             data={report.byCategory.slice(0, 10).map((r) => ({
-              label: formatWebsiteCategory(r.label),
+              label: categoryLabel(r.label),
               value: r.grossProfitMinorUnits,
             }))}
             valueFormatter={formatMinorCurrency}
@@ -200,7 +203,7 @@ export default async function CogsReportPage({
       {/* Detailed COGS tables */}
       <Section title="COGS & margin by category" exportHref={`/admin/reports/cogs/export?group=category&${qs}`}>
         <ReportTable
-          columns={cogsColumns("Category", formatWebsiteCategory)}
+          columns={cogsColumns("Category", categoryLabel)}
           rows={report.byCategory as (CogsGroupRow & Record<string, unknown>)[]}
           totals={{
             label: "Total",
