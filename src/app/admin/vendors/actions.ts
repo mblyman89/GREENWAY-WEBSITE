@@ -663,10 +663,14 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
   const vendor = await getVendorById(id);
   if (!vendor) redirect("/admin/vendors?error=" + encodeURIComponent("Vendor not found."));
 
+  // R1: "Continue crawl" — resume the saved frontier instead of starting over.
+  const continueCrawl = String(formData.get("continue") ?? "") === "1";
+
   try {
     const job = await startHarvest({
       targets: [{ url, entityType: "vendor", entityId: id, displayName: vendor!.display_name }],
-      label: `Research: ${vendor!.display_name || url}`,
+      label: `${continueCrawl ? "Continue crawl" : "Research"}: ${vendor!.display_name || url}`,
+      continueCrawl,
     });
     await recordAudit({
       actorId: session.userId,
@@ -674,7 +678,7 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
       action: "vendor.crawl_drafted",
       entityType: "vendor",
       entityId: id,
-      after: { url, jobId: job.id, mode: "async-harvest" },
+      after: { url, jobId: job.id, mode: "async-harvest", continueCrawl },
     });
     // H12c: gap-fill the vendor's empty website field with the researched URL
     // now (a hand-entered website is never overwritten; websitePatch returns
@@ -700,10 +704,12 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
         });
       }
     }
-    const msg =
-      `Crawling ${url} in the background (a full-site crawl takes a few minutes). ` +
-      `Watch progress below; drafts will appear on the vendor page for review when it finishes.` +
-      websiteNote;
+    const msg = continueCrawl
+      ? `Continuing the crawl of ${url} where it left off — already-read pages are skipped, ` +
+        `the whole budget goes to the remaining pages. Watch progress below.` + websiteNote
+      : `Crawling ${url} in the background (a full-site crawl takes a few minutes). ` +
+        `Watch progress below; drafts will appear on the vendor page for review when it finishes.` +
+        websiteNote;
     revalidatePath(`/admin/vendors/${id}`);
     redirect(`/admin/knowledge-base/harvest?msg=${encodeURIComponent(msg)}`);
   } catch (err) {
@@ -731,13 +737,17 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
   const brand = await getBrandById(brandId);
   if (!brand) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand not found."));
 
+  // R1: "Continue crawl" — resume the saved frontier instead of starting over.
+  const continueCrawl = String(formData.get("continue") ?? "") === "1";
+
   try {
     // ASYNC (fixes the Cloudflare 524): submit a one-target harvest job instead
     // of a synchronous /research call that a multi-minute crawl would blow past
     // the tunnel timeout on. Same drafts-only landing; poll the Harvest Console.
     const job = await startHarvest({
       targets: [{ url, entityType: "brand", entityId: brandId, displayName: brand!.display_name }],
-      label: `Research: ${brand!.display_name || url}`,
+      label: `${continueCrawl ? "Continue crawl" : "Research"}: ${brand!.display_name || url}`,
+      continueCrawl,
     });
     await recordAudit({
       actorId: session.userId,
@@ -745,7 +755,7 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
       action: "brand.crawl_drafted",
       entityType: "brand",
       entityId: brandId,
-      after: { url, jobId: job.id, mode: "async-harvest" },
+      after: { url, jobId: job.id, mode: "async-harvest", continueCrawl },
     });
     // H12c: gap-fill the brand's empty website field with the researched URL now
     // (never overwrites a hand-entered value; the crawl runs in the background).

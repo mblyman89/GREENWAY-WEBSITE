@@ -35,6 +35,7 @@ from .leaflink_auth import LeaflinkAuthError
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
+from .resume_state import load_resume_state
 from .store import DraftRow, fetch_banned_phrases, write_drafts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -226,6 +227,13 @@ class HarvestRequest(BaseModel):
         description="C7: bypass the on-disk page cache for this job so a stale "
                     "age-gate shell can't mask a re-crawl. Default false.",
     )
+    continue_crawl: bool = Field(
+        default=False,
+        description="R1: CONTINUE each target's saved crawl frontier instead of "
+                    "starting over — pages read by previous runs are skipped and "
+                    "the whole budget goes to the leftover queue. Harmless on "
+                    "targets with no saved state (fresh crawl).",
+    )
     label: str = Field(default="", description="Human label shown in the job list.")
 
 
@@ -255,6 +263,7 @@ async def harvest_start(
             max_pages_per_site=req.max_pages_per_site,
             delay_between_targets=req.delay_between_targets,
             force_fresh=req.force_fresh,
+            continue_crawl=req.continue_crawl,
             label=req.label,
         )
     except HarvestValidationError as e:
@@ -262,6 +271,48 @@ async def harvest_start(
     schedule_job(job.id)
     log.info("harvest job %s queued (%d targets)", job.id, len(job.targets))
     return HarvestJobResponse(ok=True, job=job.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# Slice R1 — resume-state lookup: "how much of this site is left to crawl?"
+# The back office shows a "Continue crawl — N pages left" button when saved
+# leftover state exists for an entity's site. Read-only; no crawling happens.
+# ---------------------------------------------------------------------------
+
+class ResumeStateRequest(BaseModel):
+    url: str = Field(..., description="The site whose saved crawl state to look up.")
+    entity_type: str = Field(..., description="vendor | brand | product")
+    entity_id: str = Field(..., description="Supabase id of the entity.")
+
+
+class ResumeStateResponse(BaseModel):
+    ok: bool
+    found: bool
+    pending: int = 0            # pages discovered but not yet read
+    visited: int = 0            # pages read across all runs
+    runs: int = 0               # crawl runs accumulated
+    total_pages: int = 0        # cumulative pages read
+    updated_at: float = 0.0     # unix ts of the last run
+
+
+@app.post("/resume-state", response_model=ResumeStateResponse)
+def resume_state_lookup(
+    req: ResumeStateRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> ResumeStateResponse:
+    _require_secret(x_crawler_secret)
+    state = load_resume_state(req.entity_type, req.entity_id, req.url)
+    if state is None:
+        return ResumeStateResponse(ok=True, found=False)
+    return ResumeStateResponse(
+        ok=True,
+        found=True,
+        pending=len(state.pending),
+        visited=len(state.visited),
+        runs=state.runs,
+        total_pages=state.total_pages,
+        updated_at=state.updated_at,
+    )
 
 
 @app.get("/harvest", response_model=HarvestJobListResponse)

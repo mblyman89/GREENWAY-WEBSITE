@@ -34,7 +34,7 @@ import {
   importHarvestImageAction,
 } from "../actions";
 import { HarvestImagePicker, parseImageLines } from "@/components/admin/ai/HarvestImagePicker";
-import { isCrawlerConfigured, crawlerHealth } from "@/lib/ai/crawler-client";
+import { isCrawlerConfigured, crawlerHealth, getCrawlResumeState } from "@/lib/ai/crawler-client";
 
 export const dynamic = "force-dynamic";
 // Deep crawler research reads several pages politely (robots + per-domain
@@ -102,6 +102,13 @@ export default async function VendorEditPage({
 
   const brandLogos = new Map<string, string | null>();
   for (const b of brands) brandLogos.set(b.id, await logoUrlForMediaId(b.logo_media_id));
+
+  // R1: does this vendor's site have a saved, continuable crawl frontier?
+  // Cheap read-only lookup; found:false on any worker hiccup (button hides).
+  const resumeState =
+    crawlerOn && vendor.website
+      ? await getCrawlResumeState({ url: vendor.website, entityType: "vendor", entityId: id })
+      : { found: false, pending: 0, visited: 0, runs: 0, totalPages: 0, updatedAt: 0 };
 
   // Pending AI drafts per brand (so each brand card can show its own review list).
   const brandSuggestions = new Map<string, AiSuggestion[]>();
@@ -215,20 +222,40 @@ export default async function VendorEditPage({
                   You&rsquo;ll be taken to the Harvest Console to watch progress. Nothing is published.
                 </p>
                 {crawlerOn ? (
-                  <form action={crawlVendorAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    <input type="hidden" name="id" value={vendor.id} />
-                    <input
-                      name="url"
-                      type="url"
-                      required
-                      placeholder="https://vendor-website.com/about"
-                      className={`${field} flex-1`}
-                      defaultValue={vendor.website ?? ""}
-                    />
-                    <Button type="submit" variant="special" className="shrink-0">
-                      🔎 Research
-                    </Button>
-                  </form>
+                  <>
+                    <form action={crawlVendorAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <input type="hidden" name="id" value={vendor.id} />
+                      <input
+                        name="url"
+                        type="url"
+                        required
+                        placeholder="https://vendor-website.com/about"
+                        className={`${field} flex-1`}
+                        defaultValue={vendor.website ?? ""}
+                      />
+                      <Button type="submit" variant="special" className="shrink-0">
+                        🔎 Research
+                      </Button>
+                    </form>
+                    {/* R1: the crawl stopped at the page budget with pages still
+                        queued — offer to CONTINUE it. Already-read pages are
+                        skipped, so no time or credits are wasted re-crawling. */}
+                    {resumeState.found && resumeState.pending > 0 && vendor.website && (
+                      <form action={crawlVendorAction} className="mt-2">
+                        <input type="hidden" name="id" value={vendor.id} />
+                        <input type="hidden" name="url" value={vendor.website} />
+                        <input type="hidden" name="continue" value="1" />
+                        <Button
+                          type="submit"
+                          variant="save"
+                          size="sm"
+                          title={`${resumeState.totalPages} page(s) read across ${resumeState.runs} run(s); ${resumeState.pending} discovered page(s) still unread. Continuing never re-fetches what was already read.`}
+                        >
+                          ⏩ Continue crawl — {resumeState.pending} page{resumeState.pending === 1 ? "" : "s"} left ({resumeState.totalPages} read so far)
+                        </Button>
+                      </form>
+                    )}
+                  </>
                 ) : (
                   <p className="mt-2 rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-2 text-[11px] text-[var(--admin-gold)]">
                     Set <code className="rounded bg-black/40 px-1">CRAWLER_BASE_URL</code> and{" "}

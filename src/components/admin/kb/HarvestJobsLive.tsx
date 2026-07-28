@@ -41,6 +41,12 @@ type TargetState = {
   pages_leftover?: number;
   /** C4: one-line completeness verdict ("COMPLETE — …" / "BUDGET REACHED — …"). */
   coverage_assessment?: string;
+  /** R1 (resumable crawls): this run CONTINUED a previous budget-cut crawl. */
+  resumed?: boolean;
+  /** R1: how many crawl runs this site has had (fresh = 1). */
+  crawl_runs?: number;
+  /** R1: pages read across ALL runs for this site (fresh = this run's pages). */
+  total_pages_all_runs?: number;
   drafts_written: number;
   error: string;
 };
@@ -217,6 +223,23 @@ export function HarvestJobsLive({
                     .map((t) => (
                       <li key={t.url} className="truncate" title={t.coverage_assessment || t.url}>
                         {t.display_name || t.url} — {t.pages} read, {t.pages_leftover} left queued
+                        {(t.crawl_runs ?? 1) > 1 && (
+                          <span className="text-white/40">
+                            {" "}· run #{t.crawl_runs} ({t.total_pages_all_runs} total read)
+                          </span>
+                        )}
+                        {jumpableVendorId(t) && (
+                          <>
+                            {" "}
+                            <Link
+                              href={`/admin/vendors/${jumpableVendorId(t)}`}
+                              className="text-[var(--admin-gold)] underline hover:text-white"
+                              title="The vendor page has a gold '⏩ Continue crawl' button that picks up exactly where this run stopped — already-read pages are never re-fetched."
+                            >
+                              Continue on vendor page →
+                            </Link>
+                          </>
+                        )}
                       </li>
                     ))}
                 </ul>

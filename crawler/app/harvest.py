@@ -71,6 +71,11 @@ class TargetState:
     # human assessment ("COMPLETE — …" / "BUDGET REACHED — …").
     pages_leftover: int = 0
     coverage_assessment: str = ""
+    # R1 (resumable crawls): whether this target's crawl CONTINUED a previous
+    # run's saved frontier, and the cumulative progress across all runs.
+    resumed: bool = False
+    crawl_runs: int = 1
+    total_pages_all_runs: int = 0
     drafts_written: int = 0
     drafts_skipped: int = 0
     products_written: int = 0  # H9b: structured kb_products draft rows staged
@@ -91,6 +96,10 @@ class JobState:
     # Optional politeness gap BETWEEN sites (seconds) — used by the Tier-3
     # "trickle" mode so a whole-market pass is a slow background hum, not a burst.
     delay_between_targets: float = 0.0
+    # R1: when true, every target CONTINUES its saved crawl frontier instead of
+    # starting over — already-read pages are skipped and the budget goes to the
+    # leftover queue. Harmless on targets with no saved state (fresh crawl).
+    continue_crawl: bool = False
     created_at: float = 0.0
     started_at: float = 0.0
     finished_at: float = 0.0
@@ -192,6 +201,7 @@ def create_job(
     max_pages_per_site: int | None = None,
     delay_between_targets: float = 0.0,
     force_fresh: bool = False,
+    continue_crawl: bool = False,
     label: str = "",
     settings: Settings | None = None,
 ) -> JobState:
@@ -234,6 +244,7 @@ def create_job(
         max_pages_per_site=max_pages_per_site,
         delay_between_targets=float(delay_between_targets),
         force_fresh=bool(force_fresh),
+        continue_crawl=bool(continue_crawl),
         created_at=time.time(),
         targets=states,
     )
@@ -336,12 +347,17 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                     settings=settings,
                     max_pages=job.max_pages_per_site,
                     force_fresh=job.force_fresh,
+                    continue_crawl=job.continue_crawl,
                 )
                 t.pages = len(result.pages)
                 # C4: surface the crawl's completeness verdict on the target.
                 if result.coverage is not None:
                     t.pages_leftover = result.coverage.queued_leftover
                     t.coverage_assessment = result.coverage.assessment
+                    # R1: cumulative resume progress across runs.
+                    t.resumed = result.coverage.resumed
+                    t.crawl_runs = result.coverage.crawl_runs
+                    t.total_pages_all_runs = result.coverage.total_pages_all_runs
                 if not result.fetched_ok:
                     t.status = "failed"
                     t.error = result.error or "fetch failed"
