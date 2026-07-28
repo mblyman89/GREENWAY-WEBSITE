@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData } from "@/lib/pos/import-service";
+import { getPublishedVersion, diffVersions, archiveStaleIntakeDrafts } from "@/lib/pos/menu-version";
 import { recordFactReview } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import type { FactReviewFacts } from "@/lib/pos/fact-review-core";
@@ -94,13 +95,47 @@ export async function uploadAndStageImport(formData: FormData): Promise<void> {
   redirect(`/admin/menu-imports/${importId}?staged=1`);
 }
 
+/** Admin surfaces a publish can return to (never redirect to arbitrary input). */
+function publishReturnBase(from: string, importId: string): string {
+  if (from === "publish") return "/admin/publish";
+  if (from === "publish-draft") return "/admin/publish"; // detail redirects to the center on success/error
+  return importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";
+}
+
 /** Publish a staged menu version (manager approval). */
 export async function publishVersion(formData: FormData): Promise<void> {
   const session = await requirePermission("menu.publish");
   const versionId = String(formData.get("versionId") ?? "");
   const importId = String(formData.get("importId") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const dest = publishReturnBase(from, importId);
   if (!versionId) {
-    redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing version id."));
+    redirect(dest + "?error=" + encodeURIComponent("Missing version id."));
+  }
+
+  // SLICE 76 safety gate: the live menu is a SNAPSHOT — publishing REPLACES it
+  // wholesale. If this draft would REMOVE products that are live right now,
+  // refuse unless the manager explicitly ticked the removal confirmation.
+  // (This is what let an old 3-item draft silently wipe an 18-item menu.)
+  try {
+    const published = await getPublishedVersion();
+    if (published && published.id !== versionId) {
+      const diff = await diffVersions(versionId, published.id);
+      const confirmed = String(formData.get("confirm_removals") ?? "") === "yes";
+      if (diff.removed.length > 0 && !confirmed) {
+        redirect(
+          dest +
+            "?error=" +
+            encodeURIComponent(
+              `Not published: this draft would REMOVE ${diff.removed.length} product(s) from the live menu. Review the "will be removed" list and tick the confirmation box if that's really what you want — or publish the newest draft instead.`,
+            ),
+        );
+      }
+    }
+  } catch (err) {
+    // redirect() throws NEXT_REDIRECT — rethrow it; only swallow real diff errors.
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    console.error("[menu-imports] publish removal guard diff failed:", err);
   }
 
   try {
@@ -114,9 +149,13 @@ export async function publishVersion(formData: FormData): Promise<void> {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Publish failed.";
-    const dest = importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";
     redirect(dest + "?error=" + encodeURIComponent(message));
   }
+
+  // SLICE 76 housekeeping: with this snapshot live, intake drafts staged
+  // BEFORE it are landmines (publishing one would drop newer products) —
+  // archive them so they can't be published by mistake. Best-effort.
+  await archiveStaleIntakeDrafts(versionId);
 
   // Refresh public menu surfaces so they read the new published snapshot.
   // SLICE 59: ONE canonical list (public-surfaces.ts) covers "/", "/menu",
@@ -124,9 +163,9 @@ export async function publishVersion(formData: FormData): Promise<void> {
   // from the live menu, so a publish must refresh it too. (SLICE 39: "/shop"
   // was never a route in this app.)
   revalidatePath("/admin/menu-imports");
+  revalidatePath("/admin/publish");
   revalidatePublicMenuSurfaces();
 
-  const dest = importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";
   redirect(dest + "?published=1");
 }
 

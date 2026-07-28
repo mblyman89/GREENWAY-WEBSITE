@@ -30,6 +30,7 @@ export type JourneyStageKey =
   | "publish"
   | "enrich"
   | "master"
+  | "inventory"
   | "pay";
 
 export type JourneyStage = {
@@ -96,11 +97,11 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     key: "publish",
     index: 4,
     label: "Publish",
-    href: "/admin/inventory",
+    href: "/admin/publish",
     altHref: "/admin/menu-imports",
-    hint: "Live, on-hand inventory that's customer-facing",
-    cardTitle: "Live Menu",
-    permission: "inventory.manage",
+    hint: "Review menu drafts and put them live",
+    cardTitle: "Publish Menu",
+    permission: "menu.import",
   },
   {
     key: "enrich",
@@ -121,8 +122,17 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     permission: "inventory.manage",
   },
   {
-    key: "pay",
+    key: "inventory",
     index: 7,
+    label: "Inventory",
+    href: "/admin/inventory",
+    hint: "Live, on-hand stock and compliance lots",
+    cardTitle: "Inventory",
+    permission: "inventory.manage",
+  },
+  {
+    key: "pay",
+    index: 8,
     label: "Pay",
     href: "/admin/vendor-payments",
     hint: "Match the invoice and pay the vendor",
@@ -169,20 +179,26 @@ export function __runJourneyCoreTests(): { passed: number } {
     passed += 1;
   };
 
-  assert(JOURNEY_STAGES.length === 8, "exactly 8 stages");
-  // Indexes are contiguous 0..7 in order.
+  assert(JOURNEY_STAGES.length === 9, "exactly 9 stages");
+  // Indexes are contiguous 0..8 in order.
   JOURNEY_STAGES.forEach((s, i) => assert(s.index === i, `index contiguous at ${s.key}`));
   // Keys unique.
-  assert(new Set(JOURNEY_STAGES.map((s) => s.key)).size === 8, "keys unique");
+  assert(new Set(JOURNEY_STAGES.map((s) => s.key)).size === 9, "keys unique");
   // Hrefs unique and rooted in /admin.
-  assert(new Set(JOURNEY_STAGES.map((s) => s.href)).size === 8, "hrefs unique");
+  assert(new Set(JOURNEY_STAGES.map((s) => s.href)).size === 9, "hrefs unique");
   assert(JOURNEY_STAGES.every((s) => s.href.startsWith("/admin/")), "hrefs rooted");
-  // Canonical order is the audited pipeline order.
+  // Canonical order is the audited pipeline order (SLICE 76: Inventory sits
+  // between Master and Pay per the owner's request).
   assert(
     JOURNEY_STAGES.map((s) => s.key).join(",") ===
-      "discover,order,receive,onboard,publish,enrich,master,pay",
+      "discover,order,receive,onboard,publish,enrich,master,inventory,pay",
     "canonical order",
   );
+  // SLICE 76: Publish points at the dedicated command center; Menu Imports
+  // stays reachable as the secondary surface (uploads + history, unabsorbed).
+  assert(journeyStage("publish").href === "/admin/publish", "publish → command center");
+  assert(journeyStage("publish").altHref === "/admin/menu-imports", "publish altHref stays on Menu Imports");
+  assert(journeyStage("inventory").href === "/admin/inventory", "inventory stage → inventory page");
   // W10: every stage declares the permission its primary page requires, and
   // Pay is the scoped payables permission (owner Q2) — NOT settings.manage.
   assert(

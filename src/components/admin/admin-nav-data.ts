@@ -53,15 +53,17 @@ export const adminNav: AdminNavItem[] = [
   // Product Intake: the end-to-end product workflow. W1 — ordered to mirror
   // THE canonical journey (src/lib/catalog/journey-core.ts): the Hub (the map)
   // first, then the stages in journey order, then reference surfaces
-  // (fuel, not stages) last. 4 · Publish lives under Admin → Menu Imports.
+  // (fuel, not stages) last. SLICE 76: 4 · Publish has its own command center;
+  // 7 · Inventory keeps its long-standing spot in the Inventory group below.
   { label: "Catalog Hub", href: "/admin/catalog", permission: "products.enrich", icon: "\ud83d\uddc2\ufe0f", group: "Product Intake" }, // 🗂️ the map / front door of the journey
   { label: "Product Discovery", href: "/admin/discovery", permission: "inventory.manage", icon: "\ud83d\udd0d", group: "Product Intake" }, // 🔍 0 · Discover
   { label: "Purchasing", href: "/admin/purchasing", permission: "inventory.manage", icon: "\ud83e\uddfe", group: "Product Intake" }, // 🧾 1 · Order
   { label: "Receiving", href: "/admin/inventory/intake", permission: "inventory.manage", icon: "\ud83d\ude9a", group: "Product Intake" }, // 🚚 2 · Receive
   { label: "Product Onboarding", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "\ud83c\udd95", group: "Product Intake" }, // 🆕 3 · Onboard
+  { label: "Publish Menu", href: "/admin/publish", permission: "menu.import", icon: "\ud83d\udce2", group: "Product Intake" }, // 📢 4 · Publish (SLICE 76 command center)
   { label: "Product Enrichment", href: "/admin/products", permission: "products.enrich", icon: "\u2728", group: "Product Intake" }, // ✨ 5 · Enrich
   { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "\ud83e\uddec", group: "Product Intake" }, // 🧬 6 · Master
-  { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "payables.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 7 · Pay (W10: scoped — purchase manager runs AP)
+  { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "payables.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 8 · Pay (W10: scoped — purchase manager runs AP)
   { label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊 reference — fuel, not a stage
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "\ud83d\udcda", group: "Product Intake" }, // 📚 reference — fuel, not a stage
 

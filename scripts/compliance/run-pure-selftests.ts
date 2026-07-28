@@ -149,6 +149,7 @@ import { __runEodCoreTests } from "../../src/lib/registers/eod-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 import { __runEnrichmentMatchCoreTests } from "../../src/lib/enrichment/match-core";
+import { __runPublishGuardTests } from "../../src/lib/pos/publish-guard-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -360,6 +361,7 @@ async function main() {
   __runSafeCoreTests();
   __runEodCoreTests();
   __runEnrichmentMatchCoreTests();
+  __runPublishGuardTests();
   // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
   // internally on assertion failure are bare calls; suites that only return
   // { passed, failed } are wrapped so a failure still fails this runner.

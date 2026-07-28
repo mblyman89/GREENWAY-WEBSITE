@@ -246,6 +246,41 @@ async function versionItemIndex(versionId: string) {
   return map;
 }
 
+/**
+ * SLICE 76 housekeeping — after a MANUAL publish succeeds, archive
+ * intake-origin staged drafts that are OLDER than the version just published.
+ * Each was built from an older live snapshot, so publishing one later would
+ * silently DROP newer products (the exact trap the owner hit). Newer drafts
+ * are left alone. Best-effort: failures log and never break the publish.
+ */
+export async function archiveStaleIntakeDrafts(publishedVersionId: string): Promise<number> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data: pub } = await admin
+      .from("menu_versions")
+      .select("id, created_at")
+      .eq("id", publishedVersionId)
+      .single();
+    if (!pub) return 0;
+    const { data, error } = await admin
+      .from("menu_versions")
+      .update({ status: "archived", updated_at: new Date().toISOString() })
+      .is("import_id", null)
+      .eq("status", "staged")
+      .neq("id", publishedVersionId)
+      .lt("created_at", (pub as { created_at: string }).created_at)
+      .select("id");
+    if (error) {
+      console.error("[menu-version] archiveStaleIntakeDrafts error:", error.message);
+      return 0;
+    }
+    return (data ?? []).length;
+  } catch (err) {
+    console.error("[menu-version] archiveStaleIntakeDrafts exception:", err);
+    return 0;
+  }
+}
+
 export type MenuDiffEntry = {
   sourceId: string;
   name: string;

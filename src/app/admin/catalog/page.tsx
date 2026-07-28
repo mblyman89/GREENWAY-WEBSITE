@@ -134,12 +134,15 @@ export default async function CatalogHubPage() {
         {!hub.hasPublishedMenu && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
             No published menu yet. Products you receive and approve with a price are carried
-            onto a menu draft automatically &mdash; review and publish it under{" "}
-            <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
-              Menu Imports &rarr; Menu drafts from receiving
+            onto a menu draft automatically &mdash; review and publish it in the{" "}
+            <Link href="/admin/publish" className="text-[var(--admin-accent)] hover:underline">
+              Publish command center
             </Link>
-            , then enrichment metrics will appear here. (The one-time POS upload on that page is only
-            for the initial Cultivera import.)
+            , then enrichment metrics will appear here. (The one-time POS upload lives under{" "}
+            <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
+              Menu Imports
+            </Link>{" "}
+            and is only for the initial Cultivera import.)
           </div>
         )}
 
@@ -316,14 +319,14 @@ export default async function CatalogHubPage() {
             </Card>
             ) : null}
 
-            {/* 4 — Publish (Live Menu) — W1: the stage the old hub skipped. */}
+            {/* 4 — Publish — SLICE 76: the dedicated command center. */}
             {canSee("publish") ? (
             <Card accent="gold">
               <CardHeader title={stageTitle("publish")} subtitle="Publish the menu customers see" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-                The menu is built from your POS exports: upload them under Menu
-                Imports, review the staged version, and publish. Live, on-hand,
-                customer-facing stock lives under Inventory.
+                The Publish command center shows what&apos;s live, marks the newest
+                menu draft, and warns in plain English before anything gets
+                removed. POS-export uploads stay under Menu Imports.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Badge tone={hub.hasPublishedMenu ? "green" : "gold"}>
@@ -331,8 +334,8 @@ export default async function CatalogHubPage() {
                 </Badge>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button href="/admin/menu-imports" size="sm">Open menu imports →</Button>
-                <Button href="/admin/inventory" size="sm" variant="neutral">Open inventory →</Button>
+                <Button href="/admin/publish" size="sm">Open publish center →</Button>
+                <Button href="/admin/menu-imports" size="sm" variant="neutral">Open menu imports →</Button>
               </div>
             </Card>
             ) : null}
@@ -378,7 +381,25 @@ export default async function CatalogHubPage() {
             </Card>
             ) : null}
 
-            {/* 7 — Accounts Payable */}
+            {/* 7 — Inventory (SLICE 76: its own stage between Master and Pay). */}
+            {canSee("inventory") ? (
+            <Card accent="green">
+              <CardHeader title={stageTitle("inventory")} subtitle="Live, on-hand stock and compliance lots" />
+              <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
+                Every active lot behind the menu — on-hand counts, lot codes,
+                expiry and COA status. Counts move automatically from receiving
+                and register sales; cycle counts keep them honest.
+              </p>
+              <div className="mt-3">
+                <Badge tone="neutral">Lots &amp; on-hand counts</Badge>
+              </div>
+              <div className="mt-4">
+                <Button href="/admin/inventory" size="sm">Open inventory →</Button>
+              </div>
+            </Card>
+            ) : null}
+
+            {/* 8 — Accounts Payable */}
             {canSee("pay") ? (
             <Card accent="green">
               <CardHeader title={stageTitle("pay")} subtitle="Pay the vendor" />
