@@ -29,6 +29,12 @@ export async function sendPurchaseOrderEmail(params: {
   to: string | null;
   poNumber: string;
   bodyText: string;
+  /**
+   * SLICE 81: optional branded HTML body (renderPoEmailHtml from the PURE
+   * po-document-core). When present it replaces the legacy plain-text-in-a-
+   * <pre> rendering; the plain bodyText is still sent as the text fallback.
+   */
+  html?: string | null;
 }): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY ?? "";
   const from = process.env.ORDER_EMAIL_FROM ?? "";
@@ -45,7 +51,8 @@ export async function sendPurchaseOrderEmail(params: {
         from,
         to: [params.to],
         subject: `Purchase Order ${params.poNumber} — Greenway Marijuana`,
-        html: `
+        text: params.bodyText,
+        html: params.html && params.html.trim().length > 0 ? params.html : `
           <div style="font-family:system-ui,Arial,sans-serif;color:#111">
             <h2 style="color:#12351f">Purchase Order ${escapeHtml(params.poNumber)}</h2>
             <p>Please find our purchase order below. Reply to confirm availability and delivery.</p>

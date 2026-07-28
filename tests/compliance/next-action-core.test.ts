@@ -16,8 +16,8 @@ import {
 
 describe("next-action-core: poWhatDoIDoHere", () => {
   it("covers the full PO status chain with the right primary action", () => {
-    expect(poWhatDoIDoHere("draft", true).primaryAction).toBe("Send to vendor");
-    expect(poWhatDoIDoHere("submitted", true).primaryAction).toBe("Send to vendor");
+    expect(poWhatDoIDoHere("draft", true).primaryAction).toBe("Verify & send");
+    expect(poWhatDoIDoHere("submitted", true).primaryAction).toBe("Verify & send");
     expect(poWhatDoIDoHere("sent", true).primaryAction).toBe("Receive");
     expect(poWhatDoIDoHere("partial", true).primaryAction).toBe("Receive");
     expect(poWhatDoIDoHere("received", true).primaryAction).toBeNull();

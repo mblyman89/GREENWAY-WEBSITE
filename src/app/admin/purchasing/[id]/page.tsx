@@ -11,6 +11,9 @@ import {
   lineTotalMinor,
   type PurchaseOrderStatus,
 } from "@/lib/purchasing/po-store";
+// SLICE 81: branded document + verified send + procure-to-pay paper trail.
+import { poCodename, buildPoPaperTrail, type TrailStepState } from "@/lib/purchasing/po-document-core";
+import { buildPoTrailFacts } from "@/lib/purchasing/po-document-store";
 import {
   setStatusAction,
   sendPurchaseOrderAction,
@@ -24,6 +27,14 @@ import { PoMarketContextCard } from "../PoMarketContextCard";
 import { PoReviewPanel } from "./PoReviewPanel";
 
 export const dynamic = "force-dynamic";
+
+/** SLICE 81: dot styling for the paper-trail steps. */
+function trailDotClass(state: TrailStepState): string {
+  if (state === "done") return "bg-emerald-100 text-emerald-700";
+  if (state === "partial") return "bg-amber-100 text-amber-700";
+  if (state === "unavailable") return "bg-stone-200 text-stone-500";
+  return "border border-stone-300 text-stone-400";
+}
 
 function statusTone(s: PurchaseOrderStatus): "green" | "gold" | "orange" | "neutral" | "danger" {
   if (s === "received") return "green";
@@ -46,6 +57,11 @@ export default async function PurchaseOrderDetailPage({
   const po = await getPurchaseOrder(id);
   if (!po) notFound();
 
+  // SLICE 81: codename + the real PO → manifest → payment → stamp chain.
+  const codename = poCodename(po.po_number);
+  const trailData = await buildPoTrailFacts(po);
+  const trailSteps = buildPoPaperTrail(trailData.facts);
+
   const sent = (Array.isArray(sp.sent) ? sp.sent[0] : sp.sent) === "1";
   const marked = (Array.isArray(sp.marked) ? sp.marked[0] : sp.marked) === "1";
   const errorMessage = Array.isArray(sp.error) ? sp.error[0] : sp.error;
@@ -60,7 +76,7 @@ export default async function PurchaseOrderDetailPage({
     <div>
       <AdminPageHeader
         title={po.po_number ?? "Purchase order"}
-        subtitle={po.vendor_name ?? "Vendor not set"}
+        subtitle={[codename, po.vendor_name ?? "Vendor not set"].filter(Boolean).join(" · ")}
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -111,12 +127,12 @@ export default async function PurchaseOrderDetailPage({
             {po.paid_at ? <Badge tone="green">paid</Badge> : null}
             {po.origin === "ai_suggested" ? <Badge tone="gold">AI drafted</Badge> : null}
 
-            {canSend ? (
-              <form action={sendPurchaseOrderAction}>
-                <input type="hidden" name="po_id" value={po.id} />
-                <Button type="submit" variant="save" size="sm">Send to vendor</Button>
-              </form>
-            ) : null}
+            <a href={`/admin/purchasing/${po.id}/document`} target="_blank" rel="noopener noreferrer">
+              <Button type="button" variant="neutral" size="sm">Preview document</Button>
+            </a>
+            <a href={`/admin/purchasing/${po.id}/document?download=1`}>
+              <Button type="button" variant="neutral" size="sm">Download</Button>
+            </a>
 
             {po.status === "draft" ? (
               <form action={setStatusAction}>
@@ -158,6 +174,86 @@ export default async function PurchaseOrderDetailPage({
               — stamped automatically when Accounts Payable settled every linked invoice.
             </p>
           ) : null}
+        </Card>
+
+        {/* SLICE 81: Verify & send — preview the branded document, confirm the
+            recipient, then send. Download sits right beside it. */}
+        {canSend ? (
+          <Card className="p-5">
+            <h2 className="mb-1 text-sm font-semibold text-stone-800">Send to vendor</h2>
+            <p className="mb-3 text-xs text-stone-500">
+              Step 1: press <span className="font-medium">Preview document</span> above and read it like the vendor will.
+              Step 2: confirm the send-to email below. Step 3: press <span className="font-medium">Verify & send</span>.
+              The email carries the Greenway-branded order; <span className="font-medium">Download</span> saves the same
+              document to attach or print yourself.
+            </p>
+            <form action={sendPurchaseOrderAction} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="po_id" value={po.id} />
+              <label className="flex flex-col gap-1 text-xs text-stone-600">
+                Send to (verify this address)
+                <input
+                  type="email"
+                  name="send_to"
+                  defaultValue={po.vendor_email ?? ""}
+                  placeholder="orders@vendor.com"
+                  className="w-72 rounded border border-stone-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <Button type="submit" variant="save" size="sm">Verify & send</Button>
+              <a href={`/admin/purchasing/${po.id}/document?download=1`}>
+                <Button type="button" variant="neutral" size="sm">Download</Button>
+              </a>
+            </form>
+            {!po.vendor_email ? (
+              <p className="mt-2 text-xs text-amber-600">
+                No vendor email on file — type one above, or add it to the vendor record so it prefills next time.
+                Sending without an address only marks the PO as Sent.
+              </p>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {/* SLICE 81: paper trail — PO → manifest → payment → paid stamp with
+            honest gaps. This is the full procure-to-pay audit trail
+            (three-way match: PO ↔ manifest ↔ invoice). */}
+        <Card className="p-5">
+          <h2 className="mb-1 text-sm font-semibold text-stone-800">Paper trail (procure-to-pay)</h2>
+          <p className="mb-3 text-xs text-stone-500">
+            The full audit trail for this order: the PO, the delivery manifest(s) linked to it, the invoice
+            payment(s) recorded against those manifests, and the automatic paid stamp.
+          </p>
+          <ol className="space-y-3">
+            {trailSteps.map((step) => (
+              <li key={step.key} className="flex items-start gap-3">
+                <span className={`mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full text-[10px] font-bold ${trailDotClass(step.state)}`}>
+                  {step.state === "done" ? "✓" : step.state === "partial" ? "◑" : step.state === "unavailable" ? "!" : "○"}
+                </span>
+                <div>
+                  <div className="text-sm font-medium text-stone-800">{step.label}</div>
+                  <div className="text-xs text-stone-600">{step.note}</div>
+                  {step.key === "manifest" && trailData.manifests.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {trailData.manifests.map((m) => (
+                        <Link
+                          key={m.id}
+                          href={`/admin/inventory/intake/${m.id}`}
+                          className="rounded border border-stone-200 px-2 py-0.5 text-xs text-stone-700 hover:border-stone-400"
+                        >
+                          {m.number ?? "Manifest"} · {m.status}
+                          {m.owedMinor > 0 ? ` · ${formatMoneyMinor(m.paidMinor)} / ${formatMoneyMinor(m.owedMinor)} paid` : ""}
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
+                  {step.key === "payment" && trailData.facts.linkAvailable && trailData.manifests.length > 0 ? (
+                    <Link href="/admin/vendor-payments" className="mt-1 inline-block text-xs text-emerald-700 hover:underline">
+                      Open Vendor payments →
+                    </Link>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
         </Card>
 
         {/* Lines */}
