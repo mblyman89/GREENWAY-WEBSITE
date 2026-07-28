@@ -488,3 +488,19 @@
   **Until this is run, the Payee Banking page shows a friendly banner and
   the vendor payments page keeps the old manual bank-entry fields. Run it
   before paying your next vendor so the vault protections switch on.**
+
+## SLICE 83 — emailed vendor menus
+
+- [ ] **`supabase/migrations/0144_emailed_vendor_menus.sql`** — creates the
+  `public.emailed_menu_snapshots` and `public.emailed_menu_items` tables:
+  every menu a vendor emails to the `vendor_menu@` inbox is parsed (from the
+  message body, HTML, or PDF/text attachments — with an AI assist when the
+  deterministic parser can't read it) and saved here as a browsable snapshot
+  with items priced in integer cents, potency, quantities, and any product
+  images matched from the email. The Vendor menus page lists these snapshots
+  next to the Cultivera and GrowFlow ones, and each snapshot's detail page
+  hands selected items straight into the purchase-order builder. Staff-only
+  RLS (`is_staff()`); idempotent; safe to re-run. Run it AFTER 0143.
+  **Until this is run, emails to `vendor_menu@` are still logged in the
+  inbound email log, but menu parsing fails with a friendly note and no
+  snapshots appear on the Vendor menus page.**

@@ -39,6 +39,8 @@ import {
   getGrowflowSnapshotItems,
 } from "@/lib/purchasing/growflow-store";
 import { growflowMenuPrefillBanner } from "@/lib/purchasing/growflow-media-core";
+import { getEmailedMenu, getEmailedMenuItems } from "@/lib/purchasing/emailed-menu-store";
+import { emailMenuPrefillBanner } from "@/lib/purchasing/email-menu-core";
 import { PoMarketContextCard } from "../PoMarketContextCard";
 import type { PoLineLike } from "@/lib/purchasing/po-market-context-core";
 import { PoCockpitSection } from "@/app/admin/discovery/PoCockpitSection";
@@ -327,6 +329,26 @@ export default async function NewPurchaseOrderPage({
     }
   }
 
+  // SLICE 83 — emailed menu hand-off: same W11-safe contract as fromMenu, but
+  // the ids resolve against OUR saved emailed_menu_* rows (vendor guessed by
+  // sender address, honored only when it matches a real vendor). The saved
+  // rows share the MenuPrefillItemLike columns, so buildMenuPrefills is reused.
+  const fromEmailMenu = one(sp, "fromEmailMenu");
+  let emailMenuPrefills: SuggestionRow[] = [];
+  let emailMenuVendorLabel: string | null = null;
+  if (fromEmailMenu && menuItemIds.length > 0) {
+    const emSnap = await getEmailedMenu(fromEmailMenu);
+    if (emSnap) {
+      const emItems = await getEmailedMenuItems(fromEmailMenu);
+      const emVendorId =
+        emSnap.vendor_id && vendors.some((v) => v.id === emSnap.vendor_id)
+          ? emSnap.vendor_id
+          : null;
+      emailMenuVendorLabel = emSnap.from_name ?? emSnap.from_address ?? null;
+      emailMenuPrefills = buildMenuPrefills(emItems, menuItemIds, emVendorId, emailMenuVendorLabel);
+    }
+  }
+
   // Task I (I6): candidate rows in PoLineLike shape for the market check —
   // suggested qty as the order qty, real unit costs (wholesale, minor units).
   const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...variantPrefills, ...growflowPrefills, ...rows].map((r) => ({
@@ -417,6 +439,11 @@ export default async function NewPurchaseOrderPage({
         {growflowPrefills.length > 0 ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
             {growflowMenuPrefillBanner(growflowPrefills.length, growflowVendorLabel)}
+          </div>
+        ) : null}
+        {emailMenuPrefills.length > 0 ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            {emailMenuPrefillBanner(emailMenuPrefills.length, emailMenuVendorLabel)}
           </div>
         ) : null}
 
@@ -570,8 +597,8 @@ export default async function NewPurchaseOrderPage({
                 planSummary={planSummary}
                 prefill={prefill}
                 menuPrefills={
-                  menuPrefills.length > 0 || variantPrefills.length > 0 || growflowPrefills.length > 0
-                    ? [...menuPrefills, ...variantPrefills, ...growflowPrefills]
+                  menuPrefills.length > 0 || variantPrefills.length > 0 || growflowPrefills.length > 0 || emailMenuPrefills.length > 0
+                    ? [...menuPrefills, ...variantPrefills, ...growflowPrefills, ...emailMenuPrefills]
                     : undefined
                 }
                 fromLeadId={fromLead}

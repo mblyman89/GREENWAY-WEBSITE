@@ -46,6 +46,7 @@ import {
 } from "@/lib/inbound-email/inbound-store";
 import { enrichResendInbound } from "@/lib/inbound-email/resend-receiving-fetch";
 import { ingestFromText } from "@/lib/regulatory/regulatory-ingest";
+import { processMenuEmail } from "@/lib/purchasing/emailed-menu-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -62,6 +63,13 @@ function intakeMailbox(): string {
 // SLICE 37: second mailbox — forwarded LCB bulletins for Regulatory Watch.
 function regulatoryMailbox(): string {
   return (process.env.REGULATORY_MAILBOX ?? "lcb-watch").trim();
+}
+
+// SLICE 83: third mailbox — emailed vendor menus. Only menus + spam land here;
+// the parser classifies junk, scrapes body/HTML/CSV/PDF sources, and saves a
+// browsable snapshot for /admin/purchasing/menus + the PO builder hand-off.
+function vendorMenuMailbox(): string {
+  return (process.env.VENDOR_MENU_MAILBOX ?? "vendor_menu").trim();
 }
 
 export async function POST(request: Request) {
@@ -228,6 +236,24 @@ async function finish(
       });
       return NextResponse.json(
         { ok: true, regulatory: res.ok, created: res.ok ? res.created : false },
+        { status: 200 },
+      );
+    }
+    // SLICE 83: emailed vendor menus route to the menu parser instead. Every
+    // arrival is still logged; junk/spam is classified and recorded, a real
+    // menu becomes a browsable snapshot on /admin/purchasing/menus.
+    if (isForIntakeMailbox(email, vendorMenuMailbox())) {
+      const menu = await processMenuEmail(email);
+      await logInboundEmail({
+        email,
+        signatureOk,
+        toIntake: false,
+        disposition: "ignored",
+        manifestId: null,
+        note: `vendor menu: ${menu.outcome}${menu.snapshotId ? ` (snapshot ${menu.snapshotId})` : ""} — ${menu.note}${fetchNote ? ` — ${fetchNote}` : ""}`,
+      });
+      return NextResponse.json(
+        { ok: true, menu: menu.outcome, snapshotId: menu.snapshotId, items: menu.itemCount },
         { status: 200 },
       );
     }

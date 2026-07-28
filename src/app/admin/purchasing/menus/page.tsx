@@ -14,6 +14,8 @@ import {
   platformLabel,
   platformTone,
 } from "@/lib/purchasing/unified-menus-ui-core";
+import { listEmailedMenus } from "@/lib/purchasing/emailed-menu-store";
+import { sortEmailedRows } from "@/lib/purchasing/email-menu-core";
 import { VendorSearch } from "./vendor-search";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +30,8 @@ export const dynamic = "force-dynamic";
  */
 
 function statusTone(s: string): "green" | "gold" | "danger" | "neutral" {
-  if (s === "fetched") return "green";
-  if (s === "empty") return "gold";
+  if (s === "fetched" || s === "parsed") return "green";
+  if (s === "empty" || s === "partial") return "gold";
   if (s === "error") return "danger";
   return "neutral";
 }
@@ -46,11 +48,14 @@ export default async function VendorMenusPage() {
   // per-platform credentials degrade inside the search itself (worker 503s).
   const configured = isCultiveraClientConfigured();
 
-  const [cultiveraSnaps, growflowSnaps] = await Promise.all([
+  const [cultiveraSnaps, growflowSnaps, emailedSnaps] = await Promise.all([
     listSnapshots({ limit: 50 }),
     listGrowflowSnapshots({ limit: 50 }),
+    listEmailedMenus({ limit: 50 }),
   ]);
   const rows = mergeSnapshotRows(cultiveraSnaps, growflowSnaps);
+  // SLICE 83: menus that arrived by email (vendor_menu@), newest first.
+  const emailedRows = sortEmailedRows(emailedSnaps);
 
   const vendorsSeen = distinctVendorCount(rows);
   const latest = rows[0] ?? null;
@@ -165,6 +170,70 @@ export default async function VendorMenusPage() {
                       <td className="px-4 py-3 text-center text-[var(--admin-text-muted)]">{r.itemCount}</td>
                       <td className="px-4 py-3 text-[var(--admin-text-faint)]">
                         {fetchedAgo(r.fetchedAt) || new Date(r.fetchedAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+
+        {/* SLICE 83 — menus that vendors EMAIL to the vendor_menu@ mailbox. The
+            fetcher scrapes the body, HTML tables, CSV/TXT sheets, and PDFs
+            (AI-assisted only when needed, always re-validated), links any
+            emailed photos, and saves the result here as a browsable snapshot. */}
+        <Section
+          title="Emailed vendor menus"
+          description="Menus vendors send straight to your vendor_menu@ address. Each email is scraped — body, attachments, and PDFs — and saved here automatically. Spam never makes this list."
+        >
+          {emailedRows.length === 0 ? (
+            <EmptyState
+              icon="📬"
+              title="No emailed menus yet"
+              description="Point vendors at your vendor_menu@ address. When a menu lands there it's parsed and appears here automatically — click one to browse its items and start a purchase order."
+            />
+          ) : (
+            <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
+              <table className="w-full text-sm">
+                <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  <tr>
+                    <th className="px-4 py-3">Sender</th>
+                    <th className="px-4 py-3">Subject</th>
+                    <th className="px-4 py-3">Parsed from</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-center">Items</th>
+                    <th className="px-4 py-3">Received</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--admin-border)]">
+                  {emailedRows.map((r) => (
+                    <tr key={r.id} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={r.href}
+                          className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
+                        >
+                          {r.senderLabel}
+                        </Link>
+                        {r.senderSub && (
+                          <span className="ml-2 align-middle text-xs text-[var(--admin-text-faint)]">
+                            {r.senderSub}
+                          </span>
+                        )}
+                      </td>
+                      <td className="max-w-[16rem] truncate px-4 py-3 text-[var(--admin-text-muted)]" title={r.subject}>
+                        {r.subject}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone="neutral">{r.sourceLabel}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center text-[var(--admin-text-muted)]">{r.itemCount}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-faint)]">
+                        {fetchedAgo(r.receivedAt) || new Date(r.receivedAt).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}
