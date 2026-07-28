@@ -7,6 +7,8 @@ import { Button } from "@/components/admin/ui";
 import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
 import { listAllBrands } from "@/lib/vendors/store";
+// SLICE 77: enrichment ⇄ inventory cross-link — real lots behind this menu item.
+import { listLotsForProductKey } from "@/lib/inventory/store";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getEnrichmentCommandCenter } from "@/lib/enrichment/command-center";
@@ -64,6 +66,9 @@ export default async function ProductEditorPage({
 
   const enrichment = await getEnrichment(key);
   const brands = await listAllBrands();
+  // SLICE 77: inventory lots that share this product's POS key — the physical
+  // stock behind the menu card, each linking to its lot detail page.
+  const productLots = await listLotsForProductKey(key, 6);
   const allSuggestions = await listSuggestions("product", key, "pending");
   // SLICE 74: research_images drafts are reference data (image URL lists) —
   // they get their own visual review block instead of the plain-text one.
@@ -112,6 +117,41 @@ export default async function ProductEditorPage({
           {item.strain_name ? ` (${item.strain_name})` : ""} · THC {item.thc ?? "—"} · CBD {item.cbd ?? "—"}.
           <span className="ml-1 text-white/35">Price &amp; stock are never edited here.</span>
         </div>
+
+        {/* SLICE 77: enrichment ⇄ inventory cross-link. The physical lots
+            behind this menu item, so staff can jump straight from the menu
+            card to the traceability record (vendor, COA, expiry, quantities). */}
+        {productLots.length > 0 && (
+          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-white">Inventory lots for this product</p>
+              <Link
+                href={`/admin/inventory?q=${encodeURIComponent(key)}`}
+                className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                Search in Inventory →
+              </Link>
+            </div>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {productLots.map((lot) => (
+                <li key={lot.id}>
+                  <Link
+                    href={`/admin/inventory/${lot.id}?back=${encodeURIComponent(`/admin/products/${rawKey}`)}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs hover:border-[var(--admin-accent)]/50"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-white/80">
+                      {lot.lot_code ?? lot.product_name ?? "Unnamed lot"}
+                      {lot.vendor_name ? <span className="text-white/40"> · {lot.vendor_name}</span> : null}
+                    </span>
+                    <span className="shrink-0 text-white/40">
+                      {lot.on_hand_qty} on hand · {lot.status}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* SLICE 38 — Command center: what the menu shows now + how to fix gaps */}
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">

@@ -66,6 +66,8 @@ export default async function InventoryPage({
     sample?: string;
     medical?: string;
     expiring?: string;
+    /** SLICE 77: only lots from this vendor (vendors ⇄ inventory cross-link). */
+    vendor?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -81,6 +83,10 @@ export default async function InventoryPage({
   const isMedical = parseYesNo(sp.medical);
   const expiringWithinDays =
     sp.expiring && /^\d{1,3}$/.test(sp.expiring) ? Number(sp.expiring) : undefined;
+  // SLICE 77: the vendors ⇄ inventory cross-link. Only a UUID shape is
+  // accepted — junk params silently mean "filter off", like every other knob.
+  const vendorId =
+    sp.vendor && /^[0-9a-f-]{36}$/i.test(sp.vendor) ? sp.vendor : undefined;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -107,6 +113,7 @@ export default async function InventoryPage({
     isSample,
     isMedical,
     expiringWithinDays,
+    vendorId,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, stats, intel] = await Promise.all([
@@ -133,6 +140,7 @@ export default async function InventoryPage({
     if (sp.sample === "yes" || sp.sample === "no") params.set("sample", sp.sample);
     if (sp.medical === "yes" || sp.medical === "no") params.set("medical", sp.medical);
     if (expiringWithinDays != null) params.set("expiring", String(expiringWithinDays));
+    if (vendorId) params.set("vendor", vendorId);
     return params;
   };
   const pageHref = (p: number) => {
@@ -154,8 +162,13 @@ export default async function InventoryPage({
       isSample !== undefined ||
       isMedical !== undefined ||
       expiringWithinDays != null ||
+      vendorId !== undefined ||
       sort.key !== LOT_SORTS[0].key,
   );
+  // SLICE 77: name the vendor being filtered so the banner reads plainly.
+  const vendorFilterName = vendorId
+    ? lots.find((l) => l.vendor_id === vendorId)?.vendor_name ?? "this vendor"
+    : null;
   const gaps = inventoryGapInsights(stats);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -244,6 +257,29 @@ export default async function InventoryPage({
             months-of-supply vs the WAC 4-month ceiling, shrink telemetry). */}
         <InventoryIntelPanel center={intel.center} sellFirst={intel.sellFirst} />
 
+        {/* SLICE 77: vendors ⇄ inventory cross-link banner. When the list is
+            filtered to one vendor's lots, say so in plain English and offer a
+            one-click way back to everything (or over to the vendor's page). */}
+        {vendorId && (
+          <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm">
+            <span className="text-[var(--admin-text)]">
+              Showing only lots from <strong>{vendorFilterName}</strong>.
+            </span>
+            <Link
+              href={`/admin/vendors/${vendorId}`}
+              className="font-semibold text-[var(--admin-accent)] hover:underline"
+            >
+              Open vendor page →
+            </Link>
+            <Link
+              href="/admin/inventory"
+              className="font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            >
+              ✕ Clear filter (show all lots)
+            </Link>
+          </div>
+        )}
+
         {/* Filters (SLICE 26: full control — status tabs, search, COA /
             sample / medical tri-states, expiry window, and sort, all
             URL-driven and combinable). */}
@@ -268,6 +304,8 @@ export default async function InventoryPage({
 
         <form className="flex flex-wrap items-end gap-3" method="get">
           {activeStatus !== "all" && <input type="hidden" name="status" value={activeStatus} />}
+          {/* SLICE 77: keep the vendor cross-link filter when other knobs change. */}
+          {vendorId && <input type="hidden" name="vendor" value={vendorId} />}
           <div className="min-w-52 flex-1">
             <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
               Search

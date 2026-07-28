@@ -12,7 +12,10 @@ import {
 } from "@/lib/inventory/store";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
-import { adjustLotAction, setLotStatusAction } from "../actions";
+import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
+import { listVendors, listAllBrands } from "@/lib/vendors/store";
+import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
+import { adjustLotAction, setLotStatusAction, updateLotDetailsAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -60,10 +63,20 @@ export default async function LotDetailPage({
   const lot = await getLotById(id);
   if (!lot) notFound();
 
-  const [adjustments, manifest] = await Promise.all([
+  // SLICE 77: vendors + brands feed the correction form's pickers; the
+  // enrichment record (keyed by the lot's POS product key) surfaces the
+  // customer-facing photo/description right here.
+  const [adjustments, manifest, vendors, brands, enrichment] = await Promise.all([
     listLotAdjustments(id),
     lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
+    listVendors(),
+    listAllBrands(),
+    lot.pos_product_key ? getEnrichment(lot.pos_product_key) : Promise.resolve(null),
   ]);
+  const enrichImageId = enrichment?.primary_media_id ?? enrichment?.image_media_ids?.[0] ?? null;
+  const enrichImageUrl = enrichImageId
+    ? (await mediaUrlsForIds([enrichImageId])).get(enrichImageId) ?? null
+    : null;
 
   // Convert the raw LCB classification to OUR website category for display
   // (Request B). Read-only — the stored LCB category/inventory_type are never
@@ -77,6 +90,7 @@ export default async function LotDetailPage({
 
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
+  const detailsAction = updateLotDetailsAction.bind(null, id);
 
   const today = new Date().toISOString().slice(0, 10);
   const expired = lot.expires_on != null && lot.expires_on < today;
@@ -110,7 +124,10 @@ export default async function LotDetailPage({
                 ? "Choose a valid reason."
                 : error === "status"
                   ? "Choose a valid status."
-                  : "Something went wrong saving that."}
+                  : error === "save"
+                    ? "Something went wrong saving that."
+                    : /* SLICE 77: the details-correction action sends real plain-English messages. */
+                      decodeURIComponent(error)}
           </div>
         )}
 
@@ -137,7 +154,23 @@ export default async function LotDetailPage({
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Lot details</h2>
             <dl className="space-y-2 text-sm">
-              <Row label="Vendor" value={lot.vendor_name ?? "—"} />
+              {/* SLICE 77: the vendor is a REAL link into the vendors database
+                  (not free text) whenever the lot carries a vendor_id. */}
+              {lot.vendor_id ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--admin-text-faint)]">Vendor</dt>
+                  <dd className="text-right">
+                    <Link
+                      href={`/admin/vendors/${lot.vendor_id}`}
+                      className="font-medium text-[var(--admin-accent)] hover:underline"
+                    >
+                      {lot.vendor_name ?? "View vendor"} →
+                    </Link>
+                  </dd>
+                </div>
+              ) : (
+                <Row label="Vendor" value={lot.vendor_name ?? "—"} />
+              )}
               <Row label="Brand" value={lot.brand_name ?? "—"} />
               <Row label="Strain" value={lot.strain_name ?? "—"} />
               {/* SLICE 63 (E1): OUR product type on screen — house labeler
@@ -260,6 +293,116 @@ export default async function LotDetailPage({
                 No COA linked to this lot. WA CCRS manifest reporting requires the COA&apos;s
                 LabtestexternalIdentifier — link or import the lab result before selling.
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* SLICE 77 — correct the descriptive linkage (the ONLY legally
+            hand-editable lot fields). Quantities, lot codes, costs, LCB
+            classification, dates and COA links stay locked to manifests and
+            audited adjustments — WA traceability numbers are never hand-edited. */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Correct lot details</h2>
+            <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
+              Fix who supplied it and what it is: vendor, brand, strain, and strain type.
+              Everything else on this lot (quantities, lot code, cost, LCB classification,
+              dates, COA) is compliance data and can only change through receiving or an
+              audited adjustment. Every correction here is recorded in the audit trail.
+            </p>
+            <form action={detailsAction} className="space-y-4">
+              <Field label="Vendor" help="Pick from your vendors database — this links the lot to the vendor's page." htmlFor="vendor_id">
+                <Select id="vendor_id" name="vendor_id" defaultValue={lot.vendor_id ?? ""}>
+                  <option value="">— No vendor —</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.display_name}
+                      {v.license_number ? ` (${v.license_number})` : ""}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Brand" help="A brand tied to a vendor can only be paired with that vendor." htmlFor="brand_id">
+                <Select id="brand_id" name="brand_id" defaultValue={lot.brand_id ?? ""}>
+                  <option value="">— No brand —</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.display_name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Strain name" htmlFor="strain_name">
+                <Input id="strain_name" name="strain_name" defaultValue={lot.strain_name ?? ""} placeholder="e.g. Blue Dream" maxLength={120} />
+              </Field>
+              <Field label="Strain type" htmlFor="strain_type">
+                <Select id="strain_type" name="strain_type" defaultValue={lot.strain_type ?? ""}>
+                  <option value="">— Unknown —</option>
+                  {STRAIN_TYPE_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      {t === "cbd" ? "CBD" : t.charAt(0).toUpperCase() + t.slice(1).replace("-", " ")}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Button type="submit" variant="save" size="sm">
+                Save corrections
+              </Button>
+            </form>
+          </div>
+
+          {/* SLICE 77 — what shoppers see: the enrichment record for this
+              product (photo, description, tags), pulled in by POS product key,
+              with a jump straight into the enrichment editor. */}
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">On the menu (enrichment)</h2>
+            {lot.pos_product_key ? (
+              enrichment ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-4">
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--admin-border)] bg-black">
+                      {enrichImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={enrichImageUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--admin-text-faint)]">no photo</div>
+                      )}
+                    </div>
+                    <div className="min-w-0 text-sm">
+                      <p className="font-medium text-[var(--admin-text)]">
+                        {enrichment.display_name || lot.product_name || "(unnamed)"}
+                      </p>
+                      <p className="mt-1 line-clamp-3 text-xs text-[var(--admin-text-muted)]">
+                        {enrichment.short_description || enrichment.description || "No description written yet."}
+                      </p>
+                      {enrichment.tags.length > 0 && (
+                        <p className="mt-1 truncate text-[11px] text-[var(--admin-text-faint)]">
+                          {enrichment.tags.join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button href={`/admin/products/${encodeURIComponent(lot.pos_product_key)}?back=/admin/inventory/${lot.id}`} variant="neutral" size="sm">
+                    Open in Product Enrichment →
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm text-[var(--admin-text-muted)]">
+                  <p>
+                    This product hasn&apos;t been enriched yet — no photo or description
+                    for the customer menu.
+                  </p>
+                  <Button href={`/admin/products/${encodeURIComponent(lot.pos_product_key)}?back=/admin/inventory/${lot.id}`} variant="neutral" size="sm">
+                    Start enriching →
+                  </Button>
+                </div>
+              )
+            ) : (
+              <p className="text-sm text-[var(--admin-text-faint)]">
+                This lot isn&apos;t linked to a POS product key yet, so there&apos;s no
+                enrichment record to show. The link is made automatically when the
+                product goes onto the menu.
+              </p>
             )}
           </div>
         </div>
