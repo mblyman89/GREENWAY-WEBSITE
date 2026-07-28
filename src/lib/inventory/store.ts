@@ -60,6 +60,8 @@ export async function listLotsPaged(
     isMedical?: boolean;
     /** Only lots expiring on/before today+N days (still in date). */
     expiringWithinDays?: number;
+    /** SLICE 77: only lots supplied by this vendor (vendors ⇄ inventory link). */
+    vendorId?: string;
   },
 ): Promise<{ rows: LotWithDetail[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
@@ -69,6 +71,9 @@ export async function listLotsPaged(
 
   if (opts.status && opts.status !== "all") {
     query = query.eq("status", opts.status);
+  }
+  if (opts.vendorId) {
+    query = query.eq("vendor_id", opts.vendorId);
   }
   const like = opts.q ? ilikeContains(opts.q) : null;
   if (like) {
@@ -354,6 +359,76 @@ export async function createAdjustment(
   if (updErr) return { ok: false, error: updErr.message };
 
   return { ok: true };
+}
+
+/**
+ * SLICE 77 — hand-correct the descriptive linkage on a lot. ONLY the four
+ * legally-safe fields (vendor_id, brand_id, strain_name, strain_type) can be
+ * written; the patch object's shape is enforced by lot-edit-core's parser and
+ * by this signature. Traceability numbers are untouchable here.
+ */
+export async function updateLotDetails(
+  id: string,
+  patch: {
+    vendor_id: string | null;
+    brand_id: string | null;
+    strain_name: string | null;
+    strain_type: string | null;
+  },
+  actorId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("inventory_lots")
+    .update({
+      vendor_id: patch.vendor_id,
+      brand_id: patch.brand_id,
+      strain_name: patch.strain_name,
+      strain_type: patch.strain_type,
+      updated_by: actorId,
+    })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * SLICE 77 — all lots supplied by one vendor (newest first, hydrated with
+ * names + lab), for the vendor detail page's inventory cross-link panel.
+ */
+export async function listLotsForVendor(vendorId: string, limit = 50): Promise<LotWithDetail[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("inventory_lots")
+    .select("*")
+    .eq("vendor_id", vendorId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const lots = (data as InventoryLot[] | null) ?? [];
+  if (lots.length === 0) return [];
+  return hydrateLots(admin, lots);
+}
+
+/**
+ * SLICE 77 — all lots for one POS product key (newest first, hydrated), for
+ * the enrichment detail page's inventory cross-link panel.
+ */
+export async function listLotsForProductKey(posProductKey: string, limit = 20): Promise<LotWithDetail[]> {
+  if (!isSupabaseServiceConfigured || !posProductKey) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("inventory_lots")
+    .select("*")
+    .eq("pos_product_key", posProductKey)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const lots = (data as InventoryLot[] | null) ?? [];
+  if (lots.length === 0) return [];
+  return hydrateLots(admin, lots);
 }
 
 /** Update lifecycle status of a lot (e.g. recall, quarantine, destroy). */

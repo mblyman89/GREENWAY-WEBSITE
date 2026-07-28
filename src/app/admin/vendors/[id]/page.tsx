@@ -6,6 +6,8 @@ import { Breadcrumbs, StickyActionBar } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { vendorListBackHref } from "@/lib/vendors/list-state-core";
 import { getVendorById, listBrandsForVendor, publicMediaUrl } from "@/lib/vendors/store";
+// SLICE 77: vendors ⇄ inventory cross-link — recent lots from this vendor.
+import { listLotsForVendor } from "@/lib/inventory/store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Brand } from "@/lib/vendors/types";
 import { vendorCompleteness } from "@/lib/vendors/completeness";
@@ -90,10 +92,12 @@ export default async function VendorEditPage({
 
   const vendor = await getVendorById(id);
   if (!vendor) notFound();
-  const [brands, vendorLogo, pendingSuggestions] = await Promise.all([
+  const [brands, vendorLogo, pendingSuggestions, vendorLots] = await Promise.all([
     listBrandsForVendor(id),
     logoUrlForMediaId(vendor.logo_media_id),
     listSuggestions("vendor", id, "pending"),
+    // SLICE 77: recent inventory lots from this vendor for the cross-link panel.
+    listLotsForVendor(id, 8),
   ]);
 
   const brandLogos = new Map<string, string | null>();
@@ -590,6 +594,45 @@ export default async function VendorEditPage({
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Public card preview</p>
               <VendorCardPreview vendor={vendor} logoUrl={vendorLogo} />
             </div>
+
+            {/* SLICE 77: vendors ⇄ inventory cross-link. Recent lots received
+                from this vendor, each linking to its lot detail page, plus a
+                one-click filtered view of everything in Inventory. */}
+            <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-white">Inventory from this vendor</h2>
+                <Link
+                  href={`/admin/inventory?vendor=${vendor.id}`}
+                  className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+                >
+                  View all in Inventory →
+                </Link>
+              </div>
+              {vendorLots.length === 0 ? (
+                <p className="text-xs text-white/45">
+                  No inventory lots are linked to this vendor yet. Lots get linked automatically
+                  when a vendor manifest is accepted, or by hand on any lot&rsquo;s detail page.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {vendorLots.map((lot) => (
+                    <li key={lot.id}>
+                      <Link
+                        href={`/admin/inventory/${lot.id}?back=/admin/vendors/${vendor.id}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs hover:border-[var(--admin-accent)]/50"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-white/80">
+                          {lot.product_name ?? lot.lot_code ?? "Unnamed lot"}
+                        </span>
+                        <span className="shrink-0 text-white/40">
+                          {lot.on_hand_qty} on hand · {lot.status}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </aside>
         </div>
       </div>
