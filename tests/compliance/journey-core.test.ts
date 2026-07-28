@@ -20,7 +20,7 @@ import {
 } from "@/lib/catalog/journey-core";
 
 describe("W1 — canonical journey constant", () => {
-  it("is exactly the audited 8-stage pipeline, in order", () => {
+  it("is exactly the audited 9-stage pipeline, in order (SLICE 76 added Inventory)", () => {
     expect(JOURNEY_STAGES.map((s) => s.key)).toEqual([
       "discover",
       "order",
@@ -29,6 +29,7 @@ describe("W1 — canonical journey constant", () => {
       "publish",
       "enrich",
       "master",
+      "inventory",
       "pay",
     ]);
   });
@@ -43,13 +44,14 @@ describe("W1 — canonical journey constant", () => {
       order: "/admin/purchasing",
       receive: "/admin/inventory/intake",
       onboard: "/admin/inventory/drafts",
-      publish: "/admin/inventory",
+      publish: "/admin/publish", // SLICE 76: dedicated Publish command center
       enrich: "/admin/products",
       master: "/admin/products/masters",
+      inventory: "/admin/inventory", // SLICE 76: new stage between Master and Pay
       pay: "/admin/vendor-payments",
     };
     for (const s of JOURNEY_STAGES) expect(s.href).toBe(hrefs[s.key]);
-    // Publish's secondary surface is where publishing actually happens.
+    // Menu Imports stays reachable as Publish's secondary surface (uploads + history).
     expect(journeyStage("publish").altHref).toBe("/admin/menu-imports");
   });
 
@@ -67,9 +69,10 @@ describe("W1 — canonical journey constant", () => {
       order: "inventory.manage", // /admin/purchasing
       receive: "inventory.manage", // /admin/inventory/intake
       onboard: "inventory.manage", // /admin/inventory/drafts
-      publish: "inventory.manage", // /admin/inventory (altHref menu-imports is menu.import)
+      publish: "menu.import", // /admin/publish — SLICE 76 command center requires menu.import
       enrich: "products.enrich", // /admin/products
       master: "inventory.manage", // /admin/products/masters
+      inventory: "inventory.manage", // /admin/inventory — SLICE 76 new stage
       pay: "payables.manage", // /admin/vendor-payments — W10 scoped, NOT settings.manage
     };
     for (const s of JOURNEY_STAGES) expect(s.permission).toBe(perms[s.key]);

@@ -311,7 +311,7 @@ export async function stageIntakeMenuVersionForManifest(
         await admin.from("manifest_events").insert({
           manifest_id: manifestId,
           event_type: "menu_publish_held_for_fact_review",
-          note: `Menu update staged but NOT auto-published: the extraction engine could not verify every fact on ${factFlags.length} product(s). Review the flagged reasons on Menu Imports and publish from there.`,
+          note: `Menu update staged but NOT auto-published: the extraction engine could not verify every fact on ${factFlags.length} product(s). Review the flagged reasons in the Publish command center and publish from there.`,
           actor_id: actorId,
         });
       } catch (err) {
@@ -383,7 +383,7 @@ async function autoPublishIntakeVersion(
       console.error("[intake-menu-staging] auto-publish failed:", error.message);
       await logEvent(
         "menu_auto_publish_failed",
-        "Automatic publish didn't finish — the menu update is STAGED on Admin → Menu Imports. Press Publish there to put it live.",
+        "Automatic publish didn't finish — the menu update is STAGED in the Publish command center (Admin → Publish Menu). Press Publish there to put it live.",
       );
       return false;
     }
@@ -391,7 +391,7 @@ async function autoPublishIntakeVersion(
     console.error("[intake-menu-staging] auto-publish exception:", err);
     await logEvent(
       "menu_auto_publish_failed",
-      "Automatic publish didn't finish — the menu update is STAGED on Admin → Menu Imports. Press Publish there to put it live.",
+      "Automatic publish didn't finish — the menu update is STAGED in the Publish command center (Admin → Publish Menu). Press Publish there to put it live.",
     );
     return false;
   }
@@ -435,6 +435,7 @@ async function autoPublishIntakeVersion(
     // from the live menu, so an auto-publish must refresh it too. (SLICE 39:
     // "/shop" was never a route.)
     revalidatePath("/admin/menu-imports");
+    revalidatePath("/admin/publish");
     revalidatePublicMenuSurfaces();
   } catch (err) {
     console.error("[intake-menu-staging] revalidate failed:", err);

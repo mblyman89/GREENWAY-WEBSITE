@@ -23,7 +23,14 @@ import {
   posDiagnosticToFactReviewDiagnostic,
 } from "@/lib/pos/fact-review-core";
 import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
+import { buildPublishVerdict, type PublishVerdict } from "@/lib/pos/publish-guard-core";
 import { publishVersion } from "../actions";
+
+const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
+  safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
+  caution: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  danger: "border-red-500/40 bg-red-500/10 text-red-300",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +113,22 @@ export default async function ImportReviewPage({
 
   const blocked = (version?.error_count ?? 0) > 0;
 
+  // SLICE 76 — plain-English safety verdict: is publishing this draft safe?
+  // Only meaningful while the version is still staged (published/archived
+  // versions aren't a publish decision anymore).
+  const verdict =
+    version && version.status === "staged" && diff
+      ? buildPublishVerdict({
+          added: diff.added.length,
+          removed: diff.removed.length,
+          priceChanged: diff.priceChanged.length,
+          unchanged: diff.unchangedCount,
+          hasLiveMenu: Boolean(published),
+          stagedCreatedAt: version.created_at,
+          publishedCreatedAt: published?.created_at ?? null,
+        })
+      : null;
+
   // SLICE 58: preview the commit gate (Rule 3.1) so the reviewer sees the
   // publish verdict BEFORE clicking -- pending fact reviews refuse the commit
   // and the balanced Rule 3.3 equation is shown when the gate is open. The
@@ -186,6 +209,14 @@ export default async function ImportReviewPage({
             </div>
           </div>
         </section>
+
+        {/* SLICE 76 — the safety verdict, front and center. */}
+        {verdict && (
+          <div className={`rounded-xl border p-4 text-sm ${VERDICT_STYLE[verdict.level]}`}>
+            <p className="font-semibold">{verdict.headline}</p>
+            <p className="mt-1 opacity-90">{verdict.detail}</p>
+          </div>
+        )}
 
         {/* Diff vs published */}
         {diff && (
@@ -387,9 +418,18 @@ export default async function ImportReviewPage({
               <input type="hidden" name="importId" value={imp.id} />
               <p className="mb-1 text-xs text-[var(--admin-accent)]">{gate.message}</p>
               <p className="mb-3 text-xs text-white/50">
-                Publishing replaces the current live menu with this version and refreshes the public
+                Publishing replaces the WHOLE live menu with this version and refreshes the public
                 site. The previous version is archived (not deleted).
               </p>
+              {verdict?.requiresRemovalConfirm && (
+                <label className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
+                  <input type="checkbox" name="confirm_removals" value="yes" className="mt-0.5" />
+                  <span>
+                    I understand publishing this version will <strong>REMOVE {verdict.removedCount} product(s)</strong>{" "}
+                    from the live menu (see the &ldquo;Removed products&rdquo; list above), and that&apos;s what I want.
+                  </span>
+                </label>
+              )}
               <Button type="submit" disabled={!version} variant="confirm">
                 Publish this menu live
               </Button>

@@ -78,8 +78,8 @@ export const SOP_DOCS: readonly SopDoc[] = [
       "Count the physical boxes against the manifest lines. Verify every count before going further.",
       "Accept the manifest to activate the lots — or reject it to discard. Accepting is the human sign-off.",
       "Open Product Onboarding (Inventory → Drafts): lots that didn't match the published menu got a DRAFT product, pre-filled from the JSON + COA potency. Review each one, then Approve or Dismiss.",
-      "Open Menu Imports: export PRODUCTS and INVENTORIES from the POS, upload both, and review the staged version — approved drafts are listed in that review.",
-      "Publish the staged version when it looks right. The public menu updates and the new product is sellable.",
+      "Open the Publish command center (Admin → Publish Menu): approving with a price staged a menu draft (usually it publishes itself). Review the draft marked Latest.",
+      "Publish the latest draft when it looks right. The public menu updates and the new product is sellable.",
       "Later, Accounts Payable pays the invoice (the accepted manifest) — the linked purchase order is stamped Paid automatically once payments cover what's owed.",
     ],
     doneWhen:
@@ -189,22 +189,22 @@ export const SOP_DOCS: readonly SopDoc[] = [
   {
     slug: "publish",
     stageKey: "publish",
-    title: "SOP — Live Menu (publish)",
-    purpose: "Put the day's menu live from your POS exports — staged first, published on your click.",
-    where: journeyStage("publish").altHref ?? journeyStage("publish").href,
+    title: "SOP — Publish Menu (command center)",
+    purpose: "Review the newest menu draft and put it live — the menu is a snapshot, so always publish the newest draft.",
+    where: journeyStage("publish").href,
     before: [
-      "Fresh PRODUCTS and INVENTORIES exports from your POS (.xlsx or .csv).",
+      "A menu draft — receiving creates one automatically when you approve a product with a price (POS-export uploads live under Menu Imports).",
     ],
     steps: [
-      "In your POS, export your PRODUCTS and INVENTORIES lists as spreadsheet files (.xlsx or .csv).",
-      "Upload both files under Menu Imports — they're staged, so nothing changes on your site yet.",
-      "Open the staged version and review the changes (new items, price changes, removals). Approved onboarding drafts are listed here too.",
-      "Click Publish when it looks right. Your public menu updates with the new items and prices.",
+      "Open the Publish command center. The live-menu card shows what customers see right now; the drafts list marks ONE draft as Latest.",
+      "Open the Latest draft and read the safety verdict: green means nothing gets removed; red or gold means publishing would take products OFF the live menu.",
+      "Work the 'to fix' list — every item says what it means and has a button to the page that fixes it.",
+      "Click Publish when the verdict reads safe. Publishing REPLACES the whole live menu with this draft; older drafts would drop newer products.",
     ],
-    doneWhen: "The staged version is published and the public menu shows the changes.",
+    doneWhen: "The latest draft is published and the public menu shows the changes.",
     ifStuck: [
-      "If an upload fails, re-export the files straight from your POS (don't rename a .csv to .xlsx) and try again.",
-      "Your menu always comes from your point-of-sale system, so prices and stock stay accurate.",
+      "If the verdict warns about removals you didn't intend, don't publish — open the newest draft instead.",
+      "One-time POS-export uploads and import history live under Menu Imports (Settings), unchanged.",
     ],
   },
 
@@ -248,7 +248,27 @@ export const SOP_DOCS: readonly SopDoc[] = [
     ],
   },
 
-  // ── Stage 7 · Pay ────────────────────────────────────────────────────────
+  // ── Stage 7 · Inventory ────────────────────────────────────────────────
+  {
+    slug: "inventory",
+    stageKey: "inventory",
+    title: "SOP — Inventory (live stock)",
+    purpose: "Keep the live, on-hand stock honest — lots, quantities, and compliance identifiers.",
+    where: journeyStage("inventory").href,
+    before: ["Accepted manifests — accepting is what activates lots into inventory."],
+    steps: [
+      "Open Inventory to see every active lot: on-hand counts, lot codes, expiry and COA status.",
+      "Use the filters (status, search) to find a lot; open it for the full detail — vendor, potency, and its manifest lineage.",
+      "Investigate anything odd (negative counts, missing COA) before it becomes a compliance problem.",
+      "Use Cycle Counts for scheduled physical counts and Returns & Destruction for disposals — never edit counts by hand.",
+    ],
+    doneWhen: "On-hand counts match the shelf and every active lot has its paperwork.",
+    ifStuck: [
+      "Counts come from the register and receiving automatically — if a number looks wrong, trace the lot's history instead of forcing it.",
+    ],
+  },
+
+  // ── Stage 8 · Pay ────────────────────────────────────────────────────────
   {
     slug: "pay",
     stageKey: "pay",

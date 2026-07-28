@@ -201,7 +201,8 @@ export default async function InventoryPage({
             ← Back to Product Intake Hub
           </BackLink>
         </div>
-        <CatalogStageStrip current="menu" />
+        {/* SLICE 76: Inventory is its own journey stage now (between Master and Pay). */}
+        <CatalogStageStrip current="inventory" />
 
         {/* Top KPI band */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

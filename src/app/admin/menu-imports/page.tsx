@@ -10,6 +10,7 @@ import { Button } from "@/components/admin/ui";
 import { listImports, listVersions, getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
+import { flagOutdatedDrafts } from "@/lib/pos/publish-guard-core";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
 import { withBackParam } from "@/lib/admin/back-link-core";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
@@ -167,13 +168,21 @@ export default async function MenuImportsPage({
             the safety net: if an automatic publish ever hiccups, the staged menu update lands here so
             you can press Publish yourself.
           </p>
+          <p className="mt-2 text-xs text-white/50">
+            Prefer the new{" "}
+            <Link href="/admin/publish" className="text-[var(--admin-accent)] hover:underline">
+              Publish command center
+            </Link>{" "}
+            &mdash; it marks which draft is the LATEST (each draft is a full menu snapshot; publishing
+            an older one removes newer products).
+          </p>
           {intakeStaged.length === 0 ? (
             <p className="mt-3 text-xs text-white/40">
               Nothing waiting &mdash; every menu update from receiving has published automatically.
             </p>
           ) : (
             <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
-              {intakeStaged.map((v) => {
+              {flagOutdatedDrafts(intakeStaged).map((v) => {
                 const s = (v.summary_json ?? {}) as {
                   added?: number;
                   carried?: number;
@@ -193,6 +202,18 @@ export default async function MenuImportsPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+                      {v.freshness === "latest" ? (
+                        <span className="rounded bg-[var(--admin-accent)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-accent)]">
+                          latest
+                        </span>
+                      ) : (
+                        <span
+                          className="rounded bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-300"
+                          title="Staged before a newer draft — publishing this would remove newer products"
+                        >
+                          outdated
+                        </span>
+                      )}
                       <span className="rounded bg-[var(--admin-orange)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-orange)]">
                         staged
                       </span>

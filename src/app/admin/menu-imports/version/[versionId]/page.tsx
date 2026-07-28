@@ -6,8 +6,15 @@ import { BackLink } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { getVersion, getPublishedVersion, diffVersions, getVersionItems } from "@/lib/pos/menu-version";
+import { buildPublishVerdict, explainDiagnostic, type PublishVerdict } from "@/lib/pos/publish-guard-core";
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
 import { publishVersion } from "../../actions";
+
+const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
+  safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
+  caution: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  danger: "border-red-500/40 bg-red-500/10 text-red-300",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +71,19 @@ export default async function IntakeVersionReviewPage({
   const hiddenTotal = items.filter((i) => i.hidden).length;
   const isPublished = version.status === "published";
 
+  // SLICE 76 — plain-English safety verdict: is publishing this draft safe?
+  const verdict = diff
+    ? buildPublishVerdict({
+        added: diff.added.length,
+        removed: diff.removed.length,
+        priceChanged: diff.priceChanged.length,
+        unchanged: diff.unchangedCount,
+        hasLiveMenu: Boolean(published),
+        stagedCreatedAt: version.created_at,
+        publishedCreatedAt: published?.created_at ?? null,
+      })
+    : null;
+
   return (
     <div>
       <AdminPageHeader
@@ -113,6 +133,14 @@ export default async function IntakeVersionReviewPage({
           />
         </div>
 
+        {/* SLICE 76 — the safety verdict, front and center. */}
+        {verdict && !isPublished && (
+          <div className={`rounded-xl border p-4 text-sm ${VERDICT_STYLE[verdict.level]}`}>
+            <p className="font-semibold">{verdict.headline}</p>
+            <p className="mt-1 opacity-90">{verdict.detail}</p>
+          </div>
+        )}
+
         {/* Diff vs published */}
         {diff && (
           <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
@@ -144,6 +172,20 @@ export default async function IntakeVersionReviewPage({
                 </div>
               </details>
             )}
+            {diff.removed.length > 0 && (
+              <details className="mt-3" open>
+                <summary className="cursor-pointer text-xs font-semibold text-red-400">
+                  Will be REMOVED from the live menu ({diff.removed.length})
+                </summary>
+                <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-red-500/20">
+                  {diff.removed.slice(0, 200).map((d) => (
+                    <div key={d.sourceId} className="border-b border-white/5 px-3 py-1.5 text-xs text-white/70">
+                      {d.name} <span className="text-white/40">&middot; {d.brand} &middot; {d.category}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
             {diff.priceChanged.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-gold)]">
@@ -170,27 +212,64 @@ export default async function IntakeVersionReviewPage({
           </section>
         )}
 
-        {/* Diagnostics from the auto-carry planner */}
+        {/* Diagnostics from the auto-carry planner — SLICE 76: every "to fix"
+            entry explained in plain English with a button to the page that
+            fixes it (explanations from publish-guard-core). */}
         {diagnostics.length > 0 && (
           <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">What happened when we carried these over</h2>
+              <h2 className="text-sm font-semibold text-white">Things to fix (and how)</h2>
               <div className="flex gap-3 text-xs">
                 <span className="text-[var(--admin-gold)]">{warnings.length} to fix</span>
                 <span className="text-white/50">{info.length} info</span>
               </div>
             </div>
-            <div className="mt-3 space-y-1.5">
-              {warnings.slice(0, 100).map((d, i) => (
-                <div
-                  key={`w-${i}`}
-                  className="rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 px-3 py-2 text-xs text-[var(--admin-gold)]"
-                >
-                  {d.message}
-                </div>
-              ))}
+            <p className="mt-1 text-xs text-white/50">
+              None of these block publishing &mdash; they explain why a product was skipped, capped, or
+              kept separate. Fix the cause and the NEXT menu update picks it up automatically.
+            </p>
+            <div className="mt-3 space-y-2">
+              {warnings.slice(0, 100).map((d, i) => {
+                const x = explainDiagnostic(d.code, d.message);
+                return (
+                  <div
+                    key={`w-${i}`}
+                    className="rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 px-3 py-2.5"
+                  >
+                    <p className="text-xs font-semibold text-[var(--admin-gold)]">{x.title}</p>
+                    <p className="mt-1 text-xs text-white/70">{d.message}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <p className="flex-1 text-xs text-white/50">
+                        <strong className="text-white/70">How to fix it:</strong> {x.fix}
+                      </p>
+                      {x.fixHref && x.fixLabel && (
+                        <Button href={x.fixHref} size="sm" variant="neutral">
+                          {x.fixLabel} &rarr;
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               {warnings.length === 0 && (
                 <p className="text-sm text-white/50">No issues &mdash; every approved product carried over cleanly.</p>
+              )}
+              {info.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-white/50">
+                    FYI notes &mdash; no action needed ({info.length})
+                  </summary>
+                  <div className="mt-2 space-y-1.5">
+                    {info.slice(0, 100).map((d, i) => {
+                      const x = explainDiagnostic(d.code, d.message);
+                      return (
+                        <div key={`i-${i}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-white/60">
+                          <span className="font-semibold text-white/70">{x.title}:</span> {d.message}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
               )}
             </div>
           </section>
@@ -236,10 +315,20 @@ export default async function IntakeVersionReviewPage({
           ) : (
             <form action={publishVersion} className="mt-3">
               <input type="hidden" name="versionId" value={version.id} />
+              <input type="hidden" name="from" value="publish-draft" />
               <p className="mb-3 text-xs text-white/50">
-                Publishing replaces the current live menu with this version and refreshes the public
+                Publishing replaces the WHOLE live menu with this draft and refreshes the public
                 site. The previous version is archived (not deleted).
               </p>
+              {verdict?.requiresRemovalConfirm && (
+                <label className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
+                  <input type="checkbox" name="confirm_removals" value="yes" className="mt-0.5" />
+                  <span>
+                    I understand publishing this draft will <strong>REMOVE {verdict.removedCount} product(s)</strong>{" "}
+                    from the live menu (see the &ldquo;Will be REMOVED&rdquo; list above), and that&apos;s what I want.
+                  </span>
+                </label>
+              )}
               <Button type="submit" variant="confirm">
                 Publish this menu live
               </Button>
