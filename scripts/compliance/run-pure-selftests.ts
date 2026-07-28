@@ -201,6 +201,7 @@ import { __runCode128Tests } from "../../src/lib/printing/code128-core";
 import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
 import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
 import { __runPoDocumentCoreTests } from "../../src/lib/purchasing/po-document-core";
+import { __runPoListInsightsCoreTests } from "../../src/lib/purchasing/po-list-insights-core";
 import { __runForecastTests } from "../../src/lib/reports/forecast-core";
 import { __runNewsletterStatsTests } from "../../src/lib/reports/newsletter-stats-core";
 import { __runRangeTests } from "../../src/lib/reports/range";
@@ -419,6 +420,7 @@ async function main() {
   __runPrinterDiagnosticsTests();
   __runPoCoreTests();
   __runPoDocumentCoreTests();
+  __runPoListInsightsCoreTests();
   assertNoFailures("forecast-core", __runForecastTests());
   __runNewsletterStatsTests();
   assertNoFailures("range", __runRangeTests());
