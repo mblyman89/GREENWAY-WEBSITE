@@ -259,6 +259,12 @@ export type HarvestTargetState = {
   pages_leftover?: number;
   /** C4: one-line completeness verdict ("COMPLETE — …" / "BUDGET REACHED — …"). */
   coverage_assessment?: string;
+  /** R1: this target's crawl CONTINUED a previous run's saved frontier. */
+  resumed?: boolean;
+  /** R1: how many crawl runs this site has accumulated. */
+  crawl_runs?: number;
+  /** R1: cumulative pages read across all runs (never re-fetched). */
+  total_pages_all_runs?: number;
   drafts_written: number;
   drafts_skipped: number;
   /** H9b: structured kb_products DRAFT rows staged from the verified lineup. */
@@ -312,6 +318,9 @@ export async function startHarvest(input: {
   delayBetweenTargets?: number;
   label?: string;
   write?: boolean;
+  /** R1: continue each target's saved crawl frontier instead of starting over
+   * (already-read pages are skipped; the budget goes to the leftover queue). */
+  continueCrawl?: boolean;
 }): Promise<HarvestJob> {
   const res = await harvestFetch("/harvest", {
     method: "POST",
@@ -325,6 +334,7 @@ export async function startHarvest(input: {
       write: input.write ?? true,
       max_pages_per_site: input.maxPagesPerSite ?? null,
       delay_between_targets: input.delayBetweenTargets ?? 0,
+      continue_crawl: input.continueCrawl ?? false,
       label: input.label ?? "",
     }),
   });
@@ -357,6 +367,54 @@ export async function cancelHarvestJob(jobId: string): Promise<HarvestJob | null
   if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
   const data = (await res.json()) as { ok: boolean; job: HarvestJob };
   return data.job;
+}
+
+/** R1: the worker's saved crawl-resume state for one (entity, site). */
+export type CrawlResumeState = {
+  found: boolean;
+  /** Pages discovered but NOT yet read — what "Continue crawl" would fetch. */
+  pending: number;
+  /** Pages read across all runs so far (never re-fetched on a continue). */
+  visited: number;
+  /** How many crawl runs the site has accumulated. */
+  runs: number;
+  /** Cumulative pages read. */
+  totalPages: number;
+  /** Unix seconds of the last run (0 when not found). */
+  updatedAt: number;
+};
+
+/** R1: look up whether a site has a saved, continuable crawl frontier.
+ * Read-only and cheap — the button "Continue crawl — N pages left" uses it.
+ * Returns found:false on any worker error (the button just doesn't show). */
+export async function getCrawlResumeState(input: {
+  url: string;
+  entityType: CrawlEntityType;
+  entityId: string;
+}): Promise<CrawlResumeState> {
+  const notFound: CrawlResumeState = { found: false, pending: 0, visited: 0, runs: 0, totalPages: 0, updatedAt: 0 };
+  try {
+    const res = await harvestFetch("/resume-state", {
+      method: "POST",
+      body: JSON.stringify({ url: input.url, entity_type: input.entityType, entity_id: input.entityId }),
+    }, 8_000);
+    if (!res.ok) return notFound;
+    const data = (await res.json()) as {
+      ok: boolean; found: boolean; pending: number; visited: number;
+      runs: number; total_pages: number; updated_at: number;
+    };
+    if (!data.ok || !data.found) return notFound;
+    return {
+      found: true,
+      pending: data.pending ?? 0,
+      visited: data.visited ?? 0,
+      runs: data.runs ?? 0,
+      totalPages: data.total_pages ?? 0,
+      updatedAt: data.updated_at ?? 0,
+    };
+  } catch {
+    return notFound;
+  }
 }
 
 /** Resume an interrupted job (e.g. after a worker restart). */

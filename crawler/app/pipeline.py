@@ -22,6 +22,7 @@ from .css_extract import extract_css
 from .discovery import discover_nav_links, discover_sitemap_urls
 from .frontier import CrawlFrontier, discover_pagination_links
 from .logos import detect_logo_candidates
+from .resume_state import clear_resume_state, load_resume_state, save_resume_state
 from .seeding import seed_site_urls
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
@@ -185,16 +186,31 @@ async def research_target(
     settings: Settings | None = None,
     max_pages: int | None = None,
     force_fresh: bool = False,
+    continue_crawl: bool = False,
 ) -> ResearchResult:
     """Research one target. `max_pages` (when given) overrides the worker-wide
     CRAWL_MAX_PAGES budget for THIS run only — harvest jobs use it to give
     Tier-1 vendors a deeper read and Tier-3 directory passes a shallow one.
 
     C7: `force_fresh=True` bypasses the on-disk page cache for every fetch in
-    this crawl, so a stale age-gate shell can't mask the fix on a re-crawl."""
+    this crawl, so a stale age-gate shell can't mask the fix on a re-crawl.
+
+    R1: `continue_crawl=True` RESUMES a budget-cut crawl instead of starting
+    over: previously read pages are pre-marked visited (never re-fetched, no
+    wasted time or credits) and the saved leftover queue seeds the frontier,
+    so the whole page budget goes to pages no run has read yet. Falls back to
+    a normal fresh crawl when no saved state exists."""
     settings = settings or get_settings()
     is_product = entity_type == "product"
     page_budget = max_pages if (max_pages and max_pages > 0) else settings.crawl_max_pages
+
+    # R1: load the saved frontier state up front (None = fresh crawl).
+    prior = (
+        load_resume_state(entity_type, entity_id, url, settings=settings)
+        if (continue_crawl and not is_product)
+        else None
+    )
+    resumed = prior is not None and prior.resumable
 
     fetched = await fetch_page(url, prefer_browser=True, settings=settings, force_fresh=force_fresh)
     if not fetched.ok:
@@ -231,6 +247,13 @@ async def research_target(
     # Products are a single-page lookup, so deep crawl applies to vendor/brand.
     frontier = CrawlFrontier(base_url=url)
     failed_pages: list[str] = []
+    # R1: a CONTINUED crawl never re-reads what previous runs read — every
+    # previously visited URL is pre-marked (can't be enqueued), and the saved
+    # leftover queue seeds the frontier at a priority bonus so the budget
+    # picks up exactly where the last run stopped.
+    if resumed and prior is not None:
+        frontier.mark_visited(prior.visited)
+        frontier.add(prior.pending, bonus=2)
     # C4: per-page new-content accounting — the completeness signal. The entry
     # page is observed first so sub-page novelty is measured against it.
     saturation = SaturationTracker()
@@ -288,6 +311,23 @@ async def research_target(
     # were still adding new content (saturation). Zero extra fetches.
     coverage: CrawlCoverage | None = None
     if not is_product:
+        # R1: persist the frontier state so the NEXT run can continue where
+        # this one stopped (leftover queue in priority order + all visited).
+        # A fully exhausted site clears its state — nothing left to resume.
+        leftover_urls = frontier.pending_urls()
+        if leftover_urls:
+            saved = save_resume_state(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                entry_url=url,
+                pages_read=pages_read,
+                pending=leftover_urls,
+                previous=prior,
+                settings=settings,
+            )
+        else:
+            clear_resume_state(entity_type, entity_id, url, settings=settings)
+            saved = None
         coverage = build_coverage(
             entry_url=url,
             page_budget=page_budget,
@@ -296,6 +336,12 @@ async def research_target(
             queued_leftover=frontier.pending(),
             frontier_stats=frontier.stats.as_dict(),
             tracker=saturation,
+            resumed=resumed,
+            crawl_runs=saved.runs if saved else ((prior.runs if prior else 0) + 1),
+            total_pages_all_runs=(
+                saved.total_pages if saved
+                else (prior.total_pages if prior else 0) + len(pages_read)
+            ),
         )
 
     result = ResearchResult(

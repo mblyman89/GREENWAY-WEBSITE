@@ -170,6 +170,32 @@ class CrawlFrontier:
     def pending(self) -> int:
         return len(self._heap)
 
+    # ---- Slice R1 (resumable crawls) ---------------------------------------
+    def mark_visited(self, urls: list[str]) -> int:
+        """Pre-mark URLs as already seen (pages read by a PREVIOUS run).
+
+        A marked URL can never be enqueued again — the resume contract that a
+        continued crawl never wastes a fetch on a page it already read.
+        Returns how many keys were newly marked.
+        """
+        marked = 0
+        for raw in urls:
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            key = frontier_key(normalize_crawl_url(raw))
+            if key not in self._seen:
+                self._seen.add(key)
+                marked += 1
+        return marked
+
+    def pending_urls(self) -> list[str]:
+        """Snapshot the queued URLs in priority order WITHOUT consuming them.
+
+        Used to persist the leftover queue when the page budget runs out, so a
+        later continued crawl starts exactly where this one stopped.
+        """
+        return [url for _, _, url in sorted(self._heap)]
+
 
 # ---------------------------------------------------------------------------
 # Pagination discovery: the links that continue a listing

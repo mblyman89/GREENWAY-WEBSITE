@@ -106,6 +106,13 @@ class CrawlCoverage:
     novelty_ratios: list[float] = field(default_factory=list)
     saturation: float | None = None     # avg novelty of the last pages
     saturated: bool = False
+    # R1 (resumable crawls): whether THIS run continued a previous run's saved
+    # frontier, how many runs the site has accumulated, and the cumulative
+    # pages read across all of them — the honest "how far through the site am
+    # I?" answer the owner asked for.
+    resumed: bool = False
+    crawl_runs: int = 1
+    total_pages_all_runs: int = 0
 
     # ---- assessment -----------------------------------------------------------
     @property
@@ -135,8 +142,9 @@ class CrawlCoverage:
             )
         return (
             f"BUDGET REACHED — {self.queued_leftover} discovered page(s) were "
-            f"NOT read. Raise CRAWL_MAX_PAGES (or the harvest per-site "
-            f"override) and re-run to read them."
+            f"NOT read. Press 'Continue crawl' to pick up exactly where this "
+            f"run stopped (already-read pages are never re-fetched), or raise "
+            f"CRAWL_MAX_PAGES / the harvest per-site override."
         )
 
     def as_dict(self) -> dict:
@@ -152,6 +160,9 @@ class CrawlCoverage:
             "saturated": self.saturated,
             "site_exhausted": self.site_exhausted,
             "assessment": self.assessment,
+            "resumed": self.resumed,
+            "crawl_runs": self.crawl_runs,
+            "total_pages_all_runs": self.total_pages_all_runs,
         }
 
     def draft_text(self) -> str:
@@ -162,6 +173,13 @@ class CrawlCoverage:
             f"Assessment: {self.assessment}",
             f"Pages read: {self.pages_crawled} (budget {self.page_budget})",
         ]
+        # R1: continued crawls report their cumulative progress across runs.
+        if self.resumed or self.crawl_runs > 1:
+            lines.append(
+                f"Continued crawl: run #{self.crawl_runs} — "
+                f"{self.total_pages_all_runs} page(s) read across all runs "
+                f"(previously read pages were skipped, not re-fetched)"
+            )
         if f:
             lines.append(
                 f"Links discovered on-site: {f.get('discovered', 0)} unique — "
@@ -190,6 +208,9 @@ def build_coverage(
     queued_leftover: int,
     frontier_stats: dict,
     tracker: SaturationTracker,
+    resumed: bool = False,
+    crawl_runs: int = 1,
+    total_pages_all_runs: int = 0,
 ) -> CrawlCoverage:
     """Assemble the coverage snapshot from the pieces the pipeline tracked."""
     return CrawlCoverage(
@@ -202,4 +223,7 @@ def build_coverage(
         novelty_ratios=list(tracker.ratios),
         saturation=tracker.saturation,
         saturated=tracker.saturated,
+        resumed=resumed,
+        crawl_runs=crawl_runs,
+        total_pages_all_runs=total_pages_all_runs or pages_crawled,
     )
