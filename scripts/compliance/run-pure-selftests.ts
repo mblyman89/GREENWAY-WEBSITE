@@ -85,6 +85,7 @@ import { __runDraftApprovalGateTests } from "../../src/lib/inventory/draft-appro
 import { __runStrainFieldsCoreTests } from "../../src/lib/inventory/strain-fields-core";
 import { __runStrainTypeIntelTests } from "../../src/lib/inventory/strain-type-intel-core";
 import { __runBankingVaultUiTests } from "../../src/lib/payments/banking-vault-ui-core";
+import { __runRelatedProductsCoreTests } from "../../src/lib/menu/related-products-core";
 import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extraction-core";
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
@@ -311,6 +312,7 @@ async function main() {
   __runStrainFieldsCoreTests();
   __runStrainTypeIntelTests();
   __runBankingVaultUiTests();
+  __runRelatedProductsCoreTests();
   __runFactExtractionCoreTests();
   __runFactReviewCoreTests();
   __runImportCommitCoreTests();
