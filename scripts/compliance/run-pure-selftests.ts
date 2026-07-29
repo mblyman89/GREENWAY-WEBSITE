@@ -87,6 +87,7 @@ import { __runStrainTypeIntelTests } from "../../src/lib/inventory/strain-type-i
 import { __runBankingVaultUiTests } from "../../src/lib/payments/banking-vault-ui-core";
 import { __runRelatedProductsCoreTests } from "../../src/lib/menu/related-products-core";
 import { __runDealBadgeCoreTests } from "../../src/lib/promotions/deal-badge-core";
+import { __runWeightDisplayCoreTests } from "../../src/lib/menu/weight-display-core";
 import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extraction-core";
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
@@ -315,6 +316,7 @@ async function main() {
   __runBankingVaultUiTests();
   __runRelatedProductsCoreTests();
   __runDealBadgeCoreTests();
+  __runWeightDisplayCoreTests();
   __runFactExtractionCoreTests();
   __runFactReviewCoreTests();
   __runImportCommitCoreTests();

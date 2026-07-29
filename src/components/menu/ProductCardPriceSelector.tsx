@@ -5,6 +5,7 @@ import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem, GreenwayMenuVariant } from "@/lib/leafly/types";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
 import { collapseVariantsForDisplay } from "@/lib/menu/variant-collapse-core";
+import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 
 type ProductCardPriceSelectorProps = {
   item: GreenwayMenuItem;
@@ -15,18 +16,24 @@ type PriceLineProps = {
   variant: GreenwayMenuVariant;
   itemPriceMinorUnits: number;
   salePriceMinorUnits?: number;
+  /** Website category — drives the SLICE 98 ounce display for topicals/edibles/liquids. */
+  category: string;
 };
 
-function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, salePriceMinorUnits?: number) {
+function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, salePriceMinorUnits: number | undefined, category: string) {
   const priceMinorUnits = variant.priceMinorUnits;
   const saleRatio = typeof salePriceMinorUnits === "number" && salePriceMinorUnits > 0 && salePriceMinorUnits < itemPriceMinorUnits ? salePriceMinorUnits / itemPriceMinorUnits : undefined;
   const variantSalePrice = saleRatio ? Math.round(priceMinorUnits * saleRatio) : undefined;
   const hasSalePrice = typeof variantSalePrice === "number" && variantSalePrice > 0 && variantSalePrice < priceMinorUnits;
+  // SLICE 98 (owner: Michael): topicals/edibles/liquids show OUNCES, not grams.
+  // Display-only — the raw POS label still drives cart identity, deal tiers
+  // and WAC limit math (see weight-display-core header).
+  const shownLabel = displayVariantLabel(variant.label, category);
   return {
     regularPrice: priceMinorUnits,
     displayPrice: hasSalePrice ? variantSalePrice : priceMinorUnits,
     hasSalePrice,
-    unitLabel: variant.label ? `/${variant.label}` : "",
+    unitLabel: shownLabel ? `/${shownLabel}` : "",
   };
 }
 
@@ -46,8 +53,8 @@ function MedChip() {
   );
 }
 
-function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceLineProps) {
-  const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits);
+function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits, category }: PriceLineProps) {
+  const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits, category);
 
   // No active sale: single centered price + unit.
   if (!hasSalePrice) {
@@ -146,7 +153,7 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
                 className={`w-full border-b border-white/10 text-white outline-none transition last:border-b-0 hover:bg-[#21170f] focus-visible:bg-[#21170f] focus-visible:ring-2 focus-visible:ring-[var(--orange)] focus-visible:ring-inset ${selected ? "bg-[#1b120c]" : "bg-transparent"}`}
                 aria-pressed={selected}
               >
-                <PriceLine variant={variant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
+                <PriceLine variant={variant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} category={item.category} />
               </button>
             );
           })}
@@ -164,7 +171,7 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
         {/* SLICE 40: reserve the chevron strip's width so a long sale row
             ($53.35 $37.34 /7g) can never slide underneath the chevron. */}
         <span className={`block w-full ${showDropdown ? "pr-[2.35rem]" : ""}`}>
-          <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
+          <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} category={item.category} />
         </span>
         {showDropdown ? (
           <span className="pointer-events-none absolute inset-y-0 right-0 grid w-[2.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">

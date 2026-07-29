@@ -40,6 +40,9 @@ export async function GET(
       productName: l.product_name,
       brand: l.brand,
       variantLabel: l.variant_label,
+      // SLICE 98: category snapshot (migration 0096; null on legacy rows) so
+      // the confirmation shows ounces for topicals/edibles/liquids.
+      category: l.category ?? null,
       quantity: l.quantity,
       priceMinorUnits: l.price_minor_units,
       regularPriceMinorUnits: l.regular_price_minor_units,

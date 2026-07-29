@@ -13,6 +13,7 @@ import {
 import { snapshotToEngineRule } from "@/lib/promotions/published-rules-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { CartEstimator } from "@/components/cart/CartEstimator";
+import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 
 // ---------------------------------------------------------------------------
 // Cart + runtime inventory store
@@ -508,7 +509,9 @@ function CartLine({ item, onRemove }: { item: PricedCartItem; onRemove: (lineId:
             <p className="text-xs font-black text-zinc-500 line-through">{formatMinorCurrency(item.regularPriceMinorUnits * item.quantity)}</p>
           ) : null}
           <p className="text-lg font-black text-[var(--orange)]">{formatMinorCurrency(effectivePrice * item.quantity)}</p>
-          <p className="text-[0.62rem] font-bold uppercase tracking-[0.08em] text-zinc-500">{item.variantLabel || "each"}</p>
+          {/* SLICE 98: topicals/edibles/liquids show ounces (display only — the
+              stored variantLabel is untouched: it keys the line + limit math). */}
+          <p className="text-[0.62rem] font-bold uppercase tracking-[0.08em] text-zinc-500">{displayVariantLabel(item.variantLabel, item.category) || "each"}</p>
         </div>
       </div>
     </article>
