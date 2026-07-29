@@ -124,12 +124,22 @@ export function validateClassificationChoice(input: {
    * during onboarding. Stays pure: values are passed IN, never fetched here.
    */
   extraCategoryValues?: readonly string[];
+  /**
+   * SLICE 92: owner-created product types (inventory_types DB labels) - the
+   * type-side twin of extraCategoryValues. A type the owner created at
+   * /admin/settings/types (or inline during onboarding) is a legal pick.
+   * Stays pure: labels are passed IN, never fetched here.
+   */
+  extraTypeLabels?: readonly string[];
 }): ClassificationChoiceResult {
   const cat = input.chosenWebsiteCategory?.trim() || null;
   const type = input.chosenHouseType?.trim() || null;
   const allowedCategories = input.extraCategoryValues?.length
     ? new Set<string>([...CATEGORY_VALUES, ...input.extraCategoryValues])
     : CATEGORY_VALUES;
+  const allowedTypes = input.extraTypeLabels?.length
+    ? new Set<string>([...HOUSE_TYPE_LABELS, ...input.extraTypeLabels])
+    : HOUSE_TYPE_LABELS;
 
   if (cat && !allowedCategories.has(cat)) {
     return {
@@ -138,7 +148,7 @@ export function validateClassificationChoice(input: {
       error: `"${cat}" is not one of our website categories. Pick one from the list.`,
     };
   }
-  if (type && !HOUSE_TYPE_LABELS.has(type)) {
+  if (type && !allowedTypes.has(type)) {
     return {
       ok: false,
       code: "type_invalid",
@@ -341,6 +351,26 @@ export function __runDraftApprovalGateTests(): { passed: number } {
       extraCategoryValues: ["owner-special"],
     });
     ok(!r.ok && r.code === "category_invalid", "extras don't open the gate for junk");
+
+    // SLICE 92: owner-created product types widen the closed set when passed in.
+    r = validateClassificationChoice({
+      assessment: none,
+      chosenHouseType: "Moon Sauce",
+      extraTypeLabels: ["Moon Sauce"],
+    });
+    ok(r.ok && r.chosenHouseType === "Moon Sauce", "owner-created type accepted");
+
+    // ...but WITHOUT the extra list the same pick is still refused (closed set).
+    r = validateClassificationChoice({ assessment: none, chosenHouseType: "Moon Sauce" });
+    ok(!r.ok && r.code === "type_invalid", "unknown type still refused without extras");
+
+    // Type extras never smuggle in an unrelated junk value.
+    r = validateClassificationChoice({
+      assessment: none,
+      chosenHouseType: "Junk Type",
+      extraTypeLabels: ["Moon Sauce"],
+    });
+    ok(!r.ok && r.code === "type_invalid", "type extras don't open the gate for junk");
   }
 
   // 7) SLICE 91: always-on picker placeholders tell the truth about "empty".

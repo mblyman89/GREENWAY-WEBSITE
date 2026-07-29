@@ -7,8 +7,11 @@ import { setCatalogDraftStatus, approveDraftWithPrice } from "@/lib/inventory/ca
 // SLICE 78: create a website category during onboarding ("__new__" pick).
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { listWebsiteCategoryTypes } from "@/lib/pos/types-store";
+import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { validateCategoryDraft } from "@/lib/pos/category-registry-core";
+// SLICE 92: create a product TYPE during onboarding ("__new_type__" pick) -
+// same registry (inventory_types) the Types & Categories settings page manages.
+import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
 
 export async function approveDraftAction(draftId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
@@ -24,7 +27,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   // against the closed vocabularies inside approveDraftWithPrice - the form
   // is never trusted.
   let chosenWebsiteCategory = (formData.get("website_category") as string | null)?.trim() || null;
-  const chosenHouseType = (formData.get("house_type") as string | null)?.trim() || null;
+  let chosenHouseType = (formData.get("house_type") as string | null)?.trim() || null;
 
   // SLICE 78: "__new__" = create the category right here, mid-onboarding.
   // Same pure gatekeeper as Settings → Types (label required, slug derivation,
@@ -60,6 +63,82 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       after: { value: parsed.value, label: parsed.label, created_during: "draft_onboarding" },
     });
     chosenWebsiteCategory = parsed.value;
+  }
+
+  // SLICE 92: "__new_type__" = create the product type right here, mid-
+  // onboarding. Same pure gatekeeper the registry demands (name required,
+  // canonical-key derivation, duplicate refusal against catalog + DB), the
+  // same inventory_types table the Types & Categories page manages, the same
+  // audit trail as the settings page's create - then the new label becomes
+  // the pick. It is mapped to the website category this approval resolves to,
+  // so the new type is grouped correctly everywhere from day one.
+  if (chosenHouseType === "__new_type__") {
+    const newLabel = (formData.get("new_type_label") as string | null)?.trim() || "";
+    const existing = await listInventoryTypes({ includeInactive: true });
+    const parsed = validateInventoryTypeDraft({
+      label: newLabel,
+      existingKeys: existing.map((t) => t.key),
+    });
+    if (!parsed.ok) {
+      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(parsed.error)}`);
+    }
+    const admin = createSupabaseAdminClient();
+    // Map the new type to the category this approval files under: the human's
+    // pick when made, otherwise the resolver's verdict for THIS draft (a
+    // "Keep auto" approval submits no category override). Verified, never
+    // guessed - when neither exists the type is created unmapped and can be
+    // mapped later at Settings -> Types & Categories.
+    let mappedCategory = chosenWebsiteCategory;
+    if (!mappedCategory) {
+      const { data: draftRow } = await admin
+        .from("catalog_product_drafts")
+        .select("pos_product_key, name, inventory_type, category")
+        .eq("id", draftId)
+        .maybeSingle();
+      if (draftRow) {
+        const d = draftRow as {
+          pos_product_key: string | null;
+          name: string;
+          inventory_type: string | null;
+          category: string | null;
+        };
+        const { resolveWebsiteCategoryForLot } = await import(
+          "@/lib/inventory/website-category-resolver-server"
+        );
+        const resolution = await resolveWebsiteCategoryForLot({
+          posProductKey: d.pos_product_key,
+          productName: d.name,
+          inventoryType: d.inventory_type,
+          category: d.category,
+        });
+        mappedCategory = resolution.websiteCategory;
+      }
+    }
+    const { error } = await admin.from("inventory_types").insert({
+      key: parsed.key,
+      label: parsed.label,
+      notes: "Created during product onboarding.",
+      website_category: mappedCategory,
+      is_active: true,
+      is_system: false,
+    });
+    if (error) {
+      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(error.message)}`);
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inventory_type.created",
+      entityType: "inventory_type",
+      entityId: parsed.key,
+      after: {
+        key: parsed.key,
+        label: parsed.label,
+        website_category: mappedCategory,
+        created_during: "draft_onboarding",
+      },
+    });
+    chosenHouseType = parsed.label;
   }
   const result = await approveDraftWithPrice(draftId, priceMinor, session.userId, {
     chosenWebsiteCategory,
