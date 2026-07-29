@@ -15,6 +15,8 @@ import { cardTypeLabel } from "@/lib/menu/card-type-core";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
+// SLICE 95: vendor-pure "More from" selection + honest heading scope.
+import { selectRelatedItems, type RelatedScope } from "@/lib/menu/related-products-core";
 import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
@@ -234,17 +236,28 @@ function ChipGroup({ label, chips, accent }: { label: string; chips: string[]; a
   );
 }
 
-async function relatedItemsFor(item: GreenwayMenuItem) {
+async function relatedItemsFor(
+  item: GreenwayMenuItem,
+): Promise<{ items: GreenwayMenuItem[]; scope: RelatedScope }> {
   if (isMerchItem(item)) {
-    return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
+    return {
+      items: merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8),
+      scope: "brand",
+    };
   }
   // SLICE 40: overlay the KB strain profile (same as home + shop) so related
   // cards show the strain type instead of the raw POS value.
+  //
+  // SLICE 95 (owner bug, verified live): the old selector matched RAW brand
+  // equality, so blank-brand items from DIFFERENT vendors grouped together
+  // and leaked into each other's rails (a CERES topical under "More from
+  // 2727"). selectRelatedItems groups by the SAME brand-else-vendor identity
+  // the heading shows, never mixes vendors, ranks by purchasability →
+  // same-category → price proximity (the add-to-cart enticement order), and
+  // reports an honest scope for the heading when it must fall back.
   const allItems = await withMenuProfile(await loadLiveMenuItems());
-  const sameBrand = allItems.filter((candidate) => candidate.brand === item.brand && candidate.id !== item.id);
-  const fallback = allItems.filter((candidate) => candidate.id !== item.id && candidate.category === item.category);
-  const related = sameBrand.length ? sameBrand : fallback;
-  return related.slice(0, 8);
+  const selection = selectRelatedItems(item, allItems, 8);
+  return { items: selection.items, scope: selection.scope };
 }
 
 // The menu is dynamic (published DB version), so product pages render on demand
@@ -292,7 +305,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const knowledge = isMerchItem(item) ? null : await resolveDisplayKnowledge(item);
 
   const tone = toneForItem(item);
-  const relatedItems = await relatedItemsFor(item);
+  const { items: relatedItems, scope: relatedScope } = await relatedItemsFor(item);
   // SLICE 47 (owner Q4): label = brand, else vendor, else nothing; the shown
   // label is clipped from the FRONT of the displayed name (display only —
   // item.name is untouched for search/cart/admin/CCRS). Only a BRAND label
@@ -473,13 +486,18 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <section className="mt-11 pb-2">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[1.15rem] font-black leading-none text-white">More from</p>
-              {/* SLICE 47: heading follows the same brand-else-vendor label; falls
-                  back to the category when neither exists so it never shows a
-                  blank/placeholder brand. */}
-              <h2 className="mt-1 text-[1.6rem] font-black leading-none text-white">{pdpLabel ?? formatWebsiteCategory(item.category)}</h2>
+              <p className="text-[1.15rem] font-black leading-none text-white">
+                {relatedScope === "category" ? "More" : "More from"}
+              </p>
+              {/* SLICE 47: heading follows the same brand-else-vendor label.
+                  SLICE 95: when the rail had to fall back to the CATEGORY
+                  (no brand/vendor siblings), the heading says the category —
+                  it never advertises a brand/vendor the cards don't match. */}
+              <h2 className="mt-1 text-[1.6rem] font-black leading-none text-white">
+                {relatedScope === "category" || !pdpLabel ? formatWebsiteCategory(item.category) : pdpLabel}
+              </h2>
             </div>
-            {pdpLabelSource === "brand" ? (
+            {pdpLabelSource === "brand" && relatedScope === "brand" ? (
               <Link href={brandHref} className="shrink-0 text-[0.72rem] font-black uppercase tracking-[0.2em] text-white hover:text-[var(--greenway)]">
                 View All
               </Link>
@@ -487,7 +505,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {relatedItems.length > 0 ? (
-            <div className="mt-5 -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mt-5 -mx-4 flex snap-x items-stretch gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {relatedItems.map((related) => {
                 // Merch related items render the dedicated MERCH card (price
                 // range, colors, no THC/CBD) — never the cannabis card.
@@ -513,7 +531,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               })}
             </div>
           ) : (
-            <div className="mt-5 border border-white/10 bg-white/5 p-5 text-sm leading-6 text-zinc-300">No additional products from this brand are available in the current preview menu.</div>
+            <div className="mt-5 border border-white/10 bg-white/5 p-5 text-sm leading-6 text-zinc-300">No additional related products are available on the current menu.</div>
           )}
         </section>
       </section>

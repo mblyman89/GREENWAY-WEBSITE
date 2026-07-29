@@ -276,9 +276,16 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   const netWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
   const strain = displayStrain(item);
 
+  // SLICE 95 (owner: uniform card heights): NO h-full on the card. In the
+  // PDP's horizontal flex rail, `height: 100%` resolves against an auto-height
+  // container, so each card kept its OWN content height — the ragged
+  // 552–631px cards Michael saw (measured in-browser). Un-heighted flex/grid
+  // items stretch to the tallest sibling by default (align-items: stretch),
+  // which is exactly the equal-height behavior we want on every surface
+  // (shop grid, home rail, specials grid, PDP rail) — verified both ways.
   return (
     <article
-      className={`group relative flex h-full min-h-[29.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
+      className={`group relative flex min-h-[29.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
       style={cardStyle(tone)}
     >
       <span className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]" style={{ background: tone.glowLeft ?? tone.glow }} aria-hidden="true" />
