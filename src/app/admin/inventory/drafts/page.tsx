@@ -7,7 +7,11 @@ import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Input, Select } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
-import { listCatalogDrafts, countCatalogDrafts } from "@/lib/inventory/catalog-drafts";
+import { listCatalogDrafts, countCatalogDrafts, loadStrainTypeSuggestions } from "@/lib/inventory/catalog-drafts";
+// SLICE 93: strain-type intelligence - the picker's honest placeholder + the
+// canonical dropdown choices (strain-taxonomy, the single source of truth).
+import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-core";
+import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
@@ -110,6 +114,12 @@ export default async function CatalogDraftsPage({
     ownerTypes,
     (value) => labelForCategory(categoryLabelMap, value),
   );
+
+  // SLICE 93: one batched read (kb_strains by slug + inventory_lots by id)
+  // folded into a per-draft strain-type suggestion (kb > manifest > name
+  // parse). >=90% shows as "Keep auto" and submits no override; below the bar
+  // it's an honest hint the approver can confirm or correct.
+  const strainSuggestions = await loadStrainTypeSuggestions(drafts);
 
   const banner =
     approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
@@ -402,6 +412,31 @@ export default async function CatalogDraftsPage({
                                   className="w-48 text-xs"
                                   aria-label="New product type name"
                                 />
+                                {/* SLICE 93: strain type - never required. The
+                                    machine's verdict (strain library > the
+                                    manifest's stated fact > the name parse)
+                                    shows in the empty option; >=90% reads
+                                    "Keep auto" and submits NO override. Only
+                                    an actual selection records a human pick,
+                                    which also gap-fills the strain library so
+                                    it auto-attaches on future lots. */}
+                                <Select
+                                  name="strain_type"
+                                  defaultValue=""
+                                  className="w-48 text-xs"
+                                  aria-label="Strain type"
+                                >
+                                  <option value="">
+                                    {strainTypePickerPlaceholder(strainSuggestions.get(d.id) ?? null)}
+                                  </option>
+                                  {strainTypeDefinitions
+                                    .filter((s) => s.value !== "unknown")
+                                    .map((s) => (
+                                      <option key={s.value} value={s.value}>
+                                        {s.label}
+                                      </option>
+                                    ))}
+                                </Select>
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[var(--admin-text-faint)]">$</span>

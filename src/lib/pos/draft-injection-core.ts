@@ -57,6 +57,12 @@ export type ApprovedDraftForInjection = {
    */
   chosen_website_category?: string | null;
   chosen_house_type?: string | null;
+  /**
+   * SLICE 93: the approver's strain-type pick (migration 0146 column,
+   * canonical strain-taxonomy value). Outranks the KB and the name parse.
+   * Optional so historical callers/tests keep compiling.
+   */
+  chosen_strain_type?: string | null;
 };
 
 /** Per-draft enrichment the SERVER gathers (resolver / kb / lot lookups). */
@@ -408,6 +414,17 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       });
     }
 
+    // SLICE 93: disclose a human strain-type pick, same as category/type.
+    const chosenStrain = d.chosen_strain_type?.trim() || null;
+    if (chosenStrain) {
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_strain_type_human",
+        message: `“${d.name}” strain-typed as “${chosenStrain}” — chosen by the approver.`,
+        context: { draft_id: d.id, pos_product_key: key, strain_type: chosenStrain, source: "human" },
+      });
+    }
+
     const brand = d.brand_name?.trim() || "";
     const priceLabel = [formatMoney(d.price_minor_units), enrich.packageLabel ?? ""]
       .filter(Boolean)
@@ -427,7 +444,11 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       // CCRS/reporting parity. Null when confidence <90% — never guessed.
       pos_inventory_type: d.inventory_type?.trim() || null,
       pos_inventory_category: houseType,
-      strain_type: enrich.strainType?.trim() || "unknown",
+      // SLICE 93: the approver's strain-type pick outranks the curated KB
+      // value; the enrichment (kb_strains, or the SLICE 93 lot/name verdict
+      // the server folded in) fills the rest; "unknown" only when nothing is
+      // known. Never guessed here - the server already validated the pick.
+      strain_type: d.chosen_strain_type?.trim() || enrich.strainType?.trim() || "unknown",
       strain_name: d.strain_name,
       thc: thcPct != null ? formatIntakePotency(thcPct, unit) : null,
       cbd: cbdPct != null ? formatIntakePotency(cbdPct, unit) : null,
@@ -857,6 +878,33 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
       !p.diagnostics.some((d) => d.code === "draft_inject_category_human" || d.code === "draft_inject_house_type_human"),
       "no human diagnostics without picks",
     );
+  }
+
+  // SLICE 93: the approver's strain-type pick outranks the KB enrichment.
+  {
+    const p = plan(
+      [draft({ chosen_strain_type: "sativa-hybrid" })],
+      new Map([["d1", enrich({ strainType: "indica" })]]),
+    );
+    assert(p.items[0].strain_type === "sativa-hybrid", "human strain pick outranks the KB");
+    assert(
+      p.diagnostics.some((d) => d.code === "draft_inject_strain_type_human"),
+      "human strain pick disclosed",
+    );
+  }
+
+  // SLICE 93: no pick -> the enrichment verdict as before; nothing -> unknown.
+  {
+    const p = plan([draft({})], new Map([["d1", enrich({ strainType: "hybrid" })]]));
+    assert(p.items[0].strain_type === "hybrid", "no pick = enrichment verdict");
+    assert(
+      !p.diagnostics.some((d) => d.code === "draft_inject_strain_type_human"),
+      "no strain diagnostic without a pick",
+    );
+  }
+  {
+    const p = plan([draft({})], new Map([["d1", enrich({ strainType: null })]]));
+    assert(p.items[0].strain_type === "unknown", "nothing known = unknown, never guessed");
   }
 
   return { passed };

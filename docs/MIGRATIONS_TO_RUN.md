@@ -522,3 +522,19 @@
   **Until this is run, LeafLink search results still appear in the unified
   search, but fetching a brand's menu fails with a friendly note and no
   LeafLink snapshots appear on the Vendor menus page.**
+
+## SLICE 93 — strain type at draft approval
+
+- [ ] **`supabase/migrations/0146_draft_strain_type_choice.sql`** — adds one
+  nullable `chosen_strain_type` column to `catalog_product_drafts`: the HUMAN
+  strain-type decision made on the Product Onboarding approval card (our
+  canonical strain-taxonomy value, e.g. `indica`, `sativa-hybrid`). The name
+  parser + strain library + manifest fact auto-suggest at ≥90% confidence;
+  this column only records an actual pick by the approver, which then outranks
+  every machine signal at menu injection. Validated server-side against the
+  closed taxonomy before any write, so no CHECK constraint is needed.
+  Idempotent; safe to re-run.
+  **Until this is run, everything else on the onboarding page keeps working —
+  auto-detected strain types still flow to the menu and the strain library —
+  but making a manual strain-type PICK shows a friendly banner naming this
+  migration instead of saving.**
