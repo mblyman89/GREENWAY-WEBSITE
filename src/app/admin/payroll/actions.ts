@@ -43,7 +43,7 @@ export async function createRunAction(formData: FormData): Promise<void> {
  * comma-separated list of the employees on this run.
  *
  * SLICE 80: banking is resolved SERVER-SIDE from the employee's saved direct
- * deposit (the payee vault — Settings → Payee Banking is the ONLY editing
+ * deposit (the payee vault — Admin → Banking is the ONLY editing
  * surface). The form posts no bank fields, and any that arrive are ignored,
  * so nobody can redirect a paycheck from the payroll screen.
  */

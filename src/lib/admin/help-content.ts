@@ -696,7 +696,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Where do I set up the bank details for ACH files?",
-        a: "Banking settings holds your originating bank and company details for ACH files. Set it once — Payroll and Accounts Payable both use it.",
+        a: "The Banking page (Admin → Banking) is the vault: vendor bank details, employee direct deposit, and — on the My banking tab — your originating bank and company details for ACH files. Set it once; Payroll and Accounts Payable both use it.",
         href: "/admin/settings/banking",
       },
     ],

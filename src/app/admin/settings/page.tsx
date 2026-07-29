@@ -130,17 +130,10 @@ export default async function SettingsHomePage() {
       links: [
         {
           href: "/admin/settings/banking",
-          title: "Banking settings",
+          title: "Banking",
           description:
-            "Your bank details for payroll and vendor ACH files — routing, account number, and the NACHA origination IDs your bank assigns.",
+            "The vault: vendor + employee bank details AND your own ACH origination — one tabbed page, owner/admin only. Payments pull from here and can't be tampered with at pay time.",
           icon: "🏦",
-        },
-        {
-          href: "/admin/settings/payees",
-          title: "Payee banking",
-          description:
-            "The vault: bank details for everyone we pay — vendors and employees. Owner/admin only; payments pull from here and can't be tampered with at pay time.",
-          icon: "🔐",
         },
         {
           href: "/admin/reports/accounting",

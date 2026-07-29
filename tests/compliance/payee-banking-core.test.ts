@@ -152,7 +152,7 @@ describe("canPayWithVaultRecord — the payment gate", () => {
   it("refuses when there is no record, pointing at the vault page", () => {
     const v = canPayWithVaultRecord(null, "Fairwinds");
     expect(v.ok).toBe(false);
-    if (!v.ok) expect(v.refusal).toContain("Payee Banking");
+    if (!v.ok) expect(v.refusal).toContain("Banking");
   });
 
   it("refuses an on-hold record with phone-verification instructions", () => {

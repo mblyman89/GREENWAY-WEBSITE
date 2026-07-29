@@ -147,19 +147,19 @@ export function canPayWithVaultRecord(rec: {
   if (!rec) {
     return {
       ok: false,
-      refusal: `${vendorName} has no banking on file. An admin must add it in Settings → Payee Banking before this invoice can be paid.`,
+      refusal: `${vendorName} has no banking on file. An admin must add it in Admin → Banking (the vault) before this invoice can be paid.`,
     };
   }
   if (rec.status === "on_hold") {
     return {
       ok: false,
-      refusal: `${vendorName}'s banking is ON HOLD pending verification. Confirm the details with the vendor by phone (using a number you already have on file), then release the hold in Settings → Payee Banking.`,
+      refusal: `${vendorName}'s banking is ON HOLD pending verification. Confirm the details with the vendor by phone (using a number you already have on file), then release the hold in Admin → Banking.`,
     };
   }
   if (!rec.routing || !rec.accountNumber) {
     return {
       ok: false,
-      refusal: `${vendorName}'s banking record is incomplete. An admin must finish it in Settings → Payee Banking.`,
+      refusal: `${vendorName}'s banking record is incomplete. An admin must finish it in Admin → Banking.`,
     };
   }
   return { ok: true };

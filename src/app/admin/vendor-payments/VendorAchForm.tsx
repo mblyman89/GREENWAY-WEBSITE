@@ -164,7 +164,7 @@ export function VendorAchForm({
                 </div>
                 {/* SLICE 80: vault-aware banking. When the vault (migration
                     0143) is live, banking is pulled server-side from Settings →
-                    Payee Banking — shown masked here, never editable. Pre-0143
+                    the Banking vault — shown masked here, never editable. Pre-0143
                     the legacy manual fields render unchanged. */}
                 {p?.vaultReady ? (
                   <div className="sm:col-span-5">
@@ -185,7 +185,7 @@ export function VendorAchForm({
                         </div>
                       ) : (
                         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]">
-                          No banking on file — an admin must add it in Settings → Payee Banking before this
+                          No banking on file — an admin must add it in Admin → Banking before this
                           invoice can be paid by ACH.
                         </div>
                       )}

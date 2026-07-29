@@ -123,7 +123,7 @@ export function PayrollEntryTable({
                       </span>
                     ) : (
                       <span className="text-[var(--admin-gold)]">
-                        No banking on file — add it in Settings → Payee Banking
+                        No banking on file — add it in Admin → Banking
                       </span>
                     )}
                   </td>

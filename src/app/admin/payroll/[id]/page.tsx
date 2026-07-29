@@ -234,7 +234,7 @@ export default async function PayrollRunPage({
         steps={[
           "Run payroll in Sage as you normally do and print/open each employee's paystub.",
           "Type each employee's net pay (required) here. Gross, taxes and deductions are optional but let the row self-check against net pay.",
-          "Bank details come from Settings → Payee Banking (owner/admin only) — they show read-only here and can't be changed at pay time.",
+          "Bank details come from Admin → Banking (the vault, owner/admin only) — they show read-only here and can't be changed at pay time.",
           "Click Save entries, confirm the totals match Sage, then Generate ACH file.",
           "Download the .ach file and upload it to Timberland Bank's Jack Henry portal for direct deposit.",
         ]}
