@@ -31,12 +31,20 @@ import {
 } from "@/lib/purchasing/growflow-media-core";
 import { kbIdentityForItem } from "@/lib/purchasing/growflow-kb-link-core";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
+import type { DescriptionSaveOutcome } from "@/lib/purchasing/save-assets-core";
 
 export type SaveGrowflowItemMediaResult = {
   ok: boolean;
   kind: MediaSaveKind;
   assetId: string | null;
   deduped: boolean;
+  /**
+   * SLICE 90 — what happened to the description during the KB bind (saved /
+   * kept_existing / none_provided / blocked_noncompliant / kb_unavailable),
+   * or null when no KB bind was attempted (COA saves, already-linked reuse,
+   * failed image saves) — the message then says nothing about descriptions.
+   */
+  descriptionOutcome: DescriptionSaveOutcome | null;
   error: string | null;
 };
 
@@ -53,11 +61,11 @@ export async function saveGrowflowItemMedia(
 ): Promise<SaveGrowflowItemMediaResult> {
   const url = kind === "image" ? item.image_url : item.coa_url;
   if (!url) {
-    return { ok: false, kind, assetId: null, deduped: false, error: "No URL on this item." };
+    return { ok: false, kind, assetId: null, deduped: false, descriptionOutcome: null, error: "No URL on this item." };
   }
   const alreadyLinked = kind === "image" ? item.media_asset_id : item.coa_media_asset_id;
   if (alreadyLinked) {
-    return { ok: true, kind, assetId: alreadyLinked, deduped: true, error: null };
+    return { ok: true, kind, assetId: alreadyLinked, deduped: true, descriptionOutcome: null, error: null };
   }
 
   try {
@@ -94,7 +102,10 @@ export async function saveGrowflowItemMedia(
     // sets primary_media_id / description when the KB row hasn't already got one
     // (a human's manual choice always wins), and never auto-publishes (drafts
     // only). A failure here must not fail the media save, so it's swallowed.
+    // SLICE 90 — the description save used to be silent; surface its outcome.
+    let descriptionOutcome: DescriptionSaveOutcome | null = null;
     if (kind === "image") {
+      descriptionOutcome = "kb_unavailable";
       try {
         const identity = kbIdentityForItem(item);
         // Pass the RAW name/brand + our normalized variant: writeBackProductFacts
@@ -102,7 +113,7 @@ export async function saveGrowflowItemMedia(
         // uses, so both agree on (brand_slug, product_slug, variant_label). The
         // fallback sentinels ("unknown-brand"/"product") also match, so a nameless
         // row still upserts onto the identity our recordUsage key points at.
-        await writeBackProductFacts(
+        const wb = await writeBackProductFacts(
           {
             posProductKey: identity.posProductKey,
             // Raw name so writeback's slugifyDashed(...) || "product" reproduces
@@ -119,22 +130,24 @@ export async function saveGrowflowItemMedia(
           },
           uploadedBy,
         );
+        descriptionOutcome = wb.descriptionOutcome;
         await recordUsage(asset.id, "kb_product", identity.posProductKey, "primary_image");
       } catch {
         /* best-effort: KB association is non-fatal to the media save */
       }
     }
 
-    return { ok: true, kind, assetId: asset.id, deduped, error: null };
+    return { ok: true, kind, assetId: asset.id, deduped, descriptionOutcome, error: null };
   } catch (err) {
     if (err instanceof HarvestImageError) {
-      return { ok: false, kind, assetId: null, deduped: false, error: err.message };
+      return { ok: false, kind, assetId: null, deduped: false, descriptionOutcome: null, error: err.message };
     }
     return {
       ok: false,
       kind,
       assetId: null,
       deduped: false,
+      descriptionOutcome: null,
       error: err instanceof Error ? err.message : "Unexpected error saving media.",
     };
   }

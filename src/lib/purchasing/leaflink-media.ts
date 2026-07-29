@@ -36,6 +36,7 @@ import { leaflinkKbIdentityForItem } from "@/lib/purchasing/leaflink-kb-link-cor
 import { leaflinkCategoryDescription } from "@/lib/purchasing/leaflink-menu-core";
 import { resolveMenuDescription } from "@/lib/purchasing/menu-description-core";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
+import type { DescriptionSaveOutcome } from "@/lib/purchasing/save-assets-core";
 
 export type SaveLeaflinkItemMediaResult = {
   ok: boolean;
@@ -44,6 +45,13 @@ export type SaveLeaflinkItemMediaResult = {
   deduped: boolean;
   /** SLICE 85 — true when the KB description saved was the category stand-in. */
   descriptionWasFallback: boolean;
+  /**
+   * SLICE 90 — what happened to the description during the KB bind (saved /
+   * kept_existing / none_provided / blocked_noncompliant / kb_unavailable),
+   * or null when no KB bind was attempted (COA saves, already-linked reuse,
+   * failed image saves) — the message then says nothing about descriptions.
+   */
+  descriptionOutcome: DescriptionSaveOutcome | null;
   error: string | null;
 };
 
@@ -60,11 +68,11 @@ export async function saveLeaflinkItemMedia(
 ): Promise<SaveLeaflinkItemMediaResult> {
   const url = kind === "image" ? item.image_url : item.coa_url;
   if (!url) {
-    return { ok: false, kind, assetId: null, deduped: false, descriptionWasFallback: false, error: "No URL on this item." };
+    return { ok: false, kind, assetId: null, deduped: false, descriptionWasFallback: false, descriptionOutcome: null, error: "No URL on this item." };
   }
   const alreadyLinked = kind === "image" ? item.media_asset_id : item.coa_media_asset_id;
   if (alreadyLinked) {
-    return { ok: true, kind, assetId: alreadyLinked, deduped: true, descriptionWasFallback: false, error: null };
+    return { ok: true, kind, assetId: alreadyLinked, deduped: true, descriptionWasFallback: false, descriptionOutcome: null, error: null };
   }
 
   try {
@@ -102,7 +110,10 @@ export async function saveLeaflinkItemMedia(
     // got one (a human's manual choice always wins), and never auto-publishes
     // (drafts only). A failure here must not fail the media save.
     let descriptionWasFallback = false;
+    // SLICE 90 — the description save used to be silent; surface its outcome.
+    let descriptionOutcome: DescriptionSaveOutcome | null = null;
     if (kind === "image") {
+      descriptionOutcome = "kb_unavailable";
       try {
         const identity = leaflinkKbIdentityForItem(item);
         // SLICE 85 — the product's OWN description first; when it has none,
@@ -113,7 +124,7 @@ export async function saveLeaflinkItemMedia(
           leaflinkCategoryDescription(item.raw),
         );
         descriptionWasFallback = resolvedDescription.isFallback;
-        await writeBackProductFacts(
+        const wb = await writeBackProductFacts(
           {
             posProductKey: identity.posProductKey,
             // Raw name so writeback's slugifyDashed(...) || "product" reproduces
@@ -130,16 +141,17 @@ export async function saveLeaflinkItemMedia(
           },
           uploadedBy,
         );
+        descriptionOutcome = wb.descriptionOutcome;
         await recordUsage(asset.id, "kb_product", identity.posProductKey, "primary_image");
       } catch {
         /* best-effort: KB association is non-fatal to the media save */
       }
     }
 
-    return { ok: true, kind, assetId: asset.id, deduped, descriptionWasFallback, error: null };
+    return { ok: true, kind, assetId: asset.id, deduped, descriptionWasFallback, descriptionOutcome, error: null };
   } catch (err) {
     if (err instanceof HarvestImageError) {
-      return { ok: false, kind, assetId: null, deduped: false, descriptionWasFallback: false, error: err.message };
+      return { ok: false, kind, assetId: null, deduped: false, descriptionWasFallback: false, descriptionOutcome: null, error: err.message };
     }
     return {
       ok: false,
@@ -147,6 +159,7 @@ export async function saveLeaflinkItemMedia(
       assetId: null,
       deduped: false,
       descriptionWasFallback: false,
+      descriptionOutcome: null,
       error: err instanceof Error ? err.message : "Unexpected error saving media.",
     };
   }

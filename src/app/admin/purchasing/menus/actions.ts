@@ -42,6 +42,10 @@ import {
 import { saveLeaflinkItemMedia } from "@/lib/purchasing/leaflink-media";
 import { unifiedVendorSearch } from "@/lib/purchasing/unified-search";
 import {
+  descriptionOutcomeSentence,
+  strainDescriptionsSentence,
+} from "@/lib/purchasing/save-assets-core";
+import {
   buildMemoryUpsert,
   type UnifiedVendorHit,
   type VendorPlatform,
@@ -482,7 +486,14 @@ export async function saveCultiveraItemToKbAction(formData: FormData): Promise<S
     action: "cultivera.kb.image_saved",
     entityType: "cultivera_menu_item",
     entityId: itemId,
-    after: { assetId: res.assetId, deduped: res.deduped, boundToKb: res.boundToKb, snapshotId },
+    after: {
+      assetId: res.assetId,
+      deduped: res.deduped,
+      boundToKb: res.boundToKb,
+      // SLICE 90 — the description save is no longer silent: audit it too.
+      descriptionOutcome: res.descriptionOutcome,
+      snapshotId,
+    },
   });
 
   revalidatePath(`${BASE}/${snapshotId}`);
@@ -494,7 +505,9 @@ export async function saveCultiveraItemToKbAction(formData: FormData): Promise<S
   const kbPart = res.boundToKb
     ? " and attached to the product in the Knowledge Base."
     : " — but the Knowledge Base link could not be written (it stays available on the media library).";
-  return { ok: true, message: `${savedPart}${kbPart}` };
+  // SLICE 90 — report what happened to the vendor's description too.
+  const descPart = res.boundToKb ? descriptionOutcomeSentence(res.descriptionOutcome, false) : "";
+  return { ok: true, message: `${savedPart}${kbPart}${descPart}` };
 }
 
 /* ------------------------------------------------------------------
@@ -566,6 +579,9 @@ export async function saveCultiveraDetailStrainsToKbAction(
       boundToKb: res.boundToKb,
       fallbacks: res.fallbacks,
       descriptionFallbacks: res.descriptionFallbacks,
+      // SLICE 90 — the description saves are no longer silent: audit them too.
+      descriptionsSaved: res.descriptionsSaved,
+      descriptionsKept: res.descriptionsKept,
       failed: res.failed,
     },
   });
@@ -581,13 +597,19 @@ export async function saveCultiveraDetailStrainsToKbAction(
   const fbPart = res.fallbacks > 0
     ? ` ${res.fallbacks} strain${res.fallbacks === 1 ? "" : "s"} used the product-card image (no own photo yet).`
     : "";
+  // SLICE 90 — descriptions are saved alongside the images; say so out loud.
+  const descPart = strainDescriptionsSentence({
+    saved: res.descriptionsSaved,
+    kept: res.descriptionsKept,
+    fallbacks: res.descriptionFallbacks,
+  });
   const failPart = res.failed > 0
     ? ` ${res.failed} could not be saved — you can try again to fill the gaps.`
     : "";
   const lead = parts.length ? parts.join(", ") : `${res.strains} strain${res.strains === 1 ? "" : "s"} processed`;
   return {
     ok: res.ok,
-    message: `${lead}${kbPart}. Covered ${res.strains} distinct strain${res.strains === 1 ? "" : "s"}.${fbPart}${failPart}`,
+    message: `${lead}${kbPart}. Covered ${res.strains} distinct strain${res.strains === 1 ? "" : "s"}.${descPart}${fbPart}${failPart}`,
   };
 }
 
@@ -767,7 +789,14 @@ export async function saveGrowflowItemMediaAction(formData: FormData): Promise<S
     action: "growflow.media.saved",
     entityType: "growflow_menu_item",
     entityId: itemId,
-    after: { kind, assetId: res.assetId, deduped: res.deduped, snapshotId },
+    after: {
+      kind,
+      assetId: res.assetId,
+      deduped: res.deduped,
+      // SLICE 90 — the description save is no longer silent: audit it too.
+      descriptionOutcome: res.descriptionOutcome,
+      snapshotId,
+    },
   });
 
   revalidatePath(`${BASE}/growflow/${snapshotId}`);
@@ -775,7 +804,11 @@ export async function saveGrowflowItemMediaAction(formData: FormData): Promise<S
     ok: true,
     message: res.deduped
       ? `Already in the library — reused the existing ${kind === "coa" ? "COA" : "image"}.`
-      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).`,
+      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).${
+          // SLICE 90 — image saves also bind the vendor's description to the
+          // Knowledge Base; report what happened to it (COA saves say nothing).
+          descriptionOutcomeSentence(res.descriptionOutcome, false)
+        }`,
   };
 }
 
@@ -990,6 +1023,8 @@ export async function saveLeaflinkItemMediaAction(formData: FormData): Promise<S
       deduped: res.deduped,
       // SLICE 85 — flags saves whose KB description was the category stand-in.
       descriptionWasFallback: res.descriptionWasFallback,
+      // SLICE 90 — the description save is no longer silent: audit it too.
+      descriptionOutcome: res.descriptionOutcome,
       snapshotId,
     },
   });
@@ -999,7 +1034,11 @@ export async function saveLeaflinkItemMediaAction(formData: FormData): Promise<S
     ok: true,
     message: res.deduped
       ? `Already in the library — reused the existing ${kind === "coa" ? "COA" : "image"}.`
-      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).`,
+      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).${
+          // SLICE 90 — image saves also bind the vendor's description to the
+          // Knowledge Base; report what happened to it (COA saves say nothing).
+          descriptionOutcomeSentence(res.descriptionOutcome, res.descriptionWasFallback)
+        }`,
   };
 }
 

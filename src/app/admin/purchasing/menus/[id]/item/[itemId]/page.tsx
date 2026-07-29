@@ -49,7 +49,7 @@ export default async function CultiveraItemDetailPage({
   const variants = detail?.variants ?? [];
   // CV-7b: distinct strains on THIS detail page that have a saveable image
   // (own photo, else the product-card image as a flagged fallback). This is the
-  // exact set the "Save all strain images to KB" button will save.
+  // exact set the "Save all assets to KB" button will save.
   const lineDescription = detail?.description ?? item.description;
   const saveableStrains = strainImagesToSave(variants, {
     brand: item.brand ?? null,
