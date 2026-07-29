@@ -63,6 +63,10 @@ export const REFERENCE_FIELDS: ReadonlySet<string> = new Set([
   // ("COMPLETE" / "BUDGET REACHED — raise CRAWL_MAX_PAGES"). Pure arithmetic
   // about our own crawl; reference-only, never a profile value.
   "research_coverage",
+  // SLICE 88: best written paragraph from each crawled page with its source
+  // URL — "save any text it finds for me". Staff copy/edit into a profile
+  // field on the vendor page; the blob itself never writes a column.
+  "research_text",
 ]);
 
 /**

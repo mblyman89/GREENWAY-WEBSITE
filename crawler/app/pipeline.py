@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .compliance import check_compliance
+from .prose import build_research_text, field_fit_flags
 from .config import Settings, get_settings
 from .coverage import CrawlCoverage, SaturationTracker, build_coverage
 from .css_extract import extract_css
@@ -116,7 +117,12 @@ def _evaluate_field(
         return FieldOutcome(field_key, value, confidence, via, accepted=False,
                             reason="compliance: " + "; ".join(comp.blocking_flags), flags=comp.flags)
 
-    return FieldOutcome(field_key, value, confidence, via, accepted=True, flags=comp.flags)
+    # SLICE 88: advisory "does this text fit its destination field?" check —
+    # deterministic pattern rules (boilerplate, link farms, price lists, no
+    # sentences). Flags only; never blocks, never invents. Staff decide.
+    fit = field_fit_flags(field_key, value)
+    return FieldOutcome(field_key, value, confidence, via, accepted=True,
+                        flags=comp.flags + fit)
 
 
 def _merge_css_values(css_values: dict[str, str], page_css, *, is_product: bool) -> None:
@@ -223,6 +229,9 @@ async def research_target(
     pages_read: list[str] = [url]
     # Per-page text corpus: verification ground truth + LLM grounding.
     corpus_parts: list[str] = [fetched.markdown or ""]
+    # SLICE 88: per-page (url, markdown) kept aligned so the research_text
+    # reference draft can credit each quoted paragraph to its source page.
+    page_texts: list[tuple[str, str]] = [(url, fetched.markdown or "")]
     image_pairs: list[tuple[str, str]] = list(css.images)
     image_candidates: list[str] = list(css.image_urls) + list(fetched.image_urls)
     # C1: image ↔ adjacent-text pairing — the description printed NEXT TO or
@@ -297,6 +306,7 @@ async def research_target(
             saturation.observe_page(sub.markdown or "", sub.image_urls)
             if sub.markdown:
                 corpus_parts.append(sub.markdown)
+            page_texts.append((extra_url, sub.markdown or ""))
             # THE C2 FIX: this sub-page's own links join the crawl, so the
             # whole reachable site is walked, not just the entry page's links.
             frontier.add(discover_nav_links(sub.html, extra_url, limit=60))
@@ -445,6 +455,27 @@ async def research_target(
             reason="",
             flags=comp.flags,
         ))
+
+    # ---- Best prose per page as ONE reviewable draft (SLICE 88) ---------------
+    # INTERNAL REFERENCE DATA (like research_products): "the ability and option
+    # to save any text it finds for me" — each crawled page's most substantial
+    # human-prose paragraph, credited to its source URL, so staff can copy the
+    # good writing into a profile field and edit it there before accepting.
+    # Reference-only (never writes a field), so compliance findings are
+    # attached as flags for the reviewer rather than suppressing the draft.
+    if not is_product:
+        research_text = build_research_text(page_texts)
+        if research_text:
+            comp_text = check_compliance(research_text, banned)
+            result.fields.append(FieldOutcome(
+                field_key="research_text",
+                value=research_text,
+                confidence=0.9,          # literal page text, no synthesis
+                via="css",
+                accepted=True,
+                reason="",
+                flags=comp_text.flags,
+            ))
 
     # ---- Logo candidates as ONE reviewable draft (Slice H3) -------------------
     # The four predictable spots (JSON-LD Organization.logo, header/nav <img>

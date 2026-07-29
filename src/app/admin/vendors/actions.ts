@@ -18,6 +18,7 @@ import { getVendorById, getBrandById } from "@/lib/vendors/store";
 import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
+import { resolveEditedValue } from "@/lib/ai/edited-value";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
 import { researchSocial, startHarvest, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
@@ -336,8 +337,20 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
   }
 
+  // SLICE 88: the reviewer may have edited the draft right on the page — the
+  // edited text (when provided and different) is what gets gated AND saved.
+  const resolved = resolveEditedValue(suggestion!.suggested_value, formData.get("editedValue"));
+  if (resolved.error) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(resolved.error) + "#ai-drafts");
+  }
+
   // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
-  const gate = await acceptWithComplianceGate(suggestion!);
+  // Runs on the FINAL text (the edit, when there is one), so an edit can fix
+  // a blocked draft and can never sneak past the gate.
+  const gate = await acceptWithComplianceGate({
+    field_key: suggestion!.field_key,
+    suggested_value: resolved.value,
+  });
   if (!gate.ok) {
     await recordAudit({
       actorId: session.userId,
@@ -345,7 +358,7 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
       action: "vendor.ai_accept_blocked",
       entityType: "vendor",
       entityId: vendorId,
-      after: { field: suggestion!.field_key, ...gate.audit },
+      after: { field: suggestion!.field_key, edited: resolved.edited, ...gate.audit },
     });
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(gate.message) + "#ai-drafts");
   }
@@ -353,18 +366,18 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from("vendors")
-    .update({ [suggestion!.field_key]: suggestion!.suggested_value, updated_by: session.userId })
+    .update({ [suggestion!.field_key]: resolved.value, updated_by: session.userId })
     .eq("id", vendorId);
   if (error) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(error.message));
 
-  await reviewSuggestion(suggestionId, "accepted", session.userId);
+  await reviewSuggestion(suggestionId, resolved.edited ? "edited" : "accepted", session.userId);
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "vendor.ai_accepted",
     entityType: "vendor",
     entityId: vendorId,
-    after: { field: suggestion!.field_key, ...gate.audit },
+    after: { field: suggestion!.field_key, edited: resolved.edited, ...gate.audit },
   });
 
   revalidatePath(`/admin/vendors/${vendorId}`);
@@ -561,8 +574,18 @@ export async function acceptBrandSuggestionAction(formData: FormData): Promise<v
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
   }
 
+  // SLICE 88: reviewer's on-page edit (when present) is what gets gated + saved.
+  const resolved = resolveEditedValue(suggestion!.suggested_value, formData.get("editedValue"));
+  if (resolved.error) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(resolved.error) + `#brand-${brandId}`);
+  }
+
   // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
-  const gate = await acceptWithComplianceGate(suggestion!);
+  // Runs on the FINAL text so an edit can fix a blocked draft but never skip the gate.
+  const gate = await acceptWithComplianceGate({
+    field_key: suggestion!.field_key,
+    suggested_value: resolved.value,
+  });
   if (!gate.ok) {
     await recordAudit({
       actorId: session.userId,
@@ -570,7 +593,7 @@ export async function acceptBrandSuggestionAction(formData: FormData): Promise<v
       action: "brand.ai_accept_blocked",
       entityType: "brand",
       entityId: brandId,
-      after: { field: suggestion!.field_key, ...gate.audit },
+      after: { field: suggestion!.field_key, edited: resolved.edited, ...gate.audit },
     });
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(gate.message) + `#brand-${brandId}`);
   }
@@ -578,18 +601,18 @@ export async function acceptBrandSuggestionAction(formData: FormData): Promise<v
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from("brands")
-    .update({ [suggestion!.field_key]: suggestion!.suggested_value, updated_by: session.userId })
+    .update({ [suggestion!.field_key]: resolved.value, updated_by: session.userId })
     .eq("id", brandId);
   if (error) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(error.message));
 
-  await reviewSuggestion(suggestionId, "accepted", session.userId);
+  await reviewSuggestion(suggestionId, resolved.edited ? "edited" : "accepted", session.userId);
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "brand.ai_accepted",
     entityType: "brand",
     entityId: brandId,
-    after: { field: suggestion!.field_key, ...gate.audit },
+    after: { field: suggestion!.field_key, edited: resolved.edited, ...gate.audit },
   });
 
   revalidatePath(`/admin/vendors/${vendorId}`);

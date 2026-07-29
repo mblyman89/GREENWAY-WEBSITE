@@ -54,11 +54,17 @@ const FIELD_LABELS: Record<string, string> = {
   research_logos: "Logo candidates found on their site (pick one)",
   research_discovery: "Candidate websites found by search (review before crawling)",
   research_coverage: "Crawl coverage report — did we get everything? (reference)",
+  research_text: "Text found on their site — best paragraph per page (reference)",
 };
 
 /** Crawler research drafts that are reference-only: staff read/copy from them,
  * they can never be accepted into a profile field. */
-const REFERENCE_FIELDS = new Set(["research_products", "research_images", "research_logos", "research_discovery", "research_coverage"]);
+const REFERENCE_FIELDS = new Set(["research_products", "research_images", "research_logos", "research_discovery", "research_coverage", "research_text"]);
+
+/** SLICE 88: profile-field drafts staff can EDIT on the page before accepting.
+ *  Matches the accept actions' allowlists — research_social saves structured
+ *  handles (not prose) and image/reference drafts never write a field. */
+const EDITABLE_FIELDS = new Set(["mission_statement", "about", "product_philosophy"]);
 
 /** Crawler drafts that get the visual picker (Slice H3): thumbnails with
  * one-click Save / Set-as-logo instead of a wall of URLs. */
@@ -321,6 +327,7 @@ export default async function VendorEditPage({
                       hiddenFields={{ suggestionId: s.id, vendorId: vendor.id }}
                       acceptLabel={s.field_key === "research_social" ? "✓ Save handles to profile" : undefined}
                       referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
+                      editable={EDITABLE_FIELDS.has(s.field_key)}
                       footer={
                         IMAGE_FIELDS.has(s.field_key) ? (
                           <HarvestImagePicker
@@ -500,6 +507,7 @@ export default async function VendorEditPage({
                             hiddenFields={{ suggestionId: s.id, brandId: b.id, vendorId: vendor.id }}
                             acceptLabel={s.field_key === "research_social" ? "✓ Save handles to profile" : "✓ Accept"}
                             referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
+                            editable={EDITABLE_FIELDS.has(s.field_key)}
                             footer={
                               IMAGE_FIELDS.has(s.field_key) ? (
                                 <HarvestImagePicker
