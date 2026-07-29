@@ -55,6 +55,8 @@ export function EmailIntakeTable({
   rows,
   linksByManifestId,
   docsByManifestId,
+  view = "action",
+  processedCount = 0,
 }: {
   rows: InboundManifest[];
   /** manifest id → download links pulled from the email fetch trail. */
@@ -65,23 +67,62 @@ export function EmailIntakeTable({
    * which expire within hours.
    */
   docsByManifestId?: Map<string, ArchivedDocLink[]>;
+  /**
+   * SLICE 101 — the owner's filter: "action" (default) hides accepted +
+   * partially accepted rows; "all" shows everything, open rows first. The
+   * page applies the filter (applyIntakeView); this only renders the toggle.
+   */
+  view?: "action" | "all";
+  /** How many processed rows the "action" view hides (for the toggle label). */
+  processedCount?: number;
 }) {
   return (
     <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)]">
-      <div className="border-b border-[var(--admin-border)] px-4 py-3">
-        <h2 className="text-sm font-bold text-[var(--admin-text)]">
-          Incoming <span className="text-[var(--admin-accent)]">(email)</span>
-        </h2>
-        <p className="text-xs text-[var(--admin-text-muted)]">
-          Every real manifest, newest first — the badge moves as it does (🟡 in transit → 🔵 received →
-          🟢 accepted) and turns red past its ETA. Open a row to review and accept. Drafts only —
-          nothing activates until you accept it.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--admin-border)] px-4 py-3">
+        <div>
+          <h2 className="text-sm font-bold text-[var(--admin-text)]">
+            Incoming <span className="text-[var(--admin-accent)]">(email)</span>
+          </h2>
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            Every real manifest, newest first — the badge moves as it does (🟡 in transit → 🔵 received →
+            🟢 accepted) and turns red past its ETA. Open a row to review and accept. Drafts only —
+            nothing activates until you accept it.
+          </p>
+        </div>
+        {/* SLICE 101 — the filter toggle. Plain links (server component): the
+            page re-renders with the chosen view; needs-attention is default. */}
+        <div className="flex shrink-0 items-center gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-0.5 text-xs">
+          <Link
+            href="/admin/inventory/intake"
+            className={`rounded px-2.5 py-1 font-semibold transition ${
+              view === "action"
+                ? "bg-[var(--admin-accent)] text-black"
+                : "text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+            title="Hide manifests already accepted or partially accepted — only rows that still need attention."
+          >
+            Needs attention
+          </Link>
+          <Link
+            href="/admin/inventory/intake?view=all"
+            className={`rounded px-2.5 py-1 font-semibold transition ${
+              view === "all"
+                ? "bg-[var(--admin-accent)] text-black"
+                : "text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+            title="Show every manifest — open rows first, then accepted / partially accepted."
+          >
+            All{processedCount > 0 ? ` (+${processedCount} processed)` : ""}
+          </Link>
+        </div>
       </div>
       {rows.length === 0 ? (
         <div className="px-4 py-6 text-sm text-[var(--admin-text-faint)]">
-          No manifests yet. When a vendor emails a transfer to the intake mailbox it will appear
-          here automatically — or use the manual tools below.
+          {view === "action" && processedCount > 0
+            ? `Nothing needs attention — ${processedCount} processed manifest${
+                processedCount === 1 ? " is" : "s are"
+              } hidden. Switch to "All" to see them.`
+            : "No manifests yet. When a vendor emails a transfer to the intake mailbox it will appear here automatically — or use the manual tools below."}
         </div>
       ) : (
         <div className="overflow-x-auto">

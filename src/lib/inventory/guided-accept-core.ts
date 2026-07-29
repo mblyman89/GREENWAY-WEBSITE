@@ -168,7 +168,7 @@ export const CONCIERGE_HINTS = {
   decision: "Accept = it physically arrived correct. Reject = refuse at the dock; it leaves with the driver and never enters your inventory.",
   departed: "When the load left the vendor, from the transfer document (a draft — verify during review).",
   transporter: "Carrier that moved the load (WAC 314-55-085 chain-of-custody).",
-  finalize: "Activates every accepted lot (quarantine → active) and files the intake record. Undecided lines count as accepted.",
+  finalize: "Activates every accepted lot (quarantine → active) and files the intake record. Undecided lines count as accepted. If any line is refused or held (a partial acceptance), the why-partial note is required for the audit trail.",
 } as const;
 
 export type ConciergeHintKey = keyof typeof CONCIERGE_HINTS;

@@ -591,9 +591,13 @@ export async function promoteManifestChunkToKbAction(
   return outcomes;
 }
 
-export async function finalizeManifestAction(manifestId: string) {
+export async function finalizeManifestAction(manifestId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
-  const result = await finalizeManifestDispositions(manifestId, session.userId);
+  // SLICE 101 — the owner's rule: a PARTIAL finalize must carry a why-partial
+  // note (audit trail). The store validates BEFORE touching any lot; a missing
+  // note on a partial redirects back with a specific, fixable error.
+  const partialNote = (formData?.get("partial_note") as string | null) ?? null;
+  const result = await finalizeManifestDispositions(manifestId, session.userId, { partialNote });
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
   revalidatePath("/admin/inventory/intake");
   revalidatePath("/admin/inventory");
@@ -606,6 +610,11 @@ export async function finalizeManifestAction(manifestId: string) {
       redirect(
         `/admin/inventory/intake/${manifestId}?error=sample_cap&capmsg=${encodeURIComponent(result.error)}`,
       );
+    }
+    // SLICE 101 — missing why-partial note: a specific, fixable banner (the
+    // reviewer types the note and finalizes again; nothing was touched).
+    if (/note explaining why is required/i.test(result.error)) {
+      redirect(`/admin/inventory/intake/${manifestId}?error=partial_note`);
     }
     redirect(`/admin/inventory/intake/${manifestId}?error=finalize`);
   }
