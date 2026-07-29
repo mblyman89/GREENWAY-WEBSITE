@@ -930,6 +930,15 @@ export async function finalizeManifestDispositions(
   // quarantine exactly once, so auto-receiving only THESE ids keeps the linked
   // PO's received quantities idempotent across re-finalizes.
   const activatedLotIds: string[] = [];
+  const rejectedLotIds: string[] = [];
+  // SLICE 103 — the old loop awaited TWO round-trips PER LOT (update +
+  // adjustment insert), so a 28-line manifest paid ~56 sequential database
+  // trips before the follow-up chores even started (the owner: "the finalize
+  // button takes a few minutes to process"). This pass only CLASSIFIES; the
+  // identical-payload writes are batched below (one .in() update for the
+  // activations, ONE bulk adjustments insert, one .in() update for the
+  // rejections). Blocked lots keep per-lot updates because each carries its
+  // own gate-reason note — and a blocked lot is the rare case.
   for (const lot of rows) {
     const decided = lot.disposition === "rejected_at_dock" ? "rejected_at_dock" : "accepted";
     if (decided === "accepted") {
@@ -955,30 +964,42 @@ export async function finalizeManifestDispositions(
       }
       // Only activate CLEAN lots that are still in quarantine (idempotent).
       if (lot.status === "quarantine" || lot.status === "pending") {
-        await admin
-          .from("inventory_lots")
-          .update({ status: "active", disposition: "accepted", updated_by: actorId })
-          .eq("id", lot.id);
-        await admin.from("inventory_adjustments").insert({
-          lot_id: lot.id,
-          qty_delta: lot.received_qty,
-          reason: "receive",
-          note: "Accepted from vendor manifest intake (partial-accept flow).",
-          actor_id: actorId,
-        });
         activatedLotIds.push(lot.id);
       }
       activated += 1;
     } else {
       // Refused at dock: never received. Mark rejected; never destroy.
       if (lot.status !== "active" && lot.status !== "sold_out") {
-        await admin
-          .from("inventory_lots")
-          .update({ status: "rejected", dispositioned_at: nowIso, updated_by: actorId })
-          .eq("id", lot.id);
+        rejectedLotIds.push(lot.id);
       }
       rejected += 1;
     }
+  }
+
+  // SLICE 103 — batched writes: the payloads are identical per group, so one
+  // .in() statement replaces N sequential .eq() statements, and the receive
+  // adjustments land as a SINGLE bulk insert (per-lot qty preserved).
+  if (activatedLotIds.length > 0) {
+    const qtyByLot = new Map(rows.map((r) => [r.id, r.received_qty]));
+    await admin
+      .from("inventory_lots")
+      .update({ status: "active", disposition: "accepted", updated_by: actorId })
+      .in("id", activatedLotIds);
+    await admin.from("inventory_adjustments").insert(
+      activatedLotIds.map((lotId) => ({
+        lot_id: lotId,
+        qty_delta: qtyByLot.get(lotId) ?? 0,
+        reason: "receive",
+        note: "Accepted from vendor manifest intake (partial-accept flow).",
+        actor_id: actorId,
+      })),
+    );
+  }
+  if (rejectedLotIds.length > 0) {
+    await admin
+      .from("inventory_lots")
+      .update({ status: "rejected", dispositioned_at: nowIso, updated_by: actorId })
+      .in("id", rejectedLotIds);
   }
 
   // derivedStatus reflects what actually happened. If lots were accepted but
@@ -1028,8 +1049,27 @@ export async function finalizeManifestDispositions(
   // lots as "drafts created" even while every insert silently failed.
   let draftsCreated = 0;
   if (activated > 0) {
-    try {
-      const match = await seedDraftsForManifest(manifestId, actorId);
+    // SLICE 103 — these six follow-up chores are independent of each other
+    // (they only depend on the lot activations above, which are already
+    // committed): drafts, COA archive (network!), KB write-back, usual
+    // transport, sample ledger, PO auto-receive. The old code awaited them
+    // one after another, so the finalize's wall-clock time was the SUM of
+    // all six — with the COA downloads alone able to take 20s per
+    // certificate. Now they run CONCURRENTLY (Promise.allSettled): the
+    // finalize takes as long as the slowest chore instead of all of them
+    // stacked, and every chore keeps its own best-effort error isolation —
+    // one failing never touches the others, exactly like before.
+    const [draftsRes, coasRes, kbRes, transportRes, samplesRes, poRes] =
+      await Promise.allSettled([
+        seedDraftsForManifest(manifestId, actorId),
+        archiveCoasForManifest(manifestId),
+        promoteManifestToKb(manifestId, actorId),
+        rememberVendorUsualTransport(manifestId, actorId),
+        seedIncomingSampleEvents(manifestId, actorId),
+        autoReceiveManifestPo(manifestId, activatedLotIds),
+      ]);
+    if (draftsRes.status === "fulfilled") {
+      const match = draftsRes.value;
       draftsCreated = match.draftsCreated;
       if (match.draftsFailed > 0) {
         await logManifestEvent(
@@ -1041,50 +1081,32 @@ export async function finalizeManifestDispositions(
           actorId,
         );
       }
-    } catch (err) {
-      console.error("[intake-store] seedDraftsForManifest failed:", err);
+    } else {
+      console.error("[intake-store] seedDraftsForManifest failed:", draftsRes.reason);
     }
-    try {
-      await archiveCoasForManifest(manifestId);
-    } catch (err) {
-      console.error("[intake-store] archiveCoasForManifest failed:", err);
+    if (coasRes.status === "rejected") {
+      console.error("[intake-store] archiveCoasForManifest failed:", coasRes.reason);
     }
-    // Slice H11a: promote the accepted manifest's ground-truth product facts
-    // (name/strain/category/vendor + COA-backed potency) into the KB as
-    // DRAFTS via the existing non-destructive merge. Best-effort — a KB write
-    // hiccup must never break intake finalization.
-    try {
-      await promoteManifestToKb(manifestId, actorId);
-    } catch (err) {
-      console.error("[intake-store] promoteManifestToKb failed:", err);
+    // Slice H11a: KB write-back (name/strain/category/vendor + COA potency)
+    // as DRAFTS via the non-destructive merge. Best-effort.
+    if (kbRes.status === "rejected") {
+      console.error("[intake-store] promoteManifestToKb failed:", kbRes.reason);
     }
-    // Slice H15e: remember this vendor's carrier/driver/vehicle as their
-    // "usual transport" so the next delivery pre-suggests it. Best-effort.
-    try {
-      await rememberVendorUsualTransport(manifestId, actorId);
-    } catch (err) {
-      console.error("[intake-store] rememberVendorUsualTransport failed:", err);
+    // Slice H15e: remember this vendor's usual carrier/driver/vehicle.
+    if (transportRes.status === "rejected") {
+      console.error("[intake-store] rememberVendorUsualTransport failed:", transportRes.reason);
     }
-    // H16b Samples Slice A: for every ACCEPTED sample line, seed an INCOMING
-    // trade_sample_events row so the WAC 314-55-096 sample ledger reflects what
-    // actually arrived. Idempotent (keyed on lot_id) + best-effort.
-    try {
-      await seedIncomingSampleEvents(manifestId, actorId);
-    } catch (err) {
-      console.error("[intake-store] seedIncomingSampleEvents failed:", err);
+    // H16b Samples Slice A: incoming trade-sample ledger (WAC 314-55-096).
+    if (samplesRes.status === "rejected") {
+      console.error("[intake-store] seedIncomingSampleEvents failed:", samplesRes.reason);
     }
-    // W6: if this manifest is LINKED to a purchase order (W5 / migration 0102),
-    // auto-receive the lots that just activated against the PO's lines and log
-    // the ordered-vs-delivered picture on the timeline. Idempotent (only THIS
-    // run's activated lot ids are passed), no-op pre-0102, best-effort — a PO
-    // hiccup must never break intake finalization.
-    try {
-      const autoRx = await autoReceiveManifestPo(manifestId, activatedLotIds);
-      if (autoRx.attempted) {
-        await logManifestEvent(manifestId, "po_auto_receive", autoRx.note, actorId);
+    // W6: PO auto-receive for THIS run's activated lots (idempotent).
+    if (poRes.status === "fulfilled") {
+      if (poRes.value.attempted) {
+        await logManifestEvent(manifestId, "po_auto_receive", poRes.value.note, actorId);
       }
-    } catch (err) {
-      console.error("[intake-store] autoReceiveManifestPo failed:", err);
+    } else {
+      console.error("[intake-store] autoReceiveManifestPo failed:", poRes.reason);
     }
     // Intake auto-carry + auto-publish (owner-approved Option 1): if this
     // manifest's products have already been APPROVED (priced) as onboarding

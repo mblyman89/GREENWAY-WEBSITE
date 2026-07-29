@@ -25,6 +25,37 @@
 /** Hard ceiling — pending feedback may never outlive this (stuck-UI guard). */
 export const PENDING_SAFETY_TIMEOUT_MS = 20_000;
 
+/**
+ * SLICE 103 — separate, much longer ceiling for FORM saves. The owner: "the
+ * finalize button takes a few minutes… give us a better progress bar, the one
+ * we have now gives up well before it finalizes." A server-action save (like
+ * finalizing a big manifest) legitimately outlives the 20s navigation
+ * ceiling, and when the bar vanished mid-save the owner couldn't tell whether
+ * the click died or was still working. Form pending now survives up to 5
+ * minutes; the real clear signals (URL changed / button replaced /
+ * self-managed) still end it the moment the action actually lands, so the
+ * ceiling only matters when something is genuinely wrong.
+ */
+export const PENDING_FORM_SAFETY_TIMEOUT_MS = 300_000;
+
+/** After this long, the bar adds an honest "Still working…" hint (forms). */
+export const PENDING_STILL_WORKING_MS = 10_000;
+
+/** What kind of pending is running — forms get the long ceiling. */
+export type PendingKind = "form" | "nav";
+
+/**
+ * The honest status line under the top bar for a long-running FORM save.
+ * Returns null while the save is young (no noise for quick saves) and for
+ * link navigations (they never legitimately run long). PURE.
+ */
+export function pendingHint(kind: PendingKind, elapsedMs: number): string | null {
+  if (kind !== "form") return null;
+  if (elapsedMs < PENDING_STILL_WORKING_MS) return null;
+  const secs = Math.floor(elapsedMs / 1000);
+  return `Still working — ${secs}s. Big saves (like finalizing a manifest) can take a while; leave this page open.`;
+}
+
 /** How often the keeper re-checks whether the pending state should clear. */
 export const PENDING_POLL_MS = 250;
 
@@ -59,6 +90,12 @@ export type ClearCheck = {
   submitterDisabled: boolean;
   /** ms since the click/submit. */
   elapsedMs: number;
+  /**
+   * SLICE 103 — what started the pending. FORM saves (server actions like
+   * finalizing a manifest) get the 5-minute ceiling; link navigations keep
+   * the tight 20s one. Optional so older callers/tests default to "nav".
+   */
+  kind?: PendingKind;
 };
 
 export type ClearDecision =
@@ -70,7 +107,10 @@ export function shouldClearPending(c: ClearCheck): ClearDecision {
   if (c.hrefNow !== c.hrefAtStart) return { clear: true, reason: "navigated" };
   if (!c.submitterConnected) return { clear: true, reason: "replaced" };
   if (c.submitterDisabled) return { clear: true, reason: "self-managed" };
-  if (c.elapsedMs >= PENDING_SAFETY_TIMEOUT_MS) return { clear: true, reason: "timeout" };
+  // SLICE 103 — forms outlive navigations: the finalize save takes minutes.
+  const ceiling =
+    c.kind === "form" ? PENDING_FORM_SAFETY_TIMEOUT_MS : PENDING_SAFETY_TIMEOUT_MS;
+  if (c.elapsedMs >= ceiling) return { clear: true, reason: "timeout" };
   return { clear: false, reason: "" };
 }
 
