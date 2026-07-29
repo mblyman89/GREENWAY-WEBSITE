@@ -27,12 +27,16 @@ import {
   PENDING_POLL_MS,
   isEligibleNavClick,
   isServerActionForm,
+  pendingHint,
   shouldClearPending,
+  type PendingKind,
 } from "@/lib/admin/pending-core";
 
 type PendingRecord = {
   hrefAtStart: string;
   startedAt: number;
+  /** SLICE 103 — "form" saves get the 5-minute ceiling + Still-working hint. */
+  kind: PendingKind;
   /** Pressed submit button (null for link navigations). */
   submitter: HTMLElement | null;
   /** Form guarded against double submits (null for link navigations). */
@@ -42,6 +46,8 @@ type PendingRecord = {
 export function PendingKeeper() {
   const pathname = usePathname();
   const [barVisible, setBarVisible] = useState(false);
+  // SLICE 103 — honest "Still working — Ns" line for long form saves.
+  const [hint, setHint] = useState<string | null>(null);
   const recordRef = useRef<PendingRecord | null>(null);
 
   const clearPending = useCallback(() => {
@@ -52,6 +58,7 @@ export function PendingKeeper() {
     if (rec.form) delete rec.form.dataset.gwBusy;
     recordRef.current = null;
     setBarVisible(false);
+    setHint(null);
   }, []);
 
   const startPending = useCallback(
@@ -87,6 +94,7 @@ export function PendingKeeper() {
       startPending({
         hrefAtStart: window.location.href,
         startedAt: Date.now(),
+        kind: "form",
         submitter: submitter instanceof HTMLElement ? submitter : null,
         form,
       });
@@ -114,6 +122,7 @@ export function PendingKeeper() {
       startPending({
         hrefAtStart: window.location.href,
         startedAt: Date.now(),
+        kind: "nav",
         submitter: null,
         form: null,
       });
@@ -128,6 +137,7 @@ export function PendingKeeper() {
     const timer = window.setInterval(() => {
       const rec = recordRef.current;
       if (!rec) return;
+      const elapsedMs = Date.now() - rec.startedAt;
       const decision = shouldClearPending({
         hrefAtStart: rec.hrefAtStart,
         hrefNow: window.location.href,
@@ -136,9 +146,16 @@ export function PendingKeeper() {
         // render their own spinner — the keeper steps aside for them.
         submitterDisabled:
           rec.submitter instanceof HTMLButtonElement ? rec.submitter.disabled : false,
-        elapsedMs: Date.now() - rec.startedAt,
+        elapsedMs,
+        kind: rec.kind,
       });
-      if (decision.clear) clearPending();
+      if (decision.clear) {
+        clearPending();
+        return;
+      }
+      // SLICE 103 — after 10s a form save gets an honest status line so the
+      // owner knows the finalize is still running, not dead.
+      setHint(pendingHint(rec.kind, elapsedMs));
     }, PENDING_POLL_MS);
     return () => window.clearInterval(timer);
   }, [barVisible, clearPending]);
@@ -149,8 +166,15 @@ export function PendingKeeper() {
   }, [pathname, clearPending]);
 
   return barVisible ? (
-    <div className="gw-pending-bar" role="progressbar" aria-label="Working…">
-      <div className="gw-pending-bar-fill" />
-    </div>
+    <>
+      <div className="gw-pending-bar" role="progressbar" aria-label="Working…">
+        <div className="gw-pending-bar-fill" />
+      </div>
+      {hint ? (
+        <div className="gw-pending-hint" role="status" aria-live="polite">
+          {hint}
+        </div>
+      ) : null}
+    </>
   ) : null;
 }
