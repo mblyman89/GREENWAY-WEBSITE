@@ -21,6 +21,8 @@ import {
 } from "@/lib/inventory/draft-approval-gate-core";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
+// SLICE 92: owner-created product types (inventory_types) are legal picks too.
+import { listInventoryTypes } from "@/lib/pos/types-store";
 import {
   getPricingSettings,
   getVelocityForProduct,
@@ -417,12 +419,18 @@ export async function approveDraftWithPrice(
   });
   // SLICE 78: owner-created categories (DB registry) are legal picks too —
   // the closed set becomes hardcoded taxonomy ∪ active registry values.
-  const registryLabels = await loadCategoryLabelMap();
+  // SLICE 92: same for owner-created product types (inventory_types labels —
+  // includes rows created inline during onboarding moments earlier).
+  const [registryLabels, ownerTypes] = await Promise.all([
+    loadCategoryLabelMap(),
+    listInventoryTypes({ includeInactive: false }),
+  ]);
   const choice = validateClassificationChoice({
     assessment,
     chosenWebsiteCategory: classification?.chosenWebsiteCategory ?? null,
     chosenHouseType: classification?.chosenHouseType ?? null,
     extraCategoryValues: Object.keys(registryLabels),
+    extraTypeLabels: ownerTypes.map((t) => t.label),
   });
   if (!choice.ok) {
     return { ok: false, error: choice.error };

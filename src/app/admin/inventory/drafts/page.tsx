@@ -24,6 +24,11 @@ import {
 // registry falls back to the hardcoded list on an empty/unconfigured DB.
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { groupCatalogByCategory } from "@/lib/pos/inventory-type-catalog";
+// SLICE 92: owner-created product types join the picker (and new ones can be
+// created inline) - same inventory_types registry as Settings -> Types.
+import { listInventoryTypes } from "@/lib/pos/types-store";
+import { mergeOwnerTypesIntoGroups } from "@/lib/pos/type-registry-core";
+import { labelForCategory } from "@/lib/pos/category-registry-core";
 import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
 
 export const dynamic = "force-dynamic";
@@ -60,10 +65,11 @@ export default async function CatalogDraftsPage({
     );
   }
 
-  const [drafts, counts, categoryLabelMap] = await Promise.all([
+  const [drafts, counts, categoryLabelMap, ownerTypes] = await Promise.all([
     listCatalogDrafts(view),
     countCatalogDrafts(),
     loadCategoryLabelMap(),
+    listInventoryTypes({ includeInactive: false }),
   ]);
   // SLICE 78: [value, label] pairs for the "Pick a category" select — the
   // owner's live registry, sorted by the same order the settings page uses.
@@ -94,7 +100,16 @@ export default async function CatalogDraftsPage({
     );
   });
 
-  const typeGroups = groupCatalogByCategory();
+  // SLICE 92: the type picker = hardcoded catalog ∪ the owner's registry
+  // (listInventoryTypes returns DB rows + catalog fillers; the merge skips
+  // catalog built-ins so each type appears exactly once). Owner-created types
+  // group under their mapped website category, unmapped ones under "Other
+  // types" - a type created yesterday (or one row ago) is a one-click pick.
+  const typeGroups = mergeOwnerTypesIntoGroups(
+    groupCatalogByCategory(),
+    ownerTypes,
+    (value) => labelForCategory(categoryLabelMap, value),
+  );
 
   const banner =
     approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
@@ -375,7 +390,18 @@ export default async function CatalogDraftsPage({
                                       ))}
                                     </optgroup>
                                   ))}
+                                  {/* SLICE 92: create a product type without
+                                      leaving onboarding — name it in the box
+                                      below. It saves to the same registry the
+                                      Types & Categories page manages. */}
+                                  <option value="__new_type__">➕ Create a new product type…</option>
                                 </Select>
+                                <Input
+                                  name="new_type_label"
+                                  placeholder="New type name (only if creating one)"
+                                  className="w-48 text-xs"
+                                  aria-label="New product type name"
+                                />
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[var(--admin-text-faint)]">$</span>
