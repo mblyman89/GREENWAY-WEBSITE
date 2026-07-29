@@ -48,9 +48,11 @@ export async function saveBankingSettingsAction(formData: FormData): Promise<voi
   }).catch(() => {});
 
   revalidatePath(ROOT);
+  // SLICE 94: the Banking page is now the tabbed vault door — the company ACH
+  // settings live on the "My banking" tab, so saves land back on that tab.
   redirect(
     res.ok
-      ? `${ROOT}?msg=${encodeURIComponent("Banking settings saved.")}`
-      : `${ROOT}?error=${encodeURIComponent(res.error)}`,
+      ? `${ROOT}?tab=company&msg=${encodeURIComponent("Banking settings saved.")}`
+      : `${ROOT}?tab=company&error=${encodeURIComponent(res.error)}`,
   );
 }

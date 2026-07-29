@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
+// SLICE 94: banking-vault badge — owner/admin only, masked tail, links to the vault.
+import { can } from "@/lib/auth/roles";
+import { getVendorBankDetails } from "@/lib/payments/payee-banking-store";
+import { vendorBankingBadge } from "@/lib/payments/banking-vault-ui-core";
+import { Badge } from "@/components/admin/ui";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, StickyActionBar } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
@@ -85,7 +90,10 @@ export default async function VendorEditPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; saved?: string; note?: string; from?: string }>;
 }) {
-  await requirePermission("vendors.manage");
+  const session = await requirePermission("vendors.manage");
+  // SLICE 94: only owner/admin (settings.manage) may see the banking badge —
+  // managers who edit vendors never learn whether/where a vendor gets paid.
+  const canSeeVault = can(session.profile.role, "settings.manage");
   const { id } = await params;
   const sp = await searchParams;
   // Task E: the list page encodes its active filter/sort/page state into a
@@ -106,6 +114,21 @@ export default async function VendorEditPage({
     // SLICE 77: recent inventory lots from this vendor for the cross-link panel.
     listLotsForVendor(id, 8),
   ]);
+
+  // SLICE 94: vault lookup for the badge. Only fetched when the viewer holds
+  // settings.manage (owner/admin) — managers never trigger a banking read.
+  const vendorVault = canSeeVault
+    ? await getVendorBankDetails(id)
+    : { tableReady: false, record: null as null };
+  const vaultBadge = canSeeVault
+    ? vendorBankingBadge({
+        hasRecord: Boolean(vendorVault.record),
+        status: vendorVault.record?.status ?? null,
+        verifiedAt: vendorVault.record?.verified_at ?? null,
+        accountNumber: vendorVault.record?.account_number ?? null,
+        bankName: vendorVault.record?.bank_name ?? null,
+      })
+    : null;
 
   const brandLogos = new Map<string, string | null>();
   for (const b of brands) brandLogos.set(b.id, await logoUrlForMediaId(b.logo_media_id));
@@ -634,6 +657,24 @@ export default async function VendorEditPage({
 
           {/* RIGHT: completeness + live preview */}
           <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+            {/* SLICE 94: banking-vault badge — visible to owner/admin only.
+                Masked tail only; full numbers never reach this page. Editing
+                happens in the vault (Admin → Banking), never here. */}
+            {vaultBadge && (
+              <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-white">Banking (vault)</h2>
+                  <Badge tone={vaultBadge.tone}>{vaultBadge.label}</Badge>
+                </div>
+                <p className="text-xs text-white/50">{vaultBadge.detail}</p>
+                <Link
+                  href={`/admin/settings/banking?tab=vendors${vendorVault.record ? `&edit=${vendor.id}` : ""}`}
+                  className="mt-2 inline-block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+                >
+                  {vendorVault.record ? "Open in the vault →" : "Add banking in the vault →"}
+                </Link>
+              </section>
+            )}
             <CompletenessMeter result={completeness} />
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">Public card preview</p>

@@ -2,6 +2,9 @@
 
 /**
  * SLICE 80 — Payee banking vault actions (settings.manage = owner + admin ONLY).
+ * SLICE 94 — the vault moved to /admin/settings/banking (the "Banking" page in
+ * the Admin menu is now the vault door: Vendors | Employees | My banking).
+ * Same actions, same audits, new home; old /admin/settings/payees links redirect.
  *
  * Every action that touches a bank record writes an audit entry with MASKED
  * tails only (payee-banking-core.maskedBankSnapshot) — full routing/account
@@ -30,7 +33,7 @@ import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
 import { saveEmployeeBanking } from "@/lib/payroll/payroll-store";
 import { listVendors } from "@/lib/vendors/store";
 
-const ROOT = "/admin/settings/payees";
+const ROOT = "/admin/settings/banking";
 
 function back(tab: "vendors" | "employees", qs: { msg?: string; error?: string }): never {
   const p = new URLSearchParams({ tab });

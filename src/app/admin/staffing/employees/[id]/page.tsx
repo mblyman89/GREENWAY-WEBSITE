@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
+// SLICE 94: banking-vault badge — owner/admin only, masked tail, links to the vault.
+import { can } from "@/lib/auth/roles";
+import { listEmployeeBanking } from "@/lib/staffing/store";
+import { employeeBankingBadge } from "@/lib/payments/banking-vault-ui-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState, StickyActionBar } from "@/components/admin/ux";
@@ -51,7 +55,10 @@ export default async function EmployeeFilePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; ok?: string; back?: string }>;
 }) {
-  await requirePermission("staffing.manage");
+  const session = await requirePermission("staffing.manage");
+  // SLICE 94: only owner/admin (settings.manage) may see the banking badge —
+  // managers who run staffing never learn whether/where an employee is paid.
+  const canSeeVault = can(session.profile.role, "settings.manage");
   const { id } = await params;
   const sp = await searchParams;
 
@@ -78,6 +85,20 @@ export default async function EmployeeFilePage({
   const docByKey = new Map(file.documents.map((d) => [d.doc_key, d]));
   const deadlines = employee.hire_date ? complianceDeadlines(employee.hire_date) : [];
   const todayYmd = new Date().toISOString().slice(0, 10);
+
+  // SLICE 94: vault lookup for the badge. listEmployeeBanking() is the ONLY
+  // employee banking read path (decrypts server-side); we keep just the masked
+  // badge — full numbers never reach the rendered page.
+  const banking = canSeeVault
+    ? (await listEmployeeBanking()).find((b) => b.employee_id === id) ?? null
+    : null;
+  const bankBadge = canSeeVault
+    ? employeeBankingBadge({
+        routing: banking?.bank_routing ?? null,
+        accountNumber: banking?.bank_account_number ?? null,
+        accountType: banking?.bank_account_type ?? null,
+      })
+    : null;
 
   const phases: OnboardingPhase[] = ["hiring", "paperwork", "compliance", "ready"];
 
@@ -197,6 +218,28 @@ export default async function EmployeeFilePage({
             </p>
           )}
         </div>
+
+        {/* SLICE 94: direct-deposit badge — visible to owner/admin only.
+            Masked tail only; editing happens in the vault (Admin → Banking). */}
+        {bankBadge && (
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-white">Direct deposit (vault)</h2>
+                <Badge tone={bankBadge.tone}>{bankBadge.label}</Badge>
+              </div>
+              <Link
+                href="/admin/settings/banking?tab=employees"
+                className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                {banking && (banking.bank_routing || banking.bank_account_number)
+                  ? "Open in the vault →"
+                  : "Add banking in the vault →"}
+              </Link>
+            </div>
+            <p className="mt-2 text-xs text-white/50">{bankBadge.detail}</p>
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left 2/3: checklist + documents + training */}
