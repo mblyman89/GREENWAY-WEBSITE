@@ -34,6 +34,7 @@ import {
   importHarvestImageAction,
 } from "../actions";
 import { HarvestImagePicker, parseImageLines } from "@/components/admin/ai/HarvestImagePicker";
+import { VendorCrawlStatusChip } from "@/components/admin/kb/VendorCrawlStatusChip";
 import { isCrawlerConfigured, crawlerHealth, getCrawlResumeState } from "@/lib/ai/crawler-client";
 
 export const dynamic = "force-dynamic";
@@ -192,6 +193,15 @@ export default async function VendorEditPage({
                   you click <em>Accept</em>. The AI writes a tasteful starting point from the name — always read and edit
                   it before publishing.
                 </p>
+                {/* SLICE 89: live status of the newest crawl that targets THIS
+                    vendor — pulses while running, lights up green when the
+                    drafts are ready. State lives on the crawler worker, so it
+                    survives leaving and returning to this page. */}
+                {crawlerOn && (
+                  <div className="mt-2">
+                    <VendorCrawlStatusChip vendorId={vendor.id} />
+                  </div>
+                )}
               </div>
 
               {isAiConfigured ? (
