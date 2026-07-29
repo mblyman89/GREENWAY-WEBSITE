@@ -223,6 +223,19 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "plain",
     defaultValue: "Let's Work Together",
   },
+  // SLICE 99: the outreach paragraph is now editable too, so the whole
+  // vendor-relations pitch can be tuned from the back office.
+  {
+    block_key: "vendors.outreach.body",
+    page: "vendors",
+    section: "outreach",
+    label: "Vendor outreach — paragraph",
+    help_text:
+      "The paragraph under the outreach heading inviting producers and processors to reach out.",
+    field_type: "plain",
+    defaultValue:
+      "Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington, proudly serving the Kitsap Peninsula. We're always looking to connect with licensed I-502 producers and processors who make exceptional product. If you'd like to send samples, schedule a vendor day, or explore getting your line on our shelves, reach out — our buying team would love to hear from you.",
+  },
   // ---- Specials ------------------------------------------------------------
   {
     block_key: "specials.hero.eyebrow",
