@@ -10,8 +10,10 @@
  *    We already STORE both numbers — transfer_id lands in manifest_number and
  *    the full JSON (incl. external_id) is retained in raw_payload — so this
  *    reads the invoice/order # back out of the stored payload with NO new
- *    migration. For the OpenTHC combined invoice-manifest PDF the invoice #
- *    IS the manifest # (same document), so the column falls back to it.
+ *    migration. SLICE 100 (owner rule): TEXT payloads (flattened PDF text)
+ *    get a key-term scan — "Invoice #", "Order #", "Invoice No", "PO #" and
+ *    friends "in its many forms" — and when NO invoice/order # exists in any
+ *    form the column ALWAYS falls back to the manifest number.
  *
  *  - movingBadge: the status badge that "changes as it moves"
  *    (🟡 In transit → 🔵 Received → 🟢 Accepted, 🟠 partial, ⚪ rejected,
@@ -35,10 +37,62 @@ function asTrimmedString(v: unknown): string | null {
 }
 
 /**
+ * SLICE 100 — key-term scan over FLATTENED DOCUMENT TEXT (PDF payloads, email
+ * bodies). The owner's rule: "look for key terms in the invoice — invoice
+ * number, order number, etc. in its many forms". Every pattern is grounded in
+ * a REAL document the owner's vendors actually send (never invented):
+ *
+ *   1. OpenTHC combined invoice-manifest: "Invoice #01KQ 7GS6 EXA3 DV5M" — a
+ *      grouped ULID after "Invoice #" (same shape pdf-openthc-manifest-core
+ *      reads); collapse the spacing to the canonical 16-char id.
+ *   2. Plain labelled forms: "Invoice #: 123", "Invoice No. 123",
+ *      "Invoice Number: 123", and the GrowFlow invoice header
+ *      "Invoice Order #: 29127 Bill To: ..." — value AFTER the label. The
+ *      capture must contain a digit so label-words that follow a valueless
+ *      label are never mistaken for the number (Cultivera prints
+ *      "Order #: Order Date:" — "Order"/"Date" must not match).
+ *   3. Cultivera invoice as unpdf flattens it: "... July 14, 2026 24706Order #:"
+ *      — the order number GLUES onto the FRONT of its own label with no space
+ *      (verified on the real SPR invoice, pdf-cultivera-invoice-core fixture).
+ *   4. Purchase-order labels ("PO #", "P.O. #", "Purchase Order #") — same
+ *      digit-guarded value-after-label rule.
+ *
+ * "Manifest #:" is deliberately NOT a key term — a manifest id is only used
+ * as the FALLBACK (invoiceNumberForRow), never presented as a found invoice #.
+ */
+export function extractInvoiceNumberFromText(text: string): string | null {
+  if (!text) return null;
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length === 0) return null;
+
+  // 1) OpenTHC grouped ULID right after "Invoice #" (3-5 groups of 4).
+  const ulid = flat.match(
+    /Invoice\s*#\s*([0-9A-HJKMNP-TV-Z]{4}(?:\s+[0-9A-HJKMNP-TV-Z]{4}){2,4})/i,
+  );
+  if (ulid) return ulid[1].replace(/\s+/g, "").toUpperCase();
+
+  // 2) Value AFTER a label, digit-guarded. Scan every occurrence so a
+  //    valueless label ("Order #: Order Date:") falls through to a later one.
+  const afterLabel =
+    /\b(?:Invoice|Order|P\.?\s?O\.?|Purchase\s+Order)\s*(?:#|No\.?|Number)\s*:?\s*([A-Z0-9][A-Z0-9-]{2,19})/gi;
+  for (const m of flat.matchAll(afterLabel)) {
+    const v = m[1].trim();
+    if (/\d/.test(v)) return v;
+  }
+
+  // 3) Cultivera glue: digits welded directly onto the FRONT of "Order #".
+  const glued = flat.match(/(\d{3,12})Order\s*#/i);
+  if (glued) return glued[1];
+
+  return null;
+}
+
+/**
  * Pull the vendor's order/invoice number out of a stored manifest payload.
- * Case-insensitive over the WCIA `external_id` plus tolerant aliases some
- * systems use. Returns null when the payload has none (e.g. CCRS CSV, LCB PDF
- * text) — the caller decides the fallback.
+ * JSON payloads (WCIA imports): case-insensitive over `external_id` plus
+ * tolerant aliases. TEXT payloads (PDF flattened text, CSV): the SLICE 100
+ * key-term scan above. Returns null when the payload truly has none (e.g.
+ * CCRS CSV, LCB Internal Shipping Document) — the caller decides the fallback.
  */
 export function extractInvoiceNumber(rawPayload: unknown): string | null {
   if (rawPayload == null) return null;
@@ -47,7 +101,10 @@ export function extractInvoiceNumber(rawPayload: unknown): string | null {
   if (typeof root === "string") {
     // A stored JSON string still counts (older rows kept the raw text).
     const t = root.trim();
-    if (!t.startsWith("{")) return null;
+    if (!t.startsWith("{")) {
+      // SLICE 100: not JSON — this is flattened PDF text or CSV. Key-term scan.
+      return extractInvoiceNumberFromText(t);
+    }
     try {
       root = JSON.parse(t);
     } catch {
@@ -66,9 +123,11 @@ export function extractInvoiceNumber(rawPayload: unknown): string | null {
 }
 
 /**
- * The Invoice # cell: order/invoice # from the payload when present; for the
- * OpenTHC combined invoice-manifest PDF the manifest number IS the invoice #
- * (one document serves as both), so it doubles up; otherwise null (render "—").
+ * The Invoice # cell: order/invoice # from the payload when present (JSON
+ * keys OR the SLICE 100 key-term text scan); otherwise ALWAYS fall back to
+ * the manifest number — the owner's explicit rule: "if there is no invoice
+ * number in any of its many forms, please fallback to using the manifest
+ * number". Null only when the row has neither (render "—").
  */
 export function invoiceNumberForRow(row: {
   raw_payload: unknown;
@@ -77,13 +136,7 @@ export function invoiceNumberForRow(row: {
 }): string | null {
   const fromPayload = extractInvoiceNumber(row.raw_payload);
   if (fromPayload) return fromPayload;
-  if (row.source_format === "pdf-manifest" && row.manifest_number) {
-    // Only the OpenTHC layout puts the invoice # in manifest_number; the LCB
-    // Internal Shipping Document's manifest id is NOT an invoice #. The two are
-    // distinguishable: LCB ids are 16-18 digit numerics, OpenTHC uses ULIDs.
-    if (!/^\d{16,18}$/.test(row.manifest_number)) return row.manifest_number;
-  }
-  return null;
+  return row.manifest_number ?? null;
 }
 
 // ── Moving status badge ─────────────────────────────────────────────────────

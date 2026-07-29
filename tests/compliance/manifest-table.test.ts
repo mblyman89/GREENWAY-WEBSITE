@@ -9,10 +9,11 @@
  *    the stored raw_payload (locked decision: "order # or invoice #, whichever
  *    is available"; both numbers stay stored);
  *  - GrowFlow's variant carries external_id "29127" (the order #);
- *  - the OpenTHC combined invoice-manifest PDF stores the invoice # AS the
- *    manifest number (ULID) — the column falls back to it, while the LCB
- *    Internal Shipping Document's 17-digit manifest id must NOT be shown as
- *    an invoice #.
+ *  - SLICE 100 (owner rule): TEXT payloads (flattened PDFs) get a key-term
+ *    scan — "Invoice #", "Order #", "Invoice No", "PO #" "in its many forms",
+ *    including the real Cultivera glue where the value rides in FRONT of its
+ *    label ("... 24706Order #:"); and when NO invoice/order # exists in any
+ *    form, the column ALWAYS falls back to the manifest number.
  * The moving badge encodes the owner-approved lifecycle:
  *    🟡 In transit (→ 🔴 overdue) → 🔵 Received → 🟢 Accepted, 🟠 partial, ⚪ rejected.
  */
@@ -21,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   extractInvoiceNumber,
+  extractInvoiceNumberFromText,
   invoiceNumberForRow,
   movingBadge,
   fmtPulledIn,
@@ -61,6 +63,54 @@ describe("H15c — extractInvoiceNumber", () => {
     expect(extractInvoiceNumber([1, 2])).toBeNull();
     expect(extractInvoiceNumber("{broken json")).toBeNull();
   });
+
+  // ── SLICE 100: key-term scan over flattened document text ────────────────
+  it("Cultivera invoice text: order # glued onto the FRONT of 'Order #' (real SPR fixture)", () => {
+    // Exactly as unpdf flattens the owner's real Invoice-OrderReport PDF.
+    const spr = readFileSync(
+      join(__dirname, "fixtures", "pdf-invoice-cultivera-spr-sample.txt"),
+      "utf8",
+    );
+    expect(extractInvoiceNumber(spr)).toBe("24706");
+    // The valueless labels alone must NOT match ("Order"/"Date" are words, not numbers).
+    expect(extractInvoiceNumberFromText("Order #: Order Date: Michelle Forbes")).toBeNull();
+  });
+
+  it("OpenTHC invoice text: grouped ULID after 'Invoice #' collapses to the canonical id", () => {
+    expect(
+      extractInvoiceNumberFromText("Invoice #01KQ 7GS6 EXA3 DV5M Sold By: HIGH END FARMS #415771"),
+    ).toBe("01KQ7GS6EXA3DV5M");
+  });
+
+  it("GrowFlow invoice header: 'Invoice Order #: 29127' reads the order #", () => {
+    expect(
+      extractInvoiceNumberFromText(
+        "Invoice Order #: 29127 Bill To: Greenway License: 413541 Product Qty Total",
+      ),
+    ).toBe("29127");
+  });
+
+  it("labelled forms in their many variants", () => {
+    expect(extractInvoiceNumberFromText("Invoice #: INV-00123 due on receipt")).toBe("INV-00123");
+    expect(extractInvoiceNumberFromText("Invoice No. 4587")).toBe("4587");
+    expect(extractInvoiceNumberFromText("Invoice Number: 990011")).toBe("990011");
+    expect(extractInvoiceNumberFromText("Order Number 776655 ship to")).toBe("776655");
+    expect(extractInvoiceNumberFromText("PO # 5521")).toBe("5521");
+    expect(extractInvoiceNumberFromText("Purchase Order #: 313131")).toBe("313131");
+  });
+
+  it("never false-positives on documents WITHOUT an invoice/order # (real fixtures)", () => {
+    const lcb = readFileSync(join(__dirname, "fixtures", "pdf-manifest-sample.txt"), "utf8");
+    expect(extractInvoiceNumber(lcb)).toBeNull(); // LCB Internal Shipping Document
+    const growflow = readFileSync(
+      join(__dirname, "fixtures", "pdf-growflow-manifest-sample.txt"),
+      "utf8",
+    );
+    expect(extractInvoiceNumber(growflow)).toBeNull(); // GrowFlow manifest (no invoice terms)
+    expect(extractInvoiceNumberFromText("PO Box 1234 Arlington WA")).toBeNull(); // address
+    expect(extractInvoiceNumberFromText("in order to comply with WAC")).toBeNull(); // prose
+    expect(extractInvoiceNumberFromText("")).toBeNull();
+  });
 });
 
 describe("H15c — invoiceNumberForRow", () => {
@@ -75,32 +125,54 @@ describe("H15c — invoiceNumberForRow", () => {
   });
 
   it("OpenTHC PDF: the invoice # IS the manifest # (ULID), so it doubles up", () => {
+    // Real HEF header text as unpdf flattens it — the key-term scan reads the
+    // full grouped ULID out of the stored payload (same value as manifest #).
     expect(
       invoiceNumberForRow({
-        raw_payload: "Invoice #01KQ 7GS6 ... flattened pdf text",
+        raw_payload: "Invoice #01KQ 7GS6 EXA3 DV5M Sold By: HIGH END FARMS #415771",
         source_format: "pdf-manifest",
         manifest_number: "01KQ7GS6EXA3DV5M",
       }),
     ).toBe("01KQ7GS6EXA3DV5M");
   });
 
-  it("LCB PDF: the 17-digit manifest id is NOT an invoice # — stays blank", () => {
+  it("SLICE 100: LCB PDF has no invoice # in any form — falls back to the manifest #", () => {
     expect(
       invoiceNumberForRow({
         raw_payload: "Internal Shipping Document ... flattened pdf text",
         source_format: "pdf-manifest",
         manifest_number: "11374279827298553",
       }),
-    ).toBeNull();
+    ).toBe("11374279827298553");
   });
 
-  it("CCRS CSV rows have no invoice # — stays blank", () => {
+  it("SLICE 100: CCRS CSV rows have no invoice # — fall back to the manifest #", () => {
     expect(
       invoiceNumberForRow({
         raw_payload: "SubmittedBy,tester\nExternalManifestIdentifier,MAN-1001",
         source_format: "ccrs-csv",
         manifest_number: "MAN-1001",
       }),
+    ).toBe("MAN-1001");
+  });
+
+  it("SLICE 100: Cultivera invoice PDF text row shows the order # (not the manifest #)", () => {
+    const spr = readFileSync(
+      join(__dirname, "fixtures", "pdf-invoice-cultivera-spr-sample.txt"),
+      "utf8",
+    );
+    expect(
+      invoiceNumberForRow({
+        raw_payload: spr,
+        source_format: "pdf-manifest",
+        manifest_number: "11804443981161219",
+      }),
+    ).toBe("24706");
+  });
+
+  it("SLICE 100: nothing anywhere — null renders the dash", () => {
+    expect(
+      invoiceNumberForRow({ raw_payload: null, source_format: "wcia", manifest_number: null }),
     ).toBeNull();
   });
 });
