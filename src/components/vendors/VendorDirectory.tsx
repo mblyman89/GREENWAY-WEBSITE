@@ -23,9 +23,11 @@ const ACCENTS = [
   "from-lime-400 to-emerald-700",
 ];
 
-// Placeholder logo + description used for every vendor until real assets and
-// copy are supplied. The seamless expand overlays the description directly over
-// the card's art (no separate boxes).
+// SLICE 97: cards now prefer the REAL logo + description saved in the back
+// office (vendors table via enrichVendorDirectory); these placeholders remain
+// the honest fallback for vendors without an uploaded logo or written copy.
+// The seamless expand overlays the description directly over the card's art
+// (no separate boxes).
 const PLACEHOLDER_LOGO = "/vendors/vendor-logo-placeholder.png";
 const PLACEHOLDER_DESCRIPTION =
   "A trusted Greenway Marijuana partner growing and crafting premium cannabis for the Port Orchard community. Their mission: deliver consistent, lab-tested, top-shelf product our budtenders are proud to recommend.";
@@ -52,6 +54,9 @@ function mobileNameSizeClass(name: string): string {
 function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const nameSize = mobileNameSizeClass(vendor.name);
+  // SLICE 97: real back-office logo/description when present, placeholder otherwise.
+  const logoSrc = vendor.logoUrl || PLACEHOLDER_LOGO;
+  const description = vendor.description || PLACEHOLDER_DESCRIPTION;
 
   return (
     <button
@@ -80,7 +85,7 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
         </p>
         <span className="relative h-11 w-11 overflow-hidden rounded-full ring-2 ring-white/40 md:h-14 md:w-14">
           <Image
-            src={PLACEHOLDER_LOGO}
+            src={logoSrc}
             alt={`${vendor.name} logo`}
             fill
             sizes="56px"
@@ -110,7 +115,7 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
         <div className="relative flex items-center gap-2.5">
           <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-white/50">
             <Image
-              src={PLACEHOLDER_LOGO}
+              src={logoSrc}
               alt=""
               fill
               sizes="36px"
@@ -122,7 +127,7 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
           </p>
         </div>
         <p className="relative text-[0.72rem] font-medium leading-snug text-white/95 drop-shadow md:text-xs">
-          {PLACEHOLDER_DESCRIPTION}
+          {description}
         </p>
       </div>
     </button>
@@ -223,9 +228,13 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
               ))}
             </div>
 
-            <p className="pt-2 text-center text-xs font-semibold text-zinc-500">
-              Logos and partner descriptions shown are placeholders pending final vendor assets.
-            </p>
+            {/* SLICE 97: only claim placeholders when some card actually
+                falls back (no uploaded logo or written copy yet). */}
+            {vendors.some((v) => !v.logoUrl || !v.description) ? (
+              <p className="pt-2 text-center text-xs font-semibold text-zinc-500">
+                Some logos and partner descriptions are placeholders pending final vendor assets.
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="rounded-2xl border border-white/10 bg-zinc-950/60 p-8 text-center text-sm font-semibold text-zinc-400">
