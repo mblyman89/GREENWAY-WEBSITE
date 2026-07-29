@@ -28,6 +28,10 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   // is never trusted.
   let chosenWebsiteCategory = (formData.get("website_category") as string | null)?.trim() || null;
   let chosenHouseType = (formData.get("house_type") as string | null)?.trim() || null;
+  // SLICE 93: the approver's strain-type pick (empty = keep auto / none).
+  // Validated server-side against the canonical taxonomy in
+  // approveDraftWithPrice - the form is never trusted.
+  const chosenStrainType = (formData.get("strain_type") as string | null)?.trim() || null;
 
   // SLICE 78: "__new__" = create the category right here, mid-onboarding.
   // Same pure gatekeeper as Settings → Types (label required, slug derivation,
@@ -143,6 +147,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   const result = await approveDraftWithPrice(draftId, priceMinor, session.userId, {
     chosenWebsiteCategory,
     chosenHouseType,
+    chosenStrainType,
   });
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {

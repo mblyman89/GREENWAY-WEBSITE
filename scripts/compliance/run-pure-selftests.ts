@@ -83,6 +83,7 @@ import { __runTypeRegistryCoreTests } from "../../src/lib/pos/type-registry-core
 import { __runHouseTypeCoreTests } from "../../src/lib/inventory/house-type-core";
 import { __runDraftApprovalGateTests } from "../../src/lib/inventory/draft-approval-gate-core";
 import { __runStrainFieldsCoreTests } from "../../src/lib/inventory/strain-fields-core";
+import { __runStrainTypeIntelTests } from "../../src/lib/inventory/strain-type-intel-core";
 import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extraction-core";
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
@@ -307,6 +308,7 @@ async function main() {
   __runHouseTypeCoreTests();
   __runDraftApprovalGateTests();
   __runStrainFieldsCoreTests();
+  __runStrainTypeIntelTests();
   __runFactExtractionCoreTests();
   __runFactReviewCoreTests();
   __runImportCommitCoreTests();

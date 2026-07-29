@@ -48,7 +48,11 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0145** (the current last file — 0145 creates
+you haven't checked off through **0146** (the current last file — 0146 adds
+the `chosen_strain_type` column to catalog_product_drafts: the strain-type
+pick you make on the Product Onboarding approval card, which outranks every
+machine signal on the menu card — until it's run, auto-detected strain types
+still work but a manual pick shows a friendly banner instead of saving; 0145 creates
 the LeafLink vendor menu tables: snapshot + item tables that make LeafLink the
 third marketplace in the unified vendor-menu search, with saved menus browsable
 on the Vendor menus page, media-library saves, and a hand-off straight into the

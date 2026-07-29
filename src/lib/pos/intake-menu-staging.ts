@@ -37,7 +37,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
-import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
+// SLICE 93: kb > manifest fact > confident name parse - one folded verdict.
+import {
+  suggestStrainType,
+  STRAIN_TYPE_AUTO_MIN_CONFIDENCE,
+} from "@/lib/inventory/strain-type-intel-core";
 import {
   buildIntakeStagedVersionPlan,
   type CarryForwardItem,
@@ -93,25 +97,39 @@ export async function stageIntakeMenuVersionForManifest(
     // 0141); on databases where 0141 hasn't run yet retry WITHOUT them.
     const DRAFT_COLS =
       "id, pos_product_key, name, brand_name, vendor_name, strain_name, thc_pct, cbd_pct, total_thc_pct, potency_json, price_minor_units, updated_at, lot_id, inventory_type, category";
+    // SLICE 93: also read the approver's strain-type pick (migration 0146).
+    // Graduated fallback so each missing migration only costs ITS columns:
+    // 0141+0146 -> 0141 only -> none.
+    const missingCol = (e: { code?: string; message?: string } | null) =>
+      Boolean(
+        e &&
+          (e.code === "42703" ||
+            /column .* does not exist|could not find .* column/i.test(e.message ?? "")),
+      );
     const firstTry = await admin
       .from("catalog_product_drafts")
-      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type")
+      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type")
       .eq("manifest_id", manifestId)
       .eq("status", "approved");
     let draftRows: unknown = firstTry.data;
     let dErr = firstTry.error;
-    if (
-      dErr &&
-      (dErr.code === "42703" ||
-        /column .* does not exist|could not find .* column/i.test(dErr.message ?? ""))
-    ) {
-      const retry = await admin
+    if (missingCol(dErr)) {
+      const secondTry = await admin
         .from("catalog_product_drafts")
-        .select(DRAFT_COLS)
+        .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type")
         .eq("manifest_id", manifestId)
         .eq("status", "approved");
-      draftRows = retry.data;
-      dErr = retry.error;
+      draftRows = secondTry.data;
+      dErr = secondTry.error;
+      if (missingCol(dErr)) {
+        const retry = await admin
+          .from("catalog_product_drafts")
+          .select(DRAFT_COLS)
+          .eq("manifest_id", manifestId)
+          .eq("status", "approved");
+        draftRows = retry.data;
+        dErr = retry.error;
+      }
     }
     if (dErr) {
       console.error("[intake-menu-staging] drafts read failed:", dErr.message);
@@ -123,6 +141,7 @@ export async function stageIntakeMenuVersionForManifest(
       category: string | null;
       chosen_website_category?: string | null;
       chosen_house_type?: string | null;
+      chosen_strain_type?: string | null;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
@@ -176,7 +195,7 @@ export async function stageIntakeMenuVersionForManifest(
 
     const lotById = new Map<
       string,
-      { on_hand_qty: number; unit_weight: number | null; unit_weight_uom: string | null }
+      { on_hand_qty: number; unit_weight: number | null; unit_weight_uom: string | null; strain_type: string | null }
     >();
     const lotIds = Array.from(
       new Set(drafts.map((d) => d.lot_id).filter((v): v is string => Boolean(v))),
@@ -184,7 +203,7 @@ export async function stageIntakeMenuVersionForManifest(
     if (lotIds.length) {
       const { data: lots } = await admin
         .from("inventory_lots")
-        .select("id, on_hand_qty, unit_weight, unit_weight_uom")
+        .select("id, on_hand_qty, unit_weight, unit_weight_uom, strain_type")
         .in("id", lotIds);
       for (const l of (lots as
         | {
@@ -192,6 +211,7 @@ export async function stageIntakeMenuVersionForManifest(
             on_hand_qty: number;
             unit_weight: number | null;
             unit_weight_uom: string | null;
+            strain_type: string | null;
           }[]
         | null) ?? []) {
         lotById.set(l.id, l);
@@ -203,10 +223,21 @@ export async function stageIntakeMenuVersionForManifest(
       const lot = d.lot_id ? lotById.get(d.lot_id) ?? null : null;
       const slug = d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
       const rawStrainType = slug ? strainTypeBySlug.get(slug) ?? null : null;
-      const canonical = rawStrainType ? canonicalStrainType(rawStrainType) : null;
+      // SLICE 93: the curated KB still leads, but the manifest's stated fact
+      // (inventory_lots.strain_type) and a confident name parse now fill the
+      // gap - only >=90% signals; below the bar stays null (never guessed).
+      const suggestion = suggestStrainType({
+        kbStrainType: rawStrainType,
+        lotStrainType: lot?.strain_type ?? null,
+        productName: d.name,
+      });
+      const auto =
+        suggestion && suggestion.confidence >= STRAIN_TYPE_AUTO_MIN_CONFIDENCE
+          ? suggestion.value
+          : null;
       enrichmentByDraftId.set(d.id, {
         websiteCategory: resolutions[i]?.websiteCategory ?? null,
-        strainType: canonical && canonical !== "unknown" ? canonical : null,
+        strainType: auto && auto !== "unknown" ? auto : null,
         onHandQty: lot ? Number(lot.on_hand_qty ?? 0) : null,
         packageLabel:
           lot && lot.unit_weight != null

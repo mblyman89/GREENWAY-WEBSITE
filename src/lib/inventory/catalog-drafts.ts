@@ -23,6 +23,16 @@ import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-r
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 // SLICE 92: owner-created product types (inventory_types) are legal picks too.
 import { listInventoryTypes } from "@/lib/pos/types-store";
+// SLICE 93: strain-type intelligence - validate the approver's pick, fold the
+// kb/lot/name signals into one >=90% verdict, and gap-fill the strain library
+// so the type auto-attaches on future lots of the same strain.
+import {
+  validateStrainTypeChoice,
+  suggestStrainType,
+  decideKbStrainTypeWrite,
+  STRAIN_TYPE_AUTO_MIN_CONFIDENCE,
+} from "@/lib/inventory/strain-type-intel-core";
+import { recordAudit } from "@/lib/auth/audit";
 import {
   getPricingSettings,
   getVelocityForProduct,
@@ -61,6 +71,11 @@ export type CatalogDraft = {
    */
   chosen_website_category?: string | null;
   chosen_house_type?: string | null;
+  /**
+   * SLICE 93 (migration 0146): the HUMAN's strain-type pick from the approval
+   * card. Optional - absent on databases where 0146 hasn't run.
+   */
+  chosen_strain_type?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -363,6 +378,60 @@ export async function setCatalogDraftStatus(
 }
 
 /**
+ * SLICE 93: batched strain-type suggestions for the Product Onboarding page.
+ * One kb_strains read (by slug) + one inventory_lots read (by id) for ALL
+ * drafts, folded per draft by the pure suggestStrainType (kb > lot > name).
+ * Null entry = no signal ("Set strain type…" in the picker).
+ */
+export async function loadStrainTypeSuggestions(
+  drafts: Pick<CatalogDraft, "id" | "name" | "strain_name" | "lot_id">[],
+): Promise<Map<string, ReturnType<typeof suggestStrainType>>> {
+  const out = new Map<string, ReturnType<typeof suggestStrainType>>();
+  if (!isSupabaseServiceConfigured || drafts.length === 0) {
+    for (const d of drafts) out.set(d.id, suggestStrainType({ productName: d.name }));
+    return out;
+  }
+  const admin = createSupabaseAdminClient();
+
+  const slugs = Array.from(
+    new Set(
+      drafts
+        .map((d) => d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "")
+        .filter(Boolean),
+    ),
+  );
+  const kbTypeBySlug = new Map<string, string>();
+  if (slugs.length > 0) {
+    const { data } = await admin.from("kb_strains").select("slug, strain_type").in("slug", slugs);
+    for (const s of (data as { slug: string; strain_type: string | null }[] | null) ?? []) {
+      if (s.strain_type) kbTypeBySlug.set(s.slug, s.strain_type);
+    }
+  }
+
+  const lotIds = Array.from(new Set(drafts.map((d) => d.lot_id).filter((v): v is string => Boolean(v))));
+  const lotTypeById = new Map<string, string>();
+  if (lotIds.length > 0) {
+    const { data } = await admin.from("inventory_lots").select("id, strain_type").in("id", lotIds);
+    for (const l of (data as { id: string; strain_type: string | null }[] | null) ?? []) {
+      if (l.strain_type) lotTypeById.set(l.id, l.strain_type);
+    }
+  }
+
+  for (const d of drafts) {
+    const slug = d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+    out.set(
+      d.id,
+      suggestStrainType({
+        kbStrainType: slug ? kbTypeBySlug.get(slug) ?? null : null,
+        lotStrainType: d.lot_id ? lotTypeById.get(d.lot_id) ?? null : null,
+        productName: d.name,
+      }),
+    );
+  }
+  return out;
+}
+
+/**
  * Approve a draft with a final price. Enforces the hard 2× cost floor — the
  * price can never be saved below it. This is the guard rail that guarantees
  * margin regardless of who's at the keyboard.
@@ -374,6 +443,8 @@ export async function approveDraftWithPrice(
   classification?: {
     chosenWebsiteCategory?: string | null;
     chosenHouseType?: string | null;
+    /** SLICE 93: the approver's strain-type pick (canonical taxonomy value). */
+    chosenStrainType?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
@@ -381,7 +452,9 @@ export async function approveDraftWithPrice(
 
   const { data } = await admin
     .from("catalog_product_drafts")
-    .select("unit_cost_minor_units, manifest_id, pos_product_key, name, inventory_type, category")
+    .select(
+      "unit_cost_minor_units, manifest_id, pos_product_key, name, inventory_type, category, strain_name, lot_id",
+    )
     .eq("id", draftId)
     .maybeSingle();
   const row = data as {
@@ -391,6 +464,8 @@ export async function approveDraftWithPrice(
     name: string;
     inventory_type: string | null;
     category: string | null;
+    strain_name: string | null;
+    lot_id: string | null;
   } | null;
   const cost = row?.unit_cost_minor_units ?? null;
 
@@ -436,6 +511,14 @@ export async function approveDraftWithPrice(
     return { ok: false, error: choice.error };
   }
 
+  // SLICE 93: validate the approver's strain-type pick against the canonical
+  // taxonomy (empty / "unknown" = no pick; junk is refused - the form is
+  // never trusted). Strain type is never a GATE - it stays optional.
+  const strainChoice = validateStrainTypeChoice(classification?.chosenStrainType);
+  if (!strainChoice.ok) {
+    return { ok: false, error: strainChoice.error };
+  }
+
   // Persist the picks ONLY when the human made one - on a pre-0141 database
   // an approval without picks keeps working exactly as before, and an
   // approval WITH picks fails with a friendly pointer at the migration.
@@ -446,15 +529,26 @@ export async function approveDraftWithPrice(
   };
   if (choice.chosenWebsiteCategory !== null) update.chosen_website_category = choice.chosenWebsiteCategory;
   if (choice.chosenHouseType !== null) update.chosen_house_type = choice.chosenHouseType;
+  // SLICE 93 (migration 0146): the strain-type pick, only when made.
+  if (strainChoice.value !== null) update.chosen_strain_type = strainChoice.value;
 
   const { error } = await admin
     .from("catalog_product_drafts")
     .update(update)
     .eq("id", draftId);
   if (error) {
+    const missingColumn =
+      error.code === "42703" ||
+      /column .* does not exist|could not find .* column/i.test(error.message ?? "");
+    if (missingColumn && update.chosen_strain_type !== undefined) {
+      return {
+        ok: false,
+        error:
+          "Saving your strain-type pick needs database migration 0146 (supabase/migrations/0146_draft_strain_type_choice.sql). Run it, then approve again.",
+      };
+    }
     if (
-      (error.code === "42703" ||
-        /column .* does not exist|could not find .* column/i.test(error.message ?? "")) &&
+      missingColumn &&
       (update.chosen_website_category !== undefined || update.chosen_house_type !== undefined)
     ) {
       return {
@@ -464,6 +558,25 @@ export async function approveDraftWithPrice(
       };
     }
     return { ok: false, error: error.message };
+  }
+
+  // SLICE 93: "It should save to the kb as well so it auto attaches on that
+  // product when we get new lots in." Fold the machine signals (curated KB >
+  // manifest's stated fact > name parse) with the human's pick on top, then
+  // gap-fill kb_strains under the pure policy: create a missing row, fill a
+  // null/unknown type, and only a HUMAN pick may flip a curated value. The
+  // machine never overrides curation. Best-effort - a KB hiccup never fails
+  // the approval (the pick is already persisted on the draft).
+  try {
+    await saveStrainTypeToKb(admin, {
+      strainName: row?.strain_name ?? null,
+      lotId: row?.lot_id ?? null,
+      productName: row?.name ?? null,
+      humanPick: strainChoice.value,
+      actorId,
+    });
+  } catch (err) {
+    console.error("[catalog-drafts] strain-type KB save failed:", err);
   }
 
   // Intake auto-carry + auto-publish (owner-approved Option 1): the moment a
@@ -485,4 +598,103 @@ export async function approveDraftWithPrice(
   }
 
   return { ok: true };
+}
+
+/**
+ * SLICE 93: persist an approval's strain-type verdict into kb_strains so it
+ * auto-attaches on FUTURE lots of the same strain (injection + staging read
+ * kb_strains by slug). Pure policy in decideKbStrainTypeWrite: create the
+ * missing row, gap-fill a null/unknown type, flip ONLY on a human pick -
+ * the machine never overrides curation. Every write is audited.
+ */
+async function saveStrainTypeToKb(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  input: {
+    strainName: string | null;
+    lotId: string | null;
+    productName: string | null;
+    /** The approver's validated pick (canonical), or null when none was made. */
+    humanPick: string | null;
+    actorId: string | null;
+  },
+): Promise<void> {
+  const name = input.strainName?.trim();
+  if (!name) return; // no strain on the draft - nothing to attach the type to.
+  const slug = name.toLowerCase().replace(/\s+/g, " ");
+
+  // Existing curated row (the same slug convention injection/staging read by).
+  const { data: strainData } = await admin
+    .from("kb_strains")
+    .select("id, strain_type")
+    .eq("slug", slug)
+    .maybeSingle();
+  const existing = strainData as { id: string; strain_type: string | null } | null;
+
+  // The manifest's stated fact ([H]/[I]/[S] intake split on inventory_lots).
+  let lotStrainType: string | null = null;
+  if (input.lotId) {
+    const { data: lotData } = await admin
+      .from("inventory_lots")
+      .select("strain_type")
+      .eq("id", input.lotId)
+      .maybeSingle();
+    lotStrainType = (lotData as { strain_type: string | null } | null)?.strain_type ?? null;
+  }
+
+  // The verdict: the human's pick, else the >=90% machine suggestion. A
+  // below-bar hint is never written - never guess.
+  let verdict = input.humanPick;
+  let source: "human" | "auto" = "human";
+  if (!verdict) {
+    const suggestion = suggestStrainType({
+      kbStrainType: existing?.strain_type ?? null,
+      lotStrainType,
+      productName: input.productName,
+    });
+    if (
+      !suggestion ||
+      suggestion.confidence < STRAIN_TYPE_AUTO_MIN_CONFIDENCE ||
+      suggestion.source === "strain library" // already in the KB - nothing to save.
+    ) {
+      return;
+    }
+    verdict = suggestion.value;
+    source = "auto";
+  }
+
+  const decision = decideKbStrainTypeWrite({
+    exists: Boolean(existing?.id),
+    existingType: existing?.strain_type ?? null,
+    verdict: verdict as Parameters<typeof decideKbStrainTypeWrite>[0]["verdict"],
+    source,
+  });
+  if (decision.action === "skip") return;
+
+  if (decision.action === "create") {
+    const { error } = await admin.from("kb_strains").insert({
+      slug,
+      name,
+      strain_type: verdict,
+      active: true,
+      created_by: input.actorId,
+      updated_by: input.actorId,
+    });
+    if (error) throw new Error(error.message);
+  } else {
+    // set (gap-fill) or flip (human override of a curated value).
+    const { error } = await admin
+      .from("kb_strains")
+      .update({ strain_type: verdict, updated_by: input.actorId })
+      .eq("id", existing!.id);
+    if (error) throw new Error(error.message);
+  }
+
+  await recordAudit({
+    actorId: input.actorId,
+    action: "kb.strain.type_from_onboarding",
+    entityType: "kb_strain",
+    entityId: slug,
+    before: { strain_type: existing?.strain_type ?? null },
+    after: { strain_type: verdict, decision: decision.action, source, reason: decision.reason },
+  }).catch(() => {});
 }
