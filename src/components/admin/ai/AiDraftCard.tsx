@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/admin/ui";
 import { AiComplianceFlags } from "./AiComplianceFlags";
 import { AiProvenanceBadge } from "./AiProvenanceBadge";
+import { EditableDraftText } from "./EditableDraftText";
 
 export function AiDraftCard({
   fieldLabel,
@@ -28,6 +29,7 @@ export function AiDraftCard({
   acceptLabel = "✓ Accept & save",
   rejectLabel = "✕ Reject",
   referenceOnly = false,
+  editable = false,
   footer,
 }: {
   fieldLabel: string;
@@ -51,9 +53,20 @@ export function AiDraftCard({
    * reject button becomes "Dismiss".
    */
   referenceOnly?: boolean;
+  /**
+   * SLICE 88: writable profile-field drafts render the value in an editable
+   * textarea (client child) whose `editedValue` submits with the Accept form,
+   * so staff can fix the text right on the page before accepting. Reference
+   * and image drafts stay read-only.
+   */
+  editable?: boolean;
   footer?: ReactNode;
 }) {
   const hidden = Object.entries(hiddenFields);
+  const canEdit = editable && !referenceOnly && typeof value === "string" && value.length > 0;
+  // Unique, stable form id so the editor textarea can target the Accept form
+  // via the HTML `form` attribute (no nested forms).
+  const acceptFormId = `accept-${hiddenFields.suggestionId ?? "draft"}`;
   return (
     <div className="rounded-lg border border-white/10 bg-black/40 p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -63,7 +76,11 @@ export function AiDraftCard({
       <div className="mb-2">
         <AiProvenanceBadge source={source} confidence={confidence} />
       </div>
-      <p className="whitespace-pre-wrap text-sm text-white/85">{value}</p>
+      {canEdit ? (
+        <EditableDraftText value={value as string} formId={acceptFormId} />
+      ) : (
+        <p className="whitespace-pre-wrap text-sm text-white/85">{value}</p>
+      )}
 
       {flags.length > 0 && (
         <div className="mt-2">
@@ -73,7 +90,7 @@ export function AiDraftCard({
 
       <div className="mt-3 flex flex-wrap gap-2">
         {!referenceOnly && (
-          <form action={acceptAction}>
+          <form action={acceptAction} id={acceptFormId}>
             {hidden.map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />
             ))}
