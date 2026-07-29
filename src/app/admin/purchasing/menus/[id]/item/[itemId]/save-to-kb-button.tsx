@@ -1,17 +1,20 @@
 "use client";
 
 /**
- * CV-7b client island: "Save all strain images to KB" on the menu-item detail
- * page. A single Cultivera product LINE (e.g. SUBX "Flower") holds MANY strains
- * as size variants. This ONE button saves one image per DISTINCT strain into
- * the media library AND binds each to the durable KB product backbone (every
- * size variant of that strain inherits it). Shows the result inline and
- * refreshes the page. Idempotent — re-running only fills gaps.
+ * CV-7b client island: "Save all assets to KB" on the menu-item detail page.
+ * A single Cultivera product LINE (e.g. SUBX "Flower") holds MANY strains as
+ * size variants. This ONE button saves one image per DISTINCT strain into the
+ * media library AND binds each — image + description — to the durable KB
+ * product backbone (every size variant of that strain inherits it). SLICE 90:
+ * the label + summary now say the descriptions are saved too (it used to be
+ * silent). Shows the result inline and refreshes the page. Idempotent —
+ * re-running only fills gaps.
  */
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/admin/ui";
+import { saveAllAssetsLabel } from "@/lib/purchasing/save-assets-core";
 import { saveCultiveraDetailStrainsToKbAction } from "../../../actions";
 
 export function SaveImageToKbButton({
@@ -44,10 +47,9 @@ export function SaveImageToKbButton({
     });
   }
 
-  const label =
-    typeof strainCount === "number" && strainCount > 0
-      ? `Save all ${strainCount} strain image${strainCount === 1 ? "" : "s"} to KB`
-      : "Save all strain images to KB";
+  // SLICE 90 — "Save all assets": images AND descriptions land in the KB, so
+  // the label says so (the old "strain images" label undersold what happens).
+  const label = saveAllAssetsLabel(strainCount);
 
   return (
     <div className="flex flex-col items-end gap-1">

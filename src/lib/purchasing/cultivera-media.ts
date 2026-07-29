@@ -34,6 +34,7 @@ import {
   type StrainVariantLike,
 } from "@/lib/purchasing/cultivera-kb-link-core";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
+import type { DescriptionSaveOutcome } from "@/lib/purchasing/save-assets-core";
 
 export type SaveItemMediaResult = {
   ok: boolean;
@@ -115,6 +116,12 @@ export type SaveItemToKbResult = {
   deduped: boolean;
   /** True when the image was also bound to the durable kb_products backbone. */
   boundToKb: boolean;
+  /**
+   * SLICE 90 — what happened to the vendor's DESCRIPTION during the KB bind
+   * (saved / kept_existing / none_provided / blocked_noncompliant /
+   * kb_unavailable), so the success message can report it honestly.
+   */
+  descriptionOutcome: DescriptionSaveOutcome;
   error: string | null;
 };
 
@@ -140,7 +147,14 @@ export async function saveCultiveraItemToKb(
 ): Promise<SaveItemToKbResult> {
   const url = item.image_url;
   if (!url) {
-    return { ok: false, assetId: null, deduped: false, boundToKb: false, error: "This product has no image to save." };
+    return {
+      ok: false,
+      assetId: null,
+      deduped: false,
+      boundToKb: false,
+      descriptionOutcome: "kb_unavailable",
+      error: "This product has no image to save.",
+    };
   }
 
   try {
@@ -174,9 +188,11 @@ export async function saveCultiveraItemToKb(
     //    comes in, this image is picked FIRST and its description fills in.
     //    Gap-fill + drafts-only; a human's manual choice always wins.
     let boundToKb = false;
+    // SLICE 90 — the description save used to be silent; surface its outcome.
+    let descriptionOutcome: DescriptionSaveOutcome = "kb_unavailable";
     try {
       const identity = kbIdentityForItem(item);
-      await writeBackProductFacts(
+      const wb = await writeBackProductFacts(
         {
           posProductKey: identity.posProductKey,
           // Raw name so writeback's slugifyDashed(...) || "product" reproduces
@@ -194,22 +210,31 @@ export async function saveCultiveraItemToKb(
         },
         uploadedBy,
       );
+      descriptionOutcome = wb.descriptionOutcome;
       await recordUsage(assetId, "kb_product", identity.posProductKey, "primary_image");
       boundToKb = true;
     } catch {
       /* best-effort: KB association is non-fatal to the media save */
     }
 
-    return { ok: true, assetId, deduped, boundToKb, error: null };
+    return { ok: true, assetId, deduped, boundToKb, descriptionOutcome, error: null };
   } catch (err) {
     if (err instanceof HarvestImageError) {
-      return { ok: false, assetId: null, deduped: false, boundToKb: false, error: err.message };
+      return {
+        ok: false,
+        assetId: null,
+        deduped: false,
+        boundToKb: false,
+        descriptionOutcome: "kb_unavailable",
+        error: err.message,
+      };
     }
     return {
       ok: false,
       assetId: null,
       deduped: false,
       boundToKb: false,
+      descriptionOutcome: "kb_unavailable",
       error: err instanceof Error ? err.message : "Unexpected error saving to the KB.",
     };
   }
@@ -233,6 +258,10 @@ export type SaveDetailStrainsResult = {
   fallbacks: number;
   /** SLICE 85 — strains whose saved description was the product-line stand-in. */
   descriptionFallbacks: number;
+  /** SLICE 90 — strains whose description landed in an empty KB slot. */
+  descriptionsSaved: number;
+  /** SLICE 90 — strains whose KB row already had curated prose (kept, gap-fill). */
+  descriptionsKept: number;
   /** Strains that failed to save. */
   failed: number;
   error: string | null;
@@ -277,6 +306,8 @@ export async function saveCultiveraDetailStrainsToKb(
     boundToKb: 0,
     fallbacks: 0,
     descriptionFallbacks: 0,
+    descriptionsSaved: 0,
+    descriptionsKept: 0,
     failed: 0,
     error: null,
   };
@@ -305,7 +336,7 @@ export async function saveCultiveraDetailStrainsToKb(
 
       // Bind to the durable KB backbone at the strain level (gap-fill).
       try {
-        await writeBackProductFacts(
+        const wb = await writeBackProductFacts(
           {
             posProductKey: strain.identity.posProductKey,
             productName: strain.strainName,
@@ -323,6 +354,10 @@ export async function saveCultiveraDetailStrainsToKb(
           },
           uploadedBy,
         );
+        // SLICE 90 — count what happened to each strain's description so the
+        // button's summary can report it (saved vs kept-curated).
+        if (wb.descriptionOutcome === "saved") result.descriptionsSaved += 1;
+        else if (wb.descriptionOutcome === "kept_existing") result.descriptionsKept += 1;
         await recordUsage(asset.id, "kb_product", strain.identity.posProductKey, "primary_image");
         result.boundToKb += 1;
       } catch {

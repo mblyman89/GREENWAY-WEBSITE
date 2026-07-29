@@ -28,6 +28,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { checkCompliance, checkEffects } from "@/lib/ai/compliance";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
+import {
+  decideDescriptionOutcome,
+  type DescriptionSaveOutcome,
+} from "@/lib/purchasing/save-assets-core";
 
 /** Dashed slug (brands/products): lowercase, non-alnum → dash. */
 function slugifyDashed(value: string): string {
@@ -83,6 +87,14 @@ export type WritebackResult = {
   wroteStrain: boolean;
   rejectedEffects: { effect: string; reason: string }[];
   skippedReason?: string;
+  /**
+   * SLICE 90 — what happened to the DESCRIPTION specifically, so save buttons
+   * can report it honestly (it used to be a silent side effect):
+   *   "saved" (landed in an empty slot) | "kept_existing" (gap-fill kept the
+   *   curated prose) | "none_provided" | "blocked_noncompliant" (compliance
+   *   gate stripped it) | "kb_unavailable" (kb_products write didn't happen).
+   */
+  descriptionOutcome: DescriptionSaveOutcome;
 };
 
 /** Check a table exists / a column exists by attempting a HEAD select. */
@@ -219,11 +231,17 @@ export async function writeBackProductFacts(
   facts: WritebackFacts,
   actorId: string | null,
 ): Promise<WritebackResult> {
+  // SLICE 90 — description visibility: remember whether a description was
+  // offered and whether the compliance gate stripped it, so the result can say
+  // exactly what happened to the prose (it used to be a silent side effect).
+  const descriptionProvided = !!(facts.description ?? "").trim();
+  let descriptionBlocked = false;
   const result: WritebackResult = {
     ok: false,
     wroteProduct: false,
     wroteStrain: false,
     rejectedEffects: [],
+    descriptionOutcome: descriptionProvided ? "kb_unavailable" : "none_provided",
   };
   if (!isSupabaseServiceConfigured) {
     result.skippedReason = "Supabase not configured.";
@@ -240,6 +258,7 @@ export async function writeBackProductFacts(
     if (!prose.ok) {
       // Don't promote non-compliant copy — strip it, keep structured facts.
       facts = { ...facts, description: null, short_description: null };
+      descriptionBlocked = descriptionProvided;
     }
   }
   const effectCheck = checkEffects(facts.effects ?? [], banned);
@@ -309,6 +328,12 @@ export async function writeBackProductFacts(
     // Migration 0071 not applied yet. Strain gap-fill may still have run.
     result.ok = result.wroteStrain;
     result.skippedReason = "kb_products not available (apply migration 0071).";
+    result.descriptionOutcome = decideDescriptionOutcome({
+      provided: descriptionProvided,
+      blocked: descriptionBlocked,
+      existingHadDescription: false,
+      wroteProduct: false,
+    });
     return result;
   }
 
@@ -445,6 +470,15 @@ export async function writeBackProductFacts(
   if (!error) result.wroteProduct = true;
 
   result.ok = result.wroteProduct || result.wroteStrain;
+  // SLICE 90 — say what happened to the description: saved into an empty slot,
+  // kept because the KB row already had curated prose (gap-fill), blocked by
+  // the compliance gate, nothing offered, or the write never landed.
+  result.descriptionOutcome = decideDescriptionOutcome({
+    provided: descriptionProvided,
+    blocked: descriptionBlocked,
+    existingHadDescription: !emptyStr((existing?.description as string | null) ?? null),
+    wroteProduct: result.wroteProduct,
+  });
   return result;
 }
 

@@ -13,6 +13,7 @@ import {
   agoLabel,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
+import { SAVE_ASSETS_ITEM_LABEL } from "@/lib/purchasing/save-assets-core";
 import {
   sortGrowflowRows,
   filterGrowflowRows,
@@ -277,7 +278,7 @@ export default async function GrowflowSnapshotPage({
                         {it.media_asset_id ? (
                           <Badge tone="green">image in library</Badge>
                         ) : isHttpUrl(it.image_url) ? (
-                          <SaveGrowflowItemMediaButton snapshotId={id} itemId={it.id} kind="image" label="Save image" />
+                          <SaveGrowflowItemMediaButton snapshotId={id} itemId={it.id} kind="image" label={SAVE_ASSETS_ITEM_LABEL} />
                         ) : null}
                         {it.coa_media_asset_id ? (
                           <Badge tone="green">COA in library</Badge>

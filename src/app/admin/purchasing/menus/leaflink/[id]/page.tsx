@@ -15,6 +15,7 @@ import {
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
 import { leaflinkCategoryDescription } from "@/lib/purchasing/leaflink-menu-core";
+import { SAVE_ASSETS_ITEM_LABEL } from "@/lib/purchasing/save-assets-core";
 import {
   resolveMenuDescription,
   DESCRIPTION_FALLBACK_BADGE,
@@ -287,7 +288,7 @@ export default async function LeaflinkSnapshotPage({
                         {it.media_asset_id ? (
                           <Badge tone="green">image in library</Badge>
                         ) : isHttpUrl(it.image_url) ? (
-                          <SaveLeaflinkItemMediaButton snapshotId={id} itemId={it.id} kind="image" label="Save image" />
+                          <SaveLeaflinkItemMediaButton snapshotId={id} itemId={it.id} kind="image" label={SAVE_ASSETS_ITEM_LABEL} />
                         ) : null}
                         {it.coa_media_asset_id ? (
                           <Badge tone="green">COA in library</Badge>
