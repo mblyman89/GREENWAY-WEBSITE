@@ -243,6 +243,68 @@ async function resolveMediaKey(mediaId: string | null): Promise<string | null> {
   return (data as { storage_key: string } | null)?.storage_key ?? null;
 }
 
+/**
+ * SLICE 97 — back-office profiles for the PUBLIC vendors page.
+ *
+ * The public directory is derived from the live menu (SLICE 48), so this
+ * feeds enrichVendorDirectory (vendor-directory-core.ts) with what the back
+ * office knows: display/dba/legal names + aliases for matching, the uploaded
+ * logo URL, and about/mission copy. ALL vendors are considered (drafts too):
+ * the vendor is already publicly listed via the menu — this only decorates
+ * that existing listing with the logo/copy staff explicitly saved (logo
+ * uploads are stored status='published' because "logos are meant to be
+ * displayed"). Batched reads (3 queries), never N+1.
+ */
+export type PublicVendorProfile = {
+  display_name: string;
+  dba: string | null;
+  legal_name: string | null;
+  aliases: string[];
+  logoUrl: string | null;
+  about: string | null;
+  mission_statement: string | null;
+};
+
+export async function listPublicVendorProfiles(): Promise<PublicVendorProfile[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const vendors = await listVendors();
+  if (vendors.length === 0) return [];
+  const admin = createSupabaseAdminClient();
+  const [logoMap, aliasRows] = await Promise.all([
+    vendorLogoUrls(vendors),
+    (async () => {
+      // Page past the 1000-row cap like listVendors.
+      const PAGE = 1000;
+      const LIMIT = 10000;
+      const rows: { vendor_id: string; source_name: string }[] = [];
+      for (let from = 0; from < LIMIT; from += PAGE) {
+        const { data, error } = await admin
+          .from("vendor_aliases")
+          .select("vendor_id, source_name")
+          .range(from, Math.min(from + PAGE, LIMIT) - 1);
+        if (error || !data) break;
+        rows.push(...(data as { vendor_id: string; source_name: string }[]));
+        if (data.length < PAGE) break;
+      }
+      return rows;
+    })(),
+  ]);
+  const aliasesByVendor = new Map<string, string[]>();
+  for (const row of aliasRows) {
+    if (!aliasesByVendor.has(row.vendor_id)) aliasesByVendor.set(row.vendor_id, []);
+    aliasesByVendor.get(row.vendor_id)!.push(row.source_name);
+  }
+  return vendors.map((v) => ({
+    display_name: v.display_name,
+    dba: v.dba,
+    legal_name: v.legal_name,
+    aliases: aliasesByVendor.get(v.id) ?? [],
+    logoUrl: logoMap.get(v.id) ?? null,
+    about: v.about,
+    mission_statement: v.mission_statement,
+  }));
+}
+
 /** Map of vendor.id -> public logo URL, for list rendering without N+1 queries. */
 export async function vendorLogoUrls(vendors: Vendor[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();

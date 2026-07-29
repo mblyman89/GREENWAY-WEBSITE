@@ -20,6 +20,12 @@ export type VendorDirectoryEntry = {
   name: string;
   slug: string;
   productCount: number;
+  /** SLICE 97: real logo URL from the back office (media library), when the
+   * menu vendor matches a vendors-table profile. null -> placeholder. */
+  logoUrl?: string | null;
+  /** SLICE 97: real description from the back office (about, else mission
+   * statement), when matched. null -> placeholder copy. */
+  description?: string | null;
 };
 
 type VendorSourceItem = {
@@ -58,6 +64,84 @@ export function buildVendorDirectory(items: readonly VendorSourceItem[]): Vendor
 }
 
 // ---------------------------------------------------------------------------
+// SLICE 97 — connect the directory to the BACK-OFFICE vendor profiles.
+//
+// ROOT CAUSE of "I added a logo in the vendor detail page and the public
+// vendors page didn't update": this page NEVER read the vendors table. The
+// directory is derived from live menu items (SLICE 48) and the card component
+// hardcoded a placeholder logo for every vendor. The back-office save was
+// always correct (vendors.logo_media_id + media_assets + revalidatePath);
+// the public page simply never looked.
+//
+// Fix: enrichVendorDirectory folds the back-office profiles (logo URL +
+// about/mission copy) into the menu-derived entries. Matching mirrors the
+// intake resolution ladder, pure and read-only:
+//   1. exact case/whitespace-insensitive display_name,
+//   2. vendor_aliases source_name (how menu vendor names were born),
+//   3. normalized display_name/dba/legal_name ("Fair-Winds, LLC." ===
+//      "fair winds llc").
+// Unmatched entries keep logoUrl/description null -> the card falls back to
+// the placeholder exactly as before (honest degradation, never a broken img).
+// ---------------------------------------------------------------------------
+
+export type VendorProfileSource = {
+  display_name: string;
+  dba?: string | null;
+  legal_name?: string | null;
+  /** vendor_aliases.source_name values for this vendor. */
+  aliases?: readonly string[];
+  logoUrl?: string | null;
+  about?: string | null;
+  mission_statement?: string | null;
+};
+
+function simpleKey(value: unknown): string {
+  return normalizeWhitespace(value).toLowerCase();
+}
+
+/** Aggressive name key: punctuation/suffix-drift tolerant (po-match parity). */
+export function normalizedVendorKey(value: unknown): string {
+  return simpleKey(value)
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function enrichVendorDirectory(
+  entries: readonly VendorDirectoryEntry[],
+  profiles: readonly VendorProfileSource[],
+): VendorDirectoryEntry[] {
+  // Precedence: exact display_name beats alias beats normalized scan; within
+  // a tier the FIRST profile wins (deterministic — callers pass a stable
+  // order). Blank keys never index (mirrors related-products-core's lesson).
+  const byExact = new Map<string, VendorProfileSource>();
+  const byAlias = new Map<string, VendorProfileSource>();
+  const byNorm = new Map<string, VendorProfileSource>();
+  for (const p of profiles) {
+    const exact = simpleKey(p.display_name);
+    if (exact && !byExact.has(exact)) byExact.set(exact, p);
+    for (const alias of p.aliases ?? []) {
+      const key = simpleKey(alias);
+      if (key && !byAlias.has(key)) byAlias.set(key, p);
+    }
+    for (const candidate of [p.display_name, p.dba, p.legal_name]) {
+      const norm = normalizedVendorKey(candidate);
+      if (norm && !byNorm.has(norm)) byNorm.set(norm, p);
+    }
+  }
+  return entries.map((entry) => {
+    const exact = simpleKey(entry.name);
+    const profile =
+      byExact.get(exact) ?? byAlias.get(exact) ?? byNorm.get(normalizedVendorKey(entry.name));
+    if (!profile) return { ...entry, logoUrl: null, description: null };
+    const description =
+      normalizeWhitespace(profile.about) || normalizeWhitespace(profile.mission_statement) || null;
+    return { ...entry, logoUrl: profile.logoUrl ?? null, description };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (pure, no I/O)
 // ---------------------------------------------------------------------------
 export function __runVendorDirectoryCoreTests(): void {
@@ -92,6 +176,67 @@ export function __runVendorDirectoryCoreTests(): void {
   // Name-alphabetical tiebreak at equal counts.
   const tie = buildVendorDirectory([{ vendor: "Zeta" }, { vendor: "Alpha" }]);
   ok(tie[0].name === "Alpha" && tie[1].name === "Zeta", "alphabetical tiebreak at equal counts");
+
+  // --- SLICE 97: enrichVendorDirectory ---
+  const entries = buildVendorDirectory([
+    { vendor: "CERES" },
+    { vendor: "Fair-Winds, LLC." },
+    { vendor: "2727" },
+    { vendor: "Mystery Farms" },
+  ]);
+  const profiles: VendorProfileSource[] = [
+    {
+      display_name: "Ceres",
+      logoUrl: "https://x.supabase.co/storage/v1/object/public/media/ceres.png",
+      about: "  Craft topicals from Washington.  ",
+      mission_statement: "unused when about present",
+    },
+    {
+      display_name: "Fairwinds Manufacturing",
+      legal_name: "Fair Winds LLC",
+      logoUrl: "https://x.supabase.co/storage/v1/object/public/media/fw.png",
+      about: null,
+      mission_statement: "Plant-powered wellness.",
+    },
+    {
+      display_name: "Twenty Seven Twenty Seven",
+      aliases: ["2727", "2727 - 413999"],
+      logoUrl: null, // profile matched but no logo uploaded yet
+      about: "Bold concentrates.",
+    },
+  ];
+  const enriched = enrichVendorDirectory(entries, profiles);
+  const byName = new Map(enriched.map((e) => [e.name, e]));
+  ok(
+    byName.get("CERES")?.logoUrl === "https://x.supabase.co/storage/v1/object/public/media/ceres.png",
+    "exact name match is case-insensitive (CERES -> Ceres profile logo)",
+  );
+  ok(
+    byName.get("CERES")?.description === "Craft topicals from Washington.",
+    "about wins and is whitespace-normalized",
+  );
+  ok(
+    byName.get("Fair-Winds, LLC.")?.logoUrl === "https://x.supabase.co/storage/v1/object/public/media/fw.png",
+    "normalized legal_name matches punctuation drift (Fair-Winds, LLC.)",
+  );
+  ok(
+    byName.get("Fair-Winds, LLC.")?.description === "Plant-powered wellness.",
+    "mission statement fills in when about is empty",
+  );
+  ok(byName.get("2727")?.logoUrl === null, "alias match without a logo stays null (placeholder)");
+  ok(byName.get("2727")?.description === "Bold concentrates.", "alias match carries the description");
+  ok(
+    byName.get("Mystery Farms")?.logoUrl === null && byName.get("Mystery Farms")?.description === null,
+    "unmatched vendor degrades honestly to nulls (placeholder card unchanged)",
+  );
+  ok(enriched.length === entries.length && enriched[0].productCount === entries[0].productCount,
+    "enrichment never adds/drops/reorders entries or touches counts");
+  // Blank profile names never match blank-ish entries.
+  const blankSafe = enrichVendorDirectory(
+    [{ name: "Real", slug: "real", productCount: 1 }],
+    [{ display_name: "", logoUrl: "https://x/no.png" }],
+  );
+  ok(blankSafe[0].logoUrl === null, "blank profile display_name never forms a match key");
 
   console.log(`vendor-directory-core: ${passed} assertions passed`);
 }

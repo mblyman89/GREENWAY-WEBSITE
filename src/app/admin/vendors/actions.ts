@@ -140,6 +140,10 @@ export async function updateVendor(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/vendors");
   revalidatePath(`/admin/vendors/${id}`);
+  // SLICE 97: the public vendors page shows this profile's logo + copy, so a
+  // profile save must refresh it (previously only publish/merge did — the
+  // reason a newly uploaded logo never appeared on /vendor-delivery).
+  revalidatePath("/vendor-delivery");
   redirect(`/admin/vendors/${id}?saved=1`);
 }
 
@@ -988,6 +992,8 @@ export async function importHarvestImageAction(formData: FormData): Promise<void
     });
 
     revalidatePath(back);
+    // SLICE 97: an assigned vendor logo shows on the public vendors page.
+    if (assign && entityType === "vendor") revalidatePath("/vendor-delivery");
     redirect(`${back}?saved=1&note=${encodeURIComponent(note)}`);
   } catch (err) {
     unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate

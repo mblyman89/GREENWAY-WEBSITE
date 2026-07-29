@@ -5,8 +5,9 @@ import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
-import { buildVendorDirectory } from "@/lib/menu/vendor-directory-core";
+import { buildVendorDirectory, enrichVendorDirectory } from "@/lib/menu/vendor-directory-core";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
+import { listPublicVendorProfiles } from "@/lib/vendors/store";
 
 export const metadata = pageMetadata({
   title: "Vendors & Partners — Washington Cannabis Brands",
@@ -16,17 +17,20 @@ export const metadata = pageMetadata({
 });
 
 export default async function VendorDeliveryPage() {
-  const [copy, preview, banners, menuItems] = await Promise.all([
+  const [copy, preview, banners, menuItems, profiles] = await Promise.all([
     getContentValues(["vendors.outreach.heading"]),
     isPreviewActive(),
     getPageBanners("vendors", ["vendors.grow", "vendors.brands"]),
     loadLiveMenuAll(),
+    listPublicVendorProfiles(),
   ]);
 
   // SLICE 48: vendor directory is now derived live from the menu instead of
   // the retired static vendors.json snapshot. buildVendorDirectory skips
   // hidden items itself, so we hand it the full menu.
-  const vendors = buildVendorDirectory(menuItems);
+  // SLICE 97: fold in the back-office vendor profiles (uploaded logo +
+  // about/mission copy) so a logo saved on the vendor detail page shows here.
+  const vendors = enrichVendorDirectory(buildVendorDirectory(menuItems), profiles);
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
