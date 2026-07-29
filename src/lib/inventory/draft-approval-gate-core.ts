@@ -172,6 +172,40 @@ export function websiteCategoryLabel(value: string | null | undefined): string |
 }
 
 // ---------------------------------------------------------------------------
+// SLICE 91 - the pickers are ALWAYS on the approve form now (owner: "I want to
+// be able to edit each one just in case"). The empty option's label must tell
+// the truth about what leaving it alone means: when a pick is REQUIRED it says
+// "Pick a ...", and when the machine already classified the product it says
+// "Keep auto: X" - submitting the empty option sends NO override, so the
+// machine's verdict (and its audit provenance) stays intact. Only an actual
+// selection records a human pick.
+// ---------------------------------------------------------------------------
+
+/** Label for the category picker's empty option. */
+export function categoryPickerPlaceholder(input: {
+  needsCategoryPick: boolean;
+  /** Display label of the resolver's category (null when unmapped). */
+  resolvedLabel: string | null;
+}): string {
+  const label = input.resolvedLabel?.trim() || null;
+  if (input.needsCategoryPick || !label) return "Pick a category\u2026";
+  return `Keep auto: ${label}`;
+}
+
+/** Label for the product-type picker's empty option. */
+export function typePickerPlaceholder(input: {
+  needsTypePick: boolean;
+  /** The labeler's auto-assigned type (null when it had none at >=90%). */
+  autoType: string | null;
+  /** The labeler's confidence (only shown alongside a kept auto type). */
+  confidence: number;
+}): string {
+  const type = input.autoType?.trim() || null;
+  if (input.needsTypePick || !type) return "Pick a product type\u2026";
+  return `Keep auto: ${type} (${input.confidence}% confident)`;
+}
+
+// ---------------------------------------------------------------------------
 // Embedded self-tests (house pattern; run by scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 export function __runDraftApprovalGateTests(): { passed: number } {
@@ -309,12 +343,44 @@ export function __runDraftApprovalGateTests(): { passed: number } {
     ok(!r.ok && r.code === "category_invalid", "extras don't open the gate for junk");
   }
 
-  // 7) Label helper stays on the taxonomy.
+  // 7) SLICE 91: always-on picker placeholders tell the truth about "empty".
+  {
+    ok(
+      categoryPickerPlaceholder({ needsCategoryPick: true, resolvedLabel: null }) === "Pick a category\u2026",
+      "required category: pick prompt",
+    );
+    ok(
+      categoryPickerPlaceholder({ needsCategoryPick: false, resolvedLabel: "Cartridge" }) ===
+        "Keep auto: Cartridge",
+      "optional category: keep-auto label",
+    );
+    ok(
+      categoryPickerPlaceholder({ needsCategoryPick: false, resolvedLabel: "  " }) === "Pick a category\u2026",
+      "blank resolved label falls back to the pick prompt",
+    );
+    ok(
+      typePickerPlaceholder({ needsTypePick: true, autoType: null, confidence: 0 }) ===
+        "Pick a product type\u2026",
+      "required type: pick prompt",
+    );
+    ok(
+      typePickerPlaceholder({ needsTypePick: false, autoType: "Gummies", confidence: 95 }) ===
+        "Keep auto: Gummies (95% confident)",
+      "optional type: keep-auto label with confidence",
+    );
+    ok(
+      typePickerPlaceholder({ needsTypePick: false, autoType: null, confidence: 0 }) ===
+        "Pick a product type\u2026",
+      "no auto type falls back to the pick prompt",
+    );
+  }
+
+  // 8) Label helper stays on the taxonomy.
   ok(websiteCategoryLabel("edible-solid") === "Edible (Solid)", "label helper uses taxonomy");
   ok(websiteCategoryLabel("mystery-cat") === "mystery-cat", "unknown value passes through");
   ok(websiteCategoryLabel(null) === null, "null stays null");
 
-  // 8) Vocabulary sanity: both closed sets are non-trivial and disjoint in kind.
+  // 9) Vocabulary sanity: both closed sets are non-trivial and disjoint in kind.
   ok(CATEGORY_VALUES.size >= 20, "category vocabulary present");
   ok(HOUSE_TYPE_LABELS.size >= 50, "house-type vocabulary present");
   ok(CATEGORY_VALUES.has("disposable-cartridge"), "taxonomy value present");

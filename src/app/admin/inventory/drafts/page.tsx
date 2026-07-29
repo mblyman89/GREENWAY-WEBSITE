@@ -15,6 +15,8 @@ import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resol
 import {
   assessDraftClassification,
   websiteCategoryLabel,
+  categoryPickerPlaceholder,
+  typePickerPlaceholder,
   type DraftClassificationAssessment,
 } from "@/lib/inventory/draft-approval-gate-core";
 // SLICE 78: the category picker lists the DB-backed registry (owner's
@@ -312,58 +314,68 @@ export default async function CatalogDraftsPage({
                               <form action={approve} className="flex flex-col items-end gap-2">
                                 {/* SLICE 64: required picks when we couldn't
                                     classify at >=90% confidence. The server
-                                    re-checks — this is UX, not the gate. */}
-                                {needsCategoryPick && (
-                                  <Select
-                                    name="website_category"
-                                    required
-                                    defaultValue=""
-                                    className="w-48 text-xs"
-                                    aria-label="Website category"
-                                  >
-                                    <option value="" disabled>
-                                      Pick a category…
+                                    re-checks — this is UX, not the gate.
+                                    SLICE 91 (owner): BOTH pickers are now on
+                                    EVERY draft row — "I want to be able to
+                                    edit each one just in case." When the
+                                    machine already classified the product the
+                                    empty option reads "Keep auto: X" and
+                                    submits NO override; only an actual
+                                    selection records a human pick. */}
+                                <Select
+                                  name="website_category"
+                                  required={needsCategoryPick}
+                                  defaultValue=""
+                                  className="w-48 text-xs"
+                                  aria-label="Website category"
+                                >
+                                  <option value="" disabled={needsCategoryPick}>
+                                    {categoryPickerPlaceholder({
+                                      needsCategoryPick,
+                                      resolvedLabel: displayCategory
+                                        ? websiteCategoryLabel(displayCategory)
+                                        : null,
+                                    })}
+                                  </option>
+                                  {categoryChoices.map(([value, label]) => (
+                                    <option key={value} value={value}>
+                                      {label}
                                     </option>
-                                    {categoryChoices.map(([value, label]) => (
-                                      <option key={value} value={value}>
-                                        {label}
-                                      </option>
-                                    ))}
-                                    {/* SLICE 78: create a category without leaving
-                                        onboarding — name it in the box below. */}
-                                    <option value="__new__">➕ Create a new category…</option>
-                                  </Select>
-                                )}
-                                {needsCategoryPick && (
-                                  <Input
-                                    name="new_category_label"
-                                    placeholder="New category name (only if creating one)"
-                                    className="w-48 text-xs"
-                                    aria-label="New category name"
-                                  />
-                                )}
-                                {needsTypePick && (
-                                  <Select
-                                    name="house_type"
-                                    required
-                                    defaultValue={a?.suggestedHouseType ?? ""}
-                                    className="w-48 text-xs"
-                                    aria-label="Product type"
-                                  >
-                                    <option value="" disabled>
-                                      Pick a product type…
-                                    </option>
-                                    {typeGroups.map((g) => (
-                                      <optgroup key={g.category} label={g.categoryLabel}>
-                                        {g.types.map((t) => (
-                                          <option key={t.label} value={t.label}>
-                                            {t.label}
-                                          </option>
-                                        ))}
-                                      </optgroup>
-                                    ))}
-                                  </Select>
-                                )}
+                                  ))}
+                                  {/* SLICE 78: create a category without leaving
+                                      onboarding — name it in the box below. */}
+                                  <option value="__new__">➕ Create a new category…</option>
+                                </Select>
+                                <Input
+                                  name="new_category_label"
+                                  placeholder="New category name (only if creating one)"
+                                  className="w-48 text-xs"
+                                  aria-label="New category name"
+                                />
+                                <Select
+                                  name="house_type"
+                                  required={needsTypePick}
+                                  defaultValue={needsTypePick ? a?.suggestedHouseType ?? "" : ""}
+                                  className="w-48 text-xs"
+                                  aria-label="Product type"
+                                >
+                                  <option value="" disabled={needsTypePick}>
+                                    {typePickerPlaceholder({
+                                      needsTypePick,
+                                      autoType,
+                                      confidence: a?.house.confidence ?? 0,
+                                    })}
+                                  </option>
+                                  {typeGroups.map((g) => (
+                                    <optgroup key={g.category} label={g.categoryLabel}>
+                                      {g.types.map((t) => (
+                                        <option key={t.label} value={t.label}>
+                                          {t.label}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                </Select>
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[var(--admin-text-faint)]">$</span>
