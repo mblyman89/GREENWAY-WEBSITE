@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
+import { chipGlowFor, targetVendorId, type ChipGlow } from "@/lib/kb/vendor-crawl-status-core";
 
 /**
  * A completed target is "jumpable" when it maps to a real vendor page — i.e. an
@@ -21,11 +22,37 @@ import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
  * and have no vendor page yet).
  */
 function jumpableVendorId(t: { entity_type?: string; entity_id?: string }): string | null {
-  if (t.entity_type !== "vendor") return null;
-  const id = (t.entity_id ?? "").trim();
-  if (!id || id.startsWith("lead:")) return null;
-  return id;
+  return targetVendorId(t);
 }
+
+/** SLICE 89: how a back-to-vendor button GLOWS through the crawl lifecycle.
+ *  waiting = dim gold outline; running = pulsing purple; lit = bright green
+ *  glow (the "button lights up when the crawler is done" moment); failed =
+ *  red but still clickable. State lives on the worker's job list, so it is
+ *  remembered across page leaves for free. */
+const VENDOR_BTN_STYLE: Record<ChipGlow, string> = {
+  waiting:
+    "border-[var(--admin-gold)]/30 text-[var(--admin-gold)]/60 hover:bg-[var(--admin-gold)]/10",
+  running:
+    "border-[var(--admin-purple)]/50 text-[var(--admin-purple)] animate-pulse hover:bg-[var(--admin-purple)]/10",
+  lit:
+    "border-[var(--admin-accent)]/70 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] shadow-[0_0_10px_var(--admin-accent)] hover:bg-[var(--admin-accent)]/25",
+  failed: "border-red-400/50 text-red-300 hover:bg-red-400/10",
+};
+
+const VENDOR_BTN_ICON: Record<ChipGlow, string> = {
+  waiting: "⏳",
+  running: "⛏",
+  lit: "✅",
+  failed: "⚠",
+};
+
+const VENDOR_BTN_TITLE: Record<ChipGlow, string> = {
+  waiting: "Queued — the crawler hasn't reached this site yet",
+  running: "The crawler is reading this site right now",
+  lit: "Done — the drafts are waiting on the vendor page",
+  failed: "This site failed — open the vendor page to retry or fix the URL",
+};
 
 type TargetState = {
   url: string;
@@ -264,29 +291,34 @@ export function HarvestJobsLive({
               </details>
             )}
 
-            {/* Jump to vendor — quick return to the vendor page(s) just
-                crawled, so the owner doesn't have to hunt for them again.
-                Shown for completed vendor targets (leads have no vendor page). */}
+            {/* SLICE 89: back-to-vendor buttons for EVERY vendor target —
+                dim while queued, pulsing while the crawler reads the site,
+                and LIT UP green the moment it finishes (remembered across
+                page leaves because the state lives on the worker). Leads
+                have no vendor page and are skipped. */}
             {(() => {
-              const jumpable = job.targets.filter(
-                (t) => t.status === "done" && jumpableVendorId(t),
-              );
+              const jumpable = job.targets.filter((t) => jumpableVendorId(t));
               if (jumpable.length === 0) return null;
               return (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="text-[10px] uppercase tracking-wide text-white/40">
-                    Jump to vendor{jumpable.length > 1 ? "s" : ""}:
+                    Back to vendor{jumpable.length > 1 ? "s" : ""}:
                   </span>
                   {jumpable.slice(0, 12).map((t) => {
                     const id = jumpableVendorId(t)!;
+                    const glow = chipGlowFor(t);
                     return (
                       <Link
                         key={id}
-                        href={`/admin/vendors/${id}`}
-                        className="max-w-[220px] truncate rounded-full border border-[var(--admin-accent)]/40 px-3 py-1 text-[10px] font-semibold text-[var(--admin-accent)] transition hover:bg-[var(--admin-accent)]/10"
-                        title={`Open ${t.display_name || t.url}`}
+                        href={`/admin/vendors/${id}${glow === "lit" ? "#ai-drafts" : ""}`}
+                        className={`max-w-[220px] truncate rounded-full border px-3 py-1 text-[10px] font-semibold transition ${VENDOR_BTN_STYLE[glow]}`}
+                        title={`${VENDOR_BTN_TITLE[glow]} — ${t.display_name || t.url}`}
+                        data-glow={glow}
                       >
-                        → {t.display_name || t.url}
+                        {VENDOR_BTN_ICON[glow]} {t.display_name || t.url}
+                        {glow === "lit" && (t.drafts_written ?? 0) > 0
+                          ? ` · ${t.drafts_written} drafts`
+                          : ""}
                       </Link>
                     );
                   })}
