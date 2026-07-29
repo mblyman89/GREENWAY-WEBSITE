@@ -13,6 +13,13 @@ export type CompletedOrderLine = {
   productName: string;
   brand: string;
   variantLabel: string;
+  /**
+   * Website category slug snapshot (SLICE 98). Drives the ounce display for
+   * topicals/edibles/liquids on the receipt. Optional: legacy sessionStorage
+   * entries and pre-0096 server rows lack it — those lines simply keep the
+   * raw label (honest degradation, never a crash).
+   */
+  category?: string | null;
   quantity: number;
   priceMinorUnits: number;
   /** Pre-discount per-item price (tax-inclusive). Equals priceMinorUnits when no sale. */

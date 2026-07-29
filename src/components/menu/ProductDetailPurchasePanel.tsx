@@ -10,6 +10,7 @@ import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvid
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
 import { collapseVariantsForDisplay } from "@/lib/menu/variant-collapse-core";
+import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 
 type ProductDetailPurchasePanelProps = {
   item: GreenwayMenuItem;
@@ -89,7 +90,9 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
                     : "border-white/25 bg-[#1a1a1a] text-white hover:border-white/60"
                 }`}
               >
-                {variant.label} — {formatMinorCurrency(variant.priceMinorUnits)}
+                {/* SLICE 98: topicals/edibles/liquids show ounces (display only;
+                    the raw label still keys the cart line + limit math). */}
+                {displayVariantLabel(variant.label, item.category)} — {formatMinorCurrency(variant.priceMinorUnits)}
                 {variant.medical ? (
                   <span className="ml-1.5 rounded-[0.3rem] border border-current px-1 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.12em]">
                     Med

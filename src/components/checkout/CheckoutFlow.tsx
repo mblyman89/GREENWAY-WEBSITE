@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
 import { CartEstimator } from "@/components/cart/CartEstimator";
 import { formatMinorCurrency } from "@/lib/leafly/format";
+import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { generateOrderNumber, persistCompletedOrder } from "@/lib/checkout/order";
 
 type CustomerInfo = {
@@ -168,6 +169,9 @@ export function CheckoutFlow() {
         productName: item.productName,
         brand: item.brand,
         variantLabel: item.variantLabel,
+        // SLICE 98: category snapshot so the confirmation receipt can show
+        // ounces for topicals/edibles/liquids (display only).
+        category: item.category,
         quantity: item.quantity,
         priceMinorUnits: item.effectivePriceMinorUnits,
         regularPriceMinorUnits: item.regularPriceMinorUnits,
@@ -282,7 +286,8 @@ export function CheckoutFlow() {
                     <p className="text-[0.66rem] font-black uppercase tracking-[0.16em] text-zinc-500">{item.brand}</p>
                     <p className="mt-0.5 truncate text-base font-black text-white">{item.productName}</p>
                     <p className="mt-1 text-xs font-bold uppercase tracking-[0.1em] text-[var(--greenway)]">
-                      Qty {item.quantity}{item.variantLabel ? ` · ${item.variantLabel}` : ""}
+                      {/* SLICE 98: ounce display for topicals/edibles/liquids (display only). */}
+                      Qty {item.quantity}{item.variantLabel ? ` · ${displayVariantLabel(item.variantLabel, item.category)}` : ""}
                     </p>
                   </div>
                   <div className="text-right leading-tight">

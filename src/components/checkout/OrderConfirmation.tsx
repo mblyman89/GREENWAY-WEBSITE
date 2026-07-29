@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
+import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { readCompletedOrder, type CompletedOrder } from "@/lib/checkout/order";
 import { useHydratedValue } from "@/lib/hooks/useHydratedValue";
 
@@ -115,7 +116,9 @@ export function OrderConfirmation() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-white">{line.productName}</p>
                       <p className="text-[0.66rem] font-bold uppercase tracking-[0.12em] text-zinc-500">
-                        {line.brand} · Qty {line.quantity}{line.variantLabel ? ` · ${line.variantLabel}` : ""}
+                        {/* SLICE 98: ounce display for topicals/edibles/liquids (display only;
+                            legacy lines without a category snapshot keep the raw label). */}
+                        {line.brand} · Qty {line.quantity}{line.variantLabel ? ` · ${displayVariantLabel(line.variantLabel, line.category ?? null)}` : ""}
                       </p>
                     </div>
                     <div className="shrink-0 text-right leading-tight">
