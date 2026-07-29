@@ -163,7 +163,7 @@ export const CONCIERGE_HINTS = {
   eta: "Estimated arrival from the vendor's transfer document. Turns red on the Receiving page if the truck is late.",
   coa: "Certificate of analysis captured from the transfer — opens the lab PDF. Every activated lot must have one on file.",
   manifest_number: "The manifest / transfer ID from the signed source document. Legally validated for CCRS — no need to re-verify it.",
-  invoice_number: "The vendor's order / invoice number from the transfer (external_id) — what you'd quote on the phone.",
+  invoice_number: "The vendor's order / invoice number, read from the transfer or the invoice text — what you'd quote on the phone. When the paperwork has no invoice # in any form, the manifest # is shown instead.",
   qty: "Shipped quantity from the manifest. Your ONE human job: confirm the physical count matches before accepting.",
   decision: "Accept = it physically arrived correct. Reject = refuse at the dock; it leaves with the driver and never enters your inventory.",
   departed: "When the load left the vendor, from the transfer document (a draft — verify during review).",
