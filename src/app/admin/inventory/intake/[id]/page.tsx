@@ -215,6 +215,10 @@ export default async function ManifestReviewPage({
   const withCoa = lots.filter((l) => l.lab_result_id).length;
   const missingCoa = lots.length - withCoa;
   const sampleCount = lots.filter((l) => l.is_sample).length;
+  // SLICE 101 — any line already marked refused makes this a PARTIAL finalize,
+  // so the why-partial note field becomes required up front (the server also
+  // validates, catching partials caused by dirty lots being held).
+  const hasRefusedLine = lots.some((l) => l.disposition === "rejected_at_dock");
   const coaLinks = Array.isArray(manifest.coa_links) ? manifest.coa_links : [];
 
   const rejectAction = rejectManifestAction.bind(null, id);
@@ -375,7 +379,14 @@ export default async function ManifestReviewPage({
             The notice could not be delivered to the vendor. Please try again or contact them directly.
           </div>
         )}
-        {error && error !== "sample_cap" && error !== "polink" && !error.startsWith("notify_") && (
+        {error === "partial_note" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-orange)]">
+            <strong>Note required.</strong> This intake is partial — some lines were refused or held
+            — so a note explaining why is required for the audit trail. Nothing was changed; add the
+            note next to the Finalize button and finalize again.
+          </div>
+        )}
+        {error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && !error.startsWith("notify_") && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
           </div>
@@ -891,7 +902,7 @@ export default async function ManifestReviewPage({
                 "Decide BEFORE you accept. Refuse questionable product at the dock rather than accepting it and rejecting/returning it later — once a lot is accepted it briefly enters inventory.",
                 "Because refused product was never yours, you file NOTHING with CCRS. Ask the vendor to submit a CCRS manifest Update (to fix a quantity) or Delete (to remove a line) so their record matches what physically stayed.",
                 "Do NOT create a return manifest for driver-present refusals. Contingency manifests are discontinued (WSLCB, Nov 2025).",
-                "When every line is decided, click Finalize intake. A mix of accept + reject marks the manifest 'Partially Accepted'.",
+                "When every line is decided, click Finalize intake. A mix of accept + reject marks the manifest 'Partially Accepted' — and a note explaining WHY it's partial is required (it lands on the permanent timeline for the audit trail).",
               ]}
             >
               <p className="text-xs text-[var(--admin-text-faint)]">
@@ -902,13 +913,36 @@ export default async function ManifestReviewPage({
 
             {/* GW-035: pinned finalize — this is the longest page in the
                 admin; the deciding action stays reachable while reviewing
-                every line. */}
+                every line. SLICE 101: when any line is refused (a partial
+                acceptance), the why-partial note is MANDATORY for the audit
+                trail — the field rides in the same form so it submits with
+                the finalize; the server validates before touching any lot. */}
             <StickyActionBar
-              status="Decide each line above, then finalize — undecided lines are accepted"
+              status={
+                hasRefusedLine
+                  ? "Partial acceptance — the note explaining why is required"
+                  : "Decide each line above, then finalize — undecided lines are accepted"
+              }
               statusTone="warning"
               align="between"
             >
-              <form action={finalizeAction} title={CONCIERGE_HINTS.finalize}>
+              <form
+                action={finalizeAction}
+                title={CONCIERGE_HINTS.finalize}
+                className="flex flex-1 flex-wrap items-center justify-end gap-3"
+              >
+                <input
+                  type="text"
+                  name="partial_note"
+                  required={hasRefusedLine}
+                  placeholder={
+                    hasRefusedLine
+                      ? "Why is this partial? (required — audit trail)"
+                      : "Note (required only if this finalize ends up partial)"
+                  }
+                  title="Saved to the manifest's permanent timeline. Required whenever some lines are refused or held — the audit trail's why."
+                  className="w-full max-w-md rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none"
+                />
                 <Button type="submit" variant="save" size="sm">
                   ✓ Finalize intake
                 </Button>

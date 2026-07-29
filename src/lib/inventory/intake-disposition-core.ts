@@ -120,6 +120,53 @@ export function summarizeDispositions(
   return { total, accepted, rejected, pending, derivedStatus };
 }
 
+/**
+ * SLICE 101 — the ONE derivation of a finalized manifest's status, shared by
+ * the finalize path and its pre-flight prediction (same inputs → same answer):
+ *   - some activated + some refused/held  -> partially_accepted
+ *   - only activated                      -> accepted
+ *   - only held (dirty lots in quarantine)-> partially_accepted (not a refusal)
+ *   - nothing activated or held           -> rejected
+ */
+export function deriveManifestStatus(
+  activated: number,
+  rejected: number,
+  blockedCount: number,
+): DerivedManifestStatus {
+  if ((activated > 0 && rejected > 0) || (activated > 0 && blockedCount > 0)) {
+    return "partially_accepted";
+  }
+  if (activated > 0) return "accepted";
+  if (blockedCount > 0) return "partially_accepted";
+  return "rejected";
+}
+
+/**
+ * SLICE 101 — the owner's rule: a partial acceptance MUST carry a note
+ * explaining why, for the audit trail. Validation is pure so the finalize
+ * path can enforce it BEFORE any lot is touched. A note on a non-partial
+ * finalize is kept (harmless context), never required. Capped at 2000 chars.
+ */
+export function normalizePartialNote(
+  raw: string | null | undefined,
+  willBePartial: boolean,
+):
+  | { ok: true; note: string | null }
+  | { ok: false; error: string } {
+  const t = (raw ?? "").trim();
+  if (t.length === 0) {
+    if (willBePartial) {
+      return {
+        ok: false,
+        error:
+          "This intake is partial (some lines refused or held) — a note explaining why is required for the audit trail.",
+      };
+    }
+    return { ok: true, note: null };
+  }
+  return { ok: true, note: t.slice(0, 2000) };
+}
+
 /** Badge tone/label for the intake list + detail. */
 export function manifestStatusBadge(status: string): {
   tone: "green" | "gold" | "orange" | "danger" | "neutral";
@@ -195,6 +242,34 @@ export function __runDispositionTests(): { passed: number; failed: number } {
   ok(manifestStatusBadge("rejected").tone === "danger", "rejected danger");
   ok(manifestStatusBadge("accepted").tone === "green", "accepted green");
   ok(manifestStatusBadge("pending").label === "Pending", "pending label");
+  ok(
+    manifestStatusBadge("partially_accepted").label === "Partially Accepted",
+    "partial label distinct from Accepted",
+  );
+
+  // SLICE 101 — deriveManifestStatus (shared prediction + outcome)
+  ok(deriveManifestStatus(2, 1, 0) === "partially_accepted", "mixed accept/refuse -> partial");
+  ok(deriveManifestStatus(2, 0, 1) === "partially_accepted", "accept + held -> partial");
+  ok(deriveManifestStatus(3, 0, 0) === "accepted", "all activated -> accepted");
+  ok(deriveManifestStatus(0, 0, 2) === "partially_accepted", "only held -> partial (not rejected)");
+  ok(deriveManifestStatus(0, 3, 0) === "rejected", "all refused -> rejected");
+  ok(deriveManifestStatus(0, 0, 0) === "rejected", "nothing -> rejected (no lots activate)");
+
+  // SLICE 101 — normalizePartialNote (mandatory why-partial for the audit trail)
+  let n = normalizePartialNote("", true);
+  ok(n.ok === false, "partial without note refused");
+  if (!n.ok) ok(/required for the audit trail/.test(n.error), "refusal names the audit trail");
+  n = normalizePartialNote("   ", true);
+  ok(n.ok === false, "whitespace-only note refused on partial");
+  n = normalizePartialNote("2 cases crushed in transit; vendor short-shipped the pre-rolls", true);
+  ok(n.ok === true, "real note accepted on partial");
+  if (n.ok) ok(n.note === "2 cases crushed in transit; vendor short-shipped the pre-rolls", "note trimmed/kept");
+  n = normalizePartialNote(null, false);
+  ok(n.ok === true && n.note === null, "clean accept: no note required, none stored");
+  n = normalizePartialNote("extra context", false);
+  ok(n.ok === true && n.note === "extra context", "optional note kept on clean accept");
+  n = normalizePartialNote("x".repeat(3000), true);
+  ok(n.ok === true && n.ok && n.note !== null && n.note.length === 2000, "note capped at 2000 chars");
 
   return { passed, failed };
 }

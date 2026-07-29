@@ -38,6 +38,11 @@ import {
 } from "@/components/admin/inventory/EmailIntakeTable";
 import { listManifestDocLinks } from "@/lib/inventory/manifest-docs";
 import { ReceivingTabs } from "@/components/admin/inventory/ReceivingTabs";
+import {
+  resolveIntakeView,
+  applyIntakeView,
+  countProcessedRows,
+} from "@/lib/inventory/manifest-table-core";
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
 export const dynamic = "force-dynamic";
@@ -56,11 +61,17 @@ export default async function IntakePage({
     reperr?: string;
     tab?: string;
     back?: string;
+    view?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
-  const { error, kbdone, kbnew, kberr, repdone, replots, repitems, reperr, tab, back } =
+  const { error, kbdone, kbnew, kberr, repdone, replots, repitems, reperr, tab, back, view } =
     await searchParams;
+
+  // SLICE 101 — the owner's table filter: default hides accepted + partially
+  // accepted rows (done processing) so the manifests still needing attention
+  // are what staff see first; ?view=all shows everything, open rows first.
+  const intakeView = resolveIntakeView(view);
 
   // H15d — which tab is showing. Explicit ?tab= wins; a manual-form error
   // redirect (or a KB-backfill result banner) auto-opens Manual tools so its
@@ -285,9 +296,11 @@ export default async function IntakePage({
             invoice # + downloads. The strict H15b gate guarantees only real
             manifests appear here. */}
         <EmailIntakeTable
-          rows={manifests}
+          rows={applyIntakeView(manifests, intakeView)}
           linksByManifestId={linksByManifestId}
           docsByManifestId={docsByManifestId}
+          view={intakeView}
+          processedCount={countProcessedRows(manifests)}
         />
 
         {/* The single "Incoming (email)" table above is the one source of

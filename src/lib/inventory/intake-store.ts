@@ -63,6 +63,10 @@ import {
 } from "@/lib/inventory/manifest-dedupe-core";
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
+import {
+  deriveManifestStatus,
+  normalizePartialNote,
+} from "@/lib/inventory/intake-disposition-core";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -763,6 +767,14 @@ export async function gatherSampleCapNotice(manifestId: string): Promise<
 export async function finalizeManifestDispositions(
   manifestId: string,
   actorId: string | null,
+  opts?: {
+    /**
+     * SLICE 101 — the owner's rule: when the finalize is PARTIAL (some lines
+     * refused at dock or held dirty in quarantine) a note explaining why is
+     * MANDATORY for the audit trail. Validated BEFORE any lot is touched.
+     */
+    partialNote?: string | null;
+  },
 ): Promise<
   | {
       ok: true;
@@ -883,6 +895,34 @@ export async function finalizeManifestDispositions(
     for (const v of evaluateLotBatchActivation(facts).verdicts) gateByLotId.set(v.lotId, v);
   }
   const blocked: LotGateVerdict[] = [];
+  let partialNote: string | null = null;
+
+  // SLICE 101 — PREDICT the outcome from the same facts the loop below uses,
+  // BEFORE any lot is touched: a partial finalize (mixed accept/refuse, or any
+  // dirty lot held) requires the mandatory why-partial note. Failing validation
+  // here leaves every lot and the manifest completely untouched.
+  {
+    let willActivate = 0;
+    let willReject = 0;
+    let willBlock = 0;
+    for (const lot of rows) {
+      const decided = lot.disposition === "rejected_at_dock" ? "rejected_at_dock" : "accepted";
+      if (decided === "accepted") {
+        const gate = gateByLotId.get(lot.id);
+        if (gate && !gate.canActivate) willBlock += 1;
+        else willActivate += 1;
+      } else {
+        willReject += 1;
+      }
+    }
+    const predictedStatus = deriveManifestStatus(willActivate, willReject, willBlock);
+    const noteCheck = normalizePartialNote(
+      opts?.partialNote,
+      predictedStatus === "partially_accepted",
+    );
+    if (!noteCheck.ok) return { ok: false, error: noteCheck.error };
+    partialNote = noteCheck.note;
+  }
 
   let activated = 0;
   let rejected = 0;
@@ -944,18 +984,10 @@ export async function finalizeManifestDispositions(
   // derivedStatus reflects what actually happened. If lots were accepted but
   // HELD (blocked) while nothing cleanly activated or was refused, the manifest
   // is only "partially_accepted" (some product is stuck in quarantine awaiting a
-  // fix) rather than being falsely stamped "rejected".
-  let derivedStatus: "accepted" | "rejected" | "partially_accepted";
-  if ((activated > 0 && rejected > 0) || (activated > 0 && blocked.length > 0)) {
-    derivedStatus = "partially_accepted";
-  } else if (activated > 0) {
-    derivedStatus = "accepted";
-  } else if (blocked.length > 0) {
-    // Everything accepted was dirty and held: not a clean accept, not a refusal.
-    derivedStatus = "partially_accepted";
-  } else {
-    derivedStatus = "rejected";
-  }
+  // fix) rather than being falsely stamped "rejected". SLICE 101: the shared
+  // pure derivation (intake-disposition-core) — the SAME function the pre-flight
+  // note check used above, so prediction and outcome can never disagree.
+  const derivedStatus = deriveManifestStatus(activated, rejected, blocked.length);
 
   const { error } = await admin
     .from("inbound_manifests")
@@ -966,6 +998,10 @@ export async function finalizeManifestDispositions(
       accepted_lot_count: activated,
       rejected_lot_count: rejected,
       updated_by: actorId,
+      // SLICE 101 — the why-partial note also lives on the manifest row itself
+      // (existing notes column, no migration); only written when present so a
+      // clean accept never touches whatever notes the row already carries.
+      ...(partialNote ? { notes: `Partial acceptance: ${partialNote}`.slice(0, 2000) } : {}),
     })
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
@@ -976,10 +1012,13 @@ export async function finalizeManifestDispositions(
           .map((v) => `${v.label ?? v.lotId} [${v.reasons.map((r) => r.code).join(",")}]`)
           .join("; ")}.`
       : "";
+  // SLICE 101 — the mandatory why-partial note lands on the permanent timeline
+  // (audit trail), attributed to the reviewer.
+  const whyPartial = partialNote ? ` Why partial: ${partialNote}` : "";
   await logManifestEvent(
     manifestId,
     derivedStatus,
-    `Finalized: ${activated} activated, ${rejected} refused at dock.${blockedNote} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
+    `Finalized: ${activated} activated, ${rejected} refused at dock.${blockedNote}${whyPartial} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
     actorId,
   );
 

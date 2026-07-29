@@ -183,6 +183,47 @@ export function movingBadge(
   }
 }
 
+// ── SLICE 101: table view filter ──────────────────────────────────────────
+
+/**
+ * The owner's filter for the Incoming (email) table: hide manifests that are
+ * already fully processed (accepted OR partially accepted) so the rows that
+ * still need attention are what staff see first. Rejected rows stay visible
+ * ("I want all other manifests to be visible in the table first").
+ */
+export type IntakeTableView = "action" | "all";
+
+export function resolveIntakeView(v: string | null | undefined): IntakeTableView {
+  return v === "all" ? "all" : "action";
+}
+
+/** True when the manifest is done processing (accepted or partially accepted). */
+export function isProcessedManifest(status: string | null | undefined): boolean {
+  const stage = normalizeStage(status);
+  return stage === "accepted" || stage === "partially_accepted";
+}
+
+/**
+ * Apply the view to the rows (PURE, order-preserving):
+ *  - "action" (default): processed rows (accepted + partially accepted) hidden;
+ *  - "all": every row, but the still-open ones FIRST (each group keeps its
+ *    newest-first order) — the owner's "all other manifests visible first".
+ */
+export function applyIntakeView<T extends { status: string | null }>(
+  rows: readonly T[],
+  view: IntakeTableView,
+): T[] {
+  if (view === "action") return rows.filter((r) => !isProcessedManifest(r.status));
+  const open = rows.filter((r) => !isProcessedManifest(r.status));
+  const processed = rows.filter((r) => isProcessedManifest(r.status));
+  return [...open, ...processed];
+}
+
+/** How many rows the "action" view is hiding (for the toggle label). */
+export function countProcessedRows(rows: readonly { status: string | null }[]): number {
+  return rows.reduce((n, r) => n + (isProcessedManifest(r.status) ? 1 : 0), 0);
+}
+
 // ── "Pulled in" timestamp ───────────────────────────────────────────────────
 
 /**
