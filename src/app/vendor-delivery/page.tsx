@@ -18,7 +18,8 @@ export const metadata = pageMetadata({
 
 export default async function VendorDeliveryPage() {
   const [copy, preview, banners, menuItems, profiles] = await Promise.all([
-    getContentValues(["vendors.outreach.heading"]),
+    // SLICE 99: the outreach paragraph joins the heading as editable copy.
+    getContentValues(["vendors.outreach.heading", "vendors.outreach.body"]),
     isPreviewActive(),
     getPageBanners("vendors", ["vendors.grow", "vendors.brands"]),
     loadLiveMenuAll(),
@@ -40,6 +41,7 @@ export default async function VendorDeliveryPage() {
         vendors={vendors}
         content={{
           heading: copy["vendors.outreach.heading"],
+          body: copy["vendors.outreach.body"],
           editable: preview,
           grow: banners.byKey["vendors.grow"],
           brands: banners.byKey["vendors.brands"],

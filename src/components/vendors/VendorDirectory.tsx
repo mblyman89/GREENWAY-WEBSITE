@@ -5,6 +5,10 @@ import { useState } from "react";
 import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
 import { greenwayBusiness } from "@/content/business";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
+import {
+  VENDOR_CONTACT_CHANNELS,
+  vendorMailtoHref,
+} from "@/lib/vendors/vendor-relations-core";
 
 // SLICE 48 (owner Q3): the static vendors.json snapshot is retired. Vendors
 // now arrive as a prop, derived from the LIVE published menu by the server
@@ -136,6 +140,8 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
 
 type VendorContent = {
   heading?: string;
+  /** SLICE 99: the outreach paragraph is editable in the back office too. */
+  body?: string;
   editable?: boolean;
   /** Builder-managed banners (from page_sections). When present they drive the
    * two hero banners; otherwise the hardcoded defaults below are used. */
@@ -181,12 +187,16 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             >
               {content?.heading || "Let's Work Together"}
             </h2>
-            <p className="mt-3 text-sm leading-relaxed text-zinc-300 md:text-base">
-              Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington,
-              proudly serving the Kitsap Peninsula. We&apos;re always looking to connect with licensed I-502
-              producers and processors who make exceptional product. If you&apos;d like to send samples,
-              schedule a vendor day, or explore getting your line on our shelves, reach out — our buying
-              team would love to hear from you.
+            {/* SLICE 99: paragraph is editable copy now (vendors.outreach.body),
+                seeded with the exact previous wording so the live look holds. */}
+            <p
+              className="mt-3 text-sm leading-relaxed text-zinc-300 md:text-base"
+              {...(content?.editable
+                ? { "data-gw-block": "vendors.outreach.body", "data-gw-editable": "true" }
+                : {})}
+            >
+              {content?.body ||
+                "Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington, proudly serving the Kitsap Peninsula. We're always looking to connect with licensed I-502 producers and processors who make exceptional product. If you'd like to send samples, schedule a vendor day, or explore getting your line on our shelves, reach out — our buying team would love to hear from you."}
             </p>
             <a
               href={`${greenwayBusiness.emailHref}?subject=${encodeURIComponent(EMAIL_SUBJECT)}${
@@ -200,6 +210,36 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             <p className="mt-3 text-xs font-semibold text-zinc-500">
               {greenwayBusiness.email}
             </p>
+
+            {/* SLICE 99: dedicated vendor-relations channels. Samples, promos,
+                and vendor days go to the vendor_intake@ mailbox Michael reads;
+                menus go to vendor_menu@ (auto-parsed into the back office);
+                manifests go to vendor_intake@ (auto-staged into receiving).
+                All buttons open a BLANK-body draft with a prefilled subject. */}
+            <div className="mt-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-5">
+              {VENDOR_CONTACT_CHANNELS.map((channel) => (
+                <a
+                  key={channel.key}
+                  href={vendorMailtoHref(channel.email, channel.subject)}
+                  className="group flex flex-col rounded-xl border border-white/10 bg-black/40 p-4 transition hover:-translate-y-0.5 hover:border-[var(--greenway)]/60"
+                >
+                  <span className="text-[0.72rem] font-black uppercase tracking-wide text-[var(--greenway)]">
+                    {channel.title}
+                  </span>
+                  <span className="mt-1.5 flex-1 text-[0.7rem] leading-relaxed text-zinc-400">
+                    {channel.blurb}
+                  </span>
+                  <span className="mt-3 break-all text-[0.66rem] font-bold text-zinc-300 group-hover:text-white">
+                    {channel.email}
+                  </span>
+                  {channel.automated ? (
+                    <span className="mt-1.5 text-[0.6rem] font-semibold uppercase tracking-wide text-zinc-500">
+                      Parsed automatically
+                    </span>
+                  ) : null}
+                </a>
+              ))}
+            </div>
           </div>
         </section>
 
