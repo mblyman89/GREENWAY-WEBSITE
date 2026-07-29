@@ -33,6 +33,7 @@ import {
   type BridgeOutcome,
   type ManifestLotFacts,
 } from "@/lib/inventory/manifest-kb-bridge-core";
+import { enrichVendorFromRawText } from "@/lib/inventory/vendor-goldminer-store";
 
 type LotRow = ManifestLotFacts & { id: string };
 
@@ -125,6 +126,20 @@ export async function promoteManifestToKb(
     } catch (err) {
       outcome.skipped += 1;
       console.error("[manifest-kb-bridge] writeBackProductFacts failed:", err);
+    }
+  }
+
+  // SLICE 102: gold-miner second chance. A manifest staged from a flattened
+  // PDF keeps that text as raw_payload — mine it for the vendor's contact
+  // facts (email / phone / license / address) and gap-fill EMPTY vendor
+  // columns, so manifests that arrived BEFORE the email-time miner existed
+  // still enrich their vendor at finalize / backfill. Fill-only-empty,
+  // license-conflict interlocked, audited on the timeline. Never throws.
+  if (manifest.vendor_id) {
+    try {
+      await enrichVendorFromRawText(manifestId, manifest.vendor_id, manifest.raw_payload, actorId);
+    } catch (err) {
+      console.warn("[manifest-kb-bridge] gold-miner enrichment skipped:", err);
     }
   }
 

@@ -71,6 +71,8 @@ import { extractGenericPdfTransport } from "@/lib/inventory/pdf-generic-transpor
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 import { archiveManifestDocuments } from "@/lib/inventory/manifest-docs";
 import { mergeTransportFillEmpty } from "@/lib/inventory/manifest-merge-core";
+import { classifyMinerKind, type MinerSource } from "@/lib/inventory/vendor-goldminer-core";
+import { enrichVendorFromIntakeDocs } from "@/lib/inventory/vendor-goldminer-store";
 
 export type InboundDisposition =
   | "received"
@@ -258,12 +260,25 @@ export async function stageManifestsFromEmail(
   // H18: donors are now built whenever ANY PDF rides the email (not only when
   // a textual manifest is also present) so the PDF-primary path below can fold
   // a sibling document's transport too.
+  // SLICE 102 — vendor GOLD MINER sources. Every non-COA PDF's extracted text
+  // is kept (tagged manifest / invoice / transport) so that, after a manifest
+  // stages, the vendor's own paperwork can gap-fill the vendor profile
+  // (email, phone, license, address). COAs are deliberately excluded — a lab
+  // report prints the LAB's contact details, which must never be proposed as
+  // the vendor's. The email body rides along as the last-resort source.
+  const minerSources: MinerSource[] = [];
   const pdfDonors: TransportDonor[] = [];
   const invoiceDonors: TransportDonor[] = [];
   if (pdfCands.length > 0) {
     for (const att of pdfCands) {
       if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
       const parsed = await parsePdfManifestFromBase64(att.base64 as string);
+      if (parsed.text) {
+        minerSources.push({
+          kind: classifyMinerKind(classifyAttachmentRole(att), parsed.text),
+          text: parsed.text,
+        });
+      }
       if (parsed.ok) {
         // SLICE 69: a layout parser can read the LINES perfectly yet miss
         // transport fields its layout doesn't print where expected (the
@@ -326,6 +341,11 @@ export async function stageManifestsFromEmail(
     });
   }
 
+  // SLICE 102: the body text is also a (last-resort) gold-miner source.
+  if (typeof email.bodyText === "string" && email.bodyText.trim().length > 0) {
+    minerSources.push({ kind: "email-body", text: email.bodyText });
+  }
+
   // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
   //    verifiable manifests stage; junk (tracking exports, receipts, random
   //    JSON) is skipped WITHOUT counting as a failure — it's logged on the
@@ -359,6 +379,9 @@ export async function stageManifestsFromEmail(
       } catch (err) {
         console.warn("[inbound-email] document archive skipped:", err);
       }
+      // SLICE 102: gap-fill the vendor profile from the email's own documents
+      // (fill-only-empty; audited on the manifest timeline; never throws).
+      await enrichVendorFromIntakeDocs(staged.manifestId, minerSources, email.from, actorId);
       await autoAdvanceInTransit(staged.manifestId, actorId);
     } else if (staged.duplicate) {
       // Re-sent / duplicate manifest already live in intake: don't re-stage,
@@ -486,6 +509,9 @@ export async function stageManifestsFromEmail(
             console.warn("[inbound-email] emailed COA archive skipped:", err);
           }
         }
+        // SLICE 102: gap-fill the vendor profile from the email's documents
+        // (fill-only-empty; audited on the manifest timeline; never throws).
+        await enrichVendorFromIntakeDocs(staged.manifestId, minerSources, email.from, actorId);
         await autoAdvanceInTransit(staged.manifestId, actorId);
       } else if (staged.duplicate) {
         // Re-sent / duplicate manifest already live in intake: don't re-stage,
