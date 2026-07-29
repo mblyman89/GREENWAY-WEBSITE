@@ -424,4 +424,95 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     seo_impact: true,
     defaultValue: "Privacy Policy",
   },
+
+  // ---- Header & Footer (SLICE 104) -----------------------------------------
+  // Editable footer link destinations. Every URL default mirrors the value the
+  // footer currently renders from src/content/business.ts, so seeding changes
+  // NOTHING on the live site. The two app-store links ship BLANK on purpose —
+  // there is no app yet, so an empty URL makes the public footer show the
+  // editable "not connected yet" message (below) instead of navigating to "#".
+  {
+    block_key: "footer.social.facebook.url",
+    page: "header-footer",
+    section: "follow",
+    label: "Follow Greenway — Facebook link",
+    help_text:
+      "Where the Facebook button in the footer sends visitors. Leave blank to show your 'not connected yet' message instead.",
+    field_type: "url",
+    defaultValue:
+      "https://www.facebook.com/greenway.greenway.5817?mibextid=wwXIfr&rdid=DduvyRreh4Goqmp4&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F17c7PxQyXY%2F%3Fmibextid%3DwwXIfr#",
+  },
+  {
+    block_key: "footer.social.instagram.url",
+    page: "header-footer",
+    section: "follow",
+    label: "Follow Greenway — Instagram link",
+    help_text:
+      "Where the Instagram button in the footer sends visitors. Leave blank to show your 'not connected yet' message instead.",
+    field_type: "url",
+    defaultValue: "https://www.instagram.com/greenwaymj_",
+  },
+  {
+    block_key: "footer.social.google.url",
+    page: "header-footer",
+    section: "follow",
+    label: "Follow Greenway — Google link",
+    help_text:
+      "Where the Google button in the footer sends visitors (usually your Google Maps / Business profile). Leave blank to show your 'not connected yet' message instead.",
+    field_type: "url",
+    defaultValue:
+      "https://www.google.com/maps/place/Greenway+Marijuana/@47.5046241,-122.6410196,17z/data=!3m1!4b1!4m6!3m5!1s0x549049c49eee5f27:0xa5bc6e45aaad6ff!8m2!3d47.5046205!4d-122.6384447!16s%2Fg%2F11b6xmnx2s?entry=ttu&g_ep=EgoyMDI2MDYxNi4wIKXMDSoASAFQAw%3D%3D",
+  },
+  {
+    block_key: "footer.social.yelp.url",
+    page: "header-footer",
+    section: "follow",
+    label: "Follow Greenway — Yelp link",
+    help_text:
+      "Where the Yelp button in the footer sends visitors. Leave blank to show your 'not connected yet' message instead.",
+    field_type: "url",
+    defaultValue:
+      "https://www.yelp.com/biz/greenway-marijuana-port-orchard-2?osq=greenway+marijuana",
+  },
+  {
+    block_key: "footer.social.leafly.url",
+    page: "header-footer",
+    section: "follow",
+    label: "Follow Greenway — Leafly link",
+    help_text:
+      "Where the Leafly button in the footer sends visitors. Leave blank to show your 'not connected yet' message instead.",
+    field_type: "url",
+    defaultValue: "https://www.leafly.com/dispensary-info/greenway-marijuana",
+  },
+  {
+    block_key: "footer.app.apple.url",
+    page: "header-footer",
+    section: "app",
+    label: "App download — Apple App Store link",
+    help_text:
+      "Where the Apple App Store button sends visitors. Leave blank until your app is live — visitors then see your 'not connected yet' message instead of a broken link.",
+    field_type: "url",
+    defaultValue: "",
+  },
+  {
+    block_key: "footer.app.google.url",
+    page: "header-footer",
+    section: "app",
+    label: "App download — Google Play link",
+    help_text:
+      "Where the Google Play button sends visitors. Leave blank until your app is live — visitors then see your 'not connected yet' message instead of a broken link.",
+    field_type: "url",
+    defaultValue: "",
+  },
+  {
+    block_key: "footer.link.unavailable.message",
+    page: "header-footer",
+    section: "app",
+    label: "Footer links — 'not connected yet' message",
+    help_text:
+      "The friendly message shown when a visitor clicks a footer link that doesn't have a destination saved yet (like the app buttons before your app launches).",
+    field_type: "plain",
+    defaultValue:
+      "This isn't available just yet — check back soon! In the meantime, give us a call or stop by the shop.",
+  },
 ];

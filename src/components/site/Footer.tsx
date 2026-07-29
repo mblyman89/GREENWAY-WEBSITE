@@ -2,7 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
-import { getContentForRender } from "@/lib/cms/render-content";
+import { FooterLinkUnavailable } from "@/components/site/FooterLinkUnavailable";
+import { getContentForRender, getContentValues } from "@/lib/cms/render-content";
 
 const policyLinks = [
   { label: "Privacy Policy", href: "/privacy-policy" },
@@ -10,19 +11,44 @@ const policyLinks = [
   { label: "Consumer Health Data", href: "/consumer-health-data" },
 ];
 
+// The circular glyph styling shared by every app/social footer button, so the
+// editable versions render pixel-identical to the previous hardcoded links.
+const GLYPH_CLASS =
+  "inline-flex h-11 w-11 items-center justify-center rounded-full transition duration-200 hover:scale-105 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--greenway)]";
+
+// The editable footer link/message blocks (Admin -> Website -> Header & Footer).
+// Their seed defaults mirror the live URLs below, so the footer looks identical
+// until a staff member edits a block. The two app-store links seed BLANK on
+// purpose so they show the friendly "not connected yet" message for now.
+const FOOTER_LINK_BLOCKS = [
+  "footer.social.facebook.url",
+  "footer.social.instagram.url",
+  "footer.social.google.url",
+  "footer.social.yelp.url",
+  "footer.social.leafly.url",
+  "footer.app.apple.url",
+  "footer.app.google.url",
+  "footer.link.unavailable.message",
+] as const;
+
+type FooterLinks = Record<string, string>;
+
 // App store glyphs (steel-blue circular badges, matching brand reference).
+// `blockKey` names the editable URL block that controls each button.
 const appStores = [
-  { key: "apple", label: "Apple App Store", src: greenwayBusiness.assets.appGlyphApple, href: "#" },
-  { key: "google", label: "Google Play", src: greenwayBusiness.assets.appGlyphGoogle, href: "#" },
+  { key: "apple", label: "Apple App Store", src: greenwayBusiness.assets.appGlyphApple, blockKey: "footer.app.apple.url" },
+  { key: "google", label: "Google Play", src: greenwayBusiness.assets.appGlyphGoogle, blockKey: "footer.app.google.url" },
 ];
 
 // Social glyphs (steel-blue circular badges, matching brand reference).
+// `blockKey` names the editable URL block; `fallback` is the live business.ts
+// URL used if the block has not been seeded/edited.
 const socialGlyphs = [
-  { ...greenwayBusiness.social.facebook, src: greenwayBusiness.assets.socialGlyphFacebook },
-  { ...greenwayBusiness.social.instagram, src: greenwayBusiness.assets.socialGlyphInstagram },
-  { ...greenwayBusiness.social.google, src: greenwayBusiness.assets.socialGlyphGoogle },
-  { ...greenwayBusiness.social.yelp, src: greenwayBusiness.assets.socialGlyphYelp },
-  { ...greenwayBusiness.social.leafly, src: greenwayBusiness.assets.socialGlyphLeafly },
+  { label: greenwayBusiness.social.facebook.label, blockKey: "footer.social.facebook.url", fallback: greenwayBusiness.social.facebook.url, src: greenwayBusiness.assets.socialGlyphFacebook },
+  { label: greenwayBusiness.social.instagram.label, blockKey: "footer.social.instagram.url", fallback: greenwayBusiness.social.instagram.url, src: greenwayBusiness.assets.socialGlyphInstagram },
+  { label: greenwayBusiness.social.google.label, blockKey: "footer.social.google.url", fallback: greenwayBusiness.social.google.url, src: greenwayBusiness.assets.socialGlyphGoogle },
+  { label: greenwayBusiness.social.yelp.label, blockKey: "footer.social.yelp.url", fallback: greenwayBusiness.social.yelp.url, src: greenwayBusiness.assets.socialGlyphYelp },
+  { label: greenwayBusiness.social.leafly.label, blockKey: "footer.social.leafly.url", fallback: greenwayBusiness.social.leafly.url, src: greenwayBusiness.assets.socialGlyphLeafly },
 ];
 
 const copyrightYear = new Date().getFullYear();
@@ -87,7 +113,8 @@ async function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
  * steel-blue circular store glyphs (Apple + Google Play). Identical markup on
  * mobile and desktop. `align` controls horizontal placement of the whole row.
  */
-function AppDownload({ align = "center" }: { align?: "center" | "end" }) {
+function AppDownload({ align = "center", links }: { align?: "center" | "end"; links: FooterLinks }) {
+  const unavailable = links["footer.link.unavailable.message"] ?? "";
   return (
     <div className={`flex flex-wrap items-center gap-x-5 gap-y-3 ${align === "end" ? "justify-end" : "justify-center"}`}>
       <Image
@@ -100,14 +127,15 @@ function AppDownload({ align = "center" }: { align?: "center" | "end" }) {
       />
       <div className="flex items-center gap-3">
         {appStores.map((store) => (
-          <a
+          <FooterLinkUnavailable
             key={store.key}
-            href={store.href}
-            aria-label={`${store.label} — app coming soon`}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition duration-200 hover:scale-105 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--greenway)]"
-          >
-            <Image src={store.src} alt={store.label} width={88} height={88} className="h-11 w-11 object-contain" sizes="44px" />
-          </a>
+            href={links[store.blockKey] ?? ""}
+            label={store.label}
+            src={store.src}
+            unavailableMessage={unavailable}
+            newTab
+            className={GLYPH_CLASS}
+          />
         ))}
       </div>
     </div>
@@ -115,31 +143,38 @@ function AppDownload({ align = "center" }: { align?: "center" | "end" }) {
 }
 
 /** Follow-Greenway block: steel-blue circular social glyphs. Identical on mobile + desktop. */
-function FollowGreenway() {
+function FollowGreenway({ links }: { links: FooterLinks }) {
   // Title and glyph row are always centered (per request). With five glyphs we
   // let the row wrap and center so it never overflows its column.
+  const unavailable = links["footer.link.unavailable.message"] ?? "";
   return (
     <div className="flex w-full flex-col items-center gap-3 text-center">
       <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-400">Follow Greenway</p>
       <div className="flex flex-wrap items-center justify-center gap-3">
-        {socialGlyphs.map((social) => (
-          <a
-            key={social.url}
-            href={social.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Open Greenway on ${social.label}`}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition duration-200 hover:scale-105 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--greenway)]"
-          >
-            <Image src={social.src} alt={social.label} width={88} height={88} className="h-11 w-11 object-contain" sizes="44px" />
-          </a>
-        ))}
+        {socialGlyphs.map((social) => {
+          // Prefer the editable block value; fall back to the live business.ts
+          // URL so seeding produces no visible change. If a staff member clears
+          // a social URL, the friendly "not connected yet" message shows.
+          const resolved = links[social.blockKey];
+          const href = resolved && resolved.trim().length > 0 ? resolved : social.fallback;
+          return (
+            <FooterLinkUnavailable
+              key={social.blockKey}
+              href={href}
+              label={social.label}
+              src={social.src}
+              unavailableMessage={unavailable}
+              newTab
+              className={GLYPH_CLASS}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-async function MobileFooter() {
+async function MobileFooter({ links }: { links: FooterLinks }) {
   return (
     <div className="mx-auto max-w-md border-t border-white/10 pt-9 text-center lg:hidden">
       <Link href="/#top" aria-label="Greenway Marijuana home" className="inline-flex justify-center transition duration-200 hover:opacity-85">
@@ -181,12 +216,12 @@ async function MobileFooter() {
 
       {/* App download: wordmark left of the two circular store glyphs. */}
       <div className="mt-7 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
-        <AppDownload align="center" />
+        <AppDownload align="center" links={links} />
       </div>
 
       {/* Follow Greenway: circular social glyphs. */}
       <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
-        <FollowGreenway />
+        <FollowGreenway links={links} />
       </div>
 
       <div className="mt-7 rounded-[1.25rem] border border-[var(--gold)]/30 bg-[#090909] p-4">
@@ -207,7 +242,7 @@ async function MobileFooter() {
   );
 }
 
-async function DesktopFooter() {
+async function DesktopFooter({ links }: { links: FooterLinks }) {
   return (
     <div className="mx-auto hidden max-w-7xl border-t border-white/10 pt-10 lg:block">
       <div className="grid gap-8 lg:grid-cols-[0.78fr_1.5fr_0.85fr] lg:items-start">
@@ -249,12 +284,12 @@ async function DesktopFooter() {
 
           {/* App download — identical to mobile, in the desktop spot. */}
           <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
-            <AppDownload align="end" />
+            <AppDownload align="end" links={links} />
           </div>
 
           {/* Follow Greenway — identical to mobile, in the desktop spot. */}
           <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
-            <FollowGreenway />
+            <FollowGreenway links={links} />
           </div>
         </div>
       </div>
@@ -262,11 +297,15 @@ async function DesktopFooter() {
   );
 }
 
-export function Footer() {
+export async function Footer() {
+  // Resolve the editable footer link/message blocks once (draft-aware). Seed
+  // defaults mirror the live URLs, so this changes nothing until a block is
+  // edited. Blank app-store links trigger the friendly "not connected" message.
+  const links = await getContentValues([...FOOTER_LINK_BLOCKS]);
   return (
     <footer id="location" className="bg-black px-4 pb-8 pt-12 text-white md:px-8 md:pb-10 md:pt-14">
-      <MobileFooter />
-      <DesktopFooter />
+      <MobileFooter links={links} />
+      <DesktopFooter links={links} />
     </footer>
   );
 }

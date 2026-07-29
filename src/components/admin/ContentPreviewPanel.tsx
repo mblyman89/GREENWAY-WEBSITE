@@ -12,14 +12,26 @@ import { PreviewFrame } from "@/components/admin/PreviewFrame";
 
 export type PreviewPage = { label: string; path: string; page: string };
 
-/** Public pages that have editable content, mapped to their content `page` key. */
+/**
+ * Public pages that have editable content, mapped to their content `page` key.
+ * This list now covers every public-facing page so staff can preview the whole
+ * site from the Site Content editor (and the new Header & Footer editor).
+ */
 export const PREVIEW_PAGES: PreviewPage[] = [
   { label: "Homepage", path: "/", page: "home" },
-  { label: "Menu", path: "/menu", page: "menu" },
-  { label: "Loyalty", path: "/loyalty", page: "loyalty" },
+  { label: "Shop (Menu)", path: "/menu", page: "menu" },
   { label: "Specials", path: "/specials", page: "specials" },
+  { label: "About", path: "/about", page: "about" },
+  { label: "Location", path: "/locations", page: "locations" },
+  { label: "Price Match", path: "/price-match", page: "price-match" },
+  { label: "Loyalty", path: "/loyalty", page: "loyalty" },
+  { label: "Medical", path: "/medical", page: "medical" },
   { label: "Vendors", path: "/vendor-delivery", page: "vendors" },
+  { label: "Blog", path: "/blog", page: "blog" },
   { label: "FAQ", path: "/faq", page: "faq" },
+  { label: "Privacy Policy", path: "/privacy-policy", page: "legal" },
+  { label: "Terms of Use", path: "/terms-of-use", page: "legal" },
+  { label: "Consumer Health Data", path: "/consumer-health-data", page: "legal" },
 ];
 
 export function ContentPreviewPanel({
@@ -59,7 +71,7 @@ export function ContentPreviewPanel({
           ))}
         </div>
       </div>
-      <PreviewFrame path={activePath} onEditBlock={onEditBlock} height={560} />
+      <PreviewFrame path={activePath} onEditBlock={onEditBlock} height={820} />
     </div>
   );
 }
