@@ -2,6 +2,7 @@
 
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { menuCardDiscountForItem } from "@/lib/promotions/published-rules-core";
+import { menuCardBadgeForItem } from "@/lib/promotions/deal-badge-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { ProductCardVisual } from "./ProductCardVisual";
@@ -20,13 +21,18 @@ export function ProductCard({ item }: { item: GreenwayMenuItem }) {
   const activeRules = useActiveDealRules();
   const weekday = useStoreWeekday();
   const activeDiscount = menuCardDiscountForItem(item, activeRules, weekday);
-  // The daily-deal promo text is intentionally NOT shown on cards. Customers
-  // recognize the discount from the struck "before" price + the discounted
-  // price shown by ProductCardPriceSelector.
+  // SLICE 96 (owner directive): every card shows the deal BADGE whenever an
+  // active published rule is relevant to the item — Mon edibles+drinks, Tue
+  // prerolls/blunts incl. infused, Wed carts/concentrates, Thu featured
+  // brands, Fri flower, Sat+Sun storewide, plus any flash sale staff publish.
+  // The badge is an honest advertisement of the deal, independent of the
+  // struck price (which SLICE 40 still hides Fri/Sat/Sun — basket-dependent).
+  const badge = menuCardBadgeForItem(item, activeRules, weekday);
   return (
     <ProductCardVisual
       item={item}
       salePriceMinorUnits={activeDiscount?.cardPreviewSalePriceMinorUnits}
+      saleBadgeLabel={badge}
     />
   );
 }

@@ -5,6 +5,7 @@ import { useMockCart } from "@/components/cart/CartProvider";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { menuCardDiscountForItem } from "@/lib/promotions/published-rules-core";
+import { menuCardBadgeForItem } from "@/lib/promotions/deal-badge-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
@@ -27,6 +28,10 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
   // Only clean per-item deals show an exact sale price here (legacy behaviour:
   // basket/tier deals finalize in the cart).
   const salePriceMinorUnits = deal?.perItemSalePrice ? deal.salePriceMinorUnits : undefined;
+  // SLICE 96 (owner directive): show the deal badge on the detail page too —
+  // same shared engine as every product card (honest advertisement of the
+  // day's deal, independent of the SLICE 40 struck-price policy).
+  const dealBadge = menuCardBadgeForItem(item, activeRules, weekday);
   // SLICE 40: lowest size first, ascending (same order as the product cards).
   // SLICE 70 (restock readiness): identical label+price lots collapse to one
   // row (first in-stock lot = oldest represents; display-only, see
@@ -93,6 +98,13 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
               </button>
             );
           })}
+        </div>
+      ) : null}
+
+      {/* SLICE 96: deal badge — same look as the product-card badge. */}
+      {dealBadge ? (
+        <div className="mt-4 inline-flex rounded-full border border-[var(--greenway)]/55 bg-black/60 px-3 py-1.5 text-[0.66rem] font-black uppercase leading-tight tracking-[0.08em] text-[var(--greenway)] shadow-[0_0_18px_rgba(126,217,87,0.18)]">
+          {dealBadge}
         </div>
       ) : null}
 
