@@ -77,7 +77,7 @@ export const faqItems: readonly FaqItem[] = [
   {
     question: "Does Greenway Marijuana Offer a Price Match?",
     answer:
-      "Yes, Uncle Ike’s will price match regularly-priced menu items with Seattle i502 Pot Shops. The products must be the same brand and the same size we carry at Uncle Ike’s.",
+      "Yes, Greenway Marijuana will price match regularly-priced menu items with Seattle i502 Pot Shops. The products must be the same brand and the same size we carry at Greenway Marijuana.",
   },
   {
     question: "What possible pesticides do your growers use on their plants?",
