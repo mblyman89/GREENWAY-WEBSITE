@@ -310,6 +310,23 @@ export const PRESETS: Preset[] = [
     },
   },
   {
+    id: "home-band",
+    label: "Homepage banner band",
+    description:
+      "Wide, short background band for the homepage \\u201cShop by Category\\u201d / \\u201cShop by Brand\\u201d sections (matches the 1600\\u00d7560 band). Textless \\u2014 the title, subtitle and buttons are layered on top automatically.",
+    brief: {
+      composition:
+        "very wide short banner background composition, subtle background-style art with generous negative space, key subject kept toward the right two-thirds so overlaid headings and buttons on the left stay readable",
+      lighting: "soft even ambient lighting, gentle glow",
+      style: "clean modern editorial background art, muted contrast, uncluttered",
+      colorMood:
+        "brand green + gold accents on a deep near-black background, calm premium mood that will not fight overlaid text",
+      aspectRatio: "16:9",
+      version: 7,
+      stylize: 140,
+    },
+  },
+  {
     id: "in-store-signage",
     label: "In-store signage",
     description: "Poster-style artwork for printed in-store signage.",
@@ -388,8 +405,10 @@ export function __runMidjourneyCoreTests(): string {
   assert(g.warnings.some((w) => w.includes("subject")), "empty subject warns");
 
   // presets
-  assert(PRESETS.length >= 6, "6+ presets");
+  assert(PRESETS.length >= 7, "7+ presets");
   assert(Boolean(presetById("specials-banner")), "specials-banner preset present");
+  assert(Boolean(presetById("home-band")), "home-band preset present");
+  assert(presetById("home-band")?.brief.aspectRatio === "16:9", "home-band is 16:9 wide band");
   assert(presetById("product-hero")?.brief.aspectRatio === "1:1", "preset lookup");
 
   // closestAspectRatio: destination sizes map to sensible --ar values

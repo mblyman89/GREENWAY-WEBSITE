@@ -474,6 +474,66 @@ export async function deleteSection(id: string): Promise<{ error?: string }> {
   return {};
 }
 
+// ---------------------------------------------------------------------------
+// SLICE 112 — Home page display settings (the locked home.settings config row)
+// ---------------------------------------------------------------------------
+
+const HOME_SETTINGS_KEY = "home.settings";
+
+/**
+ * Fetch the locked home.settings config row (the holder for homepage display
+ * settings like the daily-deal card count). Returns null when it hasn't been
+ * seeded yet — callers fall back to defaults so the site works pre-seed.
+ */
+export async function getHomeSettingsSection(): Promise<PageSectionRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("page_sections")
+    .select(SELECT)
+    .eq("page_slug", "home")
+    .eq("section_key", HOME_SETTINGS_KEY)
+    .maybeSingle();
+  return data ? coerceRow(data as Record<string, unknown>) : null;
+}
+
+/**
+ * Update the home.settings config row's settings JSON by shallow-merging the
+ * given patch (so we never drop other keys). Ensures the row exists first (via
+ * the normal seed path). This config value publishes immediately — it's a plain
+ * display setting, not banner copy, so there's no draft/publish dance. Both the
+ * published `settings` and `draft_settings` are kept in lock-step.
+ */
+export async function saveHomeSettings(
+  patch: Record<string, unknown>,
+  editorId: string | null,
+): Promise<{ error?: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { error: "The database isn't fully set up yet." };
+  }
+  await ensureSectionsSeeded("home");
+  const row = await getHomeSettingsSection();
+  if (!row) return { error: "Home settings aren't available yet." };
+
+  const nextSettings = { ...(row.settings ?? {}), ...patch };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("page_sections")
+    .update({
+      settings: nextSettings,
+      draft_settings: nextSettings,
+      status: "published",
+      enabled: true,
+      draft_enabled: true,
+      last_edited_by: editorId,
+      last_published_by: editorId,
+      published_at: new Date().toISOString(),
+    })
+    .eq("id", row.id);
+  if (error) return { error: error.message };
+  return {};
+}
+
 /** Move a section up/down by swapping sort_order with its neighbour. */
 export async function moveSection(
   id: string,

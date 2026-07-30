@@ -11,8 +11,13 @@ import {
   deleteSection,
   moveSection,
   ensureSectionsSeeded,
+  saveHomeSettings,
   type SectionDraftInput,
 } from "@/lib/cms/page-sections-store";
+import {
+  clampHomeCardCount,
+  DAILY_DEALS_COUNT_KEY,
+} from "@/lib/cms/home-section-settings-core";
 import {
   isValidPageSlug,
   PAGE_SECTION_CONFIG,
@@ -58,6 +63,29 @@ function parseButtons(formData: FormData): SectionButton[] {
     if (out.length >= 4) break;
   }
   return out;
+}
+
+/**
+ * Parse the section SETTINGS JSON (SLICE 112). The editor sends the FULL,
+ * already-merged settings object (existing keys like lanes/titleClassName are
+ * preserved client-side), so we simply validate it's a plain object. Returns
+ * undefined when absent/invalid so saveSectionDraft leaves settings untouched.
+ */
+function parseSettings(
+  formData: FormData,
+): Record<string, unknown> | undefined {
+  const raw = formData.get("settings_json");
+  if (typeof raw !== "string" || raw.trim() === "") return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return undefined;
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export async function seedSectionsAction(formData: FormData): Promise<void> {
@@ -122,6 +150,11 @@ export async function saveSectionAction(formData: FormData): Promise<void> {
     draft_enabled: formData.get("draft_enabled") === "on",
   };
 
+  // SLICE 112: only include settings when the form sent a valid object, so
+  // sections without a settings control keep whatever they already had.
+  const settings = parseSettings(formData);
+  if (settings !== undefined) input.settings = settings;
+
   const res = await saveSectionDraft(id, input, session.userId);
   if (res.error) {
     revalidatePath(routeFor(slug));
@@ -180,6 +213,34 @@ export async function deleteSectionAction(formData: FormData): Promise<void> {
   });
   revalidateForSlug(slug);
   redirect(`${routeFor(slug)}?deleted=1`);
+}
+
+/**
+ * SLICE 112 — save the "Home page display" settings (currently the daily-deal
+ * highlights card count) onto the locked home.settings config row. Publishes
+ * immediately since it's a plain display setting.
+ */
+export async function saveHomeSettingsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("content.edit");
+  const count = clampHomeCardCount(formData.get("daily_deals_count"));
+  const res = await saveHomeSettings(
+    { [DAILY_DEALS_COUNT_KEY]: count },
+    session.userId,
+  );
+  if (res.error) {
+    revalidatePath(routeFor("home"));
+    redirect(`${routeFor("home")}?tab=sections&error=${encodeURIComponent(res.error)}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "page_section.home_settings",
+    entityType: "page_section",
+    entityId: "home.settings",
+    after: { dailyDealsCount: count },
+  });
+  revalidateForSlug("home");
+  redirect(`${routeFor("home")}?tab=sections&saved=1`);
 }
 
 export async function moveSectionAction(formData: FormData): Promise<void> {

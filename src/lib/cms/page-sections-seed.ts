@@ -41,6 +41,29 @@ export type SectionSeed = {
  * so the rendered banners are unchanged on first publish.
  */
 export const PAGE_SECTION_SEEDS: SectionSeed[] = [
+  // SLICE 112: a LOCKED, non-visible "config" section that holds homepage
+  // display settings the owner controls from the Home page editor's "Home page
+  // display" card. It renders NOTHING on the public site — page.tsx only reads
+  // its settings.dailyDealsCount to size the "Today's Deal" highlights grid.
+  // Seeded first (sort_order -1) so it never interferes with the visible
+  // banners' order, and locked so it can't be deleted/reordered/hidden.
+  {
+    page_slug: "home",
+    section_key: "home.settings",
+    kind: "feature",
+    sort_order: -1,
+    locked: true,
+    image: null,
+    image_alt: null,
+    image_focus: "center",
+    text_align: "left",
+    eyebrow: null,
+    title: "Home page display",
+    subtitle: null,
+    body: null,
+    buttons: [],
+    settings: { dailyDealsCount: 16 },
+  },
   {
     page_slug: "home",
     section_key: "home.category",

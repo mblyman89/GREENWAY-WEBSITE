@@ -11,6 +11,11 @@ import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
 import { getSectionsForRender } from "@/lib/cms/page-sections-store";
 import { loadBrandFactsOverlay } from "@/lib/home/brand-facts";
+import {
+  readHomeCardCount,
+  DAILY_DEALS_COUNT_KEY,
+  BRAND_COUNT_KEY,
+} from "@/lib/cms/home-section-settings-core";
 
 export const metadata: Metadata = {
   // The root layout supplies the default title; we only set the canonical here so
@@ -58,15 +63,26 @@ export default async function Home() {
   // Map the new page_sections rows (by section_key) onto the banner content.
   const category = sections.find((s) => s.key === "home.category");
   const brand = sections.find((s) => s.key === "home.brand");
+  // SLICE 112: owner-controlled card counts live in page_sections.settings JSON.
+  // The daily-deal highlights count is stored on the dedicated (locked)
+  // home.settings section; the brand-grid count on the home.brand section.
+  // Both fall back to 16 (the count the homepage shipped with) when unset.
+  const homeSettings = sections.find((s) => s.key === "home.settings");
+  const dailyDealsCount = readHomeCardCount(
+    homeSettings?.settings,
+    DAILY_DEALS_COUNT_KEY,
+  );
+  const brandCount = readHomeCardCount(brand?.settings, BRAND_COUNT_KEY);
 
   return (
     <main>
       <Header />
       <Hero slides={slides} />
-      <HomeDailyDeals items={dealItems} />
+      <HomeDailyDeals items={dealItems} count={dailyDealsCount} />
       <PromoGrid
         items={dealItems}
         brandFacts={brandFacts}
+        brandCount={brandCount}
         content={{
           categoryImage: category?.image || copy["home.category.image"],
           categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],
