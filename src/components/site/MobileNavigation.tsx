@@ -72,10 +72,16 @@ function MobileChevron({ isOpen }: { isOpen: boolean }) {
   );
 }
 
-export function MobileNavigation() {
+export function MobileNavigation({ hideMedical = false }: { hideMedical?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isAppOpen, setIsAppOpen] = useState(false);
+
+  // SLICE 107: drop the Medical link when the page is hidden. Matched by href
+  // so a label rename never breaks the filter. Defaults to showing the link.
+  const menuItems = hideMedical
+    ? primaryMenuItems.filter((item) => item.href !== "/medical")
+    : primaryMenuItems;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -128,7 +134,7 @@ export function MobileNavigation() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-7 pb-10 pt-2" aria-label="Site navigation links">
-          {primaryMenuItems.map((item) => {
+          {menuItems.map((item) => {
             if (item.label === "Shop") {
               return (
                 <div key={item.label} className="border-b border-white/[0.06]">
