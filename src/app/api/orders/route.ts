@@ -22,6 +22,7 @@ import { createOrder } from "@/lib/orders/orders-store";
 import { notifyOrderPlaced } from "@/lib/orders/notify";
 import { recordOrderNotifyFailure } from "@/lib/orders/notify-event";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { repriceOrderLines, clientTotalsMatch } from "@/lib/orders/order-pricing";
 import { evaluateCartWithSettings, logSalesLimitEvent } from "@/lib/compliance/sales-limits";
 import type { NewOrderLineInput, PersistOrderInput } from "@/lib/orders/types";
@@ -173,6 +174,11 @@ export async function POST(request: Request) {
   const itemCount = input.lines.reduce((sum, l) => sum + l.quantity, 0);
   const orderId = result.orderId;
 
+  // SLICE 113: the customer-facing identity is the friendly pool name when one
+  // was assigned, otherwise the unique GWY-XXXXXX number. Emails + the printed
+  // receipt use this so the customer sees the same label everywhere.
+  const displayLabel = resolveOrderDisplay(result.displayName, result.orderNumber);
+
   // GW-024: the notification + receipt work is scheduled with `after()`,
   // which keeps the serverless function alive PAST the response instead of
   // letting Vercel freeze it mid-fetch (the old fire-and-forget promises
@@ -183,7 +189,7 @@ export async function POST(request: Request) {
   after(async () => {
     try {
       const summary = await notifyOrderPlaced({
-        orderNumber: result.orderNumber,
+        orderNumber: displayLabel,
         customerFirstName: input.customerFirstName,
         customerEmail: input.customerEmail ?? null,
         itemCount,
@@ -204,7 +210,7 @@ export async function POST(request: Request) {
   after(async () => {
     try {
       const jobId = await queueOrderReceipt({
-        orderNumber: result.orderNumber,
+        orderNumber: displayLabel,
         orderId,
         placedAt: new Date().toISOString(),
         customerName: [input.customerFirstName, input.customerLastName ?? ""]

@@ -19,8 +19,13 @@ import {
   type OrderStatus,
 } from "@/lib/orders/types";
 import { ORDER_REVERSAL_TARGETS } from "@/lib/orders/order-lifecycle-core";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { formatDateTime } from "@/lib/pos/format";
-import { setOrderStatusAction, updateOrderNoteAction } from "../actions";
+import {
+  setOrderStatusAction,
+  updateOrderNoteAction,
+  rerollOrderNameAction,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +59,8 @@ export default async function OrderDetailPage({
   if (!order) notFound();
 
   const next = ORDER_FORWARD_TRANSITIONS[order.status];
+  const displayLabel = resolveOrderDisplay(order.display_name, order.order_number);
+  const hasFriendlyName = displayLabel !== order.order_number;
   const isClosed = CLOSED_ORDER_STATUSES.includes(order.status);
   const limitFlagged = order.limit_flag === true;
   const limitReasons = Array.isArray(order.limit_reasons) ? order.limit_reasons : [];
@@ -62,10 +69,23 @@ export default async function OrderDetailPage({
   return (
     <div>
       <AdminPageHeader
-        title={`Order #${order.order_number}`}
-        subtitle={`Placed ${formatDateTime(order.placed_at)}`}
+        title={`Order ${displayLabel}`}
+        subtitle={
+          hasFriendlyName
+            ? `#${order.order_number} · Placed ${formatDateTime(order.placed_at)}`
+            : `Placed ${formatDateTime(order.placed_at)}`
+        }
         action={
           <div className="flex items-center gap-2">
+            <form action={rerollOrderNameAction.bind(null, order.id)}>
+              <button
+                type="submit"
+                className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
+                title="Assign a different name from your order-name pool"
+              >
+                🎲 Reroll name
+              </button>
+            </form>
             <Link
               href={`/admin/orders/${order.id}/ticket`}
               className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"

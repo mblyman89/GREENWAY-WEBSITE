@@ -4,6 +4,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { getOrder } from "@/lib/orders/orders-store";
 import { ORDER_STATUS_LABELS } from "@/lib/orders/types";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { formatDateTime } from "@/lib/pos/format";
 import { PrintButton } from "@/components/admin/orders/PrintButton";
 
@@ -22,6 +23,8 @@ export default async function OrderTicketPage({
   if (!order) notFound();
 
   const itemCount = order.lines.reduce((n, l) => n + l.quantity, 0);
+  const displayLabel = resolveOrderDisplay(order.display_name, order.order_number);
+  const hasFriendlyName = displayLabel !== order.order_number;
 
   return (
     <div className="ticket-print mx-auto max-w-md bg-white px-6 py-6 text-black print:max-w-none">
@@ -38,7 +41,10 @@ export default async function OrderTicketPage({
       <div className="mt-4 flex items-end justify-between">
         <div>
           <p className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-black/50">Order</p>
-          <p className="text-5xl font-black leading-none tracking-tight">#{order.order_number}</p>
+          <p className="text-5xl font-black leading-none tracking-tight">{displayLabel}</p>
+          {hasFriendlyName ? (
+            <p className="mt-1 font-mono text-xs font-bold text-black/50">#{order.order_number}</p>
+          ) : null}
         </div>
         <div className="text-right">
           <p className="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-black/50">Status</p>

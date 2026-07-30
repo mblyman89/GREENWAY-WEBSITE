@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { getOrderByToken } from "@/lib/orders/orders-store";
 import { ORDER_STATUS_LABELS } from "@/lib/orders/types";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 
 export const runtime = "nodejs";
 
@@ -25,9 +26,11 @@ export async function GET(
     return NextResponse.json({ error: "Order not found." }, { status: 404 });
   }
 
-  // Customer-safe projection.
+  // Customer-safe projection. SLICE 113: orderNumber is the friendly pool name
+  // when one was assigned, else the unique GWY-XXXXXX number — the confirmation
+  // page already renders whatever this string is.
   return NextResponse.json({
-    orderNumber: order.order_number,
+    orderNumber: resolveOrderDisplay(order.display_name, order.order_number),
     status: order.status,
     statusLabel: ORDER_STATUS_LABELS[order.status],
     placedAt: order.placed_at,

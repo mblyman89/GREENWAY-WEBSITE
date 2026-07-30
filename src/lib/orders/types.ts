@@ -54,6 +54,13 @@ export const ORDER_FORWARD_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus>
 export type OrderRow = {
   id: string;
   order_number: string;
+  /**
+   * SLICE 113 — optional friendly pool name shown to the customer in place of
+   * order_number (migration 0147). Nullable + NON-unique so a short pool of
+   * names can recycle. Absent on rows read before the column exists; the app
+   * shows order_number whenever this is null/blank (resolveOrderDisplay).
+   */
+  display_name?: string | null;
   public_token: string;
   status: OrderStatus;
   customer_first_name: string;
@@ -190,6 +197,13 @@ export type PersistOrderInput = {
 /** What POST /api/orders returns to the client on success. */
 export type PlacedOrderResult = {
   orderNumber: string;
+  /**
+   * SLICE 113 — the friendly pool name assigned at placement, or null when the
+   * pool is empty/unset. The route + notifications show `displayName ??
+   * orderNumber` (resolveOrderDisplay) so the customer sees the fun name when
+   * there is one and the GWY number otherwise.
+   */
+  displayName?: string | null;
   publicToken: string;
   /**
    * Internal orders.id (GW-024): lets the placement route link the receipt
