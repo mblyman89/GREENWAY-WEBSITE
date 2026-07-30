@@ -36,6 +36,7 @@ export function SpecialsDailyDeals({
   count,
   textAlign = "left",
   verticalAlign = "center",
+  imageFocus,
 }: {
   items: GreenwayMenuItem[];
   /** Optional banner background image; blank/omitted keeps the built-in art. */
@@ -46,6 +47,11 @@ export function SpecialsDailyDeals({
   textAlign?: "left" | "center" | "right";
   /** Vertical placement of the banner text (default "center"). */
   verticalAlign?: "top" | "center" | "bottom";
+  /**
+   * Where the banner IMAGE sits, INDEPENDENT of the text (SLICE 117 bug fix).
+   * Omitted keeps SectionBanner's legacy text-derived behavior byte-identical.
+   */
+  imageFocus?: "center" | "top" | "bottom" | "left" | "right";
 }) {
   const LIMIT = count && Number.isFinite(count) && count > 0 ? Math.trunc(count) : DEFAULT_LIMIT;
   const bannerSrc = bannerImage && bannerImage.trim() ? bannerImage.trim() : DEFAULT_BANNER_IMAGE;
@@ -102,6 +108,7 @@ export function SpecialsDailyDeals({
         subtitle={subtitle}
         textAlign={textAlign}
         verticalAlign={verticalAlign}
+        imageFocus={imageFocus}
       />
       <h2 id="todays-deals-title" className="sr-only">
         {title} products

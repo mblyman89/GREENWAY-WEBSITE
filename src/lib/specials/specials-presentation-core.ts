@@ -67,6 +67,21 @@ export function isTextVAlign(v: unknown): v is TextVAlign {
 }
 
 /**
+ * Where the "Today's Deal" banner IMAGE sits, INDEPENDENT of the text.
+ * SLICE 117 bug fix: historically the banner image's position was hard-wired to
+ * the text alignment, so moving the text also shoved the image. This gives the
+ * image its own control. Default "right" reproduces today's exact look (because
+ * the default text-align is "left", the legacy code shoved the image right), so
+ * the live page is byte-identical until staff choose otherwise.
+ */
+export const IMAGE_FOCUSES = ["center", "top", "bottom", "left", "right"] as const;
+export type ImageFocus = (typeof IMAGE_FOCUSES)[number];
+
+export function isImageFocus(v: unknown): v is ImageFocus {
+  return typeof v === "string" && (IMAGE_FOCUSES as readonly string[]).includes(v);
+}
+
+/**
  * How many "Today's Deals" product cards to show. Today's hardcoded value is
  * 16 (SpecialsDailyDeals LIMIT). We allow 1..24 (the grid is up to 4 wide, so
  * this keeps whole rows sensible) and default to 16 so nothing changes until a
@@ -122,6 +137,12 @@ export type SpecialsPresentation = {
   todaysDealsBannerTextAlign: TextAlign;
   /** Vertical placement of the banner text over the image (default center). */
   todaysDealsBannerVerticalAlign: TextVAlign;
+  /**
+   * Where the banner IMAGE sits, independent of the text (SLICE 117 bug fix).
+   * Default "right" reproduces today's exact look (legacy code shoved the image
+   * right whenever the text was left-aligned, which is the default).
+   */
+  todaysDealsBannerImageFocus: ImageFocus;
   /** How many live product cards to show under the banner (default 16). */
   todaysDealsCount: number;
   /** Per-weekday settings (always all 7, natural order). */
@@ -142,6 +163,8 @@ export function defaultSpecialsPresentation(): SpecialsPresentation {
     todaysDealsBannerImage: "",
     todaysDealsBannerTextAlign: "left",
     todaysDealsBannerVerticalAlign: "center",
+    // "right" = byte-identical to the legacy look (left text shoved image right).
+    todaysDealsBannerImageFocus: "right",
     todaysDealsCount: TODAYS_DEALS_COUNT_DEFAULT,
     days: SPECIALS_WEEKDAYS.map((weekday, i) => ({
       weekday,
@@ -186,6 +209,9 @@ export function normalizeSpecialsPresentation(
   const todaysDealsBannerVerticalAlign = isTextVAlign(obj.todaysDealsBannerVerticalAlign)
     ? obj.todaysDealsBannerVerticalAlign
     : base.todaysDealsBannerVerticalAlign;
+  const todaysDealsBannerImageFocus = isImageFocus(obj.todaysDealsBannerImageFocus)
+    ? obj.todaysDealsBannerImageFocus
+    : base.todaysDealsBannerImageFocus;
   const todaysDealsCount =
     obj.todaysDealsCount === undefined
       ? base.todaysDealsCount
@@ -224,6 +250,7 @@ export function normalizeSpecialsPresentation(
     todaysDealsBannerImage,
     todaysDealsBannerTextAlign,
     todaysDealsBannerVerticalAlign,
+    todaysDealsBannerImageFocus,
     todaysDealsCount,
     days,
   };
@@ -239,6 +266,7 @@ export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
     todaysDealsBannerImage: norm.todaysDealsBannerImage,
     todaysDealsBannerTextAlign: norm.todaysDealsBannerTextAlign,
     todaysDealsBannerVerticalAlign: norm.todaysDealsBannerVerticalAlign,
+    todaysDealsBannerImageFocus: norm.todaysDealsBannerImageFocus,
     todaysDealsCount: norm.todaysDealsCount,
     days: norm.days.map((d) => {
       const out: Record<string, unknown> = {
@@ -418,6 +446,8 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(def.todaysDealsBannerImage === "", "default banner image blank (keeps built-in art)");
   ok(def.todaysDealsBannerTextAlign === "left", "default banner text-align left (today's look)");
   ok(def.todaysDealsBannerVerticalAlign === "center", "default banner vertical-align center");
+  // SLICE 117: default image-focus "right" reproduces the legacy look exactly.
+  ok(def.todaysDealsBannerImageFocus === "right", "default banner image-focus right (legacy look)");
   ok(def.todaysDealsCount === 16, "default today's-deals count is 16 (matches LIMIT)");
 
   // Text-align + vertical-align guards.
@@ -425,6 +455,17 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(!isTextAlign("justify") && !isTextAlign(1), "invalid text aligns rejected");
   ok(isTextVAlign("top") && isTextVAlign("center") && isTextVAlign("bottom"), "valid vertical aligns");
   ok(!isTextVAlign("middle") && !isTextVAlign(null), "invalid vertical aligns rejected");
+
+  // Image-focus guard (SLICE 117 bug fix).
+  ok(
+    isImageFocus("center") &&
+      isImageFocus("top") &&
+      isImageFocus("bottom") &&
+      isImageFocus("left") &&
+      isImageFocus("right"),
+    "valid image focuses",
+  );
+  ok(!isImageFocus("middle") && !isImageFocus(null) && !isImageFocus(2), "invalid image focuses rejected");
 
   // Count clamp: below min -> min, above max -> max, non-finite -> default 16.
   ok(clampTodaysDealsCount(0) === 1, "count clamps up to min 1");
@@ -440,19 +481,23 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
     todaysDealsBannerImage: "  /media/specials.webp  ",
     todaysDealsBannerTextAlign: "right",
     todaysDealsBannerVerticalAlign: "bottom",
+    todaysDealsBannerImageFocus: "top",
     todaysDealsCount: 40,
   });
   ok(banner.todaysDealsBannerImage === "/media/specials.webp", "banner image trimmed");
   ok(banner.todaysDealsBannerTextAlign === "right", "banner text-align applied");
   ok(banner.todaysDealsBannerVerticalAlign === "bottom", "banner vertical-align applied");
+  ok(banner.todaysDealsBannerImageFocus === "top", "banner image-focus applied");
   ok(banner.todaysDealsCount === 24, "banner count clamped to max 24");
   const badExtras = normalizeSpecialsPresentation({
     todaysDealsBannerTextAlign: "nope",
     todaysDealsBannerVerticalAlign: "nope",
+    todaysDealsBannerImageFocus: "nope",
     todaysDealsCount: NaN,
   });
   ok(badExtras.todaysDealsBannerTextAlign === "left", "bad text-align -> default left");
   ok(badExtras.todaysDealsBannerVerticalAlign === "center", "bad vertical-align -> default center");
+  ok(badExtras.todaysDealsBannerImageFocus === "right", "bad image-focus -> default right");
   ok(badExtras.todaysDealsCount === 16, "NaN count -> default 16");
 
   // Round-trip of the new fields.
@@ -460,6 +505,7 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(bannerRound.todaysDealsBannerImage === "/media/specials.webp", "round-trip keeps banner image");
   ok(bannerRound.todaysDealsBannerTextAlign === "right", "round-trip keeps text-align");
   ok(bannerRound.todaysDealsBannerVerticalAlign === "bottom", "round-trip keeps vertical-align");
+  ok(bannerRound.todaysDealsBannerImageFocus === "top", "round-trip keeps image-focus");
   ok(bannerRound.todaysDealsCount === 24, "round-trip keeps count");
 
   return { passed };

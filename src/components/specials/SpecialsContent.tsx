@@ -9,6 +9,13 @@ import {
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import type { WeeklyDealSummary } from "@/lib/promotions/published-rules-core";
 import {
+  glowCardStyle,
+  type GlowTone,
+  GLOW_STRIP_LEFT_CLASS,
+  GLOW_STRIP_RIGHT_CLASS,
+  GLOW_STRIP_BOTTOM_CLASS,
+} from "@/lib/ui/glow-card-core";
+import {
   type SpecialsPresentation,
   type BadgeStyle,
   defaultSpecialsPresentation,
@@ -41,14 +48,21 @@ type DailyDeal = {
   tone: DealTone;
 };
 
-// Build a product-card style background (radial color glow + charcoal panel).
-function dealCardStyle(tone: DealTone): CSSProperties {
+// SLICE 117: the deal card now uses the ONE shared glow recipe (the exact
+// treatment the product + vendor cards use) so all three card families match.
+// A deal tone is single-color, so left == right here.
+function dealGlowTone(tone: DealTone): GlowTone {
   return {
-    borderColor: tone.border,
-    backgroundColor: "#101010",
-    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${tone.glow} 0%, ${tone.glowSoft} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${tone.glow} 0%, ${tone.glowSoft} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
-    boxShadow: `inset 18px 0 34px -31px ${tone.glow}, inset -18px 0 34px -31px ${tone.glow}, 0 13px 28px rgba(0,0,0,0.38)`,
+    border: tone.border,
+    glowLeft: tone.glow,
+    glowSoftLeft: tone.glowSoft,
+    glowRight: tone.glow,
+    glowSoftRight: tone.glowSoft,
+    panel: tone.panel,
   };
+}
+function dealCardStyle(tone: DealTone): CSSProperties {
+  return glowCardStyle(dealGlowTone(tone));
 }
 
 const tones = {
@@ -236,10 +250,15 @@ function DailyDealCard({ deal, badgeStyle }: { deal: DailyDeal; badgeStyle: Badg
   return (
     <div className="flex h-full flex-col gap-2.5 md:gap-3">
       <article
-        className="group flex h-full flex-col overflow-hidden rounded-[1.2rem] border transition hover:-translate-y-1 md:rounded-[1.65rem]"
+        className="group relative isolate flex h-full flex-col overflow-hidden rounded-[1.2rem] border transition duration-300 hover:-translate-y-1 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] md:rounded-[1.65rem]"
         style={dealCardStyle(tone)}
       >
-        <div className="flex flex-1 flex-col p-4 md:p-5">
+        {/* SLICE 117: product/vendor-card glow strips — left/right verticals + a
+            soft bottom line — the finishing touch that makes the edge glow. */}
+        <span className={GLOW_STRIP_LEFT_CLASS} style={{ background: tone.glow }} aria-hidden="true" />
+        <span className={GLOW_STRIP_RIGHT_CLASS} style={{ background: tone.glow }} aria-hidden="true" />
+        <span className={GLOW_STRIP_BOTTOM_CLASS} style={{ background: tone.glow }} aria-hidden="true" />
+        <div className="relative z-10 flex flex-1 flex-col p-4 md:p-5">
           <div className="flex items-start justify-between gap-3 md:relative md:block">
             <div className="md:min-h-[5.35rem] md:pr-[5.4rem] lg:pr-[6.1rem]">
               <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] md:text-[0.68rem]" style={{ color: tone.border }}>{deal.day}</p>
@@ -467,6 +486,7 @@ export function SpecialsContent({
             count={pres.todaysDealsCount}
             textAlign={pres.todaysDealsBannerTextAlign}
             verticalAlign={pres.todaysDealsBannerVerticalAlign}
+            imageFocus={pres.todaysDealsBannerImageFocus}
           />
         ) : null}
 

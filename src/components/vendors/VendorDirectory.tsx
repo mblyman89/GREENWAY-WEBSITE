@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
+import { glowCardStyle, GLOW_TONES } from "@/lib/ui/glow-card-core";
 import { greenwayBusiness } from "@/content/business";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import {
@@ -24,64 +25,11 @@ type Vendor = VendorDirectoryEntry;
 // type, so we cycle a small tasteful set of ON-BRAND glow tones (Greenway
 // green, gold→orange, amber→lime) to keep the grid lively while every card
 // reads as one cohesive family with the rest of the site.
-type GlowTone = {
-  border: string;
-  glowLeft: string;
-  glowSoftLeft: string;
-  glowRight: string;
-  glowSoftRight: string;
-  panel: string;
-};
-
-const GLOW_TONES: GlowTone[] = [
-  {
-    // Greenway green.
-    border: "#4f8f5a",
-    glowLeft: "rgba(79,143,90,0.95)",
-    glowSoftLeft: "rgba(126,184,127,0.34)",
-    glowRight: "rgba(79,143,90,0.95)",
-    glowSoftRight: "rgba(126,184,127,0.34)",
-    panel: "rgba(15,28,18,0.76)",
-  },
-  {
-    // Gold → orange (matches the brand accent buttons).
-    border: "#b0863d",
-    glowLeft: "rgba(217,150,39,0.92)",
-    glowSoftLeft: "rgba(255,191,53,0.34)",
-    glowRight: "rgba(217,117,39,0.92)",
-    glowSoftRight: "rgba(255,151,53,0.34)",
-    panel: "rgba(34,25,13,0.74)",
-  },
-  {
-    // Amber → lime.
-    border: "#8a9a4f",
-    glowLeft: "rgba(190,170,70,0.92)",
-    glowSoftLeft: "rgba(214,200,110,0.34)",
-    glowRight: "rgba(126,151,95,0.95)",
-    glowSoftRight: "rgba(160,184,127,0.34)",
-    panel: "rgba(27,29,17,0.74)",
-  },
-  {
-    // Deep emerald → teal (a cooler green so adjacent cards differ).
-    border: "#3f8f7a",
-    glowLeft: "rgba(63,143,122,0.95)",
-    glowSoftLeft: "rgba(116,196,178,0.32)",
-    glowRight: "rgba(84,153,120,0.92)",
-    glowSoftRight: "rgba(126,196,160,0.32)",
-    panel: "rgba(12,28,26,0.76)",
-  },
-];
-
-// Faithful port of ProductCardVisual.tsx cardStyle(tone): dark #101010 base,
-// dual side radial glows + a vertical panel gradient, triple inset/drop shadow.
-function glowCardStyle(tone: GlowTone): CSSProperties {
-  return {
-    borderColor: tone.border,
-    backgroundColor: "#101010",
-    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${tone.glowLeft} 0%, ${tone.glowSoftLeft} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${tone.glowRight} 0%, ${tone.glowSoftRight} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
-    boxShadow: `inset 18px 0 34px -31px ${tone.glowLeft}, inset -18px 0 34px -31px ${tone.glowRight}, 0 13px 28px rgba(0,0,0,0.38)`,
-  };
-}
+//
+// SLICE 117: the GlowTone type + on-brand GLOW_TONES palette + glowCardStyle
+// now live in the shared src/lib/ui/glow-card-core.ts so the product, vendor,
+// and specials cards share ONE recipe and can never drift apart. Imported at
+// the top of this file; the output is byte-identical to before.
 
 // SLICE 97: cards prefer the REAL logo + description saved in the back office
 // (vendors table via enrichVendorDirectory); these placeholders remain the

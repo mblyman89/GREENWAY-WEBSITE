@@ -6,6 +6,7 @@ import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-co
 import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
+import { glowCardStyle } from "@/lib/ui/glow-card-core";
 
 type CardTone = {
   border: string;
@@ -121,12 +122,17 @@ function cardStyle(tone: CardTone): CSSProperties {
   const glowSoftL = tone.glowSoftLeft ?? tone.glowSoft;
   const glowR = tone.glowRight ?? tone.glow;
   const glowSoftR = tone.glowSoftRight ?? tone.glowSoft;
-  return {
-    borderColor: tone.border,
-    backgroundColor: "#101010",
-    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${glowL} 0%, ${glowSoftL} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${glowR} 0%, ${glowSoftR} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
-    boxShadow: `inset 18px 0 34px -31px ${glowL}, inset -18px 0 34px -31px ${glowR}, 0 13px 28px rgba(0,0,0,0.38)`,
-  };
+  // SLICE 117: the exact glow recipe now lives in one shared module so the
+  // product, vendor, and specials cards can never drift apart. Output is
+  // byte-identical to the hand-rolled version this replaced.
+  return glowCardStyle({
+    border: tone.border,
+    glowLeft: glowL,
+    glowSoftLeft: glowSoftL,
+    glowRight: glowR,
+    glowSoftRight: glowSoftR,
+    panel: tone.panel,
+  });
 }
 
 function isNonCannabisItem(item: GreenwayMenuItem) {
