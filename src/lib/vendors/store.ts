@@ -263,6 +263,8 @@ export type PublicVendorProfile = {
   logoUrl: string | null;
   about: string | null;
   mission_statement: string | null;
+  /** SLICE 114: third description fallback for the public vendor card. */
+  product_philosophy: string | null;
 };
 
 export async function listPublicVendorProfiles(): Promise<PublicVendorProfile[]> {
@@ -302,6 +304,7 @@ export async function listPublicVendorProfiles(): Promise<PublicVendorProfile[]>
     logoUrl: logoMap.get(v.id) ?? null,
     about: v.about,
     mission_statement: v.mission_statement,
+    product_philosophy: v.product_philosophy ?? null,
   }));
 }
 

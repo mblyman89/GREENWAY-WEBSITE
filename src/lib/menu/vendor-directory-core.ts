@@ -93,6 +93,8 @@ export type VendorProfileSource = {
   logoUrl?: string | null;
   about?: string | null;
   mission_statement?: string | null;
+  /** SLICE 114: third description fallback (vendors.product_philosophy). */
+  product_philosophy?: string | null;
 };
 
 function simpleKey(value: unknown): string {
@@ -135,8 +137,14 @@ export function enrichVendorDirectory(
     const profile =
       byExact.get(exact) ?? byAlias.get(exact) ?? byNorm.get(normalizedVendorKey(entry.name));
     if (!profile) return { ...entry, logoUrl: null, description: null };
+    // SLICE 114: the card's blurb prefers the vendor's mission_statement (the
+    // one-liner they lead with), then their about copy, then the longer
+    // product_philosophy — each whitespace-normalized, first non-blank wins.
     const description =
-      normalizeWhitespace(profile.about) || normalizeWhitespace(profile.mission_statement) || null;
+      normalizeWhitespace(profile.mission_statement) ||
+      normalizeWhitespace(profile.about) ||
+      normalizeWhitespace(profile.product_philosophy) ||
+      null;
     return { ...entry, logoUrl: profile.logoUrl ?? null, description };
   });
 }
@@ -182,27 +190,37 @@ export function __runVendorDirectoryCoreTests(): void {
     { vendor: "CERES" },
     { vendor: "Fair-Winds, LLC." },
     { vendor: "2727" },
+    { vendor: "Philosophy Only Farms" },
     { vendor: "Mystery Farms" },
   ]);
   const profiles: VendorProfileSource[] = [
     {
       display_name: "Ceres",
       logoUrl: "https://x.supabase.co/storage/v1/object/public/media/ceres.png",
-      about: "  Craft topicals from Washington.  ",
-      mission_statement: "unused when about present",
+      about: "unused when mission present",
+      mission_statement: "  Craft topicals from Washington.  ",
+      product_philosophy: "also unused when higher-priority copy present",
     },
     {
       display_name: "Fairwinds Manufacturing",
       legal_name: "Fair Winds LLC",
       logoUrl: "https://x.supabase.co/storage/v1/object/public/media/fw.png",
-      about: null,
-      mission_statement: "Plant-powered wellness.",
+      about: "Plant-powered wellness.",
+      mission_statement: null,
     },
     {
       display_name: "Twenty Seven Twenty Seven",
       aliases: ["2727", "2727 - 413999"],
       logoUrl: null, // profile matched but no logo uploaded yet
       about: "Bold concentrates.",
+    },
+    {
+      // SLICE 114: only product_philosophy is filled -> it becomes the blurb.
+      display_name: "Philosophy Only Farms",
+      logoUrl: null,
+      about: "   ",
+      mission_statement: null,
+      product_philosophy: "  Small-batch, sun-grown, single-cultivar.  ",
     },
   ];
   const enriched = enrichVendorDirectory(entries, profiles);
@@ -213,7 +231,7 @@ export function __runVendorDirectoryCoreTests(): void {
   );
   ok(
     byName.get("CERES")?.description === "Craft topicals from Washington.",
-    "about wins and is whitespace-normalized",
+    "mission_statement wins over about + philosophy, whitespace-normalized",
   );
   ok(
     byName.get("Fair-Winds, LLC.")?.logoUrl === "https://x.supabase.co/storage/v1/object/public/media/fw.png",
@@ -221,7 +239,12 @@ export function __runVendorDirectoryCoreTests(): void {
   );
   ok(
     byName.get("Fair-Winds, LLC.")?.description === "Plant-powered wellness.",
-    "mission statement fills in when about is empty",
+    "about fills in when mission_statement is empty",
+  );
+  ok(
+    byName.get("Philosophy Only Farms")?.description ===
+      "Small-batch, sun-grown, single-cultivar.",
+    "product_philosophy is the final fallback when mission + about are blank",
   );
   ok(byName.get("2727")?.logoUrl === null, "alias match without a logo stays null (placeholder)");
   ok(byName.get("2727")?.description === "Bold concentrates.", "alias match carries the description");

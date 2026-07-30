@@ -1,13 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
 import { greenwayBusiness } from "@/content/business";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import {
   VENDOR_CONTACT_CHANNELS,
+  VENDOR_OUTREACH_SUBJECT,
   vendorMailtoHref,
+  type VendorContactChannel,
 } from "@/lib/vendors/vendor-relations-core";
 
 // SLICE 48 (owner Q3): the static vendors.json snapshot is retired. Vendors
@@ -16,48 +18,96 @@ import {
 // directory always reflects what is actually on the shelves.
 type Vendor = VendorDirectoryEntry;
 
-// Accent palette cycles across the vendor tiles for a lively, on-brand grid
-// (mirrors the home "Shop by Brand" treatment).
-const ACCENTS = [
-  "from-[var(--greenway)] to-emerald-700",
-  "from-[var(--gold)] to-[var(--orange)]",
-  "from-[var(--orange)] to-rose-700",
-  "from-emerald-400 to-[var(--greenway-dark)]",
-  "from-amber-400 to-[var(--orange)]",
-  "from-lime-400 to-emerald-700",
+// SLICE 114: the cards now match the PRODUCT card treatment — a dark #101010
+// tile with a glowing side-lit border (ported from ProductCardVisual.tsx's
+// cardStyle + glow strips), NOT a colored background. Vendors have no strain
+// type, so we cycle a small tasteful set of ON-BRAND glow tones (Greenway
+// green, gold→orange, amber→lime) to keep the grid lively while every card
+// reads as one cohesive family with the rest of the site.
+type GlowTone = {
+  border: string;
+  glowLeft: string;
+  glowSoftLeft: string;
+  glowRight: string;
+  glowSoftRight: string;
+  panel: string;
+};
+
+const GLOW_TONES: GlowTone[] = [
+  {
+    // Greenway green.
+    border: "#4f8f5a",
+    glowLeft: "rgba(79,143,90,0.95)",
+    glowSoftLeft: "rgba(126,184,127,0.34)",
+    glowRight: "rgba(79,143,90,0.95)",
+    glowSoftRight: "rgba(126,184,127,0.34)",
+    panel: "rgba(15,28,18,0.76)",
+  },
+  {
+    // Gold → orange (matches the brand accent buttons).
+    border: "#b0863d",
+    glowLeft: "rgba(217,150,39,0.92)",
+    glowSoftLeft: "rgba(255,191,53,0.34)",
+    glowRight: "rgba(217,117,39,0.92)",
+    glowSoftRight: "rgba(255,151,53,0.34)",
+    panel: "rgba(34,25,13,0.74)",
+  },
+  {
+    // Amber → lime.
+    border: "#8a9a4f",
+    glowLeft: "rgba(190,170,70,0.92)",
+    glowSoftLeft: "rgba(214,200,110,0.34)",
+    glowRight: "rgba(126,151,95,0.95)",
+    glowSoftRight: "rgba(160,184,127,0.34)",
+    panel: "rgba(27,29,17,0.74)",
+  },
+  {
+    // Deep emerald → teal (a cooler green so adjacent cards differ).
+    border: "#3f8f7a",
+    glowLeft: "rgba(63,143,122,0.95)",
+    glowSoftLeft: "rgba(116,196,178,0.32)",
+    glowRight: "rgba(84,153,120,0.92)",
+    glowSoftRight: "rgba(126,196,160,0.32)",
+    panel: "rgba(12,28,26,0.76)",
+  },
 ];
 
-// SLICE 97: cards now prefer the REAL logo + description saved in the back
-// office (vendors table via enrichVendorDirectory); these placeholders remain
-// the honest fallback for vendors without an uploaded logo or written copy.
-// The seamless expand overlays the description directly over the card's art
-// (no separate boxes).
+// Faithful port of ProductCardVisual.tsx cardStyle(tone): dark #101010 base,
+// dual side radial glows + a vertical panel gradient, triple inset/drop shadow.
+function glowCardStyle(tone: GlowTone): CSSProperties {
+  return {
+    borderColor: tone.border,
+    backgroundColor: "#101010",
+    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${tone.glowLeft} 0%, ${tone.glowSoftLeft} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${tone.glowRight} 0%, ${tone.glowSoftRight} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
+    boxShadow: `inset 18px 0 34px -31px ${tone.glowLeft}, inset -18px 0 34px -31px ${tone.glowRight}, 0 13px 28px rgba(0,0,0,0.38)`,
+  };
+}
+
+// SLICE 97: cards prefer the REAL logo + description saved in the back office
+// (vendors table via enrichVendorDirectory); these placeholders remain the
+// honest fallback for vendors without an uploaded logo or written copy.
 const PLACEHOLDER_LOGO = "/vendors/vendor-logo-placeholder.png";
 const PLACEHOLDER_DESCRIPTION =
   "A trusted Greenway Marijuana partner growing and crafting premium cannabis for the Port Orchard community. Their mission: deliver consistent, lab-tested, top-shelf product our budtenders are proud to recommend.";
 
-const EMAIL_SUBJECT = "Vendor partnership inquiry — Greenway Marijuana";
 // Per request: the email body must be BLANK so it opens an empty draft.
 const EMAIL_BODY = "";
 
-// The whole name renders on one line (whitespace-nowrap), so the TOTAL
-// character count drives how small we must go to fit the narrow 2-up MOBILE
-// card. We only shrink as far as needed; short names keep the default size.
-function mobileNameSizeClass(name: string): string {
+// The vendor name lives in a slim bar at the top of the card, so the total
+// character count drives how small we go to keep it on ONE line on the narrow
+// mobile tile. Short names keep the default size.
+function nameSizeClass(name: string): string {
   const total = name.trim().length;
-  if (total >= 33) return "text-[0.4rem]";
-  if (total >= 30) return "text-[0.46rem]";
-  if (total >= 25) return "text-[0.52rem]";
-  if (total >= 22) return "text-[0.56rem]";
-  if (total >= 18) return "text-[0.66rem]";
-  if (total >= 15) return "text-[0.74rem]";
-  if (total >= 12) return "text-[0.82rem]";
-  return "text-sm";
+  if (total >= 34) return "text-[0.5rem] md:text-[0.7rem]";
+  if (total >= 28) return "text-[0.56rem] md:text-[0.8rem]";
+  if (total >= 22) return "text-[0.64rem] md:text-[0.9rem]";
+  if (total >= 16) return "text-[0.72rem] md:text-base";
+  return "text-[0.82rem] md:text-lg";
 }
 
 function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const nameSize = mobileNameSizeClass(vendor.name);
+  const tone = GLOW_TONES[index % GLOW_TONES.length];
   // SLICE 97: real back-office logo/description when present, placeholder otherwise.
   const logoSrc = vendor.logoUrl || PLACEHOLDER_LOGO;
   const description = vendor.description || PLACEHOLDER_DESCRIPTION;
@@ -67,71 +117,77 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
       type="button"
       onClick={() => setExpanded((value) => !value)}
       aria-expanded={expanded}
-      className="group relative isolate flex aspect-[5/3] w-full flex-col justify-start overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] text-left shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25"
+      aria-label={`${vendor.name} — ${vendor.productCount} ${vendor.productCount === 1 ? "product" : "products"}`}
+      className="group relative isolate flex aspect-[4/5] w-full flex-col overflow-hidden rounded-2xl border text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)]"
+      style={glowCardStyle(tone)}
     >
-      {/* Accent gradient base. */}
-      <div
-        className={`absolute inset-0 bg-gradient-to-br ${ACCENTS[index % ACCENTS.length]} opacity-80 transition group-hover:opacity-95`}
+      {/* Product-card glow strips: left / right verticals + a soft bottom line. */}
+      <span
+        className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]"
+        style={{ background: tone.glowLeft }}
         aria-hidden="true"
       />
-      {/* Soft radial highlight + bottom darkening for legibility. */}
-      <div
-        className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.28),transparent_55%),linear-gradient(180deg,rgba(0,0,0,0.1)_0%,rgba(0,0,0,0.72)_100%)]"
+      <span
+        className="pointer-events-none absolute -right-px top-[31%] h-[46%] w-px opacity-90 blur-[1px]"
+        style={{ background: tone.glowRight }}
+        aria-hidden="true"
+      />
+      <span
+        className="pointer-events-none absolute inset-x-7 -bottom-px h-px opacity-70 blur-[1px]"
+        style={{ background: tone.glowRight }}
         aria-hidden="true"
       />
 
-      {/* Name + logo at the very TOP (both mobile & desktop). On mobile the
-          name is forced onto ONE line with a size that scales down only when
-          needed so it never overflows the narrow card. */}
-      <div className="relative z-10 flex w-full flex-col items-center gap-2 px-3 pt-3 md:px-4 md:pt-4">
-        <p className={`w-full whitespace-nowrap text-center font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-base ${nameSize}`}>
+      {/* Slim name bar at the very TOP — one line, scaled to fit. */}
+      <div className="relative z-10 border-b border-white/10 px-3 py-2 md:px-4 md:py-2.5">
+        <p
+          className={`w-full truncate text-center font-black uppercase leading-none tracking-tight text-white drop-shadow ${nameSizeClass(vendor.name)}`}
+        >
           {vendor.name}
         </p>
-        <span className="relative h-11 w-11 overflow-hidden rounded-full ring-2 ring-white/40 md:h-14 md:w-14">
+      </div>
+
+      {/* Logo fills nearly the entire card. object-contain keeps brand marks
+          crisp and un-cropped; a subtle floor shadow grounds them. */}
+      <div className="relative z-0 flex flex-1 items-center justify-center p-3 md:p-4">
+        <span className="relative h-full w-full">
           <Image
             src={logoSrc}
             alt={`${vendor.name} logo`}
             fill
-            sizes="56px"
-            className="object-cover"
+            sizes="(max-width: 768px) 45vw, 22vw"
+            className="object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.45)]"
           />
         </span>
       </div>
 
-      {/* Collapsed footer: product count (no "tap" hint text). */}
+      {/* Product-count footer (fades out when the description overlay opens). */}
       <div
-        className={`relative mt-auto px-4 pb-3 transition-opacity duration-300 ${
+        className={`relative z-10 px-3 pb-2.5 text-center transition-opacity duration-300 md:px-4 md:pb-3 ${
           expanded ? "opacity-0" : "opacity-100"
         }`}
       >
-        <p className="text-[0.58rem] font-black uppercase tracking-[0.18em] text-white/80 md:text-[0.62rem]">
+        <p className="text-[0.56rem] font-black uppercase tracking-[0.18em] text-white/70 md:text-[0.62rem]">
           {vendor.productCount} {vendor.productCount === 1 ? "product" : "products"}
         </p>
       </div>
 
-      {/* Expanded description — DESKTOP ONLY (mobile has no text overlay). */}
+      {/* Expanded description overlay — a clean scrim over the whole tile with
+          the name at top and the blurb below, so nothing overlaps the logo. */}
       <div
-        className={`absolute inset-0 hidden flex-col justify-center gap-2 px-4 py-4 transition-opacity duration-300 md:flex md:px-5 ${
+        className={`absolute inset-0 z-20 flex flex-col justify-center gap-2 px-4 py-4 text-center transition-opacity duration-300 md:px-5 ${
           expanded ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <div className="absolute inset-0 bg-black/55" aria-hidden="true" />
-        <div className="relative flex items-center gap-2.5">
-          <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-white/50">
-            <Image
-              src={logoSrc}
-              alt=""
-              fill
-              sizes="36px"
-              className="object-cover"
-            />
-          </span>
-          <p className="text-sm font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-base">
-            {vendor.name}
-          </p>
-        </div>
-        <p className="relative text-[0.72rem] font-medium leading-snug text-white/95 drop-shadow md:text-xs">
+        <div className="absolute inset-0 bg-black/78 backdrop-blur-[1px]" aria-hidden="true" />
+        <p className="relative text-[0.68rem] font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-sm">
+          {vendor.name}
+        </p>
+        <p className="relative text-[0.66rem] font-medium leading-snug text-white/90 drop-shadow md:text-xs">
           {description}
+        </p>
+        <p className="relative pt-1 text-[0.5rem] font-black uppercase tracking-[0.2em] text-white/50 md:text-[0.56rem]">
+          Tap to close
         </p>
       </div>
     </button>
@@ -150,9 +206,19 @@ type VendorContent = {
   /** Any additional banner sections staff added in the Pages builder, rendered
    * below the vendor directory. */
   extraSections?: SectionBannerData[];
+  /** SLICE 114: the five contact-channel cards, already resolved with any
+   * editable overrides overlaid on the byte-identical defaults. */
+  channels?: VendorContactChannel[];
+  /** SLICE 114: editable subject line for the "Email Our Buying Team" button. */
+  outreachSubject?: string;
 };
 
 export function VendorDirectory({ content, vendors = [] }: { content?: VendorContent; vendors?: Vendor[] } = {}) {
+  // SLICE 114: channels + outreach subject are editable; fall back to the
+  // byte-identical defaults so the live look never changes until published.
+  const channels = content?.channels ?? VENDOR_CONTACT_CHANNELS;
+  const outreachSubject = content?.outreachSubject || VENDOR_OUTREACH_SUBJECT;
+
   return (
     <div className="bg-black px-4 py-6 text-white md:px-8 md:py-8">
       <div className="mx-auto max-w-[88rem] space-y-6 md:space-y-8">
@@ -199,7 +265,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
                 "Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington, proudly serving the Kitsap Peninsula. We're always looking to connect with licensed I-502 producers and processors who make exceptional product. If you'd like to send samples, schedule a vendor day, or explore getting your line on our shelves, reach out — our buying team would love to hear from you."}
             </p>
             <a
-              href={`${greenwayBusiness.emailHref}?subject=${encodeURIComponent(EMAIL_SUBJECT)}${
+              href={`${greenwayBusiness.emailHref}?subject=${encodeURIComponent(outreachSubject)}${
                 EMAIL_BODY ? `&body=${EMAIL_BODY}` : ""
               }`}
               className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[var(--orange)] to-[var(--gold)] px-7 py-3 text-sm font-black uppercase tracking-wide text-black shadow-lg shadow-black/40 transition hover:brightness-110 md:text-base"
@@ -215,9 +281,11 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
                 and vendor days go to the vendor_intake@ mailbox Michael reads;
                 menus go to vendor_menu@ (auto-parsed into the back office);
                 manifests go to vendor_intake@ (auto-staged into receiving).
-                All buttons open a BLANK-body draft with a prefilled subject. */}
+                All buttons open a BLANK-body draft with a prefilled subject.
+                SLICE 114: title/blurb/email/subject are each editable — the
+                `channels` prop is already resolved with any overrides. */}
             <div className="mt-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-5">
-              {VENDOR_CONTACT_CHANNELS.map((channel) => (
+              {channels.map((channel) => (
                 <a
                   key={channel.key}
                   href={vendorMailtoHref(channel.email, channel.subject)}
@@ -257,12 +325,12 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
           buttons={content?.brands?.buttons}
         />
 
-        {/* Vendor directory — HomeBrands-style cards, logo + name, tap to expand.
-            SLICE 48: derived live from the published menu, so an empty menu
-            shows a friendly note instead of a bare grid. */}
+        {/* Vendor directory — product-card-style glow tiles, logo forward, tap
+            to reveal the blurb. SLICE 48: derived live from the published menu,
+            so an empty menu shows a friendly note instead of a bare grid. */}
         {vendors.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
               {vendors.map((vendor, index) => (
                 <VendorCard key={vendor.slug} vendor={vendor} index={index} />
               ))}

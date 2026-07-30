@@ -113,12 +113,15 @@ export default async function SiteContentPage({
   // banner/section pages (Home, Menu, Loyalty, Specials, Vendors, FAQ) are
   // edited in their own tabs under PAGES, so we exclude them here to avoid
   // duplicating that work.
+  // SLICE 114: "vendors" removed so the editable vendor page text (outreach
+  // heading/body/subject + the five channel cards' title/blurb/email/subject)
+  // is reachable in the Site Content editor + live preview. The Vendors page is
+  // already wired into PREVIEW_PAGES, so the ✎ Edit hotspots now resolve.
   const PAGE_BUILDER_PAGES = new Set<string>([
     "home",
     "menu",
     "loyalty",
     "specials",
-    "vendors",
     "faq",
   ]);
   const blocks = allBlocks.filter((b) => !PAGE_BUILDER_PAGES.has(b.page));
