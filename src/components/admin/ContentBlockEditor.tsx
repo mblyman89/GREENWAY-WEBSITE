@@ -34,6 +34,7 @@ import {
 } from "@/components/admin/ContentImageField";
 import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import { ContentFontField } from "@/components/admin/ContentFontField";
+import { ContentSelectField } from "@/components/admin/ContentSelectField";
 
 export type EditableBlock = {
   block_key: string;
@@ -89,6 +90,7 @@ function seoTarget(blockKey: string): { min: number; max: number; what: string }
 function snippet(value: string | null, fieldType: string): string {
   if (fieldType === "image") return value ? "🖼 image set" : "no image yet";
   if (fieldType === "font") return value || "default font";
+  if (fieldType === "select") return value ? value : "default";
   const v = (value ?? "").replace(/\s+/g, " ").trim();
   if (!v) return "— empty —";
   return v.length > 90 ? `${v.slice(0, 90)}…` : v;
@@ -117,6 +119,7 @@ export function ContentBlockEditor({
 
   const isImage = block.field_type === "image";
   const isFont = block.field_type === "font";
+  const isSelect = block.field_type === "select";
   const isRich = block.field_type === "rich" || block.field_type === "markdown";
   const dirty = (value ?? "") !== (block.published_value ?? "");
   // `savedValue` tracks what's been committed to the draft via Save; if the
@@ -268,6 +271,8 @@ export function ContentBlockEditor({
               />
             ) : isFont ? (
               <ContentFontField value={value} onChange={setValue} />
+            ) : isSelect ? (
+              <ContentSelectField blockKey={block.block_key} value={value} onChange={setValue} />
             ) : (
               <textarea
                 value={value}
@@ -279,7 +284,7 @@ export function ContentBlockEditor({
             )}
 
             {/* Meta row: length + AI toggle (text blocks only) */}
-            {!isImage && !isFont && (
+            {!isImage && !isFont && !isSelect && (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className={`text-[0.7rem] ${lenTone}`}>
                   {len} characters
@@ -296,7 +301,7 @@ export function ContentBlockEditor({
             )}
 
             {/* AI panel */}
-            {!isImage && !isFont && aiPanelOpen && (
+            {!isImage && !isFont && !isSelect && aiPanelOpen && (
               <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-3">
                 {!aiEnabled ? (
                   <p className="text-xs text-[var(--admin-gold)]">

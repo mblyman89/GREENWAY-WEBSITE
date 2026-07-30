@@ -1,7 +1,26 @@
 import Link from "next/link";
 import { greenwayBusiness } from "@/content/business";
+import { getContentValues } from "@/lib/cms/render-content";
+import { selectClassName } from "@/lib/cms/content-select-core";
 
-export function SecondaryBar() {
+// Editable top-bar blocks (Admin -> Website -> Header & Footer):
+//   header.hours.size    — a "select" size (normal/large/xl/xxl) for the hours
+//   header.phone.display  — the phone BUTTON text overlay (the dialed number
+//                           never changes; only what the customer sees).
+const TOPBAR_BLOCKS = ["header.hours.size", "header.phone.display"] as const;
+
+export async function SecondaryBar() {
+  // Resolve once (draft-aware). Seed defaults mirror the live values, so this
+  // changes nothing until a staff member edits a block.
+  const values = await getContentValues([...TOPBAR_BLOCKS]);
+
+  // Hours text size -> safe CSS classes (blank/unknown -> "normal" default).
+  const hoursSizeClass = selectClassName("header.hours.size", values["header.hours.size"]);
+
+  // Phone button overlay text -> saved value else the live business.ts display.
+  const phoneText =
+    (values["header.phone.display"] ?? "").trim() || greenwayBusiness.phone.display;
+
   return (
     <div className="border-t border-black/10 bg-[var(--greenway)] text-black">
       <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,34vw)_minmax(3.5rem,1fr)_auto] items-center gap-[clamp(0.12rem,0.5vw,0.5rem)] px-[clamp(0.18rem,0.75vw,0.8rem)] py-1 md:flex md:max-w-none md:flex-nowrap md:justify-between md:px-5 lg:px-6 xl:px-8">
@@ -20,11 +39,13 @@ export function SecondaryBar() {
           </span>
         </Link>
 
-        {/* Hours: MOBILE = stacked (time on top, MON-SUN below). DESKTOP = one line, bigger. */}
+        {/* Hours: MOBILE = stacked (time on top, MON-SUN below). DESKTOP = one line, bigger.
+            The editable size (header.hours.size) applies to the big hours text on
+            both layouts; "normal" reproduces the shipped sizes exactly. */}
         <div className="min-w-0 text-center md:flex-none md:text-left">
           {/* Mobile stacked */}
           <span className="flex flex-col items-center leading-[0.95] md:hidden">
-            <span className="text-[clamp(0.6rem,3vw,0.92rem)] font-black uppercase tracking-[-0.01em] text-black">
+            <span className={`font-black uppercase tracking-[-0.01em] text-black ${hoursSizeClass}`}>
               {greenwayBusiness.hours.dailyShort}
             </span>
             <span className="text-[clamp(0.52rem,2.6vw,0.78rem)] font-black uppercase tracking-[0.02em] text-black/80">
@@ -32,7 +53,7 @@ export function SecondaryBar() {
             </span>
           </span>
           {/* Desktop one line, bigger to match address/phone */}
-          <span className="hidden font-black uppercase tracking-[0.03em] text-black md:inline md:text-[0.82rem] lg:text-[0.88rem]">
+          <span className={`hidden font-black uppercase tracking-[0.03em] text-black md:inline ${hoursSizeClass}`}>
             {greenwayBusiness.hours.short}
           </span>
         </div>
@@ -42,7 +63,7 @@ export function SecondaryBar() {
           className="inline-flex h-[clamp(1.95rem,8.1vw,2.45rem)] shrink-0 items-center rounded-full bg-black px-[clamp(0.6rem,2.05vw,1.25rem)] text-[clamp(0.92rem,4.2vw,1.22rem)] font-black uppercase tracking-[-0.02em] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-10 md:text-[1.18rem] md:tracking-[0.03em] lg:text-[1.24rem]"
           aria-label={`Call Greenway at ${greenwayBusiness.phone.numeric}`}
         >
-          {greenwayBusiness.phone.display}
+          {phoneText}
         </a>
       </div>
     </div>

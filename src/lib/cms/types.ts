@@ -64,7 +64,11 @@ export type ContentFieldType =
   | "phone"
   | "email"
   | "image"
-  | "font";
+  | "font"
+  // "select": a short value chosen from a fixed, curated option set defined in
+  // content-select-core.ts (keyed by block_key). Stored as plain text in the
+  // DB (field_type has no CHECK constraint), so this adds NO migration.
+  | "select";
 
 export type ContentBlockRow = {
   id: string;

@@ -515,4 +515,31 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "This isn't available just yet — check back soon! In the meantime, give us a call or stop by the shop.",
   },
+  // ---- Top green bar (SecondaryBar, under the page nav) --------------------
+  // The store-hours text size + the editable phone-number OVERLAY text. These
+  // seed with the exact live values so the bar looks identical until edited.
+  {
+    block_key: "header.hours.size",
+    page: "header-footer",
+    section: "topbar",
+    label: "Top bar — store hours text size",
+    help_text:
+      "How big the store-hours text is in the green bar at the top of the site. 'Normal' is the current size. Larger steps grow both the phone-size and desktop hours together.",
+    field_type: "select",
+    // Seed BLANK so the render helper uses the safe default ("normal") — the
+    // bar is pixel-identical until a size is chosen.
+    defaultValue: "",
+  },
+  {
+    block_key: "header.phone.display",
+    page: "header-footer",
+    section: "topbar",
+    label: "Top bar — phone button text",
+    help_text:
+      "The text shown on the phone button in the top green bar (e.g. \"360-BUY-WEED\"). This is only what customers SEE — the actual number they call never changes.",
+    field_type: "plain",
+    // Mirrors greenwayBusiness.phone.display (src/content/business.ts) exactly,
+    // kept as a literal to match this file's convention (no runtime import).
+    defaultValue: "360-BUY-WEED",
+  },
 ];
