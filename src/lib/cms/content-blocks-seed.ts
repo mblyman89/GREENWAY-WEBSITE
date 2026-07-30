@@ -21,6 +21,10 @@ import {
   rowsFromParagraphs,
   serializePolicyDoc,
 } from "./policy-doc-core";
+import {
+  defaultSpecialsPresentation,
+  serializeSpecialsPresentation,
+} from "@/lib/specials/specials-presentation-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -282,6 +286,24 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "plain",
     defaultValue:
       "Check out our latest deals and save on premium cannabis products. New specials added regularly.",
+  },
+  {
+    // SLICE 106: how the /specials "Weekly Cannabis Deals" grid is PRESENTED —
+    // which weekday cards show, their order, the offer-badge style, optional
+    // per-day copy overrides, and the two section toggles. This governs
+    // PRESENTATION ONLY; all pricing/offer copy still comes from the promotions
+    // engine. The default is byte-identical to today's page (live-look-safe), so
+    // seeding changes nothing until staff edit and publish. field_type "richjson"
+    // stores JSON in the plain text column → NO migration.
+    block_key: "specials.deals.presentation",
+    page: "specials",
+    section: "deals",
+    label: "Specials page — weekly deals presentation",
+    help_text:
+      "Controls how the weekly-deal cards are shown on the /specials page (which days show, their order, badge style, and optional copy). Pricing and offers are set in Promotions — this only changes how they're presented.",
+    field_type: "richjson",
+    seo_impact: true,
+    defaultValue: serializeSpecialsPresentation(defaultSpecialsPresentation()),
   },
   // ---- FAQ -----------------------------------------------------------------
   {

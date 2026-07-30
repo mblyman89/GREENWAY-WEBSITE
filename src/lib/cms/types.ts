@@ -72,7 +72,12 @@ export type ContentFieldType =
   // "richdoc": an ORDERED legal-policy document (heading/paragraph rows) edited
   // by the Legal Policies editor and stored as a JSON string in the same plain
   // text column. Also NO migration (field_type has no CHECK). See policy-doc-core.ts.
-  | "richdoc";
+  | "richdoc"
+  // "richjson": a structured JSON settings document (e.g. the /specials deals
+  // PRESENTATION settings — which weekday cards show, their order, badge style,
+  // optional copy overrides). Stored as a JSON string in the same plain text
+  // column, so NO migration. See specials-presentation-core.ts (SLICE 106).
+  | "richjson";
 
 export type ContentBlockRow = {
   id: string;
