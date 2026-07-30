@@ -11,9 +11,19 @@ type BreadcrumbsProps = {
   items: BreadcrumbItem[];
   /** Optional explicit path for the last (current) crumb so JSON-LD has a URL. */
   currentPath?: string;
+  /**
+   * Max-width utility for the crumb row. Defaults to the site-wide `88rem` so
+   * every page is unchanged. The Shop page passes the wider `--shop-max` so the
+   * breadcrumb lines up flush-left with its wider hero + product grid.
+   */
+  maxWidthClassName?: string;
 };
 
-export function Breadcrumbs({ items, currentPath }: BreadcrumbsProps) {
+export function Breadcrumbs({
+  items,
+  currentPath,
+  maxWidthClassName = "max-w-[88rem]",
+}: BreadcrumbsProps) {
   // Build BreadcrumbList JSON-LD (Home + provided crumbs). The last crumb falls
   // back to currentPath, then its href, so structured data always has a URL.
   const listElements = [
@@ -39,7 +49,7 @@ export function Breadcrumbs({ items, currentPath }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className="relative border-b border-white/10 bg-black/80 px-4 py-3 md:px-8">
       <JsonLd data={breadcrumbJsonLd} id="breadcrumbs" />
-      <ol className="mx-auto flex max-w-[88rem] flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.16em]">
+      <ol className={`mx-auto flex ${maxWidthClassName} flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.16em]`}>
         <li>
           <Link href="/" className="text-zinc-500 transition hover:text-[var(--greenway)]">
             Home

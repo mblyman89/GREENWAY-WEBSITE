@@ -1063,7 +1063,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   );
 
   return (
-    <section className="mx-auto grid max-w-[88rem] gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-8 lg:grid-cols-[280px_1fr] lg:gap-8">
+    <section className="mx-auto grid max-w-[var(--shop-max)] gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-8 lg:grid-cols-[280px_1fr] lg:gap-8">
       {/* Active filter pills — horizontal row directly below the breadcrumb, spanning full width. */}
       <div className="lg:col-span-2">
         <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
@@ -1136,13 +1136,13 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
 
         {showAccessorySections ? (
           <section id="accessories" className="scroll-mt-32">
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
           </section>
         ) : showMerchSections ? (
           <section id="merch" className="scroll-mt-32">
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
             </div>
           </section>
@@ -1162,7 +1162,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
                     <h2 className="text-3xl font-black text-white">{group.label}</h2>
                   </div>
                 )}
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                   {group.items.map((item) => <ProductCard key={item.id} item={item} />)}
                 </div>
               </section>
@@ -1175,7 +1175,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
                 <div className="mb-4 min-w-0">
                   <h2 className="text-3xl font-black text-white">Accessories</h2>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                   {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
                 </div>
               </section>
@@ -1187,7 +1187,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
                 <div className="mb-4 min-w-0">
                   <h2 className="text-3xl font-black text-white">Greenway Merch</h2>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                   {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
                 </div>
               </section>

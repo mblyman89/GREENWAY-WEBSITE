@@ -199,7 +199,7 @@ export default async function LegalPoliciesPage({
                     type="text"
                     name="draft_value"
                     defaultValue={value}
-                    className="w-full rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-white px-3 py-2 text-sm text-black"
+                    className="admin-focus w-full rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] outline-none transition focus:border-[var(--admin-accent)]"
                   />
                 </label>
                 <input type="hidden" name="block_key" value={key} />
