@@ -15,6 +15,9 @@ import {
   ensureContentBlocksSeeded,
   getContentBlock,
 } from "@/lib/cms/content-store";
+import { listMedia } from "@/lib/media/store";
+import { type MediaChoice } from "@/components/admin/ContentImageField";
+import { SPECIALS_BANNER_SPEC } from "@/lib/cms/image-spec-core";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import {
@@ -106,6 +109,18 @@ export default async function AdminSpecialsPage({
     fromDatabase: s.fromDatabase,
   }));
 
+  // Media Library choices for the banner-image picker (same source + shape the
+  // Pages builder uses), so staff can pick a catalogued image or paste a URL.
+  const mediaAssets = await listMedia({ status: "published", limit: 200 });
+  const mediaChoices: MediaChoice[] = mediaAssets
+    .filter((m) => (m.mime_type ?? "").startsWith("image/") && m.public_url)
+    .map((m) => ({
+      id: m.id,
+      url: m.public_url as string,
+      title: m.title ?? m.filename ?? "Image",
+      usageType: m.usage_type ?? null,
+    }));
+
   return (
     <div>
       <AdminPageHeader
@@ -139,7 +154,7 @@ export default async function AdminSpecialsPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {sp.error === "restore" ? (
-          <div className="rounded-[var(--admin-radius-sm)] border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800">
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Couldn&apos;t restore that version. Please try again.
           </div>
         ) : null}
@@ -166,6 +181,8 @@ export default async function AdminSpecialsPage({
             saveDraftAction={saveSpecialsDraftAction}
             publishAction={publishSpecialsAction}
             restoreAction={restoreSpecialsRevisionAction}
+            mediaChoices={mediaChoices}
+            spec={SPECIALS_BANNER_SPEC}
           />
         )}
       </div>

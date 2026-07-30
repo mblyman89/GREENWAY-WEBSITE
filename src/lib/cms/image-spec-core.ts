@@ -188,6 +188,17 @@ const BLOCK_SPECS: Record<string, ImageSpec> = {
 
 /** Named specs for non-block slots (sections, carousel slides). */
 export const SECTION_BANNER_SPEC: ImageSpec = { ...WIDE_BANNER, id: "section-banner", title: "Section background" };
+/**
+ * The "Today's Deal" wide banner on the public /specials page. Renders through
+ * SectionBanner (the same wide/short family), with the title/subtitle overlaid
+ * on the left and a dark fade. Same shape as the section-banner so art fits.
+ */
+export const SPECIALS_BANNER_SPEC: ImageSpec = {
+  ...WIDE_BANNER,
+  id: "specials-todays-deal-banner",
+  title: "Specials — Today's Deal banner",
+  tip: "Wide and short. Keep the important art toward the side away from the text — the deal title & subtitle sit over a dark fade, and you can choose which side they sit on.",
+};
 export const CAROUSEL_SLIDE_SPEC: ImageSpec = {
   ...WIDE_BANNER,
   id: "carousel-slide",
@@ -281,6 +292,12 @@ export function __runImageSpecTests(): { passed: number; failed: number } {
   ok(canvaLine(BLOCK_SPECS["home.category.image"]).includes("1600"), "canva line mentions width");
   ok(SECTION_BANNER_SPEC.aspectRatio > 2, "section banner is wide");
   ok(CAROUSEL_SLIDE_SPEC.aspectRatio > 2, "carousel slide is wide");
+  ok(SPECIALS_BANNER_SPEC.aspectRatio > 2, "specials banner is wide");
+  ok(
+    SPECIALS_BANNER_SPEC.presets[0].width === WIDE_BANNER.presets[0].width,
+    "specials banner tracks the wide-banner size",
+  );
+  ok(SPECIALS_BANNER_SPEC.id === "specials-todays-deal-banner", "specials banner id set");
   ok(CAROUSEL_SLIDE_SPEC.id === "carousel-slide", "carousel slide id set");
 
   return { passed, failed };

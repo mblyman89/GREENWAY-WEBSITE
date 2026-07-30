@@ -16,15 +16,39 @@ import {
 } from "@/components/promotions/PublishedRulesProvider";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 
-const LIMIT = 16;
+const DEFAULT_LIMIT = 16;
+const DEFAULT_BANNER_IMAGE = "/home/hero-banner.webp";
 
 /**
  * Specials page "Today's Deals" block. Shows a wide SectionBanner reflecting
- * the active day, followed by 16 standard ProductCards of the day's actual
+ * the active day, followed by N standard ProductCards of the day's actual
  * on-deal products (each resolving its own discount badge + sale price). Each
  * card links to the product / the day's filtered menu via the standard card.
+ *
+ * SLICE 111: staff can (in the Specials editor) swap the banner IMAGE, choose
+ * how the banner TEXT sits over it, and set how many product cards show. All
+ * props are optional and default to today's exact look (16 cards, built-in
+ * banner art, left/center text) so the page is unchanged until edited.
  */
-export function SpecialsDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
+export function SpecialsDailyDeals({
+  items,
+  bannerImage,
+  count,
+  textAlign = "left",
+  verticalAlign = "center",
+}: {
+  items: GreenwayMenuItem[];
+  /** Optional banner background image; blank/omitted keeps the built-in art. */
+  bannerImage?: string;
+  /** Number of product cards to show (defaults to 16). */
+  count?: number;
+  /** Horizontal placement of the banner text (default "left"). */
+  textAlign?: "left" | "center" | "right";
+  /** Vertical placement of the banner text (default "center"). */
+  verticalAlign?: "top" | "center" | "bottom";
+}) {
+  const LIMIT = count && Number.isFinite(count) && count > 0 ? Math.trunc(count) : DEFAULT_LIMIT;
+  const bannerSrc = bannerImage && bannerImage.trim() ? bannerImage.trim() : DEFAULT_BANNER_IMAGE;
   const weekday = useStoreWeekday();
   // PROMOTIONS HARMONY (Task T / PR 1): banner copy + the on-deal product pool
   // derive from the back office's PUBLISHED promotion rules (seed fallback).
@@ -57,7 +81,7 @@ export function SpecialsDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
       (a, b) => (shuffle[a.id] ?? 0) - (shuffle[b.id] ?? 0),
     );
     return ordered.slice(0, LIMIT);
-  }, [pool, shuffle]);
+  }, [pool, shuffle, LIMIT]);
 
   // Only show skeletons during the brief first paint while the store weekday is
   // still resolving on the client. Once resolved we always have products to show
@@ -71,11 +95,13 @@ export function SpecialsDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
   return (
     <section aria-labelledby="todays-deals-title" className="mt-10 space-y-4 md:mt-14 md:space-y-6">
       <SectionBanner
-        imageSrc="/home/hero-banner.webp"
+        imageSrc={bannerSrc}
         imageAlt={`${title} daily deal products`}
         eyebrow="Today's Deal"
         title={title}
         subtitle={subtitle}
+        textAlign={textAlign}
+        verticalAlign={verticalAlign}
       />
       <h2 id="todays-deals-title" className="sr-only">
         {title} products
