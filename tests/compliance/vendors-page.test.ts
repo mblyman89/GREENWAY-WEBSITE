@@ -173,11 +173,21 @@ describe("SLICE 114 — content seeds (byte-identical, no migration)", () => {
 
 describe("SLICE 114 — public card redesign (product-card glow, no colored bg)", () => {
   const card = read("src/components/vendors/VendorDirectory.tsx");
+  // SLICE 117: the glow recipe was extracted to ONE shared module so the
+  // vendor cards, product cards, and specials deal cards are guaranteed to
+  // match pixel-for-pixel. VendorDirectory now imports it instead of inlining
+  // the CSS strings, so we verify (a) it imports the shared module and (b) the
+  // shared module still carries the exact recipe (the same guarantee, one hop).
+  const glowCore = read("src/lib/ui/glow-card-core.ts");
 
   it("uses the product-card glow recipe, not a colored gradient background", () => {
-    expect(card).toContain('backgroundColor: "#101010"');
-    expect(card).toContain("radial-gradient(ellipse 54% 72% at -9% 44%");
-    expect(card).toContain("boxShadow:");
+    // (a) the card pulls the recipe from the shared glow module.
+    expect(card).toContain("glowCardStyle");
+    expect(card).toContain("@/lib/ui/glow-card-core");
+    // (b) the shared module carries the exact product-card glow recipe.
+    expect(glowCore).toContain('backgroundColor: "#101010"');
+    expect(glowCore).toContain("radial-gradient(ellipse 54% 72% at -9% 44%");
+    expect(glowCore).toContain("boxShadow:");
     // The old ACCENTS gradient palette is gone.
     expect(card).not.toContain("const ACCENTS");
     expect(card).not.toContain("bg-gradient-to-br ${ACCENTS");

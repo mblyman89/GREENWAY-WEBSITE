@@ -58,6 +58,7 @@ export function SectionBanner({
   blockKeyPrefix,
   textAlign = "left",
   verticalAlign = "center",
+  imageFocus,
 }: {
   imageSrc: string;
   imageAlt: string;
@@ -73,6 +74,16 @@ export function SectionBanner({
   textAlign?: "left" | "center" | "right";
   /** Vertical placement of the overlaid text (default "center" = today's look). */
   verticalAlign?: "top" | "center" | "bottom";
+  /**
+   * SLICE 117 (bug fix): where the IMAGE sits, INDEPENDENT of the text.
+   * Historically the image's object-position was hard-wired to `textAlign`
+   * (text left → image shoved right, etc.), so moving the text moved the image.
+   * Now the image has its own control. When `imageFocus` is omitted we keep the
+   * old text-derived behavior EXACTLY, so every existing caller is unchanged;
+   * callers that pass `imageFocus` (e.g. the Specials Today's-Deal banner) get
+   * a stable image that no longer jumps when the text is re-aligned.
+   */
+  imageFocus?: "center" | "top" | "bottom" | "left" | "right";
 }) {
   const visibleButtons = (buttons ?? []).filter(
     (b) => b.enabled !== false && b.label?.trim() && b.href?.trim(),
@@ -87,12 +98,26 @@ export function SectionBanner({
       : textAlign === "center"
         ? "bg-[linear-gradient(180deg,rgba(0,0,0,0.55)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.55)_100%)]"
         : "bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.82)_40%,rgba(0,0,0,0.32)_72%,rgba(0,0,0,0.08)_100%)]";
-  const imageObjectClass =
+  // Image position. If a caller supplies an explicit `imageFocus`, it wins and
+  // is fully INDEPENDENT of the text alignment (the bug fix). Otherwise we keep
+  // the exact legacy behavior (image shifts to the side opposite the text) so
+  // every caller that hasn't opted in renders byte-identically to before.
+  const focusObjectClass: Record<NonNullable<typeof imageFocus>, string> = {
+    center: "object-center",
+    top: "object-top",
+    bottom: "object-bottom",
+    left: "object-left",
+    right: "object-right",
+  };
+  const legacyObjectClass =
     textAlign === "right"
-      ? "object-cover object-left"
+      ? "object-left"
       : textAlign === "center"
-        ? "object-cover object-center"
-        : "object-cover object-right";
+        ? "object-center"
+        : "object-right";
+  const imageObjectClass = `object-cover ${
+    imageFocus ? focusObjectClass[imageFocus] : legacyObjectClass
+  }`;
   const textBlockClass = [
     textAlign === "right" ? "items-end text-right" : textAlign === "center" ? "items-center text-center" : "items-start text-left",
     verticalAlign === "top" ? "justify-start" : verticalAlign === "bottom" ? "justify-end" : "justify-center",

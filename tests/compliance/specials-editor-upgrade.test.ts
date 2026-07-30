@@ -122,14 +122,23 @@ describe("SectionBanner gains alignment props (legible over any image)", () => {
     expect(src).toContain("verticalAlign = \"center\"");
     expect(src).toContain('textAlign?: "left" | "center" | "right"');
     expect(src).toContain('verticalAlign?: "top" | "center" | "bottom"');
-    // align → text block + image position + gradient direction
+    // align → text block + gradient direction
     expect(src).toContain("items-end text-right");
     expect(src).toContain("items-center text-center");
     expect(src).toContain("items-start text-left");
-    expect(src).toContain("object-cover object-right"); // default (left align)
-    expect(src).toContain("object-cover object-left");
     expect(src).toContain("justify-start");
     expect(src).toContain("justify-end");
+    // SLICE 117 bug fix: image position is built via a template literal
+    // (`object-cover ${...}`) so the object-* classes live in the focus record
+    // + the legacy fallback ternary rather than as one contiguous string. We
+    // still guarantee the object-cover base + both legacy positions exist.
+    expect(src).toContain("object-cover ");
+    expect(src).toContain("object-right"); // legacy default (left-aligned text)
+    expect(src).toContain("object-left"); // legacy right-aligned text
+    // The independent image control (the actual fix) is present with a
+    // byte-identical default when omitted.
+    expect(src).toContain("imageFocus");
+    expect(src).toContain("legacyObjectClass");
   });
 });
 
@@ -152,6 +161,22 @@ describe("public render threads the new presentation fields (default = today)", 
     expect(src).toContain("count={pres.todaysDealsCount}");
     expect(src).toContain("textAlign={pres.todaysDealsBannerTextAlign}");
     expect(src).toContain("verticalAlign={pres.todaysDealsBannerVerticalAlign}");
+    // SLICE 117: the independent image-focus is threaded through too so moving
+    // the banner text no longer drags the image behind it.
+    expect(src).toContain("imageFocus={pres.todaysDealsBannerImageFocus}");
+  });
+
+  it("SLICE 117: Today's Deal image-focus is decoupled from text (bug fix)", () => {
+    const daily = read("src/components/specials/SpecialsDailyDeals.tsx");
+    // SpecialsDailyDeals accepts + forwards the independent image focus.
+    expect(daily).toContain("imageFocus");
+    expect(daily).toContain("imageFocus={imageFocus}");
+    // The presentation carries an image-focus that defaults to "right" so the
+    // live look is byte-identical (legacy: left text shoved the image right).
+    const core = read("src/lib/specials/specials-presentation-core.ts");
+    expect(core).toContain("todaysDealsBannerImageFocus");
+    expect(core).toContain("isImageFocus");
+    expect(core).toContain('todaysDealsBannerImageFocus: "right"');
   });
 });
 
