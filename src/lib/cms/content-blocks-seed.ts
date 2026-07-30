@@ -13,6 +13,26 @@
  * any drift here would change the live site the moment a block is seeded.
  */
 import type { ContentFieldType } from "./types";
+import { privacyPolicyParagraphs } from "@/content/privacy-policy";
+import { termsOfUseParagraphs } from "@/content/terms-of-use";
+import { consumerHealthDataParagraphs } from "@/content/consumer-health-data";
+import {
+  POLICY_DOCS,
+  rowsFromParagraphs,
+  serializePolicyDoc,
+} from "./policy-doc-core";
+
+// SLICE 105b: the seed value for each Legal Policies body is the CURRENT
+// hardcoded paragraph list, serialized to the JSON document shape. Computing it
+// here (instead of hand-pasting JSON) guarantees the seed can never drift from
+// the vetted fallback the public pages render — so seeding is byte-identical.
+function policyDocDefault(
+  policyId: keyof typeof POLICY_DOCS,
+  paragraphs: readonly string[],
+): string {
+  const { docKey } = POLICY_DOCS[policyId];
+  return serializePolicyDoc(rowsFromParagraphs(paragraphs, docKey));
+}
 
 export type ContentBlockSeed = {
   block_key: string;
@@ -423,6 +443,46 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "plain",
     seo_impact: true,
     defaultValue: "Privacy Policy",
+  },
+
+  // ---- Legal Policies bodies (SLICE 105b) ----------------------------------
+  // The full ordered body of each legal page, stored as ONE JSON "richdoc"
+  // block (heading/paragraph rows). Seeded with the exact current wording so
+  // the public pages are byte-identical until edited; the pages also fall back
+  // to the hardcoded arrays if a block is unseeded or malformed. NO migration
+  // (field_type is unconstrained text). Edited in Website → Legal Policies.
+  {
+    block_key: "privacy.body.doc",
+    page: "legal-privacy",
+    section: "body",
+    label: "Privacy Policy — full text",
+    help_text:
+      "The complete body of your Privacy Policy, edited paragraph by paragraph. This is legal wording — consider having counsel review changes before publishing.",
+    field_type: "richdoc",
+    seo_impact: true,
+    defaultValue: policyDocDefault("privacy-policy", privacyPolicyParagraphs),
+  },
+  {
+    block_key: "terms.body.doc",
+    page: "legal-terms",
+    section: "body",
+    label: "Terms of Use — full text",
+    help_text:
+      "The complete body of your Terms of Use, edited paragraph by paragraph. This is legal wording — consider having counsel review changes before publishing.",
+    field_type: "richdoc",
+    seo_impact: true,
+    defaultValue: policyDocDefault("terms-of-use", termsOfUseParagraphs),
+  },
+  {
+    block_key: "chd.body.doc",
+    page: "legal-chd",
+    section: "body",
+    label: "Consumer Health Data — full text",
+    help_text:
+      "The complete body of your Washington Consumer Health Data Privacy Policy (My Health My Data Act). This is legal wording — consider having counsel review changes before publishing.",
+    field_type: "richdoc",
+    seo_impact: true,
+    defaultValue: policyDocDefault("consumer-health-data", consumerHealthDataParagraphs),
   },
 
   // ---- Header & Footer (SLICE 104) -----------------------------------------

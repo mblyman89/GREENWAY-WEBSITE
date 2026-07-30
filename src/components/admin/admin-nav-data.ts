@@ -112,6 +112,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc\ufe0f", group: "Website" }, // 🖼️ media
   { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "Website" }, // 📄 text blocks
   { label: "Header & Footer", href: "/admin/header-footer", permission: "content.edit", icon: "\ud83d\udd17", group: "Website" }, // 🔗 footer links & messages (SLICE 104)
+  { label: "Legal Policies", href: "/admin/legal-policies", permission: "content.edit", icon: "\u2696\ufe0f", group: "Website" }, // ⚖️ privacy / terms / consumer health data (SLICE 105b)
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website" }, // 🏠 home page
   { label: "Menu", href: "/admin/pages/menu", permission: "content.edit", icon: "\ud83c\udf3f", group: "Website" }, // 🌿 product menu
   { label: "Loyalty", href: "/admin/pages/loyalty", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website" }, // 🏅 loyalty page

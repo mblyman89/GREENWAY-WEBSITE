@@ -68,7 +68,11 @@ export type ContentFieldType =
   // "select": a short value chosen from a fixed, curated option set defined in
   // content-select-core.ts (keyed by block_key). Stored as plain text in the
   // DB (field_type has no CHECK constraint), so this adds NO migration.
-  | "select";
+  | "select"
+  // "richdoc": an ORDERED legal-policy document (heading/paragraph rows) edited
+  // by the Legal Policies editor and stored as a JSON string in the same plain
+  // text column. Also NO migration (field_type has no CHECK). See policy-doc-core.ts.
+  | "richdoc";
 
 export type ContentBlockRow = {
   id: string;
