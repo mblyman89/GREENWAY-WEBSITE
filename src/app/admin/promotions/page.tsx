@@ -29,6 +29,11 @@ import type { PromotionRow, Weekday, DiscountType } from "@/lib/promotions/types
 import { storeWeekday } from "@/lib/reports/timezone";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 import { PromotionsAdvisorPanel } from "@/components/admin/promotions/PromotionsAdvisorPanel";
+import { getContentForRender } from "@/lib/cms/render-content";
+import {
+  resolveSpecialsPresentation,
+  isWeekdayHiddenByPresentation,
+} from "@/lib/specials/specials-presentation-core";
 
 export const dynamic = "force-dynamic";
 
@@ -115,11 +120,16 @@ export default async function PromotionsAdminPage({
     );
   }
 
-  const [promos, conflicts, audit] = await Promise.all([
+  const [promos, conflicts, audit, presentationJson] = await Promise.all([
     listPromotions(),
     detectConflicts(),
     auditPublishedPromotions(),
+    getContentForRender("specials.deals.presentation"),
   ]);
+  // SLICE 106: the /specials weekly-deal grid PRESENTATION (which weekday cards
+  // show / are hidden). Prices/offers still come from these promotions — this
+  // only affects whether the deal's CARD is visible on the public Specials page.
+  const specialsPresentation = resolveSpecialsPresentation(presentationJson);
   const published = promos.filter((p) => p.status === "published").length;
   const drafts = promos.filter((p) => p.status === "draft").length;
   const scheduled = promos.filter((p) => p.status === "scheduled").length;
@@ -156,6 +166,20 @@ export default async function PromotionsAdminPage({
     (e) => e.belowCost.length > 0 || e.regularBelowCost.length > 0,
   );
   const costUnknownTotal = audit.totals.costUnknown;
+
+  // SLICE 106: published, weekday-based promotions whose /specials deal CARD is
+  // currently hidden by the Specials presentation settings. The deal still
+  // applies at checkout and on the menu — it just isn't advertised on the
+  // weekly-deals grid. Surfaces a gentle heads-up so staff aren't surprised.
+  const hiddenByPresentation = promos
+    .filter((p) => p.status === "published" && p.weekday != null)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      weekday: p.weekday as Weekday,
+      label: WEEKDAY_LABELS[p.weekday as Weekday],
+    }))
+    .filter((p) => isWeekdayHiddenByPresentation(specialsPresentation, p.label));
 
   return (
     <div>
@@ -221,6 +245,62 @@ export default async function PromotionsAdminPage({
         {scheduleItems.length > 0 && (
           <WeeklyScheduleStrip items={scheduleItems} todayWeekday={todayWeekday} />
         )}
+
+        {/* ── Where this shows up (SLICE 106) ─────────────────────────────── */}
+        <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
+          <p className="font-semibold text-white/85">📍 Where your published promotions show up</p>
+          <p className="mt-1 text-white/55">
+            When you publish a promotion, the price is applied everywhere automatically — you don&apos;t
+            set it in more than one place.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            <li className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white/75">
+              <span className="font-semibold text-white/90">🛒 Register (POS)</span> — the discount
+              is applied at checkout, with the CCRS cost floor enforced.
+            </li>
+            <li className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white/75">
+              <span className="font-semibold text-white/90">🌿 Online menu</span> — sale prices and
+              deal badges appear on product cards and product pages.
+            </li>
+            <li className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white/75">
+              <span className="font-semibold text-white/90">🔥 Specials page</span> — weekday deals
+              appear on the weekly-deals grid.{" "}
+              <Link href="/admin/specials" className="text-[var(--admin-accent)] hover:underline">
+                Control which cards show →
+              </Link>
+            </li>
+            <li className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white/75">
+              <span className="font-semibold text-white/90">🏠 Home page</span> — today&apos;s deal is
+              featured in the daily-deals section.
+            </li>
+          </ul>
+        </div>
+
+        {/* ── Hidden-by-presentation heads-up (SLICE 106) ─────────────────── */}
+        {hiddenByPresentation.length > 0 ? (
+          <div className="rounded-xl border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-4 text-sm">
+            <p className="font-semibold text-[var(--admin-gold)]">
+              👀 {hiddenByPresentation.length} published deal
+              {hiddenByPresentation.length === 1 ? "" : "s"} not shown on the Specials page
+            </p>
+            <p className="mt-1 text-white/70">
+              These deals are still live — they apply at the register and on the online menu — but
+              their card is hidden on the weekly-deals grid by your{" "}
+              <Link href="/admin/specials" className="underline">Specials presentation settings</Link>.
+              That&apos;s fine if it&apos;s on purpose; here&apos;s the list so nothing surprises you.
+            </p>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {hiddenByPresentation.map((p) => (
+                <li
+                  key={p.id}
+                  className="rounded-full border border-[var(--admin-gold)]/40 bg-black/30 px-3 py-1 text-xs text-white/80"
+                >
+                  {p.title} <span className="text-white/45">· {p.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {/* ── CCRS below-cost audit ─────────────────────────────────────── */}
         {auditWithIssues.length > 0 ? (

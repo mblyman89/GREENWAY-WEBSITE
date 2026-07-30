@@ -8,6 +8,13 @@ import {
 } from "@/components/home/SectionBanner";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import type { WeeklyDealSummary } from "@/lib/promotions/published-rules-core";
+import {
+  type SpecialsPresentation,
+  type BadgeStyle,
+  defaultSpecialsPresentation,
+  orderedVisibleWeekdays,
+  dayPresentationFor,
+} from "@/lib/specials/specials-presentation-core";
 
 type DealTone = {
   /** Glowing card border color (matches ProductCardVisual tones). */
@@ -208,7 +215,23 @@ function ProductArtwork({ label, title, tone }: { label: string; title: string; 
   );
 }
 
-function DailyDealCard({ deal }: { deal: DailyDeal }) {
+// Offer-chip styling by presentation badge style. "classic" reproduces the
+// shipped look exactly (live-look-safe default); the others only restyle the
+// small offer chip — they never change the offer text or any pricing.
+function offerChipClass(badgeStyle: BadgeStyle): string {
+  const base =
+    "shrink-0 rounded-full px-2.5 py-1.5 text-[0.56rem] font-black uppercase tracking-[0.1em] md:absolute md:right-0 md:top-0 md:max-w-[5.8rem] md:rounded-none md:p-0 md:text-right md:text-[1.35rem] md:leading-[0.9] md:tracking-[-0.04em] lg:max-w-[6.7rem] lg:text-[1.52rem]";
+  if (badgeStyle === "bold") {
+    return `${base} border border-[var(--orange)] bg-[var(--orange)] text-black md:border-0 md:bg-transparent md:text-[var(--orange)]`;
+  }
+  if (badgeStyle === "minimal") {
+    return `${base} border border-white/15 bg-black/40 text-white/85 md:border-0 md:bg-transparent md:text-white/85`;
+  }
+  // classic (default) — byte-identical to the shipped chip.
+  return `${base} border border-[var(--orange)]/60 bg-black/55 text-[var(--orange)] md:border-0 md:bg-transparent`;
+}
+
+function DailyDealCard({ deal, badgeStyle }: { deal: DailyDeal; badgeStyle: BadgeStyle }) {
   const { tone } = deal;
   return (
     <div className="flex h-full flex-col gap-2.5 md:gap-3">
@@ -231,7 +254,7 @@ function DailyDealCard({ deal }: { deal: DailyDeal }) {
                 </span>
               </h2>
             </div>
-            <span className="shrink-0 rounded-full border border-[var(--orange)]/60 bg-black/55 px-2.5 py-1.5 text-[0.56rem] font-black uppercase tracking-[0.1em] text-[var(--orange)] md:absolute md:right-0 md:top-0 md:max-w-[5.8rem] md:rounded-none md:border-0 md:bg-transparent md:p-0 md:text-right md:text-[1.35rem] md:leading-[0.9] md:tracking-[-0.04em] lg:max-w-[6.7rem] lg:text-[1.52rem]">
+            <span className={offerChipClass(badgeStyle)}>
               <span className="md:hidden">{deal.offer}</span>
               <span className="hidden md:block">{deal.desktopOffer}</span>
             </span>
@@ -276,6 +299,7 @@ export function SpecialsContent({
   weeklyDeals,
   content,
   menuItems = [],
+  presentation,
 }: {
   thursdayBrands?: string[];
   /**
@@ -288,7 +312,15 @@ export function SpecialsContent({
   content?: SpecialsHeroContent;
   /** Live menu items (from the published DB version) for the daily-deals grid. */
   menuItems?: GreenwayMenuItem[];
+  /**
+   * SLICE 106: PRESENTATION-ONLY settings (which weekday cards show, order,
+   * badge style, per-day copy overrides, section toggles). When omitted the
+   * page renders EXACTLY as it does today (live-look-safe default). This layer
+   * NEVER changes discount math — pricing/offers still come from the engine.
+   */
+  presentation?: SpecialsPresentation;
 } = {}) {
+  const pres = presentation ?? defaultSpecialsPresentation();
   const summaryByDay = new Map(
     (weeklyDeals ?? [])
       .filter((d) => d.fromDatabase)
@@ -296,7 +328,7 @@ export function SpecialsContent({
   );
   // When DB-published Thursday brands are supplied, override the static Thursday
   // card's menu link so the storefront reflects the back-office promotion.
-  const deals: DailyDeal[] = dailyDeals.map((deal) => {
+  const baseDeals: DailyDeal[] = dailyDeals.map((deal) => {
     const summary = summaryByDay.get(deal.day);
     if (summary) {
       // Staff-published day: the card reflects the DB promotion's actual copy.
@@ -320,6 +352,32 @@ export function SpecialsContent({
     }
     return deal;
   });
+
+  // SLICE 106 PRESENTATION layer (never touches pricing): apply the staff's
+  // optional per-day copy OVERRIDES, then filter to the VISIBLE cards in the
+  // configured ORDER. With the default settings this is a no-op that yields the
+  // exact same seven cards in Monday→Sunday order (live-look-safe).
+  const dealByDay = new Map(baseDeals.map((d) => [d.day, d] as const));
+  const deals: DailyDeal[] = orderedVisibleWeekdays(pres)
+    .map((weekday) => {
+      const base = dealByDay.get(weekday);
+      if (!base) return null;
+      const dp = dayPresentationFor(pres, weekday);
+      if (!dp) return base;
+      const offer = dp.offerOverride ?? base.offer;
+      return {
+        ...base,
+        title: dp.titleOverride ?? base.title,
+        // A custom title should render as one line (drop the two-line split).
+        titleLines: dp.titleOverride ? undefined : base.titleLines,
+        offer,
+        desktopOffer: dp.offerOverride
+          ? dp.offerOverride.replace(/\s*off$/i, "")
+          : base.desktopOffer,
+        details: dp.descriptionOverride ? [dp.descriptionOverride] : base.details,
+      };
+    })
+    .filter((d): d is DailyDeal => d !== null);
 
   return (
     <section className="relative overflow-hidden bg-black text-white">
@@ -381,25 +439,28 @@ export function SpecialsContent({
           </div>
         </div>
 
-        {/* Canonical 7-day rules reference (kept as the deal explainer). */}
-        <section aria-labelledby="daily-deals-title" className="mt-8 md:mt-12">
-          <div className="mb-5 flex flex-col gap-2 md:mb-7 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--greenway)]">Daily discounts</p>
-              <h2 id="daily-deals-title" className="mt-2 text-3xl font-black uppercase leading-none text-white md:text-5xl">Weekly Cannabis Deals</h2>
+        {/* Canonical 7-day rules reference (kept as the deal explainer).
+            SLICE 106: staff can hide the whole grid via presentation settings. */}
+        {pres.showWeeklyGrid && deals.length ? (
+          <section aria-labelledby="daily-deals-title" className="mt-8 md:mt-12">
+            <div className="mb-5 flex flex-col gap-2 md:mb-7 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--greenway)]">Daily discounts</p>
+                <h2 id="daily-deals-title" className="mt-2 text-3xl font-black uppercase leading-none text-white md:text-5xl">Weekly Cannabis Deals</h2>
+              </div>
             </div>
-          </div>
 
-          <div className="grid items-stretch gap-x-3 gap-y-6 sm:grid-cols-2 md:gap-x-5 md:gap-y-8 xl:grid-cols-4">
-            {deals.map((deal) => (
-              <DailyDealCard key={deal.title} deal={deal} />
-            ))}
-          </div>
-        </section>
+            <div className="grid items-stretch gap-x-3 gap-y-6 sm:grid-cols-2 md:gap-x-5 md:gap-y-8 xl:grid-cols-4">
+              {deals.map((deal) => (
+                <DailyDealCard key={deal.title} deal={deal} badgeStyle={pres.badgeStyle} />
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {/* Today's actual on-deal products — standard site-wide card, 16 cards,
-            with a wide day banner above the grid. */}
-        <SpecialsDailyDeals items={menuItems} />
+            with a wide day banner above the grid. SLICE 106: optional toggle. */}
+        {pres.showTodaysDeals ? <SpecialsDailyDeals items={menuItems} /> : null}
 
         {/* Extra banners staff added in the Pages builder render here. */}
         {(content?.extraSections ?? []).length ? (

@@ -183,6 +183,7 @@ import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
 import { __runImageSpecTests } from "../../src/lib/cms/image-spec-core";
 import { __runContentSelectCoreTests } from "../../src/lib/cms/content-select-core";
 import { __runPolicyDocCoreTests } from "../../src/lib/cms/policy-doc-core";
+import { __runSpecialsPresentationCoreTests } from "../../src/lib/specials/specials-presentation-core";
 import { __runCcrsIdentifierTests } from "../../src/lib/compliance/ccrs-identifiers";
 import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventory-adjustment-core";
 import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-gate-core";
@@ -418,6 +419,7 @@ async function main() {
   assertNoFailures("image-spec-core", __runImageSpecTests());
   { const r = __runContentSelectCoreTests(); if (r.passed < 1) throw new Error("content-select-core: no assertions ran"); console.log(`content-select-core: ${r.passed} assertions passed`); }
   { const r = __runPolicyDocCoreTests(); if (r.passed < 1) throw new Error("policy-doc-core: no assertions ran"); console.log(`policy-doc-core: ${r.passed} assertions passed`); }
+  { const r = __runSpecialsPresentationCoreTests(); if (r.passed < 1) throw new Error("specials-presentation-core: no assertions ran"); console.log(`specials-presentation-core: ${r.passed} assertions passed`); }
   assertNoFailures("ccrs-identifiers", __runCcrsIdentifierTests());
   __runCcrsAdjustmentTests();
   assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());

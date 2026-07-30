@@ -116,7 +116,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website" }, // 🏠 home page
   { label: "Menu", href: "/admin/pages/menu", permission: "content.edit", icon: "\ud83c\udf3f", group: "Website" }, // 🌿 product menu
   { label: "Loyalty", href: "/admin/pages/loyalty", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website" }, // 🏅 loyalty page
-  { label: "Specials", href: "/admin/pages/specials", permission: "content.edit", icon: "\ud83d\udd25", group: "Website" }, // 🔥 hot deals
+  { label: "Specials", href: "/admin/specials", permission: "content.edit", icon: "\ud83d\udd25", group: "Website" }, // deal-area presentation controls (SLICE 106) — which cards show/order/badge/copy; prices come from Promotions
   { label: "Vendors", href: "/admin/pages/vendors", permission: "content.edit", icon: "\ud83c\udfe2", group: "Website" }, // 🏢 vendors page
   { label: "FAQ", href: "/admin/pages/faq", permission: "content.edit", icon: "\ud83d\udcac", group: "Website" }, // 💬 Q&A
   { label: "About", href: "/admin/pages/about", permission: "content.edit", icon: "\u2139\ufe0f", group: "Website" }, // ℹ️ about

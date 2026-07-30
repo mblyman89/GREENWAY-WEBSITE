@@ -6,8 +6,9 @@ import { pageMetadata } from "@/lib/seo/seo";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
-import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
+import { getContentValues, getContentForRender, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
+import { resolveSpecialsPresentation } from "@/lib/specials/specials-presentation-core";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 
@@ -25,20 +26,26 @@ export const metadata = pageMetadata({
 export default async function SpecialsPage() {
   // DB-published promotions (back-office) with static seed fallback: the
   // Thursday brand list AND the full weekly deals grid copy (Task T / PR 1).
-  const [thursdayBrands, ruleSnapshots, copy, preview, banners, menuItems] = await Promise.all([
-    getThursdayBrands(),
-    loadPublishedRuleSnapshots(),
-    getContentValues([
-      "specials.hero.eyebrow",
-      "specials.hero.title",
-      "specials.hero.subtitle",
-    ]),
-    isPreviewActive(),
-    getPageBanners("specials", ["specials.hero"]),
-    // SLICE 40: overlay the KB strain profile (same as home + shop) so the
-    // specials cards show the strain type instead of the raw POS value.
-    loadLiveMenuItems().then((items) => withMenuProfile(items)),
-  ]);
+  const [thursdayBrands, ruleSnapshots, copy, preview, banners, menuItems, presentationJson] =
+    await Promise.all([
+      getThursdayBrands(),
+      loadPublishedRuleSnapshots(),
+      getContentValues([
+        "specials.hero.eyebrow",
+        "specials.hero.title",
+        "specials.hero.subtitle",
+      ]),
+      isPreviewActive(),
+      getPageBanners("specials", ["specials.hero"]),
+      // SLICE 40: overlay the KB strain profile (same as home + shop) so the
+      // specials cards show the strain type instead of the raw POS value.
+      loadLiveMenuItems().then((items) => withMenuProfile(items)),
+      // SLICE 106: how the weekly-deal grid is PRESENTED (draft-aware). The
+      // SEED_DEFAULTS fallback is the live-look-safe default, so pre-seed and
+      // pre-migration this is identical to today.
+      getContentForRender("specials.deals.presentation"),
+    ]);
+  const presentation = resolveSpecialsPresentation(presentationJson);
 
   // Pages-builder hero (specials.hero) is the source of truth when present;
   // otherwise fall back to the content-block copy (live look unchanged).
@@ -52,6 +59,7 @@ export default async function SpecialsPage() {
         thursdayBrands={thursdayBrands}
         weeklyDeals={weeklyDealSummaries(ruleSnapshots)}
         menuItems={menuItems}
+        presentation={presentation}
         content={{
           eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],
           title: hero?.title || copy["specials.hero.title"],
