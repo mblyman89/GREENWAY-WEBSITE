@@ -60,7 +60,10 @@ describe("vendor-relations wiring (public vendors page)", () => {
 
   it("VendorDirectory renders the channel cards from the shared core", () => {
     expect(directory).toContain('from "@/lib/vendors/vendor-relations-core"');
-    expect(directory).toContain("VENDOR_CONTACT_CHANNELS.map((channel)");
+    // SLICE 114: the channel cards now render from the RESOLVED `channels`
+    // prop (editable overrides overlaid on the byte-identical defaults).
+    expect(directory).toContain("channels.map((channel)");
+    expect(directory).toContain("VENDOR_CONTACT_CHANNELS");
     expect(directory).toContain("vendorMailtoHref(channel.email, channel.subject)");
     // The honest automation footnote only shows on automated channels.
     expect(directory).toContain("channel.automated ?");
@@ -71,7 +74,8 @@ describe("vendor-relations wiring (public vendors page)", () => {
     // Seeded content block …
     expect(seeds).toContain('block_key: "vendors.outreach.body"');
     // … loaded by the server page alongside the heading …
-    expect(page).toContain('"vendors.outreach.heading", "vendors.outreach.body"');
+    expect(page).toContain('"vendors.outreach.heading"');
+    expect(page).toContain('"vendors.outreach.body"');
     expect(page).toContain('body: copy["vendors.outreach.body"]');
     // … and rendered with the in-place editor hook when preview is active.
     expect(directory).toContain('"data-gw-block": "vendors.outreach.body"');

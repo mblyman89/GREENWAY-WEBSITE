@@ -27,7 +27,7 @@ import {
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
 describe("vendor directory enrichment (SLICE 97)", () => {
-  it("embedded self-tests pass (18 assertions incl. enrichment)", () => {
+  it("embedded self-tests pass (19 assertions incl. enrichment)", () => {
     expect(() => __runVendorDirectoryCoreTests()).not.toThrow();
   });
 

@@ -31,6 +31,10 @@ import {
   MEDICAL_VISIBLE_VALUE,
 } from "@/lib/medical/medical-content-core";
 import { LOYALTY_CONTENT_BLOCKS } from "@/lib/loyalty/loyalty-content-core";
+import {
+  VENDOR_CONTACT_CHANNELS,
+  vendorChannelBlockKey,
+} from "@/lib/vendors/vendor-relations-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -78,6 +82,53 @@ function loyaltyCopyBlockSeeds(): ContentBlockSeed[] {
     field_type: "plain" as ContentFieldType,
     defaultValue: b.fallback,
   }));
+}
+
+// SLICE 114: the five public vendor-relations channel cards become fully
+// editable (title / blurb / email / subject each). DERIVED from
+// VENDOR_CONTACT_CHANNELS so every defaultValue is byte-identical to the live
+// card copy — the page looks the same until Michael edits & publishes. Emails
+// use the `email` field type so he can set the destination mailbox manually;
+// the `automated` flag is NOT editable (it reflects real pipeline wiring).
+function vendorChannelBlockSeeds(): ContentBlockSeed[] {
+  return VENDOR_CONTACT_CHANNELS.flatMap((c) => [
+    {
+      block_key: vendorChannelBlockKey(c.key, "title"),
+      page: "vendors",
+      section: "channels",
+      label: `Vendor channel — ${c.title} — title`,
+      help_text: "Heading on this vendor-relations channel card.",
+      field_type: "plain" as ContentFieldType,
+      defaultValue: c.title,
+    },
+    {
+      block_key: vendorChannelBlockKey(c.key, "blurb"),
+      page: "vendors",
+      section: "channels",
+      label: `Vendor channel — ${c.title} — description`,
+      help_text: "The one-sentence description under this channel's heading.",
+      field_type: "plain" as ContentFieldType,
+      defaultValue: c.blurb,
+    },
+    {
+      block_key: vendorChannelBlockKey(c.key, "email"),
+      page: "vendors",
+      section: "channels",
+      label: `Vendor channel — ${c.title} — email`,
+      help_text: "The mailbox this channel's button opens a message to. Set it manually.",
+      field_type: "email" as ContentFieldType,
+      defaultValue: c.email,
+    },
+    {
+      block_key: vendorChannelBlockKey(c.key, "subject"),
+      page: "vendors",
+      section: "channels",
+      label: `Vendor channel — ${c.title} — email subject`,
+      help_text: "Prefilled subject line for this channel's email button.",
+      field_type: "plain" as ContentFieldType,
+      defaultValue: c.subject,
+    },
+  ]);
 }
 
 export type ContentBlockSeed = {
@@ -319,6 +370,24 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington, proudly serving the Kitsap Peninsula. We're always looking to connect with licensed I-502 producers and processors who make exceptional product. If you'd like to send samples, schedule a vendor day, or explore getting your line on our shelves, reach out — our buying team would love to hear from you.",
   },
+  // SLICE 114: the "Email Our Buying Team" button's prefilled subject line
+  // (editable so Michael can retune it). Byte-identical default to the const.
+  {
+    block_key: "vendors.outreach.subject",
+    page: "vendors",
+    section: "outreach",
+    label: "Vendor outreach — email subject",
+    help_text:
+      "Prefilled subject line for the \u201cEmail Our Buying Team\u201d button. The email body stays blank on purpose.",
+    field_type: "plain",
+    defaultValue: "Vendor partnership inquiry — Greenway Marijuana",
+  },
+  // SLICE 114: the five vendor-relations channel cards are now fully editable
+  // (title / blurb / email / subject each). Emails use the `email` field type
+  // so Michael can set the destination mailbox manually. Defaults below are
+  // BYTE-IDENTICAL to VENDOR_CONTACT_CHANNELS in vendor-relations-core.ts, so
+  // the public page looks the same until he edits & publishes.
+  ...vendorChannelBlockSeeds(),
   // ---- Specials ------------------------------------------------------------
   {
     block_key: "specials.hero.eyebrow",

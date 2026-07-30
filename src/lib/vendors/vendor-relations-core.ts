@@ -114,6 +114,73 @@ export const VENDOR_CONTACT_CHANNELS: VendorContactChannel[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// SLICE 114 — editable channel overrides (content_blocks, NO migration)
+//
+// Michael asked to "change the email options so I can set them manually" and
+// "modify the subject line too." Each channel's title / blurb / email / subject
+// becomes an editable content block; the constants above stay the byte-identical
+// DEFAULT so the live look never changes until he edits & publishes. PURE: the
+// server page fetches the block values and passes them in as `overrides`.
+// ---------------------------------------------------------------------------
+
+/** The outreach ("Email Our Buying Team") prefilled subject line. */
+export const VENDOR_OUTREACH_SUBJECT = "Vendor partnership inquiry — Greenway Marijuana";
+
+/** Content-block key for the outreach button's subject line. */
+export const VENDOR_OUTREACH_SUBJECT_KEY = "vendors.outreach.subject";
+
+/** The four editable fields on each channel card. */
+export type VendorChannelField = "title" | "blurb" | "email" | "subject";
+
+/** content_blocks key for one channel field, e.g. `vendors.channel.samples.email`. */
+export function vendorChannelBlockKey(channelKey: string, field: VendorChannelField): string {
+  return `vendors.channel.${channelKey}.${field}`;
+}
+
+/** All channel content-block keys, in a stable order (title,blurb,email,subject × channels). */
+export const VENDOR_CHANNEL_CONTENT_KEYS: string[] = VENDOR_CONTACT_CHANNELS.flatMap((c) =>
+  (["title", "blurb", "email", "subject"] as VendorChannelField[]).map((f) =>
+    vendorChannelBlockKey(c.key, f),
+  ),
+);
+
+/** Every vendor content-block key this slice adds (channels + outreach subject). */
+export const VENDOR_EDITABLE_CONTENT_KEYS: string[] = [
+  VENDOR_OUTREACH_SUBJECT_KEY,
+  ...VENDOR_CHANNEL_CONTENT_KEYS,
+];
+
+/** True when a block key belongs to the editable vendor channel/subject set. */
+export function isVendorChannelBlock(key: string): boolean {
+  return VENDOR_EDITABLE_CONTENT_KEYS.includes(key);
+}
+
+/** Non-blank override wins over the byte-identical default (never blanks a field). */
+function pick(override: string | null | undefined, fallback: string): string {
+  const v = (override ?? "").trim();
+  return v.length > 0 ? v : fallback;
+}
+
+/**
+ * Overlay editable values onto the default channels. `overrides` maps a
+ * content-block key (from vendorChannelBlockKey) to its resolved value; any
+ * blank/whitespace/absent value falls back to the shipped default, so the
+ * card copy is never emptied. `automated` is NOT editable (it reflects real
+ * pipeline wiring, not copy). PURE.
+ */
+export function resolveVendorChannels(
+  overrides: Record<string, string | null | undefined> = {},
+): VendorContactChannel[] {
+  return VENDOR_CONTACT_CHANNELS.map((c) => ({
+    ...c,
+    title: pick(overrides[vendorChannelBlockKey(c.key, "title")], c.title),
+    blurb: pick(overrides[vendorChannelBlockKey(c.key, "blurb")], c.blurb),
+    email: pick(overrides[vendorChannelBlockKey(c.key, "email")], c.email),
+    subject: pick(overrides[vendorChannelBlockKey(c.key, "subject")], c.subject),
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (wired into scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -170,6 +237,41 @@ export function __runVendorRelationsCoreTests(): void {
     ok(c.subject.includes("[your brand]"), `${c.key} subject prompts for brand`);
     ok(vendorMailtoHref(c.email, c.subject).startsWith("mailto:"), `${c.key} href valid`);
   }
+
+  // SLICE 114: editable channel overrides.
+  ok(VENDOR_OUTREACH_SUBJECT === "Vendor partnership inquiry — Greenway Marijuana", "outreach subject default");
+  ok(VENDOR_OUTREACH_SUBJECT_KEY === "vendors.outreach.subject", "outreach subject key");
+  ok(vendorChannelBlockKey("samples", "email") === "vendors.channel.samples.email", "channel block key shape");
+  // 5 channels × 4 fields = 20 channel keys; +1 outreach subject = 21 editable keys.
+  ok(VENDOR_CHANNEL_CONTENT_KEYS.length === 20, "20 channel content keys");
+  ok(VENDOR_EDITABLE_CONTENT_KEYS.length === 21, "21 editable vendor keys total");
+  ok(new Set(VENDOR_EDITABLE_CONTENT_KEYS).size === 21, "editable keys unique");
+  ok(isVendorChannelBlock("vendors.channel.menus.subject"), "channel block recognized");
+  ok(isVendorChannelBlock(VENDOR_OUTREACH_SUBJECT_KEY), "outreach subject recognized");
+  ok(!isVendorChannelBlock("vendors.outreach.body"), "non-channel block not recognized");
+
+  // Empty overrides -> byte-identical defaults (live look unchanged).
+  const def = resolveVendorChannels();
+  ok(def.length === 5, "resolver returns five channels");
+  ok(
+    JSON.stringify(def) === JSON.stringify(VENDOR_CONTACT_CHANNELS),
+    "no overrides -> byte-identical default channels",
+  );
+
+  // Overrides win; blank/whitespace overrides fall back; automated stays fixed.
+  const resolved = resolveVendorChannels({
+    "vendors.channel.samples.title": "Free Samples",
+    "vendors.channel.samples.email": "  new_intake@greenwaymarijuana.com  ",
+    "vendors.channel.menus.subject": "   ", // whitespace -> fallback
+    "vendors.channel.menus.email": "", // empty -> fallback
+  });
+  const rByKey = new Map(resolved.map((c) => [c.key, c]));
+  ok(rByKey.get("samples")?.title === "Free Samples", "override title wins");
+  ok(rByKey.get("samples")?.email === "new_intake@greenwaymarijuana.com", "override email trimmed + wins");
+  ok(rByKey.get("samples")?.blurb === byKey.get("samples")?.blurb, "un-overridden field keeps default");
+  ok(rByKey.get("menus")?.subject === byKey.get("menus")?.subject, "whitespace override -> default subject");
+  ok(rByKey.get("menus")?.email === VENDOR_MENU_EMAIL, "empty override -> default email");
+  ok(rByKey.get("menus")?.automated === true, "automated flag not editable (stays true)");
 
   console.log(`vendor-relations-core self-tests: ${passed} passed`);
 }
