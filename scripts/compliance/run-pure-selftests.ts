@@ -185,6 +185,7 @@ import { __runContentSelectCoreTests } from "../../src/lib/cms/content-select-co
 import { __runPolicyDocCoreTests } from "../../src/lib/cms/policy-doc-core";
 import { __runSpecialsPresentationCoreTests } from "../../src/lib/specials/specials-presentation-core";
 import { __runMedicalContentCoreTests } from "../../src/lib/medical/medical-content-core";
+import { __runLoyaltyContentCoreTests } from "../../src/lib/loyalty/loyalty-content-core";
 import { __runCcrsIdentifierTests } from "../../src/lib/compliance/ccrs-identifiers";
 import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventory-adjustment-core";
 import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-gate-core";
@@ -422,6 +423,7 @@ async function main() {
   { const r = __runPolicyDocCoreTests(); if (r.passed < 1) throw new Error("policy-doc-core: no assertions ran"); console.log(`policy-doc-core: ${r.passed} assertions passed`); }
   { const r = __runSpecialsPresentationCoreTests(); if (r.passed < 1) throw new Error("specials-presentation-core: no assertions ran"); console.log(`specials-presentation-core: ${r.passed} assertions passed`); }
   { const r = __runMedicalContentCoreTests(); if (r.passed < 1) throw new Error("medical-content-core: no assertions ran"); console.log(`medical-content-core: ${r.passed} assertions passed`); }
+  { const r = __runLoyaltyContentCoreTests(); if (r.passed < 1) throw new Error("loyalty-content-core: no assertions ran"); console.log(`loyalty-content-core: ${r.passed} assertions passed`); }
   assertNoFailures("ccrs-identifiers", __runCcrsIdentifierTests());
   __runCcrsAdjustmentTests();
   assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());
