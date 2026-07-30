@@ -121,7 +121,7 @@ export function MedicalProgramContent() {
             Washington waives the 9.3% sales tax on qualifying high-CBD compliant products
             (chapter 246-70 WAC — very low THC with a high CBD ratio) for{" "}
             <span className="font-black text-white">any adult customer</span> — no card required. Look for high-CBD items on our{" "}
-            <Link href="/menu" className="font-black text-[var(--greenway)] underline-offset-2 hover:underline">
+            <Link href="/menu?strains=cbd" className="font-black text-[var(--greenway)] underline-offset-2 hover:underline">
               menu
             </Link>{" "}
             or ask a budtender.
@@ -165,7 +165,7 @@ export function MedicalProgramContent() {
             switch on the medical toggle for an honest estimate of your tax savings on today&apos;s cart.
           </p>
           <Link
-            href="/menu"
+            href="/menu?strains=cbd"
             className="mt-5 inline-flex rounded-full bg-[var(--greenway)] px-6 py-2.5 text-sm font-black uppercase tracking-[0.12em] text-black transition hover:bg-white"
           >
             Shop the menu
