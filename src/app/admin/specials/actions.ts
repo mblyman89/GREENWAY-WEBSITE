@@ -28,8 +28,7 @@ import {
   publishContentBlock,
   restoreContentRevisionToDraft,
 } from "@/lib/cms/content-store";
-
-export const SPECIALS_PRESENTATION_BLOCK = "specials.deals.presentation";
+import { SPECIALS_PRESENTATION_BLOCK } from "@/lib/specials/specials-presentation-core";
 
 function backTo(flag: string): string {
   return `/admin/specials?${flag}=1`;

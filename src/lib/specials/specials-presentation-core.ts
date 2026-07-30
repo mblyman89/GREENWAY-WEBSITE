@@ -21,6 +21,14 @@
  * and SLICE 105b "richdoc".
  */
 
+/**
+ * The ONE content_blocks row that stores the Specials presentation settings.
+ * Lives here (a plain module) so both the "use server" actions file and the
+ * editor page can import it — a "use server" file may only export async
+ * functions, so the block-key constant cannot live there.
+ */
+export const SPECIALS_PRESENTATION_BLOCK = "specials.deals.presentation";
+
 /** The seven store weekdays in natural display order (matches SpecialsContent). */
 export const SPECIALS_WEEKDAYS = [
   "Monday",

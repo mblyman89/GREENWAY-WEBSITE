@@ -19,9 +19,9 @@ import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import {
   SPECIALS_WEEKDAYS,
+  SPECIALS_PRESENTATION_BLOCK,
   type SpecialsWeekday,
 } from "@/lib/specials/specials-presentation-core";
-import { SPECIALS_PRESENTATION_BLOCK } from "./actions";
 import {
   saveSpecialsDraftAction,
   publishSpecialsAction,
