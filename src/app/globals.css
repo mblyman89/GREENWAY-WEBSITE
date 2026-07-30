@@ -10,6 +10,13 @@
   --frost: #d1d5db;
   --charcoal: #1a1a1a;
 
+  /* Shop (customer /menu) content width. One source of truth so the hero,
+   * banners, and the filters+products grid all share the SAME max width and
+   * stay perfectly aligned. Wider than the 88rem the rest of the site uses so
+   * the filters hug the left and the four product cards fill to the right on
+   * large monitors, with sane page gutters (px-8) preserved. */
+  --shop-max: 120rem;
+
   /* ---------------------------------------------------------------------------
    * ADMIN DESIGN TOKENS (back-office only)
    * One source of truth for the back-office look so every page stays consistent.

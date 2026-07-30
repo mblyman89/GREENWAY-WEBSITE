@@ -74,11 +74,14 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
 
       {/* Breadcrumb sits ABOVE the hero, consistent with every other page.
           (BreadcrumbList JSON-LD is emitted automatically by <Breadcrumbs>.) */}
-      <Breadcrumbs items={[{ label: "Shop", href: "/menu" }]} />
+      <Breadcrumbs
+        items={[{ label: "Shop", href: "/menu" }]}
+        maxWidthClassName="max-w-[var(--shop-max)]"
+      />
 
       {/* Wide, short hero banner — clean, left-aligned title with a single subtitle line */}
       <section className="border-b border-white/10 bg-black px-4 py-4 md:px-8 md:py-5">
-        <div className="mx-auto max-w-[88rem]">
+        <div className="mx-auto max-w-[var(--shop-max)]">
           <div className="relative flex min-h-[8.5rem] items-center overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] px-5 py-6 shadow-2xl shadow-black/40 md:min-h-[10.5rem] md:px-10">
             <div
               className="absolute inset-0 bg-[radial-gradient(circle_at_88%_28%,rgba(255,127,0,0.42),transparent_42%),radial-gradient(circle_at_70%_85%,rgba(126,217,87,0.28),transparent_45%),linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]"
@@ -134,7 +137,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
       {/* Extra banners staff added in the Pages builder render here. */}
       {banners.extras.length ? (
         <section className="bg-black px-4 pb-2 md:px-8">
-          <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
+          <div className="mx-auto max-w-[var(--shop-max)] space-y-4 md:space-y-6">
             {banners.extras.map((s) => (
               <SectionBanner
                 key={s.key}
@@ -151,7 +154,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
       ) : null}
 
       <section id="products">
-        <Suspense fallback={<div className="mx-auto max-w-[88rem] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
+        <Suspense fallback={<div className="mx-auto max-w-[var(--shop-max)] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
           <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} categoryLabels={categoryLabels} />
         </Suspense>
       </section>
