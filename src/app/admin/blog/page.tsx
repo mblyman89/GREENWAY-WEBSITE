@@ -9,6 +9,7 @@ import { isAiConfigured } from "@/lib/ai/provider";
 import { Button } from "@/components/admin/ui/Button";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
 import { withBackParam } from "@/lib/admin/back-link-core";
+import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 
 export const dynamic = "force-dynamic";
 
@@ -65,18 +66,47 @@ export default async function BlogAdminPage({
               "Save as a draft, preview, then Publish when ready.",
             ]}
           >
-            <p>
+            <p className="mb-2">
               Posts stay drafts until you publish, so you can take your time. The
               AI helper only writes drafts for you to review and edit.
+            </p>
+            <p>
+              <strong>Open Canva</strong> opens Canva in a new tab using your
+              existing sign-in (Canva can&rsquo;t be logged in from a link or a
+              stored password). Want the button to jump to a specific team home,
+              brand kit, or template? Set <code>NEXT_PUBLIC_CANVA_URL</code> in
+              Vercel &rarr; Settings &rarr; Environment Variables and redeploy.
             </p>
           </HelpPanel>
         }
         action={
-          <Button href={withBackParam("/admin/blog/new", sp)} variant="primary">
-            + New post
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <CanvaButton />
+            <Button href={withBackParam("/admin/blog/new", sp)} variant="primary">
+              + New post
+            </Button>
+          </div>
         }
       />
+
+      {/* SLICE 115: cross-links so the blog "look" and the blog "content" are
+          one click apart, and the newsletter sender is right next door. */}
+      <div className="px-5 pt-5 sm:px-8">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-xs text-[var(--admin-text-muted)]">
+          <span className="font-semibold text-[var(--admin-text)]">Quick links:</span>
+          <Link href="/admin/content?block=blog.hero.heading.part1" className="text-[var(--admin-accent)] hover:underline">
+            Edit the blog page&rsquo;s look (Site Content)
+          </Link>
+          <span aria-hidden="true">·</span>
+          <Link href="/admin/newsletter" className="text-[var(--admin-accent)] hover:underline">
+            Newsletter Send Center
+          </Link>
+          <span aria-hidden="true">·</span>
+          <a href="/blog" target="_blank" rel="noopener noreferrer" className="text-[var(--admin-accent)] hover:underline">
+            View live blog ↗
+          </a>
+        </div>
+      </div>
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div className="grid gap-4 sm:grid-cols-4">

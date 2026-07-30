@@ -8,6 +8,8 @@ import { Header } from "@/components/site/Header";
 import { getPublicPost, getPublishedSlugs } from "@/lib/cms/blog-store";
 import { formatBlogDate } from "@/lib/blog/format-date";
 import { resolveTitleStyle } from "@/lib/blog/title-style";
+import { getContentValues } from "@/lib/cms/render-content";
+import { resolveBlogCopy } from "@/lib/blog/blog-content-core";
 
 type BlogArticlePageProps = {
   params: Promise<{
@@ -46,6 +48,10 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
 
   if (!post) notFound();
 
+  // SLICE 115: the "Back to blog" link label is owner-editable page chrome.
+  const copy = await getContentValues(["blog.detail.backLabel"]);
+  const backLabel = resolveBlogCopy("blog.detail.backLabel", copy);
+
   const isNewsletter = post.kind === "newsletter";
   const dateText = formatBlogDate(post.publishDate, post.dateLabel);
   const heroTitleStyle = resolveTitleStyle(post.titleStyle, "hero");
@@ -65,7 +71,7 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
               {post.category}
             </span>
             <Link href="/blog" className="rounded-full border border-white/15 px-4 py-2 text-[0.68rem] font-black uppercase tracking-[0.16em] text-white transition hover:border-[var(--orange)] hover:text-[var(--orange)] md:text-xs">
-              ← Back to blog
+              {backLabel}
             </Link>
           </div>
 

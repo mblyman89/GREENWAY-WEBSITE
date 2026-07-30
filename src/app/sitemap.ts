@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { getPublishedSlugs } from "@/lib/cms/blog-store";
 
 const baseUrl = "https://www.greenwaymarijuana.com";
 
@@ -56,5 +57,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.55,
     })) satisfies MetadataRoute.Sitemap;
 
-  return [...staticEntries, ...productEntries];
+  // SLICE 115: individual published blog/newsletter articles. getPublishedSlugs
+  // is DB-backed with a built-in fallback to the starter posts, so this never
+  // throws and the sitemap always lists the same articles the blog shows.
+  const blogSlugs = await getPublishedSlugs();
+  const blogEntries = blogSlugs.map((slug) => ({
+    url: `${baseUrl}/blog/${slug}`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.5,
+  })) satisfies MetadataRoute.Sitemap;
+
+  return [...staticEntries, ...productEntries, ...blogEntries];
 }

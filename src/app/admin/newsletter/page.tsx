@@ -17,6 +17,7 @@ import { NewsletterStatsSection } from "@/components/admin/reports/NewsletterSta
 import { Button } from "@/components/admin/ui/Button";
 import { Input } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
+import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,15 @@ export default async function NewsletterSendPage({
         title="Newsletter Send Center"
         subtitle="Pick a published newsletter and email a branded announcement to your loyalty members."
         breadcrumbs={<Breadcrumbs items={[{ label: "Newsletter Send" }]} />}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* SLICE 115: jump straight to Canva to design the newsletter. */}
+            <CanvaButton />
+            <Button href="/admin/blog" variant="neutral">
+              Blog &amp; posts
+            </Button>
+          </div>
+        }
         help={
           <HelpPanel
             id="newsletter-send"

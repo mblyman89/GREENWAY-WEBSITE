@@ -13,10 +13,13 @@ const categoryStyles: Record<BlogPost["category"], string> = {
 
 type BlogCardProps = {
   post: BlogPost;
+  /** Owner-editable button label (SLICE 115); defaults to "Read article". */
+  readMoreLabel?: string;
 };
 
-export function BlogCard({ post }: BlogCardProps) {
+export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
   const isNewsletter = post.kind === "newsletter";
+  const buttonLabel = readMoreLabel?.trim() || "Read article";
   const dateText = formatBlogDate(post.publishDate, post.dateLabel);
   // Newsletter cards open the uploaded PDF directly (in a new tab); regular
   // articles open the full article page. Falls back to the article page if a
@@ -52,14 +55,14 @@ export function BlogCard({ post }: BlogCardProps) {
               rel="noopener noreferrer"
               className="shrink-0 rounded-full bg-[var(--orange)] px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-black transition hover:bg-[var(--gold)]"
             >
-              Read article
+              {buttonLabel}
             </a>
           ) : (
             <Link
               href={`/blog/${post.slug}`}
               className="shrink-0 rounded-full bg-[var(--orange)] px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-black transition hover:bg-[var(--gold)]"
             >
-              Read article
+              {buttonLabel}
             </Link>
           )}
         </div>
@@ -101,7 +104,7 @@ export function BlogCard({ post }: BlogCardProps) {
           href={`/blog/${post.slug}`}
           className="mt-6 inline-flex w-fit rounded-full bg-[var(--orange)] px-6 py-3 text-xs font-black uppercase tracking-[0.18em] text-black transition hover:bg-[var(--gold)]"
         >
-          Read article
+          {buttonLabel}
         </Link>
       </div>
     </article>
