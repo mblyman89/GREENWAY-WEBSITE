@@ -23,8 +23,12 @@ import {
   ORDER_FORWARD_TRANSITIONS,
   type OrderStatus,
 } from "@/lib/orders/types";
-import { setOrderStatusAction } from "./actions";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
+import { listPoolNamesStatus } from "@/lib/orders/order-name-pool-store";
+import { getPrinterSettings, isPrinterOnline } from "@/lib/printing/printer-store";
+import { setOrderStatusAction, testPrintFromOrdersAction } from "./actions";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
+import { OrderNamePoolManager } from "@/components/admin/orders/OrderNamePoolManager";
 import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
 import { withBackParam } from "@/lib/admin/back-link-core";
 
@@ -79,6 +83,9 @@ export default async function OrdersAdminPage({
     to?: string;
     min?: string;
     max?: string;
+    poolMsg?: string;
+    poolErr?: string;
+    printTest?: string;
   }>;
 }) {
   await requirePermission("orders.view");
@@ -129,9 +136,13 @@ export default async function OrdersAdminPage({
     totalMax,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
-  const [firstPage, counts] = await Promise.all([
+  const [firstPage, counts, poolStatus, printerSettings] = await Promise.all([
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     getOrderStatusCounts(),
+    // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
+    // pool / null settings when 0147 isn't applied or the printer isn't set up).
+    listPoolNamesStatus(),
+    getPrinterSettings(),
   ]);
   let { rows: orders, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
@@ -174,6 +185,16 @@ export default async function OrdersAdminPage({
 
   const activeCount = counts.new + counts.acknowledged + counts.preparing + counts.ready;
 
+  // SLICE 113 — printer heartbeat + auto-print status for the at-a-glance chip.
+  const printerConfigured = Boolean(printerSettings?.poll_token);
+  const printerOnline = isPrinterOnline(printerSettings?.last_poll_at ?? null);
+  const autoPrintOn = Boolean(printerSettings?.auto_print_orders);
+  const printerLabel = printerSettings?.printer_label?.trim() || "Receipt printer";
+  // Only nag when it actually matters: live orders waiting AND the printer is
+  // configured for auto-print but hasn't checked in.
+  const printerNeedsAttention = printerConfigured && autoPrintOn && !printerOnline && activeCount > 0;
+  const printTestQueued = sp.printTest === "1";
+
   return (
     <div>
       <AdminPageHeader
@@ -209,6 +230,82 @@ export default async function OrdersAdminPage({
           <StatCard label="Preparing" value={counts.preparing} accent="green" icon="📦" />
           <StatCard label="Ready" value={counts.ready} accent="green" hint="Waiting for pickup" icon="✅" />
           <StatCard label="Active total" value={activeCount} icon="🧾" />
+        </div>
+
+        {/* SLICE 113 — Receipt-printer status at a glance + one-tap test print.
+            Lives here so whoever is working the orders queue can confirm the
+            printer is alive without leaving the page. */}
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block h-2.5 w-2.5 rounded-full ${
+                !printerConfigured
+                  ? "bg-[var(--admin-text-faint)]"
+                  : printerOnline
+                    ? "bg-[var(--admin-accent)]"
+                    : "bg-[var(--admin-danger)]"
+              }`}
+              aria-hidden
+            />
+            <span className="text-sm font-bold text-[var(--admin-text)]">
+              🖨️ {printerLabel}
+            </span>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-[0.08em] ${
+                !printerConfigured
+                  ? "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]"
+                  : printerOnline
+                    ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]"
+                    : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"
+              }`}
+            >
+              {!printerConfigured ? "Not set up" : printerOnline ? "Connected" : "Not seen recently"}
+            </span>
+            {printerConfigured ? (
+              <span className="text-xs text-[var(--admin-text-muted)]">
+                Auto-print {autoPrintOn ? "on" : "off"}
+              </span>
+            ) : null}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <form action={testPrintFromOrdersAction}>
+              <Button type="submit" variant="neutral" size="sm">
+                Send test print
+              </Button>
+            </form>
+            <Link
+              href="/admin/equipment?tab=printer"
+              className="admin-focus rounded-lg border border-[var(--admin-border-strong)] bg-white/5 px-3 py-1.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:text-[var(--admin-text)]"
+            >
+              Printer settings →
+            </Link>
+          </div>
+        </div>
+
+        {printTestQueued ? (
+          <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
+            ✅ Test print queued. If the printer is on and connected it should print within a few seconds.
+          </div>
+        ) : null}
+
+        {printerNeedsAttention ? (
+          <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
+            ⚠️ You have {activeCount} active order{activeCount === 1 ? "" : "s"} and auto-print is on, but
+            the printer hasn’t checked in for a while. Receipts may not be printing — check that it’s
+            powered on and connected, then send a test print.
+          </div>
+        ) : null}
+
+        {/* SLICE 113 — Order-name pool manager (fun recycling names for online
+            orders). Fallback-safe: shows a gentle "finish setup" note until
+            migration 0147 is applied. */}
+        <div className="mt-4">
+          <OrderNamePoolManager
+            names={poolStatus.names}
+            migrationReady={poolStatus.migrationReady}
+            message={sp.poolMsg ?? null}
+            error={sp.poolErr ?? null}
+          />
         </div>
 
         {/* Filters + search (SLICE 26: full control — status, search, date
@@ -314,7 +411,7 @@ export default async function OrdersAdminPage({
                           href={detailHref(order.id)}
                           className="text-lg font-black text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
                         >
-                          #{order.order_number}
+                          {resolveOrderDisplay(order.display_name, order.order_number)}
                         </Link>
                         <span
                           className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
@@ -322,6 +419,11 @@ export default async function OrdersAdminPage({
                           {ORDER_STATUS_LABELS[order.status]}
                         </span>
                       </div>
+                      {order.display_name && order.display_name.trim() ? (
+                        <p className="mt-0.5 font-mono text-xs text-[var(--admin-text-faint)]">
+                          #{order.order_number}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
                         {order.customer_first_name}
                         {order.customer_last_name ? ` ${order.customer_last_name}` : ""}

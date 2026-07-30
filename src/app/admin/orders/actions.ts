@@ -19,7 +19,16 @@ import { redirect } from "next/navigation";
 import { requirePermission, getStaffSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
-import { setOrderStatus, updateStaffNote, getOrder } from "@/lib/orders/orders-store";
+import { setOrderStatus, updateStaffNote, getOrder, rerollOrderDisplayName } from "@/lib/orders/orders-store";
+import {
+  addPoolName,
+  updatePoolName,
+  setPoolNameEnabled,
+  deletePoolName,
+  reorderPoolNames,
+  listPoolNames,
+} from "@/lib/orders/order-name-pool-store";
+import { validateOrderName } from "@/lib/orders/order-name-pool-core";
 // POS Slice B1: the → completed compliance gate is EXTRACTED (verbatim) into
 // src/lib/orders/completion-gate.ts so the POS sync route re-runs the exact
 // same sequence for every synced register sale. This file now just calls it.
@@ -426,4 +435,197 @@ export async function unlinkOrderCustomerAction(formData: FormData): Promise<voi
   });
   revalidatePath(`/admin/orders/${orderId}`);
   redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent("Customer link removed.")}`);
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 113 — Order-NAME pool management + printer test (from the orders page)
+// ---------------------------------------------------------------------------
+
+const ORDERS_BASE = "/admin/orders";
+
+/** Redirect back to /admin/orders with a success/error banner + the pool panel open. */
+function poolRedirect(ok: boolean, message: string): never {
+  const key = ok ? "poolMsg" : "poolErr";
+  redirect(`${ORDERS_BASE}?pool=1&${key}=${encodeURIComponent(message.slice(0, 300))}`);
+}
+
+/** Add a name to the recycling pool. requires orders.manage; audited. */
+export async function addPoolNameAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const raw = String(formData.get("name") ?? "");
+  const existing = await listPoolNames();
+  const check = validateOrderName(existing, raw);
+  if (!check.ok) poolRedirect(false, check.error ?? "Could not add the name.");
+
+  const res = await addPoolName(check.value);
+  if (!res.ok) poolRedirect(false, res.error ?? "Could not add the name.");
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order_name_pool.add",
+    entityType: "order_name_pool",
+    entityId: check.value,
+    after: { name: check.value },
+  });
+  revalidatePath(ORDERS_BASE);
+  poolRedirect(true, `Added “${check.value}” to the pool.`);
+}
+
+/** Rename an existing pool entry. requires orders.manage; audited. */
+export async function updatePoolNameAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const id = String(formData.get("id") ?? "");
+  const raw = String(formData.get("name") ?? "");
+  if (!id) poolRedirect(false, "Missing name id.");
+
+  const existing = await listPoolNames();
+  const check = validateOrderName(existing, raw, id);
+  if (!check.ok) poolRedirect(false, check.error ?? "Could not save the name.");
+
+  const res = await updatePoolName(id, check.value);
+  if (!res.ok) poolRedirect(false, res.error ?? "Could not save the name.");
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order_name_pool.update",
+    entityType: "order_name_pool",
+    entityId: id,
+    after: { name: check.value },
+  });
+  revalidatePath(ORDERS_BASE);
+  poolRedirect(true, `Renamed to “${check.value}”.`);
+}
+
+/** Enable/disable a pool name (toggle via a hidden "enabled" field). */
+export async function togglePoolNameAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const id = String(formData.get("id") ?? "");
+  const enabled = String(formData.get("enabled") ?? "") === "true";
+  if (!id) poolRedirect(false, "Missing name id.");
+
+  const res = await setPoolNameEnabled(id, enabled);
+  if (!res.ok) poolRedirect(false, res.error ?? "Could not update the name.");
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order_name_pool.toggle",
+    entityType: "order_name_pool",
+    entityId: id,
+    after: { enabled },
+  });
+  revalidatePath(ORDERS_BASE);
+  poolRedirect(true, enabled ? "Name enabled." : "Name disabled (kept in the list).");
+}
+
+/** Remove a pool name entirely. requires orders.manage; audited. */
+export async function deletePoolNameAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const id = String(formData.get("id") ?? "");
+  if (!id) poolRedirect(false, "Missing name id.");
+
+  const res = await deletePoolName(id);
+  if (!res.ok) poolRedirect(false, res.error ?? "Could not remove the name.");
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order_name_pool.delete",
+    entityType: "order_name_pool",
+    entityId: id,
+  });
+  revalidatePath(ORDERS_BASE);
+  poolRedirect(true, "Name removed from the pool.");
+}
+
+/** Persist a new manual order (comma-separated ids in the desired order). */
+export async function reorderPoolNamesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const idsRaw = String(formData.get("ids") ?? "");
+  const ids = idsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0) poolRedirect(false, "Nothing to reorder.");
+
+  const res = await reorderPoolNames(ids);
+  if (!res.ok) poolRedirect(false, res.error ?? "Could not reorder the pool.");
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order_name_pool.reorder",
+    entityType: "order_name_pool",
+    entityId: "pool",
+    after: { order: ids },
+  });
+  revalidatePath(ORDERS_BASE);
+  poolRedirect(true, "Pool order saved.");
+}
+
+/**
+ * Assign a DIFFERENT pool name to one order (the "reroll" flourish on the order
+ * detail). Bound to the order id in the page. requires orders.manage; audited.
+ */
+export async function rerollOrderNameAction(orderId: string): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  if (!orderId) return;
+
+  const name = await rerollOrderDisplayName(orderId);
+  if (!name) {
+    redirect(
+      `${ORDERS_BASE}/${orderId}?blocked=${encodeURIComponent("No pool name available — add names to your order-name pool (and apply migration 0147) first.")}`,
+    );
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.name_rerolled",
+    entityType: "order",
+    entityId: orderId,
+    after: { display_name: name },
+  });
+  revalidatePath(`${ORDERS_BASE}/${orderId}`);
+  redirect(`${ORDERS_BASE}/${orderId}?ok=${encodeURIComponent(`Order renamed to “${name}”.`)}`);
+}
+
+/**
+ * Queue a sample receipt from the ORDERS page so staff can confirm the printer
+ * is wired up without leaving the dashboard. Mirrors the Equipment test print
+ * but redirects back here. requires settings.manage; audited.
+ */
+export async function testPrintFromOrdersAction(): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const { queueJob, formatReceipt } = await import("@/lib/printing/printer-store");
+  const body = formatReceipt({
+    orderNumber: "TEST-PRINT",
+    placedAt: new Date().toISOString(),
+    customerName: "Test Receipt",
+    lines: [
+      { productName: "Sample item A", brand: "Greenway", variantLabel: "1g", quantity: 1, priceMinorUnits: 1000 },
+      { productName: "Sample item B", brand: "Greenway", variantLabel: "10pk", quantity: 2, priceMinorUnits: 1500 },
+    ],
+    subtotalMinorUnits: 4000,
+    savingsMinorUnits: 0,
+    estimatedTaxMinorUnits: 1480,
+    totalMinorUnits: 5480,
+    customerNote: "This is a CloudPRNT test print (from the Orders page).",
+  });
+
+  const id = await queueJob({ bodyText: body, title: "Test print" });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "receipt_printer.test_print",
+    entityType: "receipt_print_jobs",
+    entityId: id ?? "n/a",
+  });
+
+  if (!id) {
+    poolRedirect(false, "Could not queue test print — Supabase service role not configured.");
+  }
+  revalidatePath(ORDERS_BASE);
+  redirect(`${ORDERS_BASE}?printTest=1`);
 }

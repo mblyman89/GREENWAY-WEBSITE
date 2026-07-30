@@ -38,6 +38,7 @@ import {
   reservationExpiryNote,
   shouldExpireOrder,
 } from "./reservation-expiry-core";
+import { assignNextPoolName } from "./order-name-pool-store";
 
 // ---------------------------------------------------------------------------
 // Placement (guest, no auth) — input is SERVER-PRICED (see order-pricing.ts)
@@ -47,6 +48,26 @@ import {
 function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   return error.code === "42703" || /column .* does not exist|could not find .* column/i.test(error.message ?? "");
+}
+
+/**
+ * SLICE 113: remembers whether orders.display_name exists so search can include
+ * it. Starts optimistic (true); flips to false the first time a search query
+ * errors with a missing-column error (migration 0147 not applied yet), so we
+ * only pay the retry once per cold start.
+ */
+let displayNameSearchable = true;
+
+/** Build the order-search OR clause, including display_name only when available. */
+function orderSearchClause(like: string, withDisplayName: boolean): string {
+  const parts = [
+    `order_number.ilike.${like}`,
+    `customer_first_name.ilike.${like}`,
+    `customer_last_name.ilike.${like}`,
+    `customer_phone.ilike.${like}`,
+  ];
+  if (withDisplayName) parts.push(`display_name.ilike.${like}`);
+  return parts.join(",");
 }
 
 export async function createOrder(input: PersistOrderInput): Promise<PlacedOrderResult | null> {
@@ -79,18 +100,48 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
 
   // Preferred shape includes the 0096 limit-flag columns; fall back to the
   // legacy shape when the owner has not applied the migration yet.
+  // SLICE 113: claim the next friendly pool name (LRU) BEFORE insert. Returns
+  // null when the pool is empty/unset or migration 0147 isn't applied yet — the
+  // order then keeps its unique GWY-XXXXXX number (display_name stays null).
+  const displayName = await assignNextPoolName();
+
+  const selectCols = "id, order_number, display_name, public_token";
+  const selectColsLegacy = "id, order_number, public_token";
+  type PlacedPick = Pick<OrderRow, "id" | "order_number" | "public_token"> & {
+    display_name?: string | null;
+  };
+
+  // Ladder: full row (limit + display) → drop display_name (0147 unapplied,
+  // keep limit) → bare baseOrderRow (0096 unapplied too). Same degrade-don't-fail
+  // posture the limit columns already use.
   let { data: order, error } = await admin
     .from("orders")
-    .insert({ ...baseOrderRow, limit_flag: input.limitFlag, limit_reasons: input.limitReasons })
-    .select("id, order_number, public_token")
-    .single<Pick<OrderRow, "id" | "order_number" | "public_token">>();
+    .insert({
+      ...baseOrderRow,
+      limit_flag: input.limitFlag,
+      limit_reasons: input.limitReasons,
+      ...(displayName ? { display_name: displayName } : {}),
+    })
+    .select(selectCols)
+    .single<PlacedPick>();
 
   if (error && isMissingColumnError(error)) {
+    // Retry WITHOUT display_name (migration 0147 not applied) but keep the
+    // limit flags. If display_name was what was missing, this succeeds.
+    ({ data: order, error } = await admin
+      .from("orders")
+      .insert({ ...baseOrderRow, limit_flag: input.limitFlag, limit_reasons: input.limitReasons })
+      .select(selectColsLegacy)
+      .single<PlacedPick>());
+  }
+
+  if (error && isMissingColumnError(error)) {
+    // Retry with the bare legacy row (neither 0096 limit cols nor 0147 present).
     ({ data: order, error } = await admin
       .from("orders")
       .insert(baseOrderRow)
-      .select("id, order_number, public_token")
-      .single<Pick<OrderRow, "id" | "order_number" | "public_token">>());
+      .select(selectColsLegacy)
+      .single<PlacedPick>());
   }
 
   if (error || !order) return null;
@@ -138,7 +189,36 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
     note: "Order placed online.",
   });
 
-  return { orderNumber: order.order_number, publicToken: order.public_token, orderId: order.id };
+  return {
+    orderNumber: order.order_number,
+    // Prefer the value the DB actually stored (present post-0147); fall back to
+    // the name we claimed so notifications/receipt still show it even if the
+    // select projection didn't include the column on a legacy retry.
+    displayName: order.display_name ?? displayName ?? null,
+    publicToken: order.public_token,
+    orderId: order.id,
+  };
+}
+
+/**
+ * SLICE 113 — assign a DIFFERENT pool name to an existing order (the "reroll"
+ * flourish on the order detail). Claims the next LRU name and writes it to the
+ * order's display_name. Returns the new name, or null when the pool is
+ * empty/unset or migration 0147 isn't applied (display_name unchanged). Never
+ * throws — a missing column simply yields null.
+ */
+export async function rerollOrderDisplayName(orderId: string): Promise<string | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const name = await assignNextPoolName();
+  if (!name) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("orders").update({ display_name: name }).eq("id", orderId);
+    if (error) return null;
+    return name;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -201,43 +281,42 @@ export async function listOrdersPaged(
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
   const admin = createSupabaseAdminClient();
 
-  let query = admin.from("orders").select("*", { count: "exact" });
-
-  if (filter.status && filter.status !== "all") {
-    if (filter.status === "active") {
-      query = query.in("status", ["new", "acknowledged", "preparing", "ready"]);
-    } else {
-      query = query.eq("status", filter.status);
-    }
-  }
-
   const search = filter.search?.trim();
-  if (search) {
-    const like = `%${search}%`;
-    query = query.or(
-      [
-        `order_number.ilike.${like}`,
-        `customer_first_name.ilike.${like}`,
-        `customer_last_name.ilike.${like}`,
-        `customer_phone.ilike.${like}`,
-      ].join(","),
-    );
+
+  // Applies the non-search filters + sort + range to a fresh query, adding the
+  // search OR clause with or without display_name. Factored so we can retry
+  // without display_name if the column doesn't exist yet (migration 0147).
+  const runQuery = async (withDisplayName: boolean) => {
+    let q = admin.from("orders").select("*", { count: "exact" });
+    if (filter.status && filter.status !== "all") {
+      if (filter.status === "active") {
+        q = q.in("status", ["new", "acknowledged", "preparing", "ready"]);
+      } else {
+        q = q.eq("status", filter.status);
+      }
+    }
+    if (search) q = q.or(orderSearchClause(`%${search}%`, withDisplayName));
+    if (filter.placedFrom) q = q.gte("placed_at", filter.placedFrom);
+    if (filter.placedTo) q = q.lte("placed_at", filter.placedTo);
+    if (filter.totalMin != null) q = q.gte("total_minor_units", filter.totalMin);
+    if (filter.totalMax != null) q = q.lte("total_minor_units", filter.totalMax);
+    const s: SortColumn[] = filter.sort ?? [{ column: "placed_at", ascending: false }];
+    for (const col of s) {
+      q = q.order(col.column, {
+        ascending: col.ascending,
+        ...(col.nullsFirst !== undefined ? { nullsFirst: col.nullsFirst } : {}),
+      });
+    }
+    return q.range(filter.from, filter.to);
+  };
+
+  const first = await runQuery(search ? displayNameSearchable : false);
+  let { data, count } = first;
+  if (first.error && search && displayNameSearchable && isMissingColumnError(first.error)) {
+    // display_name column not present yet — remember + retry without it.
+    displayNameSearchable = false;
+    ({ data, count } = await runQuery(false));
   }
-
-  if (filter.placedFrom) query = query.gte("placed_at", filter.placedFrom);
-  if (filter.placedTo) query = query.lte("placed_at", filter.placedTo);
-  if (filter.totalMin != null) query = query.gte("total_minor_units", filter.totalMin);
-  if (filter.totalMax != null) query = query.lte("total_minor_units", filter.totalMax);
-
-  const sort: SortColumn[] = filter.sort ?? [{ column: "placed_at", ascending: false }];
-  for (const s of sort) {
-    query = query.order(s.column, {
-      ascending: s.ascending,
-      ...(s.nullsFirst !== undefined ? { nullsFirst: s.nullsFirst } : {}),
-    });
-  }
-
-  const { data, count } = await query.range(filter.from, filter.to);
   return { rows: (data as OrderRow[]) ?? [], total: count ?? 0 };
 }
 
@@ -245,33 +324,29 @@ export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRo
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
 
-  let query = admin.from("orders").select("*");
-
-  if (filter.status && filter.status !== "all") {
-    if (filter.status === "active") {
-      query = query.in("status", ["new", "acknowledged", "preparing", "ready"]);
-    } else {
-      query = query.eq("status", filter.status);
-    }
-  }
-
   const search = filter.search?.trim();
-  if (search) {
-    // Match order number, first/last name, or phone (digits-insensitive on phone).
-    const like = `%${search}%`;
-    query = query.or(
-      [
-        `order_number.ilike.${like}`,
-        `customer_first_name.ilike.${like}`,
-        `customer_last_name.ilike.${like}`,
-        `customer_phone.ilike.${like}`,
-      ].join(","),
-    );
+
+  // Fresh query each attempt so a display_name retry starts clean.
+  const runQuery = async (withDisplayName: boolean) => {
+    let q = admin.from("orders").select("*");
+    if (filter.status && filter.status !== "all") {
+      if (filter.status === "active") {
+        q = q.in("status", ["new", "acknowledged", "preparing", "ready"]);
+      } else {
+        q = q.eq("status", filter.status);
+      }
+    }
+    // Match order number, display name, first/last name, or phone.
+    if (search) q = q.or(orderSearchClause(`%${search}%`, withDisplayName));
+    return q.order("placed_at", { ascending: false }).limit(filter.limit ?? 200);
+  };
+
+  const first = await runQuery(search ? displayNameSearchable : false);
+  let { data } = first;
+  if (first.error && search && displayNameSearchable && isMissingColumnError(first.error)) {
+    displayNameSearchable = false;
+    ({ data } = await runQuery(false));
   }
-
-  query = query.order("placed_at", { ascending: false }).limit(filter.limit ?? 200);
-
-  const { data } = await query;
   return (data as OrderRow[]) ?? [];
 }
 
