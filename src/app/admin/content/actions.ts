@@ -37,6 +37,10 @@ const PAGE_TO_PATH: Record<string, string> = {
   about: "/about",
   locations: "/locations",
   "price-match": "/price-match",
+  // SLICE 105b: legal policy bodies (one JSON "richdoc" block per page).
+  "legal-privacy": "/privacy-policy",
+  "legal-terms": "/terms-of-use",
+  "legal-chd": "/consumer-health-data",
 };
 
 function revalidatePublicForPage(page: string): void {

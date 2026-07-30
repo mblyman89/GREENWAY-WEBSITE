@@ -16,6 +16,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { CONTENT_BLOCK_SEEDS } from "./content-blocks-seed";
 import type { PostStatus } from "./types";
+import { resolvePolicyRows, type PolicyRow } from "./policy-doc-core";
 
 const SEED_DEFAULTS = new Map(
   CONTENT_BLOCK_SEEDS.map((s) => [s.block_key, s.defaultValue]),
@@ -123,6 +124,21 @@ export async function getContentValues(
   } catch {
     return result;
   }
+}
+
+/**
+ * Resolve the ordered rows for a legal-policy body (SLICE 105b). Draft-aware:
+ * staff preview sees the draft document, everyone else the published one. The
+ * vetted hardcoded paragraph array is always the ultimate fallback, so an
+ * unseeded, empty, or malformed document can NEVER blank a legal page — it
+ * renders byte-identical to the shipped copy until a staff member edits it.
+ */
+export async function getPolicyRowsForRender(
+  docKey: string,
+  fallbackParagraphs: readonly string[],
+): Promise<PolicyRow[]> {
+  const stored = await getContentForRender(docKey);
+  return resolvePolicyRows(stored, fallbackParagraphs, docKey);
 }
 
 /** Is the current request a staff preview (Draft Mode on)? */
