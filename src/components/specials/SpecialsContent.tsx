@@ -460,7 +460,15 @@ export function SpecialsContent({
 
         {/* Today's actual on-deal products — standard site-wide card, 16 cards,
             with a wide day banner above the grid. SLICE 106: optional toggle. */}
-        {pres.showTodaysDeals ? <SpecialsDailyDeals items={menuItems} /> : null}
+        {pres.showTodaysDeals ? (
+          <SpecialsDailyDeals
+            items={menuItems}
+            bannerImage={pres.todaysDealsBannerImage}
+            count={pres.todaysDealsCount}
+            textAlign={pres.todaysDealsBannerTextAlign}
+            verticalAlign={pres.todaysDealsBannerVerticalAlign}
+          />
+        ) : null}
 
         {/* Extra banners staff added in the Pages builder render here. */}
         {(content?.extraSections ?? []).length ? (

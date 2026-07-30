@@ -295,6 +295,21 @@ export const PRESETS: Preset[] = [
     },
   },
   {
+    id: "specials-banner",
+    label: "Specials banner",
+    description: "Wide, short banner for the \u201cToday's Deal\u201d strip on the Specials page \u2014 key art on one side, calm space on the other for the deal text.",
+    brief: {
+      composition:
+        "very wide short banner composition, key subject to one side, opposite side calm and uncluttered for overlaid deal text",
+      lighting: "bright punchy lighting with a rich glow",
+      style: "bold modern promotional key-art, high impact, clean",
+      colorMood: "brand green + gold accents on a deep near-black background, energetic deal mood",
+      aspectRatio: "16:9",
+      version: 7,
+      stylize: 180,
+    },
+  },
+  {
     id: "in-store-signage",
     label: "In-store signage",
     description: "Poster-style artwork for printed in-store signage.",
@@ -373,7 +388,8 @@ export function __runMidjourneyCoreTests(): string {
   assert(g.warnings.some((w) => w.includes("subject")), "empty subject warns");
 
   // presets
-  assert(PRESETS.length >= 5, "5+ presets");
+  assert(PRESETS.length >= 6, "6+ presets");
+  assert(Boolean(presetById("specials-banner")), "specials-banner preset present");
   assert(presetById("product-hero")?.brief.aspectRatio === "1:1", "preset lookup");
 
   // closestAspectRatio: destination sizes map to sensible --ar values

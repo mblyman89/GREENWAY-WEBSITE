@@ -50,6 +50,42 @@ export function isBadgeStyle(v: unknown): v is BadgeStyle {
   return typeof v === "string" && (BADGE_STYLES as readonly string[]).includes(v);
 }
 
+/** Horizontal text placement for the "Today's Deal" wide banner. */
+export const TEXT_ALIGNS = ["left", "center", "right"] as const;
+export type TextAlign = (typeof TEXT_ALIGNS)[number];
+
+export function isTextAlign(v: unknown): v is TextAlign {
+  return typeof v === "string" && (TEXT_ALIGNS as readonly string[]).includes(v);
+}
+
+/** Vertical text placement for the "Today's Deal" wide banner. */
+export const TEXT_VALIGNS = ["top", "center", "bottom"] as const;
+export type TextVAlign = (typeof TEXT_VALIGNS)[number];
+
+export function isTextVAlign(v: unknown): v is TextVAlign {
+  return typeof v === "string" && (TEXT_VALIGNS as readonly string[]).includes(v);
+}
+
+/**
+ * How many "Today's Deals" product cards to show. Today's hardcoded value is
+ * 16 (SpecialsDailyDeals LIMIT). We allow 1..24 (the grid is up to 4 wide, so
+ * this keeps whole rows sensible) and default to 16 so nothing changes until a
+ * staff member edits it.
+ */
+export const TODAYS_DEALS_COUNT_DEFAULT = 16;
+export const TODAYS_DEALS_COUNT_MIN = 1;
+export const TODAYS_DEALS_COUNT_MAX = 24;
+
+/** Clamp any input to a valid Today's-Deals product count (default 16). */
+export function clampTodaysDealsCount(v: unknown): number {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  if (!Number.isFinite(n)) return TODAYS_DEALS_COUNT_DEFAULT;
+  const i = Math.trunc(n);
+  if (i < TODAYS_DEALS_COUNT_MIN) return TODAYS_DEALS_COUNT_MIN;
+  if (i > TODAYS_DEALS_COUNT_MAX) return TODAYS_DEALS_COUNT_MAX;
+  return i;
+}
+
 /**
  * Per-day presentation. `visible` hides the card; `order` is a small integer
  * used to sort the visible cards (ties keep natural weekday order); the three
@@ -74,6 +110,20 @@ export type SpecialsPresentation = {
   showTodaysDeals: boolean;
   /** Offer-chip visual style on the weekly cards. */
   badgeStyle: BadgeStyle;
+  /**
+   * "Today's Deal" WIDE BANNER background image (the strip above the live
+   * product grid). Blank string => keep the built-in default art
+   * (/home/hero-banner.webp) so the page is unchanged until staff pick one.
+   * The banner's TEXT (title/subtitle) still comes from Promotions — staff
+   * only swap the image + choose how the text sits over it.
+   */
+  todaysDealsBannerImage: string;
+  /** Horizontal placement of the banner text over the image (default left). */
+  todaysDealsBannerTextAlign: TextAlign;
+  /** Vertical placement of the banner text over the image (default center). */
+  todaysDealsBannerVerticalAlign: TextVAlign;
+  /** How many live product cards to show under the banner (default 16). */
+  todaysDealsCount: number;
   /** Per-weekday settings (always all 7, natural order). */
   days: DayPresentation[];
 };
@@ -87,6 +137,12 @@ export function defaultSpecialsPresentation(): SpecialsPresentation {
     showWeeklyGrid: true,
     showTodaysDeals: true,
     badgeStyle: "classic",
+    // Live-look-safe: blank image keeps the built-in banner art, count 16 and
+    // left/center text placement reproduce today's SpecialsDailyDeals exactly.
+    todaysDealsBannerImage: "",
+    todaysDealsBannerTextAlign: "left",
+    todaysDealsBannerVerticalAlign: "center",
+    todaysDealsCount: TODAYS_DEALS_COUNT_DEFAULT,
     days: SPECIALS_WEEKDAYS.map((weekday, i) => ({
       weekday,
       visible: true,
@@ -119,6 +175,22 @@ export function normalizeSpecialsPresentation(
     typeof obj.showTodaysDeals === "boolean" ? obj.showTodaysDeals : base.showTodaysDeals;
   const badgeStyle = isBadgeStyle(obj.badgeStyle) ? obj.badgeStyle : base.badgeStyle;
 
+  // "Today's Deal" banner extras (all fall back to the live-look-safe default).
+  const todaysDealsBannerImage =
+    typeof obj.todaysDealsBannerImage === "string"
+      ? obj.todaysDealsBannerImage.trim()
+      : base.todaysDealsBannerImage;
+  const todaysDealsBannerTextAlign = isTextAlign(obj.todaysDealsBannerTextAlign)
+    ? obj.todaysDealsBannerTextAlign
+    : base.todaysDealsBannerTextAlign;
+  const todaysDealsBannerVerticalAlign = isTextVAlign(obj.todaysDealsBannerVerticalAlign)
+    ? obj.todaysDealsBannerVerticalAlign
+    : base.todaysDealsBannerVerticalAlign;
+  const todaysDealsCount =
+    obj.todaysDealsCount === undefined
+      ? base.todaysDealsCount
+      : clampTodaysDealsCount(obj.todaysDealsCount);
+
   // Index any provided day entries by weekday so we can merge onto the full 7.
   const byWeekday = new Map<SpecialsWeekday, Record<string, unknown>>();
   if (Array.isArray(obj.days)) {
@@ -145,7 +217,16 @@ export function normalizeSpecialsPresentation(
     };
   });
 
-  return { showWeeklyGrid, showTodaysDeals, badgeStyle, days };
+  return {
+    showWeeklyGrid,
+    showTodaysDeals,
+    badgeStyle,
+    todaysDealsBannerImage,
+    todaysDealsBannerTextAlign,
+    todaysDealsBannerVerticalAlign,
+    todaysDealsCount,
+    days,
+  };
 }
 
 /** Serialize to the stored JSON string (stable key order for clean diffs). */
@@ -155,6 +236,10 @@ export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
     showWeeklyGrid: norm.showWeeklyGrid,
     showTodaysDeals: norm.showTodaysDeals,
     badgeStyle: norm.badgeStyle,
+    todaysDealsBannerImage: norm.todaysDealsBannerImage,
+    todaysDealsBannerTextAlign: norm.todaysDealsBannerTextAlign,
+    todaysDealsBannerVerticalAlign: norm.todaysDealsBannerVerticalAlign,
+    todaysDealsCount: norm.todaysDealsCount,
     days: norm.days.map((d) => {
       const out: Record<string, unknown> = {
         weekday: d.weekday,
@@ -327,6 +412,55 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   // isBadgeStyle guard.
   ok(isBadgeStyle("classic") && isBadgeStyle("bold") && isBadgeStyle("minimal"), "valid badge styles");
   ok(!isBadgeStyle("neon") && !isBadgeStyle(3), "invalid badge styles rejected");
+
+  // ── Today's Deal banner extras (SLICE 111) ────────────────────────────────
+  // Default is live-look-safe: blank image, 16 cards, left/center placement.
+  ok(def.todaysDealsBannerImage === "", "default banner image blank (keeps built-in art)");
+  ok(def.todaysDealsBannerTextAlign === "left", "default banner text-align left (today's look)");
+  ok(def.todaysDealsBannerVerticalAlign === "center", "default banner vertical-align center");
+  ok(def.todaysDealsCount === 16, "default today's-deals count is 16 (matches LIMIT)");
+
+  // Text-align + vertical-align guards.
+  ok(isTextAlign("left") && isTextAlign("center") && isTextAlign("right"), "valid text aligns");
+  ok(!isTextAlign("justify") && !isTextAlign(1), "invalid text aligns rejected");
+  ok(isTextVAlign("top") && isTextVAlign("center") && isTextVAlign("bottom"), "valid vertical aligns");
+  ok(!isTextVAlign("middle") && !isTextVAlign(null), "invalid vertical aligns rejected");
+
+  // Count clamp: below min -> min, above max -> max, non-finite -> default 16.
+  ok(clampTodaysDealsCount(0) === 1, "count clamps up to min 1");
+  ok(clampTodaysDealsCount(99) === 24, "count clamps down to max 24");
+  ok(clampTodaysDealsCount(8) === 8, "count keeps a valid value");
+  ok(clampTodaysDealsCount(8.9) === 8, "count truncates decimals");
+  ok(clampTodaysDealsCount("12") === 12, "count parses numeric strings");
+  ok(clampTodaysDealsCount("abc") === 16, "count non-numeric -> default 16");
+  ok(clampTodaysDealsCount(undefined) === 16, "count undefined -> default 16");
+
+  // Normalize coerces bad extras back to safe values.
+  const banner = normalizeSpecialsPresentation({
+    todaysDealsBannerImage: "  /media/specials.webp  ",
+    todaysDealsBannerTextAlign: "right",
+    todaysDealsBannerVerticalAlign: "bottom",
+    todaysDealsCount: 40,
+  });
+  ok(banner.todaysDealsBannerImage === "/media/specials.webp", "banner image trimmed");
+  ok(banner.todaysDealsBannerTextAlign === "right", "banner text-align applied");
+  ok(banner.todaysDealsBannerVerticalAlign === "bottom", "banner vertical-align applied");
+  ok(banner.todaysDealsCount === 24, "banner count clamped to max 24");
+  const badExtras = normalizeSpecialsPresentation({
+    todaysDealsBannerTextAlign: "nope",
+    todaysDealsBannerVerticalAlign: "nope",
+    todaysDealsCount: NaN,
+  });
+  ok(badExtras.todaysDealsBannerTextAlign === "left", "bad text-align -> default left");
+  ok(badExtras.todaysDealsBannerVerticalAlign === "center", "bad vertical-align -> default center");
+  ok(badExtras.todaysDealsCount === 16, "NaN count -> default 16");
+
+  // Round-trip of the new fields.
+  const bannerRound = parseSpecialsPresentation(serializeSpecialsPresentation(banner))!;
+  ok(bannerRound.todaysDealsBannerImage === "/media/specials.webp", "round-trip keeps banner image");
+  ok(bannerRound.todaysDealsBannerTextAlign === "right", "round-trip keeps text-align");
+  ok(bannerRound.todaysDealsBannerVerticalAlign === "bottom", "round-trip keeps vertical-align");
+  ok(bannerRound.todaysDealsCount === 24, "round-trip keeps count");
 
   return { passed };
 }

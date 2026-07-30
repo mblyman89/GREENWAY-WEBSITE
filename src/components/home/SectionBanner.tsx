@@ -56,6 +56,8 @@ export function SectionBanner({
   priority = false,
   editable = false,
   blockKeyPrefix,
+  textAlign = "left",
+  verticalAlign = "center",
 }: {
   imageSrc: string;
   imageAlt: string;
@@ -67,10 +69,34 @@ export function SectionBanner({
   priority?: boolean;
   editable?: boolean;
   blockKeyPrefix?: string;
+  /** Horizontal placement of the overlaid text (default "left" = today's look). */
+  textAlign?: "left" | "center" | "right";
+  /** Vertical placement of the overlaid text (default "center" = today's look). */
+  verticalAlign?: "top" | "center" | "bottom";
 }) {
   const visibleButtons = (buttons ?? []).filter(
     (b) => b.enabled !== false && b.label?.trim() && b.href?.trim(),
   );
+
+  // Overlay gradient is weighted toward the SAME side the text sits on so the
+  // copy stays legible; a center placement uses a soft all-over darken. The
+  // image itself is object-positioned to the OPPOSITE side so the art shows.
+  const gradientClass =
+    textAlign === "right"
+      ? "bg-[linear-gradient(270deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.82)_40%,rgba(0,0,0,0.32)_72%,rgba(0,0,0,0.08)_100%)]"
+      : textAlign === "center"
+        ? "bg-[linear-gradient(180deg,rgba(0,0,0,0.55)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.55)_100%)]"
+        : "bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.82)_40%,rgba(0,0,0,0.32)_72%,rgba(0,0,0,0.08)_100%)]";
+  const imageObjectClass =
+    textAlign === "right"
+      ? "object-cover object-left"
+      : textAlign === "center"
+        ? "object-cover object-center"
+        : "object-cover object-right";
+  const textBlockClass = [
+    textAlign === "right" ? "items-end text-right" : textAlign === "center" ? "items-center text-center" : "items-start text-left",
+    verticalAlign === "top" ? "justify-start" : verticalAlign === "bottom" ? "justify-end" : "justify-center",
+  ].join(" ");
   const editAttrs = (suffix: string) =>
     editable && blockKeyPrefix
       ? {
@@ -88,15 +114,15 @@ export function SectionBanner({
           fill
           priority={priority}
           sizes="(max-width: 768px) 100vw, 1408px"
-          className="object-cover object-right"
+          className={imageObjectClass}
         />
       </div>
-      {/* Left-weighted dark gradient so the title stays legible over the art. */}
+      {/* Dark gradient weighted toward the text side so the title stays legible. */}
       <div
-        className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.82)_40%,rgba(0,0,0,0.32)_72%,rgba(0,0,0,0.08)_100%)]"
+        className={`absolute inset-0 ${gradientClass}`}
         aria-hidden="true"
       />
-      <div className="relative flex min-h-[5.5rem] flex-col justify-center px-5 py-4 md:min-h-[7.5rem] md:px-9 md:py-6">
+      <div className={`relative flex min-h-[5.5rem] flex-col px-5 py-4 md:min-h-[7.5rem] md:px-9 md:py-6 ${textBlockClass}`}>
         {eyebrow ? (
           <p
             className="text-[0.6rem] font-black uppercase tracking-[0.22em] text-[var(--greenway)] md:text-xs"

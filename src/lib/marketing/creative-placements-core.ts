@@ -29,7 +29,7 @@
  * PURE: no server-only imports, unit-testable via __runCreativePlacementsTests.
  */
 
-import { resolveImageSpec, SECTION_BANNER_SPEC } from "@/lib/cms/image-spec-core";
+import { resolveImageSpec, SECTION_BANNER_SPEC, SPECIALS_BANNER_SPEC } from "@/lib/cms/image-spec-core";
 
 export type PlacementGroup = "website" | "social" | "email" | "blog" | "print";
 
@@ -92,6 +92,18 @@ const WEBSITE_PLACEMENTS: CreativePlacement[] = [
     tip: "Wide and short. Keep the important art toward the right — headings and buttons are overlaid on the left with a dark fade.",
     promptHint:
       "very wide banner composition, key subject placed in the right two-thirds, left third calm and uncluttered for overlaid text, no text in the image",
+  },
+  {
+    id: "website-specials-banner",
+    group: "website",
+    label: "Specials — Today's Deal banner",
+    where: "The wide banner strip above the live \u201cToday's Deals\u201d products on the public Specials page.",
+    width: SPECIALS_BANNER_SPEC.presets[0].width,
+    height: SPECIALS_BANNER_SPEC.presets[0].height,
+    format: "jpeg",
+    tip: "Wide and short. The deal title & subtitle sit over a dark fade — keep the key art toward the side away from the text (you choose which side in the Specials editor).",
+    promptHint:
+      "very wide banner composition, key subject placed to one side, the opposite side calm and uncluttered for overlaid deal text, no text in the image",
   },
   {
     id: "website-loyalty-hero",
@@ -413,6 +425,12 @@ export function __runCreativePlacementsTests(): string {
   const loyaltySpec = resolveImageSpec("loyalty.hero.image").presets[0];
   const loyalty = placementById("website-loyalty-hero")!;
   ok(loyalty.width === loyaltySpec.width && loyalty.height === loyaltySpec.height, "loyalty hero tracks image-spec-core");
+  const specialsSpec = SPECIALS_BANNER_SPEC.presets[0];
+  const specials = placementById("website-specials-banner")!;
+  ok(
+    specials.width === specialsSpec.width && specials.height === specialsSpec.height,
+    "specials banner tracks image-spec-core",
+  );
 
   // Print slots carry explicit print notes.
   ok(Boolean(placementById("print-flyer-letter")!.printNote), "flyer has print note");
