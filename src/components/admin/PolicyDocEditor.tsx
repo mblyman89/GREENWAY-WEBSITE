@@ -113,11 +113,13 @@ export function PolicyDocEditor(props: Props) {
   }
 
   const cautionBanner = (
-    <div className="rounded-[var(--admin-radius-sm)] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      <strong>Heads up — this is legal wording.</strong> Changes here update what customers
-      read on your <em>{label}</em> page. Consider having your attorney review edits before you
-      Publish. Nothing goes live until you click <strong>Publish {label}</strong>. Every publish is
-      saved to history so you can roll back.
+    <div className="rounded-[var(--admin-radius)] border-2 border-[var(--admin-gold)]/60 bg-[var(--admin-gold)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+      <strong className="font-black uppercase tracking-wide text-[var(--admin-gold)]">
+        Heads up — this is legal wording.
+      </strong>{" "}
+      Changes here update what customers read on your <em>{label}</em> page. Consider having your
+      attorney review edits before you Publish. Nothing goes live until you click{" "}
+      <strong>Publish {label}</strong>. Every publish is saved to history so you can roll back.
     </div>
   );
 
@@ -126,22 +128,22 @@ export function PolicyDocEditor(props: Props) {
       {cautionBanner}
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span className="rounded-full bg-[var(--admin-surface-2,#f3f4f6)] px-3 py-1 text-[var(--admin-text-muted)]">
+        <span className="rounded-full bg-[var(--admin-surface-2)] px-3 py-1 text-[var(--admin-text-muted)]">
           {rows.length} rows · {headingCount} headings · {paragraphCount} paragraphs
         </span>
         {dirtyVsPublished ? (
-          <span className="rounded-full bg-orange-100 px-3 py-1 font-semibold text-orange-800">
+          <span className="rounded-full bg-[var(--admin-gold)]/15 px-3 py-1 font-semibold text-[var(--admin-gold)]">
             Unpublished changes
           </span>
         ) : (
-          <span className="rounded-full bg-green-100 px-3 py-1 font-semibold text-green-800">
+          <span className="rounded-full bg-[var(--admin-accent-soft)] px-3 py-1 font-semibold text-[var(--admin-accent)]">
             Live &amp; up to date
           </span>
         )}
         <button
           type="button"
           onClick={() => setShowPreview((v) => !v)}
-          className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium hover:bg-[var(--admin-surface-2,#f3f4f6)]"
+          className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)]"
         >
           {showPreview ? "Hide" : "Show"} customer preview
         </button>
@@ -149,7 +151,7 @@ export function PolicyDocEditor(props: Props) {
           href={publicPath}
           target="_blank"
           rel="noreferrer"
-          className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium hover:bg-[var(--admin-surface-2,#f3f4f6)]"
+          className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)]"
         >
           View live page ↗
         </a>
@@ -203,7 +205,7 @@ export function PolicyDocEditor(props: Props) {
                     onClick={() => moveRow(index, -1)}
                     disabled={index === 0}
                     aria-label="Move up"
-                    className="rounded border border-[var(--admin-border)] px-2 py-1 disabled:opacity-30"
+                    className="rounded border border-[var(--admin-border)] px-2 py-1 text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)] disabled:opacity-30"
                   >
                     ↑
                   </button>
@@ -212,18 +214,19 @@ export function PolicyDocEditor(props: Props) {
                     onClick={() => moveRow(index, 1)}
                     disabled={index === rows.length - 1}
                     aria-label="Move down"
-                    className="rounded border border-[var(--admin-border)] px-2 py-1 disabled:opacity-30"
+                    className="rounded border border-[var(--admin-border)] px-2 py-1 text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)] disabled:opacity-30"
                   >
                     ↓
                   </button>
-                  <button
+                  <Button
+                    variant="danger"
+                    size="sm"
                     type="button"
                     onClick={() => removeRow(row.id)}
                     aria-label="Delete row"
-                    className="rounded border border-red-200 px-2 py-1 text-red-700 hover:bg-red-50"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
               <textarea
@@ -231,7 +234,7 @@ export function PolicyDocEditor(props: Props) {
                 onChange={(e) => updateRow(row.id, { text: e.target.value })}
                 rows={row.kind === "heading" ? 1 : 4}
                 placeholder={row.kind === "heading" ? "Section heading…" : "Paragraph text…"}
-                className={`w-full resize-y rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-white px-3 py-2 text-sm text-black ${
+                className={`w-full resize-y rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none ${
                   row.kind === "heading" ? "font-bold" : ""
                 }`}
               />
@@ -328,7 +331,7 @@ export function PolicyDocEditor(props: Props) {
                     <input type="hidden" name="revision_id" value={rev.id} />
                     <button
                       type="submit"
-                      className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium hover:bg-[var(--admin-surface-2,#f3f4f6)]"
+                      className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] px-3 py-1 font-medium text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)]"
                     >
                       Restore into draft
                     </button>
