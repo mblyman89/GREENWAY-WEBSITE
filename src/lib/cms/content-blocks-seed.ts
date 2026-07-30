@@ -35,6 +35,7 @@ import {
   VENDOR_CONTACT_CHANNELS,
   vendorChannelBlockKey,
 } from "@/lib/vendors/vendor-relations-core";
+import { BLOG_CONTENT_BLOCKS } from "@/lib/blog/blog-content-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -129,6 +130,26 @@ function vendorChannelBlockSeeds(): ContentBlockSeed[] {
       defaultValue: c.subject,
     },
   ]);
+}
+
+// SLICE 115: the editable Blog page-chrome copy blocks are DERIVED from the
+// blog content core so each seed defaultValue is byte-identical to the page's
+// live fallback and can never drift from the vetted copy. This only makes the
+// blog page CHROME (headings, intro, button/label text) owner-editable -- the
+// blog POSTS themselves stay in /admin/blog (the single source of truth).
+function blogCopyBlockSeeds(): ContentBlockSeed[] {
+  return BLOG_CONTENT_BLOCKS.map((b) => ({
+    block_key: b.key,
+    page: "blog",
+    // Section is derived from the middle segment of the key (e.g.
+    // blog.hero.eyebrow -> "hero", blog.card.readMore -> "card") for tidy
+    // grouping in the admin list.
+    section: b.key.split(".")[1] ?? "body",
+    label: b.label,
+    ...(b.help ? { help_text: b.help } : {}),
+    field_type: "plain" as ContentFieldType,
+    defaultValue: b.fallback,
+  }));
 }
 
 export type ContentBlockSeed = {
@@ -388,6 +409,7 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
   // BYTE-IDENTICAL to VENDOR_CONTACT_CHANNELS in vendor-relations-core.ts, so
   // the public page looks the same until he edits & publishes.
   ...vendorChannelBlockSeeds(),
+  ...blogCopyBlockSeeds(),
   // ---- Specials ------------------------------------------------------------
   {
     block_key: "specials.hero.eyebrow",
