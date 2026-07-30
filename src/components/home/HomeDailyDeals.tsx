@@ -15,8 +15,7 @@ import {
   usePublishedRules,
 } from "@/components/promotions/PublishedRulesProvider";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
-
-const LIMIT = 16;
+import { HOME_CARD_COUNT_DEFAULT } from "@/lib/cms/home-section-settings-core";
 
 /**
  * Home "Daily Deals" section. Replaces the old static "50% OFF CLEARANCE"
@@ -25,7 +24,19 @@ const LIMIT = 16;
  * the cards show the actual on-deal products via the standard ProductCard,
  * so every card resolves its own daily discount badge + sale price.
  */
-export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
+export function HomeDailyDeals({
+  items,
+  count = HOME_CARD_COUNT_DEFAULT,
+}: {
+  items: GreenwayMenuItem[];
+  /**
+   * How many deal cards to show. Owner-controlled via the Home page editor's
+   * "Home page display" card (home.settings section → settings.dailyDealsCount).
+   * Defaults to 16 (the count the homepage shipped with).
+   */
+  count?: number;
+}) {
+  const LIMIT = count;
   const weekday = useStoreWeekday();
   // PROMOTIONS HARMONY (Task T / PR 1): the section title, offer line, shop
   // link AND the on-deal product pool all derive from the back office's
@@ -60,7 +71,7 @@ export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
       (a, b) => (shuffle[a.id] ?? 0) - (shuffle[b.id] ?? 0),
     );
     return ordered.slice(0, LIMIT);
-  }, [pool, shuffle]);
+  }, [pool, shuffle, LIMIT]);
 
   // Only show skeletons during the brief first paint while the store weekday is
   // still resolving on the client. Once resolved, we always have products to
@@ -108,7 +119,7 @@ export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
           // on the client (no layout shift). After it resolves we always have
           // products to show (the day's deals, or the menu fallback).
           <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, index) => (
+            {Array.from({ length: Math.min(LIMIT, 8) }).map((_, index) => (
               <div
                 key={index}
                 className="aspect-[3/4] animate-pulse rounded-2xl border border-white/10 bg-white/5"

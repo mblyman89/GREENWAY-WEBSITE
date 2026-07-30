@@ -13,6 +13,11 @@ import {
 } from "@/lib/cms/page-sections-types";
 import { listSections } from "@/lib/cms/page-sections-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
+import { HomeDisplaySettingsCard } from "@/components/admin/HomeDisplaySettingsCard";
+import {
+  readHomeCardCount,
+  DAILY_DEALS_COUNT_KEY,
+} from "@/lib/cms/home-section-settings-core";
 import { listCarouselSlides } from "@/lib/cms/carousel-store";
 import { MAX_CAROUSEL_SLIDES } from "@/lib/cms/carousel-types";
 import { listFaqItems } from "@/lib/cms/faq-store";
@@ -26,6 +31,7 @@ import {
   publishSectionAction,
   deleteSectionAction,
   moveSectionAction,
+  saveHomeSettingsAction,
 } from "./actions";
 import {
   seedCarouselAction,
@@ -285,14 +291,39 @@ async function SectionsTab({
   mediaChoices: MediaChoice[];
   hasSeeds: boolean;
 }) {
-  const sections = await listSections(slug);
-  const atCap = sections.length >= cap;
+  const allSections = await listSections(slug);
+  const isHome = slug === "home";
+
+  // SLICE 112: the locked home.settings config row holds homepage DISPLAY
+  // settings (e.g. the daily-deal card count). It's not a visible banner, so we
+  // pull it out of the normal card list and surface it as a dedicated "Home
+  // page display" card at the top.
+  const homeSettingsRow = isHome
+    ? allSections.find((s) => s.section_key === "home.settings")
+    : undefined;
+  const sections = allSections.filter(
+    (s) => s.section_key !== "home.settings",
+  );
+  const dailyDealsCount = readHomeCardCount(
+    homeSettingsRow?.settings,
+    DAILY_DEALS_COUNT_KEY,
+  );
+  // The cap the owner sees excludes the invisible config row.
+  const visibleCap = isHome ? cap - 1 : cap;
+  const atCap = allSections.length >= cap;
 
   return (
     <div className="space-y-5">
+      {isHome ? (
+        <HomeDisplaySettingsCard
+          dailyDealsCount={dailyDealsCount}
+          saveAction={saveHomeSettingsAction}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--admin-text-muted)]">
-          {sections.length} of {cap} sections
+          {sections.length} of {visibleCap} sections
         </p>
         <div className="flex items-center gap-2">
           {sections.length === 0 && hasSeeds ? (

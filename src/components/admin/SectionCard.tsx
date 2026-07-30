@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
-import { SECTION_BANNER_SPEC } from "@/lib/cms/image-spec-core";
+import { SECTION_BANNER_SPEC, resolveImageSpec } from "@/lib/cms/image-spec-core";
+import {
+  HOME_CARD_COUNT_OPTIONS,
+  BRAND_COUNT_KEY,
+  clampHomeCardCount,
+} from "@/lib/cms/home-section-settings-core";
 import { controlClassName, labelClassName } from "./ui";
 import type {
   SectionAdminVM,
@@ -63,7 +68,26 @@ export function SectionCard({
     body: section.draft_body ?? section.body ?? "",
     buttons: (section.draft_buttons ?? section.buttons ?? []) as SectionButton[],
     enabled: section.draft_enabled,
+    settings: (section.draft_settings ??
+      section.settings ??
+      {}) as Record<string, unknown>,
   };
+
+  // SLICE 112 — Home page editor "superpower": this section renders a live
+  // product/brand GRID whose card count the owner can choose. Right now that's
+  // the "Shop by Brand" grid (home.brand, settings.lanes === "brand"); the
+  // control appears only for those sections. The count is stored in the
+  // section's settings JSON (no migration) and merged on save so we never drop
+  // other settings keys (lanes, titleClassName, ...).
+  const hasBrandGrid = d.settings.lanes === "brand";
+  const initialCardCount = clampHomeCardCount(d.settings[BRAND_COUNT_KEY]);
+
+  // Home banners get their EXACT band size (1600×560) in the Canva size helper.
+  // resolveImageSpec keys off "<section>.image" (e.g. home.category.image);
+  // everything else falls back to the generic wide section-banner spec.
+  const imageSpec = section.section_key.startsWith("home.")
+    ? resolveImageSpec(`${section.section_key}.image`)
+    : SECTION_BANNER_SPEC;
 
   const [image, setImage] = useState(d.image);
   const [imageAlt, setImageAlt] = useState(d.image_alt);
@@ -75,6 +99,7 @@ export function SectionCard({
   const [body, setBody] = useState(d.body);
   const [enabled, setEnabled] = useState(d.enabled);
   const [buttons, setButtons] = useState<DraftButton[]>(withIds(d.buttons));
+  const [cardCount, setCardCount] = useState<number>(initialCardCount);
   // GW-035: friendly confirm dialog instead of the browser's window.confirm.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteFormRef = useRef<HTMLFormElement>(null);
@@ -87,6 +112,15 @@ export function SectionCard({
   );
   const initialButtonsJson = JSON.stringify(d.buttons);
 
+  // Merge the chosen card count into the existing settings (preserving lanes,
+  // titleClassName and any other keys) so saving never drops sibling settings.
+  const settingsJson = JSON.stringify(
+    hasBrandGrid
+      ? { ...d.settings, [BRAND_COUNT_KEY]: clampHomeCardCount(cardCount) }
+      : d.settings,
+  );
+  const initialSettingsJson = JSON.stringify(d.settings);
+
   const unsaved =
     !locked &&
     (image !== d.image ||
@@ -98,7 +132,8 @@ export function SectionCard({
       subtitle !== d.subtitle ||
       body !== d.body ||
       enabled !== d.enabled ||
-      buttonsJson !== initialButtonsJson);
+      buttonsJson !== initialButtonsJson ||
+      settingsJson !== initialSettingsJson);
 
   useEffect(() => {
     if (!unsaved) return;
@@ -229,6 +264,7 @@ export function SectionCard({
             <input type="hidden" name="image_focus" value={imageFocus} />
             <input type="hidden" name="text_align" value={textAlign} />
             <input type="hidden" name="buttons_json" value={buttonsJson} />
+            <input type="hidden" name="settings_json" value={settingsJson} />
 
             {/* Background image */}
             <div>
@@ -239,7 +275,7 @@ export function SectionCard({
                 value={image}
                 onChange={setImage}
                 mediaChoices={mediaChoices}
-                spec={SECTION_BANNER_SPEC}
+                spec={imageSpec}
               />
             </div>
 
@@ -403,6 +439,36 @@ export function SectionCard({
                 </div>
               )}
             </div>
+
+            {/* SLICE 112: live-grid card count (Shop by Brand grid). */}
+            {hasBrandGrid ? (
+              <div className="rounded-lg border border-white/10 p-3">
+                <span className={labelCls}>Grid — cards shown</span>
+                <p className="mb-2 text-xs text-white/50">
+                  How many brand tiles appear in the grid below this banner on
+                  the homepage. Fewer tiles = a tighter, faster section.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {HOME_CARD_COUNT_OPTIONS.map((opt) => {
+                    const active = cardCount === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setCardCount(opt.value)}
+                        className={
+                          active
+                            ? "rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent-soft)] px-3 py-1.5 text-sm font-semibold text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+                            : "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-sm text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             {/* Enable + save */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">

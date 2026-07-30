@@ -42,12 +42,15 @@ export function PromoGrid({
   content,
   items = [],
   brandFacts,
+  brandCount,
 }: {
   content?: PromoBannerContent;
   /** Live menu items (from the published DB version) for the brand grid. */
   items?: GreenwayMenuItem[];
   /** 7d: master-data brand overlay (normalized name -> canonical name + known_for). */
   brandFacts?: Record<string, BrandFactsOverlay>;
+  /** SLICE 112: owner-controlled brand-grid card count (home.brand settings.cardCount). */
+  brandCount?: number;
 } = {}) {
   return (
     <>
@@ -99,7 +102,12 @@ export function PromoGrid({
         </div>
       </section>
 
-      <HomeBrands items={items} content={content} brandFacts={brandFacts} />
+      <HomeBrands
+        items={items}
+        content={content}
+        brandFacts={brandFacts}
+        count={brandCount}
+      />
     </>
   );
 }

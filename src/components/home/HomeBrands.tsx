@@ -6,8 +6,7 @@ import { SectionBanner } from "@/components/home/SectionBanner";
 import type { PromoBannerContent } from "@/components/home/PromoGrid";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { useShuffleOrder } from "@/lib/home/useShuffleOrder";
-
-const LIMIT = 16;
+import { HOME_CARD_COUNT_DEFAULT } from "@/lib/cms/home-section-settings-core";
 
 type BrandEntry = {
   brand: string;
@@ -62,12 +61,20 @@ export function HomeBrands({
   items,
   content,
   brandFacts,
+  count = HOME_CARD_COUNT_DEFAULT,
 }: {
   items: GreenwayMenuItem[];
   content?: PromoBannerContent;
   /** 7d: master-data overlay keyed by normalized brand name. */
   brandFacts?: Record<string, BrandFactsOverlay>;
+  /**
+   * How many brand tiles to show. Owner-controlled via the Home page editor's
+   * "Shop by Brand" section ("Grid — cards shown", home.brand → settings.cardCount).
+   * Defaults to 16 (the count the homepage shipped with).
+   */
+  count?: number;
 }) {
+  const LIMIT = count;
   const allBrands = useMemo(() => buildBrandEntries(items), [items]);
   const shuffle = useShuffleOrder(
     "home-brands",
@@ -79,7 +86,7 @@ export function HomeBrands({
       (a, b) => (shuffle[a.brand] ?? 0) - (shuffle[b.brand] ?? 0),
     );
     return ordered.slice(0, LIMIT);
-  }, [allBrands, shuffle]);
+  }, [allBrands, shuffle, LIMIT]);
 
   return (
     <section id="shop-by-brand" className="bg-black px-4 py-6 md:px-8 md:py-8" aria-label="Shop by brand">

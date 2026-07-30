@@ -32,7 +32,9 @@ export const PAGE_SECTION_CONFIG: Record<
   string,
   { label: string; previewPath: string; cap: number }
 > = {
-  home: { label: "Home", previewPath: "/", cap: 4 },
+  // Home's cap is 5 (not 4) to account for the locked, non-visible "home.settings"
+  // config section (SLICE 112) so the owner still has room for up to 4 real banners.
+  home: { label: "Home", previewPath: "/", cap: 5 },
   menu: { label: "Menu", previewPath: "/menu", cap: 4 },
   loyalty: { label: "Loyalty", previewPath: "/loyalty", cap: 4 },
   specials: { label: "Specials", previewPath: "/specials", cap: 4 },
