@@ -14,53 +14,49 @@
  *   - Elevated limits (WAC 314-55-095): carded patients in the database only.
  *   - NO medical/therapeutic claims anywhere (WAC 314-55-155).
  *
- * Copy in the hero/intro is CMS-editable (medical.* blocks); the statutory
- * mechanics below are fixed copy so an edit can't accidentally overpromise.
+ * SLICE 107: the hero/intro, the section eyebrows/titles, and the two
+ * informational bullet lists are CMS-editable (medical.* blocks via <SiteText>)
+ * — every block's fallback is byte-identical to the copy below, so the page is
+ * unchanged until a staff member edits & publishes. The STATUTORY mechanics
+ * (tax/limit fine print, WAC/RCW citations) stay FIXED here and the
+ * purchase-limit TABLE stays LIVE from the compliance core so an edit can never
+ * overpromise or drift the legal table.
  */
 import Link from "next/link";
 import { SiteText } from "@/components/site/SiteText";
 import { purchaseLimitRows } from "@/lib/medical/purchase-limit-display-core";
 
-const whatToBring = [
-  "A valid medical cannabis authorization form (DOH 630-236) from your healthcare practitioner — tamper-resistant original, complete and signed.",
-  "Valid government-issued photo ID matching the authorization.",
-  "About 15–20 minutes: our certified medical cannabis consultant verifies your form, enters you into the state database, and prints your recognition card in store.",
-];
-
-const cardBenefits = [
-  "Sales tax (9.3%) waived on DOH-compliant products (chapter 246-70 WAC) — look for the medical designation on qualifying items.",
-  "Excise tax (37%) waived on DOH-compliant products while the state exemption window is open — the single biggest saving on qualifying purchases.",
-  "Purchase limits three times higher than recreational limits (see the table below).",
-  "Ages 18–20 may purchase with a valid recognition card (recreational sales are 21+).",
-];
-
 function SectionCard({
-  eyebrow,
-  title,
+  eyebrowKey,
+  titleKey,
   children,
 }: {
-  eyebrow: string;
-  title: string;
+  eyebrowKey: string;
+  titleKey: string;
   children: React.ReactNode;
 }) {
   return (
     <article className="rounded-[1.45rem] border border-white/10 bg-zinc-950/88 p-5 shadow-2xl shadow-black/40 md:rounded-[2.2rem] md:p-9">
-      <p className="text-[0.68rem] font-black uppercase tracking-[0.24em] text-[var(--gold)] md:text-xs">
-        {eyebrow}
-      </p>
-      <h2 className="mt-3 text-2xl font-black uppercase leading-[0.95] tracking-tight text-[var(--orange)] md:text-4xl">
-        {title}
-      </h2>
+      <SiteText
+        blockKey={eyebrowKey}
+        as="p"
+        className="block text-[0.68rem] font-black uppercase tracking-[0.24em] text-[var(--gold)] md:text-xs"
+      />
+      <SiteText
+        blockKey={titleKey}
+        as="h2"
+        className="mt-3 block text-2xl font-black uppercase leading-[0.95] tracking-tight text-[var(--orange)] md:text-4xl"
+      />
       {children}
     </article>
   );
 }
 
-function Bullet({ children }: { children: React.ReactNode }) {
+function Bullet({ blockKey }: { blockKey: string }) {
   return (
     <p className="text-sm leading-7 text-zinc-200 md:text-base md:leading-8">
       <span className="mr-2 text-[var(--orange)]">–</span>
-      {children}
+      <SiteText blockKey={blockKey} as="span" />
     </p>
   );
 }
@@ -92,11 +88,11 @@ export function MedicalProgramContent() {
           />
         </header>
 
-        <SectionCard eyebrow="Get carded in store" title="What to bring">
+        <SectionCard eyebrowKey="medical.bring.eyebrow" titleKey="medical.bring.title">
           <div className="mt-5 space-y-3">
-            {whatToBring.map((line) => (
-              <Bullet key={line}>{line}</Bullet>
-            ))}
+            <Bullet blockKey="medical.bring.item1" />
+            <Bullet blockKey="medical.bring.item2" />
+            <Bullet blockKey="medical.bring.item3" />
           </div>
           <p className="mt-5 text-xs leading-6 text-zinc-500 md:text-sm md:leading-7">
             Joining the state database is voluntary and free at Greenway. Your recognition card is
@@ -105,11 +101,12 @@ export function MedicalProgramContent() {
           </p>
         </SectionCard>
 
-        <SectionCard eyebrow="Recognition card perks" title="What your card gets you">
+        <SectionCard eyebrowKey="medical.perks.eyebrow" titleKey="medical.perks.title">
           <div className="mt-5 space-y-3">
-            {cardBenefits.map((line) => (
-              <Bullet key={line}>{line}</Bullet>
-            ))}
+            <Bullet blockKey="medical.perks.item1" />
+            <Bullet blockKey="medical.perks.item2" />
+            <Bullet blockKey="medical.perks.item3" />
+            <Bullet blockKey="medical.perks.item4" />
           </div>
           <p className="mt-5 text-xs leading-6 text-zinc-500 md:text-sm md:leading-7">
             Honest fine print: both tax exemptions apply only to DOH-compliant products (chapter
@@ -119,7 +116,7 @@ export function MedicalProgramContent() {
           </p>
         </SectionCard>
 
-        <SectionCard eyebrow="No card? No problem" title="High-CBD products — tax break for everyone">
+        <SectionCard eyebrowKey="medical.cbd.eyebrow" titleKey="medical.cbd.title">
           <p className="mt-5 text-sm leading-7 text-zinc-200 md:text-base md:leading-8">
             Washington waives the 9.3% sales tax on qualifying high-CBD compliant products
             (chapter 246-70 WAC — very low THC with a high CBD ratio) for{" "}
@@ -131,7 +128,7 @@ export function MedicalProgramContent() {
           </p>
         </SectionCard>
 
-        <SectionCard eyebrow="Carry more, shop less often" title="Purchase limits: medical vs. recreational">
+        <SectionCard eyebrowKey="medical.limits.eyebrow" titleKey="medical.limits.title">
           <div className="mt-5 overflow-hidden rounded-xl border border-white/12">
             <table className="w-full text-left text-sm md:text-base">
               <thead>

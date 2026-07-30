@@ -66,11 +66,27 @@ export const HOURS_SIZE_OPTIONS: SelectOption[] = [
   },
 ];
 
+/**
+ * Medical page visibility (SLICE 107). "no" = Visible (default, first) and
+ * "yes" = Hidden. When Hidden, /medical returns notFound() and the Medical nav
+ * link is filtered out. The class is empty for both — this select drives page
+ * routing/nav logic, not a CSS class. The options mirror the medical core's
+ * MEDICAL_HIDE_OPTIONS so there is a single source of truth for the labels.
+ */
+export const MEDICAL_HIDE_SELECT_OPTIONS: SelectOption[] = [
+  { value: "no", label: "Visible (default)", className: "" },
+  { value: "yes", label: "Hidden", className: "" },
+];
+
 /** Registry of every select block, keyed by block_key. */
 const SELECT_SPECS: Record<string, SelectSpec> = {
   "header.hours.size": {
     options: HOURS_SIZE_OPTIONS,
     note: "How big the store-hours text is in the top green bar. Larger steps grow both the phone-size and desktop hours together.",
+  },
+  "medical.page.hidden": {
+    options: MEDICAL_HIDE_SELECT_OPTIONS,
+    note: "Hide the whole Medical page. When Hidden, the page and its menu link disappear from the public site (staff pages are unaffected).",
   },
 };
 
@@ -154,10 +170,23 @@ export function __runContentSelectCoreTests(): { passed: number } {
   ok(selectClassName("header.hours.size", null) === normalCls, "null value → default class");
   ok(selectClassName("nope", "large") === "", "unknown block → empty class");
 
-  // Every option's class is non-empty (so a choice always does something).
+  // Every hours option's class is non-empty (so a choice always does something).
   for (const o of HOURS_SIZE_OPTIONS) {
     ok(o.className.trim().length > 0, `option ${o.value} has a class`);
     ok(o.label.trim().length > 0, `option ${o.value} has a label`);
+  }
+
+  // Medical visibility select (SLICE 107) — drives routing/nav, not CSS, so an
+  // empty className is valid. Default (first) is "no" = Visible, so a blank /
+  // unseeded value can never hide the page.
+  ok(isSelectBlock("medical.page.hidden"), "medical.page.hidden is a select block");
+  ok(selectDefaultValue("medical.page.hidden") === "no", "medical default = 'no' (Visible)");
+  const medSpec = resolveSelectSpec("medical.page.hidden");
+  ok(!!medSpec && medSpec.options.length === 2, "medical select has 2 options");
+  ok(medSpec!.options[0]!.value === "no", "medical first option is 'no'");
+  ok(medSpec!.options[1]!.value === "yes", "medical second option is 'yes'");
+  for (const o of MEDICAL_HIDE_SELECT_OPTIONS) {
+    ok(o.label.trim().length > 0, `medical option ${o.value} has a label`);
   }
 
   return { passed };

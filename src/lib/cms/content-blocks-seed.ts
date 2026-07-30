@@ -25,6 +25,11 @@ import {
   defaultSpecialsPresentation,
   serializeSpecialsPresentation,
 } from "@/lib/specials/specials-presentation-core";
+import {
+  MEDICAL_CONTENT_BLOCKS,
+  MEDICAL_HIDE_BLOCK,
+  MEDICAL_VISIBLE_VALUE,
+} from "@/lib/medical/medical-content-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -36,6 +41,23 @@ function policyDocDefault(
 ): string {
   const { docKey } = POLICY_DOCS[policyId];
   return serializePolicyDoc(rowsFromParagraphs(paragraphs, docKey));
+}
+
+// SLICE 107: the editable Medical copy blocks are DERIVED from the medical
+// content core so each seed defaultValue is byte-identical to the page's
+// live fallback and can never drift from the vetted copy.
+function medicalCopyBlockSeeds(): ContentBlockSeed[] {
+  return MEDICAL_CONTENT_BLOCKS.map((b) => ({
+    block_key: b.key,
+    page: "medical",
+    // Section is derived from the middle segment of the key (e.g.
+    // medical.bring.title -> "bring") for tidy grouping in the admin list.
+    section: b.key.split(".")[1] ?? "body",
+    label: `Medical \u2014 ${b.label}`,
+    ...(b.help ? { help_text: b.help } : {}),
+    field_type: "plain" as ContentFieldType,
+    defaultValue: b.fallback,
+  }));
 }
 
 export type ContentBlockSeed = {
@@ -237,6 +259,19 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "Washington patients with a valid authorization can join the state's voluntary Medical Cannabis Authorization Database at our store, receive a recognition card, and unlock tax savings and higher purchase limits on qualifying products. Here's how it works and what to bring.",
   },
+  {
+    // SLICE 107: page-level "hide this page" switch (select). Default "no" =
+    // Visible, so seeding changes nothing until a staff member picks Hidden.
+    block_key: MEDICAL_HIDE_BLOCK,
+    page: "medical",
+    section: "page",
+    label: "Medical page \u2014 visibility",
+    help_text:
+      "Hide the whole Medical page from the public site. When Hidden, the page and its menu link disappear (staff pages are unaffected).",
+    field_type: "select",
+    defaultValue: MEDICAL_VISIBLE_VALUE,
+  },
+  ...medicalCopyBlockSeeds(),
   // ---- Vendors -------------------------------------------------------------
   {
     block_key: "vendors.outreach.heading",
