@@ -115,7 +115,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Legal Policies", href: "/admin/legal-policies", permission: "content.edit", icon: "\u2696\ufe0f", group: "Website" }, // ⚖️ privacy / terms / consumer health data (SLICE 105b)
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website" }, // 🏠 home page
   { label: "Menu", href: "/admin/pages/menu", permission: "content.edit", icon: "\ud83c\udf3f", group: "Website" }, // 🌿 product menu
-  { label: "Loyalty", href: "/admin/pages/loyalty", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website" }, // 🏅 loyalty page
+  { label: "Loyalty", href: "/admin/loyalty-page", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website" }, // 🏅 public /loyalty page: editable friendly copy (signup form + program-terms headings) — SLICE 108. Numbers stay live from CRM Loyalty Program; consent text is fixed. Re-pointed from /admin/pages/loyalty per SLICE 106 Specials precedent.
   { label: "Specials", href: "/admin/specials", permission: "content.edit", icon: "\ud83d\udd25", group: "Website" }, // deal-area presentation controls (SLICE 106) — which cards show/order/badge/copy; prices come from Promotions
   { label: "Medical page", href: "/admin/medical-page", permission: "content.edit", icon: "\ud83e\ude7a", group: "Website" }, // 🩺 public /medical page: hide-page switch + editable copy (SLICE 107). Distinct from /admin/medical patient intake (medical.manage).
   { label: "Vendors", href: "/admin/pages/vendors", permission: "content.edit", icon: "\ud83c\udfe2", group: "Website" }, // 🏢 vendors page

@@ -12,9 +12,22 @@ import type { LoyaltyTermsSummary, TierDisplayRow } from "@/lib/loyalty/program-
 type LoyaltyProgramTermsProps = {
   terms: LoyaltyTermsSummary;
   tiers: TierDisplayRow[];
+  /**
+   * SLICE 108 — editable FRIENDLY headings (loyalty.terms.*). Each falls back
+   * to the byte-identical shipped string when the block is unseeded/blank. The
+   * NUMBERS (earn/value/redeem/bonus/expiry lines + the tier ladder) and the
+   * register-mechanics paragraph below stay LIVE/FIXED — they derive from the
+   * same loyalty_config the register pays with, so they can never advertise
+   * terms that differ from what the POS actually pays.
+   */
+  copy?: {
+    eyebrow?: string;
+    title?: string;
+    tiersHeading?: string;
+  };
 };
 
-export function LoyaltyProgramTerms({ terms, tiers }: LoyaltyProgramTermsProps) {
+export function LoyaltyProgramTerms({ terms, tiers, copy }: LoyaltyProgramTermsProps) {
   const bullets = [
     terms.earnLine,
     terms.valueLine,
@@ -28,13 +41,13 @@ export function LoyaltyProgramTerms({ terms, tiers }: LoyaltyProgramTermsProps) 
       <div className="mx-auto max-w-7xl px-4 pb-10 md:px-8 md:pb-16">
         <article className="rounded-[1.45rem] border border-white/10 bg-zinc-950/88 p-5 shadow-2xl shadow-black/40 md:rounded-[2.2rem] md:p-9 lg:p-11">
           <p className="text-[0.68rem] font-black uppercase tracking-[0.24em] text-[var(--gold)] md:text-xs">
-            How Greenway Points work
+            {copy?.eyebrow || "How Greenway Points work"}
           </p>
           <h2
             id="loyalty-terms-heading"
             className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight text-[var(--orange)] md:text-5xl"
           >
-            Program terms
+            {copy?.title || "Program terms"}
           </h2>
 
           <div className="mt-5 space-y-3 md:mt-7">
@@ -48,7 +61,7 @@ export function LoyaltyProgramTerms({ terms, tiers }: LoyaltyProgramTermsProps) 
 
           {tiers.length > 0 ? (
             <div className="mt-7 md:mt-9">
-              <h3 className="text-xl font-black text-white md:text-2xl">Member tiers</h3>
+              <h3 className="text-xl font-black text-white md:text-2xl">{copy?.tiersHeading || "Member tiers"}</h3>
               <div className="mt-4 overflow-hidden rounded-xl border border-white/12">
                 <table className="w-full text-left text-sm md:text-base">
                   <thead>

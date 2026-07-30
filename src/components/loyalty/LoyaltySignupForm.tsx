@@ -45,6 +45,16 @@ type LoyaltyContent = {
   heroImage?: string;
   heroImageMobile?: string;
   editable?: boolean;
+  /**
+   * SLICE 108 — editable FRIENDLY copy (loyalty.form.*). Each falls back to the
+   * byte-identical shipped string below when the block is unseeded/blank, so
+   * the page looks unchanged until a staff member edits and publishes. The
+   * marketing-consent disclosure and the form field labels stay FIXED (legal /
+   * form integrity) and are intentionally NOT props here.
+   */
+  birthdayHelp?: string;
+  submitLabel?: string;
+  successTitle?: string;
 };
 
 export function LoyaltySignupForm({
@@ -174,7 +184,7 @@ export function LoyaltySignupForm({
 
           {success || fallbackSuccess ? (
             <div className="mx-auto mt-7 max-w-2xl rounded-2xl border border-[var(--greenway)]/35 bg-[var(--greenway-dark)]/55 p-4 text-sm leading-6 text-zinc-100">
-              <p className="font-black text-[var(--greenway)]">Thank you — your signup was submitted.</p>
+              <p className="font-black text-[var(--greenway)]">{content?.successTitle || "Thank you — your signup was submitted."}</p>
               <p className="mt-2">Reference ID: {(success ?? fallbackSuccess)?.signupId}</p>
               <p className="mt-1 text-zinc-300">Notification status: {(success ?? fallbackSuccess)?.notificationStatus}.</p>
             </div>
@@ -203,7 +213,7 @@ export function LoyaltySignupForm({
             <label className="block">
               <span className="text-sm font-black text-white">Birthday <span className="text-red-300">*</span></span>
               <input type="date" name="birthday" className="mt-2 block w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/12 bg-white px-4 py-3 text-base font-semibold text-black outline-none transition focus:border-[var(--orange)] focus:ring-2 focus:ring-[var(--orange)]/35" autoComplete="bday" value={values.birthday} onChange={(event) => updateValue("birthday", event.target.value)} />
-              <p className="mt-2 text-xs font-semibold leading-5 text-zinc-400">Get special discounts and offers on your birthday!</p>
+              <p className="mt-2 text-xs font-semibold leading-5 text-zinc-400">{content?.birthdayHelp || "Get special discounts and offers on your birthday!"}</p>
               <FieldError message={errors.birthday} />
             </label>
 
@@ -238,7 +248,7 @@ export function LoyaltySignupForm({
             <FieldError message={errors.form ?? errors.company} />
 
             <button type="submit" disabled={isSubmitting} className="mt-2 rounded-full bg-[var(--orange)] px-6 py-4 text-sm font-black uppercase tracking-[0.18em] text-black shadow-xl shadow-black/35 transition hover:bg-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-60">
-              {isSubmitting ? "Submitting..." : "Sign Up"}
+              {isSubmitting ? "Submitting..." : content?.submitLabel || "Sign Up"}
             </button>
           </form>
         </div>

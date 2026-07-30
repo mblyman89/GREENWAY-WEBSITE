@@ -30,6 +30,7 @@ import {
   MEDICAL_HIDE_BLOCK,
   MEDICAL_VISIBLE_VALUE,
 } from "@/lib/medical/medical-content-core";
+import { LOYALTY_CONTENT_BLOCKS } from "@/lib/loyalty/loyalty-content-core";
 
 // SLICE 105b: the seed value for each Legal Policies body is the CURRENT
 // hardcoded paragraph list, serialized to the JSON document shape. Computing it
@@ -54,6 +55,25 @@ function medicalCopyBlockSeeds(): ContentBlockSeed[] {
     // medical.bring.title -> "bring") for tidy grouping in the admin list.
     section: b.key.split(".")[1] ?? "body",
     label: `Medical \u2014 ${b.label}`,
+    ...(b.help ? { help_text: b.help } : {}),
+    field_type: "plain" as ContentFieldType,
+    defaultValue: b.fallback,
+  }));
+}
+
+// SLICE 108: the editable Loyalty copy blocks are DERIVED from the loyalty
+// content core so each seed defaultValue is byte-identical to the page's live
+// fallback and can never drift from the vetted copy. The LEGAL consent text and
+// the LIVE register numbers/tiers are intentionally NOT seeded here — they stay
+// fixed/live in the components.
+function loyaltyCopyBlockSeeds(): ContentBlockSeed[] {
+  return LOYALTY_CONTENT_BLOCKS.map((b) => ({
+    block_key: b.key,
+    page: "loyalty",
+    // Section is derived from the middle segment of the key (e.g.
+    // loyalty.form.submit_label -> "form", loyalty.terms.title -> "terms").
+    section: b.key.split(".")[1] ?? "body",
+    label: `Loyalty \u2014 ${b.label}`,
     ...(b.help ? { help_text: b.help } : {}),
     field_type: "plain" as ContentFieldType,
     defaultValue: b.fallback,
@@ -229,6 +249,10 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "plain",
     defaultValue: "Get updates on our promotions tailored to you.",
   },
+  // ---- Loyalty editable copy (SLICE 108) -----------------------------------
+  // Friendly signup-form + program-terms copy. Legal consent text and the LIVE
+  // register numbers/tiers are intentionally NOT here (they stay fixed/live).
+  ...loyaltyCopyBlockSeeds(),
   // ---- Medical -------------------------------------------------------------
   {
     block_key: "medical.hero.title",
