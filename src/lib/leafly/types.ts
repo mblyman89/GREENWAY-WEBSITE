@@ -1,3 +1,5 @@
+import type { DohCategory } from "@/lib/medical/medical-sale-core";
+
 export type LeaflyEnvironment = "sandbox" | "production";
 
 export type GreenwayCategory =
@@ -87,6 +89,25 @@ export type GreenwayMenuItem = {
   imageUrl?: string;
   /** True when `imageUrl` is a representative substitute, not the exact product. */
   imageIsFallback?: boolean;
+  /**
+   * SLICE D (SHOP-4): true when the store has VERIFIED this product as DOH
+   * (WA DOH 246-70) compliant and recorded it in the durable
+   * medical_product_registry (migration 0113), keyed by the stable POS product
+   * key (= this item's `id`), so the verification survives menu re-imports.
+   * This is the SAME registry the medical checkout uses to zero the sales/excise
+   * tax, so the public flag and the register agree by construction. Threaded at
+   * menu-build time by withDohCompliance(); absent/false when unverified or
+   * pre-migration (the honest default — no badge until verified). The badge
+   * render lands in Slice F.
+   */
+  dohCompliant?: boolean;
+  /**
+   * SLICE D (SHOP-4): the WAC 246-70 DOH lane for a compliant product
+   * (general_use / high_thc / high_cbd), carried alongside the boolean from the
+   * same registry read so Slices E (filter) + F (badge) can label it honestly
+   * without a second DB round-trip. null when not compliant.
+   */
+  dohCategory?: DohCategory | null;
 };
 
 export type LeaflyClientConfig = {

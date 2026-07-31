@@ -14,6 +14,7 @@ import { getShopPromotionTitleMap } from "@/lib/cms/shop-promotion-choices";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
+import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 // SLICE 78: the DB-backed category registry — renames/additions made at
 // /admin/settings/types propagate to the customer menu through this map.
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
@@ -42,8 +43,14 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // terpene. Sensory/descriptive only; degrades to no terpenes when unmatched.
   // 7b.2: KB-first curated copy + terpene fallback, compliance-filtered, batched
   // (one resolve for the whole menu \u2014 no per-card DB reads). Non-throwing.
-  const menuItems = await withDisplayKnowledge(
-    await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
+  // SLICE D (SHOP-4): overlay the DOH-compliant flag (+ WAC 246-70 category)
+  // from the durable medical_product_registry (migration 0113), keyed by the
+  // item id. Outermost so it runs on the fully-enriched items; degrades to
+  // "no DOH" pre-migration / unconfigured. (Badge render = Slice F.)
+  const menuItems = await withDohCompliance(
+    await withDisplayKnowledge(
+      await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
+    ),
   );
   // SLICE 78: owner-managed category labels (value → label). Serializable, so
   // the client menu can render the owner's names; empty map = old behavior.
