@@ -64,6 +64,10 @@ export default async function SpecialsPage() {
           eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],
           title: hero?.title || copy["specials.hero.title"],
           subtitle: hero?.subtitle || copy["specials.hero.subtitle"],
+          // SLICE 118 (P1b): the TOP hero image + focus (Pages builder). Absent
+          // by default, so the hero stays gradient-only until Michael sets one.
+          image: hero?.image ?? undefined,
+          imageFocus: hero?.imageFocus,
           buttons: hero?.buttons,
           extraSections: banners.extras,
           editable: preview,

@@ -205,6 +205,18 @@ export const CAROUSEL_SLIDE_SPEC: ImageSpec = {
   title: "Carousel slide",
   tip: "Wide and short. All slides share one size so the carousel doesn\u2019t jump — keep art on the right, text on the left.",
 };
+/**
+ * SLICE 118 (P1b): the TOP hero strip on the public /specials page. It is a very
+ * wide, short band (about 8:1 on desktop) with the eyebrow/title/subtitle set on
+ * the LEFT over a dark fade, so art should sit toward the right. Grounded in the
+ * same wide-banner family as the section/specials banners so uploads always fit.
+ */
+export const SPECIALS_HERO_SPEC: ImageSpec = {
+  ...WIDE_BANNER,
+  id: "specials-hero-banner",
+  title: "Specials \u2014 top hero banner",
+  tip: "Very wide and short (about 8:1 on desktop). The eyebrow, title & subtitle sit on the LEFT over a dark fade \u2014 keep the key art toward the RIGHT so it stays in view.",
+};
 
 /**
  * Resolve the best spec for a given block_key. Falls back by category:
@@ -299,6 +311,13 @@ export function __runImageSpecTests(): { passed: number; failed: number } {
   );
   ok(SPECIALS_BANNER_SPEC.id === "specials-todays-deal-banner", "specials banner id set");
   ok(CAROUSEL_SLIDE_SPEC.id === "carousel-slide", "carousel slide id set");
+  // SLICE 118 (P1b): the specials TOP hero spec is a wide-banner-family strip.
+  ok(SPECIALS_HERO_SPEC.aspectRatio > 2, "specials hero is wide");
+  ok(
+    SPECIALS_HERO_SPEC.presets[0].width === WIDE_BANNER.presets[0].width,
+    "specials hero tracks the wide-banner size",
+  );
+  ok(SPECIALS_HERO_SPEC.id === "specials-hero-banner", "specials hero id set");
 
   return { passed, failed };
 }

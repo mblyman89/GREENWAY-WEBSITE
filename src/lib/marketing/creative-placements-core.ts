@@ -29,7 +29,12 @@
  * PURE: no server-only imports, unit-testable via __runCreativePlacementsTests.
  */
 
-import { resolveImageSpec, SECTION_BANNER_SPEC, SPECIALS_BANNER_SPEC } from "@/lib/cms/image-spec-core";
+import {
+  resolveImageSpec,
+  SECTION_BANNER_SPEC,
+  SPECIALS_BANNER_SPEC,
+  SPECIALS_HERO_SPEC,
+} from "@/lib/cms/image-spec-core";
 
 export type PlacementGroup = "website" | "social" | "email" | "blog" | "print";
 
@@ -104,6 +109,18 @@ const WEBSITE_PLACEMENTS: CreativePlacement[] = [
     tip: "Wide and short. The deal title & subtitle sit over a dark fade — keep the key art toward the side away from the text (you choose which side in the Specials editor).",
     promptHint:
       "very wide banner composition, key subject placed to one side, the opposite side calm and uncluttered for overlaid deal text, no text in the image",
+  },
+  {
+    id: "website-specials-hero",
+    group: "website",
+    label: "Specials — top hero banner",
+    where: "The very wide, short hero strip at the top of the public Specials page.",
+    width: SPECIALS_HERO_SPEC.presets[0].width,
+    height: SPECIALS_HERO_SPEC.presets[0].height,
+    format: "jpeg",
+    tip: "Very wide and short. The eyebrow, title & subtitle sit on the LEFT over a dark fade — keep the key art toward the RIGHT so it stays in view.",
+    promptHint:
+      "very wide short banner composition, key subject placed in the right third, left side calm and uncluttered for overlaid text, no text in the image",
   },
   {
     id: "website-loyalty-hero",
@@ -430,6 +447,13 @@ export function __runCreativePlacementsTests(): string {
   ok(
     specials.width === specialsSpec.width && specials.height === specialsSpec.height,
     "specials banner tracks image-spec-core",
+  );
+  // SLICE 118 (P1b): the specials TOP hero placement tracks the same source.
+  const specialsHeroSpec = SPECIALS_HERO_SPEC.presets[0];
+  const specialsHero = placementById("website-specials-hero")!;
+  ok(
+    specialsHero.width === specialsHeroSpec.width && specialsHero.height === specialsHeroSpec.height,
+    "specials hero tracks image-spec-core",
   );
 
   // Print slots carry explicit print notes.
