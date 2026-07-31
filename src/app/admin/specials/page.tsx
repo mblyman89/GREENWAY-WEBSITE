@@ -4,6 +4,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
+import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 import {
   SpecialsPresentationEditor,
   type SpecialsRevisionVM,
@@ -149,7 +150,12 @@ export default async function AdminSpecialsPage({
             </p>
           </HelpPanel>
         }
-        action={<Button href="/admin/promotions" variant="neutral">Promotions →</Button>}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <CanvaButton />
+            <Button href="/admin/promotions" variant="neutral">Promotions →</Button>
+          </div>
+        }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">

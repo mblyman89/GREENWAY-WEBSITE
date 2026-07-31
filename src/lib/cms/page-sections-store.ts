@@ -211,6 +211,13 @@ export type BannerData = {
   key: string;
   image: string;
   imageAlt: string;
+  /**
+   * SLICE 118 (P1b): which part of the image stays in view. Exposed so pages
+   * that render a builder banner in a bespoke slot (e.g. the Specials TOP hero)
+   * can honor the staff-chosen focus. Optional so existing callers are
+   * unaffected when it is absent.
+   */
+  imageFocus?: SectionImageFocus;
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -223,6 +230,7 @@ export function toBannerData(s: RenderSection): BannerData {
     key: s.key,
     image: s.image,
     imageAlt: s.imageAlt,
+    imageFocus: s.imageFocus,
     eyebrow: s.eyebrow,
     title: s.title,
     subtitle: s.subtitle,

@@ -530,6 +530,26 @@ export function SpecialsPresentationEditor(props: Props) {
               <strong>&ldquo;Specials — Today&rsquo;s Deal banner&rdquo;</strong> destination, then
               paste or Media-Library-pick it above.
             </p>
+
+            {/* SLICE 118 (P1b): the TOP hero banner image lives in the Pages
+                builder (it is a page-section banner), so we point staff there
+                rather than duplicating a second banner editor here. */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Top hero banner image</div>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                The big banner at the very top of the Specials page can now show your own image
+                behind the title. You edit it in the{" "}
+                <Link href="/admin/pages/specials" className="text-[var(--admin-accent)] hover:underline">
+                  Specials page builder
+                </Link>{" "}
+                &mdash; set its <strong>image</strong> and <strong>image focus</strong> there. Leave
+                it blank to keep the built-in gradient look. Need art? In{" "}
+                <Link href="/admin/creative" className="text-[var(--admin-accent)] hover:underline">
+                  Creative Studio
+                </Link>{" "}
+                pick the new <strong>&ldquo;Specials &mdash; top hero banner&rdquo;</strong> preset.
+              </p>
+            </div>
           </div>
 
           {/* Banner preview column */}

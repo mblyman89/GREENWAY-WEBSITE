@@ -307,10 +307,33 @@ type SpecialsHeroContent = {
   title?: string;
   subtitle?: string;
   editable?: boolean;
+  /**
+   * SLICE 118 (P1b): the TOP hero background image, editable via the Pages
+   * builder (page-sections banner "specials.hero"). Until this slice the hero
+   * rendered a gradient-only block and this value was silently ignored; now,
+   * when present, the image sits behind the dark fade. When ABSENT the hero is
+   * byte-identical to before (pure gradient) so the live look is unchanged.
+   */
+  image?: string;
+  /** Which part of the hero image stays in view (from the Pages builder). */
+  imageFocus?: "center" | "top" | "bottom" | "left" | "right";
   /** CTA buttons for the primary hero (from the Pages builder). */
   buttons?: SectionBannerButton[];
   /** Extra banners staff added in the Pages builder (rendered at the bottom). */
   extraSections?: SectionBannerData[];
+};
+
+// SLICE 118: map the hero image_focus to an object-position class, matching the
+// SectionBanner focusObjectClass record so both hero families behave the same.
+const HERO_FOCUS_OBJECT_CLASS: Record<
+  NonNullable<SpecialsHeroContent["imageFocus"]>,
+  string
+> = {
+  center: "object-center",
+  top: "object-top",
+  bottom: "object-bottom",
+  left: "object-left",
+  right: "object-right",
 };
 
 export function SpecialsContent({
@@ -406,6 +429,21 @@ export function SpecialsContent({
       <div className="relative mx-auto max-w-[88rem] px-4 py-5 md:px-8 md:py-8">
         {/* Top hero — short + wide, matching the home / shop page proportions. */}
         <div className="relative isolate flex min-h-[8.5rem] items-center overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem]">
+          {/* SLICE 118 (P1b): optional editable hero image (Pages builder). When
+              set it sits BEHIND the dark fade below, so the eyebrow/title/subtitle
+              stay readable over any photo. When absent, nothing renders here and
+              the hero is byte-identical to the prior gradient-only look. */}
+          {content?.image && content.image.trim() ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={content.image.trim()}
+              alt=""
+              aria-hidden="true"
+              className={`absolute inset-0 h-full w-full object-cover ${
+                HERO_FOCUS_OBJECT_CLASS[content.imageFocus ?? "right"]
+              }`}
+            />
+          ) : null}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_28%,rgba(255,127,0,0.4),transparent_42%),radial-gradient(circle_at_70%_85%,rgba(126,217,87,0.26),transparent_45%),linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]" aria-hidden="true" />
           <div className="relative max-w-[80%] px-5 py-6 md:max-w-[62%] md:px-10">
             <p
