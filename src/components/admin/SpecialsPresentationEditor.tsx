@@ -97,6 +97,8 @@ type Props = {
   restoreAction: (formData: FormData) => void | Promise<void>;
   mediaChoices: MediaChoice[];
   spec?: ImageSpec;
+  /** SLICE 119: image spec for the per-weekday deal-card photo (portrait-ish). */
+  cardSpec?: ImageSpec;
 };
 
 const BLOCK_KEY = "specials.deals.presentation";
@@ -119,7 +121,7 @@ function safeParse(json: string | null): unknown {
 }
 
 export function SpecialsPresentationEditor(props: Props) {
-  const { engineCopy, revisions, saveDraftAction, publishAction, restoreAction, mediaChoices, spec } =
+  const { engineCopy, revisions, saveDraftAction, publishAction, restoreAction, mediaChoices, spec, cardSpec } =
     props;
   const [pres, setPres] = useState<SpecialsPresentation>(() => initialPresentation(props));
   const [showHistory, setShowHistory] = useState(false);
@@ -343,6 +345,24 @@ export function SpecialsPresentationEditor(props: Props) {
                       Leave a box blank to keep the wording from Promotions. Overrides change the
                       wording on the card only — never the discount.
                     </p>
+
+                    {/* SLICE 119: optional REAL photo for THIS weekday's card. When
+                        blank the card shows the built-in product mockup; when set
+                        the card's white panel shows this photo instead. */}
+                    <div className="mt-3">
+                      <span className="text-xs text-[var(--admin-text-muted)]">Card photo (optional)</span>
+                      <div className="mt-1">
+                        <ContentImageField
+                          value={day.image ?? ""}
+                          onChange={(v) => updateDay(day.weekday, { image: v })}
+                          mediaChoices={mediaChoices}
+                          spec={cardSpec}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] text-[var(--admin-text-muted)]">
+                        Leave blank to keep the built-in product graphic on this card.
+                      </p>
+                    </div>
                   </div>
                 );
               })}

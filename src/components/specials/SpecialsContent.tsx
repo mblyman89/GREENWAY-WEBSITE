@@ -46,6 +46,12 @@ type DailyDeal = {
   href: string;
   categoryLabel: string;
   tone: DealTone;
+  /**
+   * SLICE 119: optional REAL photo for this card. When set it fills the white
+   * artwork panel in place of the CSS "package" mockup; when absent the mockup
+   * renders exactly as before (live-look-safe default).
+   */
+  image?: string;
 };
 
 // SLICE 117: the deal card now uses the ONE shared glow recipe (the exact
@@ -197,13 +203,41 @@ const dailyDeals: DailyDeal[] = [
 
 // Product-style package mockup: white image panel with a glossy "package"
 // matching the look of the live ProductCardVisual image area.
-function ProductArtwork({ label, title, tone }: { label: string; title: string; tone: DealTone }) {
+function ProductArtwork({
+  label,
+  title,
+  tone,
+  image,
+}: {
+  label: string;
+  title: string;
+  tone: DealTone;
+  image?: string;
+}) {
   const initials = title
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
     .map((word) => word[0])
     .join("");
+
+  // SLICE 119: when the staff uploads a real photo for this weekday, it fills
+  // the same white panel (identical aspect + rounding) in place of the mockup.
+  // The category chip stays pinned in the top-left so the look is consistent.
+  if (image && image.trim()) {
+    return (
+      <div className="relative flex aspect-[1.12] items-center justify-center overflow-hidden rounded-[1.05rem] bg-gradient-to-b from-white to-zinc-100 shadow-inner shadow-black/10 md:rounded-[1.35rem]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image.trim()} alt={title} className="h-full w-full object-cover" />
+        <span
+          className="absolute left-2 top-2 rounded-full border bg-black/70 px-2.5 py-1 text-[0.52rem] font-black uppercase tracking-[0.12em] md:text-[0.58rem]"
+          style={{ borderColor: tone.border, color: tone.border }}
+        >
+          {label}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex aspect-[1.12] items-center justify-center overflow-hidden rounded-[1.05rem] bg-gradient-to-b from-white to-zinc-100 p-3 shadow-inner shadow-black/10 md:rounded-[1.35rem]">
@@ -280,7 +314,7 @@ function DailyDealCard({ deal, badgeStyle }: { deal: DailyDeal; badgeStyle: Badg
           </div>
 
           <div className="mt-4 md:mt-3">
-            <ProductArtwork label={deal.categoryLabel} title={deal.title} tone={tone} />
+            <ProductArtwork label={deal.categoryLabel} title={deal.title} tone={tone} image={deal.image} />
           </div>
 
           <div className="mt-4 flex flex-1 flex-col gap-2.5 text-sm font-semibold leading-6 text-zinc-200">
@@ -417,6 +451,8 @@ export function SpecialsContent({
           ? dp.offerOverride.replace(/\s*off$/i, "")
           : base.desktopOffer,
         details: dp.descriptionOverride ? [dp.descriptionOverride] : base.details,
+        // SLICE 119: optional per-day photo (blank => keep the CSS mockup).
+        image: dp.image ?? base.image,
       };
     })
     .filter((d): d is DailyDeal => d !== null);

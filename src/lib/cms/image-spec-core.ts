@@ -224,6 +224,24 @@ export const SPECIALS_HERO_SPEC: ImageSpec = {
  *   *.hero.*       → wide banner
  *   *              → wide banner (safest default for our layouts)
  */
+/**
+ * SLICE 119: the per-weekday DEAL CARD artwork on the public /specials page.
+ * It fills the card's white "package" panel, which renders at aspect-[1.12]
+ * (slightly taller than wide). Keep the product centered \u2014 there is no text
+ * overlaid on this image. Use a portrait-ish ~1.12:1 canvas so uploads fit the
+ * panel without cropping the product.
+ */
+export const SPECIALS_CARD_SPEC: ImageSpec = specFrom(
+  "specials-deal-card",
+  "Specials \u2014 weekday deal card photo",
+  896,
+  800,
+  {
+    primaryLabel: "Card photo",
+    tip: "Slightly taller than wide (about 1.12:1). Center the product \u2014 no text needed; the card adds the title, offer & button around it.",
+  },
+);
+
 export function resolveImageSpec(blockKey: string | null | undefined): ImageSpec {
   const key = (blockKey ?? "").trim();
   if (key && BLOCK_SPECS[key]) return BLOCK_SPECS[key];
@@ -318,6 +336,11 @@ export function __runImageSpecTests(): { passed: number; failed: number } {
     "specials hero tracks the wide-banner size",
   );
   ok(SPECIALS_HERO_SPEC.id === "specials-hero-banner", "specials hero id set");
+  // SLICE 119: the specials deal-card photo spec is a portrait-ish ~1.12:1 panel.
+  ok(SPECIALS_CARD_SPEC.id === "specials-deal-card", "specials card id set");
+  ok(SPECIALS_CARD_SPEC.presets[0].width === 896 && SPECIALS_CARD_SPEC.presets[0].height === 800, "specials card 896x800");
+  ok(Math.abs(SPECIALS_CARD_SPEC.aspectRatio - 1.12) < 0.01, "specials card ~1.12:1");
+  ok(SPECIALS_CARD_SPEC.aspectRatio < 2, "specials card is not a wide banner");
 
   return { passed, failed };
 }

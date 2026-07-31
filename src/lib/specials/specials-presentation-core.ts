@@ -116,6 +116,12 @@ export type DayPresentation = {
   titleOverride?: string;
   offerOverride?: string;
   descriptionOverride?: string;
+  /**
+   * SLICE 119: optional REAL photo for this weekday's card. When blank the card
+   * shows the built-in CSS "package" mockup (live-look-safe default); when set
+   * the card's white artwork panel shows this image instead.
+   */
+  image?: string;
 };
 
 export type SpecialsPresentation = {
@@ -240,6 +246,7 @@ export function normalizeSpecialsPresentation(
       titleOverride: cleanOverride(d.titleOverride),
       offerOverride: cleanOverride(d.offerOverride),
       descriptionOverride: cleanOverride(d.descriptionOverride),
+      image: cleanOverride(d.image),
     };
   });
 
@@ -277,6 +284,7 @@ export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
       if (d.titleOverride) out.titleOverride = d.titleOverride;
       if (d.offerOverride) out.offerOverride = d.offerOverride;
       if (d.descriptionOverride) out.descriptionOverride = d.descriptionOverride;
+      if (d.image) out.image = d.image;
       return out;
     }),
   });
@@ -390,7 +398,9 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
     days: [
       { weekday: "Sunday", visible: true, order: 0 },
       { weekday: "Monday", visible: false, order: 1 },
-      { weekday: "Tuesday", visible: true, order: 2, titleOverride: "Two-fer Tuesday", offerOverride: "  ", descriptionOverride: "Buy more save more" },
+      { weekday: "Tuesday", visible: true, order: 2, titleOverride: "Two-fer Tuesday", offerOverride: "  ", descriptionOverride: "Buy more save more", image: "/media/tuesday.webp" },
+      // SLICE 119: a blank/whitespace image must normalize to undefined.
+      { weekday: "Wednesday", visible: true, order: 3, image: "   " },
     ],
   });
   ok(custom.showTodaysDeals === false, "custom hides Today's Deals");
@@ -402,6 +412,12 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(tue.titleOverride === "Two-fer Tuesday", "override title kept");
   ok(tue.offerOverride === undefined, "blank/whitespace override normalized to undefined");
   ok(tue.descriptionOverride === "Buy more save more", "override description kept");
+  // SLICE 119: per-day image.
+  ok(tue.image === "/media/tuesday.webp", "per-day image kept");
+  ok(
+    dayPresentationFor(custom, "Wednesday")!.image === undefined,
+    "blank/whitespace image normalized to undefined",
+  );
 
   // Unknown weekday dropped; missing days filled visible/natural.
   const withJunk = normalizeSpecialsPresentation({
@@ -416,6 +432,9 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   const round = parseSpecialsPresentation(json)!;
   ok(round.badgeStyle === "bold" && round.showTodaysDeals === false, "round-trip preserves globals");
   ok(dayPresentationFor(round, "Tuesday")!.titleOverride === "Two-fer Tuesday", "round-trip preserves overrides");
+  ok(dayPresentationFor(round, "Tuesday")!.image === "/media/tuesday.webp", "round-trip preserves per-day image");
+  // SLICE 119: a day with no image must NOT serialize an `image` key (byte-identical defaults).
+  ok(!/"weekday":"Monday"[^}]*"image"/.test(json), "days without an image omit the image key");
 
   // Bad JSON / empty → null (caller falls back).
   ok(parseSpecialsPresentation("not json") === null, "bad JSON → null");

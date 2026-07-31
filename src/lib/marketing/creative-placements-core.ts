@@ -34,6 +34,7 @@ import {
   SECTION_BANNER_SPEC,
   SPECIALS_BANNER_SPEC,
   SPECIALS_HERO_SPEC,
+  SPECIALS_CARD_SPEC,
 } from "@/lib/cms/image-spec-core";
 
 export type PlacementGroup = "website" | "social" | "email" | "blog" | "print";
@@ -121,6 +122,18 @@ const WEBSITE_PLACEMENTS: CreativePlacement[] = [
     tip: "Very wide and short. The eyebrow, title & subtitle sit on the LEFT over a dark fade — keep the key art toward the RIGHT so it stays in view.",
     promptHint:
       "very wide short banner composition, key subject placed in the right third, left side calm and uncluttered for overlaid text, no text in the image",
+  },
+  {
+    id: "website-specials-card",
+    group: "website",
+    label: "Specials \u2014 weekday deal card photo",
+    where: "The product photo inside a single weekday deal card on the public Specials page.",
+    width: SPECIALS_CARD_SPEC.presets[0].width,
+    height: SPECIALS_CARD_SPEC.presets[0].height,
+    format: "jpeg",
+    tip: "Slightly taller than wide (about 1.12:1). Center the product \u2014 the card adds the title, offer & button around it, so no text is needed in the image.",
+    promptHint:
+      "single cannabis product centered on a clean studio background, slightly taller than wide framing, no text in the image",
   },
   {
     id: "website-loyalty-hero",
@@ -455,6 +468,14 @@ export function __runCreativePlacementsTests(): string {
     specialsHero.width === specialsHeroSpec.width && specialsHero.height === specialsHeroSpec.height,
     "specials hero tracks image-spec-core",
   );
+  // SLICE 119: the specials weekday deal-card photo placement tracks its spec.
+  const specialsCardSpec = SPECIALS_CARD_SPEC.presets[0];
+  const specialsCard = placementById("website-specials-card")!;
+  ok(
+    specialsCard.width === specialsCardSpec.width && specialsCard.height === specialsCardSpec.height,
+    "specials card tracks image-spec-core",
+  );
+  ok(specialsCard.width < specialsCard.height * 2, "specials card is not a wide banner");
 
   // Print slots carry explicit print notes.
   ok(Boolean(placementById("print-flyer-letter")!.printNote), "flyer has print note");
