@@ -457,6 +457,45 @@ export function SpecialsContent({
     })
     .filter((d): d is DailyDeal => d !== null);
 
+  // ── TOP hero placement (SLICE 120 / SET-1) ──────────────────────────────
+  // Until this slice the hero was hardcoded to left text, vertically centered,
+  // with the image shoved "right" — so staff could edit the copy but never MOVE
+  // it. These classes give the hero the same placement controls as the
+  // "Today's Deal" banner, driven by the presentation settings. The DEFAULTS
+  // (left / center / right) reproduce that exact old layout byte-for-byte, so
+  // the live page is unchanged until staff move the text or refocus the image.
+  const heroTextAlign = pres.heroBannerTextAlign; // "left" | "center" | "right"
+  const heroVAlign = pres.heroBannerVerticalAlign; // "top" | "center" | "bottom"
+  const heroImageFocus = pres.heroBannerImageFocus; // image object-position
+  // Vertical placement of the whole text column inside the hero.
+  const heroJustifyClass =
+    heroVAlign === "top" ? "justify-start" : heroVAlign === "bottom" ? "justify-end" : "justify-center";
+  // Horizontal placement of the whole text COLUMN (cross-axis of the flex-col
+  // container) — this is what moves the eyebrow/title/subtitle/buttons block to
+  // the left, center, or right of the banner.
+  const heroColumnItemsClass =
+    heroTextAlign === "right"
+      ? "items-end"
+      : heroTextAlign === "center"
+        ? "items-center"
+        : "items-start";
+  // Text-align + inner button-row alignment WITHIN the moved column.
+  const heroTextItemsClass =
+    heroTextAlign === "right"
+      ? "items-end text-right"
+      : heroTextAlign === "center"
+        ? "items-center text-center"
+        : "items-start text-left";
+  // Dark overlay weighted toward the text side so the copy stays legible. The
+  // LEFT case keeps TODAY'S EXACT gradient (100deg, 0.96→0.18) so the default
+  // look is byte-identical; center/right mirror that intent on their side.
+  const heroGradientClass =
+    heroTextAlign === "right"
+      ? "bg-[radial-gradient(circle_at_12%_28%,rgba(255,127,0,0.4),transparent_42%),radial-gradient(circle_at_30%_85%,rgba(126,217,87,0.26),transparent_45%),linear-gradient(260deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]"
+      : heroTextAlign === "center"
+        ? "bg-[radial-gradient(circle_at_50%_28%,rgba(255,127,0,0.34),transparent_46%),radial-gradient(circle_at_50%_88%,rgba(126,217,87,0.22),transparent_48%),linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.62)_50%,rgba(0,0,0,0.82)_100%)]"
+        : "bg-[radial-gradient(circle_at_88%_28%,rgba(255,127,0,0.4),transparent_42%),radial-gradient(circle_at_70%_85%,rgba(126,217,87,0.26),transparent_45%),linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]";
+
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,215,0,0.13),transparent_18rem),radial-gradient(circle_at_86%_12%,rgba(255,127,0,0.14),transparent_20rem),radial-gradient(circle_at_70%_88%,rgba(126,217,87,0.12),transparent_24rem)]" />
@@ -464,7 +503,7 @@ export function SpecialsContent({
 
       <div className="relative mx-auto max-w-[88rem] px-4 py-5 md:px-8 md:py-8">
         {/* Top hero — short + wide, matching the home / shop page proportions. */}
-        <div className="relative isolate flex min-h-[8.5rem] items-center overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem]">
+        <div className={`relative isolate flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem] ${heroJustifyClass} ${heroColumnItemsClass}`}>
           {/* SLICE 118 (P1b): optional editable hero image (Pages builder). When
               set it sits BEHIND the dark fade below, so the eyebrow/title/subtitle
               stay readable over any photo. When absent, nothing renders here and
@@ -476,12 +515,14 @@ export function SpecialsContent({
               alt=""
               aria-hidden="true"
               className={`absolute inset-0 h-full w-full object-cover ${
-                HERO_FOCUS_OBJECT_CLASS[content.imageFocus ?? "right"]
+                HERO_FOCUS_OBJECT_CLASS[heroImageFocus]
               }`}
             />
           ) : null}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_28%,rgba(255,127,0,0.4),transparent_42%),radial-gradient(circle_at_70%_85%,rgba(126,217,87,0.26),transparent_45%),linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]" aria-hidden="true" />
-          <div className="relative max-w-[80%] px-5 py-6 md:max-w-[62%] md:px-10">
+          <div className={`absolute inset-0 ${heroGradientClass}`} aria-hidden="true" />
+          <div
+            className={`relative flex max-w-[80%] flex-col px-5 py-6 md:max-w-[62%] md:px-10 ${heroTextItemsClass}`}
+          >
             <p
               className="inline-flex rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)] backdrop-blur md:text-xs"
               {...(content?.editable

@@ -44,6 +44,7 @@ import {
   defaultSpecialsPresentation,
   normalizeSpecialsPresentation,
   serializeSpecialsPresentation,
+  parseSpecialsPresentation,
 } from "@/lib/specials/specials-presentation-core";
 import { SPECIALS_BANNER_SPEC } from "@/lib/cms/image-spec-core";
 import {
@@ -239,5 +240,63 @@ describe("Creative Studio: specials banner spec + placement + preset", () => {
   it('midjourney preset "specials-banner" exists', () => {
     expect(presetById("specials-banner")).toBeTruthy();
     expect(PRESETS.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+// ── SLICE 120 (SET-1): TOP hero honors text position + image focus ─────────
+// The hero was a hardcoded block that ignored placement (text pinned left,
+// vertically centered, image shoved right), so staff could edit the copy but
+// not MOVE it. SET-1 adds three presentation fields (byte-identical defaults)
+// and wires the hero render to consume them.
+describe("SLICE 120 (SET-1): TOP hero placement in the presentation model", () => {
+  it("adds heroBanner* fields with today's-look defaults (left/center/right)", () => {
+    const def = defaultSpecialsPresentation();
+    expect(def.heroBannerTextAlign).toBe("left");
+    expect(def.heroBannerVerticalAlign).toBe("center");
+    // "right" reproduces the old `content.imageFocus ?? "right"` behavior.
+    expect(def.heroBannerImageFocus).toBe("right");
+  });
+
+  it("normalize applies valid hero placement + round-trips through serialize", () => {
+    const norm = normalizeSpecialsPresentation({
+      heroBannerTextAlign: "center",
+      heroBannerVerticalAlign: "top",
+      heroBannerImageFocus: "left",
+    });
+    expect(norm.heroBannerTextAlign).toBe("center");
+    expect(norm.heroBannerVerticalAlign).toBe("top");
+    expect(norm.heroBannerImageFocus).toBe("left");
+    const back = parseSpecialsPresentation(serializeSpecialsPresentation(norm))!;
+    expect(back.heroBannerTextAlign).toBe("center");
+    expect(back.heroBannerVerticalAlign).toBe("top");
+    expect(back.heroBannerImageFocus).toBe("left");
+  });
+
+  it("bad hero placement falls back to the live-look-safe default", () => {
+    const bad = normalizeSpecialsPresentation({
+      heroBannerTextAlign: "nope",
+      heroBannerVerticalAlign: "nope",
+      heroBannerImageFocus: "nope",
+    });
+    expect(bad.heroBannerTextAlign).toBe("left");
+    expect(bad.heroBannerVerticalAlign).toBe("center");
+    expect(bad.heroBannerImageFocus).toBe("right");
+  });
+
+  it("SpecialsContent hero consumes the presentation placement (not hardcoded)", () => {
+    const src = read("src/components/specials/SpecialsContent.tsx");
+    // Reads the three placement values from the presentation.
+    expect(src).toContain("pres.heroBannerTextAlign");
+    expect(src).toContain("pres.heroBannerVerticalAlign");
+    expect(src).toContain("pres.heroBannerImageFocus");
+    // Vertical + horizontal + text-align classes drive the layout.
+    expect(src).toContain("heroJustifyClass");
+    expect(src).toContain("heroColumnItemsClass");
+    expect(src).toContain("heroTextItemsClass");
+    // Image focus now flows from the presentation, no longer hardwired.
+    expect(src).toContain("HERO_FOCUS_OBJECT_CLASS[heroImageFocus]");
+    expect(src).not.toContain('HERO_FOCUS_OBJECT_CLASS[content.imageFocus ?? "right"]');
+    // The default (left) case preserves TODAY's exact 100deg gradient.
+    expect(src).toContain("linear-gradient(100deg,rgba(0,0,0,0.96)");
   });
 });
