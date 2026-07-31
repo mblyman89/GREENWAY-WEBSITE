@@ -325,3 +325,107 @@ describe("SLICE 120 (SET-1): TOP hero placement in the presentation model", () =
     expect(src).toContain("linear-gradient(100deg,rgba(0,0,0,0.96)");
   });
 });
+
+// ── SLICE 122 (SET-3): finish the Specials editor — 3 tabs in page order, the
+// hero IMAGE moved into Tab 1 (with placement + a live preview), and the unused
+// /admin/pages/specials builder retired ─────────────────────────────────────
+// Michael: "Let's finish off the specials page editor mortal combat style, make
+// it epic!" The hero image upload moves out of the Pages builder into the ONE
+// Specials editor's first tab (page order: Top hero → weekly cards → Today's
+// Deal banner), each with a live preview, then the orphaned Pages-builder twin
+// is retired so there is exactly ONE place to edit Specials. Live-look-safe:
+// heroBannerImage defaults to "" and the public page falls back to the seeded
+// content-copy image, so nothing changes until Michael edits + Publishes.
+describe("SLICE 122 (SET-3): hero image lives in the presentation model", () => {
+  it("adds heroBannerImage (default \"\", trimmed, round-trips)", () => {
+    const def = defaultSpecialsPresentation();
+    // Byte-identical default: blank => graceful fallback to content copy.
+    expect(def.heroBannerImage).toBe("");
+
+    const norm = normalizeSpecialsPresentation({
+      heroBannerImage: "  /media/hero.webp  ",
+    });
+    expect(norm.heroBannerImage).toBe("/media/hero.webp");
+
+    const back = parseSpecialsPresentation(serializeSpecialsPresentation(norm))!;
+    expect(back.heroBannerImage).toBe("/media/hero.webp");
+  });
+
+  it("a non-string hero image falls back to the live-look-safe default", () => {
+    const bad = normalizeSpecialsPresentation({
+      heroBannerImage: 123 as unknown as string,
+    });
+    expect(bad.heroBannerImage).toBe("");
+  });
+});
+
+describe("SLICE 122 (SET-3): public hero image = presentation first, then copy", () => {
+  it("specials/page.tsx feeds the hero image with a graceful fallback", () => {
+    const src = read("src/app/specials/page.tsx");
+    // presentation wins when set; otherwise the seeded content-copy image; else
+    // undefined. This keeps the live page byte-identical until Michael edits.
+    expect(src).toContain(
+      "presentation.heroBannerImage || hero?.image || undefined",
+    );
+  });
+});
+
+describe("SLICE 122 (SET-3): the ONE editor now has 3 tabs in page order", () => {
+  const src = read("src/components/admin/SpecialsPresentationEditor.tsx");
+
+  it("declares a three-key TabKey (hero, cards, banner) defaulting to hero", () => {
+    expect(src).toContain('type TabKey = "hero" | "cards" | "banner"');
+    // First tab is the TOP hero (matches the public page order).
+    expect(src).toContain('useState<TabKey>("hero")');
+  });
+
+  it("the tab bar is in public-page order: Top hero → cards → banner", () => {
+    const heroIdx = src.indexOf('key: "hero"');
+    const cardsIdx = src.indexOf('key: "cards"');
+    const bannerIdx = src.indexOf('key: "banner"');
+    expect(heroIdx).toBeGreaterThan(-1);
+    expect(cardsIdx).toBeGreaterThan(-1);
+    expect(bannerIdx).toBeGreaterThan(-1);
+    expect(heroIdx).toBeLessThan(cardsIdx);
+    expect(cardsIdx).toBeLessThan(bannerIdx);
+  });
+
+  it("the hero tab has the moved hero image field + placement controls", () => {
+    // Hero image now lives here (moved out of the Pages builder).
+    expect(src).toContain('setGlobal("heroBannerImage"');
+    // Text position + image focus controls write the SET-1 hero fields.
+    expect(src).toContain('setGlobal("heroBannerTextAlign"');
+    expect(src).toContain('setGlobal("heroBannerVerticalAlign"');
+    expect(src).toContain('setGlobal("heroBannerImageFocus"');
+  });
+
+  it("has a live HeroPreview that honors focus (not text-derived)", () => {
+    expect(src).toContain("HeroPreview");
+    // The preview positions the image from the chosen focus, like the banner one.
+    expect(src).toContain("PREVIEW_FOCUS_OBJECT_CLASS[imageFocus]");
+  });
+
+  it("no longer routes staff to the retired /admin/pages/specials builder", () => {
+    expect(src).not.toContain("/admin/pages/specials");
+  });
+
+  it("the editor page passes the hero image spec", () => {
+    const page = read("src/app/admin/specials/page.tsx");
+    expect(page).toContain("SPECIALS_HERO_SPEC");
+    expect(page).toContain("heroSpec={SPECIALS_HERO_SPEC}");
+  });
+});
+
+describe("SLICE 122 (SET-3): the /admin/pages/specials twin is retired", () => {
+  it("PAGE_SECTION_CONFIG no longer defines a specials slug", () => {
+    const src = read("src/lib/cms/page-sections-types.ts");
+    // The only remaining mention is the explanatory comment, never a config key.
+    expect(src).not.toContain('specials: { label: "Specials"');
+  });
+
+  it("the Help FAQ points at the dedicated /admin/specials editor", () => {
+    const src = read("src/lib/admin/help-content.ts");
+    expect(src).toContain('href: "/admin/specials"');
+    expect(src).not.toContain('href: "/admin/pages/specials"');
+  });
+});

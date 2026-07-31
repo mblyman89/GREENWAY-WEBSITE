@@ -18,7 +18,7 @@ import {
 } from "@/lib/cms/content-store";
 import { listMedia } from "@/lib/media/store";
 import { type MediaChoice } from "@/components/admin/ContentImageField";
-import { SPECIALS_BANNER_SPEC, SPECIALS_CARD_SPEC } from "@/lib/cms/image-spec-core";
+import { SPECIALS_BANNER_SPEC, SPECIALS_CARD_SPEC, SPECIALS_HERO_SPEC } from "@/lib/cms/image-spec-core";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import {
@@ -190,6 +190,7 @@ export default async function AdminSpecialsPage({
             mediaChoices={mediaChoices}
             spec={SPECIALS_BANNER_SPEC}
             cardSpec={SPECIALS_CARD_SPEC}
+            heroSpec={SPECIALS_HERO_SPEC}
           />
         )}
       </div>

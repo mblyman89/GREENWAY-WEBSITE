@@ -98,7 +98,7 @@ const IMAGE_FOCUS_LABELS: Record<ImageFocus, string> = {
 const INPUT_CLASS =
   "rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none";
 
-type TabKey = "cards" | "banner";
+type TabKey = "hero" | "cards" | "banner";
 
 type Props = {
   draftJson: string | null;
@@ -112,6 +112,8 @@ type Props = {
   spec?: ImageSpec;
   /** SLICE 119: image spec for the per-weekday deal-card photo (portrait-ish). */
   cardSpec?: ImageSpec;
+  /** SLICE 122 (SET-3): image spec for the TOP hero banner (wide). */
+  heroSpec?: ImageSpec;
 };
 
 const BLOCK_KEY = "specials.deals.presentation";
@@ -134,11 +136,11 @@ function safeParse(json: string | null): unknown {
 }
 
 export function SpecialsPresentationEditor(props: Props) {
-  const { engineCopy, revisions, saveDraftAction, publishAction, restoreAction, mediaChoices, spec, cardSpec } =
+  const { engineCopy, revisions, saveDraftAction, publishAction, restoreAction, mediaChoices, spec, cardSpec, heroSpec } =
     props;
   const [pres, setPres] = useState<SpecialsPresentation>(() => initialPresentation(props));
   const [showHistory, setShowHistory] = useState(false);
-  const [tab, setTab] = useState<TabKey>("cards");
+  const [tab, setTab] = useState<TabKey>("hero");
   const formRef = useRef<HTMLFormElement>(null);
 
   const serialized = useMemo(() => serializeSpecialsPresentation(pres), [pres]);
@@ -214,6 +216,7 @@ export function SpecialsPresentationEditor(props: Props) {
       <nav className="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3">
         {(
           [
+            { key: "hero" as const, label: "Top hero" },
             { key: "cards" as const, label: "Weekly deal cards" },
             { key: "banner" as const, label: "Today's Deal banner & products" },
           ]
@@ -233,7 +236,151 @@ export function SpecialsPresentationEditor(props: Props) {
         ))}
       </nav>
 
-      {tab === "cards" ? (
+      {tab === "hero" ? (
+        /* ── Top hero tab (page-order tab 1) ─────────────────────────────── */
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Controls column */}
+          <div className="space-y-5">
+            {/* Copy note: the words come from Site Content / inline editing. */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Hero wording</div>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                The hero&rsquo;s <strong>eyebrow</strong>, <strong>title</strong>, and{" "}
+                <strong>subtitle</strong> are edited in{" "}
+                <Link href="/admin/site-content" className="text-[var(--admin-accent)] hover:underline">
+                  Site Content
+                </Link>{" "}
+                (or by clicking them directly in{" "}
+                <Link href="/specials?preview=1" className="text-[var(--admin-accent)] hover:underline" target="_blank" rel="noreferrer">
+                  Preview
+                </Link>
+                ). This tab controls the hero <strong>image</strong> and where the text sits over it.
+              </p>
+            </div>
+
+            {/* Hero image (moved here from the retired Pages builder). */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Top hero image</div>
+              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+                The big banner at the very top of the Specials page. Paste a URL or pick one from the
+                Media Library. <strong>Leave blank</strong> to keep the built-in gradient look (no
+                photo). The image sits behind a dark fade so the wording stays readable.
+              </p>
+              <ContentImageField
+                value={pres.heroBannerImage}
+                onChange={(next) => setGlobal("heroBannerImage", next)}
+                mediaChoices={mediaChoices}
+                spec={heroSpec}
+              />
+            </div>
+
+            {/* Hero text position. */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Hero text position</div>
+              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+                Nudge the eyebrow / title / subtitle so they sit nicely over your image.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                    Horizontal
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TEXT_ALIGNS.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => setGlobal("heroBannerTextAlign", a)}
+                        className={`rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-sm font-semibold transition ${
+                          pres.heroBannerTextAlign === a
+                            ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+                            : "border border-[var(--admin-border)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                        }`}
+                      >
+                        {TEXT_ALIGN_LABELS[a]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                    Vertical
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TEXT_VALIGNS.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => setGlobal("heroBannerVerticalAlign", a)}
+                        className={`rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-sm font-semibold transition ${
+                          pres.heroBannerVerticalAlign === a
+                            ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+                            : "border border-[var(--admin-border)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                        }`}
+                      >
+                        {TEXT_VALIGN_LABELS[a]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Hero image focus (independent of the text). */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Image focus</div>
+              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+                Slide the picture so its main subject shows next to your text &mdash; this moves the{" "}
+                <strong>image</strong> on its own, so the words and the artwork never collide.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {IMAGE_FOCUSES.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setGlobal("heroBannerImageFocus", f)}
+                    className={`rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-sm font-semibold transition ${
+                      pres.heroBannerImageFocus === f
+                        ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+                        : "border border-[var(--admin-border)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                    }`}
+                  >
+                    {IMAGE_FOCUS_LABELS[f]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Creative Studio nudge for on-brand hero art. */}
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              Need on-brand artwork? Generate a wide hero in{" "}
+              <Link href="/admin/creative" className="text-[var(--admin-accent)] hover:underline">
+                Creative Studio
+              </Link>{" "}
+              &mdash; pick the <strong>&ldquo;Specials &mdash; top hero banner&rdquo;</strong> preset,
+              then paste or Media-Library-pick it above.
+            </p>
+          </div>
+
+          {/* Hero preview column */}
+          <div className="lg:sticky lg:top-4 lg:self-start">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+              Hero preview
+            </div>
+            <HeroPreview
+              image={pres.heroBannerImage}
+              textAlign={pres.heroBannerTextAlign}
+              verticalAlign={pres.heroBannerVerticalAlign}
+              imageFocus={pres.heroBannerImageFocus}
+            />
+            <div className="mt-2 flex flex-wrap gap-3 text-xs">
+              <a href="/specials" target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
+                View live /specials ↗
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : tab === "cards" ? (
         <>
           {/* Section toggle + badge style (cards-only controls). */}
           <div className="grid gap-4 md:grid-cols-2">
@@ -593,23 +740,14 @@ export function SpecialsPresentationEditor(props: Props) {
               paste or Media-Library-pick it above.
             </p>
 
-            {/* SLICE 118 (P1b): the TOP hero banner image lives in the Pages
-                builder (it is a page-section banner), so we point staff there
-                rather than duplicating a second banner editor here. */}
+            {/* SLICE 122 (SET-3): the TOP hero image now lives in the "Top hero"
+                tab of THIS editor (moved out of the retired Pages builder). */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
-              <div className="mb-1 text-sm font-semibold">Top hero banner image</div>
+              <div className="mb-1 text-sm font-semibold">Looking for the big top banner?</div>
               <p className="text-xs text-[var(--admin-text-muted)]">
-                The big banner at the very top of the Specials page can now show your own image
-                behind the title. You edit it in the{" "}
-                <Link href="/admin/pages/specials" className="text-[var(--admin-accent)] hover:underline">
-                  Specials page builder
-                </Link>{" "}
-                &mdash; set its <strong>image</strong> and <strong>image focus</strong> there. Leave
-                it blank to keep the built-in gradient look. Need art? In{" "}
-                <Link href="/admin/creative" className="text-[var(--admin-accent)] hover:underline">
-                  Creative Studio
-                </Link>{" "}
-                pick the new <strong>&ldquo;Specials &mdash; top hero banner&rdquo;</strong> preset.
+                The image at the very top of the Specials page is now set in the{" "}
+                <strong>&ldquo;Top hero&rdquo;</strong> tab above &mdash; image, text position, and
+                image focus, all with a live preview.
               </p>
             </div>
           </div>
@@ -764,6 +902,66 @@ function BannerPreview({
       <p className="text-xs text-[var(--admin-text-muted)]">
         Below the banner, up to <strong>{count}</strong> live on-deal product{count === 1 ? "" : "s"} for
         today will show. Title &amp; subtitle come from Promotions.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * SLICE 122 (SET-3): a faithful live preview of the TOP hero, mirroring the
+ * public SpecialsContent hero — direction-aware gradient by textAlign (the
+ * LEFT/default keeps today's 100deg fade intent), object-position by image
+ * focus, and vertical justify. Blank image => gradient-only (today's look).
+ */
+function HeroPreview({
+  image,
+  textAlign,
+  verticalAlign,
+  imageFocus,
+}: {
+  image: string;
+  textAlign: TextAlign;
+  verticalAlign: TextVAlign;
+  imageFocus: ImageFocus;
+}) {
+  const src = image && image.trim() ? image.trim() : "";
+  const justify =
+    verticalAlign === "top" ? "justify-start" : verticalAlign === "bottom" ? "justify-end" : "justify-center";
+  const column =
+    textAlign === "right" ? "items-end" : textAlign === "center" ? "items-center" : "items-start";
+  const items =
+    textAlign === "center" ? "items-center text-center" : textAlign === "right" ? "items-end text-right" : "items-start text-left";
+  // Mirrors SpecialsContent's heroGradientClass (LEFT default = today's 100deg).
+  const gradient =
+    textAlign === "right"
+      ? "bg-[linear-gradient(260deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]"
+      : textAlign === "center"
+        ? "bg-[linear-gradient(180deg,rgba(0,0,0,0.82)_0%,rgba(0,0,0,0.62)_50%,rgba(0,0,0,0.82)_100%)]"
+        : "bg-[linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]";
+  const objectPos = PREVIEW_FOCUS_OBJECT_CLASS[imageFocus];
+  return (
+    <div className="space-y-2">
+      <div
+        className={`relative flex aspect-[16/6] w-full flex-col overflow-hidden rounded-[var(--admin-radius-lg)] border border-white/10 bg-[#1a1a1e] ${justify} ${column}`}
+      >
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="Hero preview" className={`absolute inset-0 h-full w-full object-cover ${objectPos}`} />
+        ) : null}
+        <div className={`absolute inset-0 ${gradient}`} />
+        <div className={`relative flex max-w-[80%] flex-col px-5 py-4 ${items}`}>
+          <p className="inline-flex rounded-full border border-white/20 bg-black/40 px-2 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)]">
+            (eyebrow from Site Content)
+          </p>
+          <p className="mt-1 text-lg font-black uppercase leading-tight text-white">
+            (title from Site Content)
+          </p>
+          <p className="text-sm text-zinc-300">(subtitle from Site Content)</p>
+        </div>
+      </div>
+      <p className="text-xs text-[var(--admin-text-muted)]">
+        The eyebrow, title & subtitle come from Site Content; this tab sets the image + where the
+        text and picture sit. Blank image keeps the built-in gradient look.
       </p>
     </div>
   );

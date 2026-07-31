@@ -64,9 +64,12 @@ export default async function SpecialsPage() {
           eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],
           title: hero?.title || copy["specials.hero.title"],
           subtitle: hero?.subtitle || copy["specials.hero.subtitle"],
-          // SLICE 118 (P1b): the TOP hero image + focus (Pages builder). Absent
-          // by default, so the hero stays gradient-only until Michael sets one.
-          image: hero?.image ?? undefined,
+          // SLICE 122 (SET-3): the TOP hero image now lives in THIS page's own
+          // presentation editor (moved out of the retired Pages builder). Prefer
+          // it; fall back to the legacy Pages-builder value so anything already
+          // set there keeps working until re-saved. Blank on both => gradient-
+          // only hero (today's default look).
+          image: presentation.heroBannerImage || hero?.image || undefined,
           imageFocus: hero?.imageFocus,
           buttons: hero?.buttons,
           extraSections: banners.extras,
