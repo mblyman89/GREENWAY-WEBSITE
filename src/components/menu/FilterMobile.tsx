@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { FilterCheckboxGroup, type FilterCheckboxOption } from "./FilterCheckboxGroup";
 import { FilterSection } from "./FilterSection";
 import type { MenuSpecialFilter } from "@/lib/menu/menu-special-filters-core";
+import type { DohFilterOption } from "@/lib/menu/menu-doh-filter-core";
 
 type FilterMobileProps = {
   activeCount: number;
@@ -118,6 +119,15 @@ export type MenuFilterControlsProps = {
   specialFilters?: MenuSpecialFilter[];
   activeSpecialId?: string | null;
   onSpecialToggle?: (id: string) => void;
+  /**
+   * SLICE E (SHOP-5): the dynamic DOH filter. Options are derived from the live
+   * menu's DOH-compliant items (SLICE D flag) — the umbrella "DOH Compliant"
+   * lane plus one lane per present DOH category. Empty array (no compliant
+   * items / pre-migration) ⇒ the section does not render. One-at-a-time.
+   */
+  dohOptions?: DohFilterOption[];
+  activeDohId?: string | null;
+  onDohToggle?: (id: string) => void;
 };
 
 export function MenuFilterControls({
@@ -150,8 +160,12 @@ export function MenuFilterControls({
   specialFilters = [],
   activeSpecialId = null,
   onSpecialToggle,
+  dohOptions = [],
+  activeDohId = null,
+  onDohToggle,
 }: MenuFilterControlsProps) {
   const specialsEnabled = Boolean(onSpecialToggle) && specialFilters.length > 0;
+  const dohEnabled = Boolean(onDohToggle) && dohOptions.length > 0;
   return (
     <>
       <div className="flex items-center justify-between gap-4">
@@ -210,6 +224,48 @@ export function MenuFilterControls({
       <FilterSection title="Strains">
         <FilterCheckboxGroup name="strains" options={strainOptions} selectedValues={selectedStrains} onToggle={onStrainToggle} />
       </FilterSection>
+
+      {dohEnabled ? (
+        <FilterSection title="DOH Compliant">
+          {/* SLICE E (SHOP-5): dynamic DOH filter, placed with Strain Type as
+              agreed. Renders the umbrella "DOH Compliant" lane plus one lane per
+              present DOH category (General Use / High THC / High CBD). Same
+              checkbox-row look as Specials; one-at-a-time (clicking the active
+              one clears it). Only appears when the live menu actually has
+              DOH-compliant items — no dead checkbox pre-migration. */}
+          <div className="grid gap-2">
+            {dohOptions.map((option) => {
+              const active = activeDohId === option.id;
+              return (
+                <label
+                  key={option.id}
+                  className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                    active ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="doh"
+                      value={option.id}
+                      checked={active}
+                      onChange={() => onDohToggle?.(option.id)}
+                      className="peer sr-only"
+                    />
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
+                      ✓
+                    </span>
+                    <span className="truncate font-bold">{option.label}</span>
+                  </span>
+                  <span className="shrink-0 text-[0.7rem] font-bold uppercase tracking-[0.1em] text-zinc-500" aria-hidden="true">
+                    {option.count}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </FilterSection>
+      ) : null}
 
       {(terpeneOptions.length > 0 || selectedTerpenes.length > 0) ? (
         <FilterSection title="Terpenes" defaultOpen={false}>

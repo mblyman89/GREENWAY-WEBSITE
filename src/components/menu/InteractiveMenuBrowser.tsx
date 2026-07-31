@@ -19,6 +19,11 @@ import {
   type MenuSpecialFilter,
   type ShopSaleFilterInput,
 } from "@/lib/menu/menu-special-filters-core";
+import {
+  resolveDohFilterOptions,
+  itemMatchesDohFilter,
+  findDohFilterOption,
+} from "@/lib/menu/menu-doh-filter-core";
 import { merchProductDefs } from "@/lib/merch/merch-catalog";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
@@ -542,6 +547,9 @@ type InitialMenuSearchParams = {
   maxCbd?: string;
   maxPrice?: string;
   sort?: string;
+  // SLICE E (SHOP-5): the active DOH filter lane id (umbrella "doh" or a
+  // per-category "doh:<category>"). Shareable/persisted like the others.
+  doh?: string;
 };
 
 const SORT_OPTION_VALUES: SortOption[] = [
@@ -604,6 +612,7 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
     maxCbd: pick("maxCbd") ?? undefined,
     maxPrice: pick("maxPrice") ?? undefined,
     sort: pick("sort") ?? undefined,
+    doh: pick("doh") ?? undefined,
   };
 }
 
@@ -648,6 +657,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const persistedMaxCbd = parsePersistedNumber(initialParams.maxCbd);
   const persistedMaxPrice = parsePersistedNumber(initialParams.maxPrice);
   const persistedSort = parsePersistedSort(initialParams.sort);
+  const persistedDoh = (initialParams.doh ?? "").trim() || null;
 
   const [query, setQuery] = useState(initialSearchQuery);
   const [selectedCategories, setSelectedCategories] = useState<GreenwayCategory[]>(
@@ -708,6 +718,14 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   );
   const activeSpecialFilter = findMenuSpecialFilter(specialFilters, activeSpecialId);
 
+  // SLICE E (SHOP-5): the dynamic DOH filter. Options are derived from the live
+  // items' DOH flag (SLICE D) — the umbrella "DOH Compliant" lane plus one lane
+  // per present DOH category. Empty (no compliant items / pre-migration) ⇒ the
+  // sidebar section never renders. One-at-a-time selection, like Specials.
+  const [activeDohId, setActiveDohId] = useState<string | null>(persistedDoh);
+  const dohOptions = useMemo(() => resolveDohFilterOptions(items), [items]);
+  const activeDohOption = findDohFilterOption(dohOptions, activeDohId);
+
   // --- Filter persistence (Task G) ---------------------------------------
   // State is hydrated from forwarded URL params above (server + client agree,
   // so no hydration mismatch). Here we write the current state BACK to the URL
@@ -733,6 +751,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     if (maxCbd < maxAvailableCbd) params.set("maxCbd", String(maxCbd));
     if (maxPrice < maxAvailablePrice) params.set("maxPrice", String(maxPrice));
     if (sortBy !== "featured-shuffle") params.set("sort", sortBy);
+    if (activeDohId) params.set("doh", activeDohId);
     const queryString = params.toString();
     const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}${window.location.hash}`;
     window.history.replaceState(window.history.state, "", newUrl);
@@ -747,6 +766,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     maxCbd,
     maxPrice,
     sortBy,
+    activeDohId,
     maxAvailableThc,
     maxAvailableCbd,
     maxAvailablePrice,
@@ -790,6 +810,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
 
       setSortBy(parsePersistedSort(params.get("sort") ?? undefined) ?? "featured-shuffle");
 
+      setActiveDohId((params.get("doh") ?? "").trim() || null);
+
       // The next URL-write effect run must not clobber what we just restored.
       firstWriteRef.current = true;
     };
@@ -824,8 +846,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       pool = pool.filter((item) => itemMatchesSpecialFilter(item, activeSpecialFilter, ctx));
     }
 
+    // DOH filter (SLICE E — fully dynamic). A no-op when nothing is selected;
+    // the umbrella lane keeps any DOH-compliant item, a per-category lane keeps
+    // only that category. Shared pure matcher so sidebar/server/tests agree.
+    if (activeDohId) {
+      pool = pool.filter((item) => itemMatchesDohFilter(item, activeDohId));
+    }
+
     return sortItems(pool.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
-  }, [activeDealRules, allDealRules, activeSpecialFilter, cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
+  }, [activeDealRules, allDealRules, activeSpecialFilter, activeDohId, cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
@@ -903,7 +932,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedTerpenes.length > 0 ||
     selectedBrands.length > 0 ||
     selectedWeights.length > 0 ||
-    activeSpecialId !== null;
+    activeSpecialId !== null ||
+    activeDohId !== null;
   // Accessories/merch are catalog collections (not filterable by THC/strain/etc),
   // so only surface them at the bottom when no narrowing filters are applied.
   const surfaceBottomCollections = !hasOtherFiltersActive;
@@ -966,12 +996,19 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     setMaxPrice(maxAvailablePrice);
     setSortBy("featured-shuffle");
     setActiveSpecialId(null);
+    setActiveDohId(null);
   };
 
   // Specials selection is one-at-a-time (mutually exclusive): clicking the
   // active one clears it, clicking another switches to it.
   const toggleSpecial = (id: string) => {
     setActiveSpecialId((current) => (current === id ? null : id));
+  };
+
+  // DOH filter is also one-at-a-time: the umbrella and each per-category lane
+  // are mutually exclusive; clicking the active one clears it (SLICE E).
+  const toggleDoh = (id: string) => {
+    setActiveDohId((current) => (current === id ? null : id));
   };
 
   const strainTagLabel = (strain: string) => (strain === HIGH_CBD_VALUE ? "CBD" : strain.charAt(0).toUpperCase() + strain.slice(1));
@@ -986,6 +1023,17 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
             label: "Special",
             value: activeSpecialFilter.name,
             onRemove: () => setActiveSpecialId(null),
+          },
+        ]
+      : []),
+    // SLICE E: the active DOH filter shows as a removable pill (by lane label).
+    ...(activeDohOption
+      ? [
+          {
+            key: `doh-${activeDohOption.id}`,
+            label: "DOH",
+            value: activeDohOption.label,
+            onRemove: () => setActiveDohId(null),
           },
         ]
       : []),
@@ -1086,6 +1134,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       specialFilters={specialFilters}
       activeSpecialId={activeSpecialId}
       onSpecialToggle={toggleSpecial}
+      dohOptions={dohOptions}
+      activeDohId={activeDohId}
+      onDohToggle={toggleDoh}
     />
   );
 
