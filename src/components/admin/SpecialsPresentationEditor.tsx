@@ -32,6 +32,7 @@ import {
   BADGE_STYLES,
   TEXT_ALIGNS,
   TEXT_VALIGNS,
+  IMAGE_FOCUSES,
   TODAYS_DEALS_COUNT_MIN,
   TODAYS_DEALS_COUNT_MAX,
   clampTodaysDealsCount,
@@ -41,6 +42,7 @@ import {
   type SpecialsWeekday,
   type TextAlign,
   type TextVAlign,
+  type ImageFocus,
   normalizeSpecialsPresentation,
   serializeSpecialsPresentation,
   orderedVisibleWeekdays,
@@ -79,6 +81,17 @@ const TEXT_VALIGN_LABELS: Record<TextVAlign, string> = {
   top: "Top",
   center: "Middle",
   bottom: "Bottom",
+};
+
+/** Where the IMAGE's subject sits inside the banner frame. This is independent
+ *  of the text position, so staff can move the words to one side and keep the
+ *  photo's subject on the other side (no collision). */
+const IMAGE_FOCUS_LABELS: Record<ImageFocus, string> = {
+  center: "Center",
+  top: "Top",
+  bottom: "Bottom",
+  left: "Left",
+  right: "Right",
 };
 
 /** Dark-theme input class shared by all text/select boxes here. */
@@ -540,6 +553,35 @@ export function SpecialsPresentationEditor(props: Props) {
               </div>
             </div>
 
+            {/* Image focus control — moves the IMAGE's subject independently of
+                the text, so the words never collide with the artwork. Uses the
+                SAME object-position mapping as the public SectionBanner. */}
+            <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <div className="mb-1 text-sm font-semibold">Image focus</div>
+              <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+                Slide the picture so its main subject shows next to your text &mdash; this moves the{" "}
+                <strong>image</strong> on its own, so the words and the artwork never sit on top of
+                each other. Tip: if your text is on the <em>left</em>, set the focus to the{" "}
+                <em>right</em> (and vice-versa).
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {IMAGE_FOCUSES.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setGlobal("todaysDealsBannerImageFocus", f)}
+                    className={`rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-sm font-semibold transition ${
+                      pres.todaysDealsBannerImageFocus === f
+                        ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+                        : "border border-[var(--admin-border)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                    }`}
+                  >
+                    {IMAGE_FOCUS_LABELS[f]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Nudge to Creative Studio for on-brand banner art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide banner in{" "}
@@ -582,6 +624,7 @@ export function SpecialsPresentationEditor(props: Props) {
                 image={pres.todaysDealsBannerImage}
                 textAlign={pres.todaysDealsBannerTextAlign}
                 verticalAlign={pres.todaysDealsBannerVerticalAlign}
+                imageFocus={pres.todaysDealsBannerImageFocus}
                 count={pres.todaysDealsCount}
               />
             ) : (
@@ -666,15 +709,25 @@ export function SpecialsPresentationEditor(props: Props) {
 
 /** Small WYSIWYG-ish preview of the wide banner that mirrors how SectionBanner
  *  positions its overlay text for a given alignment (editor-only visual). */
+const PREVIEW_FOCUS_OBJECT_CLASS: Record<ImageFocus, string> = {
+  center: "object-center",
+  top: "object-top",
+  bottom: "object-bottom",
+  left: "object-left",
+  right: "object-right",
+};
+
 function BannerPreview({
   image,
   textAlign,
   verticalAlign,
+  imageFocus,
   count,
 }: {
   image: string;
   textAlign: TextAlign;
   verticalAlign: TextVAlign;
+  imageFocus: ImageFocus;
   count: number;
 }) {
   const src = image && image.trim() ? image.trim() : "/home/hero-banner.webp";
@@ -688,8 +741,10 @@ function BannerPreview({
       : textAlign === "center"
         ? "bg-[linear-gradient(180deg,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0.75)_100%)]"
         : "bg-[linear-gradient(90deg,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.15)_70%)]";
-  const objectPos =
-    textAlign === "right" ? "object-left" : textAlign === "center" ? "object-center" : "object-right";
+  // Image focus is now its OWN control (matches the public SectionBanner
+  // mapping) instead of being shoved opposite the text — so the preview is a
+  // faithful mirror of what shoppers will see.
+  const objectPos = PREVIEW_FOCUS_OBJECT_CLASS[imageFocus];
   return (
     <div className="space-y-2">
       <div className="relative aspect-[16/6] w-full overflow-hidden rounded-[var(--admin-radius-lg)] border border-white/10 bg-black">

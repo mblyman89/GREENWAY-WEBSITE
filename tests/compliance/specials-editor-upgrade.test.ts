@@ -201,6 +201,31 @@ describe("the ONE editor is tabbed, uses the image helper, and is dark-themed", 
     expect(src).toContain("Specials banner");
   });
 
+  it("SLICE 121 (SET-2): banner tab has an image-focus control (moves image independently)", () => {
+    const src = read("src/components/admin/SpecialsPresentationEditor.tsx");
+    // Imports + friendly labels for the 5 focus options.
+    expect(src).toContain("IMAGE_FOCUSES");
+    expect(src).toContain("IMAGE_FOCUS_LABELS");
+    // A button group that writes the already-threaded presentation field.
+    expect(src).toContain('setGlobal("todaysDealsBannerImageFocus", f)');
+    expect(src).toContain("IMAGE_FOCUSES.map");
+    // A human-readable heading for the control.
+    expect(src).toContain("Image focus");
+  });
+
+  it("SLICE 121 (SET-2): the editor's live BannerPreview honors image focus (not text-derived)", () => {
+    const src = read("src/components/admin/SpecialsPresentationEditor.tsx");
+    // Preview receives the focus and maps it with the SAME object-* classes as
+    // the public SectionBanner, independent of textAlign.
+    expect(src).toContain("imageFocus={pres.todaysDealsBannerImageFocus}");
+    expect(src).toContain("PREVIEW_FOCUS_OBJECT_CLASS[imageFocus]");
+    expect(src).toContain('center: "object-center"');
+    expect(src).toContain('top: "object-top"');
+    expect(src).toContain('bottom: "object-bottom"');
+    expect(src).toContain('left: "object-left"');
+    expect(src).toContain('right: "object-right"');
+  });
+
   it("has NO leftover white inputs (dark-themed) and no light hover fallback", () => {
     const src = read("src/components/admin/SpecialsPresentationEditor.tsx");
     // No text/select input should be bg-white (the only text-black left is the
