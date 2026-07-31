@@ -194,6 +194,7 @@ import { __runMedicalContentCoreTests } from "../../src/lib/medical/medical-cont
 import { __runLoyaltyContentCoreTests } from "../../src/lib/loyalty/loyalty-content-core";
 import { __runLoyaltyHeroCoreTests } from "../../src/lib/loyalty/loyalty-hero-core";
 import { __runShopCarouselCoreTests } from "../../src/lib/cms/shop-carousel-core";
+import { __runMenuSpecialFiltersTests } from "../../src/lib/menu/menu-special-filters-core";
 import { __runCcrsIdentifierTests } from "../../src/lib/compliance/ccrs-identifiers";
 import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventory-adjustment-core";
 import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-gate-core";
@@ -437,6 +438,7 @@ async function main() {
   { const r = __runLoyaltyContentCoreTests(); if (r.passed < 1) throw new Error("loyalty-content-core: no assertions ran"); console.log(`loyalty-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyHeroCoreTests(); if (r.passed < 1) throw new Error("loyalty-hero-core: no assertions ran"); console.log(`loyalty-hero-core: ${r.passed} assertions passed`); }
   { const r = __runShopCarouselCoreTests(); if (r.passed < 1) throw new Error("shop-carousel-core: no assertions ran"); console.log(`shop-carousel-core: ${r.passed} assertions passed`); }
+  { const r = __runMenuSpecialFiltersTests(); if (r.passed < 1) throw new Error("menu-special-filters-core: no assertions ran"); console.log(`menu-special-filters-core: ${r.passed} assertions passed`); }
   assertNoFailures("ccrs-identifiers", __runCcrsIdentifierTests());
   __runCcrsAdjustmentTests();
   assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());

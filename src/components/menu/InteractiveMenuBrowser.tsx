@@ -11,15 +11,23 @@ import { FilterMobile, MenuFilterControls } from "./FilterMobile";
 import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
-import { menuDiscountForItem } from "@/lib/promotions/published-rules-core";
-import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
+import { useActiveDealRules, usePublishedRules } from "@/components/promotions/PublishedRulesProvider";
+import {
+  resolveMenuSpecialFilters,
+  itemMatchesSpecialFilter,
+  findMenuSpecialFilter,
+  type MenuSpecialFilter,
+  type ShopSaleFilterInput,
+} from "@/lib/menu/menu-special-filters-core";
 import { merchProductDefs } from "@/lib/merch/merch-catalog";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
-// Item IDs eligible for the 50% Off clearance lane. Empty until real 50%-off
-// inventory is designated, so selecting "50% OFF" shows the empty state. (No
-// placeholder/mock IDs — this is wired for real clearance items later.)
-const clearanceItemIds: string[] = [];
+// SLICE C (SHOP-3): the Specials sidebar filters are now FULLY DYNAMIC (owner
+// directive). The old hardcoded "50% Off" placeholder (an empty clearanceItemIds
+// list) and the two one-off booleans are gone — every Specials checkbox is
+// derived from the live menu + published promotions via
+// menu-special-filters-core, and any one-off SALE a carousel slide links (SLICE
+// B) renders as its own checkbox here.
 
 // Canonical gram-weight order. Only weights actually present in the data are shown (see deriveWeightOptions).
 const weightDisplayOrder = ["0.5g", "0.7g", "0.75g", "1g", "1.2g", "1.5g", "2g", "2.5g", "3g", "3.5g", "4g", "5g", "7g", "14g", "28g", "1oz", "10pk"];
@@ -604,9 +612,15 @@ type InteractiveMenuBrowserProps = {
   initialSearchParams?: InitialMenuSearchParams;
   /** SLICE 78: DB-backed value→label map from /admin/settings/types. */
   categoryLabels?: Record<string, string>;
+  /**
+   * SLICE C (SHOP-3): the one-off SALE filters collected from the carousel
+   * slides (SLICE B). Each renders as its own Specials checkbox alongside the
+   * two built-in lanes. Empty = only the built-ins show.
+   */
+  saleFilters?: ShopSaleFilterInput[];
 };
 
-export function InteractiveMenuBrowser({ items, initialSearchParams = {}, categoryLabels }: InteractiveMenuBrowserProps) {
+export function InteractiveMenuBrowser({ items, initialSearchParams = {}, categoryLabels, saleFilters = [] }: InteractiveMenuBrowserProps) {
   // SLICE 78: register the owner's labels BEFORE any lookup below runs. This
   // happens during render on both server and client with the same map, so
   // hydration stays consistent; an absent map = hardcoded behavior.
@@ -677,12 +691,22 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   );
   const [sortBy, setSortBy] = useState<SortOption>(persistedSort ?? initialSpecial?.sortBy ?? "featured-shuffle");
 
-  // Specials quick-filters (top of the filter panel).
-  const [clearanceOnly, setClearanceOnly] = useState(false);
-  const [dailyDealsOnly, setDailyDealsOnly] = useState(false);
-  // PROMOTIONS HARMONY (Task T / PR 1): the "Daily Deals" quick-filter matches
-  // items against the back office's PUBLISHED promotion rules for today.
+  // Specials quick-filters (top of the filter panel). SLICE C (SHOP-3): a single
+  // one-at-a-time selection (matching the old mutually-exclusive UX) that can be
+  // ANY dynamic Specials filter — the two built-in lanes ("50% Off", "Daily
+  // Deals") or a one-off SALE a carousel slide links.
+  const [activeSpecialId, setActiveSpecialId] = useState<string | null>(null);
+  // PROMOTIONS HARMONY (Task T / PR 1): the Specials filters match items against
+  // the back office's PUBLISHED promotion rules. activeDealRules = today's; the
+  // full set backs any name/lookups. Both fall back to the committed seeds.
   const activeDealRules = useActiveDealRules();
+  const allDealRules = usePublishedRules();
+  // The ordered, data-driven Specials filter list (built-ins + dynamic sales).
+  const specialFilters = useMemo<MenuSpecialFilter[]>(
+    () => resolveMenuSpecialFilters(saleFilters),
+    [saleFilters],
+  );
+  const activeSpecialFilter = findMenuSpecialFilter(specialFilters, activeSpecialId);
 
   // --- Filter persistence (Task G) ---------------------------------------
   // State is hydrated from forwarded URL params above (server + client agree,
@@ -790,19 +814,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     const specialItemIds = initialSpecial?.itemIds;
     let pool = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
 
-    // Specials quick-filters.
-    if (clearanceOnly) {
-      pool = pool.filter((item) => clearanceItemIds.includes(item.id));
-    }
-    if (dailyDealsOnly) {
-      // Intentionally uses menuDiscountForItem (not the weekday-gated card variant):
-      // this filter selects deal-ELIGIBLE items. On Fri/Sat/Sun the cards hide the
-      // discounted price, but the cart still applies the deal, so eligibility stands.
-      pool = pool.filter((item) => menuDiscountForItem(item, activeDealRules ?? []) !== undefined);
+    // Specials quick-filter (SLICE C — fully dynamic). Matching is delegated to
+    // the shared pure matcher so the sidebar, the server, and the tests agree.
+    // The "Daily Deals" lane intentionally selects deal-ELIGIBLE items: on
+    // Fri/Sat/Sun the cards hide the discounted price, but the cart still
+    // applies the deal, so eligibility stands.
+    if (activeSpecialFilter) {
+      const ctx = { allRules: allDealRules, activeRules: activeDealRules ?? [] };
+      pool = pool.filter((item) => itemMatchesSpecialFilter(item, activeSpecialFilter, ctx));
     }
 
     return sortItems(pool.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
-  }, [activeDealRules, cannabinoidBounds, clearanceOnly, criteria, dailyDealsOnly, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
+  }, [activeDealRules, allDealRules, activeSpecialFilter, cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
@@ -880,8 +903,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedTerpenes.length > 0 ||
     selectedBrands.length > 0 ||
     selectedWeights.length > 0 ||
-    clearanceOnly ||
-    dailyDealsOnly;
+    activeSpecialId !== null;
   // Accessories/merch are catalog collections (not filterable by THC/strain/etc),
   // so only surface them at the bottom when no narrowing filters are applied.
   const surfaceBottomCollections = !hasOtherFiltersActive;
@@ -943,24 +965,30 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     setMaxCbd(maxAvailableCbd);
     setMaxPrice(maxAvailablePrice);
     setSortBy("featured-shuffle");
-    setClearanceOnly(false);
-    setDailyDealsOnly(false);
+    setActiveSpecialId(null);
   };
 
-  // Specials toggles are mutually exclusive — picking one clears the other.
-  const toggleClearance = () => {
-    setClearanceOnly((current) => !current);
-    setDailyDealsOnly(false);
-  };
-  const toggleDailyDeals = () => {
-    setDailyDealsOnly((current) => !current);
-    setClearanceOnly(false);
+  // Specials selection is one-at-a-time (mutually exclusive): clicking the
+  // active one clears it, clicking another switches to it.
+  const toggleSpecial = (id: string) => {
+    setActiveSpecialId((current) => (current === id ? null : id));
   };
 
   const strainTagLabel = (strain: string) => (strain === HIGH_CBD_VALUE ? "CBD" : strain.charAt(0).toUpperCase() + strain.slice(1));
 
   // NOTE: The search query is intentionally NOT shown as a filter pill — it just filters live.
   const activeFilterTags = [
+    // SLICE C: the active Specials filter shows as a removable pill (by name).
+    ...(activeSpecialFilter
+      ? [
+          {
+            key: `special-${activeSpecialFilter.id}`,
+            label: "Special",
+            value: activeSpecialFilter.name,
+            onRemove: () => setActiveSpecialId(null),
+          },
+        ]
+      : []),
     ...selectedCategories.map((category) => ({
       key: `category-${category}`,
       label: "Category",
@@ -1055,10 +1083,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       terpeneOptions={terpeneOptions}
       brandOptions={brandOptions}
       weightOptions={weightOptions}
-      clearanceActive={clearanceOnly}
-      dailyDealsActive={dailyDealsOnly}
-      onClearanceToggle={toggleClearance}
-      onDailyDealsToggle={toggleDailyDeals}
+      specialFilters={specialFilters}
+      activeSpecialId={activeSpecialId}
+      onSpecialToggle={toggleSpecial}
     />
   );
 
