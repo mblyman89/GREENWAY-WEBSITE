@@ -19,10 +19,17 @@ const CATEGORY_LABEL: Record<FontCategory, string> = {
   sans: "Sans-serif (clean & modern)",
   serif: "Serif (classic & elegant)",
   display: "Display (bold headlines)",
+  script: "Script (cursive & handwritten)",
   mono: "Monospaced",
 };
 
-const CATEGORY_ORDER: FontCategory[] = ["sans", "serif", "display", "mono"];
+const CATEGORY_ORDER: FontCategory[] = [
+  "sans",
+  "serif",
+  "display",
+  "script",
+  "mono",
+];
 
 export function ContentFontField({
   value,

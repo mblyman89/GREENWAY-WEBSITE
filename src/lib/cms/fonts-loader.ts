@@ -21,6 +21,9 @@ import {
   Merriweather,
   Roboto_Slab,
   JetBrains_Mono,
+  Great_Vibes,
+  Dancing_Script,
+  Pacifico,
 } from "next/font/google";
 
 const inter = Inter({
@@ -77,6 +80,25 @@ const jetbrains = JetBrains_Mono({
   variable: "--gw-font-jetbrains",
   display: "swap",
 });
+// Script / cursive faces (SLICE 123) — used for special banner flourishes such
+// as the loyalty hero subtitle ("Earn Points With Every Purchase").
+const greatVibes = Great_Vibes({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-great-vibes",
+  display: "swap",
+});
+const dancingScript = Dancing_Script({
+  subsets: ["latin"],
+  variable: "--gw-font-dancing-script",
+  display: "swap",
+});
+const pacifico = Pacifico({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--gw-font-pacifico",
+  display: "swap",
+});
 
 /**
  * A single className string declaring every font CSS variable. Spread onto the
@@ -93,4 +115,7 @@ export const fontVariablesClassName = [
   merriweather.variable,
   robotoSlab.variable,
   jetbrains.variable,
+  greatVibes.variable,
+  dancingScript.variable,
+  pacifico.variable,
 ].join(" ");

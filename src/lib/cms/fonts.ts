@@ -16,7 +16,7 @@
  * entry here with the matching CSS variable.
  */
 
-export type FontCategory = "sans" | "serif" | "display" | "mono";
+export type FontCategory = "sans" | "serif" | "display" | "script" | "mono";
 
 export type FontOption = {
   /** Stable id stored in the content block (e.g. "poppins"). */
@@ -127,6 +127,30 @@ export const FONT_OPTIONS: FontOption[] = [
     category: "mono",
     cssVar: "--gw-font-jetbrains",
     stack: `var(--gw-font-jetbrains), ui-monospace, monospace`,
+  },
+  {
+    id: "great-vibes",
+    label: "Great Vibes",
+    note: "Elegant flowing script. Classy signature-style flourish.",
+    category: "script",
+    cssVar: "--gw-font-great-vibes",
+    stack: `var(--gw-font-great-vibes), "Segoe Script", cursive`,
+  },
+  {
+    id: "dancing-script",
+    label: "Dancing Script",
+    note: "Lively casual script. Friendly handwritten feel.",
+    category: "script",
+    cssVar: "--gw-font-dancing-script",
+    stack: `var(--gw-font-dancing-script), "Segoe Script", cursive`,
+  },
+  {
+    id: "pacifico",
+    label: "Pacifico",
+    note: "Bold rounded script. Retro, fun, high-personality.",
+    category: "script",
+    cssVar: "--gw-font-pacifico",
+    stack: `var(--gw-font-pacifico), "Segoe Script", cursive`,
   },
 ];
 

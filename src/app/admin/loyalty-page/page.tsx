@@ -13,17 +13,29 @@ import {
   listContentBlocks,
   listContentRevisions,
   ensureContentBlocksSeeded,
+  getContentBlock,
 } from "@/lib/cms/content-store";
 import {
   LOYALTY_CONTENT_BLOCKS,
   loyaltyContentFallback,
 } from "@/lib/loyalty/loyalty-content-core";
+import { LOYALTY_HERO_PRESENTATION_BLOCK } from "@/lib/loyalty/loyalty-hero-core";
 import { getConfig, listTiers } from "@/lib/loyalty/loyalty-store";
 import { loyaltyTermsSummary, tierDisplayRows } from "@/lib/loyalty/program-terms-core";
+import {
+  LoyaltyHeroEditor,
+  type LoyaltyHeroRevisionVM,
+} from "@/components/admin/LoyaltyHeroEditor";
+import { listMedia } from "@/lib/media/store";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
+import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import {
   saveLoyaltyDraftAction,
   publishLoyaltyAction,
   restoreLoyaltyRevisionAction,
+  saveLoyaltyHeroDraftAction,
+  publishLoyaltyHeroAction,
+  restoreLoyaltyHeroRevisionAction,
 } from "./actions";
 
 /**
@@ -134,6 +146,29 @@ export default async function AdminLoyaltyPage({
     blocks: blockVMs.filter((b) => b.key.startsWith(g.prefix)),
   })).filter((s) => s.blocks.length > 0);
 
+  // ---- Hero banner (SLICE 123 / LOY-1): ONE richjson presentation block ----
+  const heroBlock = await getContentBlock(LOYALTY_HERO_PRESENTATION_BLOCK);
+  const heroRevisions = await listContentRevisions(LOYALTY_HERO_PRESENTATION_BLOCK, 15);
+  const heroRevisionVMs: LoyaltyHeroRevisionVM[] = heroRevisions.map((r) => ({
+    id: r.id,
+    created_at: r.created_at,
+    actor_email: r.actor_email,
+  }));
+  // Media Library choices for the banner-image pickers (same source + shape the
+  // Pages/Specials builders use), so staff can pick a catalogued image or paste
+  // a URL. Only published images with a public URL are offered.
+  const mediaAssets = await listMedia({ status: "published", limit: 200 });
+  const mediaChoices: MediaChoice[] = mediaAssets
+    .filter((m) => (m.mime_type ?? "").startsWith("image/") && m.public_url)
+    .map((m) => ({
+      id: m.id,
+      url: m.public_url as string,
+      title: m.title ?? m.filename ?? "Image",
+      usageType: m.usage_type ?? null,
+    }));
+  const heroDesktopSpec = resolveImageSpec("loyalty.hero.image");
+  const heroMobileSpec = resolveImageSpec("loyalty.hero.image_mobile");
+
   // ---- Live program numbers snapshot (read-only reference) -----------------
   const [cfg, tiers] = await Promise.all([getConfig(), listTiers()]);
   const summary = loyaltyTermsSummary(cfg);
@@ -174,8 +209,9 @@ export default async function AdminLoyaltyPage({
               never advertise terms that differ from what customers actually earn.
             </p>
             <p>
-              The hero banner image, title, and subtitle are edited under Site Content and the page
-              section builder. This editor only handles the friendly copy.
+              The <strong>hero banner</strong> (the big image and its wording) is now edited right
+              here at the top of this page — pick the picture and style the eyebrow, title, and
+              subtitle text. Everything for the Loyalty page lives on this one screen.
             </p>
           </HelpPanel>
         }
@@ -197,6 +233,36 @@ export default async function AdminLoyaltyPage({
                 : "Draft saved."}
           </div>
         )}
+
+        {/* SLICE 123 (LOY-1): the hero banner editor (image + overlay text). */}
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--admin-text)]">Hero banner</h2>
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              The big banner at the top of the Loyalty page — its picture and the eyebrow / title /
+              subtitle wording, fonts, colors, and layout.
+            </p>
+          </div>
+          {!heroBlock ? (
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              The Loyalty hero banner is being set up. Refresh in a moment.
+            </p>
+          ) : (
+            <LoyaltyHeroEditor
+              draftJson={heroBlock.draft_value ?? null}
+              publishedJson={heroBlock.published_value ?? null}
+              revisions={heroRevisionVMs}
+              saveDraftAction={saveLoyaltyHeroDraftAction}
+              publishAction={publishLoyaltyHeroAction}
+              restoreAction={restoreLoyaltyHeroRevisionAction}
+              mediaChoices={mediaChoices}
+              desktopSpec={heroDesktopSpec}
+              mobileSpec={heroMobileSpec}
+            />
+          )}
+        </section>
+
+        <div className="border-t border-[var(--admin-border)]" />
 
         <LoyaltyPageEditor
           sections={sections}

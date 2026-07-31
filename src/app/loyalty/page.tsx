@@ -12,6 +12,10 @@ import {
   LOYALTY_CONTENT_KEYS,
   resolveLoyaltyValue,
 } from "@/lib/loyalty/loyalty-content-core";
+import {
+  LOYALTY_HERO_PRESENTATION_BLOCK,
+  resolveLoyaltyHeroPresentation,
+} from "@/lib/loyalty/loyalty-hero-core";
 
 export const metadata = pageMetadata({
   title: "Loyalty Rewards & Sign-Up — Greenway Points",
@@ -33,6 +37,10 @@ export default async function LoyaltyPage() {
       "loyalty.hero.subtitle",
       "loyalty.hero.image",
       "loyalty.hero.image_mobile",
+      // SLICE 123 (LOY-1) — the new editable hero banner presentation (image +
+      // overlay text blocks with fonts/colors/alignment). Draft-aware, so staff
+      // preview sees unpublished edits; everyone else sees the published look.
+      LOYALTY_HERO_PRESENTATION_BLOCK,
       // SLICE 108 — editable friendly copy (signup form + program terms).
       ...LOYALTY_CONTENT_KEYS,
     ]),
@@ -49,11 +57,20 @@ export default async function LoyaltyPage() {
   // stays driven by the loyalty.hero.image* content blocks. Live look unchanged.
   const hero = banners.byKey["loyalty.hero"];
 
+  // SLICE 123 (LOY-1): resolve the new editable hero banner. When unseeded this
+  // returns the owner-approved default (new textless art + overlay text that
+  // recreates the old baked headline), so the page renders the intended new
+  // look immediately and staff can then customize it.
+  const heroPresentation = resolveLoyaltyHeroPresentation(
+    copy[LOYALTY_HERO_PRESENTATION_BLOCK],
+  );
+
   return (
     <main id="top" className="min-h-screen bg-black text-white">
       <Header />
       <Breadcrumbs items={[{ label: "Loyalty" }]} />
       <LoyaltySignupForm
+        heroPresentation={heroPresentation}
         content={{
           title: hero?.title || copy["loyalty.hero.title"],
           subtitle: hero?.subtitle || copy["loyalty.hero.subtitle"],
