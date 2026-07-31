@@ -20,6 +20,7 @@ import { selectRelatedItems, type RelatedScope } from "@/lib/menu/related-produc
 import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
+import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 import { resolveDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
@@ -296,9 +297,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // its own photo path, so we only resolve for cannabis + non-cannabis items.
   // Also overlay the KB strain profile (terpenes + leaning-hybrid strainType)
   // so the detail page matches the menu card. No-op when no KB/curated match.
+  // SLICE D (SHOP-4): thread the DOH-compliant flag onto the detail item too,
+  // from the same durable registry, so the product page agrees with the menu
+  // card. Merch is non-cannabis → skip. Degrades to "no DOH" pre-migration.
   const [item] = isMerchItem(baseItem)
     ? [baseItem]
-    : await withMenuProfile(await withResolvedImages([baseItem]));
+    : await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem])));
 
   // 7b.1: KB-first curated knowledge, compliance-filtered for public display.
   // Merch/accessories are non-cannabis → the helper returns an empty result.
