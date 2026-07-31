@@ -32,6 +32,11 @@ import {
 } from "@/lib/medical/medical-content-core";
 import { LOYALTY_CONTENT_BLOCKS } from "@/lib/loyalty/loyalty-content-core";
 import {
+  LOYALTY_HERO_PRESENTATION_BLOCK,
+  defaultLoyaltyHeroPresentation,
+  serializeLoyaltyHeroPresentation,
+} from "@/lib/loyalty/loyalty-hero-core";
+import {
   VENDOR_CONTACT_CHANNELS,
   vendorChannelBlockKey,
 } from "@/lib/vendors/vendor-relations-core";
@@ -320,6 +325,24 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Loyalty hero — subtitle",
     field_type: "plain",
     defaultValue: "Get updates on our promotions tailored to you.",
+  },
+  {
+    // SLICE 123 (LOY-1): the /loyalty hero rebuilt as a fully editable "special"
+    // banner — a textless background image plus three overlay text blocks
+    // (eyebrow / title / subtitle), each with its own font, on-brand color, and
+    // hard-line-break stacking, plus image focus + text alignment. Replaces the
+    // old baked-in-text banner (owner-approved live-look change). field_type
+    // "richjson" stores JSON in the plain text column → NO migration. The
+    // default recreates the classic look with the new textless gold-leaf art.
+    block_key: LOYALTY_HERO_PRESENTATION_BLOCK,
+    page: "loyalty",
+    section: "hero",
+    label: "Loyalty hero — banner (image + overlay text)",
+    help_text:
+      "The big banner at the top of the Loyalty page. Pick the background image, then style the eyebrow, title, and subtitle text (font, color, alignment). Press Enter in a text box to stack lines. A cursive font is available for the subtitle flourish.",
+    field_type: "richjson",
+    seo_impact: true,
+    defaultValue: serializeLoyaltyHeroPresentation(defaultLoyaltyHeroPresentation()),
   },
   // ---- Loyalty editable copy (SLICE 108) -----------------------------------
   // Friendly signup-form + program-terms copy. Legal consent text and the LIVE

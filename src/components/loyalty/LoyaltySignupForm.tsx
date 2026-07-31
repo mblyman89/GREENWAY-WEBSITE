@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { greenwayBusiness } from "@/content/business";
+import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
+import type { LoyaltyHeroPresentation } from "@/lib/loyalty/loyalty-hero-core";
 
 const consentText =
   "By signing up, I consent to enroll in the member list, understanding that I will receive marketing communications, including, but not limited to, advertisements, through text messages, calls either through an automatic telephone dialing system or artificial or prerecorded voice call, emails, or other outreach channels. By doing so, I understand that I am allowing Greenway Marijuana to retain my personal contact details and engagement history for use in personalized marketing communications. I understand that I may opt-out of text messages at any time by replying \"STOP\". Standard messaging and calling rates may apply. I affirm that I am of legal age to receive communications related to the services and products being advertised. Consent is not a condition of purchase.";
@@ -59,7 +61,15 @@ type LoyaltyContent = {
 
 export function LoyaltySignupForm({
   content,
-}: { content?: LoyaltyContent } = {}) {
+  heroPresentation,
+}: {
+  content?: LoyaltyContent;
+  /**
+   * SLICE 123 (LOY-1): the editable hero banner (textless art + overlay text
+   * blocks). When supplied it renders in place of the old baked-in-text images.
+   */
+  heroPresentation?: LoyaltyHeroPresentation;
+} = {}) {
   const [values, setValues] = useState<FormValues>(defaultValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,38 +129,52 @@ export function LoyaltySignupForm({
       <div className="noise-overlay" />
 
       <div className="relative mx-auto max-w-[88rem] px-4 pt-5 md:px-8 md:pt-8">
-        {/* MOBILE banner (own art, ~3:1) */}
-        <div
-          className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:hidden"
-          {...(content?.editable
-            ? { "data-gw-block": "loyalty.hero.image_mobile", "data-gw-editable": "true" }
-            : {})}
-        >
-          <Image
-            src={content?.heroImageMobile || greenwayBusiness.assets.loyaltyHeroMobile}
-            alt="Greenway Loyalty Points promotional banner"
-            fill
+        {heroPresentation ? (
+          /* SLICE 123 (LOY-1): the new editable hero — textless art + overlay
+             text blocks (eyebrow/title/subtitle) with fonts, colors, line-break
+             stacking, image focus, and alignment, all managed from the Loyalty
+             page editor. Replaces the old baked-in-text banner images. */
+          <LoyaltyHeroBanner
+            presentation={heroPresentation}
             priority
-            sizes="calc(100vw - 2rem)"
-            className="object-cover object-center"
+            editable={content?.editable}
           />
-        </div>
-        {/* DESKTOP banner (own art, wide) */}
-        <div
-          className="relative hidden aspect-[3200/563] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:block"
-          {...(content?.editable
-            ? { "data-gw-block": "loyalty.hero.image", "data-gw-editable": "true" }
-            : {})}
-        >
-          <Image
-            src={content?.heroImage || greenwayBusiness.assets.loyaltyHero}
-            alt="Greenway Loyalty Points promotional banner"
-            fill
-            priority
-            sizes="(min-width: 1408px) 1408px, calc(100vw - 4rem)"
-            className="object-cover object-center"
-          />
-        </div>
+        ) : (
+          <>
+            {/* Legacy fallback (only if no presentation is supplied): the
+                original baked-image banners. */}
+            <div
+              className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:hidden"
+              {...(content?.editable
+                ? { "data-gw-block": "loyalty.hero.image_mobile", "data-gw-editable": "true" }
+                : {})}
+            >
+              <Image
+                src={content?.heroImageMobile || greenwayBusiness.assets.loyaltyHeroMobile}
+                alt="Greenway Loyalty Points promotional banner"
+                fill
+                priority
+                sizes="calc(100vw - 2rem)"
+                className="object-cover object-center"
+              />
+            </div>
+            <div
+              className="relative hidden aspect-[3200/563] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:block"
+              {...(content?.editable
+                ? { "data-gw-block": "loyalty.hero.image", "data-gw-editable": "true" }
+                : {})}
+            >
+              <Image
+                src={content?.heroImage || greenwayBusiness.assets.loyaltyHero}
+                alt="Greenway Loyalty Points promotional banner"
+                fill
+                priority
+                sizes="(min-width: 1408px) 1408px, calc(100vw - 4rem)"
+                className="object-cover object-center"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="relative mx-auto max-w-4xl px-4 py-7 md:px-8 md:py-10 lg:py-12">

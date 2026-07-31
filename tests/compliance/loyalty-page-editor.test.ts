@@ -93,11 +93,14 @@ describe("seeds are live-look-safe (byte-identical)", () => {
     }
   });
 
-  it("the pre-existing 4 loyalty.hero.* blocks are untouched (still 10 loyalty blocks total)", () => {
+  it("the pre-existing 4 loyalty.hero.* blocks are untouched (11 loyalty blocks total)", () => {
     const loyalty = CONTENT_BLOCK_SEEDS.filter((s) => s.block_key.startsWith("loyalty."));
-    expect(loyalty.length).toBe(10); // 4 hero + 6 new copy blocks
+    // SLICE 123 (LOY-1): +1 new block (loyalty.hero.presentation, richjson) for
+    // the editable hero banner. Previously 10 (4 hero + 6 copy) -> now 11.
+    expect(loyalty.length).toBe(11); // 4 hero + 6 copy + 1 hero-presentation
     expect(byKey.has("loyalty.hero.title")).toBe(true);
     expect(byKey.has("loyalty.hero.subtitle")).toBe(true);
+    expect(byKey.has("loyalty.hero.presentation")).toBe(true);
   });
 
   it("all content block keys remain unique across the whole seed", () => {

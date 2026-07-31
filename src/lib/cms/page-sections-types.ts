@@ -38,7 +38,13 @@ export const PAGE_SECTION_CONFIG: Record<
   // config section (SLICE 112) so the owner still has room for up to 4 real banners.
   home: { label: "Home", previewPath: "/", cap: 5 },
   menu: { label: "Menu", previewPath: "/menu", cap: 4 },
-  loyalty: { label: "Loyalty", previewPath: "/loyalty", cap: 4 },
+  // Loyalty is retired from the Pages builder (SLICE 123 / LOY-1): the dedicated
+  // /admin/loyalty-page editor now owns the ENTIRE Loyalty page — the hero
+  // banner (image + editable eyebrow/title/subtitle with fonts, colors, and a
+  // live preview) PLUS the friendly signup/terms copy. Removing the slug here
+  // makes /admin/pages/loyalty -> notFound so there is one clear place to edit
+  // Loyalty. The loyalty.hero.* copy blocks are still seeded and read via the
+  // editor's graceful fallback, so nothing on the public page breaks.
   // Specials is retired from the Pages builder (SLICE 122 / SET-3): the dedicated
   // /admin/specials editor now owns the hero image + placement, the weekly deal
   // cards, and the Today's Deal banner (each with live previews). Removing the

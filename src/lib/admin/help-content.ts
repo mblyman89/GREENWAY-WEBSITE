@@ -341,7 +341,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         q: "How is that different from the public Loyalty page?",
         a: "This area runs the program (points and rules). The words and design customers see are edited separately under Website → Loyalty, with preview before publish.",
-        href: "/admin/pages/loyalty",
+        href: "/admin/loyalty-page",
       },
       {
         q: "Where do I see loyalty performance?",
