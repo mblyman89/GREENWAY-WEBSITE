@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FilterCheckboxGroup, type FilterCheckboxOption } from "./FilterCheckboxGroup";
 import { FilterSection } from "./FilterSection";
+import type { MenuSpecialFilter } from "@/lib/menu/menu-special-filters-core";
 
 type FilterMobileProps = {
   activeCount: number;
@@ -109,10 +110,14 @@ export type MenuFilterControlsProps = {
   terpeneOptions: FilterCheckboxOption[];
   brandOptions: FilterCheckboxOption[];
   weightOptions: FilterCheckboxOption[];
-  clearanceActive?: boolean;
-  dailyDealsActive?: boolean;
-  onClearanceToggle?: () => void;
-  onDailyDealsToggle?: () => void;
+  /**
+   * SLICE C (SHOP-3): the Specials section is now FULLY DYNAMIC — a data-driven
+   * list of filters (the two built-in lanes + any one-off SALE a carousel slide
+   * links) instead of two hardcoded checkboxes. One-at-a-time selection.
+   */
+  specialFilters?: MenuSpecialFilter[];
+  activeSpecialId?: string | null;
+  onSpecialToggle?: (id: string) => void;
 };
 
 export function MenuFilterControls({
@@ -142,12 +147,11 @@ export function MenuFilterControls({
   terpeneOptions,
   brandOptions,
   weightOptions,
-  clearanceActive = false,
-  dailyDealsActive = false,
-  onClearanceToggle,
-  onDailyDealsToggle,
+  specialFilters = [],
+  activeSpecialId = null,
+  onSpecialToggle,
 }: MenuFilterControlsProps) {
-  const specialsEnabled = Boolean(onClearanceToggle || onDailyDealsToggle);
+  const specialsEnabled = Boolean(onSpecialToggle) && specialFilters.length > 0;
   return (
     <>
       <div className="flex items-center justify-between gap-4">
@@ -159,49 +163,38 @@ export function MenuFilterControls({
 
       {specialsEnabled ? (
         <FilterSection title="Specials">
-          {/* Styled to match the other filter sections (same checkbox-row look as
-              Categories / Brands / Strains) instead of standalone pill buttons. */}
+          {/* SLICE C (SHOP-3): fully data-driven. Renders the built-in lanes
+              ("50% Off", "Daily Deals") AND any one-off SALE a carousel slide
+              links — same checkbox-row look as Categories / Brands / Strains.
+              One-at-a-time selection (mutually exclusive), so the boxes behave
+              like radios (clicking the active one clears it). */}
           <div className="grid gap-2">
-            <label
-              className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                clearanceActive ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
-              }`}
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <input
-                  type="checkbox"
-                  name="specials"
-                  value="clearance"
-                  checked={clearanceActive}
-                  onChange={onClearanceToggle}
-                  className="peer sr-only"
-                />
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
-                  ✓
-                </span>
-                <span className="truncate font-bold">50% Off</span>
-              </span>
-            </label>
-            <label
-              className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
-                dailyDealsActive ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
-              }`}
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <input
-                  type="checkbox"
-                  name="specials"
-                  value="daily-deals"
-                  checked={dailyDealsActive}
-                  onChange={onDailyDealsToggle}
-                  className="peer sr-only"
-                />
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
-                  ✓
-                </span>
-                <span className="truncate font-bold">Daily Deals</span>
-              </span>
-            </label>
+            {specialFilters.map((f) => {
+              const active = activeSpecialId === f.id;
+              return (
+                <label
+                  key={f.id}
+                  className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                    active ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="specials"
+                      value={f.id}
+                      checked={active}
+                      onChange={() => onSpecialToggle?.(f.id)}
+                      className="peer sr-only"
+                    />
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
+                      ✓
+                    </span>
+                    <span className="truncate font-bold">{f.name}</span>
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </FilterSection>
       ) : null}

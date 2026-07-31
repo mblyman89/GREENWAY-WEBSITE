@@ -9,6 +9,8 @@ import { pageMetadata } from "@/lib/seo/seo";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { getShopCarouselForRender, ensureShopCarouselSeeded } from "@/lib/cms/shop-carousel-store";
+import { collectShopSaleFilters } from "@/lib/cms/shop-carousel-core";
+import { getShopPromotionTitleMap } from "@/lib/cms/shop-promotion-choices";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
@@ -56,6 +58,13 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // empty, so this never blanks. Seed is idempotent + no-ops pre-migration.
   await ensureShopCarouselSeeded();
   const shopSlides = await getShopCarouselForRender();
+  // SLICE C (SHOP-3): the one-off SALE filters a slide links (SLICE B) become
+  // dynamic sidebar checkboxes. Collect them here (server) from the SAME slides
+  // the carousel renders, using the promotion titles for any unnamed filter, and
+  // hand the plain {id,name,promotionId} list to the browser. Degrades to an
+  // empty list pre-migration / when nothing is linked (the sidebar then shows
+  // just the two built-in lanes).
+  const saleFilters = collectShopSaleFilters(shopSlides, await getShopPromotionTitleMap());
   const initialSearchParams = {
     search: firstSearchParamValue(resolvedSearchParams?.search),
     category: firstSearchParamValue(resolvedSearchParams?.category),
@@ -110,7 +119,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
 
       <section id="products">
         <Suspense fallback={<div className="mx-auto max-w-[var(--shop-max)] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
-          <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} categoryLabels={categoryLabels} />
+          <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} categoryLabels={categoryLabels} saleFilters={saleFilters} />
         </Suspense>
       </section>
       <Footer />
