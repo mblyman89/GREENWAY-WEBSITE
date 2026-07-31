@@ -41,10 +41,13 @@ import {
   CTA_VARIANTS,
   normalizeShopHeroPresentation,
   serializeShopHeroPresentation,
+  slideFilterName,
   type ShopHeroPresentation,
   type ShopSlideCta,
   type ShopCtaVariant,
+  type ShopSlidePromotion,
 } from "@/lib/cms/shop-carousel-core";
+import type { ShopPromotionChoice } from "@/lib/cms/shop-promotion-choices";
 
 // ── View-model handed down from the server page ──────────────────────────────
 
@@ -66,6 +69,8 @@ type Props = {
   /** true once the shop_carousel_slides table exists (post-migration). */
   tableReady: boolean;
   mediaChoices: MediaChoice[];
+  /** Published promotions the owner can link a slide to (SLICE B). */
+  promotionChoices: ShopPromotionChoice[];
   desktopSpec?: ImageSpec;
   mobileSpec?: ImageSpec;
   createAction: (formData: FormData) => void | Promise<void>;
@@ -302,12 +307,112 @@ function CtaEditor({
   );
 }
 
+// ── Link a sale (SLICE B / SHOP-2) ──────────────────────────────────────────
+
+/**
+ * Lets the owner LINK this slide to a published promotion and (optionally)
+ * auto-create a matching sale-filter checkbox in the Shop sidebar, giving it a
+ * friendly filter name. The link lives inside the slide's presentation JSON, so
+ * no migration is needed. When no promotions are published yet, the picker
+ * explains what to do instead of showing an empty dropdown.
+ */
+function PromotionLinkEditor({
+  promotion,
+  choices,
+  onChange,
+}: {
+  promotion: ShopSlidePromotion;
+  choices: ShopPromotionChoice[];
+  onChange: (next: ShopSlidePromotion) => void;
+}) {
+  const linked = choices.find((c) => c.id === promotion.promotionId) ?? null;
+  const namePreview = slideFilterName(
+    // Build a minimal shape slideFilterName can read.
+    { promotion } as ShopHeroPresentation,
+    linked?.title ?? null,
+  );
+  return (
+    <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+      <div className="mb-1 text-sm font-semibold">Link a sale (optional)</div>
+      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+        Tie this slide to one of your published promotions. Turn on the sidebar filter and shoppers
+        get a one-click checkbox on the Shop page that shows only that sale&apos;s products.
+      </p>
+
+      {choices.length === 0 ? (
+        <p className="text-xs text-[var(--admin-gold)]">
+          No published promotions yet. Create one under <strong>Promotions</strong>, publish it, and
+          it will appear here to link.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+            Promotion
+            <select
+              value={promotion.promotionId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                onChange({
+                  promotionId: id,
+                  // Dropping the link also switches the sidebar filter off.
+                  autoFilter: id ? promotion.autoFilter : false,
+                  filterName: promotion.filterName,
+                });
+              }}
+              className={`mt-1.5 w-full ${INPUT_CLASS}`}
+            >
+              <option value="">— No sale linked —</option>
+              {choices.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                  {c.hint ? ` (${c.hint})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {promotion.promotionId ? (
+            <>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={promotion.autoFilter}
+                  onChange={(e) => onChange({ ...promotion, autoFilter: e.target.checked })}
+                />
+                <span>Show a filter for this sale in the Shop sidebar</span>
+              </label>
+
+              {promotion.autoFilter ? (
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                  Filter name
+                  <input
+                    type="text"
+                    value={promotion.filterName}
+                    maxLength={40}
+                    placeholder={linked?.title ?? "e.g. 50% Off"}
+                    onChange={(e) => onChange({ ...promotion, filterName: e.target.value })}
+                    className={`mt-1.5 w-full ${INPUT_CLASS}`}
+                  />
+                  <span className="mt-1 block font-normal normal-case text-[var(--admin-text-faint)]">
+                    Shoppers will see: <strong>{namePreview}</strong>
+                  </span>
+                </label>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The full editor for ONE slide (controls + live preview + save/publish/schedule). */
 function SlideCard({
   slide,
   index,
   total,
   mediaChoices,
+  promotionChoices,
   desktopSpec,
   mobileSpec,
   saveDraftAction,
@@ -319,6 +424,7 @@ function SlideCard({
   index: number;
   total: number;
   mediaChoices: MediaChoice[];
+  promotionChoices: ShopPromotionChoice[];
   desktopSpec?: ImageSpec;
   mobileSpec?: ImageSpec;
   saveDraftAction: Props["saveDraftAction"];
@@ -514,6 +620,12 @@ function SlideCard({
 
             <CtaEditor ctas={pres.ctas} onChange={(next) => setField("ctas", next)} />
 
+            <PromotionLinkEditor
+              promotion={pres.promotion}
+              choices={promotionChoices}
+              onChange={(next) => setField("promotion", next)}
+            />
+
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Schedule (optional)</div>
               <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
@@ -598,6 +710,7 @@ export function ShopBannerEditor(props: Props) {
     slides,
     tableReady,
     mediaChoices,
+    promotionChoices,
     desktopSpec,
     mobileSpec,
     createAction,
@@ -653,6 +766,7 @@ export function ShopBannerEditor(props: Props) {
               index={index}
               total={slides.length}
               mediaChoices={mediaChoices}
+              promotionChoices={promotionChoices}
               desktopSpec={desktopSpec}
               mobileSpec={mobileSpec}
               saveDraftAction={saveDraftAction}

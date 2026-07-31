@@ -91,6 +91,58 @@ export function normalizeCtas(value: unknown): ShopSlideCta[] {
   return out;
 }
 
+// ── Sale link (SLICE B / SHOP-2) ────────────────────────────────────────────
+
+/**
+ * A slide can be LINKED to a published promotion (a one-off sale) and, when the
+ * owner opts in, that link AUTO-CREATES a matching "sale filter" checkbox in the
+ * Shop sidebar (the actual sidebar render lands in Slice C). The link + the
+ * owner-chosen filter NAME live inside the slide's presentation JSON, so no new
+ * migration is ever needed.
+ */
+export type ShopSlidePromotion = {
+  /** The linked promotion's id (from getPublishedPromotions), or null = none. */
+  promotionId: string | null;
+  /**
+   * The label shown on the sidebar sale-filter checkbox (owner-chosen). Blank =
+   * fall back to the promotion's own title at render time.
+   */
+  filterName: string;
+  /** When true, this sale appears as its own checkbox in the Shop filter sidebar. */
+  autoFilter: boolean;
+};
+
+/** No promotion linked. */
+export function defaultShopSlidePromotion(): ShopSlidePromotion {
+  return { promotionId: null, filterName: "", autoFilter: false };
+}
+
+/** Coerce an unknown value into a valid ShopSlidePromotion (never throws). */
+export function normalizeShopSlidePromotion(raw: unknown): ShopSlidePromotion {
+  const base = defaultShopSlidePromotion();
+  if (!raw || typeof raw !== "object") return base;
+  const o = raw as Record<string, unknown>;
+  const promotionId =
+    typeof o.promotionId === "string" && o.promotionId.trim() ? o.promotionId.trim() : null;
+  const filterName = typeof o.filterName === "string" ? o.filterName.trim().slice(0, 40) : "";
+  // A filter with no linked promotion is meaningless, so autoFilter needs a link.
+  const autoFilter = o.autoFilter === true && promotionId !== null;
+  return { promotionId, filterName, autoFilter };
+}
+
+/**
+ * A stable, URL/DOM-safe id for one sale filter, derived from its label. Pure so
+ * the sidebar (client) and any server callers agree. Falls back to the
+ * promotion id when the name slugs to nothing (e.g. all punctuation).
+ */
+export function slugifyShopFilter(name: string, fallback: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || `sale-${fallback}`;
+}
+
 // ── One overlay text block (mirrors the loyalty hero block) ──────────────────
 
 /**
@@ -158,6 +210,12 @@ export type ShopHeroPresentation = {
   /** Up to two call-to-action buttons. */
   ctas: ShopSlideCta[];
   /**
+   * Optional link to a published promotion (a one-off sale) + the sidebar sale
+   * filter it can auto-create (SLICE B). Stored in the same JSON blob so no new
+   * migration is needed. Defaults to "no sale linked".
+   */
+  promotion: ShopSlidePromotion;
+  /**
    * Optional schedule window (ISO strings). When set, the slide is only shown
    * publicly inside the window. null = always shown. (Honored by isSlideLiveAt;
    * the editor UI + auto-link land in a later slice — the field is stored now so
@@ -191,6 +249,7 @@ export function defaultShopHeroPresentation(): ShopHeroPresentation {
       "muted",
     ),
     ctas: [],
+    promotion: defaultShopSlidePromotion(),
     scheduleStart: null,
     scheduleEnd: null,
   };
@@ -232,6 +291,7 @@ export function normalizeShopHeroPresentation(input: unknown): ShopHeroPresentat
     title: normalizeBlock(obj.title, base.title),
     subtitle: normalizeBlock(obj.subtitle, base.subtitle),
     ctas: normalizeCtas(obj.ctas),
+    promotion: normalizeShopSlidePromotion(obj.promotion),
     scheduleStart: cleanSchedule(obj.scheduleStart),
     scheduleEnd: cleanSchedule(obj.scheduleEnd),
   };
@@ -255,6 +315,7 @@ export function serializeShopHeroPresentation(p: ShopHeroPresentation): string {
     title: serializeBlock(n.title),
     subtitle: serializeBlock(n.subtitle),
     ctas: n.ctas,
+    promotion: n.promotion,
     scheduleStart: n.scheduleStart,
     scheduleEnd: n.scheduleEnd,
   });
@@ -310,6 +371,64 @@ export function slideHasContent(p: ShopHeroPresentation): boolean {
     (p.title.show && p.title.text.trim() !== "") ||
     (p.subtitle.show && p.subtitle.text.trim() !== "");
   return p.image.trim() !== "" || p.imageMobile.trim() !== "" || anyText;
+}
+
+// ── Sale-filter collection (SLICE B bridge → Slice C sidebar) ────────────────
+
+/** The linked promotion id for a slide, or null. */
+export function slideLinkedPromotionId(p: ShopHeroPresentation): string | null {
+  return p.promotion.promotionId;
+}
+
+/**
+ * The sidebar sale-filter label for a slide: the owner's chosen name, else the
+ * supplied promotion title fallback, else a generic "Sale". Pure + trimmed.
+ */
+export function slideFilterName(p: ShopHeroPresentation, promotionTitle?: string | null): string {
+  const chosen = p.promotion.filterName.trim();
+  if (chosen) return chosen;
+  const fromPromo = (promotionTitle ?? "").trim();
+  return fromPromo || "Sale";
+}
+
+/** One resolved sale filter to render in the Shop sidebar. */
+export type ShopSaleFilter = {
+  /** Stable id (slug of the label) used as the checkbox key + URL token. */
+  id: string;
+  /** Display label on the checkbox. */
+  name: string;
+  /** The promotion this filter selects. */
+  promotionId: string;
+};
+
+/**
+ * From the live carousel slides (+ a promotion-id → title map for name
+ * fallbacks), collect the dynamic sale filters to show in the Shop sidebar:
+ * every slide that links a promotion AND opts into auto-filter. Deduped by
+ * promotion id (first slide wins), capped at MAX_SHOP_CAROUSEL_SLIDES (10), in
+ * slide order. Pure so the server + client + tests all agree.
+ */
+export function collectShopSaleFilters(
+  slides: Array<{ presentation: ShopHeroPresentation }>,
+  promotionTitles?: Record<string, string | null | undefined>,
+): ShopSaleFilter[] {
+  const out: ShopSaleFilter[] = [];
+  const seenPromotions = new Set<string>();
+  const seenIds = new Set<string>();
+  for (const slide of slides) {
+    const promo = slide.presentation.promotion;
+    if (!promo.autoFilter || !promo.promotionId) continue;
+    if (seenPromotions.has(promo.promotionId)) continue;
+    const name = slideFilterName(slide.presentation, promotionTitles?.[promo.promotionId]);
+    let id = slugifyShopFilter(name, promo.promotionId);
+    // Guarantee a unique DOM/URL token even if two labels slug identically.
+    if (seenIds.has(id)) id = `${id}-${seenPromotions.size + 1}`;
+    seenPromotions.add(promo.promotionId);
+    seenIds.add(id);
+    out.push({ id, name, promotionId: promo.promotionId });
+    if (out.length >= MAX_SHOP_CAROUSEL_SLIDES) break;
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -433,6 +552,59 @@ export function __runShopCarouselCoreTests(): { passed: number } {
     subtitle: { text: "", show: false },
   });
   ok(!slideHasContent(blank), "fully blank slide has no content");
+
+  // ── Sale link + filter collection (SLICE B) ──────────────────────────────
+  ok(def.promotion.promotionId === null && def.promotion.autoFilter === false, "default links no sale");
+
+  // autoFilter requires a promotion id (a filter with no sale is meaningless).
+  const noLink = normalizeShopSlidePromotion({ autoFilter: true, filterName: "50% Off" });
+  ok(noLink.autoFilter === false, "autoFilter without a promotion id is dropped");
+  const linked = normalizeShopSlidePromotion({ promotionId: " p1 ", autoFilter: true, filterName: "  50% Off  " });
+  ok(linked.promotionId === "p1" && linked.autoFilter === true, "linked+auto kept; id trimmed");
+  ok(linked.filterName === "50% Off", "filter name trimmed");
+  const longName = normalizeShopSlidePromotion({ promotionId: "p", filterName: "x".repeat(80) });
+  ok(longName.filterName.length === 40, "filter name capped at 40 chars");
+
+  // Promotion field survives the presentation round-trip.
+  const withSale = normalizeShopHeroPresentation({
+    promotion: { promotionId: "promo-9", filterName: "Weekend Blowout", autoFilter: true },
+  });
+  const saleRound = resolveShopHeroPresentation(serializeShopHeroPresentation(withSale));
+  ok(saleRound.promotion.promotionId === "promo-9" && saleRound.promotion.autoFilter, "sale link round-trips");
+
+  // slugify.
+  ok(slugifyShopFilter("50% Off!", "x") === "50-off", "slug lowercases + hyphenates");
+  ok(slugifyShopFilter("!!!", "abc") === "sale-abc", "slug falls back when empty");
+
+  // slideFilterName fallback chain: chosen name → promo title → "Sale".
+  const namedSlide = normalizeShopHeroPresentation({ promotion: { promotionId: "p", filterName: "Doorbuster", autoFilter: true } });
+  ok(slideFilterName(namedSlide, "Ignored Title") === "Doorbuster", "chosen name wins");
+  const unnamedSlide = normalizeShopHeroPresentation({ promotion: { promotionId: "p", filterName: "", autoFilter: true } });
+  ok(slideFilterName(unnamedSlide, "Promo Title") === "Promo Title", "falls back to promo title");
+  ok(slideFilterName(unnamedSlide, null) === "Sale", "falls back to generic Sale");
+
+  // collectShopSaleFilters: only auto+linked slides, deduped by promotion, capped, in order.
+  const mk = (promotionId: string | null, autoFilter: boolean, filterName = "") =>
+    ({ presentation: normalizeShopHeroPresentation({ promotion: { promotionId, autoFilter, filterName } }) });
+  const collected = collectShopSaleFilters(
+    [
+      mk("a", true, "Alpha"),
+      mk("b", false, "Bravo"), // not auto → skipped
+      mk(null, true, "Nope"), // no promo → skipped
+      mk("a", true, "Alpha again"), // dup promo → skipped
+      mk("c", true, ""), // uses title fallback
+    ],
+    { c: "Charlie Sale" },
+  );
+  ok(collected.length === 2, "collect keeps only distinct auto-linked sales");
+  ok(collected[0].id === "alpha" && collected[0].promotionId === "a", "first filter alpha");
+  ok(collected[1].name === "Charlie Sale", "unnamed uses promo-title fallback");
+  // Duplicate labels → unique ids.
+  const dupNames = collectShopSaleFilters([mk("x", true, "Sale"), mk("y", true, "Sale")]);
+  ok(dupNames.length === 2 && dupNames[0].id !== dupNames[1].id, "duplicate labels get unique ids");
+  // Cap at ten even with more linked slides.
+  const many = Array.from({ length: 14 }, (_, i) => mk(`p${i}`, true, `F${i}`));
+  ok(collectShopSaleFilters(many).length === MAX_SHOP_CAROUSEL_SLIDES, "collect caps at ten filters");
 
   return { passed };
 }
