@@ -14,6 +14,7 @@ import {
 import { listMedia } from "@/lib/media/store";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { resolveImageSpec } from "@/lib/cms/image-spec-core";
+import { listShopPromotionChoices } from "@/lib/cms/shop-promotion-choices";
 import {
   seedShopBannerAction,
   addShopBannerSlideAction,
@@ -107,6 +108,11 @@ export default async function AdminShopBannerPage({
   const desktopSpec = resolveImageSpec("menu.hero.image");
   const mobileSpec = resolveImageSpec("menu.hero.image_mobile");
 
+  // Published promotions the owner can link a slide to (SLICE B). Degrades to
+  // the committed daily-deal seeds when the DB is empty, so the picker is never
+  // blank.
+  const promotionChoices = await listShopPromotionChoices();
+
   return (
     <div>
       <AdminPageHeader
@@ -158,6 +164,7 @@ export default async function AdminShopBannerPage({
           slides={slides}
           tableReady={tableReady}
           mediaChoices={mediaChoices}
+          promotionChoices={promotionChoices}
           desktopSpec={desktopSpec}
           mobileSpec={mobileSpec}
           createAction={addShopBannerSlideAction}
