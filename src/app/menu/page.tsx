@@ -3,11 +3,12 @@ import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
-import { SiteText } from "@/components/site/SiteText";
 import { SectionBanner } from "@/components/home/SectionBanner";
+import { ShopBannerCarousel } from "@/components/menu/ShopBannerCarousel";
 import { pageMetadata } from "@/lib/seo/seo";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
+import { getShopCarouselForRender, ensureShopCarouselSeeded } from "@/lib/cms/shop-carousel-store";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
@@ -45,13 +46,16 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // SLICE 78: owner-managed category labels (value → label). Serializable, so
   // the client menu can render the owner's names; empty map = old behavior.
   const categoryLabels = await loadCategoryLabelMap();
-  // Pages-builder banners for /menu: the primary menu.hero is editable via the
-  // existing SiteText hero below; any extra banners staff add render under it.
+  // Pages-builder banners for /menu: any EXTRA banners staff add render under
+  // the top carousel. (The primary top banner is now the Shop banner carousel,
+  // edited at Admin → Content → Shop Banner — see below.)
   const banners = await getPageBanners("menu", ["menu.hero"]);
-  const menuHero = banners.byKey["menu.hero"];
-  const menuHeroButtons = (menuHero?.buttons ?? []).filter(
-    (b) => b.enabled !== false && b.label?.trim() && b.href?.trim(),
-  );
+  // SLICE A (SHOP-1): the Shop top banner is now a staff-managed CAROUSEL (up to
+  // ten "special" slides). Resolve them draft-aware; the store falls back to a
+  // single default slide (matching the old static banner) pre-migration / when
+  // empty, so this never blanks. Seed is idempotent + no-ops pre-migration.
+  await ensureShopCarouselSeeded();
+  const shopSlides = await getShopCarouselForRender();
   const initialSearchParams = {
     search: firstSearchParamValue(resolvedSearchParams?.search),
     category: firstSearchParamValue(resolvedSearchParams?.category),
@@ -79,60 +83,11 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
         maxWidthClassName="max-w-[var(--shop-max)]"
       />
 
-      {/* Wide, short hero banner — clean, left-aligned title with a single subtitle line */}
-      <section className="border-b border-white/10 bg-black px-4 py-4 md:px-8 md:py-5">
-        <div className="mx-auto max-w-[var(--shop-max)]">
-          <div className="relative flex min-h-[8.5rem] items-center overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] px-5 py-6 shadow-2xl shadow-black/40 md:min-h-[10.5rem] md:px-10">
-            <div
-              className="absolute inset-0 bg-[radial-gradient(circle_at_88%_28%,rgba(255,127,0,0.42),transparent_42%),radial-gradient(circle_at_70%_85%,rgba(126,217,87,0.28),transparent_45%),linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]"
-              aria-hidden="true"
-            />
-            {/* Right-side decorative illustration (no logo icon) */}
-            <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 items-center justify-center md:flex" aria-hidden="true">
-              <div className="relative h-28 w-28 rotate-6">
-                <div className="absolute inset-0 rounded-[40%_60%_55%_45%/55%_45%_60%_40%] bg-gradient-to-br from-[var(--greenway)] via-[var(--gold)] to-[var(--orange)] opacity-70 blur-[2px]" />
-                <div className="absolute inset-4 rounded-[45%_55%_50%_50%/50%_50%_55%_45%] border border-white/30 bg-black/30" />
-                <div className="absolute left-1/2 top-1/2 h-16 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30" />
-              </div>
-            </div>
-            <div className="relative max-w-[78%] md:max-w-[60%]">
-              {/* Editable from Admin → Site Content (menu.hero.*). Falls back to
-                  the seeded copy, so there is no visible change until staff
-                  edit + publish. Shows the draft value live in staff preview. */}
-              <SiteText
-                blockKey="menu.hero.title"
-                as="h1"
-                className="text-3xl font-black uppercase leading-none tracking-tight text-white md:text-5xl"
-              />
-              <SiteText
-                blockKey="menu.hero.subtitle"
-                as="p"
-                className="mt-2 text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base"
-              />
-              {menuHeroButtons.length ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-4 md:gap-3">
-                  {menuHeroButtons.map((b, i) => {
-                    const variant = b.variant ?? "solid";
-                    const base =
-                      "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-full px-4 text-[0.68rem] font-black uppercase tracking-[0.12em] transition md:h-10 md:px-5 md:text-xs";
-                    const styles =
-                      variant === "solid"
-                        ? "bg-[var(--greenway)] text-black hover:bg-[#6bc746]"
-                        : variant === "outline"
-                          ? "border border-white/30 text-white hover:border-[var(--orange)] hover:text-[var(--orange)]"
-                          : "text-[var(--greenway)] underline-offset-4 hover:underline";
-                    return (
-                      <a key={`${b.href}-${i}`} href={b.href} className={`${base} ${styles}`}>
-                        {b.label}
-                      </a>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* SLICE A (SHOP-1): the top banner is now a staff-managed CAROUSEL of up
+          to ten "special" slides (Admin → Content → Shop Banner). Falls back to
+          a single default slide matching the old static banner, so the page is
+          effectively unchanged until staff edit + publish. */}
+      <ShopBannerCarousel slides={shopSlides} />
 
       {/* Extra banners staff added in the Pages builder render here. */}
       {banners.extras.length ? (
