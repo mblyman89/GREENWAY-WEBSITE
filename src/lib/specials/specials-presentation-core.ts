@@ -164,6 +164,14 @@ export type SpecialsPresentation = {
   heroBannerVerticalAlign: TextVAlign;
   /** Where the TOP hero IMAGE sits, independent of the text (default right). */
   heroBannerImageFocus: ImageFocus;
+  /**
+   * SLICE 122 (SET-3): the TOP hero background image, now owned by THIS editor
+   * (moved out of the retired Pages builder). Blank string => keep today's
+   * gradient-only hero (no image), so the live page is byte-identical until
+   * staff upload one and Publish. When set, the image sits behind the dark
+   * fade with heroBannerImageFocus / placement applied.
+   */
+  heroBannerImage: string;
   /** How many live product cards to show under the banner (default 16). */
   todaysDealsCount: number;
   /** Per-weekday settings (always all 7, natural order). */
@@ -192,6 +200,9 @@ export function defaultSpecialsPresentation(): SpecialsPresentation {
     heroBannerTextAlign: "left",
     heroBannerVerticalAlign: "center",
     heroBannerImageFocus: "right",
+    // SLICE 122 (SET-3): blank => today's gradient-only hero (no image), so the
+    // live page is unchanged until staff upload one and Publish.
+    heroBannerImage: "",
     todaysDealsCount: TODAYS_DEALS_COUNT_DEFAULT,
     days: SPECIALS_WEEKDAYS.map((weekday, i) => ({
       weekday,
@@ -251,6 +262,11 @@ export function normalizeSpecialsPresentation(
   const heroBannerImageFocus = isImageFocus(obj.heroBannerImageFocus)
     ? obj.heroBannerImageFocus
     : base.heroBannerImageFocus;
+  // SLICE 122 (SET-3): TOP hero image (moved from the retired Pages builder).
+  const heroBannerImage =
+    typeof obj.heroBannerImage === "string"
+      ? obj.heroBannerImage.trim()
+      : base.heroBannerImage;
   const todaysDealsCount =
     obj.todaysDealsCount === undefined
       ? base.todaysDealsCount
@@ -294,6 +310,7 @@ export function normalizeSpecialsPresentation(
     heroBannerTextAlign,
     heroBannerVerticalAlign,
     heroBannerImageFocus,
+    heroBannerImage,
     todaysDealsCount,
     days,
   };
@@ -313,6 +330,7 @@ export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
     heroBannerTextAlign: norm.heroBannerTextAlign,
     heroBannerVerticalAlign: norm.heroBannerVerticalAlign,
     heroBannerImageFocus: norm.heroBannerImageFocus,
+    heroBannerImage: norm.heroBannerImage,
     todaysDealsCount: norm.todaysDealsCount,
     days: norm.days.map((d) => {
       const out: Record<string, unknown> = {
@@ -514,6 +532,7 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(def.heroBannerTextAlign === "left", "default hero text-align left (today's look)");
   ok(def.heroBannerVerticalAlign === "center", "default hero vertical-align center (today's look)");
   ok(def.heroBannerImageFocus === "right", "default hero image-focus right (today's look)");
+  ok(def.heroBannerImage === "", "default hero image blank (gradient-only, today's look)");
 
   // Text-align + vertical-align guards.
   ok(isTextAlign("left") && isTextAlign("center") && isTextAlign("right"), "valid text aligns");
@@ -578,10 +597,12 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
     heroBannerTextAlign: "center",
     heroBannerVerticalAlign: "top",
     heroBannerImageFocus: "left",
+    heroBannerImage: "  /media/hero.webp  ",
   });
   ok(hero.heroBannerTextAlign === "center", "hero text-align applied");
   ok(hero.heroBannerVerticalAlign === "top", "hero vertical-align applied");
   ok(hero.heroBannerImageFocus === "left", "hero image-focus applied");
+  ok(hero.heroBannerImage === "/media/hero.webp", "hero image trimmed + applied");
   const badHero = normalizeSpecialsPresentation({
     heroBannerTextAlign: "nope",
     heroBannerVerticalAlign: "nope",
@@ -590,10 +611,12 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(badHero.heroBannerTextAlign === "left", "bad hero text-align -> default left");
   ok(badHero.heroBannerVerticalAlign === "center", "bad hero vertical-align -> default center");
   ok(badHero.heroBannerImageFocus === "right", "bad hero image-focus -> default right");
+  ok(badHero.heroBannerImage === "", "bad hero image -> default blank");
   const heroRound = parseSpecialsPresentation(serializeSpecialsPresentation(hero))!;
   ok(heroRound.heroBannerTextAlign === "center", "round-trip keeps hero text-align");
   ok(heroRound.heroBannerVerticalAlign === "top", "round-trip keeps hero vertical-align");
   ok(heroRound.heroBannerImageFocus === "left", "round-trip keeps hero image-focus");
+  ok(heroRound.heroBannerImage === "/media/hero.webp", "round-trip keeps hero image");
 
   return { passed };
 }

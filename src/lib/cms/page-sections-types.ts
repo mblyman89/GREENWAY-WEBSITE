@@ -3,10 +3,12 @@
  *
  * Shared types for the generic per-page "section builder" (migration 0013,
  * table public.page_sections). This generalizes the home carousel pattern so
- * EVERY page (home, menu, loyalty, specials, vendors, faq, about, locations,
+ * EVERY page (home, menu, loyalty, vendors, faq, about, locations,
  * price-match) can have editable banners/sections: text, image, and
  * add/delete/style call-to-action buttons. Each row carries its own published +
- * draft copy so it can be edited + previewed before going live.
+ * draft copy so it can be edited + previewed before going live. (Specials was
+ * retired from this builder in SLICE 122 / SET-3 in favor of the dedicated
+ * /admin/specials editor; see PAGE_SECTION_CONFIG below.)
  */
 import type { PostStatus } from "./types";
 
@@ -37,7 +39,13 @@ export const PAGE_SECTION_CONFIG: Record<
   home: { label: "Home", previewPath: "/", cap: 5 },
   menu: { label: "Menu", previewPath: "/menu", cap: 4 },
   loyalty: { label: "Loyalty", previewPath: "/loyalty", cap: 4 },
-  specials: { label: "Specials", previewPath: "/specials", cap: 4 },
+  // Specials is retired from the Pages builder (SLICE 122 / SET-3): the dedicated
+  // /admin/specials editor now owns the hero image + placement, the weekly deal
+  // cards, and the Today's Deal banner (each with live previews). Removing the
+  // slug here makes /admin/pages/specials -> notFound so there is one clear place
+  // to edit Specials. The specials.hero content copy (eyebrow/title/subtitle) is
+  // still seeded + edited via Site Content and read by the editor's graceful
+  // fallback, so the public page is unchanged.
   vendors: { label: "Vendors", previewPath: "/vendor-delivery", cap: 4 },
   faq: { label: "FAQ", previewPath: "/faq", cap: 4 },
   about: { label: "About", previewPath: "/about", cap: 4 },

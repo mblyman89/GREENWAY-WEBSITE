@@ -172,8 +172,8 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Where do I edit the Specials page?",
-        a: "The Specials page builder controls the words and layout of the public specials page; the deals themselves come from Promotions.",
-        href: "/admin/pages/specials",
+        a: "The Specials editor controls the top hero image, the weekly deal cards, and the Today's Deal banner \u2014 each with live previews. The deals themselves come from Promotions, and the hero wording comes from Site Content.",
+        href: "/admin/specials",
       },
       {
         q: "Where do I edit the Vendors page?",
