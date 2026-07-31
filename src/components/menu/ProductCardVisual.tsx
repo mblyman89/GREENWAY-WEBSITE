@@ -5,6 +5,7 @@ import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-core";
 import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
+import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 import { glowCardStyle } from "@/lib/ui/glow-card-core";
 
@@ -281,6 +282,13 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   const cannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
   const netWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
   const strain = displayStrain(item);
+  // SLICE F (owner Michael): the on-card DOH pill. Michael locked in a BLUE
+  // pill that says "DOH", living "with the other pills" (the 1:1 / CBD profile
+  // pill). dohPillForItem returns null for non-compliant items so nothing shows
+  // pre-migration (empty medical registry) -- exactly like today. It renders
+  // INDEPENDENTLY of the cannabinoid block so a DOH item ALWAYS shows its pill,
+  // even a non-cannabis DOH item or one whose profile pill is suppressed.
+  const dohPill = dohPillForItem(item);
 
   // SLICE 95 (owner: uniform card heights): NO h-full on the card. In the
   // PDP's horizontal flex rail, `height: 100%` resolves against an auto-height
@@ -356,6 +364,19 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
               style={{ background: pillBackground(tone) }}
             >
               {strain}
+            </span>
+          ) : null}
+          {/* SLICE F (owner Michael): the DOH pill. Same rounded-full shape as
+              the profile pill so it sits naturally in the pill lane, but BLUE
+              (tone tokens live in menu-doh-badge-core → colour is one line).
+              Rendered OUTSIDE the cannabinoid block so it always shows for a
+              DOH item; when the profile pill is present the two stack neatly. */}
+          {dohPill ? (
+            <span
+              className={`mx-auto inline-flex items-center gap-1.5 rounded-full border ${dohPill.tone.border} bg-black/45 px-3 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] ${dohPill.tone.text} backdrop-blur-sm`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${dohPill.tone.dot}`} aria-hidden="true" />
+              {dohPill.label}
             </span>
           ) : null}
           {showCannabinoids && cannabinoids ? (
