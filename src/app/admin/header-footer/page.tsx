@@ -38,9 +38,31 @@ import {
  * pixel-identical to the live site until a staff member edits a block, because
  * each block's seed default mirrors the current live value.
  */
+/**
+ * A few blocks that ALSO render in the site footer live under other page-groups
+ * for historical reasons (`footer.*` under page "footer"; the plain-text hours
+ * under page "business"). MIG-3 makes the Header & Footer editor their real home.
+ *
+ * MS-3.1 is the ADDITIVE-FIRST half: we surface these here (editable in this
+ * editor) while they STILL remain in Site Content for now — a harmless duplicate,
+ * because both edit the SAME database rows via the SAME save/publish actions. The
+ * reachability guard's honest owner stays SITE_CONTENT until the MS-3.3 SUBTRACT
+ * removes the Site Content copy and flips the owner to HEADER_FOOTER. No block is
+ * un-editable at any commit; the public footer is byte-identical until an edit.
+ *
+ * Kept as an explicit allowlist (not a broad prefix) so ONLY these three known
+ * footer-rendered blocks are pulled in — never anything unexpected.
+ */
+const HEADER_FOOTER_EXTRA_KEYS: ReadonlySet<string> = new Set<string>([
+  "footer.compliance.warning", // WA compliance language shown in the footer
+  "footer.hours.image", // the "OPEN / hours" graphic in the footer
+  "business.hours.display", // plain-text hours shown in the footer
+]);
+
 function publicPathForHeaderFooterBlock(): string | null {
-  // Every header-footer block renders in the shared footer on every page, so
-  // "View on site" and the live preview both point at the homepage.
+  // Every header-footer block (and the extra footer-rendered blocks above) shows
+  // in the shared footer on every page, so "View on site" and the live preview
+  // both point at the homepage.
   return "/";
 }
 
@@ -86,8 +108,12 @@ export default async function HeaderFooterPage({
     const inserted = await ensureContentBlocksSeeded();
     if (inserted > 0) allBlocks = await listContentBlocks();
   }
-  // Scope this editor to the header/footer blocks only.
-  const blocks = allBlocks.filter((b) => b.page === "header-footer");
+  // Scope this editor to the header/footer blocks, PLUS the three footer-rendered
+  // blocks that MIG-3 rehomes here (see HEADER_FOOTER_EXTRA_KEYS above). This is
+  // the additive-first surface: they also still show in Site Content until MS-3.3.
+  const blocks = allBlocks.filter(
+    (b) => b.page === "header-footer" || HEADER_FOOTER_EXTRA_KEYS.has(b.block_key),
+  );
   // If NOTHING is seeded anywhere yet, offer the one-click initialize button
   // (it seeds the whole controlled set, header-footer included).
   const notSeeded = allBlocks.length === 0;
@@ -167,6 +193,12 @@ export default async function HeaderFooterPage({
               When your app launches, paste the App Store / Google Play links here and the buttons
               start working automatically.
             </p>
+            <p className="mb-2">
+              <strong>Footer compliance &amp; hours:</strong> this editor also owns the required
+              WA <strong>compliance warning</strong>, the <strong>store-hours image</strong>, and the
+              plain-text <strong>store hours</strong> that appear in the footer. Edit them here just
+              like any other block &mdash; the same draft &rarr; preview &rarr; publish flow applies.
+            </p>
             <p>
               <strong>Nothing breaks:</strong> you can only edit these approved spots, so the footer
               always stays laid out correctly.
@@ -222,7 +254,7 @@ export default async function HeaderFooterPage({
               <StatCard
                 label="Editable footer slots"
                 value={blocks.length}
-                hint="Follow Greenway links, App links & the not-connected message"
+                hint="Social & app links, the compliance warning, store-hours image & hours text"
                 accent="muted"
               />
               <StatCard

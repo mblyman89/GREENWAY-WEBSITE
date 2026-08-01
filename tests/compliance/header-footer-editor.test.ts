@@ -136,3 +136,41 @@ describe("SLICE 104 — editor page, nav item & preview", () => {
     }
   });
 });
+
+describe("MIG-3 MS-3.1 — footer compliance/hours surfaced in Header & Footer (ADD)", () => {
+  const editor = readFileSync("src/app/admin/header-footer/page.tsx", "utf8");
+  const byKey = new Map(CONTENT_BLOCK_SEEDS.map((s) => [s.block_key, s]));
+
+  const EXTRA = [
+    "footer.compliance.warning",
+    "footer.hours.image",
+    "business.hours.display",
+  ] as const;
+
+  it("declares the explicit extra-keys allowlist (not a broad prefix)", () => {
+    expect(editor).toContain("HEADER_FOOTER_EXTRA_KEYS");
+    for (const key of EXTRA) {
+      expect(editor).toContain(key);
+    }
+  });
+
+  it("broadens the editor scope to header-footer OR the three extra keys", () => {
+    // Still scoped to the header-footer group...
+    expect(editor).toContain('b.page === "header-footer"');
+    // ...PLUS the allowlisted footer-rendered blocks (additive-first).
+    expect(editor).toContain("HEADER_FOOTER_EXTRA_KEYS.has(b.block_key)");
+  });
+
+  it("the three extra blocks really do render in the site footer", () => {
+    // page grouping is historical; they render in the footer, hence the rehome.
+    expect(byKey.get("footer.compliance.warning")?.page).toBe("footer");
+    expect(byKey.get("footer.hours.image")?.page).toBe("footer");
+    expect(byKey.get("business.hours.display")?.page).toBe("business");
+  });
+
+  it("does NOT drag the font blocks in (those go to Branding in MIG-4)", () => {
+    // site.font.* are page 'business' too, but must stay OUT of this editor.
+    expect(editor).not.toContain("site.font.heading");
+    expect(editor).not.toContain("site.font.body");
+  });
+});
