@@ -186,6 +186,7 @@ import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
 import { __runImageSpecTests } from "../../src/lib/cms/image-spec-core";
 import { __runContentSelectCoreTests } from "../../src/lib/cms/content-select-core";
 import { __runContentReachabilityCoreTests } from "../../src/lib/cms/content-reachability-core";
+import { __runPageWordingCoreTests } from "../../src/lib/cms/page-wording-core";
 import { __runPolicyDocCoreTests } from "../../src/lib/cms/policy-doc-core";
 import { __runSpecialsPresentationCoreTests } from "../../src/lib/specials/specials-presentation-core";
 import { __runHomeSectionSettingsTests } from "../../src/lib/cms/home-section-settings-core";
@@ -434,6 +435,7 @@ async function main() {
   assertNoFailures("image-spec-core", __runImageSpecTests());
   { const r = __runContentSelectCoreTests(); if (r.passed < 1) throw new Error("content-select-core: no assertions ran"); console.log(`content-select-core: ${r.passed} assertions passed`); }
   { const r = __runContentReachabilityCoreTests(); if (r.passed < 1) throw new Error("content-reachability-core: no assertions ran"); console.log(`content-reachability-core: ${r.passed} assertions passed`); }
+  { const r = __runPageWordingCoreTests(); if (r.passed < 1) throw new Error("page-wording-core: no assertions ran"); console.log(`page-wording-core: ${r.passed} assertions passed`); }
   { const r = __runPolicyDocCoreTests(); if (r.passed < 1) throw new Error("policy-doc-core: no assertions ran"); console.log(`policy-doc-core: ${r.passed} assertions passed`); }
   { const r = __runSpecialsPresentationCoreTests(); if (r.passed < 1) throw new Error("specials-presentation-core: no assertions ran"); console.log(`specials-presentation-core: ${r.passed} assertions passed`); }
   assertNoFailures("home-section-settings-core", __runHomeSectionSettingsTests());
