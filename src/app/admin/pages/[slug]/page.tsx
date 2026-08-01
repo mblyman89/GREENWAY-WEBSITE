@@ -11,6 +11,8 @@ import {
   PAGE_SECTION_CONFIG,
   sectionCapFor,
 } from "@/lib/cms/page-sections-types";
+import { PageWordingCard } from "@/components/admin/PageWordingCard";
+import { PAGES_WITH_WORDING } from "@/lib/cms/page-wording-core";
 import { listSections } from "@/lib/cms/page-sections-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
 import { HomeDisplaySettingsCard } from "@/components/admin/HomeDisplaySettingsCard";
@@ -205,6 +207,18 @@ export default async function PageBuilderPage({
           </a>{" "}
           to see your changes before they go live.
         </p>
+
+        {/*
+          MIG-1 MS-1.2: the all-inclusive "Page wording" card. For pages listed
+          in PAGES_WITH_WORDING (vendors first), this surfaces that page's
+          editable text/images (its content blocks) right here in the page's own
+          editor — the same safe draft → preview → publish machinery as Site
+          Content, just scoped to this page. Additive only: the blocks also
+          remain in Site Content until a later mini-slice removes them there.
+        */}
+        {PAGES_WITH_WORDING.has(slug) ? (
+          <PageWordingCard slug={slug} previewPath={config.previewPath} />
+        ) : null}
 
         {isHome && tab === "carousel" ? (
           <CarouselTab mediaChoices={mediaChoices} />
