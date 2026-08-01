@@ -113,15 +113,22 @@ export default async function SiteContentPage({
   // banner/section pages (Home, Menu, Loyalty, Specials, Vendors, FAQ) are
   // edited in their own tabs under PAGES, so we exclude them here to avoid
   // duplicating that work.
-  // SLICE 114: "vendors" removed so the editable vendor page text (outreach
-  // heading/body/subject + the five channel cards' title/blurb/email/subject)
-  // is reachable in the Site Content editor + live preview. The Vendors page is
-  // already wired into PREVIEW_PAGES, so the ✎ Edit hotspots now resolve.
+  // SLICE 114 (superseded): "vendors" was TEMPORARILY removed here so the vendor
+  // page text was reachable in Site Content while the Vendors page had no editor
+  // of its own.
+  // MIG-1 MS-1.3: the Vendors page now has its OWN all-inclusive "Page wording"
+  // card (/admin/pages/vendors, added MS-1.2), so we RE-EXCLUDE "vendors" here —
+  // the 23 vendor blocks now live in exactly ONE honest home (the Vendors page
+  // editor) instead of being duplicated in this junk drawer. The Vendors preview
+  // + ✎ Edit hotspots move with them (the Page wording card carries its own
+  // preview + editor shell). No block is lost: they were editable in BOTH places
+  // since MS-1.2, and this removes only the duplicate Site Content copy.
   const PAGE_BUILDER_PAGES = new Set<string>([
     "home",
     "menu",
     "loyalty",
     "specials",
+    "vendors",
     "faq",
   ]);
   const blocks = allBlocks.filter((b) => !PAGE_BUILDER_PAGES.has(b.page));

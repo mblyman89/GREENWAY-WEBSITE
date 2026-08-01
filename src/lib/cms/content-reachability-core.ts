@@ -110,13 +110,15 @@ export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([]);
  * `page` is in this set are NOT shown in Site Content. Kept in sync with the
  * real filter; the self-test cross-checks it.
  *
- * TODAY (origin/main): home, menu, loyalty, specials, faq.
+ * TODAY (after MIG-1 MS-1.3): home, menu, loyalty, specials, vendors, faq.
+ * (vendors joined here in MS-1.3, when its own "Page wording" card took over.)
  */
 export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>([
   "home",
   "menu",
   "loyalty",
   "specials",
+  "vendors",
   "faq",
 ]);
 
@@ -215,7 +217,7 @@ export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
     footer: CONTENT_EDITORS.SITE_CONTENT, // -> HEADER_FOOTER (MIG-3)
     locations: CONTENT_EDITORS.SITE_CONTENT, // -> PAGES_LOCATIONS (MIG-2)
     "price-match": CONTENT_EDITORS.SITE_CONTENT, // -> PAGES_PRICE_MATCH (MIG-2)
-    vendors: CONTENT_EDITORS.SITE_CONTENT, // -> PAGES_VENDORS (MIG-1)
+    vendors: CONTENT_EDITORS.PAGES_VENDORS, // MIG-1 MS-1.3: flipped from SITE_CONTENT (Page wording card owns it)
     // legal groups: reachable in Site Content AND legal-policies today. We pick
     // the dedicated editor as the honest owner (it is the intended home).
     legal: CONTENT_EDITORS.LEGAL_POLICIES,
