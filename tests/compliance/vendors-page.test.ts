@@ -15,8 +15,10 @@
  *    flag is NOT editable. The blank-body mailto rule is preserved.
  *  - The card uses the product-card glow recipe (#101010 + dual radial glows +
  *    boxShadow), NO ACCENTS gradient background.
- *  - The vendors page is UNLOCKED in the Site Content editor (removed from
- *    PAGE_BUILDER_PAGES) so the new editable text is reachable.
+ *  - The vendors page's editable text lives in its OWN "Page wording" card
+ *    (/admin/pages/vendors, MIG-1 MS-1.2). MS-1.3 re-excluded vendors from the
+ *    Site Content editor (back in PAGE_BUILDER_PAGES) so the 23 blocks now have
+ *    exactly one honest home instead of being duplicated.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -205,14 +207,16 @@ describe("SLICE 114 — public card redesign (product-card glow, no colored bg)"
   });
 });
 
-describe("SLICE 114 — editor unlocked + preview parity", () => {
-  it("vendors removed from PAGE_BUILDER_PAGES so the editable text is reachable", () => {
+describe("SLICE 114 → MIG-1 MS-1.3 — vendors editor moved to its own Page wording card", () => {
+  it("vendors is BACK in PAGE_BUILDER_PAGES (MS-1.3): its text now lives in the Vendors Page wording card, not Site Content", () => {
     const editor = read("src/app/admin/content/page.tsx");
     const setBlock = editor.slice(
       editor.indexOf("const PAGE_BUILDER_PAGES"),
-      editor.indexOf("const PAGE_BUILDER_PAGES") + 260,
+      editor.indexOf("const PAGE_BUILDER_PAGES") + 300,
     );
-    expect(setBlock).not.toContain('"vendors"');
+    // MS-1.3 SUBTRACT: vendors re-excluded from Site Content now that the
+    // Vendors page has its own all-inclusive "Page wording" card (MS-1.2).
+    expect(setBlock).toContain('"vendors"');
     // The other builder pages remain excluded.
     expect(setBlock).toContain('"home"');
     expect(setBlock).toContain('"faq"');
