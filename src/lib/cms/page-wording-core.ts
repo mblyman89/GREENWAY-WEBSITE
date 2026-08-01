@@ -27,6 +27,10 @@
  * MS-2.1a: about (2 blocks — hero title + subtitle).
  * MS-2.1b: locations (2 blocks — hero title + the storefront photo, the first
  *          IMAGE block routed through the card's Media Library picker).
+ * MS-2.1c: price-match (2 blocks — hero title + promise headline). NOTE the page
+ *          slug is "price-match" (hyphen) while the block-key prefix is
+ *          "pricematch." (no hyphen); the card scopes by page (b.page === slug),
+ *          so the rollout entry is the SLUG "price-match".
  * Future slices add: locations, price-match, faq, home, blog, ...
  *
  * A slug here MUST be a real /admin/pages/[slug] page (a valid PageSlug) and its
@@ -36,6 +40,7 @@ export const PAGES_WITH_WORDING: ReadonlySet<string> = new Set<string>([
   "vendors",
   "about",
   "locations",
+  "price-match",
 ]);
 
 /**
@@ -78,6 +83,7 @@ export function __runPageWordingCoreTests(): { passed: number } {
   assert(PAGES_WITH_WORDING.has("vendors"), "vendors wording is live (MS-1.2)");
   assert(PAGES_WITH_WORDING.has("about"), "about wording is live (MS-2.1a)");
   assert(PAGES_WITH_WORDING.has("locations"), "locations wording is live (MS-2.1b)");
+  assert(PAGES_WITH_WORDING.has("price-match"), "price-match wording is live (MS-2.1c)");
   assert(pageHasWording("vendors"), "pageHasWording agrees for vendors");
   assert(!pageHasWording("nonexistent-page"), "unknown page has no wording");
 
@@ -97,10 +103,10 @@ export function __runPageWordingCoreTests(): { passed: number } {
     "previewPath is trimmed",
   );
 
-  // 3. Snapshot: exactly 3 pages wired at MS-2.1b (bumped deliberately per slice).
+  // 3. Snapshot: exactly 4 pages wired at MS-2.1c (bumped deliberately per slice).
   assert(
-    PAGES_WITH_WORDING.size === 3,
-    `expected 3 wording pages (MS-2.1b), found ${PAGES_WITH_WORDING.size}`,
+    PAGES_WITH_WORDING.size === 4,
+    `expected 4 wording pages (MS-2.1c), found ${PAGES_WITH_WORDING.size}`,
   );
 
   return { passed };
