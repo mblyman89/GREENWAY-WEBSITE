@@ -152,6 +152,12 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   // excluded set so self-test #7 stays honest and this mirrors the
   // PAGE_BUILDER_PAGES exclusion in admin/content/page.tsx.
   "header-footer",
+  // MIG-6 Slice 2 (SUBTRACT): the blog group now defaults to BLOG (its dedicated
+  // /admin/blog/content editor has owned it since MIG-6 Slice 1), and this slice
+  // removes its duplicate copy from the Site Content list. It joins the excluded
+  // set so self-test #7 stays honest and this mirrors the PAGE_BUILDER_PAGES
+  // exclusion in admin/content/page.tsx.
+  "blog",
 ]);
 
 /**
@@ -251,7 +257,7 @@ export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
   {
     // still in Site Content today (junk drawer) — migration targets noted:
     about: CONTENT_EDITORS.PAGES_ABOUT, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
-    blog: CONTENT_EDITORS.SITE_CONTENT, // -> BLOG (MIG-6)
+    blog: CONTENT_EDITORS.BLOG, // MIG-6 Slice 2: flipped from SITE_CONTENT (Blog wording editor owns it; 7 blocks surfaced Slice 1)
     business: CONTENT_EDITORS.SETTINGS_BRANDING, // MIG-4 MS-4.2: flipped from SITE_CONTENT. The whole "business" group now lives outside Site Content -- the 2 site.font.* blocks follow this default into the Branding editor (surfaced MS-4.1), and business.hours.display keeps its KEY_OWNER_OVERRIDE to HEADER_FOOTER (override precedence wins). No business block remains in Site Content.
     footer: CONTENT_EDITORS.HEADER_FOOTER, // MIG-3 MS-3.3: flipped from SITE_CONTENT (Header & Footer editor owns it; both footer blocks surfaced MS-3.1)
     locations: CONTENT_EDITORS.PAGES_LOCATIONS, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)

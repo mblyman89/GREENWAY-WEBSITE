@@ -78,7 +78,6 @@ export const adminNav: AdminNavItem[] = [
   { label: "Marketing & Advertising", href: "/admin/marketing", permission: "content.edit", icon: "\ud83d\udce3", group: "MKTG & ADV" }, // 📣 megaphone
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "\ud83c\udff7\ufe0f", group: "MKTG & ADV" }, // 🏷️ deal tag
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\ud83d\udcdd", group: "MKTG & ADV" }, // 📝 writing
-  { label: "Blog wording", href: "/admin/blog/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "MKTG & ADV" }, // blog page wording (hero heading/intro + button labels) -- MIG-6 Slice 1; posts live in Blog & Newsletter, card design not editable here
   { label: "Email Newsletter", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709\ufe0f", group: "MKTG & ADV" }, // ✉️ email
   { label: "Creative Studio", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" }, // 🎨 creative
 
@@ -115,8 +114,8 @@ export const adminNav: AdminNavItem[] = [
   { label: "Header & Footer", href: "/admin/header-footer", permission: "content.edit", icon: "\ud83d\udd17", group: "Website" }, // 🔗 footer links & messages (SLICE 104)
   { label: "Branding", href: "/admin/settings/branding", permission: "content.edit", icon: "\ud83c\udfa8", group: "Website" }, // 🎨 site-wide fonts (heading + body) — MIG-4 MS-4.1
   { label: "Legal Policies", href: "/admin/legal-policies", permission: "content.edit", icon: "\u2696\ufe0f", group: "Website" }, // ⚖️ privacy / terms / consumer health data (SLICE 105b)
+  { label: "Blog wording", href: "/admin/blog/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "Website" }, // blog page wording (hero heading/intro + button labels) -- MIG-6 Slice 1; relocated MKTG -> Website in MIG-6 Slice 2 so all page editors live under Website; posts live in Blog & Newsletter, card design not editable here
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website" }, // 🏠 home page
-  { label: "Menu", href: "/admin/pages/menu", permission: "content.edit", icon: "\ud83c\udf3f", group: "Website" }, // 🌿 product menu
   { label: "Shop Banner", href: "/admin/content/shop-banner", permission: "content.edit", icon: "\ud83c\udf9e\ufe0f", group: "Website" }, // 🎞️ the Shop (/menu) top-banner carousel — up to 10 "special" slides, full loyalty-style editor + per-slide CTAs + optional schedule (SLICE A / SHOP-1)
   { label: "Loyalty", href: "/admin/loyalty-page", permission: "content.edit", icon: "\ud83c\udfc5", group: "Website" }, // 🏅 public /loyalty page: editable friendly copy (signup form + program-terms headings) — SLICE 108. Numbers stay live from CRM Loyalty Program; consent text is fixed. Re-pointed from /admin/pages/loyalty per SLICE 106 Specials precedent.
   { label: "Specials", href: "/admin/specials", permission: "content.edit", icon: "\ud83d\udd25", group: "Website" }, // deal-area presentation controls (SLICE 106) — which cards show/order/badge/copy; prices come from Promotions

@@ -37,7 +37,15 @@ export const PAGE_SECTION_CONFIG: Record<
   // Home's cap is 5 (not 4) to account for the locked, non-visible "home.settings"
   // config section (SLICE 112) so the owner still has room for up to 4 real banners.
   home: { label: "Home", previewPath: "/", cap: 5 },
-  menu: { label: "Menu", previewPath: "/menu", cap: 4 },
+  // Menu is retired from the Pages builder (MIG-6 Slice 2): the Shop (/menu) top
+  // banner is now the dedicated Shop Banner carousel editor (/admin/content/shop-
+  // banner, SLICE A / SHOP-1) with up to 10 fully-editable slides, so a second
+  // tier of "extra banners" under the carousel is no longer needed (the owner
+  // confirmed the carousel plus the Specials and Home promo areas cover this).
+  // Removing the slug here makes /admin/pages/menu -> notFound so there is one
+  // clear place to manage the Shop banner. The menu.hero.* copy blocks are still
+  // seeded and read via the public page's graceful fallback, so nothing on the
+  // public /menu page breaks. Mirrors the loyalty/specials retirements above.
   // Loyalty is retired from the Pages builder (SLICE 123 / LOY-1): the dedicated
   // /admin/loyalty-page editor now owns the ENTIRE Loyalty page — the hero
   // banner (image + editable eyebrow/title/subtitle with fonts, colors, and a

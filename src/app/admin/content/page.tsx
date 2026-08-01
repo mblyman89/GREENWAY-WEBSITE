@@ -174,6 +174,14 @@ export default async function SiteContentPage({
     // where the header-footer group already defaults to HEADER_FOOTER and the
     // page now joins SITE_CONTENT_EXCLUDED_PAGES.
     "header-footer",
+    // MIG-6 Slice 2 (SUBTRACT): the whole "blog" group (the 7 blog wording
+    // blocks -- hero eyebrow/heading parts/intro, card "read more", detail
+    // back label) is now excluded wholesale. Every one of those blocks lives in
+    // the dedicated Blog wording editor (/admin/blog/content) since MIG-6 Slice
+    // 1, so removing them here simply deletes the duplicate Site Content copy.
+    // No block is lost. Mirrors the reachability guard, where the blog group now
+    // defaults to BLOG and blog joins SITE_CONTENT_EXCLUDED_PAGES.
+    "blog",
   ]);
   // MIG-4 MS-4.2 (the "business" split RESOLVED): the "business" page group is
   // now excluded WHOLESALE (added to PAGE_BUILDER_PAGES above). All three of its
