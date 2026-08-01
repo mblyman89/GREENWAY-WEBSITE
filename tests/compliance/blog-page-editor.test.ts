@@ -178,9 +178,12 @@ describe("SLICE 115 — Canva button + cross-links + connections", () => {
     expect(read("src/app/admin/newsletter/page.tsx")).toContain("<CanvaButton />");
   });
 
-  it("blog admin cross-links to Site Content (blog), newsletter, and live blog", () => {
+  it("blog admin cross-links to the Blog wording editor, newsletter, and live blog", () => {
     const src = read("src/app/admin/blog/page.tsx");
-    expect(src).toContain("/admin/content?block=blog.hero.heading.part1");
+    // MIG-6 Slice 1: the wording deep-link was repointed from Site Content to
+    // the new dedicated Blog wording editor (/admin/blog/content).
+    expect(src).toContain('href="/admin/blog/content"');
+    expect(src).not.toContain("/admin/content?block=blog.hero.heading.part1");
     expect(src).toContain('href="/admin/newsletter"');
     expect(src).toContain('href="/blog"');
   });

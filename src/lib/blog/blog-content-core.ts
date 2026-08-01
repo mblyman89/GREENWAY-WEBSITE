@@ -92,6 +92,57 @@ export const BLOG_CONTENT_DEFAULTS: Readonly<Record<string, string>> =
     }, {}),
   );
 
+/** Fast lookup set of the curated blog keys (for the editor's scope guard). */
+const BLOG_CONTENT_KEY_SET: ReadonlySet<string> = new Set<string>(
+  BLOG_CONTENT_KEYS,
+);
+
+/**
+ * MIG-6 Slice 1: the scope guard for the dedicated Blog page-wording editor.
+ * Returns true ONLY for the 7 curated blog page-chrome keys, so the editor's
+ * server actions can never touch any other content block (Site Content and the
+ * other dedicated editors own everything else). Mirrors isMedicalContentBlock.
+ */
+export function isBlogContentBlock(blockKey: string): boolean {
+  return BLOG_CONTENT_KEY_SET.has(blockKey);
+}
+
+/**
+ * MIG-6 Slice 1: friendly grouping of the 7 blocks for the editor UI. The group
+ * is the middle segment of the key (blog.hero.* -> "hero", blog.card.* ->
+ * "card", blog.detail.* -> "detail"), which matches the `section` the seed
+ * derives, so the editor and the Site Content list stay consistent.
+ */
+export type BlogContentSection = {
+  id: string;
+  heading: string;
+  /** The block keys in this section, in curated order. */
+  keys: readonly string[];
+};
+
+export const BLOG_CONTENT_SECTIONS: readonly BlogContentSection[] = [
+  {
+    id: "hero",
+    heading: "Blog landing page (top hero)",
+    keys: BLOG_CONTENT_KEYS.filter((k) => k.startsWith("blog.hero.")),
+  },
+  {
+    id: "card",
+    heading: "Post cards",
+    keys: BLOG_CONTENT_KEYS.filter((k) => k.startsWith("blog.card.")),
+  },
+  {
+    id: "detail",
+    heading: "Single article page",
+    keys: BLOG_CONTENT_KEYS.filter((k) => k.startsWith("blog.detail.")),
+  },
+] as const;
+
+/** Look up one curated block's label/help/fallback by key (or undefined). */
+export function blogContentBlock(key: string): BlogContentBlock | undefined {
+  return BLOG_CONTENT_BLOCKS.find((b) => b.key === key);
+}
+
 /**
  * Resolve one blog copy value: a non-blank override wins, otherwise the
  * byte-identical default. Unknown keys return "" (never throws).
@@ -177,6 +228,51 @@ export function runBlogContentCoreSelfTests(): string[] {
     "resolveBlogCopy null override -> default",
   );
   check(resolveBlogCopy("blog.unknown.key") === "", "unknown key -> empty");
+
+  // MIG-6 Slice 1: scope guard accepts exactly the 7 curated keys, nothing else.
+  check(
+    BLOG_CONTENT_KEYS.every((k) => isBlogContentBlock(k)),
+    "isBlogContentBlock accepts every curated blog key",
+  );
+  check(
+    !isBlogContentBlock("blog.unknown.key") &&
+      !isBlogContentBlock("medical.hero.eyebrow") &&
+      !isBlogContentBlock("footer.social.facebook.url") &&
+      !isBlogContentBlock(""),
+    "isBlogContentBlock rejects non-curated / foreign / empty keys",
+  );
+
+  // MIG-6 Slice 1: sections cover all 7 keys exactly once, in curated order.
+  const sectionKeys = BLOG_CONTENT_SECTIONS.flatMap((s) => s.keys);
+  check(
+    sectionKeys.length === BLOG_CONTENT_KEYS.length,
+    "sections cover exactly the curated key count",
+  );
+  check(
+    new Set(sectionKeys).size === sectionKeys.length,
+    "no block appears in two sections",
+  );
+  check(
+    sectionKeys.every((k) => BLOG_CONTENT_KEY_SET.has(k)),
+    "every sectioned key is a curated blog key",
+  );
+  check(
+    BLOG_CONTENT_SECTIONS.length === 3 &&
+      BLOG_CONTENT_SECTIONS[0].id === "hero" &&
+      BLOG_CONTENT_SECTIONS[1].id === "card" &&
+      BLOG_CONTENT_SECTIONS[2].id === "detail",
+    "sections are hero / card / detail",
+  );
+
+  // MIG-6 Slice 1: blogContentBlock returns the block for a known key, undefined otherwise.
+  check(
+    blogContentBlock("blog.hero.eyebrow")?.fallback === "The Blog",
+    "blogContentBlock resolves a known block",
+  );
+  check(
+    blogContentBlock("blog.unknown.key") === undefined,
+    "blogContentBlock returns undefined for unknown keys",
+  );
 
   return failures;
 }
