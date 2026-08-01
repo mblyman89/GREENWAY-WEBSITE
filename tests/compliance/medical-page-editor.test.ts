@@ -50,6 +50,11 @@ import {
   selectDefaultValue,
   resolveSelectSpec,
 } from "@/lib/cms/content-select-core";
+import {
+  CONTENT_EDITORS,
+  ownerForBlock,
+  SITE_CONTENT_EXCLUDED_PAGES,
+} from "@/lib/cms/content-reachability-core";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -300,5 +305,83 @@ describe("MIG-5 Slice 1 — Medical hero/intro added to the dedicated editor", (
     expect(core).toContain("3 hero/intro Medical blocks");
     const res = __runMedicalContentCoreTests();
     expect(res.passed).toBeGreaterThan(100);
+  });
+});
+
+describe("MIG-5 Slice 2 — SUBTRACT: medical & legal removed from Site Content", () => {
+  const sitePath = "src/app/admin/content/page.tsx";
+  // Read ONLY the PAGE_BUILDER_PAGES Set literal body (between its `[` and `]`)
+  // so an explanatory comment mentioning any page name in prose can't fool us.
+  const siteSrc = read(sitePath);
+  const setStart = siteSrc.indexOf("const PAGE_BUILDER_PAGES");
+  const literal = siteSrc.slice(
+    siteSrc.indexOf("[", setStart),
+    siteSrc.indexOf("]", setStart) + 1,
+  );
+
+  it("Site Content now excludes the whole medical group (wholesale)", () => {
+    expect(literal).toContain('"medical"');
+  });
+
+  it("Site Content now excludes all four legal groups (wholesale)", () => {
+    expect(literal).toContain('"legal"');
+    expect(literal).toContain('"legal-privacy"');
+    expect(literal).toContain('"legal-terms"');
+    expect(literal).toContain('"legal-chd"');
+  });
+
+  it("the Site Content filter still filters by !PAGE_BUILDER_PAGES.has(b.page)", () => {
+    expect(siteSrc).toContain(
+      "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
+    );
+  });
+
+  it("the 3 medical copy blocks now resolve to the Medical page editor", () => {
+    for (const key of [
+      "medical.hero.title",
+      "medical.hero.subtitle",
+      "medical.intro.body",
+    ]) {
+      expect(ownerForBlock(key, "medical")).toBe(CONTENT_EDITORS.MEDICAL_PAGE);
+    }
+  });
+
+  it("none of the medical/legal blocks fall back to SITE_CONTENT any more", () => {
+    const cases: [string, string][] = [
+      ["medical.hero.title", "medical"],
+      ["medical.hero.subtitle", "medical"],
+      ["medical.intro.body", "medical"],
+      ["privacy.hero.title", "legal"],
+      ["terms.hero.title", "legal"],
+      ["chd.hero.title.line1", "legal"],
+      ["chd.hero.title.line2", "legal"],
+      ["privacy.body.doc", "legal-privacy"],
+      ["terms.body.doc", "legal-terms"],
+      ["chd.body.doc", "legal-chd"],
+    ];
+    for (const [key, page] of cases) {
+      const owner = ownerForBlock(key, page);
+      expect(owner).not.toBe(CONTENT_EDITORS.SITE_CONTENT);
+      expect(owner).not.toBe(CONTENT_EDITORS.NONE);
+    }
+  });
+
+  it("all five pages are in SITE_CONTENT_EXCLUDED_PAGES (mirrors the filter)", () => {
+    for (const page of [
+      "medical",
+      "legal",
+      "legal-privacy",
+      "legal-terms",
+      "legal-chd",
+    ]) {
+      expect(SITE_CONTENT_EXCLUDED_PAGES.has(page)).toBe(true);
+    }
+  });
+
+  it("the website-sync medical card now points at the Medical page editor", () => {
+    const sync = read("src/app/admin/website-sync/page.tsx");
+    expect(sync).toContain('href="/admin/medical-page"');
+    // The old Site Content link for the medical note is gone from that card.
+    expect(sync).toMatch(/Medical page[\s\S]*medical\.\* blocks/);
   });
 });

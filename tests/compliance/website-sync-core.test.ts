@@ -183,9 +183,12 @@ describe("MIG-3 MS-3.2 — Website Sync 'edit hours' deep link repointed to Head
     expect(hoursNote).not.toContain('href="/admin/content"');
   });
 
-  it("leaves the Medical card link on Site Content (medical.* moves later, in MIG-5)", () => {
-    // the medical copy is NOT part of MIG-3; its Site Content deep link must be untouched.
+  it("points the Medical card at the Medical page editor (repointed in MIG-5 Slice 2)", () => {
+    // MIG-5 Slice 2 moved the medical copy out of the Site Content junk drawer
+    // and into the dedicated Medical page editor, so the deep link followed it.
     const medicalNote = page.slice(page.indexOf("medical.* blocks") - 400, page.indexOf("medical.* blocks"));
-    expect(medicalNote).toContain('href="/admin/content"');
+    expect(medicalNote).toContain('href="/admin/medical-page"');
+    // and the whole sync page no longer links to the old Site Content editor.
+    expect(page).not.toContain('href="/admin/content"');
   });
 });

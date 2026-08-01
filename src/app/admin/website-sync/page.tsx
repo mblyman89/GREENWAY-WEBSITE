@@ -260,11 +260,11 @@ export default async function WebsiteSyncPage() {
               <p className="mt-3 text-sm text-[var(--admin-text-muted)]">{endorsementStatusLine(endorsement)}</p>
               {canEditContent ? (
                 <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
-                  Page copy lives in{" "}
-                  <Link href="/admin/content" className="underline">
-                    Site Content
+                  Page copy lives in the{" "}
+                  <Link href="/admin/medical-page" className="underline">
+                    Medical page
                   </Link>{" "}
-                  (medical.* blocks).
+                  editor (medical.* blocks).
                 </p>
               ) : null}
             </Card>
