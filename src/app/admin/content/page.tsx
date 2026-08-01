@@ -164,6 +164,16 @@ export default async function SiteContentPage({
     "legal-privacy",
     "legal-terms",
     "legal-chd",
+    // MIG-5 Slice 4 (SUBTRACT): the whole "header-footer" group (the 5 social
+    // links, 2 app-store links, the "not connected yet" message, and the two
+    // top-bar controls — hours text size + phone button text) is now excluded
+    // wholesale. Every one of those blocks has lived in the dedicated Header &
+    // Footer editor (/admin/header-footer) since it was created, so removing
+    // them here simply deletes the duplicate Site Content copy. No block is
+    // lost — they were editable in BOTH places. Mirrors the reachability guard,
+    // where the header-footer group already defaults to HEADER_FOOTER and the
+    // page now joins SITE_CONTENT_EXCLUDED_PAGES.
+    "header-footer",
   ]);
   // MIG-4 MS-4.2 (the "business" split RESOLVED): the "business" page group is
   // now excluded WHOLESALE (added to PAGE_BUILDER_PAGES above). All three of its

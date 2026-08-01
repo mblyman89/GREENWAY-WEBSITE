@@ -146,6 +146,12 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "legal-privacy",
   "legal-terms",
   "legal-chd",
+  // MIG-5 Slice 4 (SUBTRACT): the header-footer group already defaults to
+  // HEADER_FOOTER (its dedicated editor has owned it since Slice 104), and this
+  // slice removes its duplicate copy from the Site Content list. It joins the
+  // excluded set so self-test #7 stays honest and this mirrors the
+  // PAGE_BUILDER_PAGES exclusion in admin/content/page.tsx.
+  "header-footer",
 ]);
 
 /**
