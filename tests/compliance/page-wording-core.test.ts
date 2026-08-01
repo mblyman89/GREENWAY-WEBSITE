@@ -3,12 +3,12 @@
  *
  * These pins lock the pure contract the Vendors page editor relies on:
  *   - the rollout set is additive and starts with vendors at MS-1.2,
- *     then adds about at MS-2.1a,
+ *     then adds about at MS-2.1a, then locations at MS-2.1b,
  *   - pageHasWording agrees with the set,
  *   - the public-path helper returns a real path for a page and safely yields
  *     null for blank/missing previewPaths (so the block browser omits the
  *     "View on site" link rather than linking somewhere broken),
- *   - exactly two pages are wired at MS-2.1a (a deliberate, per-slice snapshot).
+ *   - exactly three pages are wired at MS-2.1b (a deliberate, per-slice snapshot).
  *
  * It also runs the module's embedded self-tests so the two never drift.
  */
@@ -32,6 +32,11 @@ describe("page-wording-core", () => {
     expect(pageHasWording("about")).toBe(true);
   });
 
+  it("wires locations wording at MS-2.1b", () => {
+    expect(PAGES_WITH_WORDING.has("locations")).toBe(true);
+    expect(pageHasWording("locations")).toBe(true);
+  });
+
   it("does not wire unknown pages", () => {
     expect(pageHasWording("nope")).toBe(false);
   });
@@ -44,12 +49,12 @@ describe("page-wording-core", () => {
     expect(wordingBlockPublicPath("  /about  ")).toBe("/about");
   });
 
-  it("has exactly two wording pages at MS-2.1a (snapshot)", () => {
-    expect(PAGES_WITH_WORDING.size).toBe(2);
+  it("has exactly three wording pages at MS-2.1b (snapshot)", () => {
+    expect(PAGES_WITH_WORDING.size).toBe(3);
   });
 
   it("passes its embedded pure self-tests", () => {
     const r = __runPageWordingCoreTests();
-    expect(r.passed).toBeGreaterThanOrEqual(11);
+    expect(r.passed).toBeGreaterThanOrEqual(12);
   });
 });
