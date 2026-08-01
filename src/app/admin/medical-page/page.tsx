@@ -17,9 +17,11 @@ import {
 } from "@/lib/cms/content-store";
 import {
   MEDICAL_CONTENT_BLOCKS,
+  MEDICAL_HERO_BLOCKS,
   MEDICAL_HIDE_BLOCK,
   MEDICAL_VISIBLE_VALUE,
   medicalFallback,
+  medicalHeroFallback,
 } from "@/lib/medical/medical-content-core";
 import {
   saveMedicalDraftAction,
@@ -40,7 +42,7 @@ import {
  */
 export const dynamic = "force-dynamic";
 
-/** Which of the 15 copy blocks are long enough to want a textarea. */
+/** Which copy blocks are long enough to want a textarea. */
 const MULTILINE_KEYS = new Set<string>([
   "medical.bring.item1",
   "medical.bring.item2",
@@ -49,6 +51,8 @@ const MULTILINE_KEYS = new Set<string>([
   "medical.perks.item2",
   "medical.perks.item3",
   "medical.perks.item4",
+  // MIG-5 Slice 1: the intro paragraph is a long block -> textarea.
+  "medical.intro.body",
 ]);
 
 /** Grouping of the copy blocks into friendly sections for the editor UI. */
@@ -109,35 +113,52 @@ export default async function AdminMedicalPage({
 
   // ---- Copy blocks (build one VM each; blocks come from the pure core) -----
   const byKey = new Map(allBlocks.map((b) => [b.block_key, b]));
+
+  // Build a VM for one editable block, given its byte-identical fallback.
+  const buildVM = async (
+    cb: { key: string; label: string; help?: string },
+    fallback: string,
+  ): Promise<MedicalBlockVM> => {
+    const row = byKey.get(cb.key);
+    const draftValue = row?.draft_value ?? row?.published_value ?? fallback;
+    const publishedValue = row?.published_value ?? fallback;
+    const revRows = await listContentRevisions(cb.key, 10);
+    return {
+      key: cb.key,
+      label: cb.label,
+      help: cb.help ?? null,
+      multiline: MULTILINE_KEYS.has(cb.key),
+      draftValue,
+      publishedValue,
+      hasUnpublishedDraft: !!row && (row.draft_value ?? "") !== (row.published_value ?? ""),
+      revisions: revRows.map((r) => ({
+        id: r.id,
+        created_at: r.created_at,
+        actor_email: r.actor_email,
+      })),
+    };
+  };
+
   const blockVMs: MedicalBlockVM[] = await Promise.all(
-    MEDICAL_CONTENT_BLOCKS.map(async (cb): Promise<MedicalBlockVM> => {
-      const row = byKey.get(cb.key);
-      const fallback = medicalFallback(cb.key);
-      const draftValue = row?.draft_value ?? row?.published_value ?? fallback;
-      const publishedValue = row?.published_value ?? fallback;
-      const revRows = await listContentRevisions(cb.key, 10);
-      return {
-        key: cb.key,
-        label: cb.label,
-        help: cb.help ?? null,
-        multiline: MULTILINE_KEYS.has(cb.key),
-        draftValue,
-        publishedValue,
-        hasUnpublishedDraft: !!row && (row.draft_value ?? "") !== (row.published_value ?? ""),
-        revisions: revRows.map((r) => ({
-          id: r.id,
-          created_at: r.created_at,
-          actor_email: r.actor_email,
-        })),
-      };
-    }),
+    MEDICAL_CONTENT_BLOCKS.map((cb) => buildVM(cb, medicalFallback(cb.key))),
   );
 
-  const sections: MedicalSectionVM[] = SECTION_GROUPS.map((g) => ({
-    id: g.id,
-    heading: g.heading,
-    blocks: blockVMs.filter((b) => b.key.startsWith(g.prefix)),
-  })).filter((s) => s.blocks.length > 0);
+  // MIG-5 Slice 1: the hero/intro blocks (separate registry, byte-identical
+  // fallbacks) surface as their own "Hero & intro" section at the top.
+  const heroVMs: MedicalBlockVM[] = await Promise.all(
+    MEDICAL_HERO_BLOCKS.map((cb) => buildVM(cb, medicalHeroFallback(cb.key))),
+  );
+
+  const sections: MedicalSectionVM[] = [
+    ...(heroVMs.length > 0
+      ? [{ id: "hero", heading: "Hero & intro (top of the page)", blocks: heroVMs }]
+      : []),
+    ...SECTION_GROUPS.map((g) => ({
+      id: g.id,
+      heading: g.heading,
+      blocks: blockVMs.filter((b) => b.key.startsWith(g.prefix)),
+    })).filter((s) => s.blocks.length > 0),
+  ];
 
   return (
     <div>

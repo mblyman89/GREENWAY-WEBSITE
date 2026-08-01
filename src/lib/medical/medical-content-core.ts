@@ -180,6 +180,50 @@ export const MEDICAL_CONTENT_BLOCKS: readonly MedicalContentBlock[] = [
   },
 ] as const;
 
+/**
+ * MIG-5 Slice 1 (ADD) — the Medical page's HERO + INTRO copy.
+ *
+ * These three blocks (`medical.hero.title`, `medical.hero.subtitle`,
+ * `medical.intro.body`) are rendered on the public /medical page by
+ * MedicalProgramContent.tsx via <SiteText>, whose fallback is the
+ * content-blocks SEED defaultValue. They were seeded with EXPLICIT rows in
+ * content-blocks-seed.ts (NOT via medicalCopyBlockSeeds), and until now they
+ * were editable ONLY in the generic Site Content "junk drawer".
+ *
+ * This registry surfaces them in the dedicated Medical page editor too
+ * (additive-first). It is DELIBERATELY SEPARATE from MEDICAL_CONTENT_BLOCKS so
+ * it does NOT feed medicalCopyBlockSeeds() — that would DOUBLE-SEED these keys
+ * (they already have explicit seed rows) and break the intentional invariant
+ * that MEDICAL_CONTENT_BLOCKS holds exactly the 15 non-hero copy blocks.
+ *
+ * Each `fallback` below is BYTE-FOR-BYTE identical to the seed defaultValue in
+ * content-blocks-seed.ts, so nothing on the public page changes when a staff
+ * member merely opens this editor — only an explicit edit + Publish changes the
+ * live site (identical draft→publish machinery as the 15 copy blocks).
+ */
+export const MEDICAL_HERO_BLOCKS: readonly MedicalContentBlock[] = [
+  {
+    key: "medical.hero.title",
+    label: "Hero — title",
+    help: "The big headline at the top of the public Medical page.",
+    fallback: "Medical Cannabis at Greenway",
+  },
+  {
+    key: "medical.hero.subtitle",
+    label: "Hero — subtitle",
+    help: "The bold line directly under the hero title.",
+    fallback:
+      "Greenway Marijuana is a medically endorsed retailer with certified medical cannabis consultants on staff.",
+  },
+  {
+    key: "medical.intro.body",
+    label: "Intro paragraph",
+    help: "The paragraph under the hero explaining the medical program at a glance. Keep claims factual — no therapeutic or curative claims.",
+    fallback:
+      "Washington patients with a valid authorization can join the state's voluntary Medical Cannabis Authorization Database at our store, receive a recognition card, and unlock tax savings and higher purchase limits on qualifying products. Here's how it works and what to bring.",
+  },
+] as const;
+
 /** Every editable Medical block key (for a one-shot getContentValues fetch). */
 export const MEDICAL_CONTENT_KEYS: readonly string[] = MEDICAL_CONTENT_BLOCKS.map(
   (b) => b.key,
@@ -193,6 +237,29 @@ const MEDICAL_FALLBACKS: Record<string, string> = Object.fromEntries(
 /** The byte-identical fallback for a Medical block key ("" if unknown). */
 export function medicalFallback(key: string): string {
   return MEDICAL_FALLBACKS[key] ?? "";
+}
+
+/** Every hero/intro block key (MIG-5 Slice 1). */
+export const MEDICAL_HERO_KEYS: readonly string[] = MEDICAL_HERO_BLOCKS.map(
+  (b) => b.key,
+);
+
+/** Fast lookup: hero/intro block_key -> byte-identical fallback copy. */
+const MEDICAL_HERO_FALLBACKS: Record<string, string> = Object.fromEntries(
+  MEDICAL_HERO_BLOCKS.map((b) => [b.key, b.fallback]),
+);
+
+/**
+ * The byte-identical fallback for a Medical HERO/INTRO block key ("" if
+ * unknown). Kept separate from medicalFallback so the two registries never mix.
+ */
+export function medicalHeroFallback(key: string): string {
+  return MEDICAL_HERO_FALLBACKS[key] ?? "";
+}
+
+/** Is this block_key one of the Medical HERO/INTRO blocks (MIG-5 Slice 1)? */
+export function isMedicalHeroBlock(key: string | null | undefined): boolean {
+  return !!key && key in MEDICAL_HERO_FALLBACKS;
 }
 
 /**
@@ -261,6 +328,35 @@ export function __runMedicalContentCoreTests(): { passed: number } {
   ok(!isMedicalContentBlock("medical.hero.title"), "hero.title (SiteText) is not in this registry");
   ok(!isMedicalContentBlock(""), "empty key is not a copy block");
   ok(!isMedicalContentBlock(null), "null key is not a copy block");
+
+  // ---- Hero/intro registry (MIG-5 Slice 1) --------------------------------
+  // A SEPARATE registry so it never feeds medicalCopyBlockSeeds (no double
+  // seed) and keeps MEDICAL_CONTENT_BLOCKS at exactly 15.
+  ok(MEDICAL_HERO_BLOCKS.length === 3, "3 hero/intro Medical blocks");
+  ok(MEDICAL_HERO_KEYS.length === MEDICAL_HERO_BLOCKS.length, "hero keys mirror blocks");
+  const heroSeen = new Set<string>();
+  for (const b of MEDICAL_HERO_BLOCKS) {
+    ok(!heroSeen.has(b.key), `duplicate hero key: ${b.key}`);
+    heroSeen.add(b.key);
+    ok(b.key.startsWith("medical."), `${b.key} is namespaced under medical.`);
+    ok(b.label.trim().length > 0, `${b.key} has a label`);
+    ok(b.fallback.trim().length > 0, `${b.key} has non-empty byte-identical copy`);
+    // The two registries must be DISJOINT (a key is in exactly one).
+    ok(!isMedicalContentBlock(b.key), `${b.key} is NOT in the 15-copy registry`);
+  }
+  // The three expected keys are present and recognised by the hero helper.
+  ok(isMedicalHeroBlock("medical.hero.title"), "hero.title is a hero block");
+  ok(isMedicalHeroBlock("medical.hero.subtitle"), "hero.subtitle is a hero block");
+  ok(isMedicalHeroBlock("medical.intro.body"), "intro.body is a hero block");
+  ok(!isMedicalHeroBlock("medical.bring.title"), "bring.title is NOT a hero block");
+  ok(!isMedicalHeroBlock(MEDICAL_HIDE_BLOCK), "hide block is NOT a hero block");
+  ok(!isMedicalHeroBlock(null), "null key is not a hero block");
+  // Byte-identical fallbacks (guards against copy drift from the seed).
+  ok(
+    medicalHeroFallback("medical.hero.title") === "Medical Cannabis at Greenway",
+    "hero.title fallback exact",
+  );
+  ok(medicalHeroFallback("nope") === "", "unknown hero key fallback = ''");
 
   // ---- Fallback + resolve safety ------------------------------------------
   ok(medicalFallback("medical.bring.title") === "What to bring", "bring.title fallback exact");
