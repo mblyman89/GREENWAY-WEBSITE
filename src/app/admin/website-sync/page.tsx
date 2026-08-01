@@ -293,8 +293,8 @@ export default async function WebsiteSyncPage() {
               {canEditContent ? (
                 <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
                   Footer copy is the <code>business.hours.display</code> block in{" "}
-                  <Link href="/admin/content" className="underline">
-                    Site Content
+                  <Link href="/admin/header-footer" className="underline">
+                    Header &amp; Footer
                   </Link>
                   .
                 </p>
