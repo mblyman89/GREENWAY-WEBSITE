@@ -116,12 +116,14 @@ export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([]);
  * once each got its own "Page wording" card in MS-2.1a/b/c; the whole "footer"
  * group joined in MS-3.3 once the Header & Footer editor owned it — MS-3.1.)
  *
- * NOTE the "business" group is NOT listed here even though its
- * business.hours.display block also moved to Header & Footer in MS-3.3: that
- * group is SPLIT (the two site.font.* blocks stay in Site Content pending the
- * Branding editor, MIG-4), so business.hours.display is excluded by KEY (an
- * EXCLUDED_KEYS entry in content/page.tsx) via a KEY_OWNER_OVERRIDE, not by
- * excluding the whole page group. Excluding the group would strand the fonts.
+ * MIG-4 MS-4.2: the "business" group is now listed here. Its last two Site
+ * Content blocks -- the site.font.* typography settings -- moved to the Branding
+ * editor (surfaced MS-4.1), and its business.hours.display block already moved to
+ * Header & Footer (MS-3.1) via a KEY_OWNER_OVERRIDE. With NO business block left
+ * in Site Content, the whole group is excluded here (its default owner flipped to
+ * SETTINGS_BRANDING in PAGE_GROUP_DEFAULT_OWNER, so the fonts stay reachable and
+ * the hours override still points at HEADER_FOOTER). This satisfies self-test #7:
+ * an excluded page must NOT default to SITE_CONTENT.
  */
 export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>([
   "home",
@@ -134,6 +136,7 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "locations",
   "price-match",
   "footer",
+  "business",
 ]);
 
 /**
@@ -234,7 +237,7 @@ export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
     // still in Site Content today (junk drawer) — migration targets noted:
     about: CONTENT_EDITORS.PAGES_ABOUT, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     blog: CONTENT_EDITORS.SITE_CONTENT, // -> BLOG (MIG-6)
-    business: CONTENT_EDITORS.SITE_CONTENT, // MIG-3 MS-3.3: hours split OUT to HEADER_FOOTER (see KEY_OWNER_OVERRIDES); the 2 site.font.* blocks STAY here until BRANDING (MIG-4)
+    business: CONTENT_EDITORS.SETTINGS_BRANDING, // MIG-4 MS-4.2: flipped from SITE_CONTENT. The whole "business" group now lives outside Site Content -- the 2 site.font.* blocks follow this default into the Branding editor (surfaced MS-4.1), and business.hours.display keeps its KEY_OWNER_OVERRIDE to HEADER_FOOTER (override precedence wins). No business block remains in Site Content.
     footer: CONTENT_EDITORS.HEADER_FOOTER, // MIG-3 MS-3.3: flipped from SITE_CONTENT (Header & Footer editor owns it; both footer blocks surfaced MS-3.1)
     locations: CONTENT_EDITORS.PAGES_LOCATIONS, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     "price-match": CONTENT_EDITORS.PAGES_PRICE_MATCH, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)

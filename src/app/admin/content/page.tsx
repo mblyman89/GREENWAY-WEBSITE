@@ -105,17 +105,19 @@ export default async function SiteContentPage({
     const inserted = await ensureContentBlocksSeeded();
     if (inserted > 0) allBlocks = await listContentBlocks();
   }
-  // Site Content is the home for editable SITE-WIDE / cross-page text that
-  // doesn't live inside a single page builder: the site fonts (site.font.*) and
-  // the simple text pages whose copy isn't managed in the Pages builder (About,
-  // Locations, Price Match heroes). The richer banner/section pages (Home, Menu,
-  // Loyalty, Specials, Vendors, FAQ) are edited in their own tabs under PAGES,
-  // so we exclude them here to avoid duplicating that work.
+  // Site Content is now the home for the SIMPLE TEXT PAGES whose copy isn't
+  // managed in the Pages builder (About, Locations, Price Match heroes). The
+  // richer banner/section pages (Home, Menu, Loyalty, Specials, Vendors, FAQ)
+  // are edited in their own tabs under PAGES, so we exclude them here to avoid
+  // duplicating that work.
   // MIG-3 MS-3.3: the shared footer (store-hours image, hours line, WA
   // compliance warning) and the business hours line moved OUT of here into the
-  // dedicated Header & Footer editor (see PAGE_BUILDER_PAGES += "footer" and the
-  // EXCLUDED_KEYS business.hours.display below). The two site.font.* blocks are
-  // the only "business"-group copy that remains here, pending Branding (MIG-4).
+  // dedicated Header & Footer editor (see PAGE_BUILDER_PAGES += "footer").
+  // MIG-4 MS-4.2: the two site.font.* typography settings — the last "business"-
+  // group copy that used to live here — moved OUT to the dedicated Branding
+  // editor (/admin/settings/branding), so the whole "business" group is now
+  // excluded too (PAGE_BUILDER_PAGES += "business"). Site Content no longer owns
+  // any site-wide fonts.
   // SLICE 114 (superseded): "vendors" was TEMPORARILY removed here so the vendor
   // page text was reachable in Site Content while the Vendors page had no editor
   // of its own.
@@ -143,15 +145,19 @@ export default async function SiteContentPage({
     "locations",
     "price-match",
     "footer",
+    "business",
   ]);
-  // MIG-3 MS-3.3 (the "business" split): the "business" page group is NOT
-  // excluded wholesale because it is split across two editors — its store-hours
-  // line (business.hours.display) moved to Header & Footer (MS-3.1), but its two
-  // site.font.* blocks STAY here until the Branding editor lands (MIG-4).
-  // Excluding the whole page would strand the fonts, so we hide just the hours
-  // block by KEY. This mirrors the KEY_OWNER_OVERRIDES entry in
-  // content-reachability-core.ts (business.hours.display -> HEADER_FOOTER).
-  const EXCLUDED_KEYS = new Set<string>(["business.hours.display"]);
+  // MIG-4 MS-4.2 (the "business" split RESOLVED): the "business" page group is
+  // now excluded WHOLESALE (added to PAGE_BUILDER_PAGES above). All three of its
+  // blocks now live elsewhere — the two site.font.* typography settings moved to
+  // the Branding editor (/admin/settings/branding, surfaced MS-4.1), and the
+  // store-hours line (business.hours.display) moved to Header & Footer (MS-3.1).
+  // With nothing left in the group, the earlier per-KEY hide of the hours block
+  // is no longer needed, so EXCLUDED_KEYS is now empty (kept for structure /
+  // future per-key hides). This mirrors content-reachability-core.ts, where the
+  // business group default flipped to SETTINGS_BRANDING and business is now in
+  // SITE_CONTENT_EXCLUDED_PAGES.
+  const EXCLUDED_KEYS = new Set<string>([]);
   const blocks = allBlocks.filter(
     (b) => !PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key),
   );
@@ -217,7 +223,7 @@ export default async function SiteContentPage({
     <div>
       <AdminPageHeader
         title="Site Content"
-        subtitle="Your site-wide wording — site fonts and simple text pages. Edit a draft, preview it, then Publish."
+        subtitle="Your simple text pages' wording. Edit a draft, preview it, then Publish."
         breadcrumbs={<Breadcrumbs items={[{ label: "Site Content" }]} />}
         help={
           <HelpPanel
@@ -235,9 +241,10 @@ export default async function SiteContentPage({
               there&apos;s no way to accidentally break the layout.
             </p>
             <p className="mb-2">
-              <strong>Where things live:</strong> your site fonts and your simple text pages
-              (About, Locations, Price Match) are edited here. The footer (social links, store
-              hours, the compliance warning) is edited under{" "}
+              <strong>Where things live:</strong> your simple text pages
+              (About, Locations, Price Match) are edited here. Your site <strong>fonts</strong>
+              (heading &amp; body) are edited under <strong>Branding</strong>, the footer (social
+              links, store hours, the compliance warning) is edited under{" "}
               <strong>Header &amp; Footer</strong>, and your richer pages with banners and sections
               — Home, Menu, Loyalty, Specials, Vendors, FAQ — are edited under{" "}
               <strong>Pages</strong> in the sidebar.

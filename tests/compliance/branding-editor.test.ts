@@ -1,13 +1,16 @@
 /**
- * MIG-4 MS-4.1 — Branding editor (ADD / additive-first).
+ * MIG-4 Branding editor tests.
  *
- * Verifies the new /admin/settings/branding editor surfaces the two site-wide
- * font blocks (site.font.heading / site.font.body), is registered in the admin
- * navigation under the Website group, and reuses the shared Site Content
- * save/publish machinery — WITHOUT yet removing the fonts from Site Content
- * (that duplicate removal is the MS-4.2 SUBTRACT). At this commit the fonts are
- * editable in BOTH places (same DB rows, same actions), so no block is ever
- * un-editable and the public site is byte-identical until an edit is published.
+ * MS-4.1 (ADD): the new /admin/settings/branding editor surfaces the two
+ * site-wide font blocks (site.font.heading / site.font.body), is registered in
+ * the admin navigation under the Website group, and reuses the shared Site
+ * Content save/publish machinery.
+ *
+ * MS-4.2 (SUBTRACT): the fonts are removed from the Site Content junk drawer
+ * (the whole "business" group is now excluded wholesale) and the reachability
+ * guard's honest owner for them flips to SETTINGS_BRANDING, while
+ * business.hours.display keeps its Header & Footer key-override. The public site
+ * stays byte-identical until an owner picks a new font and publishes.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -17,6 +20,7 @@ import { adminNav } from "@/components/admin/admin-nav-data";
 import {
   CONTENT_EDITORS,
   ownerForBlock,
+  SITE_CONTENT_EXCLUDED_PAGES,
 } from "@/lib/cms/content-reachability-core";
 
 const BRANDING_PAGE = "src/app/admin/settings/branding/page.tsx";
@@ -90,37 +94,55 @@ describe("MIG-4 MS-4.1 — Branding is registered in the admin nav (Website grou
   });
 });
 
-describe("MIG-4 MS-4.1 — additive-first: fonts STILL in Site Content this slice", () => {
+describe("MIG-4 MS-4.2 — SUBTRACT: fonts removed from Site Content, now owned by Branding", () => {
   const siteSrc = read(SITE_CONTENT_PAGE);
 
-  it("Site Content has NOT yet excluded the font keys (removed in MS-4.2)", () => {
-    // The SUBTRACT slice adds these to EXCLUDED_KEYS / excludes the business
-    // group. Until then they remain reachable in Site Content too.
-    expect(siteSrc).not.toContain('"site.font.heading"');
-    expect(siteSrc).not.toContain('"site.font.body"');
-    // 'business' is NOT in the page-builder exclusion Set *literal* yet. We read
-    // only the array body (between the `new Set([` and its closing `])`) so the
-    // MS-3.3 explanatory comment that mentions the word "business" in prose does
-    // not create a false match.
+  it("Site Content now excludes the whole 'business' group (wholesale)", () => {
+    // We read only the PAGE_BUILDER_PAGES array body (between its `[` and `]`)
+    // so an explanatory comment mentioning the word "business" in prose does not
+    // create a false match.
     const setStart = siteSrc.indexOf("const PAGE_BUILDER_PAGES");
     const arrOpen = siteSrc.indexOf("[", setStart);
     const arrClose = siteSrc.indexOf("]", arrOpen);
     const setLiteral = siteSrc.slice(arrOpen, arrClose + 1);
-    expect(setLiteral).not.toContain('"business"');
+    expect(setLiteral).toContain('"business"');
   });
 
-  it("the reachability guard still owns the fonts as SITE_CONTENT this slice", () => {
-    // Additive-first: the honest owner flips to SETTINGS_BRANDING only in MS-4.2.
+  it("the per-key hours hide is no longer needed (EXCLUDED_KEYS is empty)", () => {
+    // The whole business group is excluded now, so the earlier per-KEY hide of
+    // business.hours.display is redundant; EXCLUDED_KEYS is emptied.
+    expect(siteSrc).toContain("const EXCLUDED_KEYS = new Set<string>([])");
+  });
+
+  it("the reachability guard now owns BOTH fonts as SETTINGS_BRANDING", () => {
     expect(ownerForBlock("site.font.heading", "business")).toBe(
-      CONTENT_EDITORS.SITE_CONTENT,
+      CONTENT_EDITORS.SETTINGS_BRANDING,
     );
     expect(ownerForBlock("site.font.body", "business")).toBe(
+      CONTENT_EDITORS.SETTINGS_BRANDING,
+    );
+  });
+
+  it("business.hours.display STILL resolves to Header & Footer (override wins)", () => {
+    // The KEY_OWNER_OVERRIDE takes precedence over the new group default, so the
+    // hours block continues to live in Header & Footer, not Branding.
+    expect(ownerForBlock("business.hours.display", "business")).toBe(
+      CONTENT_EDITORS.HEADER_FOOTER,
+    );
+  });
+
+  it("'business' is now in SITE_CONTENT_EXCLUDED_PAGES and does NOT default to SITE_CONTENT", () => {
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("business")).toBe(true);
+    // Self-test #7 invariant: an excluded page must not default to SITE_CONTENT.
+    expect(ownerForBlock("site.font.heading", "business")).not.toBe(
       CONTENT_EDITORS.SITE_CONTENT,
     );
   });
 
-  it("the SETTINGS_BRANDING editor enum exists and is a real (non-NONE) owner", () => {
-    expect(CONTENT_EDITORS.SETTINGS_BRANDING).toBe("SETTINGS_BRANDING");
-    expect(CONTENT_EDITORS.SETTINGS_BRANDING).not.toBe(CONTENT_EDITORS.NONE);
+  it("the Branding editor still surfaces exactly the two fonts (unchanged by SUBTRACT)", () => {
+    const b = read("src/app/admin/settings/branding/page.tsx");
+    expect(b).toContain('"site.font.heading"');
+    expect(b).toContain('"site.font.body"');
+    expect(b).toContain("BRANDING_FONT_KEYS.has(b.block_key)");
   });
 });

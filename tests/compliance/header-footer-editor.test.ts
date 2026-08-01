@@ -189,15 +189,15 @@ describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SU
     expect(setBody).toContain('"footer"');
   });
 
-  it("Site Content hides ONLY the business.hours.display key (fonts stay)", () => {
-    // the 'business' group is split: hours moves, site.font.* stay for Branding.
+  it("the filter combines page exclusion AND key exclusion (structure intact)", () => {
+    // MIG-4 MS-4.2: the 'business' split is now RESOLVED — the fonts moved to the
+    // Branding editor and the whole group is excluded, so EXCLUDED_KEYS is empty.
+    // The filter still combines page + key exclusion for future per-key hides.
     expect(content).toContain("EXCLUDED_KEYS");
-    expect(content).toContain('"business.hours.display"');
-    // the filter must combine page exclusion AND key exclusion.
     expect(content).toContain(
       "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
     );
-    // the font blocks must NOT be excluded from Site Content this slice.
+    // the font blocks must NOT appear in Site Content (moved out in MS-4.2).
     expect(content).not.toContain('"site.font.heading"');
     expect(content).not.toContain('"site.font.body"');
   });
@@ -208,11 +208,12 @@ describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SU
     expect(guard).toContain(
       '"business.hours.display": CONTENT_EDITORS.HEADER_FOOTER',
     );
-    // business group default STAYS SITE_CONTENT (for the fonts, until MIG-4).
-    expect(guard).toContain("business: CONTENT_EDITORS.SITE_CONTENT");
+    // MIG-4 MS-4.2: business group default flipped SITE_CONTENT -> SETTINGS_BRANDING
+    // (the fonts follow it into the Branding editor; the hours override still wins).
+    expect(guard).toContain("business: CONTENT_EDITORS.SETTINGS_BRANDING");
   });
 
-  it("the 'footer' group is in SITE_CONTENT_EXCLUDED_PAGES but 'business' is NOT", () => {
+  it("the 'footer' AND 'business' groups are now in SITE_CONTENT_EXCLUDED_PAGES", () => {
     const excl = guard.slice(
       guard.indexOf("SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(["),
       guard.indexOf(
@@ -221,7 +222,8 @@ describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SU
       ),
     );
     expect(excl).toContain('"footer"');
-    // business must NOT be excluded wholesale — that would strand site.font.*.
-    expect(excl).not.toContain('"business"');
+    // MIG-4 MS-4.2: business is now excluded wholesale (its last blocks — the
+    // fonts — moved to Branding), so nothing is stranded.
+    expect(excl).toContain('"business"');
   });
 });
