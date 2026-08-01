@@ -78,6 +78,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Marketing & Advertising", href: "/admin/marketing", permission: "content.edit", icon: "\ud83d\udce3", group: "MKTG & ADV" }, // 📣 megaphone
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "\ud83c\udff7\ufe0f", group: "MKTG & ADV" }, // 🏷️ deal tag
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\ud83d\udcdd", group: "MKTG & ADV" }, // 📝 writing
+  { label: "Blog wording", href: "/admin/blog/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "MKTG & ADV" }, // blog page wording (hero heading/intro + button labels) -- MIG-6 Slice 1; posts live in Blog & Newsletter, card design not editable here
   { label: "Email Newsletter", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709\ufe0f", group: "MKTG & ADV" }, // ✉️ email
   { label: "Creative Studio", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" }, // 🎨 creative
 

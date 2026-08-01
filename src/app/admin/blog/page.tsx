@@ -94,8 +94,8 @@ export default async function BlogAdminPage({
       <div className="px-5 pt-5 sm:px-8">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-xs text-[var(--admin-text-muted)]">
           <span className="font-semibold text-[var(--admin-text)]">Quick links:</span>
-          <Link href="/admin/content?block=blog.hero.heading.part1" className="text-[var(--admin-accent)] hover:underline">
-            Edit the blog page&rsquo;s look (Site Content)
+          <Link href="/admin/blog/content" className="text-[var(--admin-accent)] hover:underline">
+            Edit the blog page&rsquo;s wording
           </Link>
           <span aria-hidden="true">·</span>
           <Link href="/admin/newsletter" className="text-[var(--admin-accent)] hover:underline">
