@@ -24,13 +24,15 @@
  * Pages whose "Page wording" card is LIVE. Grows one entry per mini-slice.
  *
  * MS-1.2: vendors (23 blocks — outreach copy + the five contact-channel cards).
- * Future slices add: about, locations, price-match, faq, home, blog, ...
+ * MS-2.1a: about (2 blocks — hero title + subtitle).
+ * Future slices add: locations, price-match, faq, home, blog, ...
  *
  * A slug here MUST be a real /admin/pages/[slug] page (a valid PageSlug) and its
  * content blocks MUST use `page === slug`. Both are asserted in the self-tests.
  */
 export const PAGES_WITH_WORDING: ReadonlySet<string> = new Set<string>([
   "vendors",
+  "about",
 ]);
 
 /**
@@ -68,9 +70,10 @@ export function __runPageWordingCoreTests(): { passed: number } {
     passed += 1;
   };
 
-  // 1. The rollout set is non-empty and contains vendors at MS-1.2.
+  // 1. The rollout set is non-empty and contains the pages wired so far.
   assert(PAGES_WITH_WORDING.size >= 1, "rollout set must not be empty");
-  assert(PAGES_WITH_WORDING.has("vendors"), "vendors wording is live at MS-1.2");
+  assert(PAGES_WITH_WORDING.has("vendors"), "vendors wording is live (MS-1.2)");
+  assert(PAGES_WITH_WORDING.has("about"), "about wording is live (MS-2.1a)");
   assert(pageHasWording("vendors"), "pageHasWording agrees for vendors");
   assert(!pageHasWording("nonexistent-page"), "unknown page has no wording");
 
@@ -90,10 +93,10 @@ export function __runPageWordingCoreTests(): { passed: number } {
     "previewPath is trimmed",
   );
 
-  // 3. Snapshot: exactly 1 page wired at MS-1.2 (bumped deliberately per slice).
+  // 3. Snapshot: exactly 2 pages wired at MS-2.1a (bumped deliberately per slice).
   assert(
-    PAGES_WITH_WORDING.size === 1,
-    `expected 1 wording page at MS-1.2, found ${PAGES_WITH_WORDING.size}`,
+    PAGES_WITH_WORDING.size === 2,
+    `expected 2 wording pages (MS-2.1a), found ${PAGES_WITH_WORDING.size}`,
   );
 
   return { passed };
