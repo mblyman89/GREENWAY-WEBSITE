@@ -110,10 +110,18 @@ export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([]);
  * `page` is in this set are NOT shown in Site Content. Kept in sync with the
  * real filter; the self-test cross-checks it.
  *
- * TODAY (after MIG-2 MS-2.2): home, menu, loyalty, specials, vendors, faq,
- * about, locations, price-match.
+ * TODAY (after MIG-3 MS-3.3): home, menu, loyalty, specials, vendors, faq,
+ * about, locations, price-match, footer.
  * (vendors joined here in MS-1.3; about/locations/price-match joined in MS-2.2,
- * once each got its own "Page wording" card in MS-2.1a/b/c.)
+ * once each got its own "Page wording" card in MS-2.1a/b/c; the whole "footer"
+ * group joined in MS-3.3 once the Header & Footer editor owned it — MS-3.1.)
+ *
+ * NOTE the "business" group is NOT listed here even though its
+ * business.hours.display block also moved to Header & Footer in MS-3.3: that
+ * group is SPLIT (the two site.font.* blocks stay in Site Content pending the
+ * Branding editor, MIG-4), so business.hours.display is excluded by KEY (an
+ * EXCLUDED_KEYS entry in content/page.tsx) via a KEY_OWNER_OVERRIDE, not by
+ * excluding the whole page group. Excluding the group would strand the fonts.
  */
 export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>([
   "home",
@@ -125,6 +133,7 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "about",
   "locations",
   "price-match",
+  "footer",
 ]);
 
 /**
@@ -172,10 +181,17 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
   //     SITE_CONTENT_EXCLUDED_PAGES, so the page-group default already routes
   //     them to SITE_CONTENT. No override needed until MIG-5d moves them. ---
 
-  // --- business group split: fonts -> (future) branding; hours -> (future)
-  //     header-footer. TODAY all three still live in Site Content (page
-  //     "business" is not excluded), so no override is needed at v1. Listed here
-  //     as a reminder of the eventual split (MIG-3 / MIG-4). ---
+  // --- business group SPLIT (MIG-3 MS-3.3): the "business" page group holds
+  //     three blocks. business.hours.display moved to the Header & Footer editor
+  //     (surfaced MS-3.1, Site Content copy removed MS-3.3), so we OVERRIDE its
+  //     owner to HEADER_FOOTER here. The other two (site.font.heading /
+  //     site.font.body) STAY in Site Content for now and move to the Branding
+  //     editor in MIG-4 — so the "business" page-group default remains
+  //     SITE_CONTENT (below) and the group is NOT added to
+  //     SITE_CONTENT_EXCLUDED_PAGES (excluding it would strand the fonts). The
+  //     hours block is instead hidden from Site Content by KEY via EXCLUDED_KEYS
+  //     in content/page.tsx, matching this override. ---
+  "business.hours.display": CONTENT_EDITORS.HEADER_FOOTER,
 };
 
 /**
@@ -218,8 +234,8 @@ export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
     // still in Site Content today (junk drawer) — migration targets noted:
     about: CONTENT_EDITORS.PAGES_ABOUT, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     blog: CONTENT_EDITORS.SITE_CONTENT, // -> BLOG (MIG-6)
-    business: CONTENT_EDITORS.SITE_CONTENT, // split -> BRANDING + HEADER_FOOTER (MIG-3/4)
-    footer: CONTENT_EDITORS.SITE_CONTENT, // -> HEADER_FOOTER (MIG-3)
+    business: CONTENT_EDITORS.SITE_CONTENT, // MIG-3 MS-3.3: hours split OUT to HEADER_FOOTER (see KEY_OWNER_OVERRIDES); the 2 site.font.* blocks STAY here until BRANDING (MIG-4)
+    footer: CONTENT_EDITORS.HEADER_FOOTER, // MIG-3 MS-3.3: flipped from SITE_CONTENT (Header & Footer editor owns it; both footer blocks surfaced MS-3.1)
     locations: CONTENT_EDITORS.PAGES_LOCATIONS, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     "price-match": CONTENT_EDITORS.PAGES_PRICE_MATCH, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     vendors: CONTENT_EDITORS.PAGES_VENDORS, // MIG-1 MS-1.3: flipped from SITE_CONTENT (Page wording card owns it)

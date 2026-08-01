@@ -174,3 +174,54 @@ describe("MIG-3 MS-3.1 — footer compliance/hours surfaced in Header & Footer (
     expect(editor).not.toContain("site.font.body");
   });
 });
+
+describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SUBTRACT)", () => {
+  const content = readFileSync("src/app/admin/content/page.tsx", "utf8");
+  const guard = readFileSync("src/lib/cms/content-reachability-core.ts", "utf8");
+
+  it("Site Content excludes the whole 'footer' page group now", () => {
+    // footer.compliance.warning + footer.hours.image (page 'footer') now live
+    // only in the Header & Footer editor.
+    const setBody = content.slice(
+      content.indexOf("PAGE_BUILDER_PAGES = new Set<string>(["),
+      content.indexOf("]);", content.indexOf("PAGE_BUILDER_PAGES = new Set<string>([")),
+    );
+    expect(setBody).toContain('"footer"');
+  });
+
+  it("Site Content hides ONLY the business.hours.display key (fonts stay)", () => {
+    // the 'business' group is split: hours moves, site.font.* stay for Branding.
+    expect(content).toContain("EXCLUDED_KEYS");
+    expect(content).toContain('"business.hours.display"');
+    // the filter must combine page exclusion AND key exclusion.
+    expect(content).toContain(
+      "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
+    );
+    // the font blocks must NOT be excluded from Site Content this slice.
+    expect(content).not.toContain('"site.font.heading"');
+    expect(content).not.toContain('"site.font.body"');
+  });
+
+  it("the reachability guard now owns footer + hours in Header & Footer", () => {
+    // footer group default flipped to HEADER_FOOTER; hours block overridden.
+    expect(guard).toContain("footer: CONTENT_EDITORS.HEADER_FOOTER");
+    expect(guard).toContain(
+      '"business.hours.display": CONTENT_EDITORS.HEADER_FOOTER',
+    );
+    // business group default STAYS SITE_CONTENT (for the fonts, until MIG-4).
+    expect(guard).toContain("business: CONTENT_EDITORS.SITE_CONTENT");
+  });
+
+  it("the 'footer' group is in SITE_CONTENT_EXCLUDED_PAGES but 'business' is NOT", () => {
+    const excl = guard.slice(
+      guard.indexOf("SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(["),
+      guard.indexOf(
+        "]);",
+        guard.indexOf("SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(["),
+      ),
+    );
+    expect(excl).toContain('"footer"');
+    // business must NOT be excluded wholesale — that would strand site.font.*.
+    expect(excl).not.toContain('"business"');
+  });
+});
