@@ -33,11 +33,15 @@ import {
   MEDICAL_HIDE_OPTIONS,
   MEDICAL_CONTENT_BLOCKS,
   MEDICAL_CONTENT_KEYS,
+  MEDICAL_HERO_BLOCKS,
+  MEDICAL_HERO_KEYS,
   MEDICAL_VISIBLE_VALUE,
   MEDICAL_HIDDEN_VALUE,
   isMedicalPageHidden,
   isMedicalContentBlock,
+  isMedicalHeroBlock,
   medicalFallback,
+  medicalHeroFallback,
   resolveMedicalValue,
   __runMedicalContentCoreTests,
 } from "@/lib/medical/medical-content-core";
@@ -218,5 +222,83 @@ describe("admin editor is wired", () => {
     expect(nav).toContain('href: "/admin/medical-page"');
     // The patient-intake tool remains a separate item.
     expect(nav).toContain('href: "/admin/medical"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MIG-5 Slice 1 (ADD) — the hero/intro copy is now editable in the Medical
+// editor too (additive-first). It stays editable in Site Content until the
+// SUBTRACT slice; nothing on /medical changes until a staff member Publishes.
+// ---------------------------------------------------------------------------
+describe("MIG-5 Slice 1 — Medical hero/intro added to the dedicated editor", () => {
+  const corePath = "src/lib/medical/medical-content-core.ts";
+  const seedByKey = new Map(CONTENT_BLOCK_SEEDS.map((s) => [s.block_key, s]));
+
+  it("exposes exactly the 3 hero/intro blocks in a SEPARATE registry", () => {
+    expect(MEDICAL_HERO_BLOCKS).toHaveLength(3);
+    expect([...MEDICAL_HERO_KEYS].sort()).toEqual(
+      ["medical.hero.subtitle", "medical.hero.title", "medical.intro.body"],
+    );
+  });
+
+  it("keeps the two registries DISJOINT (no double-seed risk)", () => {
+    // The 15-copy registry stays exactly 15 and excludes the hero keys.
+    expect(MEDICAL_CONTENT_BLOCKS).toHaveLength(15);
+    for (const k of MEDICAL_HERO_KEYS) {
+      expect(isMedicalContentBlock(k)).toBe(false);
+      expect(MEDICAL_CONTENT_KEYS).not.toContain(k);
+    }
+    for (const b of MEDICAL_CONTENT_BLOCKS) {
+      expect(isMedicalHeroBlock(b.key)).toBe(false);
+    }
+  });
+
+  it("hero registry does NOT feed medicalCopyBlockSeeds (each key seeded once)", () => {
+    for (const k of MEDICAL_HERO_KEYS) {
+      const rows = CONTENT_BLOCK_SEEDS.filter((s) => s.block_key === k);
+      expect(rows).toHaveLength(1);
+    }
+  });
+
+  it("every hero fallback is BYTE-IDENTICAL to its seed defaultValue", () => {
+    for (const b of MEDICAL_HERO_BLOCKS) {
+      const seed = seedByKey.get(b.key);
+      expect(seed).toBeTruthy();
+      expect(b.fallback).toBe(seed?.defaultValue);
+      expect(medicalHeroFallback(b.key)).toBe(seed?.defaultValue);
+    }
+  });
+
+  it("isMedicalHeroBlock recognises only the hero keys", () => {
+    expect(isMedicalHeroBlock("medical.hero.title")).toBe(true);
+    expect(isMedicalHeroBlock("medical.intro.body")).toBe(true);
+    expect(isMedicalHeroBlock("medical.bring.title")).toBe(false);
+    expect(isMedicalHeroBlock(MEDICAL_HIDE_BLOCK)).toBe(false);
+    expect(isMedicalHeroBlock(null)).toBe(false);
+    expect(isMedicalHeroBlock("")).toBe(false);
+  });
+
+  it("the medical editor actions now accept hero blocks", () => {
+    const actions = read("src/app/admin/medical-page/actions.ts");
+    expect(actions).toContain("isMedicalHeroBlock");
+    // The guard OR-combines the hide block, the copy blocks, and hero blocks.
+    expect(actions).toMatch(/isMedicalContentBlock\(blockKey\)\s*\|\|\s*\n?\s*isMedicalHeroBlock\(blockKey\)/);
+  });
+
+  it("the medical editor page surfaces a Hero & intro section (intro is multiline)", () => {
+    const page = read("src/app/admin/medical-page/page.tsx");
+    expect(page).toContain("MEDICAL_HERO_BLOCKS");
+    expect(page).toContain("medicalHeroFallback");
+    expect(page).toContain("Hero & intro");
+    // intro.body added to the multiline set.
+    expect(page).toMatch(/MULTILINE_KEYS[\s\S]*medical\.intro\.body/);
+  });
+
+  it("the pure core still passes all self-tests including the new hero asserts", () => {
+    const core = read(corePath);
+    expect(core).toContain("MEDICAL_HERO_BLOCKS");
+    expect(core).toContain("3 hero/intro Medical blocks");
+    const res = __runMedicalContentCoreTests();
+    expect(res.passed).toBeGreaterThan(100);
   });
 });

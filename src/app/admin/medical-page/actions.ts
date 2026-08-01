@@ -32,11 +32,20 @@ import {
 import {
   MEDICAL_HIDE_BLOCK,
   isMedicalContentBlock,
+  isMedicalHeroBlock,
 } from "@/lib/medical/medical-content-core";
 
-/** All block keys this editor is allowed to touch. */
+/**
+ * All block keys this editor is allowed to touch: the page-hide switch, the 15
+ * curated copy blocks, and (MIG-5 Slice 1) the 3 hero/intro blocks now surfaced
+ * in this editor too.
+ */
 function isEditableMedicalBlock(blockKey: string): boolean {
-  return blockKey === MEDICAL_HIDE_BLOCK || isMedicalContentBlock(blockKey);
+  return (
+    blockKey === MEDICAL_HIDE_BLOCK ||
+    isMedicalContentBlock(blockKey) ||
+    isMedicalHeroBlock(blockKey)
+  );
 }
 
 function backTo(flag: string): string {
