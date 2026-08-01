@@ -18,6 +18,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
+import {
+  CONTENT_EDITORS,
+  ownerForBlock,
+  SITE_CONTENT_EXCLUDED_PAGES,
+} from "@/lib/cms/content-reachability-core";
 
 const FOOTER_URL_BLOCKS = [
   "footer.social.facebook.url",
@@ -225,5 +230,72 @@ describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SU
     // MIG-4 MS-4.2: business is now excluded wholesale (its last blocks — the
     // fonts — moved to Branding), so nothing is stranded.
     expect(excl).toContain('"business"');
+  });
+});
+
+describe("MIG-5 Slice 4 — header-footer removed from Site Content (SUBTRACT)", () => {
+  const content = readFileSync("src/app/admin/content/page.tsx", "utf8");
+  const guard = readFileSync("src/lib/cms/content-reachability-core.ts", "utf8");
+  const editor = readFileSync("src/app/admin/header-footer/page.tsx", "utf8");
+
+  // Every block that renders in the site header/footer and lives on the
+  // 'header-footer' page group (already surfaced in the editor since Slice 104).
+  const HF_BLOCKS = [
+    "footer.social.facebook.url",
+    "footer.social.instagram.url",
+    "footer.social.google.url",
+    "footer.social.yelp.url",
+    "footer.social.leafly.url",
+    "footer.app.apple.url",
+    "footer.app.google.url",
+    "footer.link.unavailable.message",
+    "header.hours.size",
+    "header.phone.display",
+  ] as const;
+
+  it("Site Content now excludes the whole 'header-footer' group (wholesale)", () => {
+    // Read ONLY the PAGE_BUILDER_PAGES Set literal body so a prose comment
+    // mentioning 'header-footer' can't fool us.
+    const setStart = content.indexOf("const PAGE_BUILDER_PAGES");
+    const literal = content.slice(
+      content.indexOf("[", setStart),
+      content.indexOf("]", setStart) + 1,
+    );
+    expect(literal).toContain('"header-footer"');
+  });
+
+  it("the Site Content filter is unchanged (page + key exclusion intact)", () => {
+    expect(content).toContain(
+      "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
+    );
+  });
+
+  it("'header-footer' is now in SITE_CONTENT_EXCLUDED_PAGES", () => {
+    const start = guard.indexOf(
+      "SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>([",
+    );
+    const excl = guard.slice(start, guard.indexOf("]);", start));
+    expect(excl).toContain('"header-footer"');
+    // and the runtime set agrees
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("header-footer")).toBe(true);
+  });
+
+  it("the group default stays HEADER_FOOTER (no flip needed — clean subtract)", () => {
+    expect(guard).toContain('"header-footer": CONTENT_EDITORS.HEADER_FOOTER');
+  });
+
+  it("all 10 header-footer blocks resolve to the Header & Footer editor (none stranded)", () => {
+    for (const key of HF_BLOCKS) {
+      const owner = ownerForBlock(key, "header-footer");
+      expect(owner).toBe(CONTENT_EDITORS.HEADER_FOOTER);
+      expect(owner).not.toBe(CONTENT_EDITORS.SITE_CONTENT);
+      expect(owner).not.toBe(CONTENT_EDITORS.NONE);
+    }
+  });
+
+  it("the ADD is intact: the editor still surfaces the header-footer group", () => {
+    // The subtract removes only the Site Content duplicate; the dedicated
+    // editor (which has owned these since Slice 104) is untouched.
+    expect(editor).toContain('b.page === "header-footer"');
   });
 });
