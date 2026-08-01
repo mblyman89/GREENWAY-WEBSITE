@@ -5,6 +5,7 @@
  * storefront consumes: MenuVersion rows, weeklyDealSummaries() output from
  * published-rules-core, SalesHoursWindow from sales-hours-core.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   dealSourceSummary,
@@ -161,5 +162,30 @@ describe("dealSourceSummary", () => {
       { fromDatabase: true },
     ];
     expect(dealSourceSummary(rows)).toBe("3 of 7 days customized in the back office");
+  });
+});
+
+describe("MIG-3 MS-3.2 — Website Sync 'edit hours' deep link repointed to Header & Footer (REPOINT)", () => {
+  const page = readFileSync("src/app/admin/website-sync/page.tsx", "utf8");
+
+  it("the Hours card links to the Header & Footer editor (not Site Content)", () => {
+    // the hours footer copy now lives in /admin/header-footer (surfaced in MS-3.1),
+    // so the shortcut next to the business.hours.display note must point there.
+    const hoursNote = page.slice(page.indexOf("business.hours.display"));
+    expect(hoursNote).toContain('href="/admin/header-footer"');
+    // the raw page source carries the HTML entity for the ampersand
+    expect(hoursNote).toContain("Header &amp; Footer");
+  });
+
+  it("does NOT send the hours shortcut to the old Site Content editor", () => {
+    // guard against a regression that would re-point the hours link back to /admin/content.
+    const hoursNote = page.slice(page.indexOf("business.hours.display"), page.indexOf("business.hours.display") + 400);
+    expect(hoursNote).not.toContain('href="/admin/content"');
+  });
+
+  it("leaves the Medical card link on Site Content (medical.* moves later, in MIG-5)", () => {
+    // the medical copy is NOT part of MIG-3; its Site Content deep link must be untouched.
+    const medicalNote = page.slice(page.indexOf("medical.* blocks") - 400, page.indexOf("medical.* blocks"));
+    expect(medicalNote).toContain('href="/admin/content"');
   });
 });
