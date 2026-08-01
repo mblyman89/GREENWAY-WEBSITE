@@ -167,8 +167,8 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Where do I edit the Menu page's words and layout?",
-        a: "The Menu page builder controls the text and layout around your public menu (the products themselves come from your published menu upload).",
-        href: "/admin/pages/menu",
+        a: "The Shop (Menu) page's top banner is now the Shop Banner editor \u2014 a carousel of up to ten fully-editable \"special\" slides (image, styled text, buttons, and an optional schedule) with a live preview. The products themselves come from your published menu upload.",
+        href: "/admin/content/shop-banner",
       },
       {
         q: "Where do I edit the Specials page?",

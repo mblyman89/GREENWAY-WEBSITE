@@ -4,10 +4,11 @@
  * Michael: build a dedicated editor for the blog page's wording (the hero
  * heading/intro and the button labels) so those settings have a real home,
  * without editing the blog card design or the "glow" feature, and without
- * disrupting the audit roadmap. This is the ADD half: the 7 blog chrome blocks
- * are surfaced in a new /admin/blog/content editor. They STAY in Site Content
- * for now (Slice 2 removes them), so nothing is stranded and the reachability
- * baseline is unchanged.
+ * disrupting the audit roadmap. Slice 1 was the ADD half (the 7 blog chrome
+ * blocks surfaced in /admin/blog/content while they still lived in Site Content).
+ * Slice 2 is the SUBTRACT half: blog now defaults to the BLOG editor and is
+ * excluded from Site Content, so the junk drawer is finally empty and nothing
+ * is stranded (the dedicated editor owns all 7).
  *
  * These tests pin the safe-by-default wiring:
  *   - the 7 curated blog chrome blocks exist, page "blog", field "plain",
@@ -15,8 +16,8 @@
  *   - the 3 sections (hero / card / detail) cover all 7 keys once,
  *   - the new editor page + scoped actions + client component are in place,
  *   - the nav item + the repointed /admin/blog deep-link are wired,
- *   - reachability is UNCHANGED: blog still defaults to SITE_CONTENT, is NOT in
- *     SITE_CONTENT_EXCLUDED_PAGES nor PAGE_BUILDER_PAGES (ADD-only slice), and
+ *   - reachability is FLIPPED: blog now defaults to BLOG, IS in
+ *     SITE_CONTENT_EXCLUDED_PAGES and PAGE_BUILDER_PAGES (SUBTRACT slice), and
  *     the 17-orphan snapshot is untouched.
  */
 import { readFileSync } from "node:fs";
@@ -143,36 +144,47 @@ describe("MIG-6 Slice 1 — discoverability wiring", () => {
     expect(nav).toContain("Blog wording");
   });
 
+  it("MIG-6 Slice 2: the Blog wording entry lives in the Website group", () => {
+    // Michael: all page editors belong under Website. The entry moved out of
+    // "MKTG & ADV" so the whole nav line must now carry group: "Website".
+    const line = nav
+      .split("\n")
+      .find((l) => l.includes('label: "Blog wording"'));
+    expect(line).toBeDefined();
+    expect(line).toContain('group: "Website"');
+    expect(line).not.toContain('group: "MKTG & ADV"');
+  });
+
   it("repoints the /admin/blog deep-link from Site Content to the new editor", () => {
     expect(blogPage).toContain('href="/admin/blog/content"');
     expect(blogPage).not.toContain("/admin/content?block=blog.hero.heading.part1");
   });
 });
 
-describe("MIG-6 Slice 1 — reachability baseline UNCHANGED (ADD-only)", () => {
+describe("MIG-6 Slice 2 — reachability FLIPPED to BLOG (SUBTRACT)", () => {
   const guard = readFileSync("src/lib/cms/content-reachability-core.ts", "utf8");
   const content = readFileSync("src/app/admin/content/page.tsx", "utf8");
 
-  it("blog STILL defaults to SITE_CONTENT (the flip to BLOG happens in Slice 2)", () => {
-    expect(PAGE_GROUP_DEFAULT_OWNER.blog).toBe(CONTENT_EDITORS.SITE_CONTENT);
+  it("blog now defaults to BLOG (flipped from SITE_CONTENT in Slice 2)", () => {
+    expect(PAGE_GROUP_DEFAULT_OWNER.blog).toBe(CONTENT_EDITORS.BLOG);
   });
 
-  it("all 7 blog blocks are still reachable via SITE_CONTENT (none stranded)", () => {
+  it("all 7 blog blocks are now owned by the BLOG editor (none stranded)", () => {
     for (const key of BLOG_BLOCKS) {
-      expect(ownerForBlock(key, "blog")).toBe(CONTENT_EDITORS.SITE_CONTENT);
+      expect(ownerForBlock(key, "blog")).toBe(CONTENT_EDITORS.BLOG);
     }
   });
 
-  it("blog is NOT excluded from Site Content yet (still shows there)", () => {
-    expect(SITE_CONTENT_EXCLUDED_PAGES.has("blog")).toBe(false);
+  it("blog IS now excluded from Site Content (moved to its dedicated editor)", () => {
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("blog")).toBe(true);
     const pb = content.slice(
       content.indexOf("const PAGE_BUILDER_PAGES"),
       content.indexOf("]", content.indexOf("const PAGE_BUILDER_PAGES")) + 1,
     );
-    expect(pb.includes('"blog"')).toBe(false);
+    expect(pb.includes('"blog"')).toBe(true);
   });
 
-  it("the BLOG editor enum exists (ready for the Slice 2 flip)", () => {
+  it("the BLOG editor enum exists and the 17-orphan snapshot is UNTOUCHED", () => {
     expect(CONTENT_EDITORS.BLOG).toBe("BLOG");
     expect(guard).toContain("KNOWN_ORPHANS_V1.size === 17");
   });

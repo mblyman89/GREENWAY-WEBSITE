@@ -10,7 +10,8 @@
  *    BYTE-IDENTICAL to the copy the page renders today (live-look-safe), plus a
  *    resolver where a non-blank override wins and blank/unknown fall back.
  *  - Those blocks are seeded (page:"blog") into CONTENT_BLOCK_SEEDS, byte for
- *    byte, and blog is NOT in PAGE_BUILDER_PAGES (so they show in Site Content).
+ *    byte, and (MIG-6 Slice 2) blog IS now in PAGE_BUILDER_PAGES, so they live in
+ *    the dedicated /admin/blog/content editor, not the Site Content junk drawer.
  *  - The public pages read the blocks via getContentValues + render them with
  *    data-gw-block markers when preview is on; the "Read article" and
  *    "Back to blog" labels are editable with the correct defaults.
@@ -119,14 +120,14 @@ describe("SLICE 115 — seeds (no migration, byte-identical)", () => {
   });
 });
 
-describe("SLICE 115 — blog is editable in Site Content", () => {
-  it("blog is NOT filtered out of the Site Content editor", () => {
+describe("MIG-6 Slice 2 — blog moved OUT of Site Content into its own editor", () => {
+  it("blog IS now filtered out of the Site Content editor (junk drawer empty)", () => {
     const src = read("src/app/admin/content/page.tsx");
     const set = src.slice(
       src.indexOf("PAGE_BUILDER_PAGES = new Set"),
       src.indexOf("]);", src.indexOf("PAGE_BUILDER_PAGES = new Set")),
     );
-    expect(set.includes('"blog"')).toBe(false);
+    expect(set.includes('"blog"')).toBe(true);
   });
 
   it("blog is wired into the preview page picker", () => {
