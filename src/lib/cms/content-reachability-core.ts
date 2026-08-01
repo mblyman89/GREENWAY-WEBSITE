@@ -137,6 +137,15 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "price-match",
   "footer",
   "business",
+  // MIG-5 Slice 2 (SUBTRACT): medical now owned by MEDICAL_PAGE, and the four
+  // legal groups by LEGAL_POLICIES — none of them default to SITE_CONTENT any
+  // more, so they leave the junk drawer here too (keeps self-test #7 honest and
+  // mirrors PAGE_BUILDER_PAGES in admin/content/page.tsx).
+  "medical",
+  "legal",
+  "legal-privacy",
+  "legal-terms",
+  "legal-chd",
 ]);
 
 /**
@@ -250,12 +259,13 @@ export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
     "legal-terms": CONTENT_EDITORS.LEGAL_POLICIES,
     // header-footer group: dedicated editor owns it (b.page === "header-footer").
     "header-footer": CONTENT_EDITORS.HEADER_FOOTER,
-    // medical group default: the dedicated Medical page editor owns its registry
-    // blocks. The 3 stuck hero/intro keys are the exception — but they still sit
-    // in Site Content today, so we keep the default as SITE_CONTENT for the
-    // whole "medical" page group at v1 to reflect reality (MIG-5d will flip the
-    // registry blocks to MEDICAL_PAGE and add hero/intro fields there).
-    medical: CONTENT_EDITORS.SITE_CONTENT,
+    // medical group default: the dedicated Medical page editor owns the whole
+    // group now. MIG-5 Slice 1 surfaced the three stuck hero/intro copy fields in
+    // that editor alongside the registry blocks it already owned; MIG-5 Slice 2
+    // (this slice) then removed the medical group from the Site Content junk
+    // drawer, so MEDICAL_PAGE is now the single honest owner. The page is also
+    // added to SITE_CONTENT_EXCLUDED_PAGES below.
+    medical: CONTENT_EDITORS.MEDICAL_PAGE, // MIG-5 Slice 2: flipped from SITE_CONTENT (Medical page editor owns it; hero/intro surfaced Slice 1)
     // page-builder groups (excluded from Site Content) with dedicated editors:
     loyalty: CONTENT_EDITORS.LOYALTY_PAGE,
     specials: CONTENT_EDITORS.SPECIALS,

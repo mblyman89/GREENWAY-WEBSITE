@@ -134,6 +134,19 @@ export default async function SiteContentPage({
   // "footer" here — the two footer blocks now have exactly ONE honest home
   // instead of being duplicated in this junk drawer. No block is lost: they were
   // editable in BOTH places since MS-3.1, and this removes only the duplicate.
+  // MIG-5 Slice 2 (SUBTRACT): the "medical" group (3 blocks: the /medical hero
+  // title, hero subtitle, and intro paragraph) and the four "legal" groups
+  // (legal / legal-privacy / legal-terms / legal-chd — the privacy, terms and
+  // Consumer-Health-Data page titles plus their three long policy bodies) are
+  // now excluded WHOLESALE. Every one of those blocks already has exactly one
+  // honest home elsewhere: the medical copy moved to the dedicated Medical page
+  // editor (/admin/medical-page, hero/intro surfaced in Slice 1), and the legal
+  // copy has long lived in the Legal & Policies editor (/admin/legal-policies).
+  // Removing them here empties the last "always-visible" pages out of this junk
+  // drawer. No block is lost — they were editable in BOTH places, so this only
+  // deletes the duplicate Site Content copy. Mirrors content-reachability-core.ts,
+  // where medical flips to MEDICAL_PAGE (legal already routes to LEGAL_POLICIES)
+  // and all five pages join SITE_CONTENT_EXCLUDED_PAGES.
   const PAGE_BUILDER_PAGES = new Set<string>([
     "home",
     "menu",
@@ -146,6 +159,11 @@ export default async function SiteContentPage({
     "price-match",
     "footer",
     "business",
+    "medical",
+    "legal",
+    "legal-privacy",
+    "legal-terms",
+    "legal-chd",
   ]);
   // MIG-4 MS-4.2 (the "business" split RESOLVED): the "business" page group is
   // now excluded WHOLESALE (added to PAGE_BUILDER_PAGES above). All three of its
