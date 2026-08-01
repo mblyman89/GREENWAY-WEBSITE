@@ -110,8 +110,10 @@ export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([]);
  * `page` is in this set are NOT shown in Site Content. Kept in sync with the
  * real filter; the self-test cross-checks it.
  *
- * TODAY (after MIG-1 MS-1.3): home, menu, loyalty, specials, vendors, faq.
- * (vendors joined here in MS-1.3, when its own "Page wording" card took over.)
+ * TODAY (after MIG-2 MS-2.2): home, menu, loyalty, specials, vendors, faq,
+ * about, locations, price-match.
+ * (vendors joined here in MS-1.3; about/locations/price-match joined in MS-2.2,
+ * once each got its own "Page wording" card in MS-2.1a/b/c.)
  */
 export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>([
   "home",
@@ -120,6 +122,9 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "specials",
   "vendors",
   "faq",
+  "about",
+  "locations",
+  "price-match",
 ]);
 
 /**
@@ -211,12 +216,12 @@ export const KNOWN_ORPHANS_V1: ReadonlySet<string> = new Set<string>([
 export const PAGE_GROUP_DEFAULT_OWNER: Readonly<Record<string, ContentEditor>> =
   {
     // still in Site Content today (junk drawer) — migration targets noted:
-    about: CONTENT_EDITORS.SITE_CONTENT, // -> PAGES_ABOUT (MIG-2)
+    about: CONTENT_EDITORS.PAGES_ABOUT, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     blog: CONTENT_EDITORS.SITE_CONTENT, // -> BLOG (MIG-6)
     business: CONTENT_EDITORS.SITE_CONTENT, // split -> BRANDING + HEADER_FOOTER (MIG-3/4)
     footer: CONTENT_EDITORS.SITE_CONTENT, // -> HEADER_FOOTER (MIG-3)
-    locations: CONTENT_EDITORS.SITE_CONTENT, // -> PAGES_LOCATIONS (MIG-2)
-    "price-match": CONTENT_EDITORS.SITE_CONTENT, // -> PAGES_PRICE_MATCH (MIG-2)
+    locations: CONTENT_EDITORS.PAGES_LOCATIONS, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
+    "price-match": CONTENT_EDITORS.PAGES_PRICE_MATCH, // MIG-2 MS-2.2: flipped from SITE_CONTENT (Page wording card owns it)
     vendors: CONTENT_EDITORS.PAGES_VENDORS, // MIG-1 MS-1.3: flipped from SITE_CONTENT (Page wording card owns it)
     // legal groups: reachable in Site Content AND legal-policies today. We pick
     // the dedicated editor as the honest owner (it is the intended home).

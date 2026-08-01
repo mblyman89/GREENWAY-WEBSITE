@@ -130,6 +130,9 @@ export default async function SiteContentPage({
     "specials",
     "vendors",
     "faq",
+    "about",
+    "locations",
+    "price-match",
   ]);
   const blocks = allBlocks.filter((b) => !PAGE_BUILDER_PAGES.has(b.page));
   // "Not seeded" must reflect the whole table — if nothing exists yet, the
