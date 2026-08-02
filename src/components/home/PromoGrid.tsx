@@ -1,19 +1,12 @@
+import Image from "next/image";
 import Link from "next/link";
 import { HomeBrands } from "@/components/home/HomeBrands";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import type { BrandFactsOverlay } from "@/lib/home/brand-facts";
 import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
-
-// Accent gradient per category tile (cycled in lane order).
-const LANE_ACCENTS: Record<string, string> = {
-  flower: "from-[var(--greenway)] to-emerald-700",
-  prerolls: "from-amber-400 to-[var(--orange)]",
-  concentrates: "from-[var(--gold)] to-[var(--orange)]",
-  edibles: "from-rose-400 to-rose-700",
-  liquids: "from-sky-400 to-blue-700",
-  topicals: "from-fuchsia-400 to-purple-700",
-};
+import { glowCardStyle, glowToneByIndex } from "@/lib/ui/glow-card-core";
+import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
 
 /**
  * Home "Shop by Category" + "Shop by Brand" sections.
@@ -43,6 +36,7 @@ export function PromoGrid({
   items = [],
   brandFacts,
   brandCount,
+  laneImages,
 }: {
   content?: PromoBannerContent;
   /** Live menu items (from the published DB version) for the brand grid. */
@@ -51,6 +45,12 @@ export function PromoGrid({
   brandFacts?: Record<string, BrandFactsOverlay>;
   /** SLICE 112: owner-controlled brand-grid card count (home.brand settings.cardCount). */
   brandCount?: number;
+  /**
+   * Owner-uploaded product photo per category lane (home.category
+   * settings.laneImages). An unset lane resolves to "" so the tile renders its
+   * clean text-only fallback, byte-identical to the card the site shipped with.
+   */
+  laneImages?: Partial<Record<HomeTypeLaneKey, string>>;
 } = {}) {
   return (
     <>
@@ -74,30 +74,56 @@ export function PromoGrid({
           />
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">
-            {categoryLanes.map((lane) => (
-              <Link
-                key={lane.key}
-                href={lane.href}
-                className="group relative isolate flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] p-4 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25 lg:aspect-[3/4]"
-              >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${LANE_ACCENTS[lane.key] ?? "from-[var(--greenway)] to-emerald-700"} opacity-80 transition group-hover:opacity-95`}
-                  aria-hidden="true"
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.3),transparent_55%),linear-gradient(180deg,rgba(0,0,0,0.06)_0%,rgba(0,0,0,0.72)_100%)]"
-                  aria-hidden="true"
-                />
-                <div className="relative">
-                  <p className="text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
-                    {lane.label}
-                  </p>
-                  <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-[0.16em] text-white/80 md:text-[0.62rem]">
-                    Shop now →
-                  </p>
-                </div>
-              </Link>
-            ))}
+            {categoryLanes.map((lane, index) => {
+              const tone = glowToneByIndex(index);
+              // Owner-uploaded product photo for this lane, or "" -> clean
+              // text-only fallback (byte-identical to the card the site shipped).
+              const image = laneImages?.[lane.key as HomeTypeLaneKey] || "";
+              return (
+                <Link
+                  key={lane.key}
+                  href={lane.href}
+                  className="group relative isolate flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl border shadow-lg shadow-black/30 transition duration-300 hover:-translate-y-0.5 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] lg:aspect-[3/4]"
+                  style={glowCardStyle(tone)}
+                >
+                  {/* Owner image fills the card (object-cover). When unset, the
+                      glow shell alone shows through — the clean fallback. */}
+                  {image ? (
+                    <Image
+                      src={image}
+                      alt=""
+                      fill
+                      sizes="(max-width: 768px) 45vw, 16vw"
+                      className="absolute inset-0 z-0 object-cover"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+
+                  {/* Product-card glow strips: left / right verticals. */}
+                  <span
+                    className="pointer-events-none absolute -left-px top-[14%] z-[2] h-[42%] w-px opacity-90 blur-[1px]"
+                    style={{ background: tone.glowLeft }}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="pointer-events-none absolute -right-px top-[31%] z-[2] h-[46%] w-px opacity-90 blur-[1px]"
+                    style={{ background: tone.glowRight }}
+                    aria-hidden="true"
+                  />
+
+                  {/* Text lives in its OWN bottom bar/container so it never sits
+                      on top of the product photo. Centered per owner request. */}
+                  <div className="relative z-[3] border-t border-white/12 bg-[linear-gradient(180deg,rgba(10,14,11,0.82),rgba(8,10,9,0.96))] px-2 py-2.5 text-center backdrop-blur-[2px]">
+                    <p className="text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
+                      {lane.label}
+                    </p>
+                    <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-[0.16em] text-[var(--greenway)] md:text-[0.62rem]">
+                      Shop now →
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>

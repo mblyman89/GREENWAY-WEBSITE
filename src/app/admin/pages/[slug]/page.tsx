@@ -16,10 +16,13 @@ import { PAGES_WITH_WORDING } from "@/lib/cms/page-wording-core";
 import { listSections } from "@/lib/cms/page-sections-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
 import { HomeDisplaySettingsCard } from "@/components/admin/HomeDisplaySettingsCard";
+import { TypeCardImagesEditor } from "@/components/admin/TypeCardImagesEditor";
 import {
   readHomeCardCount,
+  readLaneImages,
   DAILY_DEALS_COUNT_KEY,
 } from "@/lib/cms/home-section-settings-core";
+import { getHomeSectionByKey } from "@/lib/cms/page-sections-store";
 import { listCarouselSlides } from "@/lib/cms/carousel-store";
 import { MAX_CAROUSEL_SLIDES } from "@/lib/cms/carousel-types";
 import { listFaqItems } from "@/lib/cms/faq-store";
@@ -34,6 +37,7 @@ import {
   deleteSectionAction,
   moveSectionAction,
   saveHomeSettingsAction,
+  saveTypeCardImagesAction,
 } from "./actions";
 import {
   seedCarouselAction,
@@ -59,6 +63,8 @@ type Flash = { tone: "ok" | "error"; text: string } | null;
 function flashFor(sp: Record<string, string | undefined>): Flash {
   if (sp.error) return { tone: "error", text: decodeURIComponent(sp.error) };
   if (sp.added) return { tone: "ok", text: "New section added — scroll down to edit it." };
+  if (sp.saved && sp.tab === "typecards")
+    return { tone: "ok", text: "Category tile images published to the homepage." };
   if (sp.saved) return { tone: "ok", text: "Draft saved. Publish when you're ready." };
   if (sp.published) return { tone: "ok", text: "Published to the live page." };
   if (sp.deleted) return { tone: "ok", text: "Section deleted." };
@@ -83,10 +89,11 @@ export default async function PageBuilderPage({
   const config = PAGE_SECTION_CONFIG[slug];
   const isHome = slug === "home";
   const isFaq = slug === "faq";
-  // Home has two tabs (carousel | sections); FAQ has (sections | qanda);
-  // other pages only show sections.
-  let tab: "carousel" | "sections" | "qanda" = "sections";
+  // Home has three tabs (carousel | sections | typecards); FAQ has
+  // (sections | qanda); other pages only show sections.
+  let tab: "carousel" | "sections" | "qanda" | "typecards" = "sections";
   if (isHome && sp.tab === "carousel") tab = "carousel";
+  else if (isHome && sp.tab === "typecards") tab = "typecards";
   else if (isFaq && sp.tab === "qanda") tab = "qanda";
 
   if (!isSupabaseServiceConfigured) {
@@ -170,6 +177,16 @@ export default async function PageBuilderPage({
             >
               Sections
             </a>
+            <a
+              href={`/admin/pages/home?tab=typecards`}
+              className={
+                tab === "typecards"
+                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
+              }
+            >
+              Type Cards
+            </a>
           </div>
         ) : null}
 
@@ -223,6 +240,8 @@ export default async function PageBuilderPage({
 
         {isHome && tab === "carousel" ? (
           <CarouselTab mediaChoices={mediaChoices} />
+        ) : isHome && tab === "typecards" ? (
+          <TypeCardsTab mediaChoices={mediaChoices} />
         ) : isFaq && tab === "qanda" ? (
           <QandaTab />
         ) : (
@@ -288,6 +307,23 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Type Cards tab (home only) — per-lane "Shop by Category" tile images
+// ---------------------------------------------------------------------------
+
+async function TypeCardsTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
+  const categoryRow = await getHomeSectionByKey("home.category");
+  const laneImages = readLaneImages(categoryRow?.settings);
+
+  return (
+    <TypeCardImagesEditor
+      laneImages={laneImages}
+      mediaChoices={mediaChoices}
+      saveAction={saveTypeCardImagesAction}
+    />
   );
 }
 
