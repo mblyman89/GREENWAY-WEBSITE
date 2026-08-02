@@ -208,18 +208,21 @@ describe("SLICE 114 — public card redesign (product-card glow, no colored bg)"
 });
 
 describe("SLICE 114 → MIG-1 MS-1.3 — vendors editor moved to its own Page wording card", () => {
-  it("vendors is BACK in PAGE_BUILDER_PAGES (MS-1.3): its text now lives in the Vendors Page wording card, not Site Content", () => {
-    const editor = read("src/app/admin/content/page.tsx");
-    const setBlock = editor.slice(
-      editor.indexOf("const PAGE_BUILDER_PAGES"),
-      editor.indexOf("const PAGE_BUILDER_PAGES") + 300,
+  it("vendors resolves to its own Page wording card, not Site Content (MS-1.3; Site Content page retired in MIG-7)", async () => {
+    // MIG-7 PR-B retired the Site Content page (src/app/admin/content/page.tsx),
+    // so we no longer read its PAGE_BUILDER_PAGES filter text. The honest source
+    // of truth for "which editor owns this page group" is the reachability core.
+    const { PAGE_GROUP_DEFAULT_OWNER, CONTENT_EDITORS } = await import(
+      "@/lib/cms/content-reachability-core"
     );
-    // MS-1.3 SUBTRACT: vendors re-excluded from Site Content now that the
-    // Vendors page has its own all-inclusive "Page wording" card (MS-1.2).
-    expect(setBlock).toContain('"vendors"');
-    // The other builder pages remain excluded.
-    expect(setBlock).toContain('"home"');
-    expect(setBlock).toContain('"faq"');
+    // MS-1.3 SUBTRACT: vendors is owned by the Vendors Page wording card (its
+    // own all-inclusive editor, MS-1.2), NOT the retired Site Content drawer.
+    expect(PAGE_GROUP_DEFAULT_OWNER["vendors"]).toBe(
+      CONTENT_EDITORS.PAGES_VENDORS,
+    );
+    expect(PAGE_GROUP_DEFAULT_OWNER["vendors"]).not.toBe(
+      CONTENT_EDITORS.SITE_CONTENT,
+    );
   });
 
   it("admin preview card matches the public redesign (dark + glow + logo forward)", () => {

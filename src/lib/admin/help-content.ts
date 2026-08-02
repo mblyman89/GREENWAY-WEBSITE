@@ -137,8 +137,8 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I change the words on my homepage or other pages?",
-        a: "Use Site Content, or open the specific page builder (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match) in the Pages section. You edit blocks like the hero headline or business hours and preview before it goes live.",
-        href: "/admin/content",
+        a: "Open the specific page builder (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match) in the Pages section, or use Header & Footer / Branding / Legal Policies for those areas. You edit blocks like the hero headline or business hours and preview before it goes live. To see the whole site as it will look, use the Live preview tab on Website Sync.",
+        href: "/admin/website-sync",
       },
       {
         q: "How do I change the big rotating banners on the homepage?",

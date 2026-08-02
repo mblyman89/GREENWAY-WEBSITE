@@ -48,6 +48,10 @@ export async function PageWordingCard({
   slug: string;
   previewPath: string | null | undefined;
 }) {
+  // The shared content actions were repointed off the retired Site Content page
+  // (MIG-7): tell them to return here, to this page's own editor, after a
+  // save/publish/restore/seed so the flash banner lands on the right page.
+  const returnTo = `/admin/pages/${slug}`;
   // Lazy, idempotent top-up so any missing controlled blocks appear. No-op once
   // everything already exists. Same call the header-footer editor makes.
   let allBlocks = await listContentBlocks();
@@ -73,6 +77,7 @@ export async function PageWordingCard({
           current live values — no visible change until you edit).
         </p>
         <form action={seedContentBlocksAction} className="mt-4">
+          <input type="hidden" name="return_to" value={returnTo} />
           <Button type="submit" variant="primary">
             Initialize content blocks
           </Button>
@@ -189,6 +194,7 @@ export async function PageWordingCard({
         pendingCount={pendingCount}
         publishAllAction={publishAllDraftsAction}
         discardAllAction={discardAllDraftsAction}
+        returnTo={returnTo}
       />
 
       <ContentEditorShell
@@ -198,6 +204,7 @@ export async function PageWordingCard({
         saveDraftAction={saveContentDraftAction}
         publishAction={publishContentBlockAction}
         restoreAction={restoreContentRevisionAction}
+        returnTo={returnTo}
       />
     </section>
   );

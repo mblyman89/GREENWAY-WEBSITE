@@ -62,6 +62,45 @@ function revalidatePublicForPage(page: string): void {
   revalidatePath("/", "layout");
 }
 
+/**
+ * These content actions are shared by SEVERAL editors (Branding, Header &
+ * Footer, the Hero-text / Page-wording cards) -- not only the old Site Content
+ * page, which was retired in MIG-7. So a form must be able to say WHERE to send
+ * the user back to (with its flash param), instead of the old hardcoded
+ * `/admin/content`. Each form posts an optional hidden `return_to` field with
+ * its own route; we validate it is a same-site ADMIN path (never a foreign
+ * host/protocol or a non-admin page) and default safely to the Website Sync
+ * dashboard if it is missing or unsafe.
+ *
+ * `flash` is the query string to append (e.g. "saved=1", or a hash like
+ * "restored=1#block-x"). It is appended with the correct separator.
+ */
+const RETURN_TO_FALLBACK = "/admin/website-sync";
+
+function safeReturnTo(formData: FormData): string {
+  const raw = String(formData.get("return_to") ?? "").trim();
+  // Only allow same-site ADMIN paths: must start with "/admin/", must not be a
+  // protocol-relative "//host" or contain a scheme. This prevents open redirect
+  // and guarantees we never bounce to a public/unknown route.
+  if (
+    raw.startsWith("/admin/") &&
+    !raw.startsWith("//") &&
+    !raw.includes("://")
+  ) {
+    return raw;
+  }
+  return RETURN_TO_FALLBACK;
+}
+
+/** Build a redirect target: <return_to base> + <flash query/hash>. */
+function returnWithFlash(formData: FormData, flash: string): string {
+  const base = safeReturnTo(formData);
+  if (!flash) return base;
+  // flash may be "saved=1" (query) or "restored=1#block-x" (query+hash).
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}${flash}`;
+}
+
 export type AiSuggestResult =
   | { ok: true; value: string; complianceFlags: string[]; model: string }
   | { ok: false; error: string };
@@ -194,7 +233,9 @@ export async function suggestSeoAction(
 }
 
 /** Lazily seed the controlled block set (idempotent) — used on first visit. */
-export async function seedContentBlocksAction(): Promise<void> {
+export async function seedContentBlocksAction(
+  formData: FormData,
+): Promise<void> {
   const session = await requirePermission("content.edit");
   const inserted = await ensureContentBlocksSeeded();
   if (inserted > 0) {
@@ -206,8 +247,7 @@ export async function seedContentBlocksAction(): Promise<void> {
       after: { inserted },
     });
   }
-  revalidatePath("/admin/content");
-  redirect("/admin/content?seeded=1");
+  redirect(returnWithFlash(formData, "seeded=1"));
 }
 
 export async function saveContentDraftAction(formData: FormData): Promise<void> {
@@ -215,7 +255,7 @@ export async function saveContentDraftAction(formData: FormData): Promise<void> 
   const blockKey = String(formData.get("block_key") ?? "");
   const draftValue = String(formData.get("draft_value") ?? "");
   const block = await getContentBlock(blockKey);
-  if (!block) redirect("/admin/content");
+  if (!block) redirect(safeReturnTo(formData));
 
   // S-19: the footer compliance warning must keep every WA-mandated sentence.
   // Formatting is free; deleting a required line hard-fails the save.
@@ -231,9 +271,12 @@ export async function saveContentDraftAction(formData: FormData): Promise<void> 
         after: { missing: check.missing },
       });
       redirect(
-        `/admin/content?warning_error=${encodeURIComponent(
-          `Required WA warning language missing: ${check.missing.join(" | ")}`.slice(0, 600),
-        )}`,
+        returnWithFlash(
+          formData,
+          `warning_error=${encodeURIComponent(
+            `Required WA warning language missing: ${check.missing.join(" | ")}`.slice(0, 600),
+          )}`,
+        ),
       );
     }
   }
@@ -248,15 +291,14 @@ export async function saveContentDraftAction(formData: FormData): Promise<void> 
     before: { draft_value: block.draft_value },
     after: { draft_value: draftValue },
   });
-  revalidatePath("/admin/content");
-  redirect("/admin/content?saved=1");
+  redirect(returnWithFlash(formData, "saved=1"));
 }
 
 export async function publishContentBlockAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const blockKey = String(formData.get("block_key") ?? "");
   const block = await getContentBlock(blockKey);
-  if (!block) redirect("/admin/content");
+  if (!block) redirect(safeReturnTo(formData));
 
   // S-19: same mandated-language gate at publish time (covers a pre-existing
   // bad draft or a restore from history).
@@ -273,9 +315,12 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
         after: { missing: check.missing, phase: "publish" },
       });
       redirect(
-        `/admin/content?warning_error=${encodeURIComponent(
-          `Cannot publish — required WA warning language missing: ${check.missing.join(" | ")}`.slice(0, 600),
-        )}`,
+        returnWithFlash(
+          formData,
+          `warning_error=${encodeURIComponent(
+            `Cannot publish — required WA warning language missing: ${check.missing.join(" | ")}`.slice(0, 600),
+          )}`,
+        ),
       );
     }
   }
@@ -293,9 +338,8 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
     after: { published_value: block.draft_value ?? block.published_value },
   });
 
-  revalidatePath("/admin/content");
   revalidatePublicForPage(block.page);
-  redirect("/admin/content?published=1");
+  redirect(returnWithFlash(formData, "published=1"));
 }
 
 export async function saveSeoEntryAction(formData: FormData): Promise<void> {
@@ -337,10 +381,10 @@ export async function restoreContentRevisionAction(
 ): Promise<void> {
   const session = await requirePermission("content.edit");
   const revisionId = String(formData.get("revision_id") ?? "");
-  if (!revisionId) redirect("/admin/content");
+  if (!revisionId) redirect(safeReturnTo(formData));
 
   const result = await restoreContentRevisionToDraft(revisionId, session.userId);
-  if (!result) redirect("/admin/content?error=restore");
+  if (!result) redirect(returnWithFlash(formData, "error=restore"));
 
   await recordAudit({
     actorId: session.userId,
@@ -350,12 +394,13 @@ export async function restoreContentRevisionAction(
     entityId: result.blockKey,
     after: { restored_from_revision: revisionId },
   });
-  revalidatePath("/admin/content");
-  redirect(`/admin/content?restored=1#block-${result.blockKey}`);
+  redirect(returnWithFlash(formData, `restored=1#block-${result.blockKey}`));
 }
 
 /** Publish EVERY block that currently has an unpublished draft. */
-export async function publishAllDraftsAction(): Promise<void> {
+export async function publishAllDraftsAction(
+  formData: FormData,
+): Promise<void> {
   const session = await requirePermission("content.edit");
   const published = await publishAllDrafts(session.userId, session.email);
 
@@ -375,12 +420,13 @@ export async function publishAllDraftsAction(): Promise<void> {
     }
     for (const page of pages) revalidatePublicForPage(page);
   }
-  revalidatePath("/admin/content");
-  redirect(`/admin/content?published_all=${published.length}`);
+  redirect(returnWithFlash(formData, `published_all=${published.length}`));
 }
 
 /** Discard EVERY unpublished draft (reset draft back to the live value). */
-export async function discardAllDraftsAction(): Promise<void> {
+export async function discardAllDraftsAction(
+  formData: FormData,
+): Promise<void> {
   const session = await requirePermission("content.edit");
   const reset = await discardAllDrafts(session.userId);
   if (reset.length > 0) {
@@ -392,6 +438,5 @@ export async function discardAllDraftsAction(): Promise<void> {
       after: { count: reset.length, blocks: reset },
     });
   }
-  revalidatePath("/admin/content");
-  redirect(`/admin/content?discarded=${reset.length}`);
+  redirect(returnWithFlash(formData, `discarded=${reset.length}`));
 }

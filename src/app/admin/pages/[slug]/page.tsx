@@ -118,9 +118,10 @@ export default async function PageBuilderPage({
 
   const flash = flashFor(sp);
 
-  // The in-app preview screen lives in Site Content; the carousel/home Preview
-  // link points there (not the live website) per the owner's request.
-  const previewHref = `/admin/content?preview=${encodeURIComponent(config.previewPath)}`;
+  // The in-app preview screen now lives on the Website Sync page's "Live
+  // preview" tab (MIG-7: Site Content retired). The carousel/home Preview link
+  // points there (not the live website) per the owner's request.
+  const previewHref = "/admin/website-sync?tab=preview";
 
   return (
     <div>

@@ -110,7 +110,10 @@ export const adminNav: AdminNavItem[] = [
   // T PR 5) — what the storefront is serving RIGHT NOW, with edit links.
   { label: "Website Sync", href: "/admin/website-sync", permission: "dashboard.view", icon: "\ud83d\udd17", group: "Website" }, // 🔗 storefront harmony
   { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc\ufe0f", group: "Website" }, // 🖼️ media
-  { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "Website" }, // 📄 text blocks
+  // "Site Content" nav entry removed (MIG-7 PR-B): the /admin/content junk-drawer
+  // page was retired -- every content block now has a dedicated editor (Pages,
+  // Header & Footer, Branding, Legal, etc.) and the live preview + SEO editor
+  // moved to Website Sync. Nothing links here anymore.
   { label: "Header & Footer", href: "/admin/header-footer", permission: "content.edit", icon: "\ud83d\udd17", group: "Website" }, // 🔗 footer links & messages (SLICE 104)
   { label: "Branding", href: "/admin/settings/branding", permission: "content.edit", icon: "\ud83c\udfa8", group: "Website" }, // 🎨 site-wide fonts (heading + body) — MIG-4 MS-4.1
   { label: "Legal Policies", href: "/admin/legal-policies", permission: "content.edit", icon: "\u2696\ufe0f", group: "Website" }, // ⚖️ privacy / terms / consumer health data (SLICE 105b)

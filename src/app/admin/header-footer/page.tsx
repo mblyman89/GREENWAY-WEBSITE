@@ -205,7 +205,7 @@ export default async function HeaderFooterPage({
             </p>
           </HelpPanel>
         }
-        action={<Button href="/admin/content" variant="neutral">Site Content →</Button>}
+        action={<Button href="/admin/website-sync" variant="neutral">Website Sync →</Button>}
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
@@ -238,6 +238,7 @@ export default async function HeaderFooterPage({
               visible change until you edit).
             </p>
             <form action={seedContentBlocksAction} className="mt-4">
+              <input type="hidden" name="return_to" value="/admin/header-footer" />
               <Button type="submit" variant="primary">Initialize content blocks</Button>
             </form>
           </div>
@@ -245,7 +246,7 @@ export default async function HeaderFooterPage({
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6">
             <p className="text-sm text-[var(--admin-text-muted)]">
               Your header &amp; footer editable slots are being set up. Refresh in a moment — if this
-              persists, use &ldquo;Initialize content blocks&rdquo; on the Site Content page.
+              persists, use &ldquo;Initialize content blocks&rdquo; above.
             </p>
           </div>
         ) : (
@@ -268,6 +269,7 @@ export default async function HeaderFooterPage({
               pendingCount={pendingCount}
               publishAllAction={publishAllDraftsAction}
               discardAllAction={discardAllDraftsAction}
+              returnTo="/admin/header-footer"
             />
             <ContentEditorShell
               blocks={blockVMs}
@@ -276,6 +278,7 @@ export default async function HeaderFooterPage({
               saveDraftAction={saveContentDraftAction}
               publishAction={publishContentBlockAction}
               restoreAction={restoreContentRevisionAction}
+              returnTo="/admin/header-footer"
             />
           </>
         )}

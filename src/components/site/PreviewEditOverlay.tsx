@@ -7,6 +7,12 @@
  * affordance. Clicking it deep-links to the exact field in the admin content
  * editor.
  *
+ * NOTE (MIG-7 PR-B): the "✎ Edit" pencils are currently TURNED OFF via the
+ * `HOTSPOTS_ENABLED` flag below -- their only jump target (the Site Content
+ * page) was retired and there is no per-editor jump-to-field surface yet. The
+ * feature is left fully intact (flip the flag to switch it back on). The
+ * preview-mode badge / Exit control is unaffected.
+ *
  * It also renders a slim top banner so the previewer always knows they're in
  * preview mode and can exit back to the published site.
  *
@@ -25,6 +31,20 @@ type Hotspot = {
 
 const ADMIN_EDIT_BASE = "/admin/content";
 
+/**
+ * "Edit this field" jump-to hotspots are TURNED OFF for now (MIG-7 PR-B).
+ *
+ * The only place these pencils could jump to was the old Site Content page,
+ * whose editor list is being retired. There is no per-editor "focus this exact
+ * field" surface yet, so the pencils have nowhere meaningful to land. Rather
+ * than delete the feature, we gate it behind this flag: the measuring effect,
+ * the postMessage plumbing and the `edit()` navigation all stay intact and can
+ * be switched back on (set to `true`) when we build the dedicated jump-to-field
+ * feature on the individual editors. The Preview-mode badge (below) is NOT
+ * affected -- staff still see they are in preview and can exit.
+ */
+const HOTSPOTS_ENABLED = false;
+
 export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [inFrame, setInFrame] = useState(false);
@@ -36,6 +56,7 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
 
   // Measure all editable blocks and (re)compute hotspot positions.
   useEffect(() => {
+    if (!HOTSPOTS_ENABLED) return; // pencils turned off (MIG-7 PR-B)
     function measure() {
       const els = Array.from(
         document.querySelectorAll<HTMLElement>("[data-gw-block]"),
@@ -118,8 +139,10 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
         </button>
       </div>
 
-      {/* Edit hotspots */}
-      {hotspots.map((spot) => (
+      {/* Edit hotspots -- OFF for now (HOTSPOTS_ENABLED=false, MIG-7 PR-B).
+          Kept intact so the jump-to-field feature can be switched back on. */}
+      {HOTSPOTS_ENABLED &&
+        hotspots.map((spot) => (
         <button
           key={spot.key}
           type="button"

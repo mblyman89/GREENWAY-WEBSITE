@@ -163,7 +163,8 @@ describe("MIG-6 Slice 1 — discoverability wiring", () => {
 
 describe("MIG-6 Slice 2 — reachability FLIPPED to BLOG (SUBTRACT)", () => {
   const guard = readFileSync("src/lib/cms/content-reachability-core.ts", "utf8");
-  const content = readFileSync("src/app/admin/content/page.tsx", "utf8");
+  // MIG-7 PR-B retired the Site Content page; "excluded from Site Content" is
+  // proven via SITE_CONTENT_EXCLUDED_PAGES + owner resolution below.
 
   it("blog now defaults to BLOG (flipped from SITE_CONTENT in Slice 2)", () => {
     expect(PAGE_GROUP_DEFAULT_OWNER.blog).toBe(CONTENT_EDITORS.BLOG);
@@ -177,11 +178,11 @@ describe("MIG-6 Slice 2 — reachability FLIPPED to BLOG (SUBTRACT)", () => {
 
   it("blog IS now excluded from Site Content (moved to its dedicated editor)", () => {
     expect(SITE_CONTENT_EXCLUDED_PAGES.has("blog")).toBe(true);
-    const pb = content.slice(
-      content.indexOf("const PAGE_BUILDER_PAGES"),
-      content.indexOf("]", content.indexOf("const PAGE_BUILDER_PAGES")) + 1,
+    // Owner resolution confirms blog lives in the BLOG editor, not Site Content.
+    expect(PAGE_GROUP_DEFAULT_OWNER.blog).toBe(CONTENT_EDITORS.BLOG);
+    expect(PAGE_GROUP_DEFAULT_OWNER.blog).not.toBe(
+      CONTENT_EDITORS.SITE_CONTENT,
     );
-    expect(pb.includes('"blog"')).toBe(true);
   });
 
   it("the BLOG editor enum exists and the orphan snapshot reflects MIG-5c (0 remain)", () => {

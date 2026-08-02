@@ -309,31 +309,25 @@ describe("MIG-5 Slice 1 — Medical hero/intro added to the dedicated editor", (
 });
 
 describe("MIG-5 Slice 2 — SUBTRACT: medical & legal removed from Site Content", () => {
-  const sitePath = "src/app/admin/content/page.tsx";
-  // Read ONLY the PAGE_BUILDER_PAGES Set literal body (between its `[` and `]`)
-  // so an explanatory comment mentioning any page name in prose can't fool us.
-  const siteSrc = read(sitePath);
-  const setStart = siteSrc.indexOf("const PAGE_BUILDER_PAGES");
-  const literal = siteSrc.slice(
-    siteSrc.indexOf("[", setStart),
-    siteSrc.indexOf("]", setStart) + 1,
-  );
+  // MIG-7 PR-B retired the Site Content page. "Excluded from Site Content" is
+  // now proven via the reachability core's SITE_CONTENT_EXCLUDED_PAGES set +
+  // owner resolution, not by reading the deleted page's PAGE_BUILDER_PAGES.
 
-  it("Site Content now excludes the whole medical group (wholesale)", () => {
-    expect(literal).toContain('"medical"');
-  });
-
-  it("Site Content now excludes all four legal groups (wholesale)", () => {
-    expect(literal).toContain('"legal"');
-    expect(literal).toContain('"legal-privacy"');
-    expect(literal).toContain('"legal-terms"');
-    expect(literal).toContain('"legal-chd"');
-  });
-
-  it("the Site Content filter still filters by !PAGE_BUILDER_PAGES.has(b.page)", () => {
-    expect(siteSrc).toContain(
-      "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
+  it("Site Content excludes the whole medical group (SITE_CONTENT_EXCLUDED_PAGES)", async () => {
+    const { SITE_CONTENT_EXCLUDED_PAGES } = await import(
+      "@/lib/cms/content-reachability-core"
     );
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("medical")).toBe(true);
+  });
+
+  it("Site Content excludes all four legal groups (SITE_CONTENT_EXCLUDED_PAGES)", async () => {
+    const { SITE_CONTENT_EXCLUDED_PAGES } = await import(
+      "@/lib/cms/content-reachability-core"
+    );
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("legal")).toBe(true);
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("legal-privacy")).toBe(true);
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("legal-terms")).toBe(true);
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("legal-chd")).toBe(true);
   });
 
   it("the 3 medical copy blocks now resolve to the Medical page editor", () => {

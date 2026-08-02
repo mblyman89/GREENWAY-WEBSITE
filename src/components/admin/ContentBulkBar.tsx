@@ -16,14 +16,21 @@ import { ConfirmDialog } from "@/components/admin/ux";
 
 type Props = {
   pendingCount: number;
-  publishAllAction: () => void;
-  discardAllAction: () => void;
+  publishAllAction: (formData: FormData) => void;
+  discardAllAction: (formData: FormData) => void;
+  /**
+   * Admin route the bulk actions return to (with their flash param). Shared
+   * across editors since the old Site Content page was retired (MIG-7); each
+   * host page passes its own route.
+   */
+  returnTo?: string;
 };
 
 export function ContentBulkBar({
   pendingCount,
   publishAllAction,
   discardAllAction,
+  returnTo,
 }: Props) {
   const [confirm, setConfirm] = useState<null | "publish" | "discard">(null);
   const publishFormRef = useRef<HTMLFormElement>(null);
@@ -51,6 +58,9 @@ export function ContentBulkBar({
 
       <div className="flex flex-wrap items-center gap-2">
         <form ref={publishFormRef} action={publishAllAction} className="contents">
+          {returnTo ? (
+            <input type="hidden" name="return_to" value={returnTo} />
+          ) : null}
           <button
             type="button"
             disabled={!hasPending}
@@ -61,6 +71,9 @@ export function ContentBulkBar({
           </button>
         </form>
         <form ref={discardFormRef} action={discardAllAction} className="contents">
+          {returnTo ? (
+            <input type="hidden" name="return_to" value={returnTo} />
+          ) : null}
           <button
             type="button"
             disabled={!hasPending}

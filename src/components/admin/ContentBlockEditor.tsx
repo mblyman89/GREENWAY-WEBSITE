@@ -62,6 +62,13 @@ type Props = {
   restoreAction?: (formData: FormData) => void;
   /** Published media library images, for the "image" field-type picker. */
   mediaChoices?: MediaChoice[];
+  /**
+   * Admin route the save/publish/restore server actions should send the user
+   * back to (with their flash param). Since these actions are shared by several
+   * editors -- and the old Site Content page was retired (MIG-7) -- each host
+   * passes its own route so "Saved."/"Published." lands on the right page.
+   */
+  returnTo?: string;
 };
 
 function relTime(iso?: string | null): string | null {
@@ -105,6 +112,7 @@ export function ContentBlockEditor({
   revisions = [],
   restoreAction,
   mediaChoices = [],
+  returnTo,
 }: Props) {
   const { toast } = useToast();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -261,6 +269,9 @@ export function ContentBlockEditor({
           <form action={saveDraftAction} className="space-y-2">
             <input type="hidden" name="block_key" value={block.block_key} />
             <input type="hidden" name="draft_value" value={value} />
+            {returnTo ? (
+              <input type="hidden" name="return_to" value={returnTo} />
+            ) : null}
 
             {isImage ? (
               <ContentImageField
@@ -385,6 +396,9 @@ export function ContentBlockEditor({
 
           <form action={publishAction} className="mt-2">
             <input type="hidden" name="block_key" value={block.block_key} />
+            {returnTo ? (
+              <input type="hidden" name="return_to" value={returnTo} />
+            ) : null}
             <Button type="submit" variant="confirm" size="sm">
               Publish live
             </Button>
@@ -410,6 +424,7 @@ export function ContentBlockEditor({
               draftValue={value}
               revisions={revisions}
               restoreAction={restoreAction}
+              returnTo={returnTo}
             />
           )}
         </div>

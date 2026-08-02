@@ -130,7 +130,7 @@ export default async function LegalPoliciesPage({
             </p>
           </HelpPanel>
         }
-        action={<Button href="/admin/content" variant="neutral">Site Content →</Button>}
+        action={<Button href="/admin/website-sync" variant="neutral">Website Sync →</Button>}
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
