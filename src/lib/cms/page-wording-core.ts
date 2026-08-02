@@ -42,7 +42,11 @@ export const PAGES_WITH_WORDING: ReadonlySet<string> = new Set<string>([
   "locations",
   "price-match",
   "faq", // MIG-5a: FAQ hero copy orphans (faq.hero.title/subtitle) get a home
-  "home", // MIG-5a: Home category/brand banner orphans (home.category.*/home.brand.*) get a home
+  // NOTE: the Home page was added by MIG-5a then REMOVED by MIG-5a-fix. The Home
+  // category/brand banners are already editable in the Home Sections tab
+  // (page_sections); the home.category.*/home.brand.* content blocks are just
+  // the legacy render fallback behind them, so a Page wording card there was a
+  // duplicate editor. See content-reachability-core (PAGES_HOME).
 ]);
 
 /**
@@ -87,7 +91,7 @@ export function __runPageWordingCoreTests(): { passed: number } {
   assert(PAGES_WITH_WORDING.has("locations"), "locations wording is live (MS-2.1b)");
   assert(PAGES_WITH_WORDING.has("price-match"), "price-match wording is live (MS-2.1c)");
   assert(PAGES_WITH_WORDING.has("faq"), "faq wording is live (MIG-5a)");
-  assert(PAGES_WITH_WORDING.has("home"), "home wording is live (MIG-5a)");
+  assert(!PAGES_WITH_WORDING.has("home"), "home wording removed (MIG-5a-fix: Sections tab owns the banners, not a duplicate card)");
   assert(pageHasWording("vendors"), "pageHasWording agrees for vendors");
   assert(!pageHasWording("nonexistent-page"), "unknown page has no wording");
 
@@ -107,10 +111,12 @@ export function __runPageWordingCoreTests(): { passed: number } {
     "previewPath is trimmed",
   );
 
-  // 3. Snapshot: exactly 6 pages wired at MIG-5a (bumped deliberately per slice).
+  // 3. Snapshot: exactly 5 pages wired after MIG-5a-fix (vendors, about,
+  //    locations, price-match, faq). "home" was removed -- its banners are
+  //    edited in the Home Sections tab, not a duplicate Page wording card.
   assert(
-    PAGES_WITH_WORDING.size === 6,
-    `expected 6 wording pages (MIG-5a), found ${PAGES_WITH_WORDING.size}`,
+    PAGES_WITH_WORDING.size === 5,
+    `expected 5 wording pages (MIG-5a-fix), found ${PAGES_WITH_WORDING.size}`,
   );
 
   return { passed };
