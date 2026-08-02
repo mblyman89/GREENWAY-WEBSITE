@@ -89,6 +89,8 @@ export type MenuFilterControlsProps = {
   selectedStrains: string[];
   selectedTerpenes: string[];
   selectedBrands: string[];
+  /** PR 3: additive by-vendor facet (surfaces all brands by a producer). */
+  selectedVendors: string[];
   selectedWeights: string[];
   maxThc: number;
   maxCbd: number;
@@ -101,6 +103,7 @@ export type MenuFilterControlsProps = {
   onStrainToggle: (strain: string) => void;
   onTerpeneToggle: (terpene: string) => void;
   onBrandToggle: (brand: string) => void;
+  onVendorToggle: (vendor: string) => void;
   onWeightToggle: (weight: string) => void;
   onMaxThcChange: (value: number) => void;
   onMaxCbdChange: (value: number) => void;
@@ -110,6 +113,8 @@ export type MenuFilterControlsProps = {
   strainOptions: FilterCheckboxOption[];
   terpeneOptions: FilterCheckboxOption[];
   brandOptions: FilterCheckboxOption[];
+  /** PR 3: by-vendor options (mirrors brandOptions; derived from item.vendor). */
+  vendorOptions: FilterCheckboxOption[];
   weightOptions: FilterCheckboxOption[];
   /**
    * SLICE C (SHOP-3): the Specials section is now FULLY DYNAMIC — a data-driven
@@ -135,6 +140,7 @@ export function MenuFilterControls({
   selectedStrains,
   selectedTerpenes,
   selectedBrands,
+  selectedVendors,
   selectedWeights,
   maxThc,
   maxCbd,
@@ -147,6 +153,7 @@ export function MenuFilterControls({
   onStrainToggle,
   onTerpeneToggle,
   onBrandToggle,
+  onVendorToggle,
   onWeightToggle,
   onMaxThcChange,
   onMaxCbdChange,
@@ -156,6 +163,7 @@ export function MenuFilterControls({
   strainOptions,
   terpeneOptions,
   brandOptions,
+  vendorOptions,
   weightOptions,
   specialFilters = [],
   activeSpecialId = null,
@@ -215,6 +223,15 @@ export function MenuFilterControls({
 
       <FilterSection title="Categories">
         <FilterCheckboxGroup name="categories" options={categoryOptions} selectedValues={selectedCategories} onToggle={onCategoryToggle} />
+      </FilterSection>
+
+      {/* PR 3: additive by-VENDOR facet, placed directly ABOVE Brands (owner
+          directive). Filtering by vendor surfaces all brands by a producer \u2014 the
+          same clean display vendor the Vendors page and Home vendor cards use.
+          Only renders rows when the menu actually carries vendors. Brands stays
+          byte-identical below. */}
+      <FilterSection title="Vendors">
+        <FilterCheckboxGroup name="vendors" options={vendorOptions} selectedValues={selectedVendors} onToggle={onVendorToggle} searchable searchLabel="Search vendors" searchPlaceholder="Search vendors..." />
       </FilterSection>
 
       <FilterSection title="Brands">

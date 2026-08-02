@@ -330,6 +330,8 @@ type FilterCriteria = {
   selectedStrains: string[];
   selectedTerpenes: string[];
   selectedBrands: string[];
+  // PR 3: additive by-vendor facet (mirrors selectedBrands; matches item.vendor).
+  selectedVendors: string[];
   selectedWeights: string[];
   maxThc: number;
   maxCbd: number;
@@ -481,13 +483,17 @@ function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, m
   const strainOk = matchesStrainSelection(item, criteria.selectedStrains);
   const terpeneOk = matchesTerpeneSelection(item, criteria.selectedTerpenes);
   const brandOk = criteria.selectedBrands.length === 0 || criteria.selectedBrands.includes(item.brand);
+  // PR 3: additive by-vendor match. item.vendor is optional (blank on items with
+  // no producer), so an item with no vendor never matches a vendor selection \u2014
+  // consistent with buildVendorDirectory, which skips blank-vendor items.
+  const vendorOk = criteria.selectedVendors.length === 0 || criteria.selectedVendors.includes(item.vendor ?? "");
   const weightOk = criteria.selectedWeights.length === 0 || criteria.selectedWeights.some((weight) => itemWeightLabels(item).includes(weight));
   const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc, bounds.maxAvailableThc);
   const cbdOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalCbd), criteria.maxCbd, bounds.maxAvailableCbd);
   const priceOk = matchesPriceSlider(item.priceMinorUnits, criteria.maxPrice, maxAvailablePrice);
   const searchOk = matchesSearch(item, criteria.query);
 
-  return categoryOk && strainOk && terpeneOk && brandOk && weightOk && thcOk && cbdOk && priceOk && searchOk;
+  return categoryOk && strainOk && terpeneOk && brandOk && vendorOk && weightOk && thcOk && cbdOk && priceOk && searchOk;
 }
 
 function countValues(values: string[]) {
@@ -525,6 +531,7 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   if (key === "selectedStrains") return { ...criteria, selectedStrains: [] };
   if (key === "selectedTerpenes") return { ...criteria, selectedTerpenes: [] };
   if (key === "selectedBrands") return { ...criteria, selectedBrands: [] };
+  if (key === "selectedVendors") return { ...criteria, selectedVendors: [] };
   if (key === "selectedWeights") return { ...criteria, selectedWeights: [] };
   if (key === "maxThc") return { ...criteria, maxThc: UNBOUNDED };
   if (key === "maxCbd") return { ...criteria, maxCbd: UNBOUNDED };
@@ -542,6 +549,10 @@ type InitialMenuSearchParams = {
   strains?: string;
   terpenes?: string;
   brands?: string;
+  // PR 3: additive by-VENDOR filter (surfaces all brands by a producer). Mirrors
+  // `brands` exactly; keyed on item.vendor (the clean display vendor label). The
+  // brand filter + all ?brand=/?brands= deep links are left untouched.
+  vendors?: string;
   weights?: string;
   maxThc?: string;
   maxCbd?: string;
@@ -607,6 +618,7 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
     strains: pick("strains") ?? undefined,
     terpenes: pick("terpenes") ?? undefined,
     brands: pick("brands") ?? undefined,
+    vendors: pick("vendors") ?? undefined,
     weights: pick("weights") ?? undefined,
     maxThc: pick("maxThc") ?? undefined,
     maxCbd: pick("maxCbd") ?? undefined,
@@ -652,6 +664,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const persistedStrains = parsePersistedList(initialParams.strains);
   const persistedTerpenes = parsePersistedList(initialParams.terpenes);
   const persistedBrands = parsePersistedList(initialParams.brands);
+  // PR 3: additive by-vendor facet. Home vendor cards deep-link ?vendors=<vendor>.
+  const persistedVendors = parsePersistedList(initialParams.vendors);
   const persistedWeights = parsePersistedList(initialParams.weights);
   const persistedMaxThc = parsePersistedNumber(initialParams.maxThc);
   const persistedMaxCbd = parsePersistedNumber(initialParams.maxCbd);
@@ -668,6 +682,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const [selectedBrands, setSelectedBrands] = useState<string[]>(
     persistedBrands.length ? persistedBrands : initialBrand ? [initialBrand] : [],
   );
+  // PR 3: additive by-vendor facet (no legacy singular param \u2014 Home cards use ?vendors=).
+  const [selectedVendors, setSelectedVendors] = useState<string[]>(persistedVendors);
   const [selectedWeights, setSelectedWeights] = useState<string[]>(persistedWeights);
   // Data-derived bounds for sliders (no hardcoded ceilings).
   const maxAvailablePrice = useMemo(
@@ -746,6 +762,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     if (selectedStrains.length) params.set("strains", selectedStrains.join(","));
     if (selectedTerpenes.length) params.set("terpenes", selectedTerpenes.join(","));
     if (selectedBrands.length) params.set("brands", selectedBrands.join(","));
+    if (selectedVendors.length) params.set("vendors", selectedVendors.join(","));
     if (selectedWeights.length) params.set("weights", selectedWeights.join(","));
     if (maxThc < maxAvailableThc) params.set("maxThc", String(maxThc));
     if (maxCbd < maxAvailableCbd) params.set("maxCbd", String(maxCbd));
@@ -760,6 +777,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedCategories,
     selectedStrains,
     selectedBrands,
+    selectedVendors,
     selectedTerpenes,
     selectedWeights,
     maxThc,
@@ -801,6 +819,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       const singleBrand = params.get("brand") ?? "";
       setSelectedBrands(nextBrands.length ? nextBrands : singleBrand ? [singleBrand] : []);
 
+      // PR 3: additive by-vendor facet (plural param only).
+      setSelectedVendors(list("vendors"));
+
       setSelectedWeights(list("weights"));
       setQuery(params.get("search") ?? "");
 
@@ -826,11 +847,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedStrains,
     selectedTerpenes,
     selectedBrands,
+    selectedVendors,
     selectedWeights,
     maxThc,
     maxCbd,
     maxPrice,
-  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedCategories, selectedStrains, selectedTerpenes, selectedWeights]);
+  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedVendors, selectedCategories, selectedStrains, selectedTerpenes, selectedWeights]);
 
   const filteredItems = useMemo(() => {
     const specialItemIds = initialSpecial?.itemIds;
@@ -899,6 +921,16 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     return buildOptions(optionItems.map((item) => item.brand), selectedBrands);
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedBrands]);
 
+  // PR 3: additive by-vendor options (mirrors brandOptions). Only items that carry
+  // a non-blank vendor contribute, so the list matches the vendor cards / directory.
+  const vendorOptions = useMemo(() => {
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedVendors"), maxAvailablePrice, cannabinoidBounds));
+    return buildOptions(
+      optionItems.map((item) => (item.vendor ?? "").trim()).filter(Boolean),
+      selectedVendors,
+    );
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedVendors]);
+
   const weightOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedWeights"), maxAvailablePrice, cannabinoidBounds));
     return buildWeightOptionsFromData(optionItems, selectedWeights);
@@ -931,6 +963,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedStrains.length > 0 ||
     selectedTerpenes.length > 0 ||
     selectedBrands.length > 0 ||
+    selectedVendors.length > 0 ||
     selectedWeights.length > 0 ||
     activeSpecialId !== null ||
     activeDohId !== null;
@@ -990,6 +1023,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     setSelectedStrains([]);
     setSelectedTerpenes([]);
     setSelectedBrands([]);
+    setSelectedVendors([]);
     setSelectedWeights([]);
     setMaxThc(maxAvailableThc);
     setMaxCbd(maxAvailableCbd);
@@ -1042,6 +1076,14 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       label: "Category",
       value: categoryLabel(category),
       onRemove: () => setSelectedCategories((current) => current.filter((value) => value !== category)),
+    })),
+    // PR 3: additive by-vendor pills, shown just before Brand pills (Vendors sit
+    // above Brands in the sidebar too).
+    ...selectedVendors.map((vendor) => ({
+      key: `vendor-${vendor}`,
+      label: "Vendor",
+      value: vendor,
+      onRemove: () => setSelectedVendors((current) => current.filter((value) => value !== vendor)),
     })),
     ...selectedBrands.map((brand) => ({
       key: `brand-${brand}`,
@@ -1107,6 +1149,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       selectedStrains={selectedStrains}
       selectedTerpenes={selectedTerpenes}
       selectedBrands={selectedBrands}
+      selectedVendors={selectedVendors}
       selectedWeights={selectedWeights}
       maxThc={maxThc}
       maxCbd={maxCbd}
@@ -1117,6 +1160,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       onStrainToggle={(strain) => setSelectedStrains((current) => toggleValue(current, strain))}
       onTerpeneToggle={(terpene) => setSelectedTerpenes((current) => toggleValue(current, terpene))}
       onBrandToggle={(brand) => setSelectedBrands((current) => toggleValue(current, brand))}
+      onVendorToggle={(vendor) => setSelectedVendors((current) => toggleValue(current, vendor))}
       onWeightToggle={(weight) => setSelectedWeights((current) => toggleValue(current, weight))}
       onMaxThcChange={setMaxThc}
       onMaxCbdChange={setMaxCbd}
@@ -1130,6 +1174,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       strainOptions={strainOptions}
       terpeneOptions={terpeneOptions}
       brandOptions={brandOptions}
+      vendorOptions={vendorOptions}
       weightOptions={weightOptions}
       specialFilters={specialFilters}
       activeSpecialId={activeSpecialId}

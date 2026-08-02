@@ -15,6 +15,12 @@ type FilterCheckboxGroupProps = {
   onToggle: (value: string) => void;
   searchable?: boolean;
   searchPlaceholder?: string;
+  /**
+   * PR 3: the small label ABOVE the search box. Previously hardcoded to
+   * "Search brands"; now a prop so the additive Vendors facet can read
+   * "Search vendors". Defaults to the original text for byte-identical Brands.
+   */
+  searchLabel?: string;
   emptyMessage?: string;
   initialVisibleCount?: number;
 };
@@ -26,6 +32,7 @@ export function FilterCheckboxGroup({
   onToggle,
   searchable = false,
   searchPlaceholder = "Search options...",
+  searchLabel = "Search brands",
   emptyMessage = "No matching filter options.",
   initialVisibleCount = 5,
 }: FilterCheckboxGroupProps) {
@@ -45,7 +52,7 @@ export function FilterCheckboxGroup({
     <div className="grid gap-3">
       {searchable ? (
         <label className="grid gap-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-zinc-400">
-          Search brands
+          {searchLabel}
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}

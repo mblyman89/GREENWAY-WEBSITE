@@ -82,6 +82,8 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
     categories: firstSearchParamValue(resolvedSearchParams?.categories),
     strains: firstSearchParamValue(resolvedSearchParams?.strains),
     brands: firstSearchParamValue(resolvedSearchParams?.brands),
+    // PR 3: additive by-vendor filter (Home vendor cards deep-link ?vendors=<vendor>).
+    vendors: firstSearchParamValue(resolvedSearchParams?.vendors),
     weights: firstSearchParamValue(resolvedSearchParams?.weights),
     maxThc: firstSearchParamValue(resolvedSearchParams?.maxThc),
     maxCbd: firstSearchParamValue(resolvedSearchParams?.maxCbd),

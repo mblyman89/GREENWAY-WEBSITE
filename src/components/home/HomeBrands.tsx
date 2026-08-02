@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { VendorGlowCard } from "@/components/vendors/VendorGlowCard";
 import type { PromoBannerContent } from "@/components/home/PromoGrid";
@@ -19,9 +20,10 @@ import { HOME_CARD_COUNT_DEFAULT } from "@/lib/cms/home-section-settings-core";
  * menu actually carried several vendors: the old grid grouped by the free-text
  * `brand` field, while the Vendors page (and now this) group by `vendor`.
  *
- * The cards are intentionally UNWIRED for now (static tiles, no menu link). A
- * later slice will switch the customer menu filter from brand to vendor and
- * then point each card at the vendor-filtered menu.
+ * PR 3: the cards are now WIRED \u2014 each links to the vendor-filtered menu
+ * (/menu?vendors=<vendor name>), which the additive by-vendor menu filter reads.
+ * The link wraps the shared presentational VendorGlowCard so that component stays
+ * dumb (the Vendors page can adopt it later with its own wrapper).
  *
  * Like the old section, it rotates through the vendors (feature-shuffle style)
  * and honours the owner-controlled card count (home.brand → settings.cardCount).
@@ -72,7 +74,16 @@ export function HomeBrands({
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
           {shown.map((vendor, index) => (
-            <VendorGlowCard key={vendor.slug} vendor={vendor} index={index} />
+            // PR 3: wire each card to the vendor-filtered menu. vendor.name is the
+            // clean display vendor the menu filter matches on (item.vendor).
+            <Link
+              key={vendor.slug}
+              href={`/menu?vendors=${encodeURIComponent(vendor.name)}`}
+              aria-label={`Shop ${vendor.name} products`}
+              className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--greenway)]/60"
+            >
+              <VendorGlowCard vendor={vendor} index={index} />
+            </Link>
           ))}
         </div>
       </div>
