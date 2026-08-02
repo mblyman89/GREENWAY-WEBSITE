@@ -10,7 +10,11 @@ import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
 import { getSectionsForRender } from "@/lib/cms/page-sections-store";
-import { loadBrandFactsOverlay } from "@/lib/home/brand-facts";
+import {
+  buildVendorDirectory,
+  enrichVendorDirectory,
+} from "@/lib/menu/vendor-directory-core";
+import { listPublicVendorProfiles } from "@/lib/vendors/store";
 import {
   readHomeCardCount,
   readLaneImages,
@@ -35,7 +39,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
   // Section-banner copy/images are editable from Admin → Site Content.
-  const [slides, copy, sections, preview, dealItems, brandFacts] = await Promise.all([
+  const [slides, copy, sections, preview, dealItems, vendorProfiles] = await Promise.all([
     getCarouselForRender(),
     getContentValues([
       "home.category.image",
@@ -56,10 +60,21 @@ export default async function Home() {
     // hybrids + terpenes). No-op when no KB/curated match. Menu now comes from
     // the PUBLISHED DB version (dynamic), not a static snapshot.
     loadLiveMenuItems().then((items) => withMenuProfile(items)),
-    // 7d: master-data overlay for the brand grid (canonical name + known_for),
-    // sourced from the operational `brands` table. Defensive (empty when off).
-    loadBrandFactsOverlay(),
+    // PR 2: back-office vendor profiles (logo + copy) for the "Shop by Brand"
+    // section, which now shows VENDOR cards. Defensive (empty when off).
+    listPublicVendorProfiles(),
   ]);
+
+  // PR 2 (owner Option B): the "Shop by Brand" section now groups by VENDOR —
+  // the same pipeline the public Vendors page uses — so the homepage shows one
+  // card per producer (fixing the old bug where free-text `brand` grouping
+  // surfaced only a single card when the menu carried several vendors).
+  // buildVendorDirectory skips hidden items; enrichVendorDirectory folds in the
+  // real logo/description from the vendors table.
+  const vendors = enrichVendorDirectory(
+    buildVendorDirectory(dealItems),
+    vendorProfiles,
+  );
 
   // Map the new page_sections rows (by section_key) onto the banner content.
   const category = sections.find((s) => s.key === "home.category");
@@ -84,8 +99,7 @@ export default async function Home() {
       <Hero slides={slides} />
       <HomeDailyDeals items={dealItems} count={dailyDealsCount} />
       <PromoGrid
-        items={dealItems}
-        brandFacts={brandFacts}
+        vendors={vendors}
         brandCount={brandCount}
         laneImages={laneImages}
         content={{

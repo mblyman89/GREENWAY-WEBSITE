@@ -2,8 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { HomeBrands } from "@/components/home/HomeBrands";
 import { SectionBanner } from "@/components/home/SectionBanner";
-import type { GreenwayMenuItem } from "@/lib/leafly/types";
-import type { BrandFactsOverlay } from "@/lib/home/brand-facts";
+import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
 import { glowCardStyle, glowToneByIndex } from "@/lib/ui/glow-card-core";
 import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
@@ -16,8 +15,9 @@ import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
  * Topicals). Each tile links to the pre-filtered menu via the lane's
  * /menu?categories=a,b,c href.
  *
- * Brand: delegated to the client HomeBrands component, which rotates through
- * brands (feature-shuffle style) into a 4x4 grid.
+ * Brand: delegated to the client HomeBrands component, which now rotates
+ * through VENDOR glow cards (feature-shuffle style) — the same look as the
+ * public Vendors page.
  */
 export type PromoBannerContent = {
   categoryImage?: string;
@@ -33,16 +33,16 @@ export type PromoBannerContent = {
 
 export function PromoGrid({
   content,
-  items = [],
-  brandFacts,
+  vendors = [],
   brandCount,
   laneImages,
 }: {
   content?: PromoBannerContent;
-  /** Live menu items (from the published DB version) for the brand grid. */
-  items?: GreenwayMenuItem[];
-  /** 7d: master-data brand overlay (normalized name -> canonical name + known_for). */
-  brandFacts?: Record<string, BrandFactsOverlay>;
+  /**
+   * Vendor directory entries (derived live from the published menu + back-office
+   * profiles) for the "Shop by Brand" vendor-card grid.
+   */
+  vendors?: VendorDirectoryEntry[];
   /** SLICE 112: owner-controlled brand-grid card count (home.brand settings.cardCount). */
   brandCount?: number;
   /**
@@ -129,9 +129,8 @@ export function PromoGrid({
       </section>
 
       <HomeBrands
-        items={items}
+        vendors={vendors}
         content={content}
-        brandFacts={brandFacts}
         count={brandCount}
       />
     </>
