@@ -17,6 +17,7 @@ import { loyaltyTermsSummary, tierDisplayRows } from "@/lib/loyalty/program-term
 import { getEndorsementConfig } from "@/lib/medical/store";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getContentValues } from "@/lib/cms/render-content";
+import { WebsiteSyncPreviewPanel } from "@/components/admin/WebsiteSyncPreviewPanel";
 import {
   dealSourceSummary,
   endorsementStatusLine,
@@ -29,6 +30,21 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
+ * Website Sync tabs (MIG-7 PR-A). Two tabs, driven by the URL `?tab=` param
+ * (the same server-side idiom used by the Legal Policies editor — no client
+ * state needed):
+ *   - "harmony": the storefront harmony dashboard (published menu, deals,
+ *     loyalty, medical + hours) — the page's original content.
+ *   - "preview": the live public-page preview panel, moved here from the old
+ *     Site Content editor.
+ */
+const WEBSITE_SYNC_TABS = [
+  { id: "harmony", label: "Storefront harmony" },
+  { id: "preview", label: "Live preview" },
+] as const;
+type WebsiteSyncTab = (typeof WEBSITE_SYNC_TABS)[number]["id"];
+
+/**
  * Website Sync (Task T / PR 5) — the harmony dashboard. One page that shows
  * exactly what the storefront is serving RIGHT NOW, block by block, each with
  * a jump link to the admin surface that owns it. Every figure on this page is
@@ -36,9 +52,18 @@ export const dynamic = "force-dynamic";
  * version, published rule snapshots, loyalty config/tiers, endorsement
  * config, CMS hours copy) — so if it looks right here, it IS right out there.
  */
-export default async function WebsiteSyncPage() {
+export default async function WebsiteSyncPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await requireStaff();
   const role = session.profile.role;
+
+  const sp = await searchParams;
+  const activeTab: WebsiteSyncTab = WEBSITE_SYNC_TABS.some((t) => t.id === sp.tab)
+    ? (sp.tab as WebsiteSyncTab)
+    : "harmony";
 
   const [version, snapshots, loyaltyConfig, loyaltyTiers, endorsement, hoursWindow, content] =
     await Promise.all([
@@ -72,6 +97,11 @@ export default async function WebsiteSyncPage() {
         title="Website Sync"
         subtitle="What the storefront is serving right now — read through the exact same loaders the public site uses."
         breadcrumbs={<Breadcrumbs items={[{ label: "Website Sync" }]} />}
+        action={
+          canEditContent ? (
+            <Button href="/admin/content/seo" variant="neutral">SEO editor →</Button>
+          ) : null
+        }
         help={
           <HelpPanel
             id="website-sync"
@@ -92,6 +122,30 @@ export default async function WebsiteSyncPage() {
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">
+        {/* Tabs — same server-side `?tab=` idiom as the Legal Policies editor. */}
+        <div className="flex flex-wrap gap-2 border-b border-[var(--admin-border)]">
+          {WEBSITE_SYNC_TABS.map((t) => {
+            const isActive = t.id === activeTab;
+            return (
+              <a
+                key={t.id}
+                href={`/admin/website-sync?tab=${t.id}`}
+                className={`-mb-px rounded-t-[var(--admin-radius-sm)] border-b-2 px-4 py-2 text-sm font-semibold ${
+                  isActive
+                    ? "border-[var(--admin-accent)] text-[var(--admin-accent)]"
+                    : "border-transparent text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+                }`}
+              >
+                {t.label}
+              </a>
+            );
+          })}
+        </div>
+
+        {activeTab === "preview" ? (
+          <WebsiteSyncPreviewPanel />
+        ) : (
+          <>
         {/* ------------------------------------------------ published menu */}
         <Section
           title="Published menu"
@@ -302,6 +356,8 @@ export default async function WebsiteSyncPage() {
             </Card>
           </div>
         </Section>
+          </>
+        )}
       </div>
     </div>
   );
