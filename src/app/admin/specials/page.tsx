@@ -24,8 +24,10 @@ import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import {
   SPECIALS_WEEKDAYS,
   SPECIALS_PRESENTATION_BLOCK,
+  SPECIALS_HERO_TEXT_BLOCKS,
   type SpecialsWeekday,
 } from "@/lib/specials/specials-presentation-core";
+import { HeroTextCard } from "@/components/admin/HeroTextCard";
 import {
   saveSpecialsDraftAction,
   publishSpecialsAction,
@@ -173,6 +175,18 @@ export default async function AdminSpecialsPage({
                 : "Draft saved."}
           </div>
         )}
+
+        {/* MIG-5c: the Specials hero TEXT (eyebrow/title/subtitle) had no editor
+            after the Specials Pages-builder was retired. Surface it here — the
+            one honest place to edit Specials — via the shared content-block
+            machinery. Byte-identical until edited + published. */}
+        <HeroTextCard
+          blockKeys={SPECIALS_HERO_TEXT_BLOCKS}
+          previewPath="/specials"
+          title="Hero text"
+          description="The eyebrow, title, and subtitle on your Specials page hero. Edit a draft, preview it, then Publish — every publish is snapshotted so you can roll back."
+          helpId="specials-hero-text"
+        />
 
         {!block ? (
           <p className="text-sm text-[var(--admin-text-muted)]">

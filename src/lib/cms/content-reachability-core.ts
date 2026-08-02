@@ -98,17 +98,19 @@ export const REAL_EDITORS: ReadonlySet<ContentEditor> = new Set(
 
 /**
  * RETIRED_KEYS — block keys that are intentionally NOT editable anywhere,
- * because they are dead/superseded and pending an explicit owner decision.
+ * because they are dead/superseded and the owner has signed off on retiring them.
  * Nothing may be added here without owner sign-off (tracked in the MIG-0 audit
- * SECTION 4.3 / decision D8). Keeping the list EMPTY at v1 means the self-test
- * treats every un-owned key as a hard failure today.
+ * SECTION 4.3 / decision D8). Owner NONE is valid ONLY for keys on this list.
  *
- * NOTE: the known dead/superseded candidates (menu.hero.title/subtitle,
- * loyalty.hero.title/subtitle) are currently still owned by SITE_CONTENT via the
- * page-group rule below, so they ARE reachable today — they only become
- * retire-candidates in MIG-5e. Until that decision, they are NOT orphaned.
+ * MIG-5c: menu.hero.title/subtitle are RETIRED. The shop-banner carousel
+ * (SHOP-1) replaced the old static /menu hero, so these blocks are read nowhere
+ * on the public page. Owner-confirmed retire (Michael, MIG-5c). They stay in the
+ * seed (byte-identical) but have no editing home by design.
  */
-export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([]);
+export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([
+  "menu.hero.title",
+  "menu.hero.subtitle",
+]);
 
 /**
  * Page groups that the Site Content screen EXCLUDES today (its
@@ -208,15 +210,20 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
   "home.brand.title": CONTENT_EDITORS.PAGES_HOME,
   "home.brand.subtitle": CONTENT_EDITORS.PAGES_HOME,
 
-  "specials.hero.eyebrow": CONTENT_EDITORS.NONE, // MIG-5b target: SPECIALS
-  "specials.hero.title": CONTENT_EDITORS.NONE,
-  "specials.hero.subtitle": CONTENT_EDITORS.NONE,
+  // MIG-5c: rescued into the /admin/specials editor (HeroTextCard).
+  "specials.hero.eyebrow": CONTENT_EDITORS.SPECIALS,
+  "specials.hero.title": CONTENT_EDITORS.SPECIALS,
+  "specials.hero.subtitle": CONTENT_EDITORS.SPECIALS,
 
-  "menu.hero.title": CONTENT_EDITORS.NONE, // MIG-5e: dead, retire-candidate
+  // MIG-5c: dead — the shop-banner carousel (SHOP-1) replaced the old static
+  // menu hero, so these blocks render nowhere. Retired (see RETIRED_KEYS).
+  "menu.hero.title": CONTENT_EDITORS.NONE,
   "menu.hero.subtitle": CONTENT_EDITORS.NONE,
 
-  "loyalty.hero.title": CONTENT_EDITORS.NONE, // MIG-5e: superseded by presentation
-  "loyalty.hero.subtitle": CONTENT_EDITORS.NONE,
+  // MIG-5c: rescued into the /admin/loyalty-page editor (LOYALTY_CONTENT_BLOCKS
+  // "hero" group). These are the signup heading, still displayed on the page.
+  "loyalty.hero.title": CONTENT_EDITORS.LOYALTY_PAGE,
+  "loyalty.hero.subtitle": CONTENT_EDITORS.LOYALTY_PAGE,
 
   // --- medical.* hero/intro are stuck in Site Content today (registry excludes
   //     them) — audit SECTION 4.3. Their `page` is "medical", which is NOT in
@@ -244,24 +251,23 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
  * When this set is empty, zero orphans remain.
  */
 export const KNOWN_ORPHANS_V1: ReadonlySet<string> = new Set<string>([
-  // Removed from this list (given a real owner):
+  // EMPTY as of MIG-5c — zero orphans remain. History of what left this list:
   //   - faq.hero.title/subtitle -> PAGES_FAQ (TRUE orphans, rescued MIG-5a).
   //   - home.category.*/home.brand.* (8) -> PAGES_HOME, the Home Sections tab.
   //     These were never true orphans: they are the legacy render fallback
   //     behind the real page_sections banners. MIG-5a-fix removed the duplicate
   //     Page wording card MIG-5a had added and recorded the honest owner.
-  // NOTE (verified, pending their own slice): the entries BELOW are likewise
-  // fallbacks behind the Sections/builder (specials.hero.* / loyalty.hero.*) or
-  // dead (menu.hero.*). They are kept here as known, non-editable-via-a-new-home
-  // keys until MIG-5b/5c formally re-owns (Sections) or retires them -- none
-  // needs a brand-new editor.
-  "specials.hero.eyebrow",
-  "specials.hero.title",
-  "specials.hero.subtitle",
-  "menu.hero.title",
-  "menu.hero.subtitle",
-  "loyalty.hero.title",
-  "loyalty.hero.subtitle",
+  //   - specials.hero.eyebrow/title/subtitle -> SPECIALS. Recon (MIG-5c) proved
+  //     these are GENUINE orphans (the Specials page-builder was retired, the
+  //     /admin/specials editor only did deal cards + hero image, and specials is
+  //     in SITE_CONTENT_EXCLUDED_PAGES). Rescued via HeroTextCard.
+  //   - loyalty.hero.title/subtitle -> LOYALTY_PAGE. These are the signup heading
+  //     STILL displayed on /loyalty (below the banner), whose edit path was
+  //     broken (deep-linked to Site Content, which excludes loyalty). Rescued
+  //     into the /admin/loyalty-page editor as its own signup-heading group.
+  //   - menu.hero.title/subtitle -> RETIRED_KEYS. Truly dead: the shop-banner
+  //     carousel (SHOP-1) replaced the old static /menu hero, so these render
+  //     nowhere. Owner-confirmed retire (Michael, MIG-5c).
 ]);
 
 /**
@@ -349,11 +355,19 @@ export function unresolvedKeys(): string[] {
     .map((r) => r.key);
 }
 
-/** Keys with owner NONE that are NOT on the known-orphan allowlist (must be []). */
+/**
+ * Keys with owner NONE that are neither on the known-orphan allowlist NOR
+ * intentionally retired (must be []). A NONE owner is legitimate ONLY when the
+ * key is an allowlisted orphan (pending its own rescue slice) or a RETIRED_KEY
+ * (owner-confirmed dead, read nowhere on the public site).
+ */
 export function unexpectedOrphans(): string[] {
   return buildReachabilityReport()
     .filter(
-      (r) => r.owner === CONTENT_EDITORS.NONE && !KNOWN_ORPHANS_V1.has(r.key),
+      (r) =>
+        r.owner === CONTENT_EDITORS.NONE &&
+        !KNOWN_ORPHANS_V1.has(r.key) &&
+        !RETIRED_KEYS.has(r.key),
     )
     .map((r) => r.key);
 }
@@ -362,6 +376,12 @@ export function unexpectedOrphans(): string[] {
 export function staleAllowlistedOrphans(): string[] {
   const seedKeys = new Set(CONTENT_BLOCK_SEEDS.map((b) => b.block_key));
   return [...KNOWN_ORPHANS_V1].filter((k) => !seedKeys.has(k));
+}
+
+/** Retired keys that no longer exist in the seed (stale retire list). */
+export function staleRetiredKeys(): string[] {
+  const seedKeys = new Set(CONTENT_BLOCK_SEEDS.map((b) => b.block_key));
+  return [...RETIRED_KEYS].filter((k) => !seedKeys.has(k));
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +418,28 @@ export function __runContentReachabilityCoreTests(): { passed: number } {
     stale.length === 0,
     `KNOWN_ORPHANS_V1 lists keys not in the seed (remove them): ${stale.join(", ")}`,
   );
+
+  // 4b. RETIRED_KEYS integrity (MIG-5c): every retired key must (i) exist in the
+  //     seed, (ii) resolve to NONE (a retired key with any editor owner is a
+  //     mistake), and (iii) not also be allowlisted as an orphan (disjoint).
+  const staleRetired = staleRetiredKeys();
+  assert(
+    staleRetired.length === 0,
+    `RETIRED_KEYS lists keys not in the seed (remove them): ${staleRetired.join(", ")}`,
+  );
+  const ownerByKey = new Map(
+    buildReachabilityReport().map((r) => [r.key, r.owner] as const),
+  );
+  for (const k of RETIRED_KEYS) {
+    assert(
+      ownerByKey.get(k) === CONTENT_EDITORS.NONE,
+      `retired key ${k} must resolve to NONE, got ${ownerByKey.get(k)}`,
+    );
+    assert(
+      !KNOWN_ORPHANS_V1.has(k),
+      `key ${k} is both retired and allowlisted as an orphan (pick one)`,
+    );
+  }
 
   // 5. Every declared owner value is a real editor OR NONE (typo guard).
   const validOwners = new Set<string>(Object.values(CONTENT_EDITORS));
@@ -437,16 +479,16 @@ export function __runContentReachabilityCoreTests(): { passed: number } {
 
   // 8. Snapshot: known orphans remaining, decremented deliberately by each
   //    slice for a visible countdown to zero. Started at 17 (v1 audit ground
-  //    truth). MIG-5a + MIG-5a-fix accounted for 10 keys, leaving 7:
-  //      - faq.hero.* (2): TRUE orphans, rescued to PAGES_FAQ (page reads them
-  //        directly, no Sections fallback).
-  //      - home.category.*/home.brand.* (8): NOT true orphans -- they are the
-  //        legacy render fallback behind the Home Sections tab (page_sections),
-  //        so their honest owner is PAGES_HOME (that Sections tab). MIG-5a-fix
-  //        removed the duplicate Page wording card that MIG-5a had added.
+  //    truth). MIG-5a + MIG-5a-fix accounted for 10 keys, leaving 7. MIG-5c
+  //    accounted for the final 7 -> ZERO:
+  //      - specials.hero.* (3): rescued to SPECIALS (HeroTextCard).
+  //      - loyalty.hero.title/subtitle (2): rescued to LOYALTY_PAGE (the signup
+  //        heading, still displayed on-page).
+  //      - menu.hero.title/subtitle (2): RETIRED (shop-banner carousel replaced
+  //        them; read nowhere). Owner-confirmed retire.
   assert(
-    KNOWN_ORPHANS_V1.size === 7,
-    `expected 7 known orphans after MIG-5a-fix, found ${KNOWN_ORPHANS_V1.size}`,
+    KNOWN_ORPHANS_V1.size === 0,
+    `expected 0 known orphans after MIG-5c, found ${KNOWN_ORPHANS_V1.size}`,
   );
 
   return { passed };

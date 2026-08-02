@@ -81,11 +81,15 @@ function loyaltyCopyBlockSeeds(): ContentBlockSeed[] {
     block_key: b.key,
     page: "loyalty",
     // Section is derived from the middle segment of the key (e.g.
-    // loyalty.form.submit_label -> "form", loyalty.terms.title -> "terms").
+    // loyalty.form.submit_label -> "form", loyalty.terms.title -> "terms",
+    // loyalty.hero.title -> "hero").
     section: b.key.split(".")[1] ?? "body",
     label: `Loyalty \u2014 ${b.label}`,
     ...(b.help ? { help_text: b.help } : {}),
     field_type: "plain" as ContentFieldType,
+    // MIG-5c: the signup heading joined the registry; preserve its SEO flag so
+    // the derived seed stays byte-identical to the removed literal row.
+    ...(b.seoImpact ? { seo_impact: true } : {}),
     defaultValue: b.fallback,
   }));
 }
@@ -309,23 +313,12 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "image",
     defaultValue: "/brand/greenway-loyalty-points-hero-mobile.png",
   },
-  {
-    block_key: "loyalty.hero.title",
-    page: "loyalty",
-    section: "hero",
-    label: "Loyalty hero — title",
-    field_type: "plain",
-    seo_impact: true,
-    defaultValue: "Signup to get offers and discounts from Greenway Marijuana",
-  },
-  {
-    block_key: "loyalty.hero.subtitle",
-    page: "loyalty",
-    section: "hero",
-    label: "Loyalty hero — subtitle",
-    field_type: "plain",
-    defaultValue: "Get updates on our promotions tailored to you.",
-  },
+  // MIG-5c: the loyalty.hero.title/subtitle "signup heading" rows moved OUT of
+  // this literal list. They are now DERIVED from LOYALTY_CONTENT_BLOCKS via
+  // loyaltyCopyBlockSeeds() (below), which owns them in the /admin/loyalty-page
+  // editor's "hero" group. The derived rows are byte-identical (same key, page,
+  // section "hero", defaultValue, and seo_impact:true on the title), so nothing
+  // about the seed changes — this just removes the duplicate source.
   {
     // SLICE 123 (LOY-1): the /loyalty hero rebuilt as a fully editable "special"
     // banner — a textless background image plus three overlay text blocks

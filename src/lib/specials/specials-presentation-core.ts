@@ -29,6 +29,19 @@
  */
 export const SPECIALS_PRESENTATION_BLOCK = "specials.deals.presentation";
 
+/**
+ * The Specials HERO TEXT content blocks (eyebrow / title / subtitle). These
+ * render on the public /specials hero but had no editor after the Specials
+ * Pages-builder was retired (the dedicated editor owns the deal cards + hero
+ * IMAGE only). MIG-5c surfaces them in the Specials editor via HeroTextCard, so
+ * they are owned by CONTENT_EDITORS.SPECIALS and are no longer orphans.
+ */
+export const SPECIALS_HERO_TEXT_BLOCKS = [
+  "specials.hero.eyebrow",
+  "specials.hero.title",
+  "specials.hero.subtitle",
+] as const;
+
 /** The seven store weekdays in natural display order (matches SpecialsContent). */
 export const SPECIALS_WEEKDAYS = [
   "Monday",

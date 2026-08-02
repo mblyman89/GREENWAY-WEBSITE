@@ -184,12 +184,15 @@ describe("MIG-6 Slice 2 — reachability FLIPPED to BLOG (SUBTRACT)", () => {
     expect(pb.includes('"blog"')).toBe(true);
   });
 
-  it("the BLOG editor enum exists and the orphan snapshot reflects MIG-5a (7 remain)", () => {
+  it("the BLOG editor enum exists and the orphan snapshot reflects MIG-5c (0 remain)", () => {
     expect(CONTENT_EDITORS.BLOG).toBe("BLOG");
     // MIG-5a + MIG-5a-fix accounted for 10 keys (faq.hero.* rescued to
     // PAGES_FAQ; home.category.*/home.brand.* re-owned to PAGES_HOME = the Home
     // Sections tab, since they are only the fallback behind the real banners),
-    // so the guard's countdown snapshot moved from 17 to 7. BLOG is unchanged.
-    expect(guard).toContain("KNOWN_ORPHANS_V1.size === 7");
+    // moving the snapshot 17 -> 7. MIG-5c then cleared the final 7 -> 0:
+    // specials.hero.* rescued to SPECIALS (HeroTextCard), loyalty.hero.title/
+    // subtitle rescued to LOYALTY_PAGE (signup heading), menu.hero.title/subtitle
+    // RETIRED (dead — shop-banner carousel replaced them). BLOG is unchanged.
+    expect(guard).toContain("KNOWN_ORPHANS_V1.size === 0");
   });
 });

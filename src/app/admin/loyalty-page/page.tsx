@@ -65,6 +65,13 @@ const MULTILINE_KEYS = new Set<string>([
 /** Grouping of the copy blocks into friendly sections for the editor UI. */
 const SECTION_GROUPS: { id: string; heading: string; description?: string; prefix: string }[] = [
   {
+    id: "hero",
+    heading: "Signup heading (above the form)",
+    description:
+      "The headline and subtitle that sit under the hero banner image, right above the signup form.",
+    prefix: "loyalty.hero.",
+  },
+  {
     id: "signup",
     heading: "Signup form",
     description:
