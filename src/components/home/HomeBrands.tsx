@@ -1,92 +1,58 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import { SectionBanner } from "@/components/home/SectionBanner";
+import { VendorGlowCard } from "@/components/vendors/VendorGlowCard";
 import type { PromoBannerContent } from "@/components/home/PromoGrid";
-import type { GreenwayMenuItem } from "@/lib/leafly/types";
+import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import { useShuffleOrder } from "@/lib/home/useShuffleOrder";
 import { HOME_CARD_COUNT_DEFAULT } from "@/lib/cms/home-section-settings-core";
 
-type BrandEntry = {
-  brand: string;
-  count: number;
-  href: string;
-};
-
 /**
- * 7d: master-data overlay shape. Structurally identical to BrandFactsOverlay in
- * src/lib/home/brand-facts.ts, redeclared here so this CLIENT component never
- * imports that server-only module.
- */
-type BrandFactsOverlay = {
-  displayName: string;
-  knownFor: string | null;
-};
-
-function normalizeBrandKey(value: string): string {
-  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-// Brand accent palette cycles across the 16 tiles for a lively, on-brand grid.
-const ACCENTS = [
-  "from-[var(--greenway)] to-emerald-700",
-  "from-[var(--gold)] to-[var(--orange)]",
-  "from-[var(--orange)] to-rose-700",
-  "from-emerald-400 to-[var(--greenway-dark)]",
-  "from-amber-400 to-[var(--orange)]",
-  "from-lime-400 to-emerald-700",
-];
-
-function buildBrandEntries(items: GreenwayMenuItem[]): BrandEntry[] {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    if (!item.brand) continue;
-    counts.set(item.brand, (counts.get(item.brand) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([brand, count]) => ({
-    brand,
-    count,
-    href: `/menu?brands=${encodeURIComponent(brand)}`,
-  }));
-}
-
-/**
- * Home "Shop by Brand" section. Rotates through brands like the menu feature
- * shuffle — a fresh set of up to 16 brands each fresh page load — rendered as
- * a 4x4 grid on desktop / 2-up on mobile, each linking to the brand-filtered
- * menu (/menu?brands=<brand>).
+ * Home "Shop by Brand" section.
+ *
+ * PR 2 (owner Option B): this section now shows VENDOR cards that look exactly
+ * like the public Vendors page — a dark glow tile with the vendor name on top,
+ * the logo in the middle, and the product count at the bottom (shared
+ * VendorGlowCard). This replaces the old free-text `brand`-grouped gradient
+ * tiles, which is why the homepage previously showed only one card when the
+ * menu actually carried several vendors: the old grid grouped by the free-text
+ * `brand` field, while the Vendors page (and now this) group by `vendor`.
+ *
+ * The cards are intentionally UNWIRED for now (static tiles, no menu link). A
+ * later slice will switch the customer menu filter from brand to vendor and
+ * then point each card at the vendor-filtered menu.
+ *
+ * Like the old section, it rotates through the vendors (feature-shuffle style)
+ * and honours the owner-controlled card count (home.brand → settings.cardCount).
  */
 export function HomeBrands({
-  items,
+  vendors,
   content,
-  brandFacts,
   count = HOME_CARD_COUNT_DEFAULT,
 }: {
-  items: GreenwayMenuItem[];
+  /** Vendor directory entries derived live from the published menu + profiles. */
+  vendors: VendorDirectoryEntry[];
   content?: PromoBannerContent;
-  /** 7d: master-data overlay keyed by normalized brand name. */
-  brandFacts?: Record<string, BrandFactsOverlay>;
   /**
-   * How many brand tiles to show. Owner-controlled via the Home page editor's
+   * How many vendor cards to show. Owner-controlled via the Home page editor's
    * "Shop by Brand" section ("Grid — cards shown", home.brand → settings.cardCount).
    * Defaults to 16 (the count the homepage shipped with).
    */
   count?: number;
 }) {
   const LIMIT = count;
-  const allBrands = useMemo(() => buildBrandEntries(items), [items]);
   const shuffle = useShuffleOrder(
     "home-brands",
-    allBrands.map((b) => b.brand),
+    vendors.map((v) => v.slug),
   );
 
-  const brands = useMemo(() => {
-    const ordered = [...allBrands].sort(
-      (a, b) => (shuffle[a.brand] ?? 0) - (shuffle[b.brand] ?? 0),
+  const shown = useMemo(() => {
+    const ordered = [...vendors].sort(
+      (a, b) => (shuffle[a.slug] ?? 0) - (shuffle[b.slug] ?? 0),
     );
     return ordered.slice(0, LIMIT);
-  }, [allBrands, shuffle, LIMIT]);
+  }, [vendors, shuffle, LIMIT]);
 
   return (
     <section id="shop-by-brand" className="bg-black px-4 py-6 md:px-8 md:py-8" aria-label="Shop by brand">
@@ -104,42 +70,10 @@ export function HomeBrands({
           blockKeyPrefix="home.brand"
         />
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4">
-          {brands.map((entry, index) => {
-            // 7d: overlay master data \u2014 canonical display name + known_for tagline.
-            const facts = brandFacts?.[normalizeBrandKey(entry.brand)];
-            const label = facts?.displayName || entry.brand;
-            const tagline = facts?.knownFor?.trim() || null;
-            return (
-              <Link
-                key={entry.brand}
-                href={entry.href}
-                className="group relative isolate flex aspect-[5/3] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] p-4 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25"
-              >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${ACCENTS[index % ACCENTS.length]} opacity-80 transition group-hover:opacity-95`}
-                  aria-hidden="true"
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.28),transparent_55%),linear-gradient(180deg,rgba(0,0,0,0.1)_0%,rgba(0,0,0,0.72)_100%)]"
-                  aria-hidden="true"
-                />
-                <div className="relative">
-                  <p className="text-[0.58rem] font-black uppercase tracking-[0.18em] text-white/80 md:text-[0.62rem]">
-                    {entry.count} {entry.count === 1 ? "product" : "products"}
-                  </p>
-                  <p className="mt-0.5 text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
-                    {label}
-                  </p>
-                  {tagline ? (
-                    <p className="mt-1 line-clamp-2 text-[0.62rem] font-semibold leading-snug text-white/85 drop-shadow md:text-[0.68rem]">
-                      {tagline}
-                    </p>
-                  ) : null}
-                </div>
-              </Link>
-            );
-          })}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          {shown.map((vendor, index) => (
+            <VendorGlowCard key={vendor.slug} vendor={vendor} index={index} />
+          ))}
         </div>
       </div>
     </section>

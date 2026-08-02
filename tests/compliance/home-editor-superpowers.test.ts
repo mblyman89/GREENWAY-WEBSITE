@@ -125,7 +125,9 @@ describe("render wiring — hardcoded LIMIT = 16 is gone; count is threaded", ()
     const src = read("src/components/home/HomeBrands.tsx");
     expect(src).not.toContain("const LIMIT = 16");
     expect(src).toContain("count = HOME_CARD_COUNT_DEFAULT");
-    expect(src).toContain("[allBrands, shuffle, LIMIT]");
+    // PR 2: HomeBrands now shuffles/limits VENDOR entries (not free-text brands)
+    // but still honours the owner count prop via the same shuffle-memo pattern.
+    expect(src).toContain("[vendors, shuffle, LIMIT]");
   });
 
   it("PromoGrid forwards brandCount to HomeBrands", () => {
