@@ -133,6 +133,15 @@ export function ContentImageField({
               className="w-full max-w-xs rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
             />
             <a
+              href="/admin/marketing/midjourney"
+              target="_blank"
+              rel="noreferrer"
+              title="Generate a new image with FLUX; it saves into your Media Library, then pick it here."
+              className="whitespace-nowrap rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-3 py-1.5 text-xs font-bold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/20"
+            >
+              ✨ Generate with FLUX (Creative Studio) ↗
+            </a>
+            <a
               href="/admin/media"
               target="_blank"
               rel="noreferrer"

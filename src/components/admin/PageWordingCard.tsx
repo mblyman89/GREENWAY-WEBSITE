@@ -10,6 +10,7 @@ import {
   listContentRevisions,
   ensureContentBlocksSeeded,
 } from "@/lib/cms/content-store";
+import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
 import { listMedia } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/cms/ai-content";
 import { wordingBlockPublicPath } from "@/lib/cms/page-wording-core";
@@ -59,8 +60,22 @@ export async function PageWordingCard({
     const inserted = await ensureContentBlocksSeeded();
     if (inserted > 0) allBlocks = await listContentBlocks();
   }
-  // Scope to THIS page's blocks only.
-  const blocks = allBlocks.filter((b) => b.page === slug);
+  // Scope to THIS page's blocks only, then present them in PAGE (reading)
+  // order. The database query returns blocks alphabetically by block_key, but
+  // the owner expects to edit them top-to-bottom exactly as they appear on the
+  // page. The curated seed list (CONTENT_BLOCK_SEEDS) is authored in that page
+  // order, so we sort by each block's index there. This needs no database
+  // column or migration — the ordering lives in code alongside the block
+  // definitions, so it can never drift. Any block missing from the seed
+  // (should not happen for controlled blocks) sorts to the end, stably.
+  const seedOrder = new Map(
+    CONTENT_BLOCK_SEEDS.map((s, i) => [s.block_key, i] as const),
+  );
+  const orderOf = (key: string) =>
+    seedOrder.has(key) ? (seedOrder.get(key) as number) : Number.MAX_SAFE_INTEGER;
+  const blocks = allBlocks
+    .filter((b) => b.page === slug)
+    .sort((a, b) => orderOf(a.block_key) - orderOf(b.block_key));
   const notSeeded = allBlocks.length === 0;
 
   // If nothing is seeded anywhere yet, offer the one-click initialize button
