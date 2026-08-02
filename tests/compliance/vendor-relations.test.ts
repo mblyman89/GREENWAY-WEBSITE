@@ -65,9 +65,12 @@ describe("vendor-relations wiring (public vendors page)", () => {
     expect(directory).toContain("channels.map((channel)");
     expect(directory).toContain("VENDOR_CONTACT_CHANNELS");
     expect(directory).toContain("vendorMailtoHref(channel.email, channel.subject)");
-    // The honest automation footnote only shows on automated channels.
-    expect(directory).toContain("channel.automated ?");
-    expect(directory).toContain("Parsed automatically");
+    // T-307: the "Parsed automatically" footnote was removed from the cards at
+    // the owner's request (cosmetic). The automated FLAG on the data model is
+    // unchanged (still drives receiving intake); it just no longer prints on
+    // the public card. Guard that the on-card footnote is gone.
+    expect(directory).not.toContain("channel.automated ?");
+    expect(directory).not.toContain("Parsed automatically");
   });
 
   it("outreach paragraph joined the page editor (vendors.outreach.body)", () => {
