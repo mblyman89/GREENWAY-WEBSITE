@@ -41,6 +41,8 @@ export const PAGES_WITH_WORDING: ReadonlySet<string> = new Set<string>([
   "about",
   "locations",
   "price-match",
+  "faq", // MIG-5a: FAQ hero copy orphans (faq.hero.title/subtitle) get a home
+  "home", // MIG-5a: Home category/brand banner orphans (home.category.*/home.brand.*) get a home
 ]);
 
 /**
@@ -84,6 +86,8 @@ export function __runPageWordingCoreTests(): { passed: number } {
   assert(PAGES_WITH_WORDING.has("about"), "about wording is live (MS-2.1a)");
   assert(PAGES_WITH_WORDING.has("locations"), "locations wording is live (MS-2.1b)");
   assert(PAGES_WITH_WORDING.has("price-match"), "price-match wording is live (MS-2.1c)");
+  assert(PAGES_WITH_WORDING.has("faq"), "faq wording is live (MIG-5a)");
+  assert(PAGES_WITH_WORDING.has("home"), "home wording is live (MIG-5a)");
   assert(pageHasWording("vendors"), "pageHasWording agrees for vendors");
   assert(!pageHasWording("nonexistent-page"), "unknown page has no wording");
 
@@ -103,10 +107,10 @@ export function __runPageWordingCoreTests(): { passed: number } {
     "previewPath is trimmed",
   );
 
-  // 3. Snapshot: exactly 4 pages wired at MS-2.1c (bumped deliberately per slice).
+  // 3. Snapshot: exactly 6 pages wired at MIG-5a (bumped deliberately per slice).
   assert(
-    PAGES_WITH_WORDING.size === 4,
-    `expected 4 wording pages (MS-2.1c), found ${PAGES_WITH_WORDING.size}`,
+    PAGES_WITH_WORDING.size === 6,
+    `expected 6 wording pages (MIG-5a), found ${PAGES_WITH_WORDING.size}`,
   );
 
   return { passed };
