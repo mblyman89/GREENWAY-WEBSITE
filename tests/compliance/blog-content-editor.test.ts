@@ -186,9 +186,10 @@ describe("MIG-6 Slice 2 — reachability FLIPPED to BLOG (SUBTRACT)", () => {
 
   it("the BLOG editor enum exists and the orphan snapshot reflects MIG-5a (7 remain)", () => {
     expect(CONTENT_EDITORS.BLOG).toBe("BLOG");
-    // MIG-5a rescued 10 orphans (faq.hero.* -> PAGES_FAQ,
-    // home.category.*/home.brand.* -> PAGES_HOME), so the guard's countdown
-    // snapshot moved from 17 to 7. The BLOG editor itself is unchanged.
+    // MIG-5a + MIG-5a-fix accounted for 10 keys (faq.hero.* rescued to
+    // PAGES_FAQ; home.category.*/home.brand.* re-owned to PAGES_HOME = the Home
+    // Sections tab, since they are only the fallback behind the real banners),
+    // so the guard's countdown snapshot moved from 17 to 7. BLOG is unchanged.
     expect(guard).toContain("KNOWN_ORPHANS_V1.size === 7");
   });
 });

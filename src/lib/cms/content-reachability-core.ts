@@ -69,7 +69,13 @@ export const CONTENT_EDITORS = {
   PAGES_PRICE_MATCH: "PAGES_PRICE_MATCH",
   /** /admin/pages/faq wording card (MIG-5a). */
   PAGES_FAQ: "PAGES_FAQ",
-  /** /admin/pages/home wording card (MIG-5c). */
+  /**
+   * /admin/pages/home -> "Sections" tab (the page_sections banner builder).
+   * The home.category.* / home.brand.* content blocks are the LEGACY render
+   * fallback behind the real, richer Sections banners (home.category / home.brand
+   * rows). They are NOT edited in a Page wording card -- MIG-5a-fix removed that
+   * duplicate; the honest owner is this Sections tab.
+   */
   PAGES_HOME: "PAGES_HOME",
   /** /admin/settings/branding — fonts + brand hub (MIG-4). */
   SETTINGS_BRANDING: "SETTINGS_BRANDING",
@@ -184,10 +190,15 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
   "faq.hero.title": CONTENT_EDITORS.PAGES_FAQ,
   "faq.hero.subtitle": CONTENT_EDITORS.PAGES_FAQ,
 
-  // MIG-5a: RESCUED. The Home category/brand banner copy + background images are
-  // now surfaced by the Page wording card on /admin/pages/home (home added to
-  // PAGES_WITH_WORDING). Owner flipped NONE -> PAGES_HOME and all eight keys
-  // removed from KNOWN_ORPHANS_V1.
+  // MIG-5a-fix: these 8 keys are NOT orphans and never needed a new editor.
+  // They are the LEGACY render fallback behind the Home "Sections" tab, whose
+  // home.category / home.brand banner rows (page_sections) are the real editor
+  // and the source of truth on the public homepage (src/app/page.tsx:
+  // `category?.image || copy["home.category.image"]`). MIG-5a mistakenly
+  // surfaced them a SECOND time in a Page wording card (a duplicate); this fix
+  // removes "home" from PAGES_WITH_WORDING and records the honest owner as the
+  // Sections tab (PAGES_HOME). Kept as the silent fallback (owner-approved
+  // Option A) so a de-published Section can't blank the homepage.
   "home.category.image": CONTENT_EDITORS.PAGES_HOME,
   "home.category.eyebrow": CONTENT_EDITORS.PAGES_HOME,
   "home.category.title": CONTENT_EDITORS.PAGES_HOME,
@@ -233,9 +244,17 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
  * When this set is empty, zero orphans remain.
  */
 export const KNOWN_ORPHANS_V1: ReadonlySet<string> = new Set<string>([
-  // MIG-5a RESCUED (removed from this list): faq.hero.title/subtitle ->
-  // PAGES_FAQ, and home.category.*/home.brand.* (8 keys) -> PAGES_HOME. All ten
-  // are now editable via the Page wording card on their own page editor.
+  // Removed from this list (given a real owner):
+  //   - faq.hero.title/subtitle -> PAGES_FAQ (TRUE orphans, rescued MIG-5a).
+  //   - home.category.*/home.brand.* (8) -> PAGES_HOME, the Home Sections tab.
+  //     These were never true orphans: they are the legacy render fallback
+  //     behind the real page_sections banners. MIG-5a-fix removed the duplicate
+  //     Page wording card MIG-5a had added and recorded the honest owner.
+  // NOTE (verified, pending their own slice): the entries BELOW are likewise
+  // fallbacks behind the Sections/builder (specials.hero.* / loyalty.hero.*) or
+  // dead (menu.hero.*). They are kept here as known, non-editable-via-a-new-home
+  // keys until MIG-5b/5c formally re-owns (Sections) or retires them -- none
+  // needs a brand-new editor.
   "specials.hero.eyebrow",
   "specials.hero.title",
   "specials.hero.subtitle",
@@ -417,12 +436,17 @@ export function __runContentReachabilityCoreTests(): { passed: number } {
   }
 
   // 8. Snapshot: known orphans remaining, decremented deliberately by each
-  //    rescue slice for a visible countdown to zero. Started at 17 (v1 audit
-  //    ground truth); MIG-5a rescued 10 (faq.hero.* -> PAGES_FAQ,
-  //    home.category.*/home.brand.* -> PAGES_HOME), leaving 7.
+  //    slice for a visible countdown to zero. Started at 17 (v1 audit ground
+  //    truth). MIG-5a + MIG-5a-fix accounted for 10 keys, leaving 7:
+  //      - faq.hero.* (2): TRUE orphans, rescued to PAGES_FAQ (page reads them
+  //        directly, no Sections fallback).
+  //      - home.category.*/home.brand.* (8): NOT true orphans -- they are the
+  //        legacy render fallback behind the Home Sections tab (page_sections),
+  //        so their honest owner is PAGES_HOME (that Sections tab). MIG-5a-fix
+  //        removed the duplicate Page wording card that MIG-5a had added.
   assert(
     KNOWN_ORPHANS_V1.size === 7,
-    `expected 7 known orphans after MIG-5a, found ${KNOWN_ORPHANS_V1.size}`,
+    `expected 7 known orphans after MIG-5a-fix, found ${KNOWN_ORPHANS_V1.size}`,
   );
 
   return { passed };

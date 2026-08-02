@@ -60,13 +60,17 @@ describe("page-wording-core", () => {
     expect(pageHasWording("faq")).toBe(true);
   });
 
-  it("wires home wording at MIG-5a", () => {
-    expect(PAGES_WITH_WORDING.has("home")).toBe(true);
-    expect(pageHasWording("home")).toBe(true);
+  it("does NOT wire home wording (MIG-5a-fix removed the duplicate)", () => {
+    // The Home category/brand banners are edited in the Home "Sections" tab
+    // (page_sections). The home.category.*/home.brand.* content blocks are only
+    // the legacy render fallback behind them, so surfacing them in a Page
+    // wording card was a duplicate editor. MIG-5a-fix removed it.
+    expect(PAGES_WITH_WORDING.has("home")).toBe(false);
+    expect(pageHasWording("home")).toBe(false);
   });
 
-  it("has exactly six wording pages at MIG-5a (snapshot)", () => {
-    expect(PAGES_WITH_WORDING.size).toBe(6);
+  it("has exactly five wording pages after MIG-5a-fix (snapshot)", () => {
+    expect(PAGES_WITH_WORDING.size).toBe(5);
   });
 
   it("passes its embedded pure self-tests", () => {
