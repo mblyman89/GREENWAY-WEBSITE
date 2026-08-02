@@ -91,7 +91,7 @@ function parseSettings(
 export async function seedSectionsAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const slug = String(formData.get("page_slug") ?? "");
-  if (!isValidPageSlug(slug)) redirect("/admin/content");
+  if (!isValidPageSlug(slug)) redirect("/admin/website-sync");
   const inserted = await ensureSectionsSeeded(slug);
   if (inserted > 0) {
     await recordAudit({
@@ -110,7 +110,7 @@ export async function seedSectionsAction(formData: FormData): Promise<void> {
 export async function addSectionAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const slug = String(formData.get("page_slug") ?? "");
-  if (!isValidPageSlug(slug)) redirect("/admin/content");
+  if (!isValidPageSlug(slug)) redirect("/admin/website-sync");
 
   const result = await createSection(slug, session.userId);
   if ("error" in result) {
@@ -133,7 +133,7 @@ export async function saveSectionAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const slug = String(formData.get("page_slug") ?? "");
   const id = String(formData.get("section_id") ?? "");
-  if (!isValidPageSlug(slug) || !id) redirect("/admin/content");
+  if (!isValidPageSlug(slug) || !id) redirect("/admin/website-sync");
 
   const input: SectionDraftInput = {
     image: String(formData.get("image") ?? "").trim() || null,
@@ -175,7 +175,7 @@ export async function publishSectionAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const slug = String(formData.get("page_slug") ?? "");
   const id = String(formData.get("section_id") ?? "");
-  if (!isValidPageSlug(slug) || !id) redirect("/admin/content");
+  if (!isValidPageSlug(slug) || !id) redirect("/admin/website-sync");
 
   const res = await publishSection(id, session.userId);
   if (res.error) {
@@ -197,7 +197,7 @@ export async function deleteSectionAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const slug = String(formData.get("page_slug") ?? "");
   const id = String(formData.get("section_id") ?? "");
-  if (!isValidPageSlug(slug) || !id) redirect("/admin/content");
+  if (!isValidPageSlug(slug) || !id) redirect("/admin/website-sync");
 
   const res = await deleteSection(id);
   if (res.error) {
@@ -248,7 +248,7 @@ export async function moveSectionAction(formData: FormData): Promise<void> {
   const slug = String(formData.get("page_slug") ?? "");
   const id = String(formData.get("section_id") ?? "");
   const direction = String(formData.get("direction") ?? "") === "up" ? "up" : "down";
-  if (!isValidPageSlug(slug) || !id) redirect("/admin/content");
+  if (!isValidPageSlug(slug) || !id) redirect("/admin/website-sync");
 
   await moveSection(id, direction);
   await recordAudit({

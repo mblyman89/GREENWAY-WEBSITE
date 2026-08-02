@@ -32,6 +32,8 @@ type Props = {
   revisions: RevisionItem[];
   /** Permission-gated server action; takes a FormData with revision_id. */
   restoreAction: (formData: FormData) => void;
+  /** Admin route to return to after restore (shared action, MIG-7). */
+  returnTo?: string;
 };
 
 function timeAgo(iso: string): string {
@@ -86,6 +88,7 @@ export function ContentRevisionHistory({
   draftValue,
   revisions,
   restoreAction,
+  returnTo,
 }: Props) {
   const [open, setOpen] = useState(false);
   const dirty = (draftValue ?? "") !== (liveValue ?? "");
@@ -154,6 +157,13 @@ export function ContentRevisionHistory({
                     {idx !== 0 && (
                       <form action={restoreAction}>
                         <input type="hidden" name="revision_id" value={rev.id} />
+                        {returnTo ? (
+                          <input
+                            type="hidden"
+                            name="return_to"
+                            value={returnTo}
+                          />
+                        ) : null}
                         <button
                           type="submit"
                           className={CHIP_ACTION}

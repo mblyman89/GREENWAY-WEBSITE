@@ -45,6 +45,7 @@ import {
 export async function HeroTextCard({
   blockKeys,
   previewPath,
+  returnTo,
   title = "Hero text",
   description = "The headline words on this page's hero. Edit a draft, preview it, then Publish — every publish is snapshotted so you can roll back.",
   helpId = "hero-text",
@@ -53,6 +54,12 @@ export async function HeroTextCard({
   blockKeys: readonly string[];
   /** Public path used for the "View on site" preview deep-link (e.g. "/specials"). */
   previewPath: string | null | undefined;
+  /**
+   * Admin route the shared save/publish/restore/bulk actions should return to
+   * (with their flash param). The old Site Content page was retired (MIG-7), so
+   * each host page passes its own route -- e.g. "/admin/specials".
+   */
+  returnTo?: string;
   /** Card heading. */
   title?: string;
   /** Card sub-description. */
@@ -182,6 +189,7 @@ export async function HeroTextCard({
         pendingCount={pendingCount}
         publishAllAction={publishAllDraftsAction}
         discardAllAction={discardAllDraftsAction}
+        returnTo={returnTo}
       />
 
       <ContentEditorShell
@@ -191,6 +199,7 @@ export async function HeroTextCard({
         saveDraftAction={saveContentDraftAction}
         publishAction={publishContentBlockAction}
         restoreAction={restoreContentRevisionAction}
+        returnTo={returnTo}
       />
     </section>
   );

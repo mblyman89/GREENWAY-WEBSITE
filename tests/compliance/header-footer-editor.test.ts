@@ -181,30 +181,40 @@ describe("MIG-3 MS-3.1 — footer compliance/hours surfaced in Header & Footer (
 });
 
 describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SUBTRACT)", () => {
-  const content = readFileSync("src/app/admin/content/page.tsx", "utf8");
+  // MIG-7 PR-B retired the Site Content page (src/app/admin/content/page.tsx),
+  // so the "excluded from Site Content" facts are now asserted purely against
+  // the reachability core (the true source of truth for owner resolution).
   const guard = readFileSync("src/lib/cms/content-reachability-core.ts", "utf8");
 
-  it("Site Content excludes the whole 'footer' page group now", () => {
+  it("the 'footer' page group is owned by Header & Footer, not Site Content", async () => {
     // footer.compliance.warning + footer.hours.image (page 'footer') now live
     // only in the Header & Footer editor.
-    const setBody = content.slice(
-      content.indexOf("PAGE_BUILDER_PAGES = new Set<string>(["),
-      content.indexOf("]);", content.indexOf("PAGE_BUILDER_PAGES = new Set<string>([")),
+    const { PAGE_GROUP_DEFAULT_OWNER, CONTENT_EDITORS } = await import(
+      "@/lib/cms/content-reachability-core"
     );
-    expect(setBody).toContain('"footer"');
+    expect(PAGE_GROUP_DEFAULT_OWNER["footer"]).toBe(
+      CONTENT_EDITORS.HEADER_FOOTER,
+    );
+    expect(PAGE_GROUP_DEFAULT_OWNER["footer"]).not.toBe(
+      CONTENT_EDITORS.SITE_CONTENT,
+    );
   });
 
-  it("the filter combines page exclusion AND key exclusion (structure intact)", () => {
-    // MIG-4 MS-4.2: the 'business' split is now RESOLVED — the fonts moved to the
-    // Branding editor and the whole group is excluded, so EXCLUDED_KEYS is empty.
-    // The filter still combines page + key exclusion for future per-key hides.
-    expect(content).toContain("EXCLUDED_KEYS");
-    expect(content).toContain(
-      "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
+  it("the font blocks are owned by Branding, not Site Content (MS-4.2)", async () => {
+    // MIG-4 MS-4.2: the 'business' split is RESOLVED — the fonts (site.font.*)
+    // moved to the Branding editor and the whole 'business' group is owned there.
+    const { ownerForBlock, CONTENT_EDITORS } = await import(
+      "@/lib/cms/content-reachability-core"
     );
-    // the font blocks must NOT appear in Site Content (moved out in MS-4.2).
-    expect(content).not.toContain('"site.font.heading"');
-    expect(content).not.toContain('"site.font.body"');
+    expect(ownerForBlock("site.font.heading", "business")).toBe(
+      CONTENT_EDITORS.SETTINGS_BRANDING,
+    );
+    expect(ownerForBlock("site.font.body", "business")).toBe(
+      CONTENT_EDITORS.SETTINGS_BRANDING,
+    );
+    expect(ownerForBlock("site.font.heading", "business")).not.toBe(
+      CONTENT_EDITORS.SITE_CONTENT,
+    );
   });
 
   it("the reachability guard now owns footer + hours in Header & Footer", () => {
@@ -234,7 +244,9 @@ describe("MIG-3 MS-3.3 — footer + business.hours removed from Site Content (SU
 });
 
 describe("MIG-5 Slice 4 — header-footer removed from Site Content (SUBTRACT)", () => {
-  const content = readFileSync("src/app/admin/content/page.tsx", "utf8");
+  // MIG-7 PR-B retired the Site Content page; its "excludes header-footer" fact
+  // is now proven via the reachability core (SITE_CONTENT_EXCLUDED_PAGES + owner
+  // resolution) rather than by reading the deleted page's filter literal.
   const guard = readFileSync("src/lib/cms/content-reachability-core.ts", "utf8");
   const editor = readFileSync("src/app/admin/header-footer/page.tsx", "utf8");
 
@@ -253,21 +265,9 @@ describe("MIG-5 Slice 4 — header-footer removed from Site Content (SUBTRACT)",
     "header.phone.display",
   ] as const;
 
-  it("Site Content now excludes the whole 'header-footer' group (wholesale)", () => {
-    // Read ONLY the PAGE_BUILDER_PAGES Set literal body so a prose comment
-    // mentioning 'header-footer' can't fool us.
-    const setStart = content.indexOf("const PAGE_BUILDER_PAGES");
-    const literal = content.slice(
-      content.indexOf("[", setStart),
-      content.indexOf("]", setStart) + 1,
-    );
-    expect(literal).toContain('"header-footer"');
-  });
-
-  it("the Site Content filter is unchanged (page + key exclusion intact)", () => {
-    expect(content).toContain(
-      "!PAGE_BUILDER_PAGES.has(b.page) && !EXCLUDED_KEYS.has(b.block_key)",
-    );
+  it("the 'header-footer' group is excluded from Site Content (SITE_CONTENT_EXCLUDED_PAGES)", () => {
+    // The runtime set is the source of truth now that the page is retired.
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("header-footer")).toBe(true);
   });
 
   it("'header-footer' is now in SITE_CONTENT_EXCLUDED_PAGES", () => {

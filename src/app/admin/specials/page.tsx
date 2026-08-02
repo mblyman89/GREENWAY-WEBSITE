@@ -183,6 +183,7 @@ export default async function AdminSpecialsPage({
         <HeroTextCard
           blockKeys={SPECIALS_HERO_TEXT_BLOCKS}
           previewPath="/specials"
+          returnTo="/admin/specials"
           title="Hero text"
           description="The eyebrow, title, and subtitle on your Specials page hero. Edit a draft, preview it, then Publish — every publish is snapshotted so you can roll back."
           helpId="specials-hero-text"

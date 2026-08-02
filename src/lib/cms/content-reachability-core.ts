@@ -15,9 +15,11 @@
  *   1. Every seeded block key has exactly one declared owner (no silent gaps).
  *   2. No block is left with owner NONE unless it is on an explicit, reviewed
  *      RETIRED allowlist (so "orphan" can never happen by accident).
- *   3. The set of keys the Site Content screen still owns matches this table,
- *      so the exclusion filter in src/app/admin/content/page.tsx can be checked
- *      against ground truth in a later slice.
+ *   3. The set of keys the Site Content screen still owns matches this table.
+ *      (MIG-7 PR-B: the Site Content page itself was retired -- proven empty,
+ *      0 blocks resolved to SITE_CONTENT -- but the SITE_CONTENT owner value is
+ *      kept in this map as the historical/"junk drawer" sentinel the self-tests
+ *      still assert against.)
  *
  * It reads NOTHING from the database and imports NO React/Next — it is safe to
  * run inside run-pure-selftests.ts. It reasons over the SEED (the same list the
@@ -41,7 +43,8 @@ import { CONTENT_BLOCK_SEEDS } from "./content-blocks-seed";
  * — only allowed for keys on RETIRED_KEYS.
  */
 export const CONTENT_EDITORS = {
-  /** /admin/content — the legacy "Site Content" junk drawer (being emptied). */
+  /** The legacy "Site Content" junk drawer -- RETIRED (MIG-7 PR-B). Kept as the
+   *  historical sentinel owner; no block resolves here anymore (proven empty). */
   SITE_CONTENT: "SITE_CONTENT",
   /** /admin/header-footer — header + footer chrome editor. */
   HEADER_FOOTER: "HEADER_FOOTER",
@@ -113,10 +116,11 @@ export const RETIRED_KEYS: ReadonlySet<string> = new Set<string>([
 ]);
 
 /**
- * Page groups that the Site Content screen EXCLUDES today (its
- * PAGE_BUILDER_PAGES set in src/app/admin/content/page.tsx). Blocks whose
- * `page` is in this set are NOT shown in Site Content. Kept in sync with the
- * real filter; the self-test cross-checks it.
+ * Page groups that the Site Content screen EXCLUDED (its former
+ * PAGE_BUILDER_PAGES set). Blocks whose `page` was in this set were NOT shown in
+ * Site Content. MIG-7 PR-B retired the Site Content page entirely, but this set
+ * is retained because the self-test cross-checks it as ground truth for owner
+ * resolution.
  *
  * TODAY (after MIG-3 MS-3.3): home, menu, loyalty, specials, vendors, faq,
  * about, locations, price-match, footer.
@@ -147,8 +151,9 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "business",
   // MIG-5 Slice 2 (SUBTRACT): medical now owned by MEDICAL_PAGE, and the four
   // legal groups by LEGAL_POLICIES — none of them default to SITE_CONTENT any
-  // more, so they leave the junk drawer here too (keeps self-test #7 honest and
-  // mirrors PAGE_BUILDER_PAGES in admin/content/page.tsx).
+  // more, so they leave the junk drawer here too (keeps self-test #7 honest).
+  // (Historically this mirrored PAGE_BUILDER_PAGES in admin/content/page.tsx,
+  // which was retired in MIG-7 PR-B — this exclusion set is now the sole owner.)
   "medical",
   "legal",
   "legal-privacy",
@@ -156,15 +161,15 @@ export const SITE_CONTENT_EXCLUDED_PAGES: ReadonlySet<string> = new Set<string>(
   "legal-chd",
   // MIG-5 Slice 4 (SUBTRACT): the header-footer group already defaults to
   // HEADER_FOOTER (its dedicated editor has owned it since Slice 104), and this
-  // slice removes its duplicate copy from the Site Content list. It joins the
-  // excluded set so self-test #7 stays honest and this mirrors the
-  // PAGE_BUILDER_PAGES exclusion in admin/content/page.tsx.
+  // slice removed its duplicate copy from the Site Content list. It joins the
+  // excluded set so self-test #7 stays honest. (Site Content — the page this
+  // once mirrored — was retired in MIG-7 PR-B.)
   "header-footer",
   // MIG-6 Slice 2 (SUBTRACT): the blog group now defaults to BLOG (its dedicated
   // /admin/blog/content editor has owned it since MIG-6 Slice 1), and this slice
-  // removes its duplicate copy from the Site Content list. It joins the excluded
-  // set so self-test #7 stays honest and this mirrors the PAGE_BUILDER_PAGES
-  // exclusion in admin/content/page.tsx.
+  // removed its duplicate copy from the Site Content list. It joins the excluded
+  // set so self-test #7 stays honest. (Site Content — the page this once
+  // mirrored — was retired in MIG-7 PR-B.)
   "blog",
 ]);
 

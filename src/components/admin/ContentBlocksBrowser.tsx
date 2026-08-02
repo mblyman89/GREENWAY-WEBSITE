@@ -41,6 +41,8 @@ type Props = {
   /** Controlled page filter (synced with the live preview selector). */
   pageFilter?: string;
   onPageFilterChange?: (page: string) => void;
+  /** Admin route the block save/publish/restore actions return to (MIG-7). */
+  returnTo?: string;
 };
 
 type Filter = "all" | "attention" | "seo" | string; // string = a page name
@@ -81,6 +83,7 @@ export function ContentBlocksBrowser({
   mediaChoices = [],
   pageFilter,
   onPageFilterChange,
+  returnTo,
 }: Props) {
   const [query, setQuery] = useState("");
   const [internalFilter, setInternalFilter] = useState<Filter>("all");
@@ -243,6 +246,7 @@ export function ContentBlocksBrowser({
                   revisions={b.revisions}
                   restoreAction={restoreAction}
                   mediaChoices={mediaChoices}
+                  returnTo={returnTo}
                 />
               ))}
             </div>

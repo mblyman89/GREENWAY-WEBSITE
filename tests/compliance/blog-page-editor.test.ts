@@ -121,13 +121,17 @@ describe("SLICE 115 — seeds (no migration, byte-identical)", () => {
 });
 
 describe("MIG-6 Slice 2 — blog moved OUT of Site Content into its own editor", () => {
-  it("blog IS now filtered out of the Site Content editor (junk drawer empty)", () => {
-    const src = read("src/app/admin/content/page.tsx");
-    const set = src.slice(
-      src.indexOf("PAGE_BUILDER_PAGES = new Set"),
-      src.indexOf("]);", src.indexOf("PAGE_BUILDER_PAGES = new Set")),
+  it("blog is owned by its own editor, not Site Content (Site Content page retired in MIG-7)", async () => {
+    // MIG-7 PR-B retired the Site Content page, so we assert ownership via the
+    // reachability core (the true source of truth) instead of reading the
+    // deleted page's PAGE_BUILDER_PAGES filter.
+    const { PAGE_GROUP_DEFAULT_OWNER, CONTENT_EDITORS } = await import(
+      "@/lib/cms/content-reachability-core"
     );
-    expect(set.includes('"blog"')).toBe(true);
+    expect(PAGE_GROUP_DEFAULT_OWNER["blog"]).toBe(CONTENT_EDITORS.BLOG);
+    expect(PAGE_GROUP_DEFAULT_OWNER["blog"]).not.toBe(
+      CONTENT_EDITORS.SITE_CONTENT,
+    );
   });
 
   it("blog is wired into the preview page picker", () => {

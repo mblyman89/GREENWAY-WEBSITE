@@ -111,14 +111,14 @@ export const WORKSPACES: Workspace[] = [
     group: "Website",
     title: "Website",
     summary:
-      "Safe editors for every public page (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match), plus the Media Library and Site Content — with preview before publish.",
+      "Safe editors for every public page (Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match), plus the Media Library and Website Sync — with preview before publish.",
     does: [
       "Edit public pages without touching code",
       "Manage images in the Media Library",
       "Preview unpublished changes before they go live",
     ],
     icon: "🖥️",
-    href: "/admin/content",
+    href: "/admin/website-sync",
     permission: "content.edit",
   },
   {

@@ -24,7 +24,8 @@ import {
 } from "@/lib/cms/content-reachability-core";
 
 const BRANDING_PAGE = "src/app/admin/settings/branding/page.tsx";
-const SITE_CONTENT_PAGE = "src/app/admin/content/page.tsx";
+// (The Site Content page was retired in MIG-7 PR-B; ownership is now asserted
+//  via the reachability core rather than by reading that deleted file.)
 
 function read(path: string): string {
   return readFileSync(path, "utf8");
@@ -95,23 +96,13 @@ describe("MIG-4 MS-4.1 — Branding is registered in the admin nav (Website grou
 });
 
 describe("MIG-4 MS-4.2 — SUBTRACT: fonts removed from Site Content, now owned by Branding", () => {
-  const siteSrc = read(SITE_CONTENT_PAGE);
+  // MIG-7 PR-B retired the Site Content page (SITE_CONTENT_PAGE). The "business
+  // group excluded from Site Content" fact is proven via the reachability core's
+  // SITE_CONTENT_EXCLUDED_PAGES + owner resolution (below) instead of by reading
+  // the deleted page's PAGE_BUILDER_PAGES / EXCLUDED_KEYS literals.
 
-  it("Site Content now excludes the whole 'business' group (wholesale)", () => {
-    // We read only the PAGE_BUILDER_PAGES array body (between its `[` and `]`)
-    // so an explanatory comment mentioning the word "business" in prose does not
-    // create a false match.
-    const setStart = siteSrc.indexOf("const PAGE_BUILDER_PAGES");
-    const arrOpen = siteSrc.indexOf("[", setStart);
-    const arrClose = siteSrc.indexOf("]", arrOpen);
-    const setLiteral = siteSrc.slice(arrOpen, arrClose + 1);
-    expect(setLiteral).toContain('"business"');
-  });
-
-  it("the per-key hours hide is no longer needed (EXCLUDED_KEYS is empty)", () => {
-    // The whole business group is excluded now, so the earlier per-KEY hide of
-    // business.hours.display is redundant; EXCLUDED_KEYS is emptied.
-    expect(siteSrc).toContain("const EXCLUDED_KEYS = new Set<string>([])");
+  it("the 'business' group is excluded from Site Content (SITE_CONTENT_EXCLUDED_PAGES)", () => {
+    expect(SITE_CONTENT_EXCLUDED_PAGES.has("business")).toBe(true);
   });
 
   it("the reachability guard now owns BOTH fonts as SETTINGS_BRANDING", () => {

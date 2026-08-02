@@ -18,8 +18,10 @@
  *   2. switch the list filter to that page (so the block is rendered),
  *   3. then scroll to + highlight + focus the field.
  *
- * It also honours a `?block=<key>` URL param so deep links from the standalone
- * (new-tab) preview land on the right field too.
+ * It also honours a `?block=<key>` URL param so deep links land on the right
+ * field. (NOTE: the ✎ Edit preview hotspots that generated those links are
+ * currently turned OFF -- see PreviewEditOverlay's HOTSPOTS_ENABLED flag, MIG-7
+ * PR-B -- so this handler is dormant but kept intact for when they return.)
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -39,6 +41,12 @@ type Props = {
   saveDraftAction: (formData: FormData) => void;
   publishAction: (formData: FormData) => void;
   restoreAction: (formData: FormData) => void;
+  /**
+   * Admin route the content actions return to (with their flash param). Passed
+   * straight through to the block editors. Shared across editors since the old
+   * Site Content page was retired (MIG-7); each host page passes its own route.
+   */
+  returnTo?: string;
 };
 
 export function ContentEditorShell({
@@ -48,6 +56,7 @@ export function ContentEditorShell({
   saveDraftAction,
   publishAction,
   restoreAction,
+  returnTo,
 }: Props) {
   // Map block_key -> page so we can switch the filter to the right page.
   const pageForBlock = useMemo(() => {
@@ -108,7 +117,8 @@ export function ContentEditorShell({
     return () => window.clearTimeout(id);
   }, [pageFilter, focusBlock]);
 
-  // Honour a deep link like /admin/content?block=home.hero.title on first load.
+  // Honour a deep link like ?block=home.hero.title on first load (dormant while
+  // the preview ✎ Edit hotspots are turned off -- see PreviewEditOverlay).
   // Defer to a microtask so the state update happens after the initial commit
   // (keeps the mount effect free of synchronous setState cascades).
   useEffect(() => {
@@ -143,6 +153,7 @@ export function ContentEditorShell({
         restoreAction={restoreAction}
         pageFilter={pageFilter}
         onPageFilterChange={setPageFilter}
+        returnTo={returnTo}
       />
     </>
   );
