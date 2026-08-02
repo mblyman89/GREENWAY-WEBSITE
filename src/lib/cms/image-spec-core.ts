@@ -152,6 +152,18 @@ const BLOCK_SPECS: Record<string, ImageSpec> = {
       tip: "A wide 16:9 photo. Text and gradient are overlaid on the lower-left.",
     },
   ),
+  "pricematch.hero.image": specFrom(
+    "pricematch.hero.image",
+    "Price Match — card graphic",
+    1264,
+    800,
+    {
+      primaryLabel: "Card graphic",
+      extraPresets: [{ label: "Mobile (taller)", width: 800, height: 870 }],
+      formatNote: "WebP or PNG. A bold branded graphic works best.",
+      tip: "Fills the graphic panel inside the Price Match card. Wide on desktop (~1.58:1); the mobile view crops taller, so keep the important art centered.",
+    },
+  ),
   "home.category.image": specFrom(
     "home.category.image",
     "Homepage — category band",
