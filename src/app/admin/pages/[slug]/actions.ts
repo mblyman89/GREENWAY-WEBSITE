@@ -12,11 +12,17 @@ import {
   moveSection,
   ensureSectionsSeeded,
   saveHomeSettings,
+  saveHomeSectionSettings,
+  getHomeSectionByKey,
   type SectionDraftInput,
 } from "@/lib/cms/page-sections-store";
 import {
   clampHomeCardCount,
   DAILY_DEALS_COUNT_KEY,
+  LANE_IMAGES_KEY,
+  HOME_TYPE_LANE_KEYS,
+  readLaneImages,
+  writeLaneImage,
 } from "@/lib/cms/home-section-settings-core";
 import {
   isValidPageSlug,
@@ -241,6 +247,46 @@ export async function saveHomeSettingsAction(formData: FormData): Promise<void> 
   });
   revalidateForSlug("home");
   redirect(`${routeFor("home")}?tab=sections&saved=1`);
+}
+
+/**
+ * Save the six "Shop by Category" tile images onto the home.category section's
+ * settings JSON (settings.laneImages). Each lane arrives as a form field
+ * `lane_image_<key>` carrying a Media Library URL/path (or blank to clear).
+ * Publishes immediately — these are display images, not banner copy — and
+ * merges so existing settings (lanes / cardCount) are never dropped. Blank
+ * lanes render the clean text-only fallback (byte-identical to the shipped
+ * card), so nothing changes on the live site until an image is chosen.
+ */
+export async function saveTypeCardImagesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("content.edit");
+  // Start from the existing settings so we merge rather than replace.
+  const row = await getHomeSectionByKey("home.category");
+  let settings = (row?.settings as Record<string, unknown> | undefined) ?? {};
+  for (const lane of HOME_TYPE_LANE_KEYS) {
+    const value = formData.get(`lane_image_${lane}`);
+    settings = writeLaneImage(settings, lane, typeof value === "string" ? value : "");
+  }
+  const laneImages = readLaneImages(settings);
+  const res = await saveHomeSectionSettings(
+    "home.category",
+    { [LANE_IMAGES_KEY]: settings[LANE_IMAGES_KEY] },
+    session.userId,
+  );
+  if (res.error) {
+    revalidatePath(routeFor("home"));
+    redirect(`${routeFor("home")}?tab=typecards&error=${encodeURIComponent(res.error)}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "page_section.type_card_images",
+    entityType: "page_section",
+    entityId: "home.category",
+    after: { laneImages },
+  });
+  revalidateForSlug("home");
+  redirect(`${routeFor("home")}?tab=typecards&saved=1`);
 }
 
 export async function moveSectionAction(formData: FormData): Promise<void> {

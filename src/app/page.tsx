@@ -13,6 +13,7 @@ import { getSectionsForRender } from "@/lib/cms/page-sections-store";
 import { loadBrandFactsOverlay } from "@/lib/home/brand-facts";
 import {
   readHomeCardCount,
+  readLaneImages,
   DAILY_DEALS_COUNT_KEY,
   BRAND_COUNT_KEY,
 } from "@/lib/cms/home-section-settings-core";
@@ -73,6 +74,9 @@ export default async function Home() {
     DAILY_DEALS_COUNT_KEY,
   );
   const brandCount = readHomeCardCount(brand?.settings, BRAND_COUNT_KEY);
+  // Per-lane category-tile images (owner-uploaded via the Home Sections editor).
+  // Unset lanes resolve to "" so the tile renders its clean text-only fallback.
+  const laneImages = readLaneImages(category?.settings);
 
   return (
     <main>
@@ -83,6 +87,7 @@ export default async function Home() {
         items={dealItems}
         brandFacts={brandFacts}
         brandCount={brandCount}
+        laneImages={laneImages}
         content={{
           categoryImage: category?.image || copy["home.category.image"],
           categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],

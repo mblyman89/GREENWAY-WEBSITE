@@ -88,6 +88,98 @@ export function writeHomeCardCount(
 }
 
 // ---------------------------------------------------------------------------
+// Home "Shop by Category" per-lane images (SLICE: home type cards)
+//
+// The six category tiles (Flower, Prerolls, Concentrates, Edibles, Liquids,
+// Topicals) can each show an owner-uploaded product photo INSIDE the card. The
+// chosen image URL/path is stored per lane on the home.category section's
+// settings JSON under `laneImages` (an object keyed by lane key). An unset lane
+// resolves to "" so the tile renders its clean text-only fallback (byte
+// identical to today's card). Reuses the existing settings JSON column — no new
+// migration, mirrors the card-count helpers above.
+// ---------------------------------------------------------------------------
+
+/** The settings-JSON key (on home.category) holding the per-lane image map. */
+export const LANE_IMAGES_KEY = "laneImages";
+
+/** The six category lane keys, in display order (mirrors categoryLanes). */
+export const HOME_TYPE_LANE_KEYS = [
+  "flower",
+  "prerolls",
+  "concentrates",
+  "edibles",
+  "liquids",
+  "topicals",
+] as const;
+
+export type HomeTypeLaneKey = (typeof HOME_TYPE_LANE_KEYS)[number];
+
+/** Coerce any value into a safe image string ("" when missing/non-string). */
+export function clampLaneImage(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Read the per-lane image map out of the home.category section settings JSON.
+ * Always returns a full map (every lane key present); unset lanes resolve to "".
+ * Missing / malformed settings resolve to an all-empty map.
+ */
+export function readLaneImages(
+  settings: Record<string, unknown> | null | undefined,
+): Record<HomeTypeLaneKey, string> {
+  const out = {} as Record<HomeTypeLaneKey, string>;
+  const raw =
+    settings && typeof settings === "object"
+      ? (settings as Record<string, unknown>)[LANE_IMAGES_KEY]
+      : undefined;
+  const map =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  for (const key of HOME_TYPE_LANE_KEYS) {
+    out[key] = clampLaneImage(map[key]);
+  }
+  return out;
+}
+
+/**
+ * Read a single lane's image ("" when unset/invalid). Convenience over
+ * readLaneImages when only one lane is needed.
+ */
+export function readLaneImage(
+  settings: Record<string, unknown> | null | undefined,
+  lane: string,
+): string {
+  if (!(HOME_TYPE_LANE_KEYS as readonly string[]).includes(lane)) return "";
+  return readLaneImages(settings)[lane as HomeTypeLaneKey];
+}
+
+/**
+ * Return a NEW settings object with one lane's image set (or cleared when the
+ * value is blank), keeping every other setting (lanes / cardCount / other lane
+ * images) untouched. The nested laneImages object is cloned, never mutated.
+ */
+export function writeLaneImage(
+  settings: Record<string, unknown> | null | undefined,
+  lane: string,
+  value: unknown,
+): Record<string, unknown> {
+  const base: Record<string, unknown> =
+    settings && typeof settings === "object" ? { ...settings } : {};
+  const current = readLaneImages(settings);
+  const next: Record<string, string> = { ...current };
+  if ((HOME_TYPE_LANE_KEYS as readonly string[]).includes(lane)) {
+    next[lane] = clampLaneImage(value);
+  }
+  // Drop empty entries so an all-default map serializes clean (no visible change).
+  const trimmed: Record<string, string> = {};
+  for (const key of HOME_TYPE_LANE_KEYS) {
+    if (next[key]) trimmed[key] = next[key];
+  }
+  if (Object.keys(trimmed).length > 0) base[LANE_IMAGES_KEY] = trimmed;
+  else delete base[LANE_IMAGES_KEY];
+  return base;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (run by scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -162,6 +254,70 @@ export function __runHomeSectionSettingsTests(): { passed: number; failed: numbe
   const original = { lanes: "brand" as string };
   writeHomeCardCount(original, BRAND_COUNT_KEY, 8);
   ok(!("cardCount" in original), "write does not mutate the input object");
+
+  // ---- Per-lane images -----------------------------------------------------
+  ok(HOME_TYPE_LANE_KEYS.length === 6, "six type lane keys");
+  ok(HOME_TYPE_LANE_KEYS[0] === "flower", "first lane is flower");
+  ok(HOME_TYPE_LANE_KEYS[5] === "topicals", "last lane is topicals");
+
+  // clampLaneImage
+  ok(clampLaneImage("/x.png") === "/x.png", "clampLaneImage passes a string");
+  ok(clampLaneImage("  /x.png  ") === "/x.png", "clampLaneImage trims");
+  ok(clampLaneImage(null) === "", "clampLaneImage null -> empty");
+  ok(clampLaneImage(123) === "", "clampLaneImage number -> empty");
+  ok(clampLaneImage(undefined) === "", "clampLaneImage undefined -> empty");
+
+  // readLaneImages — full map, unset lanes empty
+  const imgs = readLaneImages({ laneImages: { flower: "/f.png", edibles: "/e.png" } });
+  ok(imgs.flower === "/f.png", "read lane image flower");
+  ok(imgs.edibles === "/e.png", "read lane image edibles");
+  ok(imgs.prerolls === "", "unset lane -> empty");
+  ok(Object.keys(imgs).length === 6, "readLaneImages returns all six lanes");
+  ok(readLaneImages(null).flower === "", "read null settings -> empty map");
+  ok(readLaneImages({}).flower === "", "read missing laneImages -> empty");
+  ok(
+    readLaneImages({ laneImages: "nope" as unknown as object }).flower === "",
+    "read malformed laneImages -> empty",
+  );
+
+  // readLaneImage — single lane
+  ok(
+    readLaneImage({ laneImages: { flower: "/f.png" } }, "flower") === "/f.png",
+    "readLaneImage valid lane",
+  );
+  ok(readLaneImage({ laneImages: { flower: "/f.png" } }, "bogus") === "", "readLaneImage bad lane -> empty");
+
+  // writeLaneImage — preserves other settings, clones nested map, drops blanks
+  const w1 = writeLaneImage({ lanes: "category", cardCount: 16 }, "flower", "/f.png");
+  ok(w1.lanes === "category", "writeLaneImage preserves lanes");
+  ok(w1.cardCount === 16, "writeLaneImage preserves cardCount");
+  ok(
+    (w1.laneImages as Record<string, string>).flower === "/f.png",
+    "writeLaneImage sets the lane",
+  );
+  const w2 = writeLaneImage(w1, "edibles", "/e.png");
+  ok(
+    (w2.laneImages as Record<string, string>).flower === "/f.png" &&
+      (w2.laneImages as Record<string, string>).edibles === "/e.png",
+    "writeLaneImage keeps prior lane image",
+  );
+  const w3 = writeLaneImage(w2, "flower", "");
+  ok(
+    !(w3.laneImages as Record<string, string>).flower &&
+      (w3.laneImages as Record<string, string>).edibles === "/e.png",
+    "writeLaneImage blanks a lane, keeps others",
+  );
+  const w4 = writeLaneImage({ lanes: "category" }, "flower", "");
+  ok(!("laneImages" in w4), "writeLaneImage drops empty laneImages entirely");
+  ok(w4.lanes === "category", "writeLaneImage keeps lanes when clearing images");
+  ok(writeLaneImage({}, "bogus", "/x.png").laneImages === undefined, "writeLaneImage ignores bad lane");
+  // Immutability: original nested map not mutated
+  const origSettings = { laneImages: { flower: "/f.png" } };
+  writeLaneImage(origSettings, "edibles", "/e.png");
+  ok(
+    !("edibles" in (origSettings.laneImages as Record<string, string>)),
+    "writeLaneImage does not mutate the input nested map",
+  );
 
   return { passed, failed };
 }

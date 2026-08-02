@@ -542,6 +542,60 @@ export async function saveHomeSettings(
   return {};
 }
 
+/**
+ * Fetch any home page_sections row by its section_key (e.g. "home.category").
+ * Returns null when unseeded so callers fall back to defaults pre-seed.
+ */
+export async function getHomeSectionByKey(
+  sectionKey: string,
+): Promise<PageSectionRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("page_sections")
+    .select(SELECT)
+    .eq("page_slug", "home")
+    .eq("section_key", sectionKey)
+    .maybeSingle();
+  return data ? coerceRow(data as Record<string, unknown>) : null;
+}
+
+/**
+ * Shallow-merge a settings patch onto a named home section's settings JSON and
+ * publish immediately (display settings, not banner copy). Mirrors
+ * saveHomeSettings but targets any home section by key (e.g. the per-lane
+ * category-tile images on home.category). Never drops existing settings keys
+ * (lanes / cardCount / etc.). Keeps published `settings` + `draft_settings` in
+ * lock-step so the live render and the editor draft agree.
+ */
+export async function saveHomeSectionSettings(
+  sectionKey: string,
+  patch: Record<string, unknown>,
+  editorId: string | null,
+): Promise<{ error?: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { error: "The database isn't fully set up yet." };
+  }
+  await ensureSectionsSeeded("home");
+  const row = await getHomeSectionByKey(sectionKey);
+  if (!row) return { error: "That homepage section isn't available yet." };
+
+  const nextSettings = { ...(row.settings ?? {}), ...patch };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("page_sections")
+    .update({
+      settings: nextSettings,
+      draft_settings: nextSettings,
+      last_edited_by: editorId,
+      last_published_by: editorId,
+      published_at: new Date().toISOString(),
+    })
+    .eq("id", row.id);
+  if (error) return { error: error.message };
+  return {};
+}
+
 /** Move a section up/down by swapping sort_order with its neighbour. */
 export async function moveSection(
   id: string,
