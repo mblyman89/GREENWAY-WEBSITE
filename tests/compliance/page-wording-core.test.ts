@@ -55,8 +55,18 @@ describe("page-wording-core", () => {
     expect(wordingBlockPublicPath("  /about  ")).toBe("/about");
   });
 
-  it("has exactly four wording pages at MS-2.1c (snapshot)", () => {
-    expect(PAGES_WITH_WORDING.size).toBe(4);
+  it("wires faq wording at MIG-5a", () => {
+    expect(PAGES_WITH_WORDING.has("faq")).toBe(true);
+    expect(pageHasWording("faq")).toBe(true);
+  });
+
+  it("wires home wording at MIG-5a", () => {
+    expect(PAGES_WITH_WORDING.has("home")).toBe(true);
+    expect(pageHasWording("home")).toBe(true);
+  });
+
+  it("has exactly six wording pages at MIG-5a (snapshot)", () => {
+    expect(PAGES_WITH_WORDING.size).toBe(6);
   });
 
   it("passes its embedded pure self-tests", () => {

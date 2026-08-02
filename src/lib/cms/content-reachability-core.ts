@@ -178,17 +178,24 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
   //     explicitly, and we allowlist them below as KNOWN_ORPHANS_V1 pending
   //     their rescue slices. This makes the damage MACHINE-VISIBLE instead of
   //     hidden. ---
-  "faq.hero.title": CONTENT_EDITORS.NONE, // MIG-5a target: PAGES_FAQ
-  "faq.hero.subtitle": CONTENT_EDITORS.NONE, // MIG-5a target: PAGES_FAQ
+  // MIG-5a: RESCUED. The FAQ hero copy is now surfaced by the Page wording card
+  // on /admin/pages/faq (faq added to PAGES_WITH_WORDING). Owner flipped
+  // NONE -> PAGES_FAQ and both keys removed from KNOWN_ORPHANS_V1.
+  "faq.hero.title": CONTENT_EDITORS.PAGES_FAQ,
+  "faq.hero.subtitle": CONTENT_EDITORS.PAGES_FAQ,
 
-  "home.category.image": CONTENT_EDITORS.NONE, // MIG-5c target: PAGES_HOME
-  "home.category.eyebrow": CONTENT_EDITORS.NONE,
-  "home.category.title": CONTENT_EDITORS.NONE,
-  "home.category.subtitle": CONTENT_EDITORS.NONE,
-  "home.brand.image": CONTENT_EDITORS.NONE,
-  "home.brand.eyebrow": CONTENT_EDITORS.NONE,
-  "home.brand.title": CONTENT_EDITORS.NONE,
-  "home.brand.subtitle": CONTENT_EDITORS.NONE,
+  // MIG-5a: RESCUED. The Home category/brand banner copy + background images are
+  // now surfaced by the Page wording card on /admin/pages/home (home added to
+  // PAGES_WITH_WORDING). Owner flipped NONE -> PAGES_HOME and all eight keys
+  // removed from KNOWN_ORPHANS_V1.
+  "home.category.image": CONTENT_EDITORS.PAGES_HOME,
+  "home.category.eyebrow": CONTENT_EDITORS.PAGES_HOME,
+  "home.category.title": CONTENT_EDITORS.PAGES_HOME,
+  "home.category.subtitle": CONTENT_EDITORS.PAGES_HOME,
+  "home.brand.image": CONTENT_EDITORS.PAGES_HOME,
+  "home.brand.eyebrow": CONTENT_EDITORS.PAGES_HOME,
+  "home.brand.title": CONTENT_EDITORS.PAGES_HOME,
+  "home.brand.subtitle": CONTENT_EDITORS.PAGES_HOME,
 
   "specials.hero.eyebrow": CONTENT_EDITORS.NONE, // MIG-5b target: SPECIALS
   "specials.hero.title": CONTENT_EDITORS.NONE,
@@ -226,16 +233,9 @@ export const KEY_OWNER_OVERRIDES: Readonly<Record<string, ContentEditor>> = {
  * When this set is empty, zero orphans remain.
  */
 export const KNOWN_ORPHANS_V1: ReadonlySet<string> = new Set<string>([
-  "faq.hero.title",
-  "faq.hero.subtitle",
-  "home.category.image",
-  "home.category.eyebrow",
-  "home.category.title",
-  "home.category.subtitle",
-  "home.brand.image",
-  "home.brand.eyebrow",
-  "home.brand.title",
-  "home.brand.subtitle",
+  // MIG-5a RESCUED (removed from this list): faq.hero.title/subtitle ->
+  // PAGES_FAQ, and home.category.*/home.brand.* (8 keys) -> PAGES_HOME. All ten
+  // are now editable via the Page wording card on their own page editor.
   "specials.hero.eyebrow",
   "specials.hero.title",
   "specials.hero.subtitle",
@@ -416,12 +416,13 @@ export function __runContentReachabilityCoreTests(): { passed: number } {
     );
   }
 
-  // 8. Snapshot: exactly 17 known orphans at v1 (audit ground truth). This will
-  //    be decremented deliberately by each rescue slice, giving a visible
-  //    countdown to zero.
+  // 8. Snapshot: known orphans remaining, decremented deliberately by each
+  //    rescue slice for a visible countdown to zero. Started at 17 (v1 audit
+  //    ground truth); MIG-5a rescued 10 (faq.hero.* -> PAGES_FAQ,
+  //    home.category.*/home.brand.* -> PAGES_HOME), leaving 7.
   assert(
-    KNOWN_ORPHANS_V1.size === 17,
-    `expected 17 known orphans at v1, found ${KNOWN_ORPHANS_V1.size}`,
+    KNOWN_ORPHANS_V1.size === 7,
+    `expected 7 known orphans after MIG-5a, found ${KNOWN_ORPHANS_V1.size}`,
   );
 
   return { passed };
