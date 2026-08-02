@@ -52,13 +52,20 @@ export type LoyaltyContentBlock = {
   /** content_blocks.block_key */
   key: string;
   /** Which part of the page this block lives in (for the admin editor groups). */
-  section: "signup" | "terms";
+  section: "hero" | "signup" | "terms";
   /** Friendly label shown in the admin editor. */
   label: string;
   /** Optional helper line under the field in the admin editor. */
   help?: string;
   /** Byte-identical live copy — the seed default and public fallback. */
   fallback: string;
+  /**
+   * Whether editing this block can affect SEO (drives the "affects SEO" badge in
+   * the editor + the seo_impact seed flag). Defaults to false when omitted, so
+   * the existing form/terms blocks are unchanged. MIG-5c sets it on the rescued
+   * loyalty.hero.title to preserve its pre-existing seo_impact: true seed flag.
+   */
+  seoImpact?: boolean;
 };
 
 /**
@@ -67,6 +74,29 @@ export type LoyaltyContentBlock = {
  * (SLICE 108 audit F2/F3).
  */
 export const LOYALTY_CONTENT_BLOCKS: readonly LoyaltyContentBlock[] = [
+  // ---- Signup heading (MIG-5c rescue) --------------------------------------
+  // The big "Signup to get offers…" headline + subtitle that render BELOW the
+  // hero banner on the public /loyalty page (LoyaltySignupForm.tsx L198/L206).
+  // They rendered live but had no editor after the Loyalty Pages-builder was
+  // retired (the hero-banner editor owns the image + overlay presentation only).
+  // Surfaced here so they are owned by LOYALTY_PAGE and no longer orphans. Every
+  // fallback is byte-identical to the component + seed default, so the public
+  // page stays unchanged until edited + published.
+  {
+    key: "loyalty.hero.title",
+    section: "hero",
+    label: "Signup heading — title",
+    help: "The big headline above the signup form (below the hero banner image).",
+    fallback: "Signup to get offers and discounts from Greenway Marijuana",
+    seoImpact: true, // preserves the pre-existing seed's seo_impact: true
+  },
+  {
+    key: "loyalty.hero.subtitle",
+    section: "hero",
+    label: "Signup heading — subtitle",
+    help: "The line under the signup heading.",
+    fallback: "Get updates on our promotions tailored to you.",
+  },
   // ---- Signup form (client component; copy arrives via props) --------------
   {
     key: "loyalty.form.birthday_help",
@@ -159,21 +189,30 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
   };
 
   // ---- Registry shape ------------------------------------------------------
-  ok(LOYALTY_CONTENT_BLOCKS.length === 6, "6 editable Loyalty copy blocks");
+  // MIG-5c: the signup heading (loyalty.hero.title/subtitle) joined the registry
+  // (rescued from orphan status), so 6 -> 8.
+  ok(LOYALTY_CONTENT_BLOCKS.length === 8, "8 editable Loyalty copy blocks (MIG-5c added the 2 hero heading blocks)");
   ok(LOYALTY_CONTENT_KEYS.length === LOYALTY_CONTENT_BLOCKS.length, "keys mirror blocks");
 
-  // Keys are unique + well-formed; sections are one of the two known groups.
+  // Keys are unique + well-formed; sections are one of the three known groups.
   const seen = new Set<string>();
   for (const b of LOYALTY_CONTENT_BLOCKS) {
     ok(!seen.has(b.key), `duplicate key: ${b.key}`);
     seen.add(b.key);
     ok(b.key.startsWith("loyalty."), `${b.key} is namespaced under loyalty.`);
-    ok(b.section === "signup" || b.section === "terms", `${b.key} has a known section`);
+    ok(
+      b.section === "hero" || b.section === "signup" || b.section === "terms",
+      `${b.key} has a known section`,
+    );
     ok(b.label.trim().length > 0, `${b.key} has a label`);
     ok(b.fallback.trim().length > 0, `${b.key} has non-empty byte-identical copy`);
   }
 
-  // Section membership is exactly as designed (3 signup + 3 terms).
+  // Section membership is exactly as designed (2 hero + 3 signup + 3 terms).
+  ok(
+    LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "hero").length === 2,
+    "2 signup-heading (hero) copy blocks",
+  );
   ok(
     LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "signup").length === 3,
     "3 signup-form copy blocks",
@@ -184,6 +223,16 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
   );
 
   // ---- Byte-identical fallbacks (verbatim from the components) -------------
+  ok(
+    loyaltyContentFallback("loyalty.hero.title") ===
+      "Signup to get offers and discounts from Greenway Marijuana",
+    "hero.title fallback exact (matches LoyaltySignupForm + seed default)",
+  );
+  ok(
+    loyaltyContentFallback("loyalty.hero.subtitle") ===
+      "Get updates on our promotions tailored to you.",
+    "hero.subtitle fallback exact (matches LoyaltySignupForm + seed default)",
+  );
   ok(
     loyaltyContentFallback("loyalty.form.birthday_help") ===
       "Get special discounts and offers on your birthday!",
@@ -209,10 +258,13 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
   // ---- isLoyaltyContentBlock ----------------------------------------------
   ok(isLoyaltyContentBlock("loyalty.form.submit_label"), "submit_label is a copy block");
   ok(isLoyaltyContentBlock("loyalty.terms.title"), "terms.title is a copy block");
-  // The pre-existing hero blocks (SiteText / section builder) are NOT in this
-  // registry — they have their own editors.
-  ok(!isLoyaltyContentBlock("loyalty.hero.title"), "hero.title is not in this registry");
+  // MIG-5c: the signup heading text IS now in this registry (rescued).
+  ok(isLoyaltyContentBlock("loyalty.hero.title"), "hero.title is now a copy block (MIG-5c rescue)");
+  ok(isLoyaltyContentBlock("loyalty.hero.subtitle"), "hero.subtitle is now a copy block (MIG-5c rescue)");
+  // The hero IMAGE / richjson presentation blocks are NOT in this registry —
+  // they have their own dedicated hero-banner editor.
   ok(!isLoyaltyContentBlock("loyalty.hero.image"), "hero.image is not in this registry");
+  ok(!isLoyaltyContentBlock("loyalty.hero.presentation"), "hero.presentation is not in this registry");
   ok(!isLoyaltyContentBlock(""), "empty key is not a copy block");
   ok(!isLoyaltyContentBlock(null), "null key is not a copy block");
 

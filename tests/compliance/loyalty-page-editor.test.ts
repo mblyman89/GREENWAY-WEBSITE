@@ -42,24 +42,32 @@ describe("loyalty-content-core pure logic", () => {
     expect(passed).toBeGreaterThan(30);
   });
 
-  it("has 6 editable copy blocks with unique, namespaced keys + non-empty copy", () => {
-    expect(LOYALTY_CONTENT_BLOCKS.length).toBe(6);
-    expect(LOYALTY_CONTENT_KEYS.length).toBe(6);
+  it("has 8 editable copy blocks with unique, namespaced keys + non-empty copy", () => {
+    // MIG-5c: the signup heading (loyalty.hero.title/subtitle) joined the
+    // registry as its own "hero" section, so 6 -> 8.
+    expect(LOYALTY_CONTENT_BLOCKS.length).toBe(8);
+    expect(LOYALTY_CONTENT_KEYS.length).toBe(8);
     const keys = LOYALTY_CONTENT_BLOCKS.map((b) => b.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const b of LOYALTY_CONTENT_BLOCKS) {
       expect(b.key.startsWith("loyalty.")).toBe(true);
       expect(b.fallback.trim().length).toBeGreaterThan(0);
-      expect(["signup", "terms"]).toContain(b.section);
+      expect(["hero", "signup", "terms"]).toContain(b.section);
     }
-    // 3 signup + 3 terms.
+    // 2 hero + 3 signup + 3 terms.
+    expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "hero").length).toBe(2);
     expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "signup").length).toBe(3);
     expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "terms").length).toBe(3);
   });
 
-  it("the pre-existing hero blocks are NOT in this registry (separate editors)", () => {
-    expect(isLoyaltyContentBlock("loyalty.hero.title")).toBe(false);
+  it("the signup heading IS in this registry now (MIG-5c rescue); hero image/presentation are NOT", () => {
+    // MIG-5c: the signup heading text (loyalty.hero.title/subtitle) is now a
+    // copy block here. The hero IMAGE and PRESENTATION art stay in their own
+    // (image/banner) editors and are NOT copy blocks.
+    expect(isLoyaltyContentBlock("loyalty.hero.title")).toBe(true);
+    expect(isLoyaltyContentBlock("loyalty.hero.subtitle")).toBe(true);
     expect(isLoyaltyContentBlock("loyalty.hero.image")).toBe(false);
+    expect(isLoyaltyContentBlock("loyalty.hero.presentation")).toBe(false);
     expect(isLoyaltyContentBlock("loyalty.form.submit_label")).toBe(true);
     expect(isLoyaltyContentBlock("loyalty.terms.title")).toBe(true);
     expect(isLoyaltyContentBlock("")).toBe(false);
@@ -93,11 +101,16 @@ describe("seeds are live-look-safe (byte-identical)", () => {
     }
   });
 
-  it("the pre-existing 4 loyalty.hero.* blocks are untouched (11 loyalty blocks total)", () => {
+  it("the seed's loyalty blocks are untouched (11 loyalty blocks total)", () => {
     const loyalty = CONTENT_BLOCK_SEEDS.filter((s) => s.block_key.startsWith("loyalty."));
     // SLICE 123 (LOY-1): +1 new block (loyalty.hero.presentation, richjson) for
-    // the editable hero banner. Previously 10 (4 hero + 6 copy) -> now 11.
-    expect(loyalty.length).toBe(11); // 4 hero + 6 copy + 1 hero-presentation
+    // the editable hero banner. Previously 10 -> now 11. MIG-5c did NOT add or
+    // remove any seed row — it only re-homed the existing loyalty.hero.title/
+    // subtitle seed blocks into the LOYALTY_CONTENT_BLOCKS registry (the "hero"
+    // group in the /admin/loyalty-page editor). So the seed count stays 11:
+    // 2 hero-heading copy + 1 hero-image + 1 hero-image-mobile +
+    // 1 hero-presentation + 3 signup + 3 terms.
+    expect(loyalty.length).toBe(11);
     expect(byKey.has("loyalty.hero.title")).toBe(true);
     expect(byKey.has("loyalty.hero.subtitle")).toBe(true);
     expect(byKey.has("loyalty.hero.presentation")).toBe(true);
