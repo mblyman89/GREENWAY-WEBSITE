@@ -232,7 +232,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
                 All buttons open a BLANK-body draft with a prefilled subject.
                 SLICE 114: title/blurb/email/subject are each editable — the
                 `channels` prop is already resolved with any overrides. */}
-            <div className="mt-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-5 lg:items-start">
+            <div className="mt-8 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 lg:grid-cols-5">
               {channels.map((channel) => (
                 <a
                   key={channel.key}
@@ -242,7 +242,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
                   <span className="text-[0.72rem] font-black uppercase tracking-wide text-[var(--greenway)]">
                     {channel.title}
                   </span>
-                  <span className="mt-1.5 flex-1 text-[0.7rem] leading-relaxed text-zinc-400 lg:flex-none">
+                  <span className="mt-1.5 flex-1 text-[0.7rem] leading-relaxed text-zinc-400">
                     {channel.blurb}
                   </span>
                   <span className="mt-3 break-all text-[0.66rem] font-bold text-zinc-300 group-hover:text-white">
