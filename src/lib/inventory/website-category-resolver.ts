@@ -56,6 +56,7 @@ export type ResolvableLot = {
 
 /** Where the resolved category came from (audit trail / debugging). */
 export type ResolutionSource =
+  | "override" // (0) per-product owner override (product_classification_overrides)
   | "menu_item" // (a) menu_items.category by pos_product_key
   | "inventory_type" // (b) inventory_types DB / catalog map
   | "heuristic" // (c) name / coarse-type detection
@@ -380,6 +381,14 @@ export function heuristicWebsiteCategory(
 
 export type ResolveOptions = {
   /**
+   * Per-product OWNER OVERRIDE (precedence 0 — HIGHEST). The website category
+   * VALUE the owner set from the Inventory Detail corrections section
+   * (product_classification_overrides.website_category, migration 0150). When
+   * present + valid it beats even menu_items.category — a human deliberately
+   * re-filed THIS product. Pass null/undefined when there is no override.
+   */
+  overrideCategory?: string | null;
+  /**
    * Website category already known from menu_items.category for this lot's
    * pos_product_key (precedence a). Pass null/undefined if unknown.
    */
@@ -397,6 +406,19 @@ export function resolveWebsiteCategory(
 ): WebsiteCategoryResolution {
   const raw = lot.inventoryType ?? null;
   const map = opts.inventoryTypeMap ?? buildStaticInventoryTypeMap();
+
+  // (0) OWNER OVERRIDE — highest precedence. A human re-filed THIS product from
+  // the Inventory Detail corrections section; honor it over everything else.
+  const override = opts.overrideCategory ?? null;
+  if (override && VALID_CATEGORY.has(override)) {
+    return {
+      websiteCategory: override,
+      label: websiteCategoryLabel(override),
+      raw,
+      source: "override",
+      unmapped: false,
+    };
+  }
 
   // (a) menu_items.category — authoritative.
   const fromMenu = opts.menuItemCategory ?? null;
@@ -465,6 +487,34 @@ export function __runWebsiteCategoryResolverTests(): void {
   };
   const eq = (a: unknown, b: unknown, msg: string) =>
     ok(JSON.stringify(a) === JSON.stringify(b), `${msg} (got ${JSON.stringify(a)})`);
+
+  // (0) OWNER OVERRIDE wins over EVERYTHING — even a conflicting published
+  // menu_item category. A human re-filed THIS product in the corrections section.
+  const ov = resolveWebsiteCategory(
+    { posProductKey: "SKU-OV", inventoryType: "BHO", productName: "Live Badder" },
+    { overrideCategory: "flower", menuItemCategory: "concentrate" },
+  );
+  eq(ov.websiteCategory, "flower", "(0) override beats menu_item");
+  eq(ov.source, "override", "(0) source=override");
+  ok(!ov.unmapped, "(0) override not unmapped");
+  eq(ov.label, "Flower", "(0) override label resolved");
+  eq(ov.raw, "BHO", "(0) override leaves raw untouched");
+
+  // An INVALID override value is ignored — resolution falls through to (a)/(b).
+  const ovBad = resolveWebsiteCategory(
+    { inventoryType: "BHO", productName: "Live Badder" },
+    { overrideCategory: "not-a-real-category", menuItemCategory: "concentrate" },
+  );
+  eq(ovBad.websiteCategory, "concentrate", "(0) invalid override falls to menu_item");
+  eq(ovBad.source, "menu_item", "(0) invalid override → menu_item");
+
+  // A null/absent override never interferes with normal resolution.
+  const ovNull = resolveWebsiteCategory(
+    { inventoryType: "BHO", productName: "Live Badder" },
+    { overrideCategory: null },
+  );
+  eq(ovNull.websiteCategory, "concentrate", "(0) null override → normal path");
+  eq(ovNull.source, "inventory_type", "(0) null override → inventory_type");
 
   // (a) menu_items.category wins over everything, even a conflicting raw type.
   const a = resolveWebsiteCategory(

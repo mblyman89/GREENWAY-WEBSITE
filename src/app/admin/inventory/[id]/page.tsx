@@ -15,7 +15,15 @@ import { lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
 import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
 import { listVendors, listAllBrands } from "@/lib/vendors/store";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
-import { adjustLotAction, setLotStatusAction, updateLotDetailsAction } from "../actions";
+// Option A: per-product website Type/Category override (migration 0150).
+import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
+import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
+import {
+  adjustLotAction,
+  setLotStatusAction,
+  updateLotDetailsAction,
+  updateLotWebsiteClassificationAction,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -66,13 +74,19 @@ export default async function LotDetailPage({
   // SLICE 77: vendors + brands feed the correction form's pickers; the
   // enrichment record (keyed by the lot's POS product key) surfaces the
   // customer-facing photo/description right here.
-  const [adjustments, manifest, vendors, brands, enrichment] = await Promise.all([
-    listLotAdjustments(id),
-    lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
-    listVendors(),
-    listAllBrands(),
-    lot.pos_product_key ? getEnrichment(lot.pos_product_key) : Promise.resolve(null),
-  ]);
+  const [adjustments, manifest, vendors, brands, enrichment, categoryTypes, inventoryTypes, override] =
+    await Promise.all([
+      listLotAdjustments(id),
+      lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
+      listVendors(),
+      listAllBrands(),
+      lot.pos_product_key ? getEnrichment(lot.pos_product_key) : Promise.resolve(null),
+      // Option A: the LIVE registries feed the override pickers, and the current
+      // stored override prefills them (so re-opening shows the owner's choice).
+      listWebsiteCategoryTypes({ includeInactive: false }),
+      listInventoryTypes({ includeInactive: false }),
+      lot.pos_product_key ? getOverrideForKey(lot.pos_product_key) : Promise.resolve(null),
+    ]);
   const enrichImageId = enrichment?.primary_media_id ?? enrichment?.image_media_ids?.[0] ?? null;
   const enrichImageUrl = enrichImageId
     ? (await mediaUrlsForIds([enrichImageId])).get(enrichImageId) ?? null
@@ -91,6 +105,7 @@ export default async function LotDetailPage({
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
   const detailsAction = updateLotDetailsAction.bind(null, id);
+  const classificationAction = updateLotWebsiteClassificationAction.bind(null, id);
 
   const today = new Date().toISOString().slice(0, 10);
   const expired = lot.expires_on != null && lot.expires_on < today;
@@ -405,6 +420,119 @@ export default async function LotDetailPage({
               </p>
             )}
           </div>
+        </div>
+
+        {/* Option A — correct THIS product's WEBSITE Type & Category (what the
+            menu filters by). Behaves like the onboarding approval card: pick an
+            existing value, or create a new one on the fly (saved into the same
+            Types & Categories registries). NEVER touches the LCB classification
+            (that stays locked as the WA traceability source of truth). */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Website type &amp; category (menu)</h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
+            These are the Type and Category <strong>our website</strong> uses to
+            file this product on the menu — the system fills them in
+            automatically, but if it got one wrong you can re-file just this
+            product here. You can also add a brand-new category or type on the
+            fly; it saves to your{" "}
+            <Link href="/admin/settings/types" className="underline">
+              Types &amp; Categories
+            </Link>{" "}
+            list so it&apos;s reusable everywhere. This does <strong>not</strong>{" "}
+            change the LCB classification (that stays locked for WA state
+            reporting).
+          </p>
+          {lot.pos_product_key ? (
+            <>
+              <div className="mb-4 grid gap-2 text-xs sm:grid-cols-2">
+                <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2">
+                  <span className="text-[var(--admin-text-faint)]">Category now: </span>
+                  <span className="font-medium text-[var(--admin-text)]">
+                    {override?.website_category
+                      ? `${categoryResolution.label || override.website_category} (your override)`
+                      : categoryResolution.unmapped
+                        ? "— (unmapped, auto)"
+                        : `${categoryResolution.label || "—"} (auto)`}
+                  </span>
+                </div>
+                <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2">
+                  <span className="text-[var(--admin-text-faint)]">Type now: </span>
+                  <span className="font-medium text-[var(--admin-text)]">
+                    {override?.house_type
+                      ? `${override.house_type} (your override)`
+                      : `${lotTypeLabel(lot)} (auto)`}
+                  </span>
+                </div>
+              </div>
+              <form action={classificationAction} className="space-y-4">
+                <Field
+                  label="Website category"
+                  help="Leave on “Keep current” to change nothing. Pick “Auto” to remove your override and let the system decide."
+                  htmlFor="website_category"
+                >
+                  <Select id="website_category" name="website_category" defaultValue="__keep__">
+                    <option value="__keep__">Keep current</option>
+                    <option value="__clear__">Auto (remove my override)</option>
+                    {categoryTypes.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                    <option value="__new__">➕ Create a new category…</option>
+                  </Select>
+                </Field>
+                <Field
+                  label="New category name"
+                  help="Only used when you picked “Create a new category…” above."
+                  htmlFor="new_category_label"
+                >
+                  <Input
+                    id="new_category_label"
+                    name="new_category_label"
+                    placeholder="e.g. Live Rosin"
+                    maxLength={60}
+                  />
+                </Field>
+                <Field
+                  label="Website type"
+                  help="Leave on “Keep current” to change nothing. Pick “Auto” to remove your override."
+                  htmlFor="house_type"
+                >
+                  <Select id="house_type" name="house_type" defaultValue="__keep__">
+                    <option value="__keep__">Keep current</option>
+                    <option value="__clear__">Auto (remove my override)</option>
+                    {inventoryTypes.map((t) => (
+                      <option key={t.key} value={t.label}>
+                        {t.label}
+                      </option>
+                    ))}
+                    <option value="__new_type__">➕ Create a new type…</option>
+                  </Select>
+                </Field>
+                <Field
+                  label="New type name"
+                  help="Only used when you picked “Create a new type…” above."
+                  htmlFor="new_type_label"
+                >
+                  <Input
+                    id="new_type_label"
+                    name="new_type_label"
+                    placeholder="e.g. Diamonds"
+                    maxLength={60}
+                  />
+                </Field>
+                <Button type="submit" variant="save" size="sm">
+                  Save website type &amp; category
+                </Button>
+              </form>
+            </>
+          ) : (
+            <p className="text-sm text-[var(--admin-text-faint)]">
+              This lot isn&apos;t linked to a POS product key yet, so there&apos;s no
+              menu listing to re-file. The link is made automatically when the
+              product goes onto the menu.
+            </p>
+          )}
         </div>
 
         {/* Adjustment + status controls */}

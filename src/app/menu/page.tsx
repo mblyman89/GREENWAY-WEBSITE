@@ -16,6 +16,9 @@ import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
+// Option A: owner's per-product website-category overrides (migration 0150).
+// Read-time overlay; degrades to identity pre-migration / unconfigured.
+import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 // SLICE 78: the DB-backed category registry — renames/additions made at
 // /admin/settings/types propagate to the customer menu through this map.
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
@@ -48,9 +51,11 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // from the durable medical_product_registry (migration 0113), keyed by the
   // item id. Outermost so it runs on the fully-enriched items; degrades to
   // "no DOH" pre-migration / unconfigured. (Badge render = Slice F.)
-  const menuItems = await withDohCompliance(
-    await withDisplayKnowledge(
-      await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
+  const menuItems = await withCategoryOverride(
+    await withDohCompliance(
+      await withDisplayKnowledge(
+        await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
+      ),
     ),
   );
   // SLICE 78: owner-managed category labels (value → label). Serializable, so
