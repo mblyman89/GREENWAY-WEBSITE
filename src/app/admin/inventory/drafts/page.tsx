@@ -455,6 +455,7 @@ export default async function CatalogDraftsPage({
                                   productName={builtName ?? (d.name || "")}
                                   vendorOrBrand={[d.brand_name, d.vendor_name].filter(Boolean).join(" ") || ""}
                                   strainSelectId={`strain-type-${d.id}`}
+                                  posProductKey={d.pos_product_key ?? ""}
                                   aiEnabled={aiLookupEnabled}
                                 />
                                 <div className="flex items-center gap-2">

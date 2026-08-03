@@ -17,6 +17,9 @@ import {
   LOOKUP_AUTO_MIN_CONFIDENCE,
   PRODUCT_LOOKUP_SYSTEM,
   LOOKUP_HONEST_MISS,
+  coerceCategory,
+  coercePotencyRatio,
+  cleanImageCandidates,
   type RawProductLookup,
 } from "@/lib/inventory/product-lookup-core";
 import { __runProductLookupParseTests, looseParseLookupJson } from "@/lib/inventory/product-lookup-parse";
@@ -35,7 +38,7 @@ const base: RawProductLookup = {
 describe("product-lookup-core (T-314)", () => {
   it("embedded self-tests all pass", () => {
     const { passed } = __runProductLookupTests();
-    expect(passed).toBeGreaterThanOrEqual(20);
+    expect(passed).toBeGreaterThanOrEqual(30);
   });
 
   it("parse core self-tests pass", () => {
@@ -160,5 +163,65 @@ describe("product-lookup-core (T-314)", () => {
     >;
     expect(o.found).toBe(true);
     expect(o.strain_type).toBe("indica");
+  });
+});
+
+describe("product-lookup-core all-inclusive fields (T-315)", () => {
+  it("category coercion maps synonyms and never guesses", () => {
+    expect(coerceCategory("Beverage")).toBe("beverage");
+    expect(coerceCategory("gummies")).toBe("edible");
+    expect(coerceCategory("cartridge")).toBe("vape");
+    expect(coerceCategory("who knows")).toBe("");
+  });
+
+  it("potency ratio is extracted or blank", () => {
+    expect(coercePotencyRatio("1:1")).toBe("1:1");
+    expect(coercePotencyRatio("ratio 20:1 cbd")).toBe("20:1");
+    expect(coercePotencyRatio("none")).toBe("");
+  });
+
+  it("image candidates drop junk/svg/dupes and cap", () => {
+    const out = cleanImageCandidates([
+      "https://cdn.x.com/p/rays.jpg",
+      "https://cdn.x.com/p/rays.jpg",
+      "https://cdn.x.com/logo.png",
+      "https://cdn.x.com/a.svg",
+      "http://cdn.x.com/p/berry.png",
+      "not-a-url",
+    ]);
+    expect(out).toEqual(["https://cdn.x.com/p/rays.jpg", "http://cdn.x.com/p/berry.png"]);
+    expect(cleanImageCandidates(null as unknown)).toEqual([]);
+  });
+
+  it("non-flower product stages enrichment without autofilling strain", () => {
+    const r = postProcessLookup({
+      ...base,
+      found: true,
+      strain_type: "unknown",
+      description: "Bright raspberry lemonade with a balanced, easygoing lift.",
+      short_description: "Balanced 1:1 raspberry lemonade.",
+      category: "beverage",
+      potency_ratio: "1:1",
+      size: "12oz",
+      image_candidates: ["https://cdn.x.com/p/rays-raspberry.jpg"],
+    });
+    expect(r.autofillStrainType).toBe(false);
+    expect(r.category).toBe("beverage");
+    expect(r.potencyRatio).toBe("1:1");
+    expect(r.size).toBe("12oz");
+    expect(r.description.length).toBeGreaterThan(0);
+    expect(r.imageCandidates).toHaveLength(1);
+    expect(r.hasEnrichmentDraft).toBe(true);
+  });
+
+  it("medical description is blocked even for non-flower", () => {
+    const r = postProcessLookup({
+      ...base,
+      found: true,
+      description: "This tincture reduces inflammation and cures insomnia.",
+      category: "tincture",
+    });
+    expect(r.description).toBe("");
+    expect(r.hasEnrichmentDraft).toBe(false);
   });
 });

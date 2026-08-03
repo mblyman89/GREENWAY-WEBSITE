@@ -18,6 +18,11 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
 import { upsertKbStrain } from "@/lib/ai/kb/store";
+import { persistSuggestion, listSuggestions } from "@/lib/ai/suggestions";
+import {
+  packImageCandidates,
+  RESEARCH_IMAGES_FIELD,
+} from "@/lib/enrichment/research-core";
 import {
   lookupProduct,
   isAiConfigured,
@@ -44,6 +49,15 @@ export type LookupKbDraft = {
   flavorNotes: string[];
   lineage: string;
   sources: string[];
+  // T-315: all-inclusive fields that feed ENRICHMENT (drafts only, human-approved).
+  /** The POS product key this draft attaches to on the enrichment page (or ""). */
+  posProductKey: string;
+  description: string;
+  shortDescription: string;
+  category: string;
+  potencyRatio: string;
+  size: string;
+  imageCandidates: string[];
 };
 
 export type ProductLookupActionResult =
@@ -63,6 +77,14 @@ export type ProductLookupActionResult =
       usedWebSearch: boolean;
       hasKbDraft: boolean;
       honestMiss: string;
+      // T-315 all-inclusive fields (for the UI + the save payload).
+      description: string;
+      shortDescription: string;
+      category: string;
+      potencyRatio: string;
+      size: string;
+      imageCandidates: string[];
+      hasEnrichmentDraft: boolean;
       /** The draft payload the client can send back to saveLookupToKbAction. */
       draft: LookupKbDraft;
     }
@@ -85,6 +107,7 @@ export async function productLookupAction(
   const query = str(formData, "query");
   const productName = str(formData, "product_name");
   const vendorOrBrand = str(formData, "vendor_or_brand");
+  const posProductKey = str(formData, "pos_product_key");
   if (!query) return { ok: false, error: "Type something to search for first." };
 
   try {
@@ -119,6 +142,9 @@ export async function productLookupAction(
         usedWebSearch: outcome.usedWebSearch,
         model: outcome.model,
         sources: outcome.sources.length,
+        category: r.category || undefined,
+        hasEnrichmentDraft: r.hasEnrichmentDraft,
+        imageCandidates: r.imageCandidates.length,
       },
     });
 
@@ -138,6 +164,13 @@ export async function productLookupAction(
       usedWebSearch: outcome.usedWebSearch,
       hasKbDraft: r.hasKbDraft,
       honestMiss: LOOKUP_HONEST_MISS,
+      description: r.description,
+      shortDescription: r.shortDescription,
+      category: r.category,
+      potencyRatio: r.potencyRatio,
+      size: r.size,
+      imageCandidates: r.imageCandidates,
+      hasEnrichmentDraft: r.hasEnrichmentDraft,
       draft: {
         name: productName || query,
         strainType: r.strainType,
@@ -148,6 +181,13 @@ export async function productLookupAction(
         flavorNotes: r.flavorNotes,
         lineage: r.lineage,
         sources: outcome.sources,
+        posProductKey,
+        description: r.description,
+        shortDescription: r.shortDescription,
+        category: r.category,
+        potencyRatio: r.potencyRatio,
+        size: r.size,
+        imageCandidates: r.imageCandidates,
       },
     };
   } catch (err) {
@@ -178,12 +218,10 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
 
   const name = String(payload.name ?? "").trim();
   if (!name) return { ok: false, error: "Nothing to save \u2014 missing a product name." };
-  if (payload.strainType === "unknown" && !payload.summary && (!payload.effects || payload.effects.length === 0)) {
-    return { ok: false, error: "Nothing worth saving to the KB for this one." };
-  }
 
   // Re-sanitize server-side: the client is never trusted. Rebuild a raw shape
-  // from the payload and run it back through the compliance gate.
+  // from the payload and run it back through the compliance gate. This covers
+  // BOTH the strain fields and the T-315 all-inclusive fields.
   const banned = await loadBannedPhrases();
   const raw: RawProductLookup = {
     strain_type: payload.strainType,
@@ -194,42 +232,141 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
     flavor_notes: Array.isArray(payload.flavorNotes) ? payload.flavorNotes : [],
     lineage: String(payload.lineage ?? ""),
     found: true,
+    description: String(payload.description ?? ""),
+    short_description: String(payload.shortDescription ?? ""),
+    category: String(payload.category ?? ""),
+    potency_ratio: String(payload.potencyRatio ?? ""),
+    size: String(payload.size ?? ""),
+    image_candidates: Array.isArray(payload.imageCandidates) ? payload.imageCandidates : [],
   };
   const safe = postProcessLookup(raw, banned);
 
+  const posKey = String(payload.posProductKey ?? "").trim();
+  const isStrainWorthy =
+    safe.strainType !== "unknown" ||
+    safe.summary.length > 0 ||
+    safe.effects.length > 0 ||
+    safe.aromaNotes.length > 0 ||
+    safe.flavorNotes.length > 0 ||
+    safe.lineage.length > 0;
+  const hasEnrichment = safe.hasEnrichmentDraft && posKey.length > 0;
+
+  if (!isStrainWorthy && !hasEnrichment) {
+    // Distinguish "nothing at all" from "have enrichment copy but no POS key".
+    if (safe.hasEnrichmentDraft && !posKey) {
+      return {
+        ok: false,
+        error:
+          "Found details, but this draft has no POS product key yet, so I can't stage them for enrichment. Approve the onboarding draft first, then re-run the lookup.",
+      };
+    }
+    return { ok: false, error: "Nothing worth saving to the KB for this one." };
+  }
+
+  const wrote: string[] = [];
   try {
-    await upsertKbStrain(
-      {
-        name,
-        strain_type: safe.strainType,
-        summary: safe.summary || null,
-        aroma_notes: safe.aromaNotes,
-        flavor_notes: safe.flavorNotes,
-        lineage: safe.lineage || null,
-        sources: Array.isArray(payload.sources) ? payload.sources : [],
-        confidence: safe.strainTypeConfidence / 100,
-        // The draft flow: a human approves before it auto-attaches to lots.
-        status: "draft",
-        source: "enrichment",
-        active: true,
-      },
-      session.userId,
-    );
+    // 1) Strain KB draft (unchanged behavior) \u2014 only when strain-worthy.
+    if (isStrainWorthy) {
+      await upsertKbStrain(
+        {
+          name,
+          strain_type: safe.strainType,
+          summary: safe.summary || null,
+          aroma_notes: safe.aromaNotes,
+          flavor_notes: safe.flavorNotes,
+          lineage: safe.lineage || null,
+          sources: Array.isArray(payload.sources) ? payload.sources : [],
+          confidence: safe.strainTypeConfidence / 100,
+          // The draft flow: a human approves before it auto-attaches to lots.
+          status: "draft",
+          source: "enrichment",
+          active: true,
+        },
+        session.userId,
+      );
+      wrote.push("kb_strain");
 
-    await recordAudit({
-      actorId: session.userId,
-      actorEmail: session.email,
-      action: "kb.strain.draft_from_lookup",
-      entityType: "kb_strains",
-      entityId: draftId || null,
-      after: {
-        name,
-        strainType: safe.strainType,
-        status: "draft",
-        source: "enrichment",
-      },
-    });
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "kb.strain.draft_from_lookup",
+        entityType: "kb_strains",
+        entityId: draftId || null,
+        after: { name, strainType: safe.strainType, status: "draft", source: "enrichment" },
+      });
+    }
 
+    // 2) ENRICHMENT feed (T-315): stage description / short_description / image
+    //    candidates as PENDING ai_suggestions keyed to the POS product key, so
+    //    they appear on the enrichment page for the owner to Accept / Import.
+    //    DRAFTS ONLY \u2014 nothing here publishes or imports on its own.
+    if (hasEnrichment) {
+      const existing = await listSuggestions("product", posKey, "pending");
+      const alreadyHas = (fieldKey: string, value: string) =>
+        existing.some((s) => s.field_key === fieldKey && (s.suggested_value ?? "") === value);
+      const src = `model:onboarding-lookup`;
+      const conf = safe.strainTypeConfidence > 0 ? safe.strainTypeConfidence / 100 : 0.75;
+
+      if (safe.description && !alreadyHas("description", safe.description)) {
+        await persistSuggestion({
+          entity_type: "product",
+          entity_id: posKey,
+          field_key: "description",
+          suggested_value: safe.description,
+          input_summary: `AI onboarding lookup for ${name}`,
+          generated_by: session.userId,
+          confidence: conf,
+          source: src,
+        });
+        wrote.push("description");
+      }
+      if (safe.shortDescription && !alreadyHas("short_description", safe.shortDescription)) {
+        await persistSuggestion({
+          entity_type: "product",
+          entity_id: posKey,
+          field_key: "short_description",
+          suggested_value: safe.shortDescription,
+          input_summary: `AI onboarding lookup for ${name}`,
+          generated_by: session.userId,
+          confidence: conf,
+          source: src,
+        });
+        wrote.push("short_description");
+      }
+      const packedImages = packImageCandidates(safe.imageCandidates);
+      if (packedImages && !alreadyHas(RESEARCH_IMAGES_FIELD, packedImages)) {
+        await persistSuggestion({
+          entity_type: "product",
+          entity_id: posKey,
+          field_key: RESEARCH_IMAGES_FIELD,
+          suggested_value: packedImages,
+          input_summary: `AI onboarding lookup \u00b7 ${packedImages.split("\n").length} image candidate(s) for ${name}`,
+          generated_by: session.userId,
+          confidence: conf,
+          source: src,
+        });
+        wrote.push("images");
+      }
+
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "enrichment.draft_from_lookup",
+        entityType: "product",
+        entityId: posKey,
+        after: {
+          name,
+          category: safe.category || undefined,
+          potencyRatio: safe.potencyRatio || undefined,
+          size: safe.size || undefined,
+          staged: wrote.filter((w) => w !== "kb_strain"),
+        },
+      });
+    }
+
+    if (wrote.length === 0) {
+      return { ok: false, error: "Those details were already staged \u2014 nothing new to save." };
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: `Could not save the draft: ${String(err).slice(0, 160)}` };
