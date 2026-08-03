@@ -51,35 +51,60 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
  * Rather than hard-wire the LlamaParse provider here (which would create an
  * import cycle — the provider imports THIS file for its own outage fallback),
  * we accept a recovery function by DEPENDENCY INJECTION. The caller that lives
- * next to the provider (inbound-store) passes it in. When unpdf yields no text
- * AND a recovery function is provided, we ask it to read the SAME bytes; if it
- * returns text, parsing continues through the exact same layout parsers below.
+ * next to the provider (inbound-store / the manual-upload action) passes it in.
+ * When a recovery function IS provided it is the PRIMARY reader (see
+ * extractPdfTextWithRecovery below) — always run, so a partial unpdf text layer
+ * can never be mistaken for a complete extraction.
  *
  * Returns "" on any failure so recovery can NEVER make things worse than today.
  */
 export type PdfTextRecovery = (bytes: Uint8Array) => Promise<string>;
 
 /**
- * Get PDF text: try unpdf first (fast + free), and only when it comes back
- * blank fall back to the injected recovery function (LlamaParse in production).
- * This is "free-first, vision only when needed" — a PDF that already has a text
- * layer never spends a LlamaParse credit. Never throws.
+ * Get PDF text — LlamaParse PRIMARY, unpdf only as an outage fallback.
+ *
+ * OWNER DECISION (accountability checkpoint): we ALWAYS use LlamaParse when a
+ * recovery function is injected, because our free credits vastly exceed our
+ * volume. We deliberately do NOT let unpdf run first: a PDF with a PARTIAL or
+ * messy text layer (a digital invoice whose logo, transport block, or social
+ * handles are images) makes unpdf return SOME text, and a "free-first" order
+ * would call that a success and silently miss the rest — the exact false
+ * positive the owner warned about. So:
+ *
+ *   - recovery function injected  → call it FIRST. The injected function is the
+ *     LlamaParse-primary provider, which ALREADY handles its own silent unpdf
+ *     fallback when LlamaCloud is unavailable (an outage). If it still returns
+ *     blank we make one last local unpdf attempt so a text PDF is never lost.
+ *   - NO recovery function         → unpdf-only (today's behavior for any caller
+ *     that does not wire vision, e.g. a pure unit test).
+ *
+ * Never throws.
  */
 async function extractPdfTextWithRecovery(
   bytes: Uint8Array,
   recoverText?: PdfTextRecovery,
 ): Promise<string> {
-  let text = "";
-  try {
-    text = await extractPdfText(bytes);
-  } catch {
-    text = "";
+  // PRIMARY: LlamaParse (via the injected recovery fn, which self-handles its
+  // own unpdf outage fallback). Always runs when wired — never gated on unpdf.
+  if (recoverText) {
+    try {
+      const recovered = await recoverText(bytes);
+      if (typeof recovered === "string" && recovered.trim()) return recovered;
+    } catch {
+      /* fall through to the local unpdf safety net below */
+    }
+    // Last-resort safety net: recovery returned blank (or threw) → try unpdf
+    // locally so a plain text PDF is never lost if the provider was unavailable.
+    try {
+      return await extractPdfText(bytes);
+    } catch {
+      return "";
+    }
   }
-  if (text.trim()) return text;
-  if (!recoverText) return text; // no recovery available → today's behavior
+
+  // No vision wired → unpdf-only (unchanged legacy behavior).
   try {
-    const recovered = await recoverText(bytes);
-    return typeof recovered === "string" ? recovered : "";
+    return await extractPdfText(bytes);
   } catch {
     return "";
   }

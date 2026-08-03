@@ -12,14 +12,18 @@
  * supplies that function, and the intake caller (inbound-store) passes it in.
  *
  * BEHAVIOR:
- *  - Returns clean text recovered by LlamaParse (vision-OCR) for a PDF whose
- *    unpdf text layer was empty (a scanned image — the owner's real failure).
+ *  - This is the PRIMARY reader: pdf-extract calls it FIRST for every PDF (it is
+ *    not gated on unpdf). We ALWAYS run LlamaParse so a PDF with a partial/messy
+ *    text layer can never be mistaken for a complete extraction — the owner's
+ *    explicit requirement.
+ *  - Returns clean text recovered by LlamaParse (vision-OCR).
  *  - Returns "" on ANY problem (key unset, outage, empty parse) so recovery can
  *    never make the intake worse than it is today. The provider's own graceful
- *    no-op guarantees this even before Michael adds LLAMA_CLOUD_API_KEY.
- *  - Uses parsePdfWithFallback so an outage silently drops back to unpdf; but
- *    since pdf-extract only calls us AFTER unpdf already returned blank, the
- *    fallback there will simply return blank too — honest, never false-flagged.
+ *    no-op guarantees this even before Michael adds LLAMA_CLOUD_API_KEY, and
+ *    pdf-extract then makes a last-resort local unpdf attempt.
+ *  - Uses parsePdfWithFallback so a LlamaCloud OUTAGE silently drops back to
+ *    unpdf inside the provider itself — LlamaParse primary, unpdf only when
+ *    LlamaParse is unavailable, exactly as planned.
  *
  * Server-only. Never import into a client component.
  */

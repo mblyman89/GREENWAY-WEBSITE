@@ -21,6 +21,7 @@ import {
   ccrsTransportToParsed,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
 import { parsePdfManifest } from "@/lib/inventory/pdf-extract";
+import { llamaParseRecoverText } from "@/lib/inbound-email/llamaparse-recovery";
 
 /** Shared: parse + stage a JSON payload, redirect on each failure mode. */
 async function stageJsonText(
@@ -155,7 +156,9 @@ export async function importManifestPdfAction(formData: FormData) {
   }
 
   const bytes = new Uint8Array(await f.arrayBuffer());
-  const parsed = await parsePdfManifest(bytes);
+  // LlamaParse-primary (vision) for manual uploads too — a scanned or
+  // partial-text PDF uploaded by hand gets the same full read as the intake.
+  const parsed = await parsePdfManifest(bytes, llamaParseRecoverText);
   if (!parsed.ok) {
     // Distinguish "not a manifest" from "unreadable/scanned" for the reviewer.
     const code = parsed.text == null ? "pdfscanned" : "pdfparse";

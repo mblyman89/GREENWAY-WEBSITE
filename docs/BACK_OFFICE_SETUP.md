@@ -62,12 +62,17 @@ LLAMA_CLOUD_API_KEY=llx-...your key...
   roughly 5–6% of it, so it stays free. If the key is missing the intake still
   works — it simply skips vision parsing and never hard-fails.
 
-Once the key is set, vision recovery runs **automatically the moment the
-fetcher pulls an email**. It is *free‑first*: a normal PDF (with a text layer)
-uses the built‑in reader and spends **zero** credits; LlamaParse only runs when
-that reader comes back blank (a scanned image). The recovered text feeds the
-existing readers, so the **Invoice #** column auto‑fills and the transport and
-vendor details populate — priority invoice → transport → vendor.
+Once the key is set, vision extraction runs **automatically the moment the
+fetcher pulls an email** (and on manual PDF uploads in the back office). It is
+*LlamaParse‑primary*: **every** PDF is read by LlamaParse first so we get every
+field — invoice number, transport/manifest details, and vendor details — not
+just whatever a partial text layer happens to expose. The built‑in reader is
+kept only as an **outage fallback**: if LlamaCloud is unreachable or the key is
+missing, the intake silently drops to the built‑in reader and never hard‑fails.
+The extracted text feeds the existing readers, so the **Invoice #** column
+auto‑fills and the transport and vendor details populate — priority invoice →
+transport → vendor. Typical volume uses roughly 5–6% of the free monthly
+credits, so it stays free.
 
 ## 6. First login (become the Owner)
 1. Visit `/admin/login`.

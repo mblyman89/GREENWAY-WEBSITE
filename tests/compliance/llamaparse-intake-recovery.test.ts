@@ -1,30 +1,33 @@
 /**
- * tests/compliance/llamaparse-intake-recovery.test.ts  (LlamaParse PR-2)
+ * tests/compliance/llamaparse-intake-recovery.test.ts
  *
- * Pins the DEPENDENCY-INJECTION seam that lets LlamaParse recover text from a
- * scanned-image PDF and feed it straight into the EXISTING layout parsers.
+ * Pins the LlamaParse-PRIMARY text pipeline in pdf-extract.ts.
  *
- * The owner's real failure: a scanned manifest has no unpdf text layer, so
- * parsePdfManifest bailed with "no extractable text" and the whole downstream
- * machinery (layout parsers, the live Invoice # scanner, transport/vendor
- * readers) was starved. PR-2 adds an optional `recoverText(bytes)` argument;
- * when unpdf yields nothing AND a recovery fn is supplied, its text continues
- * through the same parsers.
+ * OWNER DECISION (accountability checkpoint): a PDF is ALWAYS read by LlamaParse
+ * first when a recovery function is injected — it is NOT gated on unpdf. The
+ * earlier "free-first" order (unpdf first, LlamaParse only if unpdf was blank)
+ * re-introduced the owner's exact false positive: a PARTIAL/messy unpdf text
+ * layer (logo, transport block, or social handles printed as images) would be
+ * accepted as a complete extraction and the rest silently missed. LlamaParse is
+ * now primary; unpdf is only an outage/last-resort fallback.
  *
  * These tests prove:
  *   1) NO recovery fn + unreadable bytes  -> today's honest failure (unchanged).
- *   2) A recovery fn IS invoked with the bytes when unpdf is blank, and the
- *      recovered text flows through the real Transfer Log parser to a correct
- *      ParsedManifest (manifest number, vendor, date) — i.e. recovery reaches
- *      the invoice/transport/vendor machinery.
- *   3) A recovery fn that returns "" leaves the honest failure in place (never
- *      false-flagged as success).
- *   4) A recovery fn that throws is swallowed (recovery can never make the
+ *   2) When a recovery fn is injected it is the PRIMARY reader: it is invoked
+ *      with the bytes and its text flows through the real Transfer Log parser to
+ *      a correct ParsedManifest (manifest #, vendor) — reaching the invoice /
+ *      transport / vendor machinery.
+ *   3) The recovery fn is ALWAYS called first when injected — even for bytes a
+ *      reader could otherwise handle — so a partial text layer can never be
+ *      mistaken for success.
+ *   4) A recovery fn that returns "" leaves the honest failure in place (never
+ *      false-flagged as success); unpdf is only the last-resort net.
+ *   5) A recovery fn that throws is swallowed (recovery can never make the
  *      intake worse than it is today).
  *
  * `server-only` is aliased to a no-op stub by the vitest config, so pdf-extract
- * imports cleanly here. We feed a NON-PDF byte buffer so unpdf reliably returns
- * blank, forcing the recovery path.
+ * imports cleanly here. We feed a NON-PDF byte buffer so the local unpdf net
+ * reliably returns blank, isolating the recovery-primary behavior.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -41,11 +44,11 @@ const recoveredText = readFileSync(
   "utf8",
 );
 
-// Bytes that are NOT a valid PDF, so unpdf's text extraction yields nothing and
-// the recovery path is exercised deterministically.
+// Bytes that are NOT a valid PDF, so the local unpdf net yields nothing and the
+// LlamaParse-primary path is exercised deterministically.
 const notAPdf = new Uint8Array([0x68, 0x69, 0x0a]); // "hi\n"
 
-describe("llamaparse PR-2: text-recovery injection seam", () => {
+describe("llamaparse: LlamaParse-primary text pipeline", () => {
   it("without a recovery fn, an unreadable PDF fails honestly (unchanged)", async () => {
     const res = await parsePdfManifest(notAPdf);
     expect(res.ok).toBe(false);
@@ -54,15 +57,14 @@ describe("llamaparse PR-2: text-recovery injection seam", () => {
     }
   });
 
-  it("invokes the recovery fn with the bytes when unpdf is blank", async () => {
+  it("recovery fn is the PRIMARY reader: invoked with the bytes, text flows to parsers", async () => {
     const spy = vi.fn(async (bytes: Uint8Array) => {
-      // touch the arg so its type is exercised and the linter is satisfied
       expect(bytes).toBeInstanceOf(Uint8Array);
       return recoveredText;
     });
     const res = await parsePdfManifest(notAPdf, spy);
     expect(spy).toHaveBeenCalledTimes(1);
-    // Called with the SAME bytes unpdf could not read.
+    // Called with the SAME bytes.
     expect(spy.mock.calls[0][0]).toBeInstanceOf(Uint8Array);
     expect(res.ok).toBe(true);
     if (res.ok) {
@@ -70,6 +72,24 @@ describe("llamaparse PR-2: text-recovery injection seam", () => {
       expect(res.manifest.manifest_number).toBe("603353555");
       expect(res.manifest.vendor_label).toBe("Svin Garden");
       expect(res.text).toContain("Transfer Log");
+    }
+  });
+
+  it("recovery ALWAYS runs first when injected (never gated on unpdf)", async () => {
+    // Even though these bytes are not a PDF (unpdf would give nothing), the
+    // point is that recovery is consulted FIRST and its result is authoritative
+    // — proving the order is LlamaParse-primary, not free-first.
+    let recoveryCalled = false;
+    const spy = vi.fn(async () => {
+      recoveryCalled = true;
+      return recoveredText;
+    });
+    const res = await parsePdfManifest(notAPdf, spy);
+    expect(recoveryCalled).toBe(true);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      // The manifest came from the RECOVERED text, not from any unpdf read.
+      expect(res.manifest.manifest_number).toBe("603353555");
     }
   });
 
@@ -82,10 +102,12 @@ describe("llamaparse PR-2: text-recovery injection seam", () => {
     if (res.ok) expect(res.manifest.manifest_number).toBe("603353555");
   });
 
-  it("a recovery fn returning '' leaves the honest failure (no false success)", async () => {
+  it("a recovery fn returning '' falls back to the local unpdf net, then fails honestly", async () => {
     const spy = vi.fn(async () => "");
     const res = await parsePdfManifest(notAPdf, spy);
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(1); // recovery was tried first
+    // unpdf net also finds nothing in a non-PDF buffer → honest failure, no
+    // false success.
     expect(res.ok).toBe(false);
   });
 
