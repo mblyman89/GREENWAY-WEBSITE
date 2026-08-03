@@ -46,6 +46,22 @@ ADMIN_BOOTSTRAP_EMAILS=you@greenwaymarijuana.com
 On **Vercel**: Project → Settings → Environment Variables — add the same five.
 Then redeploy.
 
+### Optional: PDF vision extraction (LlamaParse)
+To read invoices and Washington transportation manifests that arrive as
+**scanned images** (no text layer), add a free LlamaCloud key. Open a free
+account at cloud.llamaindex.ai, create an API key, and add ONE variable:
+
+```
+LLAMA_CLOUD_API_KEY=llx-...your key...
+```
+
+- Add it to **Production, Preview, and Development**, then redeploy.
+- No URL variable is needed for the US region. (EU accounts only: also set
+  `LLAMA_CLOUD_BASE_URL=https://api.cloud.eu.llamaindex.ai`.)
+- Free tier is **10,000 credits/month** and resets monthly; our volume uses
+  roughly 5–6% of it, so it stays free. If the key is missing the intake still
+  works — it simply skips vision parsing and never hard-fails.
+
 ## 6. First login (become the Owner)
 1. Visit `/admin/login`.
 2. Use **"Email me a sign-in link"** with your bootstrap email.
