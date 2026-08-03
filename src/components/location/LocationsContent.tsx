@@ -3,12 +3,19 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
-import { getContentForRender } from "@/lib/cms/render-content";
-
-const aboutCopy =
-  "Your Most Trusted Cannabis Dispensary Greenway Marijuana provides a diverse range of cannabis products catering to both recreational and medicinal purposes. Our well-trained Budtenders are dedicated to addressing your inquiries and assisting you in selecting the right products tailored to your individual requirements. Our extensive inventory encompasses various offerings, catering to varying budgetary considerations and preferences. Greenway Marijuana prides itself on fostering a contemporary, inviting environment where patrons can comfortably engage. We regularly feature promotions, flash sales, and discounted items. We eagerly anticipate the opportunity to extend our services to you and aspire to become your trusted destination for Cannabis and Cannabis needs.";
+import { getContentForRender, getContentValues } from "@/lib/cms/render-content";
 
 const mapEmbedUrl = `https://www.google.com/maps?q=${encodeURIComponent(greenwayBusiness.address.mapQuery)}&output=embed`;
+
+// A conservative email check: if the editable value looks like an address we
+// build a mailto: from it; otherwise we fall back to the shared business
+// mailto so the link stays valid no matter what staff type.
+function mailtoFor(email: string): string {
+  const trimmed = email.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+    ? `mailto:${trimmed}`
+    : greenwayBusiness.emailHref;
+}
 
 function MapPinIcon() {
   return (
@@ -36,11 +43,30 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 }
 
 export async function LocationsContent() {
-  // Editable from Admin → Site Content (locations.hero.*). Falls back to the
-  // bundled storefront asset so the live look never changes until staff edit.
+  // Editable from Admin → Site Content (locations.*). Every field falls back to
+  // the byte-identical shipped copy so the live look never changes until staff
+  // edit + publish. The actionable links (directions, tel:, mailto:, /menu) stay
+  // derived from the shared business record, so editing a display label never
+  // breaks a link or changes the real dialed number. The map iframe is not
+  // editable.
   const heroImage =
     (await getContentForRender("locations.hero.image"))?.trim() ||
     greenwayBusiness.assets.storefront;
+
+  // Batch the detail-row values in one round-trip. address/phone/hours are shown
+  // verbatim; email is shown verbatim and also drives a validated mailto:.
+  const details = await getContentValues([
+    "locations.details.address",
+    "locations.details.phone",
+    "locations.details.hours",
+    "locations.details.email",
+  ]);
+  const addressText = details["locations.details.address"] || greenwayBusiness.address.full;
+  const phoneText = details["locations.details.phone"] || greenwayBusiness.phone.display;
+  const hoursText = details["locations.details.hours"] || greenwayBusiness.hours.display;
+  const emailText = details["locations.details.email"] || greenwayBusiness.email;
+  const emailHref = mailtoFor(emailText);
+
   return (
     <section className="overflow-hidden bg-black text-white">
       <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-12 lg:px-10">
@@ -66,11 +92,11 @@ export async function LocationsContent() {
               <div className="mt-4 flex flex-col gap-2 text-sm font-black tracking-[0.08em] text-zinc-100 drop-shadow-lg sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 md:text-base">
                 <span className="inline-flex items-center gap-2 text-[var(--greenway)]">
                   <MapPinIcon />
-                  <span>Port Orchard, WA 98367</span>
+                  <SiteText blockKey="locations.hero.city" as="span" />
                 </span>
                 <span className="inline-flex items-center gap-2 text-[var(--orange)]">
                   <ClockIcon />
-                  <span>open Until 11:00 PM</span>
+                  <SiteText blockKey="locations.hero.hoursPill" as="span" />
                 </span>
               </div>
             </div>
@@ -81,24 +107,32 @@ export async function LocationsContent() {
       <div className="mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-14 lg:px-10 lg:py-16">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1fr)_27rem]">
           <article className="rounded-[1.35rem] border border-white/10 bg-zinc-950/92 p-5 shadow-2xl shadow-black/35 md:rounded-[2rem] md:p-8 lg:p-10">
-            <h2 className="text-center text-3xl font-black uppercase leading-tight tracking-tight text-[var(--orange)] md:text-5xl">
-              About Greenway Marijuana
-            </h2>
-            <p className="mt-6 text-base font-medium leading-8 text-zinc-300 md:mt-8 md:text-lg md:leading-9">
-              {aboutCopy}
-            </p>
+            <SiteText
+              blockKey="locations.about.heading"
+              as="h2"
+              className="text-center text-3xl font-black uppercase leading-tight tracking-tight text-[var(--orange)] md:text-5xl"
+            />
+            <SiteText
+              blockKey="locations.about.body"
+              as="p"
+              className="mt-6 text-base font-medium leading-8 text-zinc-300 md:mt-8 md:text-lg md:leading-9"
+            />
             <div className="mt-8 flex justify-start">
               <Link
                 href="/menu"
                 className="inline-flex min-h-14 items-center justify-center rounded-full bg-[var(--orange)] px-8 text-sm font-black uppercase tracking-[0.16em] text-black shadow-lg shadow-[var(--orange)]/20 transition hover:-translate-y-0.5 hover:bg-[var(--greenway)]"
               >
-                SHOP OUR MENU
+                <SiteText blockKey="locations.about.cta" as="span" />
               </Link>
             </div>
           </article>
 
           <aside className="rounded-[1.35rem] border border-white/10 bg-zinc-950/92 p-5 shadow-2xl shadow-black/35 md:rounded-[2rem] md:p-7 lg:p-8">
-            <h2 className="text-3xl font-black uppercase tracking-tight text-[var(--orange)] md:text-4xl">Store Details</h2>
+            <SiteText
+              blockKey="locations.details.heading"
+              as="h2"
+              className="text-3xl font-black uppercase tracking-tight text-[var(--orange)] md:text-4xl"
+            />
             <div className="mt-4 h-px w-full bg-[var(--greenway)]/65" />
 
             <div className="mt-2">
@@ -109,18 +143,18 @@ export async function LocationsContent() {
                   rel="noreferrer"
                   className="transition hover:text-[var(--greenway)]"
                 >
-                  {greenwayBusiness.address.full}
+                  {addressText}
                 </a>
               </DetailRow>
               <DetailRow label="Phone">
                 <a href={`tel:${greenwayBusiness.phone.tel}`} className="transition hover:text-[var(--greenway)]">
-                  {greenwayBusiness.phone.display}
+                  {phoneText}
                 </a>
               </DetailRow>
-              <DetailRow label="Hours">{greenwayBusiness.hours.display}</DetailRow>
+              <DetailRow label="Hours">{hoursText}</DetailRow>
               <DetailRow label="Email">
-                <a href={greenwayBusiness.emailHref} className="break-words transition hover:text-[var(--greenway)]">
-                  {greenwayBusiness.email}
+                <a href={emailHref} className="break-words transition hover:text-[var(--greenway)]">
+                  {emailText}
                 </a>
               </DetailRow>
             </div>
@@ -131,10 +165,17 @@ export async function LocationsContent() {
           <div className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950/92 shadow-2xl shadow-black/35 md:rounded-[2rem]">
             <div className="flex flex-col gap-4 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between md:p-7">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--greenway)]">Find Us</p>
-                <h2 id="location-map-title" className="mt-1 text-3xl font-black uppercase tracking-tight text-white md:text-4xl">
-                  Map & Directions
-                </h2>
+                <SiteText
+                  blockKey="locations.map.eyebrow"
+                  as="p"
+                  className="text-xs font-black uppercase tracking-[0.22em] text-[var(--greenway)]"
+                />
+                <SiteText
+                  blockKey="locations.map.heading"
+                  as="h2"
+                  id="location-map-title"
+                  className="mt-1 text-3xl font-black uppercase tracking-tight text-white md:text-4xl"
+                />
               </div>
               <a
                 href={greenwayBusiness.address.directionsUrl}
@@ -142,7 +183,7 @@ export async function LocationsContent() {
                 rel="noreferrer"
                 className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--greenway)] px-6 text-xs font-black uppercase tracking-[0.16em] text-black transition hover:bg-[var(--orange)]"
               >
-                Get Directions
+                <SiteText blockKey="locations.map.cta" as="span" />
               </a>
             </div>
             <iframe
