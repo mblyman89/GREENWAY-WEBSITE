@@ -11,6 +11,9 @@ import { listCatalogDrafts, countCatalogDrafts, loadStrainTypeSuggestions } from
 // SLICE 93: strain-type intelligence - the picker's honest placeholder + the
 // canonical dropdown choices (strain-taxonomy, the single source of truth).
 import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-core";
+// T-314: manual GPT-4o + live web search product/strain lookup on each row.
+import { AiLookupPanel } from "./AiLookupPanel";
+import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
@@ -120,6 +123,9 @@ export default async function CatalogDraftsPage({
   // parse). >=90% shows as "Keep auto" and submits no override; below the bar
   // it's an honest hint the approver can confirm or correct.
   const strainSuggestions = await loadStrainTypeSuggestions(drafts);
+
+  // T-314: is the AI lookup available? (soft-disables the panel when no key.)
+  const aiLookupEnabled = isAiConfigured;
 
   const banner =
     approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
@@ -421,6 +427,7 @@ export default async function CatalogDraftsPage({
                                     which also gap-fills the strain library so
                                     it auto-attaches on future lots. */}
                                 <Select
+                                  id={`strain-type-${d.id}`}
                                   name="strain_type"
                                   defaultValue=""
                                   className="w-48 text-xs"
@@ -437,6 +444,19 @@ export default async function CatalogDraftsPage({
                                       </option>
                                     ))}
                                 </Select>
+                                {/* T-314: manual GPT-4o + live web search lookup.
+                                    Prefilled with this row's name + brand; the
+                                    operator presses Search (never auto-run). A
+                                    >=90% result autofills the strain-type select
+                                    above; otherwise an honest "not found". Offers
+                                    a "Save to KB?" draft for owner approval. */}
+                                <AiLookupPanel
+                                  draftId={d.id}
+                                  productName={builtName ?? (d.name || "")}
+                                  vendorOrBrand={[d.brand_name, d.vendor_name].filter(Boolean).join(" ") || ""}
+                                  strainSelectId={`strain-type-${d.id}`}
+                                  aiEnabled={aiLookupEnabled}
+                                />
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[var(--admin-text-faint)]">$</span>

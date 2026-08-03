@@ -475,3 +475,219 @@ export async function* generateStream(opts: GenerateOptions): AsyncGenerator<str
     await record(opts.context, AI_MODEL, promptText, full, undefined, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// LIVE WEB SEARCH \u2014 GPT-4o with the OpenAI Responses API `web_search` tool.
+//
+// T-314 (AI product/strain lookup). This is the ONE place in the provider that
+// can reach the live internet: it uses OpenAI's hosted `web_search` tool via the
+// Responses API (`/responses`), NOT chat/completions. The model plans a search,
+// reads real pages, and returns an answer PLUS the source URLs it consulted.
+//
+// Design rules (standing rules honored):
+//  - ADDITIVE ONLY: does not touch the 5 chat/completions call sites above.
+//  - Pins a strong model explicitly (default gpt-4o) so the caller always gets
+//    "max, not lite" regardless of AI_MODE (the router would downshift heavy to
+//    the light model outside sprint mode; this feature must not be downshifted).
+//  - GRACEFUL FALLBACK: if the Responses API / web_search tool is unavailable
+//    (older key, proxy gateway, non-OpenAI base URL, HTTP error), we fall back
+//    to a plain gpt-4o chat completion using the model's built-in knowledge and
+//    return `usedWebSearch: false` + empty sources. The feature NEVER dies.
+//  - Budget-guarded + usage-logged like every other spend path.
+//
+// Server-only.
+// ---------------------------------------------------------------------------
+
+/** The strong model this feature pins (independent of the router's tier). */
+const AI_WEBSEARCH_MODEL =
+  process.env.AI_MODEL_HEAVY ?? process.env.OPENAI_MODEL_HEAVY ?? "gpt-4o";
+
+/** The model id the web-search lookup will use (for provenance in the UI). */
+export const aiWebSearchModelId = AI_WEBSEARCH_MODEL;
+
+export type WebSearchOptions = {
+  system: string;
+  user: string;
+  temperature?: number;
+  maxTokens?: number;
+  context?: AiContext;
+};
+
+export type WebSearchResult = {
+  /** The model's answer text (trimmed). */
+  text: string;
+  /** Real source URLs the model consulted (deduped, order preserved). May be []. */
+  sources: string[];
+  /** The model id that produced this. */
+  model: string;
+  /** True when the live web_search tool actually ran; false on fallback. */
+  usedWebSearch: boolean;
+};
+
+/**
+ * Extract source URLs from a Responses API payload. Sources appear as URL
+ * citation annotations on output_text content parts. We read them defensively
+ * (the exact nesting varies) and de-dupe while preserving first-seen order.
+ */
+function extractResponsesSources(payload: unknown): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const push = (u: unknown) => {
+    const url = typeof u === "string" ? u.trim() : "";
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    urls.push(url);
+  };
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    // URL citation annotation shape: { type: "url_citation", url: "..." }
+    if ((obj.type === "url_citation" || obj.type === "url") && typeof obj.url === "string") {
+      push(obj.url);
+    } else if (typeof obj.url === "string") {
+      push(obj.url);
+    }
+    for (const key of Object.keys(obj)) {
+      const v = obj[key];
+      if (v && typeof v === "object") walk(v);
+    }
+  };
+  walk(payload);
+  return urls;
+}
+
+/**
+ * Concatenate the assistant's output_text from a Responses API payload. Prefers
+ * the convenience `output_text` field when present, else walks output parts.
+ */
+function extractResponsesText(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const obj = payload as Record<string, unknown>;
+  if (typeof obj.output_text === "string" && obj.output_text.trim()) {
+    return obj.output_text.trim();
+  }
+  const parts: string[] = [];
+  const output = obj.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (!item || typeof item !== "object") continue;
+      const content = (item as Record<string, unknown>).content;
+      if (!Array.isArray(content)) continue;
+      for (const part of content) {
+        if (part && typeof part === "object") {
+          const p = part as Record<string, unknown>;
+          if (typeof p.text === "string") parts.push(p.text);
+        }
+      }
+    }
+  }
+  return parts.join("").trim();
+}
+
+/**
+ * Live internet lookup via GPT-4o + the OpenAI `web_search` tool.
+ *
+ * Returns the answer text, the real source URLs, the model id, and whether the
+ * live tool actually ran. On any failure of the Responses API path it falls
+ * back to a plain built-in-knowledge completion so the feature never dies.
+ *
+ * Throws AiNotConfiguredError when no key is set and AiBudgetExceededError when
+ * the owner's monthly cap is already reached (spend is refused, never silent).
+ */
+export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSearchResult> {
+  if (!isAiConfigured) throw new AiNotConfiguredError();
+
+  // Hard budget guard \u2014 never spend past the owner's cap.
+  const budget = await getBudgetStatus();
+  if (budget.blocked) throw new AiBudgetExceededError(budget.reason ?? "AI budget exceeded.");
+
+  const model = AI_WEBSEARCH_MODEL;
+  const promptText = `${opts.system}\n${opts.user}`;
+
+  // --- Primary path: Responses API with the hosted web_search tool. ---------
+  try {
+    const res = await fetch(`${AI_BASE_URL}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${AI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: opts.temperature ?? 0.3,
+        max_output_tokens: opts.maxTokens ?? 900,
+        tools: [{ type: "web_search" }],
+        input: [
+          { role: "system", content: opts.system },
+          { role: "user", content: opts.user },
+        ],
+      }),
+    });
+
+    if (res.ok) {
+      const payload = (await res.json()) as {
+        output_text?: string;
+        output?: unknown;
+        usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+      };
+      const text = extractResponsesText(payload);
+      const sources = extractResponsesSources(payload);
+      const usage: ChatUsage = {
+        prompt_tokens: payload.usage?.input_tokens,
+        completion_tokens: payload.usage?.output_tokens,
+        total_tokens: payload.usage?.total_tokens,
+      };
+      await record(
+        { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+        model,
+        promptText,
+        text,
+        usage,
+        true,
+      );
+      return { text, sources, model, usedWebSearch: true };
+    }
+
+    // Non-OK: log and fall through to the built-in-knowledge fallback.
+    await record(
+      { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+      model,
+      promptText,
+      "",
+      undefined,
+      false,
+      `web_search HTTP ${res.status} \u2014 falling back to built-in knowledge`,
+    );
+  } catch (err) {
+    if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
+    await record(
+      { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+      model,
+      promptText,
+      "",
+      undefined,
+      false,
+      `web_search error: ${String(err).slice(0, 160)} \u2014 falling back`,
+    );
+  }
+
+  // --- Fallback path: plain gpt-4o completion (built-in knowledge). ---------
+  // No live sources; usedWebSearch=false so the UI can be honest about it.
+  const { content, usage } = await chatRaw(model, opts.system, opts.user, {
+    temperature: opts.temperature ?? 0.3,
+    maxTokens: opts.maxTokens ?? 900,
+  });
+  await record(
+    { ...opts.context, feature: opts.context?.feature ?? "ai.websearch.fallback" },
+    model,
+    promptText,
+    content,
+    usage,
+    true,
+  );
+  return { text: content, sources: [], model, usedWebSearch: false };
+}

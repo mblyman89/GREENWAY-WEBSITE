@@ -1314,6 +1314,15 @@ export type UpsertStrainInput = {
   sources?: string[];
   confidence?: number | null;
   active?: boolean;
+  /**
+   * Review status: 'published' (default when omitted) or 'draft'. Set to
+   * 'draft' by the AI product-lookup "Save to KB?" flow (T-314) so a human
+   * approves before it auto-attaches to future lots. Written only when provided
+   * so pre-migration DBs (no status column) keep working.
+   */
+  status?: string | null;
+  /** Provenance: 'manual' | 'seed' | 'enrichment'. Written only when provided. */
+  source?: string | null;
 };
 
 /**
@@ -1330,28 +1339,30 @@ export async function upsertKbStrain(input: UpsertStrainInput, actorId: string |
       ? null
       : Math.max(0, Math.min(1, input.confidence));
   const admin = createSupabaseAdminClient();
-  const { error } = await admin.from("kb_strains").upsert(
-    {
-      slug,
-      name,
-      aliases: input.aliases ?? [],
-      strain_type: input.strain_type,
-      lineage: input.lineage ?? null,
-      aroma_notes: input.aroma_notes ?? [],
-      flavor_notes: input.flavor_notes ?? [],
-      terpenes: input.terpenes ?? [],
-      summary: input.summary ?? null,
-      dominant_cannabinoid: input.dominant_cannabinoid ?? null,
-      potency_note: input.potency_note ?? null,
-      bud_structure: input.bud_structure ?? null,
-      origin: input.origin ?? null,
-      sources: input.sources ?? [],
-      confidence: conf,
-      active: input.active ?? true,
-      updated_by: actorId,
-    },
-    { onConflict: "slug" },
-  );
+  const row: Record<string, unknown> = {
+    slug,
+    name,
+    aliases: input.aliases ?? [],
+    strain_type: input.strain_type,
+    lineage: input.lineage ?? null,
+    aroma_notes: input.aroma_notes ?? [],
+    flavor_notes: input.flavor_notes ?? [],
+    terpenes: input.terpenes ?? [],
+    summary: input.summary ?? null,
+    dominant_cannabinoid: input.dominant_cannabinoid ?? null,
+    potency_note: input.potency_note ?? null,
+    bud_structure: input.bud_structure ?? null,
+    origin: input.origin ?? null,
+    sources: input.sources ?? [],
+    confidence: conf,
+    active: input.active ?? true,
+    updated_by: actorId,
+  };
+  // Additive: only include provenance columns when the caller sets them, so
+  // existing callers and pre-migration DBs behave exactly as before.
+  if (input.status !== undefined && input.status !== null) row.status = input.status;
+  if (input.source !== undefined && input.source !== null) row.source = input.source;
+  const { error } = await admin.from("kb_strains").upsert(row, { onConflict: "slug" });
   if (error) throw new Error(error.message);
 }
 

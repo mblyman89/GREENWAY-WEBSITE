@@ -36,6 +36,11 @@ import { __runBlogContentCoreTests } from "../../src/lib/blog/blog-content-core"
 import { __runCoreValuesTests } from "../../src/lib/about/core-values-core";
 import { __runGlowCardCoreTests } from "../../src/lib/ui/glow-card-core";
 import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core";
+// product-lookup-core imports the server-only compliance module, so its
+// self-test is exercised via vitest (server-only aliased) + the parse core's
+// pure test below, not this server-only-free runner. See
+// tests/compliance/product-lookup-core.test.ts.
+import { __runProductLookupParseTests } from "../../src/lib/inventory/product-lookup-parse";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
@@ -495,6 +500,7 @@ async function main() {
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());
   assertNoFailures("site-background-core", __runSiteBackgroundTests());
+  assertNoFailures("product-lookup-parse", __runProductLookupParseTests());
   assertNoFailures("core-values-core", __runCoreValuesTests());
   console.log("ALL PURE SELF-TESTS PASSED");
 }
