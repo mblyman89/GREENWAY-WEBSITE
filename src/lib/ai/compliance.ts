@@ -197,8 +197,11 @@ export const ALLOWED_EFFECTS = [
   "energetic",
   "energizing",
   "motivated",
+  "productive",
   "tingly",
   "hungry",
+  "munchies",
+  "appetite",
   // Potency / character (experiential, per the compliance reference)
   "stoney",
   "potent",
