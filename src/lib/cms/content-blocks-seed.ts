@@ -523,6 +523,47 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "Founded on the belief that cannabis can enhance everyday life, we are dedicated to providing education, quality, and community.",
   },
+  // SLICE T-310: the rest of the About page copy is now owner-editable too.
+  // Listed in PAGE (reading) order after the hero; defaults are byte-identical
+  // to the shipped copy so the page is unchanged until a block is edited.
+  {
+    block_key: "about.intro.heading",
+    page: "about",
+    section: "intro",
+    label: "About — intro heading",
+    help_text: "The orange heading above the two intro paragraphs (currently “Your Most Trusted Cannabis Dispensary”).",
+    field_type: "plain",
+    defaultValue: "Your Most Trusted Cannabis Dispensary",
+  },
+  {
+    block_key: "about.intro.paragraph1",
+    page: "about",
+    section: "intro",
+    label: "About — intro paragraph 1",
+    help_text: "The first intro paragraph on the About page.",
+    field_type: "rich",
+    defaultValue:
+      "Visit Greenway Marijuana, the top Port Orchard dispensary, offering a wide range of high-quality cannabis for recreational and medicinal use. Our knowledgeable Budtenders are eager to help answer your questions and guide you toward the ideal strains, edibles, concentrates, and accessories that suit your specific needs and preferences. With a large selection that includes top-shelf flower, budget options, and everything in between, we serve all budgets at our friendly Port Orchard location.",
+  },
+  {
+    block_key: "about.intro.paragraph2",
+    page: "about",
+    section: "intro",
+    label: "About — intro paragraph 2",
+    help_text: "The second intro paragraph on the About page.",
+    field_type: "rich",
+    defaultValue:
+      "Enjoy a modern, welcoming environment at Greenway Marijuana, Port Orchard's preferred recreational marijuana store, perfect for comfortable browsing and expert advice. Benefit from our daily deals, flash sales, and special discounts on premium cannabis products. Visit us today and make Greenway Marijuana your trusted destination for all your cannabis and wellness needs.",
+  },
+  {
+    block_key: "about.values.heading",
+    page: "about",
+    section: "values",
+    label: "About — values heading",
+    help_text: "The heading above the core-values cards (currently “Our Values”).",
+    field_type: "plain",
+    defaultValue: "Our Values",
+  },
   // ---- Locations page (bespoke hero) ---------------------------------------
   {
     block_key: "locations.hero.title",

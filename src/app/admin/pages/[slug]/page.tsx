@@ -13,6 +13,12 @@ import {
 } from "@/lib/cms/page-sections-types";
 import { PageWordingCard } from "@/components/admin/PageWordingCard";
 import { PAGES_WITH_WORDING } from "@/lib/cms/page-wording-core";
+import { AboutCoreValuesCard } from "@/components/admin/AboutCoreValuesCard";
+import { getCoreValuesDoc } from "@/lib/about/core-values-store";
+import {
+  saveCoreValuesDraftAction,
+  publishCoreValuesAction,
+} from "../about-values-actions";
 import { listSections } from "@/lib/cms/page-sections-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
 import { HomeDisplaySettingsCard } from "@/components/admin/HomeDisplaySettingsCard";
@@ -89,6 +95,7 @@ export default async function PageBuilderPage({
   const config = PAGE_SECTION_CONFIG[slug];
   const isHome = slug === "home";
   const isFaq = slug === "faq";
+  const isAbout = slug === "about";
   // Home has three tabs (carousel | sections | typecards); FAQ has
   // (sections | qanda); other pages only show sections.
   let tab: "carousel" | "sections" | "qanda" | "typecards" = "sections";
@@ -129,6 +136,10 @@ export default async function PageBuilderPage({
   // preview" tab (MIG-7: Site Content retired). The carousel/home Preview link
   // points there (not the live website) per the owner's request.
   const previewHref = "/admin/website-sync?tab=preview";
+
+  // About page: load the owner-managed "Our Values" cards (single document,
+  // draft-aware). Falls back to the shipped four cards pre-migration/pre-seed.
+  const aboutValuesDoc = isAbout ? await getCoreValuesDoc() : null;
 
   return (
     <div>
@@ -236,6 +247,24 @@ export default async function PageBuilderPage({
         */}
         {PAGES_WITH_WORDING.has(slug) ? (
           <PageWordingCard slug={slug} previewPath={config.previewPath} />
+        ) : null}
+
+        {/*
+          About page: the "Our Values" cards get their own owner editor (add /
+          edit / delete / reorder, keeping their exact look). Uses migration
+          0149 (about_core_values) with a byte-identical pre-migration fallback,
+          so the section is unchanged until the owner edits + publishes.
+        */}
+        {isAbout && aboutValuesDoc ? (
+          <AboutCoreValuesCard
+            publishedValues={aboutValuesDoc.published}
+            draftValues={aboutValuesDoc.draft}
+            dirty={aboutValuesDoc.dirty}
+            isFallback={aboutValuesDoc.isFallback}
+            previewPath={config.previewPath}
+            saveAction={saveCoreValuesDraftAction}
+            publishAction={publishCoreValuesAction}
+          />
         ) : null}
 
         {isHome && tab === "carousel" ? (
