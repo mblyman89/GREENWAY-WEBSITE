@@ -37,52 +37,100 @@ function asTrimmedString(v: unknown): string | null {
 }
 
 /**
- * SLICE 100 — key-term scan over FLATTENED DOCUMENT TEXT (PDF payloads, email
- * bodies). The owner's rule: "look for key terms in the invoice — invoice
- * number, order number, etc. in its many forms". Every pattern is grounded in
- * a REAL document the owner's vendors actually send (never invented):
+ * SLICE 100 + PR-C — key-term scan over FLATTENED DOCUMENT TEXT (PDF payloads,
+ * email bodies). The owner's rule: "look for any and all things that could be
+ * an invoice # variant, then fall back to the manifest number". Every pattern
+ * is grounded in a REAL document the owner's vendors actually send (never
+ * invented; verified against /workspace/pdf_recon extracted text):
  *
  *   1. OpenTHC combined invoice-manifest: "Invoice #01KQ 7GS6 EXA3 DV5M" — a
  *      grouped ULID after "Invoice #" (same shape pdf-openthc-manifest-core
  *      reads); collapse the spacing to the canonical 16-char id.
- *   2. Plain labelled forms: "Invoice #: 123", "Invoice No. 123",
- *      "Invoice Number: 123", and the GrowFlow invoice header
- *      "Invoice Order #: 29127 Bill To: ..." — value AFTER the label. The
- *      capture must contain a digit so label-words that follow a valueless
- *      label are never mistaken for the number (Cultivera prints
- *      "Order #: Order Date:" — "Order"/"Date" must not match).
- *   3. Cultivera invoice as unpdf flattens it: "... July 14, 2026 24706Order #:"
+ *   2. PR-C — a TRUE "Invoice #/No/Number" value WINS over Order/PO. Firetree
+ *      (GrowFlow) prints BOTH "Order #: 15121" AND "Invoice #: INV-15121"; the
+ *      invoice number is the one that marries to the vendor's invoice, so it is
+ *      preferred. Value AFTER the label, id-guarded, dot-aware.
+ *   3. General Order / PO / Purchase-Order value AFTER label, dot-aware. VMI /
+ *      Grow Op Farms prints "Order #: WA.SO8EQH0C" — a dotted alphanumeric id
+ *      (the previous [A-Z0-9-] class dropped the dot and lost it). Scanned over
+ *      every occurrence so a valueless label ("Order #: Order Date:") falls
+ *      through (Cultivera / PNW).
+ *   4. Cultivera invoice as unpdf flattens it: "... July 14, 2026 24706Order #:"
  *      — the order number GLUES onto the FRONT of its own label with no space
  *      (verified on the real SPR invoice, pdf-cultivera-invoice-core fixture).
- *   4. Purchase-order labels ("PO #", "P.O. #", "Purchase Order #") — same
- *      digit-guarded value-after-label rule.
+ *   5. PR-C — value IMMEDIATELY BEFORE the label, space/newline separated. PNW
+ *      Consulting's two-column invoice, once unpdf flattens it, prints the
+ *      number ABOVE its label: "... July 14, 2026 22014 Order #: Order Date:".
+ *      Read the id token sitting right before "Order #"/"Invoice #", guarded
+ *      hard against dates / money / address fragments.
+ *
+ * An id "looks valid" when it contains a digit (22014, INV-15121, 990011) OR is
+ * an uppercase dotted-alphanumeric license-style id (VMI "WA.SO8EQH0C"). This
+ * keeps the old digit-guard intent (valueless labels never match) while now
+ * admitting the real dotted ids the owner's vendors send.
  *
  * "Manifest #:" is deliberately NOT a key term — a manifest id is only used
  * as the FALLBACK (invoiceNumberForRow), never presented as a found invoice #.
  */
+
+/**
+ * True when a captured token plausibly IS an invoice/order id (not a label
+ * word). It must contain a digit — /\d/.test(v) keeps the original digit guard
+ * so valueless labels ("Order #: Order Date:") never match — OR be an uppercase
+ * dotted-alphanumeric license-style id (VMI "WA.SO8EQH0C").
+ */
+function looksLikeInvoiceId(v: string): boolean {
+  return /\d/.test(v) || /^[A-Z]{2,}\.[A-Z0-9]{3,}$/.test(v);
+}
+
 export function extractInvoiceNumberFromText(text: string): string | null {
   if (!text) return null;
   const flat = text.replace(/\s+/g, " ").trim();
   if (flat.length === 0) return null;
 
+  // The id value is dot-aware: starts/ends alnum, may hold - and . internally
+  // (so VMI's "WA.SO8EQH0C" survives whole). Inline in each pattern below.
+
   // 1) OpenTHC grouped ULID right after "Invoice #" (3-5 groups of 4).
   const ulid = flat.match(
-    /Invoice\s*#\s*([0-9A-HJKMNP-TV-Z]{4}(?:\s+[0-9A-HJKMNP-TV-Z]{4}){2,4})/i,
+    /Invoice\s*#\s*([0-9A-HJKMNP-TV-Z]{4}(?:\s+[0-9A-HJKMNP-TV-Z]{4}){2,4})\b/i,
   );
   if (ulid) return ulid[1].replace(/\s+/g, "").toUpperCase();
 
-  // 2) Value AFTER a label, digit-guarded. Scan every occurrence so a
-  //    valueless label ("Order #: Order Date:") falls through to a later one.
-  const afterLabel =
-    /\b(?:Invoice|Order|P\.?\s?O\.?|Purchase\s+Order)\s*(?:#|No\.?|Number)\s*:?\s*([A-Z0-9][A-Z0-9-]{2,19})/gi;
-  for (const m of flat.matchAll(afterLabel)) {
+  // 2) PREFER a true "Invoice #/No/Number" value (id-guarded, dot-aware) so a
+  //    document with BOTH order # and invoice # yields the invoice # (Firetree
+  //    prints "Order #: 15121" AND "Invoice #: INV-15121" → INV-15121 wins).
+  const invoiceLabel =
+    /\bInvoice\s*(?:#|No\.?|Number)\s*:?\s*([A-Z0-9](?:[A-Z0-9.-]{1,18}[A-Z0-9])?)/gi;
+  for (const m of flat.matchAll(invoiceLabel)) {
     const v = m[1].trim();
-    if (/\d/.test(v)) return v;
+    if (looksLikeInvoiceId(v)) return v;
   }
 
-  // 3) Cultivera glue: digits welded directly onto the FRONT of "Order #".
+  // 3) General Order / PO / Purchase-Order value AFTER label (dot-aware). Scan
+  //    every occurrence so a valueless label ("Order #: Order Date:") falls
+  //    through to a later one. VMI: "Order #: WA.SO8EQH0C".
+  const afterLabel =
+    /\b(?:Order|P\.?\s?O\.?|Purchase\s+Order)\s*(?:#|No\.?|Number)\s*:?\s*([A-Z0-9](?:[A-Z0-9.-]{1,18}[A-Z0-9])?)/gi;
+  for (const m of flat.matchAll(afterLabel)) {
+    const v = m[1].trim();
+    if (looksLikeInvoiceId(v)) return v;
+  }
+
+  // 4) Cultivera glue: digits welded directly onto the FRONT of "Order #".
   const glued = flat.match(/(\d{3,12})Order\s*#/i);
   if (glued) return glued[1];
+
+  // 5) PR-C — value IMMEDIATELY BEFORE the label (PNW two-column flatten prints
+  //    "... July 14, 2026 22014 Order #: Order Date: ..."). Guard against a bare
+  //    year so a date preceding the label is never captured.
+  const beforeLabel = flat.match(
+    /([A-Z0-9](?:[A-Z0-9.-]{1,18}[A-Z0-9])?)\s+(?:Invoice|Order)\s*#/i,
+  );
+  if (beforeLabel) {
+    const v = beforeLabel[1].trim();
+    if (looksLikeInvoiceId(v) && !/^(?:19|20)\d{2}$/.test(v)) return v;
+  }
 
   return null;
 }
