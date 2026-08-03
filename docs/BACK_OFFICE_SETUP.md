@@ -62,6 +62,13 @@ LLAMA_CLOUD_API_KEY=llx-...your key...
   roughly 5–6% of it, so it stays free. If the key is missing the intake still
   works — it simply skips vision parsing and never hard-fails.
 
+Once the key is set, vision recovery runs **automatically the moment the
+fetcher pulls an email**. It is *free‑first*: a normal PDF (with a text layer)
+uses the built‑in reader and spends **zero** credits; LlamaParse only runs when
+that reader comes back blank (a scanned image). The recovered text feeds the
+existing readers, so the **Invoice #** column auto‑fills and the transport and
+vendor details populate — priority invoice → transport → vendor.
+
 ## 6. First login (become the Owner)
 1. Visit `/admin/login`.
 2. Use **"Email me a sign-in link"** with your bootstrap email.

@@ -40,6 +40,51 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
   return "";
 }
 
+/**
+ * LlamaParse PR-2 — OPTIONAL vision-OCR text recovery, supplied by the caller.
+ *
+ * unpdf (above) is TEXT-ONLY: a scanned-image PDF (a photo of a paper manifest)
+ * has no text layer, so unpdf returns "" and every downstream layout parser,
+ * the live Invoice # scanner and the transport/vendor readers are starved. The
+ * owner's real, recurring failure.
+ *
+ * Rather than hard-wire the LlamaParse provider here (which would create an
+ * import cycle — the provider imports THIS file for its own outage fallback),
+ * we accept a recovery function by DEPENDENCY INJECTION. The caller that lives
+ * next to the provider (inbound-store) passes it in. When unpdf yields no text
+ * AND a recovery function is provided, we ask it to read the SAME bytes; if it
+ * returns text, parsing continues through the exact same layout parsers below.
+ *
+ * Returns "" on any failure so recovery can NEVER make things worse than today.
+ */
+export type PdfTextRecovery = (bytes: Uint8Array) => Promise<string>;
+
+/**
+ * Get PDF text: try unpdf first (fast + free), and only when it comes back
+ * blank fall back to the injected recovery function (LlamaParse in production).
+ * This is "free-first, vision only when needed" — a PDF that already has a text
+ * layer never spends a LlamaParse credit. Never throws.
+ */
+async function extractPdfTextWithRecovery(
+  bytes: Uint8Array,
+  recoverText?: PdfTextRecovery,
+): Promise<string> {
+  let text = "";
+  try {
+    text = await extractPdfText(bytes);
+  } catch {
+    text = "";
+  }
+  if (text.trim()) return text;
+  if (!recoverText) return text; // no recovery available → today's behavior
+  try {
+    const recovered = await recoverText(bytes);
+    return typeof recovered === "string" ? recovered : "";
+  } catch {
+    return "";
+  }
+}
+
 export type PdfManifestResult =
   | { ok: true; manifest: ParsedManifest; text: string }
   | { ok: false; error: string; text: string | null };
@@ -49,18 +94,12 @@ export type PdfManifestResult =
  * Returns a structured result so callers can surface a precise reason on failure
  * (not a manifest / no line items / unreadable PDF).
  */
-export async function parsePdfManifest(bytes: Uint8Array): Promise<PdfManifestResult> {
-  let text: string;
-  try {
-    text = await extractPdfText(bytes);
-  } catch {
-    return {
-      ok: false,
-      error:
-        "Could not read the PDF. If it is a scanned image (a photo of a paper manifest) rather than a text PDF, it can't be parsed automatically.",
-      text: null,
-    };
-  }
+export async function parsePdfManifest(
+  bytes: Uint8Array,
+  recoverText?: PdfTextRecovery,
+): Promise<PdfManifestResult> {
+  // unpdf first (free); LlamaParse recovery only when unpdf yields nothing.
+  const text = await extractPdfTextWithRecovery(bytes, recoverText);
 
   if (!text.trim()) {
     return {
@@ -125,14 +164,17 @@ export async function parsePdfManifest(bytes: Uint8Array): Promise<PdfManifestRe
 }
 
 /** Convenience: parse from a base64 string (as inbound-email attachments store). */
-export async function parsePdfManifestFromBase64(base64: string): Promise<PdfManifestResult> {
+export async function parsePdfManifestFromBase64(
+  base64: string,
+  recoverText?: PdfTextRecovery,
+): Promise<PdfManifestResult> {
   let bytes: Uint8Array;
   try {
     bytes = new Uint8Array(Buffer.from(base64, "base64"));
   } catch {
     return { ok: false, error: "Attachment was not valid base64.", text: null };
   }
-  return parsePdfManifest(bytes);
+  return parsePdfManifest(bytes, recoverText);
 }
 
 /** COA parse result (H16b-4/-5). ParsedCoaSummary carries byLot/expiresByLot. */
@@ -145,19 +187,18 @@ export type PdfCoaResult =
  * the Lot -> ParsedLab enrichment map so the wiring can merge potency/PASS/
  * expiry onto the manifest's lines by Lot ID. Never throws.
  */
-export async function parseCoaFromBase64(base64: string): Promise<PdfCoaResult> {
+export async function parseCoaFromBase64(
+  base64: string,
+  recoverText?: PdfTextRecovery,
+): Promise<PdfCoaResult> {
   let bytes: Uint8Array;
   try {
     bytes = new Uint8Array(Buffer.from(base64, "base64"));
   } catch {
     return { ok: false, error: "Attachment was not valid base64.", text: null };
   }
-  let text: string;
-  try {
-    text = await extractPdfText(bytes);
-  } catch {
-    return { ok: false, error: "Could not read the COA PDF (likely a scanned image).", text: null };
-  }
+  // unpdf first (free); LlamaParse recovery only when a scanned COA has no text.
+  const text = await extractPdfTextWithRecovery(bytes, recoverText);
   if (!text.trim()) {
     return { ok: false, error: "The COA PDF has no extractable text.", text: "" };
   }
