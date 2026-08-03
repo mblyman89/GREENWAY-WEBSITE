@@ -35,6 +35,7 @@ import { __runCanvaCoreTests } from "../../src/lib/marketing/canva-core";
 import { __runBlogContentCoreTests } from "../../src/lib/blog/blog-content-core";
 import { __runCoreValuesTests } from "../../src/lib/about/core-values-core";
 import { __runGlowCardCoreTests } from "../../src/lib/ui/glow-card-core";
+import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
@@ -493,6 +494,7 @@ async function main() {
   assertNoFailures("canva-core", __runCanvaCoreTests());
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());
+  assertNoFailures("site-background-core", __runSiteBackgroundTests());
   assertNoFailures("core-values-core", __runCoreValuesTests());
   console.log("ALL PURE SELF-TESTS PASSED");
 }

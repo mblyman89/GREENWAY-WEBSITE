@@ -57,7 +57,7 @@ export function HomeBrands({
   }, [vendors, shuffle, LIMIT]);
 
   return (
-    <section id="shop-by-brand" className="bg-black px-4 py-6 md:px-8 md:py-8" aria-label="Shop by brand">
+    <section id="shop-by-brand" className="px-4 py-6 md:px-8 md:py-8" aria-label="Shop by brand">
       <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
         <SectionBanner
           imageSrc={content?.brandImage || "/home/brand-banner.webp"}

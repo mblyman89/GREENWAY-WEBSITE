@@ -68,7 +68,7 @@ export async function LocationsContent() {
   const emailHref = mailtoFor(emailText);
 
   return (
-    <section className="overflow-hidden bg-black text-white">
+    <section className="overflow-hidden text-white">
       <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-12 lg:px-10">
         <div className="relative min-h-[19rem] overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:min-h-[27rem] md:rounded-[2rem] lg:min-h-[31rem]">
           <Image

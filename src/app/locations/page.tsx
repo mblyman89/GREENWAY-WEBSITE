@@ -1,6 +1,7 @@
 import { LocationsContent } from "@/components/location/LocationsContent";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
+import { SiteBackground } from "@/components/site/SiteBackground";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { greenwayBusiness } from "@/content/business";
@@ -15,7 +16,8 @@ export const metadata = pageMetadata({
 
 export default function LocationsPage() {
   return (
-    <main id="top" className="min-h-screen bg-black text-white">
+    <main id="top" className="min-h-screen text-white">
+      <SiteBackground />
       <JsonLd data={storeSchema()} id="locations" />
       <Header />
       <Breadcrumbs items={[{ label: "Location", href: "/locations" }]} />

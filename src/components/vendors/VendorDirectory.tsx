@@ -168,7 +168,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
   const outreachSubject = content?.outreachSubject || VENDOR_OUTREACH_SUBJECT;
 
   return (
-    <div className="bg-black px-4 py-6 text-white md:px-8 md:py-8">
+    <div className="px-4 py-6 text-white md:px-8 md:py-8">
       <div className="mx-auto max-w-[88rem] space-y-6 md:space-y-8">
         {/* Hero banner 1 — wide + short, premium art, professional copy.
             Driven by the Pages builder (vendors.grow) when present, else the
