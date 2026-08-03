@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { BlogPost } from "@/lib/blog/posts";
 import { formatBlogDate } from "@/lib/blog/format-date";
 import { resolveTitleStyle } from "@/lib/blog/title-style";
+import { blogCategoryGlowTone, glowCardStyle } from "@/lib/ui/glow-card-core";
 
 const categoryStyles: Record<BlogPost["category"], string> = {
   PRODUCTS: "border-[var(--greenway)]/45 bg-[var(--greenway)] text-black",
@@ -17,6 +18,40 @@ type BlogCardProps = {
   readMoreLabel?: string;
 };
 
+/**
+ * The shared card shell classes. The signature edge-lit glow comes from the
+ * inline glowCardStyle(tone) (reused from src/lib/ui/glow-card-core.ts, the same
+ * recipe as the product / vendor / specials cards). On hover the card keeps its
+ * existing slight lift, and `group-hover:brightness-110` makes the whole glow
+ * (radial edges + strips) read brighter. The image zoom lives on the <Image>.
+ */
+const CARD_SHELL_CLASS =
+  "group relative isolate flex min-h-[38rem] flex-col overflow-hidden rounded-[1.7rem] border transition duration-300 hover:-translate-y-1 group-hover:brightness-110 hover:brightness-110 md:min-h-[43rem]";
+
+/** The three shared "glow strips" (left / right verticals + soft bottom line),
+ *  colored from the tone and brightened on hover. */
+function GlowStrips({ left, right }: { left: string; right: string }) {
+  return (
+    <>
+      <span
+        className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px] transition duration-300 group-hover:opacity-100"
+        style={{ background: left }}
+        aria-hidden="true"
+      />
+      <span
+        className="pointer-events-none absolute -right-px top-[31%] h-[46%] w-px opacity-90 blur-[1px] transition duration-300 group-hover:opacity-100"
+        style={{ background: right }}
+        aria-hidden="true"
+      />
+      <span
+        className="pointer-events-none absolute inset-x-7 -bottom-px h-px opacity-70 blur-[1px] transition duration-300 group-hover:opacity-100"
+        style={{ background: right }}
+        aria-hidden="true"
+      />
+    </>
+  );
+}
+
 export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
   const isNewsletter = post.kind === "newsletter";
   const buttonLabel = readMoreLabel?.trim() || "Read article";
@@ -26,11 +61,14 @@ export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
   // newsletter has no PDF yet.
   const newsletterPdf = post.newsletter?.pdfSrc?.trim();
   const titleStyle = resolveTitleStyle(post.titleStyle, "card");
+  // The signature glow, colored to match this card's category pill.
+  const tone = blogCategoryGlowTone(post.category);
 
   if (isNewsletter) {
     return (
-      <article className="group flex min-h-[38rem] flex-col overflow-hidden rounded-[1.7rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/35 transition duration-300 hover:-translate-y-1 hover:border-[var(--orange)]/55 md:min-h-[43rem]">
-        <div className="relative flex-1 overflow-hidden bg-white">
+      <article className={CARD_SHELL_CLASS} style={glowCardStyle(tone)}>
+        <GlowStrips left={tone.glowLeft} right={tone.glowRight} />
+        <div className="relative z-10 flex-1 overflow-hidden bg-white">
           <Image
             src={post.image.src}
             alt={post.image.alt}
@@ -44,7 +82,7 @@ export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
           </span>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-white/10 bg-zinc-950 p-5 md:p-6">
+        <div className="relative z-10 flex items-center justify-between gap-4 border-t border-white/10 p-5 md:p-6">
           <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-zinc-300">
             {dateText}
           </p>
@@ -71,8 +109,9 @@ export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
   }
 
   return (
-    <article className="group flex min-h-[38rem] flex-col overflow-hidden rounded-[1.7rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/35 transition duration-300 hover:-translate-y-1 hover:border-[var(--orange)]/55 md:min-h-[43rem]">
-      <div className="relative aspect-[1.16/1] min-h-72 overflow-hidden bg-zinc-900 md:min-h-80">
+    <article className={CARD_SHELL_CLASS} style={glowCardStyle(tone)}>
+      <GlowStrips left={tone.glowLeft} right={tone.glowRight} />
+      <div className="relative z-10 aspect-[1.16/1] min-h-72 overflow-hidden md:min-h-80">
         <Image
           src={post.image.src}
           alt={post.image.alt}
@@ -87,7 +126,7 @@ export function BlogCard({ post, readMoreLabel }: BlogCardProps) {
         </span>
       </div>
 
-      <div className="flex flex-1 flex-col p-5 md:p-6">
+      <div className="relative z-10 flex flex-1 flex-col p-5 md:p-6">
         <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-zinc-500">
           {dateText}
         </p>
