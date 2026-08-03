@@ -122,6 +122,76 @@ export function glowToneByIndex(index: number): GlowTone {
 }
 
 /**
+ * SLICE T-312: blog / newsletter card glow tones.
+ *
+ * Unlike vendor / specials cards (which cycle GLOW_TONES for variety), a blog
+ * card has an INTRINSIC color: its category pill. So each category maps to a
+ * fixed single-color glow tone whose color MATCHES that pill, giving the card
+ * our signature edge-lit glow in its own type color:
+ *
+ *   PRODUCTS  -> greenway green  (pill: var(--greenway))
+ *   DEALS     -> orange          (pill: var(--orange))
+ *   CULTURE   -> indica blue     (pill stays WHITE; glow is our indica blue)
+ *   NEWSLETTER-> gold / yellow   (pill: var(--gold))
+ *
+ * The green / orange / gold glow rgba values are byte-identical to the ones the
+ * product + vendor cards already use for those hues (see GLOW_TONES and
+ * ProductCardVisual cardTones), and the CULTURE blue is byte-identical to the
+ * product card's `indica` glow (rgba(84,153,184,0.95) / rgba(116,184,214,0.34)),
+ * so the whole site reads as one glowing family. The self-tests pin these exact
+ * strings so a future edit can't drift one category away from the others.
+ */
+export type BlogGlowCategory = "PRODUCTS" | "DEALS" | "CULTURE" | "NEWSLETTER";
+
+export const BLOG_CATEGORY_GLOW_TONES: Record<BlogGlowCategory, GlowTone> = {
+  // Greenway green (matches the PRODUCTS pill).
+  PRODUCTS: {
+    border: "#4f8f5a",
+    glowLeft: "rgba(79,143,90,0.95)",
+    glowSoftLeft: "rgba(126,184,127,0.34)",
+    glowRight: "rgba(79,143,90,0.95)",
+    glowSoftRight: "rgba(126,184,127,0.34)",
+    panel: "rgba(15,28,18,0.76)",
+  },
+  // Orange (matches the DEALS pill + the brand accent buttons).
+  DEALS: {
+    border: "#b46f34",
+    glowLeft: "rgba(217,117,39,0.92)",
+    glowSoftLeft: "rgba(255,151,53,0.34)",
+    glowRight: "rgba(217,117,39,0.92)",
+    glowSoftRight: "rgba(255,151,53,0.34)",
+    panel: "rgba(42,25,13,0.72)",
+  },
+  // Indica blue (our indica glow) - the CULTURE pill stays WHITE.
+  CULTURE: {
+    border: "#5499b8",
+    glowLeft: "rgba(84,153,184,0.95)",
+    glowSoftLeft: "rgba(116,184,214,0.34)",
+    glowRight: "rgba(84,153,184,0.95)",
+    glowSoftRight: "rgba(116,184,214,0.34)",
+    panel: "rgba(11,26,34,0.75)",
+  },
+  // Gold / yellow (matches the NEWSLETTER pill).
+  NEWSLETTER: {
+    border: "#b0863d",
+    glowLeft: "rgba(217,180,39,0.92)",
+    glowSoftLeft: "rgba(255,215,53,0.34)",
+    glowRight: "rgba(217,180,39,0.92)",
+    glowSoftRight: "rgba(255,215,53,0.34)",
+    panel: "rgba(34,29,13,0.74)",
+  },
+};
+
+/** The glow tone for a blog category (defaults to the CULTURE blue if a future
+ *  category slips through un-mapped, so a card can never render un-glowed). */
+export function blogCategoryGlowTone(category: string): GlowTone {
+  return (
+    BLOG_CATEGORY_GLOW_TONES[category as BlogGlowCategory] ??
+    BLOG_CATEGORY_GLOW_TONES.CULTURE
+  );
+}
+
+/**
  * Self-tests. These PIN the exact emitted style strings so no future edit can
  * silently drift one card family's glow away from the others.
  */
@@ -198,6 +268,45 @@ export function runGlowCardCoreSelfTests(): string[] {
   check(glowToneByIndex(4) === GLOW_TONES[0], "index 4 wraps -> tone 0");
   check(glowToneByIndex(5) === GLOW_TONES[1], "index 5 wraps -> tone 1");
   check(glowToneByIndex(-1) === GLOW_TONES[3], "negative index wraps into range");
+
+  // SLICE T-312: blog category glow tones are pinned + match their pill colors.
+  check(
+    Object.keys(BLOG_CATEGORY_GLOW_TONES).sort().join(",") ===
+      "CULTURE,DEALS,NEWSLETTER,PRODUCTS",
+    "blog glow: exactly the four categories are mapped",
+  );
+  check(
+    BLOG_CATEGORY_GLOW_TONES.PRODUCTS.glowLeft === "rgba(79,143,90,0.95)" &&
+      BLOG_CATEGORY_GLOW_TONES.PRODUCTS.glowLeft ===
+        BLOG_CATEGORY_GLOW_TONES.PRODUCTS.glowRight,
+    "blog glow: PRODUCTS is the greenway green (single color)",
+  );
+  check(
+    BLOG_CATEGORY_GLOW_TONES.DEALS.glowLeft === "rgba(217,117,39,0.92)" &&
+      BLOG_CATEGORY_GLOW_TONES.DEALS.glowLeft ===
+        BLOG_CATEGORY_GLOW_TONES.DEALS.glowRight,
+    "blog glow: DEALS is the brand orange (single color)",
+  );
+  check(
+    BLOG_CATEGORY_GLOW_TONES.CULTURE.glowLeft === "rgba(84,153,184,0.95)" &&
+      BLOG_CATEGORY_GLOW_TONES.CULTURE.glowSoftLeft === "rgba(116,184,214,0.34)",
+    "blog glow: CULTURE is the indica blue (byte-identical to the product card indica glow)",
+  );
+  check(
+    BLOG_CATEGORY_GLOW_TONES.NEWSLETTER.glowLeft === "rgba(217,180,39,0.92)" &&
+      BLOG_CATEGORY_GLOW_TONES.NEWSLETTER.glowLeft ===
+        BLOG_CATEGORY_GLOW_TONES.NEWSLETTER.glowRight,
+    "blog glow: NEWSLETTER is the gold/yellow (single color)",
+  );
+  check(
+    blogCategoryGlowTone("PRODUCTS") === BLOG_CATEGORY_GLOW_TONES.PRODUCTS &&
+      blogCategoryGlowTone("CULTURE") === BLOG_CATEGORY_GLOW_TONES.CULTURE,
+    "blog glow: accessor returns the mapped tone",
+  );
+  check(
+    blogCategoryGlowTone("SOMETHING_NEW") === BLOG_CATEGORY_GLOW_TONES.CULTURE,
+    "blog glow: unknown category falls back to a real tone (never un-glowed)",
+  );
 
   return failures;
 }
