@@ -35,7 +35,8 @@
  *     - width/height integers >= 64 (multiples of 16 preferred, <= ~4 MP)
  *     - `disable_pup` (default false): prompt upsampling is ON BY DEFAULT;
  *       set true to use the prompt exactly as written
- *     - safety_tolerance 0..5 (default 2)
+ *     - safety_tolerance 0..5 (BFL default 2; WE default to the max 5 =
+ *       most permissive, so cannabis imagery isn't false-flagged by the API)
  *     - output_format: jpeg (default) | png | webp
  *     - input_image .. input_image_8 (up to 8 references)
  *   flux-2-flex:
@@ -241,10 +242,17 @@ export function buildFluxRequest(
     warnings.push("Midjourney-only settings (stylize, chaos, weird, niji, raw) do not apply to FLUX and were ignored.");
   }
 
+  // Verified ranges: 0..5 on FLUX 2 endpoints, 0..6 on legacy Kontext. HIGHER
+  // is MORE permissive. Owner (Greenway) requires cannabis imagery, which BFL's
+  // default (2) over-blocks via the API even though the same prompts pass on the
+  // BFL website. We therefore DEFAULT to the endpoint's MAXIMUM tolerance (the
+  // most permissive setting the API allows) so legitimate cannabis marketing
+  // isn't false-flagged. An explicit caller value still wins and is clamped to
+  // the endpoint's real ceiling, so an out-of-range value can never be sent.
+  const maxTolerance = family === "kontext" ? 6 : 5;
   const request: FluxRequest = {
     prompt,
-    // Verified ranges: 0..5 on FLUX 2 endpoints, 0..6 on legacy Kontext.
-    safety_tolerance: clampInt(opts?.safetyTolerance, 0, family === "kontext" ? 6 : 5, 2),
+    safety_tolerance: clampInt(opts?.safetyTolerance, 0, maxTolerance, maxTolerance),
     output_format:
       opts?.outputFormat === "jpeg" || opts?.outputFormat === "webp" ? opts.outputFormat : "png",
   };
@@ -474,7 +482,7 @@ export function __runFluxCoreTests(): string {
     ok(built.request.width === 1728 && built.request.height === 1152, "3:2 dims applied");
     ok(built.request.seed === 42, "seed carried");
     ok(built.request.output_format === "png", "default png");
-    ok(built.request.safety_tolerance === 2, "default safety tolerance");
+    ok(built.request.safety_tolerance === 5, "default safety tolerance = max (most permissive)");
     ok(built.request.disable_pup === undefined, "upsampling default (on) emits no field");
     ok(built.request.prompt_upsampling === undefined, "no prompt_upsampling on max");
     ok(built.warnings.some((w) => w.includes("stylize")), "warns about MJ-only knobs");
