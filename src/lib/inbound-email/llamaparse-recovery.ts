@@ -48,3 +48,56 @@ export const llamaParseRecoverText: PdfTextRecovery = async (bytes) => {
     return "";
   }
 };
+
+/**
+ * PR-A (observability): the same recovery, but it REMEMBERS which engine won
+ * and why, so the intake can log ONE authoritative ai_usage row tagged to the
+ * staged manifest (entity_id = manifest_number) once the number is known.
+ *
+ * Returns a `PdfTextRecovery` closure PLUS `lastOutcome()`, which reports the
+ * most recent parse's engine ("llamaparse" | "unpdf" | "none"), ok flag and the
+ * honest error note. The captured outcome reflects the LAST call — the intake
+ * uses one capturer per manifest so the record maps 1:1. Never throws.
+ */
+export type RecoveryOutcome = {
+  engine: "llamaparse" | "unpdf" | "none";
+  ok: boolean;
+  error: string | null;
+  note: string | null;
+};
+
+export type CapturingRecovery = {
+  /** Inject this into pdf-extract's parse* helpers. */
+  recover: PdfTextRecovery;
+  /** The most recent parse's engine/outcome (null until the first call). */
+  lastOutcome: () => RecoveryOutcome | null;
+};
+
+export function makeCapturingRecovery(): CapturingRecovery {
+  let last: RecoveryOutcome | null = null;
+  const recover: PdfTextRecovery = async (bytes) => {
+    try {
+      const outcome = await parsePdfWithFallback(
+        bytes,
+        { filename: "intake.pdf" },
+        { feature: "llamaparse-intake" },
+      );
+      last = {
+        engine: outcome.via,
+        ok: outcome.ok && outcome.via === "llamaparse",
+        error: outcome.error,
+        note: outcome.note,
+      };
+      return outcome.ok ? outcome.text : "";
+    } catch (err) {
+      last = {
+        engine: "none",
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+        note: null,
+      };
+      return "";
+    }
+  };
+  return { recover, lastOutcome: () => last };
+}

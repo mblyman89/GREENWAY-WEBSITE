@@ -59,7 +59,8 @@ function pdfRoleRank(role: AttachmentRole): number {
   }
 }
 import { parsePdfManifestFromBase64, parseCoaFromBase64 } from "@/lib/inventory/pdf-extract";
-import { llamaParseRecoverText } from "@/lib/inbound-email/llamaparse-recovery";
+import { llamaParseRecoverText, makeCapturingRecovery } from "@/lib/inbound-email/llamaparse-recovery";
+import { recordManifestParseStatus } from "@/lib/inbound-email/llamaparse-status-server";
 import {
   mergeInvoicePricesByLot,
   mergeCoaByLot,
@@ -444,6 +445,9 @@ export async function stageManifestsFromEmail(
     const invoiceParses: ParsedManifest[] = [];
     let sawManifestRolePdf = false;
     let manifestRoleParseFailed = false;
+    // PR-A: track the capturing recovery for the first (primary) PDF so we can
+    // record its engine/outcome against the staged manifest number.
+    let primaryPdfCap: ReturnType<typeof makeCapturingRecovery> | null = null;
 
     for (const att of rankedPdfs) {
       const role = classifyAttachmentRole(att);
@@ -452,9 +456,12 @@ export async function stageManifestsFromEmail(
       // PR-2: same vision-OCR recovery on the PDF-primary staging path so a
       // scanned manifest still stages (and its text becomes raw_payload, which
       // the live Invoice # scanner reads).
+      // PR-A: capture which engine won so we can record a manifest-tagged
+      // parse-status row once the primary manifest is staged (below).
+      const primaryCap = makeCapturingRecovery();
       const parsed = await parsePdfManifestFromBase64(
         att.base64 as string,
-        llamaParseRecoverText,
+        primaryCap.recover,
       );
       if (!parsed.ok) {
         if (role === "manifest") {
@@ -465,6 +472,7 @@ export async function stageManifestsFromEmail(
       }
       if (!primary) {
         primary = { manifest: parsed.manifest, text: parsed.text };
+        primaryPdfCap = primaryCap; // PR-A: this capturer maps to the primary manifest
       } else {
         // A second manifest-capable PDF: keep OpenTHC invoices as price donors.
         invoiceParses.push(parsed.manifest);
@@ -507,6 +515,13 @@ export async function stageManifestsFromEmail(
       if (staged.ok) {
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);
+        // PR-A: record which engine read this manifest (llama / FB) so the
+        // intake table badge + detail statement can show it. Best-effort.
+        await recordManifestParseStatus(
+          merged.manifest_number,
+          primaryPdfCap?.lastOutcome() ?? null,
+          { actorId },
+        );
         // SLICE 69: archive EVERY document the email carried (see JSON path).
         try {
           await archiveManifestDocuments(staged.manifestId, email.attachments, "email");

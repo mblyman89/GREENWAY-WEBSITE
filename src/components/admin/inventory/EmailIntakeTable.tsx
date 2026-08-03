@@ -30,6 +30,7 @@ import {
   fmtPulledIn,
 } from "@/lib/inventory/manifest-table-core";
 import { CONCIERGE_HINTS } from "@/lib/inventory/guided-accept-core";
+import type { ParseStatus } from "@/lib/inbound-email/llamaparse-status-core";
 
 export type ManifestDownloadLinks = {
   manifestUrl: string | null;
@@ -55,12 +56,18 @@ export function EmailIntakeTable({
   rows,
   linksByManifestId,
   docsByManifestId,
+  parseStatusByManifest,
   view = "action",
   processedCount = 0,
 }: {
   rows: InboundManifest[];
   /** manifest id → download links pulled from the email fetch trail. */
   linksByManifestId: Map<string, ManifestDownloadLinks>;
+  /**
+   * PR-A: manifest_number → document-AI parse status. Drives the compact "AI"
+   * column ("llama" green = vision read it, "FB" amber = fell back/failed).
+   */
+  parseStatusByManifest?: Map<string, ParseStatus>;
   /**
    * SLICE 69: manifest id → OUR archived copies of every document the email
    * carried (signed URLs, private bucket). Preferred over the vendor's links,
@@ -135,6 +142,12 @@ export function EmailIntakeTable({
                 <th className="cursor-help px-4 py-3" title={CONCIERGE_HINTS.invoice_number}>
                   Invoice #
                 </th>
+                <th
+                  className="cursor-help px-4 py-3 text-center"
+                  title="Document AI: 'llama' = LlamaParse vision read this manifest; 'FB' = it fell back to basic text or could not run (open the row for the reason)."
+                >
+                  AI
+                </th>
                 <th className="px-4 py-3">Vendor</th>
                 <th className="cursor-help px-4 py-3" title="When the email landed in vendor_intake@ and the system staged this draft.">
                   Pulled in
@@ -169,6 +182,32 @@ export function EmailIntakeTable({
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">{invoiceNo ?? "—"}</td>
+                    <td className="px-4 py-3 text-center">
+                      {(() => {
+                        const ps = m.manifest_number
+                          ? parseStatusByManifest?.get(m.manifest_number)
+                          : undefined;
+                        if (!ps) {
+                          return (
+                            <span
+                              className="text-[var(--admin-text-faint)]"
+                              title="No document-AI parse recorded (e.g. imported by JSON/CSV)."
+                            >
+                              —
+                            </span>
+                          );
+                        }
+                        return ps.badge === "llama" ? (
+                          <Badge tone="green">
+                            <span title={ps.statement}>llama</span>
+                          </Badge>
+                        ) : (
+                          <Badge tone="orange">
+                            <span title={ps.statement}>FB · {ps.shortReason}</span>
+                          </Badge>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">{m.vendor_label ?? "—"}</td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">{fmtPulledIn(m.created_at)}</td>
                     <td className="px-4 py-3 text-center">

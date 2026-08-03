@@ -21,7 +21,8 @@ import {
   ccrsTransportToParsed,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
 import { parsePdfManifest } from "@/lib/inventory/pdf-extract";
-import { llamaParseRecoverText } from "@/lib/inbound-email/llamaparse-recovery";
+import { makeCapturingRecovery } from "@/lib/inbound-email/llamaparse-recovery";
+import { recordManifestParseStatus } from "@/lib/inbound-email/llamaparse-status-server";
 
 /** Shared: parse + stage a JSON payload, redirect on each failure mode. */
 async function stageJsonText(
@@ -158,7 +159,10 @@ export async function importManifestPdfAction(formData: FormData) {
   const bytes = new Uint8Array(await f.arrayBuffer());
   // LlamaParse-primary (vision) for manual uploads too — a scanned or
   // partial-text PDF uploaded by hand gets the same full read as the intake.
-  const parsed = await parsePdfManifest(bytes, llamaParseRecoverText);
+  // PR-A: a capturing recovery remembers which engine won so we can record an
+  // authoritative, manifest-tagged parse-status row after staging.
+  const cap = makeCapturingRecovery();
+  const parsed = await parsePdfManifest(bytes, cap.recover);
   if (!parsed.ok) {
     // Distinguish "not a manifest" from "unreadable/scanned" for the reviewer.
     const code = parsed.text == null ? "pdfscanned" : "pdfparse";
@@ -167,6 +171,10 @@ export async function importManifestPdfAction(formData: FormData) {
 
   const staged = await stageManifest(parsed.manifest, parsed.text, session.userId, {
     sourceUrl: null,
+  });
+  // PR-A: record the parse status against the staged manifest (best-effort).
+  await recordManifestParseStatus(parsed.manifest.manifest_number, cap.lastOutcome(), {
+    actorId: session.userId,
   });
   revalidatePath("/admin/inventory/intake");
   if (!staged.ok) {
