@@ -56,7 +56,7 @@ export function PromoGrid({
     <>
       <section
         id="shop-by-category"
-        className="bg-black px-4 py-6 md:px-8 md:py-8"
+        className="px-4 py-6 md:px-8 md:py-8"
         aria-label="Shop by category"
       >
         <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">

@@ -4,6 +4,7 @@ import { HomeDailyDeals } from "@/components/home/HomeDailyDeals";
 import { PromoGrid } from "@/components/home/PromoGrid";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
+import { SiteBackground } from "@/components/site/SiteBackground";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
@@ -95,6 +96,7 @@ export default async function Home() {
 
   return (
     <main>
+      <SiteBackground />
       <Header />
       <Hero slides={slides} />
       <HomeDailyDeals items={dealItems} count={dailyDealsCount} />

@@ -1,6 +1,7 @@
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
+import { SiteBackground } from "@/components/site/SiteBackground";
 import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
@@ -52,7 +53,8 @@ export default async function VendorDeliveryPage() {
     (copy[VENDOR_OUTREACH_SUBJECT_KEY] ?? "").trim() || VENDOR_OUTREACH_SUBJECT;
 
   return (
-    <main id="top" className="min-h-screen bg-black text-white">
+    <main id="top" className="min-h-screen text-white">
+      <SiteBackground />
       <Header />
       <Breadcrumbs items={[{ label: "Vendors & Partners" }]} />
       <VendorDirectory

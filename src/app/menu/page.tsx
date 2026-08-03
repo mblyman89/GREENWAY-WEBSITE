@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
+import { SiteBackground } from "@/components/site/SiteBackground";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { ShopBannerCarousel } from "@/components/menu/ShopBannerCarousel";
@@ -92,6 +93,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   };
   return (
     <main id="top">
+      <SiteBackground />
       <Header />
 
       {/* Breadcrumb sits ABOVE the hero, consistent with every other page.
@@ -109,7 +111,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
 
       {/* Extra banners staff added in the Pages builder render here. */}
       {banners.extras.length ? (
-        <section className="bg-black px-4 pb-2 md:px-8">
+        <section className="px-4 pb-2 md:px-8">
           <div className="mx-auto max-w-[var(--shop-max)] space-y-4 md:space-y-6">
             {banners.extras.map((s) => (
               <SectionBanner

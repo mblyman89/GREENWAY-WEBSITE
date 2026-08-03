@@ -84,7 +84,7 @@ export function HomeDailyDeals({
   const menuHref = presentation?.menuHref ?? DAILY_DEAL_FALLBACK.menuHref;
 
   return (
-    <section className="bg-black px-4 py-6 md:px-8 md:py-8" aria-label="Today's daily deals">
+    <section className="px-4 py-6 md:px-8 md:py-8" aria-label="Today's daily deals">
       <div className="mx-auto max-w-[88rem]">
         <div className="mb-4 flex items-end justify-between gap-4 md:mb-6">
           <div>

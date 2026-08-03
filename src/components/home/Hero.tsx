@@ -77,7 +77,7 @@ export function Hero({ slides }: { slides: RenderSlide[] }) {
   return (
     <section
       id="top"
-      className="border-b border-white/10 bg-black px-4 py-4 md:px-8 md:py-5"
+      className="border-b border-white/10 px-4 py-4 md:px-8 md:py-5"
     >
       <div className="mx-auto max-w-[88rem]">
         <div
