@@ -99,6 +99,45 @@ describe("H15c — extractInvoiceNumber", () => {
     expect(extractInvoiceNumberFromText("Purchase Order #: 313131")).toBe("313131");
   });
 
+  // PR-C — three real vendor invoices as unpdf flattens them (verified against
+  // /workspace/pdf_recon extracted text). These were the exact cases the old
+  // regex missed: dotted alnum ids, invoice-vs-order preference, and the
+  // value-printed-above-its-label two-column collapse.
+  it("PR-C: Firetree (GrowFlow) prints BOTH order # and invoice # — the INVOICE # wins", () => {
+    expect(
+      extractInvoiceNumberFromText(
+        "Invoice Order #: 15121 Invoice #: INV-15121 Order Date: 07/28/2026 Transfer Date: 07/30/2026",
+      ),
+    ).toBe("INV-15121");
+  });
+
+  it("PR-C: VMI / Grow Op Farms 'Order #: WA.SO8EQH0C' — dotted alphanumeric id is kept whole", () => {
+    expect(
+      extractInvoiceNumberFromText(
+        "Invoice Grow Op Farms Order #: WA.SO8EQH0C Order Date: 06/24/2026 Created By: Scotland Schieber",
+      ),
+    ).toBe("WA.SO8EQH0C");
+  });
+
+  it("PR-C: PNW Consulting two-column flatten — order # prints ABOVE its label", () => {
+    expect(
+      extractInvoiceNumberFromText(
+        "INVOICE Created By: July 14, 2026 22014 Order #: Order Date: Michael Babcock PACIFIC NORTHWEST CONSULTING",
+      ),
+    ).toBe("22014");
+  });
+
+  it("PR-C: guards — a bare year, money, or PO Box before an Order label is never the id", () => {
+    expect(extractInvoiceNumberFromText("invoice dated 2026 Order Date: foo")).toBeNull();
+    expect(
+      extractInvoiceNumberFromText("Total $1,510.00 Order Total: Order #: Order Date:"),
+    ).toBeNull();
+    expect(extractInvoiceNumberFromText("PO Box 1234 in order to receive")).toBeNull();
+    // dotted id after a true Invoice # label is honored; trailing period trimmed.
+    expect(extractInvoiceNumberFromText("Invoice #: WA.ABCD1234 next")).toBe("WA.ABCD1234");
+    expect(extractInvoiceNumberFromText("Invoice #: INV-777. Thank you")).toBe("INV-777");
+  });
+
   it("never false-positives on documents WITHOUT an invoice/order # (real fixtures)", () => {
     const lcb = readFileSync(join(__dirname, "fixtures", "pdf-manifest-sample.txt"), "utf8");
     expect(extractInvoiceNumber(lcb)).toBeNull(); // LCB Internal Shipping Document
@@ -168,6 +207,39 @@ describe("H15c — invoiceNumberForRow", () => {
         manifest_number: "11804443981161219",
       }),
     ).toBe("24706");
+  });
+
+  it("PR-C: Firetree invoice row shows the INVOICE # (INV-15121), not the order # or manifest #", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload:
+          "Invoice Order #: 15121 Invoice #: INV-15121 Order Date: 07/28/2026 Transfer Date: 07/30/2026",
+        source_format: "pdf-manifest",
+        manifest_number: "15121",
+      }),
+    ).toBe("INV-15121");
+  });
+
+  it("PR-C: VMI invoice row shows the dotted order # (WA.SO8EQH0C), not the manifest #", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload:
+          "Invoice Grow Op Farms Order #: WA.SO8EQH0C Order Date: 06/24/2026 Created By: Scotland Schieber",
+        source_format: "pdf-manifest",
+        manifest_number: "WA413287.TRBOCF",
+      }),
+    ).toBe("WA.SO8EQH0C");
+  });
+
+  it("PR-C: PNW invoice row recovers the order # printed above its label (22014)", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload:
+          "INVOICE Created By: July 14, 2026 22014 Order #: Order Date: Michael Babcock PACIFIC NORTHWEST CONSULTING Manifest #: 14344505042191118",
+        source_format: "pdf-manifest",
+        manifest_number: "14344505042191118",
+      }),
+    ).toBe("22014");
   });
 
   it("SLICE 100: nothing anywhere — null renders the dash", () => {
