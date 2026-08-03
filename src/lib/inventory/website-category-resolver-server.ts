@@ -1,9 +1,13 @@
 /**
  * src/lib/inventory/website-category-resolver-server.ts
  *
- * Server-side companion to website-category-resolver.ts. It supplies the two
+ * Server-side companion to website-category-resolver.ts. It supplies the
  * precedence inputs the pure core can't compute on its own:
  *
+ *   (0) product_classification_overrides by pos_product_key — the OWNER's
+ *       per-product re-filing from the Inventory Detail corrections section.
+ *       HIGHEST precedence (beats even a published menu_items.category). Empty /
+ *       ignored until migration 0150 has been run.
  *   (a) menu_items.category by pos_product_key — AUTHORITATIVE. This is exactly
  *       the website category transform.ts already computed on import, so a lot
  *       that matches a published menu item inherits the menu's own category.
@@ -20,6 +24,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { listInventoryTypes } from "@/lib/pos/types-store";
+import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import {
   buildStaticInventoryTypeMap,
   resolveWebsiteCategory,
@@ -92,12 +97,17 @@ export async function resolveWebsiteCategories<T extends ResolvableLot>(
   lots: T[],
 ): Promise<WebsiteCategoryResolution[]> {
   if (lots.length === 0) return [];
-  const [inventoryTypeMap, menuCategories] = await Promise.all([
+  const keys = lots.map((l) => l.posProductKey);
+  const [inventoryTypeMap, menuCategories, overrides] = await Promise.all([
     loadInventoryTypeMap(),
-    loadMenuCategoriesForKeys(lots.map((l) => l.posProductKey)),
+    loadMenuCategoriesForKeys(keys),
+    getOverridesForKeys(keys),
   ]);
   return lots.map((lot) =>
     resolveWebsiteCategory(lot, {
+      overrideCategory: lot.posProductKey
+        ? overrides.get(lot.posProductKey)?.website_category ?? null
+        : null,
       menuItemCategory: lot.posProductKey ? menuCategories.get(lot.posProductKey) ?? null : null,
       inventoryTypeMap,
     }),

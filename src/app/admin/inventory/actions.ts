@@ -7,6 +7,21 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createAdjustment, updateLotStatus, updateLotDetails, getLotById } from "@/lib/inventory/store";
 import { parseLotEditInput, brandMatchesVendor, buildLotEditSummary } from "@/lib/inventory/lot-edit-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
+// Option A: per-product website Type/Category override (migration 0150).
+import {
+  parseClassificationEdit,
+  resolveOverrideValue,
+  buildClassificationAuditSummary,
+} from "@/lib/inventory/lot-website-classification-core";
+import {
+  getOverrideForKey,
+  upsertOverride,
+} from "@/lib/pos/product-classification-overrides";
+import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
+import { validateCategoryDraft } from "@/lib/pos/category-registry-core";
+import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
+import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const VALID_REASONS = new Set([
   "receive",
@@ -151,5 +166,207 @@ export async function updateLotDetailsAction(lotId: string, formData: FormData) 
 
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
+  redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+/**
+ * Option A — correct ONE product's WEBSITE Type & Category (the values our menu
+ * filters by), from the Inventory Detail corrections section. This is the
+ * per-product override the pros have: the system auto-resolves Type/Category on
+ * import/onboarding, but if that was wrong the owner re-files THIS product here.
+ *
+ * It behaves EXACTLY like the onboarding approval card:
+ *   - pick an EXISTING website category / product type, OR
+ *   - create a new one on the fly ("__new__" / "__new_type__"), which is saved
+ *     into the SAME registries the Types & Categories page manages
+ *     (website_category_types / inventory_types) and is then reusable
+ *     everywhere, OR
+ *   - keep the current override, OR clear it back to auto-resolution.
+ *
+ * It NEVER touches the CCRS/LCB columns (inventory_lots.category /
+ * inventory_type stay locked — the WA traceability source of truth). The choice
+ * is stored in product_classification_overrides (keyed by pos_product_key) and
+ * wins at read time on the menu and in the back office. The form is never
+ * trusted: every pick is whitelisted against the LIVE registries, and every
+ * change lands in the audit trail as a plain-English "old → new" summary.
+ *
+ * Degrades safely before migration 0150 (upsert returns a friendly message).
+ */
+export async function updateLotWebsiteClassificationAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const lot = await getLotById(lotId);
+  if (!lot) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("That lot no longer exists."));
+  }
+  const key = (lot.pos_product_key ?? "").trim();
+  if (!key) {
+    redirect(
+      `/admin/inventory/${lotId}?error=` +
+        encodeURIComponent("This lot isn't linked to a POS product key yet, so it can't be re-filed."),
+    );
+  }
+
+  // LIVE registries — the closed vocabularies every pick is checked against.
+  const [categoryRegistry, typeRegistry, currentOverride] = await Promise.all([
+    listWebsiteCategoryTypes({ includeInactive: false }),
+    listInventoryTypes({ includeInactive: false }),
+    getOverrideForKey(key),
+  ]);
+
+  const parsed = parseClassificationEdit(
+    {
+      website_category: formData.get("website_category") as string | null,
+      house_type: formData.get("house_type") as string | null,
+      new_category_label: formData.get("new_category_label") as string | null,
+      new_type_label: formData.get("new_type_label") as string | null,
+    },
+    {
+      validCategoryValues: categoryRegistry.map((c) => c.value),
+      validTypeLabels: typeRegistry.map((t) => t.label),
+    },
+  );
+  if (!parsed.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(parsed.error));
+  }
+
+  // The effective website category BEFORE this edit — the override if set, else
+  // the auto-resolution. Needed to map a newly-created product type, and for
+  // the audit "old → new" summary.
+  const beforeResolution = await resolveWebsiteCategoryForLot({
+    posProductKey: lot.pos_product_key,
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    category: lot.category,
+  });
+  const beforeCategory = currentOverride?.website_category ?? beforeResolution.websiteCategory;
+  const beforeType = currentOverride?.house_type ?? null;
+
+  const admin = createSupabaseAdminClient();
+
+  // Create-on-the-fly: website category ("__new__"). Same pure gatekeeper as
+  // Settings → Types, same table, same audit — then the new value is the pick.
+  let createdCategory: string | null = null;
+  if (parsed.category.kind === "create") {
+    const v = validateCategoryDraft({
+      label: parsed.category.newLabel,
+      existingValues: categoryRegistry.map((c) => c.value),
+    });
+    if (!v.ok) {
+      redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(v.error));
+    }
+    const { error } = await admin.from("website_category_types").insert({
+      value: v.value,
+      label: v.label,
+      helper: "",
+      sort_order: v.sort_order,
+      is_active: true,
+      is_system: false,
+    });
+    if (error) {
+      redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(error.message));
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "website_category.created",
+      entityType: "website_category_type",
+      entityId: v.value,
+      after: { value: v.value, label: v.label, created_during: "inventory_detail_correction" },
+    });
+    createdCategory = v.value;
+  }
+
+  // Create-on-the-fly: product type ("__new_type__"). Mapped to the website
+  // category this product files under (the just-chosen/created category if any,
+  // otherwise the current effective category) so the new type is grouped
+  // correctly everywhere from day one.
+  let createdType: string | null = null;
+  if (parsed.type.kind === "create") {
+    const v = validateInventoryTypeDraft({
+      label: parsed.type.newLabel,
+      existingKeys: typeRegistry.map((t) => t.key),
+    });
+    if (!v.ok) {
+      redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(v.error));
+    }
+    const mappedCategory =
+      createdCategory ??
+      (parsed.category.kind === "set" ? parsed.category.value : null) ??
+      beforeCategory ??
+      null;
+    const { error } = await admin.from("inventory_types").insert({
+      key: v.key,
+      label: v.label,
+      notes: "Created during an inventory-detail correction.",
+      website_category: mappedCategory,
+      is_active: true,
+      is_system: false,
+    });
+    if (error) {
+      redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(error.message));
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inventory_type.created",
+      entityType: "inventory_type",
+      entityId: v.key,
+      after: {
+        key: v.key,
+        label: v.label,
+        website_category: mappedCategory,
+        created_during: "inventory_detail_correction",
+      },
+    });
+    createdType = v.label;
+  }
+
+  // Fold each decision against the CURRENT stored override to get the new
+  // stored values. "keep" preserves the existing override; "clear" nulls it.
+  const nextCategory = resolveOverrideValue(
+    parsed.category,
+    currentOverride?.website_category ?? null,
+    createdCategory,
+  );
+  const nextType = resolveOverrideValue(
+    parsed.type,
+    currentOverride?.house_type ?? null,
+    createdType,
+  );
+
+  const result = await upsertOverride(
+    key,
+    { website_category: nextCategory, house_type: nextType, note: currentOverride?.note ?? null },
+    session.userId,
+  );
+  if (!result.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(result.error));
+  }
+
+  const summary = buildClassificationAuditSummary(
+    { category: beforeCategory, type: beforeType },
+    { category: nextCategory, type: nextType },
+  );
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.website_classification_edited",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { pos_product_key: key, website_category: beforeCategory, house_type: beforeType },
+    after: {
+      pos_product_key: key,
+      website_category: nextCategory,
+      house_type: nextType,
+      changes: summary,
+    },
+  });
+
+  // The override wins at read time on the menu and in the back office, so
+  // refresh both surfaces.
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/menu");
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
