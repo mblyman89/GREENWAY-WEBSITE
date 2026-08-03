@@ -59,6 +59,7 @@ function pdfRoleRank(role: AttachmentRole): number {
   }
 }
 import { parsePdfManifestFromBase64, parseCoaFromBase64 } from "@/lib/inventory/pdf-extract";
+import { llamaParseRecoverText } from "@/lib/inbound-email/llamaparse-recovery";
 import {
   mergeInvoicePricesByLot,
   mergeCoaByLot,
@@ -272,7 +273,13 @@ export async function stageManifestsFromEmail(
   if (pdfCands.length > 0) {
     for (const att of pdfCands) {
       if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
-      const parsed = await parsePdfManifestFromBase64(att.base64 as string);
+      // PR-2: recover text via LlamaParse (vision-OCR) when the PDF is a scanned
+      // image with no unpdf text layer — the owner's real failure. Free-first:
+      // recovery only fires when unpdf comes back blank.
+      const parsed = await parsePdfManifestFromBase64(
+        att.base64 as string,
+        llamaParseRecoverText,
+      );
       if (parsed.text) {
         minerSources.push({
           kind: classifyMinerKind(classifyAttachmentRole(att), parsed.text),
@@ -442,7 +449,13 @@ export async function stageManifestsFromEmail(
       const role = classifyAttachmentRole(att);
       if (role === "coa") continue; // handled separately below
       if (role === "manifest") sawManifestRolePdf = true;
-      const parsed = await parsePdfManifestFromBase64(att.base64 as string);
+      // PR-2: same vision-OCR recovery on the PDF-primary staging path so a
+      // scanned manifest still stages (and its text becomes raw_payload, which
+      // the live Invoice # scanner reads).
+      const parsed = await parsePdfManifestFromBase64(
+        att.base64 as string,
+        llamaParseRecoverText,
+      );
       if (!parsed.ok) {
         if (role === "manifest") {
           manifestRoleParseFailed = true;
@@ -473,7 +486,7 @@ export async function stageManifestsFromEmail(
       const coaAtt = rankedPdfs.find((a) => classifyAttachmentRole(a) === "coa");
       let coaArchiveBase64: string | null = null;
       if (coaAtt) {
-        const coaRes = await parseCoaFromBase64(coaAtt.base64 as string);
+        const coaRes = await parseCoaFromBase64(coaAtt.base64 as string, llamaParseRecoverText);
         if (coaRes.ok) {
           const cm = mergeCoaByLot(merged, coaRes.coa.byLot, coaRes.coa.expiresByLot);
           merged = cm.manifest;
