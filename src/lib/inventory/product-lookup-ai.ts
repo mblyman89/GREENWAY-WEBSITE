@@ -68,7 +68,13 @@ Respond with ONLY a JSON object (no prose, no code fences) with EXACTLY these ke
   "aroma_notes": ["..."],
   "flavor_notes": ["..."],
   "lineage": "parents if verified, else empty string",
-  "found": true
+  "found": true,
+  "description": "full marketing description (sensory/experiential only), or empty string",
+  "short_description": "one catchy line under ~120 chars, or empty string",
+  "category": "flower|pre-roll|vape|concentrate|edible|beverage|tincture|topical|capsule|accessory|other or empty string",
+  "potency_ratio": "printed cannabinoid ratio like 1:1 or 20:1, or empty string",
+  "size": "printed net size like 12oz / 3.5g / 10pk, or empty string",
+  "image_candidates": ["direct http(s) image URLs of THIS product; [] if unsure"]
 }`;
 
 /**
@@ -102,6 +108,15 @@ export async function lookupProduct(input: {
   });
 
   const raw = coerceRaw(looseParseLookupJson(ws.text));
+
+  // Extra value: also mine the real web_search source URLs for anything that
+  // looks like a product image, and offer them as ADDITIONAL candidates. This
+  // means we can still surface images even when the model forgets the
+  // image_candidates array. The pure core (cleanImageCandidates) then dedupes,
+  // drops logos/icons/svg, and caps the list \u2014 nothing is auto-imported.
+  const fromSources = ws.sources.filter((u) => IMAGE_URL_RE.test(u));
+  raw.image_candidates = [...(raw.image_candidates ?? []), ...fromSources];
+
   const result = postProcessLookup(raw, input.extraBanned ?? []);
 
   return {
@@ -111,6 +126,9 @@ export async function lookupProduct(input: {
     usedWebSearch: ws.usedWebSearch,
   };
 }
+
+/** URLs that end in a common raster image extension (query string tolerated). */
+const IMAGE_URL_RE = /\.(?:jpg|jpeg|png|webp|gif)(?:[?#].*)?$/i;
 
 /** Coerce a parsed unknown into a RawProductLookup with safe defaults. */
 function coerceRaw(parsed: unknown): RawProductLookup {
@@ -127,5 +145,12 @@ function coerceRaw(parsed: unknown): RawProductLookup {
     flavor_notes: arr(o.flavor_notes),
     lineage: String(o.lineage ?? ""),
     found: Boolean(o.found),
+    // T-315 all-inclusive fields.
+    description: String(o.description ?? ""),
+    short_description: String(o.short_description ?? ""),
+    category: String(o.category ?? ""),
+    potency_ratio: String(o.potency_ratio ?? ""),
+    size: String(o.size ?? ""),
+    image_candidates: arr(o.image_candidates),
   };
 }

@@ -68,6 +68,25 @@ export type RawProductLookup = {
   lineage: string;
   /** True only when the model actually recognized/located this product. */
   found: boolean;
+
+  // -------------------------------------------------------------------------
+  // T-315 ALL-INCLUSIVE fields (additive). Populated for ANY product type so a
+  // single search also stages the ENRICHMENT assets. All optional in spirit;
+  // the post-processor compliance-gates and sanitizes each one.
+  // -------------------------------------------------------------------------
+  /** Full marketing description (sensory/experiential ONLY, no medical claims). */
+  description?: string;
+  /** A one-line short description / tagline (same compliance rules). */
+  short_description?: string;
+  /** Product family we can verify: flower, vape, edible, beverage, concentrate,
+   *  pre-roll, tincture, topical, accessory, other. "" when unsure. */
+  category?: string;
+  /** Cannabinoid ratio when stated on packaging, e.g. "1:1", "20:1". "" if none. */
+  potency_ratio?: string;
+  /** Net size/quantity as printed, e.g. "12oz", "3.5g", "10pk". "" if unsure. */
+  size?: string;
+  /** Candidate PRODUCT image URLs from the web (reviewable; never auto-imported). */
+  image_candidates?: string[];
 };
 
 /** The sanitized, UI-ready lookup result. */
@@ -94,7 +113,131 @@ export type ProductLookupResult = {
    * (a real strain type and/or summary/effects/aroma/flavor/lineage).
    */
   hasKbDraft: boolean;
+
+  // -------------------------------------------------------------------------
+  // T-315 ALL-INCLUSIVE, sanitized fields (additive). These feed ENRICHMENT.
+  // -------------------------------------------------------------------------
+  /** Compliance-safe full description (medical/curative copy dropped), or "". */
+  description: string;
+  /** Compliance-safe short description / tagline, or "". */
+  shortDescription: string;
+  /** Verified product family, lowercased, from a fixed allow-list, or "". */
+  category: string;
+  /** Cannabinoid ratio as printed (e.g. "1:1"), digits/colon only, or "". */
+  potencyRatio: string;
+  /** Net size as printed (e.g. "12oz"), or "". */
+  size: string;
+  /** Clean, deduped, http(s)-only candidate product image URLs (never .svg). */
+  imageCandidates: string[];
+  /**
+   * True when there is enrichment-worthy content to stage (a description,
+   * short description, or at least one image candidate). Distinct from
+   * hasKbDraft, which is about strain-KB worthiness.
+   */
+  hasEnrichmentDraft: boolean;
 };
+
+/**
+ * Verified product families we accept (T-315). The model must pick from these
+ * or return "" (never invent a category). Kept broad but closed.
+ */
+export const LOOKUP_PRODUCT_CATEGORIES: readonly string[] = [
+  "flower",
+  "pre-roll",
+  "vape",
+  "concentrate",
+  "edible",
+  "beverage",
+  "tincture",
+  "topical",
+  "capsule",
+  "accessory",
+  "other",
+] as const;
+
+/** Max product-image candidates staged from one lookup (mirrors research-core). */
+export const LOOKUP_MAX_IMAGE_CANDIDATES = 12;
+
+/**
+ * Filename fragments that almost always mean "not the product shot" — logos,
+ * icons, sprites, avatars, badges, tracking pixels, placeholders. Executive
+ * value-add: keeps the reviewable candidate list clean so Michael isn't sifting
+ * through brand logos. Candidates only; nothing is ever auto-imported.
+ */
+const IMAGE_JUNK_HINTS: readonly string[] = [
+  "logo",
+  "icon",
+  "sprite",
+  "favicon",
+  "avatar",
+  "badge",
+  "placeholder",
+  "spacer",
+  "pixel",
+  "banner",
+  "thumb", // low-res thumbnails; prefer full images
+  "swatch",
+];
+
+/**
+ * Sanitize candidate product image URLs: http(s) only, de-duped, order
+ * preserved, drop .svg (logos/icons) and obvious junk-named assets, capped.
+ * NEVER fabricates a URL. Returns [] when nothing survives.
+ */
+export function cleanImageCandidates(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    const s = String(raw ?? "").trim();
+    if (!s) continue;
+    let parsed: URL;
+    try {
+      parsed = new URL(s);
+    } catch {
+      continue; // not an absolute URL
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+    if (!parsed.hostname.includes(".")) continue;
+    const lower = parsed.toString().toLowerCase();
+    if (lower.endsWith(".svg")) continue;
+    const path = parsed.pathname.toLowerCase();
+    if (IMAGE_JUNK_HINTS.some((h) => path.includes(h))) continue;
+    const key = parsed.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(parsed.toString());
+    if (out.length >= LOOKUP_MAX_IMAGE_CANDIDATES) break;
+  }
+  return out;
+}
+
+/** Coerce a raw category token to the allow-list, else "" (never guess). */
+export function coerceCategory(raw: unknown): string {
+  const v = String(raw ?? "").trim().toLowerCase();
+  if (!v) return "";
+  const hit = LOOKUP_PRODUCT_CATEGORIES.find((c) => c === v);
+  if (hit) return hit;
+  // Common synonyms mapped conservatively; anything unmatched -> "".
+  if (/pre[\s-]?roll|joint/.test(v)) return "pre-roll";
+  if (/cart|cartridge|vape|pen|disposable/.test(v)) return "vape";
+  if (/gummy|gummies|chocolate|candy|cookie|edible|chew/.test(v)) return "edible";
+  if (/drink|soda|lemonade|seltzer|beverage|shot/.test(v)) return "beverage";
+  if (/wax|shatter|rosin|resin|dab|concentrate|budder|badder|sauce|diamond/.test(v))
+    return "concentrate";
+  if (/tincture/.test(v)) return "tincture";
+  if (/lotion|balm|salve|topical|cream/.test(v)) return "topical";
+  if (/cap|capsule|softgel|pill|tablet/.test(v)) return "capsule";
+  if (/flower|bud|nug|eighth|ounce/.test(v)) return "flower";
+  return "";
+}
+
+/** Keep only digits, colon(s), and dot in a ratio like "1:1" / "20:1"; else "". */
+export function coercePotencyRatio(raw: unknown): string {
+  const v = String(raw ?? "").trim();
+  const m = v.match(/\d+(?:\.\d+)?(?::\d+(?:\.\d+)?)+/);
+  return m ? m[0] : "";
+}
 
 /**
  * SYSTEM PROMPT. Baked-in compliance + no-guessing. This is the single place
@@ -133,8 +276,25 @@ STRAIN TYPE: one of exactly \u2014 indica, sativa, hybrid, indica-hybrid,
 sativa-hybrid, cbd, unknown. Use "unknown" for non-flower products or when not
 established.
 
+ALL PRODUCTS (flower AND non-flower \u2014 edibles, beverages, vapes, concentrates,
+pre-rolls, tinctures, topicals, accessories). In addition to the strain fields,
+also report, ONLY when you can verify it:
+- "description": a tasteful marketing description (sensory, format, flavor,
+  experiential vibe). NO medical/curative claims. Leave "" if unsure.
+- "short_description": a single catchy line under ~120 chars, same rules. "".
+- "category": exactly one of \u2014 flower, pre-roll, vape, concentrate, edible,
+  beverage, tincture, topical, capsule, accessory, other. "" if unsure.
+- "potency_ratio": the cannabinoid ratio as printed on the package, e.g.
+  "1:1" or "20:1". "" if none is stated. Do NOT invent a ratio.
+- "size": the net size/quantity as printed, e.g. "12oz", "3.5g", "10pk". "".
+- "image_candidates": up to a dozen DIRECT image URLs (http/https) that clearly
+  show THIS product from reputable sources (the maker's site, the brand page,
+  a licensed menu). Absolute URLs only. Do NOT include logos, icons, banners,
+  or unrelated images. Do NOT fabricate URLs \u2014 return [] if you are unsure.
+
 Return your findings in the exact JSON shape requested. Prefer fewer, verified
-details over many guessed ones.
+details over many guessed ones. It is always better to leave a field blank than
+to guess.
 `.trim();
 
 /** Build the user prompt from the operator's search box + row context. */
@@ -161,8 +321,12 @@ export function buildLookupUserPrompt(input: {
     "Look this up. If it is a cannabis flower strain, identify its strain type " +
       "and (only if verified) lineage, aroma, flavor, and general experiential " +
       "character. If it is a non-flower product (edible, vape, concentrate, " +
-      "pre-roll, accessory), set strain_type to \"unknown\" and describe only " +
-      "what you can verify about the product. Never guess.",
+      "pre-roll, beverage, tincture, topical, accessory), set strain_type to " +
+      "\"unknown\" and describe only what you can verify about the product. " +
+      "For EVERY product also fill description, short_description, category, " +
+      "potency_ratio, size, and image_candidates when \\u2014 and only when \\u2014 " +
+      "you can verify them from reputable sources. Never guess; leave a field " +
+      "blank rather than inventing it.",
   );
   return lines.join("\n");
 }
@@ -206,6 +370,18 @@ export function postProcessLookup(
   const flavorNotes = cleanTerms(raw?.flavor_notes);
   const lineage = String(raw?.lineage ?? "").trim();
 
+  // T-315: description / short_description are compliance-gated just like the
+  // summary \u2014 any true medical/curative claim drops the whole field.
+  const descLint = lintCopy(raw?.description ?? "", extraBanned);
+  const description = descLint.disposition === "block" ? "" : (descLint.publicText ?? "");
+  const shortLint = lintCopy(raw?.short_description ?? "", extraBanned);
+  const shortDescription =
+    shortLint.disposition === "block" ? "" : (shortLint.publicText ?? "");
+  const category = coerceCategory(raw?.category);
+  const potencyRatio = coercePotencyRatio(raw?.potency_ratio);
+  const size = String(raw?.size ?? "").trim().slice(0, 40);
+  const imageCandidates = cleanImageCandidates(raw?.image_candidates);
+
   // Autofill the strain type only when it is real AND clears the 90% bar.
   const autofillStrainType =
     found &&
@@ -221,6 +397,12 @@ export function postProcessLookup(
       flavorNotes.length > 0 ||
       lineage.length > 0);
 
+  // T-315: enrichment-worthiness is separate \u2014 it's about the marketing copy
+  // and images we can stage on the enrichment page for ANY product.
+  const hasEnrichmentDraft =
+    found &&
+    (description.length > 0 || shortDescription.length > 0 || imageCandidates.length > 0);
+
   return {
     strainType,
     strainTypeConfidence,
@@ -233,6 +415,13 @@ export function postProcessLookup(
     lineage,
     found,
     hasKbDraft,
+    description,
+    shortDescription,
+    category,
+    potencyRatio,
+    size,
+    imageCandidates,
+    hasEnrichmentDraft,
   };
 }
 
@@ -362,6 +551,87 @@ export function __runProductLookupTests(): { passed: number } {
     buildLookupUserPrompt({ query: "Blue Dream", vendorOrBrand: "Acme" }).includes("Blue Dream"),
     "user prompt has query",
   );
+
+  // ---- T-315: all-inclusive fields ----------------------------------------
+  // Category coercion (allow-list + synonyms; never guess).
+  assert(coerceCategory("Edible") === "edible", "category exact");
+  assert(coerceCategory("gummies") === "edible", "category synonym gummies");
+  assert(coerceCategory("cartridge") === "vape", "category synonym cartridge");
+  assert(coerceCategory("lemonade") === "beverage", "category synonym lemonade");
+  assert(coerceCategory("mystery box") === "", "category unknown -> blank (no guess)");
+
+  // Potency ratio parsing.
+  assert(coercePotencyRatio("1:1") === "1:1", "ratio 1:1");
+  assert(coercePotencyRatio("20:1 CBD:THC") === "20:1", "ratio extracted from text");
+  assert(coercePotencyRatio("no ratio here") === "", "ratio absent -> blank");
+
+  // Image candidate hygiene.
+  const imgs = cleanImageCandidates([
+    "https://cdn.brand.com/products/rays-lemonade.jpg",
+    "not-a-url",
+    "https://cdn.brand.com/products/rays-lemonade.jpg", // dupe
+    "https://cdn.brand.com/assets/logo.png", // junk name
+    "https://cdn.brand.com/x/icon-cart.png", // junk name
+    "https://cdn.brand.com/x/hero.svg", // svg dropped
+    "http://cdn.brand.com/p/raspberry-12oz.png",
+  ]);
+  assert(
+    JSON.stringify(imgs) ===
+      JSON.stringify([
+        "https://cdn.brand.com/products/rays-lemonade.jpg",
+        "http://cdn.brand.com/p/raspberry-12oz.png",
+      ]),
+    "image candidates: dedupe, drop junk/svg, preserve order",
+  );
+  assert(cleanImageCandidates([]).length === 0, "image candidates: empty -> []");
+  assert(cleanImageCandidates("nope" as unknown).length === 0, "image candidates: non-array -> []");
+
+  // Non-flower (beverage) with description + images stages an ENRICHMENT draft
+  // even though strain_type is unknown (no autofill).
+  const bev = postProcessLookup({
+    strain_type: "unknown",
+    strain_type_confidence: 0,
+    summary: "",
+    effects: [],
+    aroma_notes: [],
+    flavor_notes: [],
+    lineage: "",
+    found: true,
+    description: "A bright raspberry lemonade with a balanced, easygoing lift.",
+    short_description: "Bright raspberry lemonade, balanced 1:1.",
+    category: "beverage",
+    potency_ratio: "1:1",
+    size: "12oz",
+    image_candidates: ["https://cdn.brand.com/p/rays-raspberry.jpg"],
+  });
+  assert(bev.autofillStrainType === false, "beverage does not autofill strain");
+  assert(bev.category === "beverage", "beverage category kept");
+  assert(bev.potencyRatio === "1:1", "beverage ratio kept");
+  assert(bev.size === "12oz", "beverage size kept");
+  assert(bev.description.length > 0, "beverage description kept");
+  assert(bev.imageCandidates.length === 1, "beverage image candidate kept");
+  assert(bev.hasEnrichmentDraft === true, "beverage has enrichment draft");
+  assert(bev.hasKbDraft === false, "beverage has no strain-kb draft");
+
+  // Medical description is dropped even for non-flower.
+  const medDesc = postProcessLookup({
+    strain_type: "unknown",
+    strain_type_confidence: 0,
+    summary: "",
+    effects: [],
+    aroma_notes: [],
+    flavor_notes: [],
+    lineage: "",
+    found: true,
+    description: "This tincture reduces inflammation and cures insomnia.",
+    short_description: "",
+    category: "tincture",
+    potency_ratio: "",
+    size: "",
+    image_candidates: [],
+  });
+  assert(medDesc.description === "", "medical description dropped");
+  assert(medDesc.hasEnrichmentDraft === false, "no enrichment draft when only medical copy");
 
   return { passed };
 }

@@ -32,6 +32,8 @@ type Props = {
   vendorOrBrand: string;
   /** DOM id of the row's strain-type <select>, so we can autofill it. */
   strainSelectId: string;
+  /** POS product key (or "") \u2014 lets Save-to-KB stage enrichment drafts. */
+  posProductKey: string;
   /** False when no AI key is set \u2014 the panel soft-disables. */
   aiEnabled: boolean;
 };
@@ -41,6 +43,7 @@ export function AiLookupPanel({
   productName,
   vendorOrBrand,
   strainSelectId,
+  posProductKey,
   aiEnabled,
 }: Props) {
   const initialQuery = [productName, vendorOrBrand].filter(Boolean).join(" ").trim();
@@ -64,6 +67,7 @@ export function AiLookupPanel({
       fd.set("query", query.trim());
       fd.set("product_name", productName);
       fd.set("vendor_or_brand", vendorOrBrand);
+      fd.set("pos_product_key", posProductKey);
       const res = await productLookupAction(fd);
       if (!res.ok) {
         setError(res.error);
@@ -107,7 +111,7 @@ export function AiLookupPanel({
   }
 
   return (
-    <div className="mt-1 w-64 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2">
+    <div className="mt-1 w-72 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2">
       <div className="mb-1 flex items-center justify-between">
         <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--admin-accent)]">
           <span aria-hidden>\ud83e\udd16</span> AI Lookup
@@ -183,6 +187,49 @@ export function AiLookupPanel({
                         .join(" \u00b7 ")}
                     </p>
                   )}
+
+                  {/* T-315: product facts (works for non-flower too). */}
+                  {(data.category || data.potencyRatio || data.size) && (
+                    <p className="text-[var(--admin-text-faint)]">
+                      {[
+                        data.category ? `Type: ${data.category}` : "",
+                        data.potencyRatio ? `Ratio: ${data.potencyRatio}` : "",
+                        data.size ? `Size: ${data.size}` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" \u00b7 ")}
+                    </p>
+                  )}
+                  {data.description && (
+                    <p className="text-[var(--admin-text-muted)]">{data.description}</p>
+                  )}
+
+                  {/* T-315: reviewable image candidates \u2014 staged for enrichment,
+                      NEVER auto-imported. Thumbnails link out to the source. */}
+                  {data.imageCandidates.length > 0 && (
+                    <div className="text-[10px] text-[var(--admin-text-faint)]">
+                      <div className="mb-1">
+                        {data.imageCandidates.length} image candidate
+                        {data.imageCandidates.length === 1 ? "" : "s"} \u2014 review on the enrichment page
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {data.imageCandidates.slice(0, 4).map((u, i) => (
+                          <a
+                            key={i}
+                            href={u}
+                            target="_blank"
+                            rel="noopener noreferrer nofollow"
+                            title={u}
+                            className="block h-10 w-10 overflow-hidden rounded border border-[var(--admin-border)] bg-black/40"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={u} alt="" className="h-full w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {data.sources.length > 0 && (
                     <div className="text-[10px] text-[var(--admin-text-faint)]">
                       Sources:{" "}
@@ -203,17 +250,21 @@ export function AiLookupPanel({
                     {data.usedWebSearch ? "Live web search" : "AI knowledge"} \u00b7 {data.model}
                   </div>
 
-                  {/* Save-to-KB draft: a draft for the owner to approve. */}
-                  {data.hasKbDraft && (
+                  {/* Save-to-KB / enrichment draft: everything is a DRAFT the
+                      owner approves. Fires for strain KB and/or enrichment copy
+                      + image candidates. Nothing publishes or imports on its own. */}
+                  {(data.hasKbDraft || data.hasEnrichmentDraft) && (
                     <div className="mt-1 border-t border-[var(--admin-border)] pt-1.5">
                       {saved === "saved" ? (
                         <p className="text-[var(--admin-accent)]">
-                          \u2713 Saved as a KB draft \u2014 review it in Knowledge Base to publish.
+                          \u2713 Saved as draft{data.hasEnrichmentDraft ? " \u2014 details + images are waiting on the enrichment page" : ""}. Nothing publishes until you approve it.
                         </p>
                       ) : (
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[var(--admin-text-muted)]">
-                            Found more \u2014 save to the KB?
+                            {data.hasEnrichmentDraft
+                              ? "Stage details + images for enrichment?"
+                              : "Found more \u2014 save to the KB?"}
                           </span>
                           <Button
                             type="button"
