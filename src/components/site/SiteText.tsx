@@ -17,12 +17,15 @@ export async function SiteText({
   blockKey,
   as: Tag = "span",
   className,
+  /** Optional DOM id (e.g. so an aria-labelledby can point at this heading). */
+  id,
   /** Render value as raw HTML (for rich blocks like the compliance warning). */
   html = false,
 }: {
   blockKey: string;
   as?: ElementType;
   className?: string;
+  id?: string;
   html?: boolean;
 }) {
   const [value, preview] = await Promise.all([
@@ -43,6 +46,7 @@ export async function SiteText({
     // <script>, event handlers, or javascript: URLs onto the public site.
     return (
       <Tag
+        id={id}
         className={className}
         {...previewProps}
         dangerouslySetInnerHTML={{ __html: sanitizeStaffHtml(value) }}
@@ -51,7 +55,7 @@ export async function SiteText({
   }
 
   return (
-    <Tag className={className} {...previewProps}>
+    <Tag id={id} className={className} {...previewProps}>
       {value}
     </Tag>
   );
