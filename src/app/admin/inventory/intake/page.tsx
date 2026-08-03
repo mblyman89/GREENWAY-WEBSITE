@@ -8,6 +8,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Textarea, Button } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-store";
+import { getParseStatusByManifestNumber } from "@/lib/inbound-email/llamaparse-status-server";
 import {
   listInboundEmails,
   extractLinksFromNote,
@@ -112,6 +113,12 @@ export default async function IntakePage({
   // single Incoming table doesn't call out on its own).
   const overdue = manifests.filter(
     (m) => normalizeStage(m.status) === "in_transit" && classifyEta(m.eta_date) === "overdue",
+  );
+
+  // PR-A — document-AI parse status per manifest (llama / FB) for the "AI"
+  // column. Read-only over the ai_usage ledger; keyed by manifest_number.
+  const parseStatusByManifest = await getParseStatusByManifestNumber(
+    manifests.map((m) => m.manifest_number),
   );
 
   // H15c — join the email fetch trail's download links (manifest/invoice PDFs)
@@ -299,6 +306,7 @@ export default async function IntakePage({
           rows={applyIntakeView(manifests, intakeView)}
           linksByManifestId={linksByManifestId}
           docsByManifestId={docsByManifestId}
+          parseStatusByManifest={parseStatusByManifest}
           view={intakeView}
           processedCount={countProcessedRows(manifests)}
         />

@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel, StickyActionBar } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
+import { getParseStatusForManifestNumber } from "@/lib/inbound-email/llamaparse-status-server";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 import { matchIntakeLinesToKb } from "@/lib/ai/kb/intake-strain-match-server";
 import { getVendorById } from "@/lib/vendors/store";
@@ -230,6 +231,9 @@ export default async function ManifestReviewPage({
   const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
   const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
   const transportAction = updateManifestTransportAction.bind(null, id);
+  // PR-A: document-AI parse status for the plain-English statement in the
+  // transport section (what LlamaParse read, or the honest reason it didn't).
+  const parseStatus = await getParseStatusForManifestNumber(manifest.manifest_number);
   const hasTransport = Boolean(
     manifest.transporter_name ||
       manifest.driver_name ||
@@ -708,6 +712,21 @@ export default async function ManifestReviewPage({
             actually delivered this load and on what vehicle. Saved with the manifest so it
             prints with the intake record.
           </p>
+          {/* PR-A: honest document-AI status — what the parser read or why it didn't. */}
+          <div
+            className={
+              "mb-4 rounded-[var(--admin-radius)] border px-4 py-2 text-xs " +
+              (parseStatus.badge === "llama"
+                ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]"
+                : "border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]")
+            }
+          >
+            {parseStatus.badge === "llama" ? "🦙 " : "⚠️ "}
+            <span className="font-semibold">
+              Document AI: {parseStatus.badge === "llama" ? "LlamaParse vision" : `fallback — ${parseStatus.shortReason}`}
+            </span>{" "}
+            <span className="opacity-90">{parseStatus.statement}</span>
+          </div>
           {transportSuggestion.usedUsual && (
             <div className="mb-4 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-xs text-[var(--admin-gold)]">
               💡 {describeSuggestion(vendorDisplay, transportSuggestion.suggestedFields)}{" "}
