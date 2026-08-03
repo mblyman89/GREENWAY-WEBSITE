@@ -585,6 +585,145 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "image",
     defaultValue: "/brand/greenway-front-of-store.webp",
   },
+  // SLICE T-311: the whole Locations page is now owner-editable. These blocks
+  // are listed in PAGE (reading) order — the editor sorts by this seed order —
+  // and every defaultValue is byte-identical to the copy the page shipped, so
+  // seeding produces no visible change until a block is edited + published. The
+  // actionable links (directions, tel:, mailto:, /menu) stay derived from the
+  // shared business record so editing a label never breaks a link or the real
+  // dialed number. The map iframe stays non-editable.
+  {
+    block_key: "locations.hero.city",
+    page: "locations",
+    section: "hero",
+    label: "Locations — hero city line",
+    help_text:
+      "The green city/state line under the headline on the storefront photo (currently “Port Orchard, WA 98367”).",
+    field_type: "plain",
+    defaultValue: "Port Orchard, WA 98367",
+  },
+  {
+    block_key: "locations.hero.hoursPill",
+    page: "locations",
+    section: "hero",
+    label: "Locations — hero hours pill",
+    help_text:
+      "The orange hours snippet next to the city line on the storefront photo (currently “open Until 11:00 PM”).",
+    field_type: "plain",
+    defaultValue: "open Until 11:00 PM",
+  },
+  {
+    block_key: "locations.about.heading",
+    page: "locations",
+    section: "about",
+    label: "Locations — about heading",
+    help_text:
+      "The orange heading over the left write-up card (currently “About Greenway Marijuana”).",
+    field_type: "plain",
+    defaultValue: "About Greenway Marijuana",
+  },
+  {
+    block_key: "locations.about.body",
+    page: "locations",
+    section: "about",
+    label: "Locations — about write-up",
+    help_text:
+      "The main store write-up paragraph in the left card on the Locations page.",
+    field_type: "rich",
+    seo_impact: true,
+    defaultValue:
+      "Your Most Trusted Cannabis Dispensary Greenway Marijuana provides a diverse range of cannabis products catering to both recreational and medicinal purposes. Our well-trained Budtenders are dedicated to addressing your inquiries and assisting you in selecting the right products tailored to your individual requirements. Our extensive inventory encompasses various offerings, catering to varying budgetary considerations and preferences. Greenway Marijuana prides itself on fostering a contemporary, inviting environment where patrons can comfortably engage. We regularly feature promotions, flash sales, and discounted items. We eagerly anticipate the opportunity to extend our services to you and aspire to become your trusted destination for Cannabis and Cannabis needs.",
+  },
+  {
+    block_key: "locations.about.cta",
+    page: "locations",
+    section: "about",
+    label: "Locations — about button label",
+    help_text:
+      "The orange button under the write-up (currently “SHOP OUR MENU”). This is the button wording only; it always links to your menu.",
+    field_type: "plain",
+    defaultValue: "SHOP OUR MENU",
+  },
+  {
+    block_key: "locations.details.heading",
+    page: "locations",
+    section: "details",
+    label: "Locations — store details heading",
+    help_text:
+      "The heading over the right-hand details card (currently “Store Details”).",
+    field_type: "plain",
+    defaultValue: "Store Details",
+  },
+  {
+    block_key: "locations.details.address",
+    page: "locations",
+    section: "details",
+    label: "Locations — store address",
+    help_text:
+      "The street address shown in the details card (currently “4851 Geiger Rd SE, Port Orchard, WA 98367”). The “Get Directions” link is unaffected.",
+    field_type: "plain",
+    defaultValue: "4851 Geiger Rd SE, Port Orchard, WA 98367",
+  },
+  {
+    block_key: "locations.details.phone",
+    page: "locations",
+    section: "details",
+    label: "Locations — store phone label",
+    help_text:
+      "The phone shown in the details card (currently “360-BUY-WEED”). This is the display label only — the number your customers actually dial never changes.",
+    field_type: "plain",
+    defaultValue: "360-BUY-WEED",
+  },
+  {
+    block_key: "locations.details.hours",
+    page: "locations",
+    section: "details",
+    label: "Locations — store hours",
+    help_text:
+      "The store hours shown in the details card (currently “Open daily, 8:00 am to 11:00 pm”).",
+    field_type: "plain",
+    defaultValue: "Open daily, 8:00 am to 11:00 pm",
+  },
+  {
+    block_key: "locations.details.email",
+    page: "locations",
+    section: "details",
+    label: "Locations — store email",
+    help_text:
+      "The contact email shown in the details card (currently “contact@greenwaymarijuana.com”). The email link updates to match a valid address.",
+    field_type: "plain",
+    defaultValue: "contact@greenwaymarijuana.com",
+  },
+  {
+    block_key: "locations.map.eyebrow",
+    page: "locations",
+    section: "map",
+    label: "Locations — map eyebrow",
+    help_text:
+      "The small green label over the map heading (currently “Find Us”).",
+    field_type: "plain",
+    defaultValue: "Find Us",
+  },
+  {
+    block_key: "locations.map.heading",
+    page: "locations",
+    section: "map",
+    label: "Locations — map heading",
+    help_text:
+      "The heading over the map (currently “Map & Directions”). The map itself is not editable.",
+    field_type: "plain",
+    defaultValue: "Map & Directions",
+  },
+  {
+    block_key: "locations.map.cta",
+    page: "locations",
+    section: "map",
+    label: "Locations — map button label",
+    help_text:
+      "The green button by the map (currently “Get Directions”). This is the button wording only; it always opens driving directions to the store.",
+    field_type: "plain",
+    defaultValue: "Get Directions",
+  },
   // ---- Price Match page (bespoke hero) -------------------------------------
   // SLICE T-309: the whole Price Match page is now owner-editable. These blocks
   // are listed in PAGE (reading) order — the editor sorts by this seed order —
