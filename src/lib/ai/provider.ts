@@ -505,6 +505,33 @@ const AI_WEBSEARCH_MODEL =
 /** The model id the web-search lookup will use (for provenance in the UI). */
 export const aiWebSearchModelId = AI_WEBSEARCH_MODEL;
 
+// ---------------------------------------------------------------------------
+// Gemini (Google) grounding path for the web-search lookup.
+//
+// Google's powerful live web search is the `google_search` grounding tool,
+// which lives behind the native Interactions API (NOT the OpenAI-compat
+// `/chat/completions` layer, which does not expose it for chat). It uses a
+// different endpoint, a different tool name, a DIFFERENT auth header
+// (`x-goog-api-key`), and returns a DIFFERENT response shape (`steps[]` with
+// `model_output` content blocks carrying `url_citation` annotations).
+//
+// We detect Gemini purely from the heavy model id (anything starting with
+// "gemini"). The Gemini key falls back to AI_API_KEY so a single key set as
+// AI_API_KEY works out of the box. Everything OpenAI stays byte-for-byte
+// intact below; the Gemini branch is fully additive.
+// ---------------------------------------------------------------------------
+
+/** Google's native Interactions API endpoint (where `google_search` lives). */
+const GEMINI_INTERACTIONS_URL =
+  process.env.AI_GEMINI_BASE_URL ??
+  "https://generativelanguage.googleapis.com/v1beta/interactions";
+
+/** The Gemini API key. Falls back to the shared AI_API_KEY. */
+const GEMINI_API_KEY = process.env.AI_GEMINI_API_KEY ?? AI_API_KEY;
+
+/** True when the heavy (web-search) model is a Gemini model. */
+const IS_GEMINI_WEBSEARCH = /^gemini/i.test(AI_WEBSEARCH_MODEL);
+
 export type WebSearchOptions = {
   system: string;
   user: string;
@@ -589,11 +616,112 @@ function extractResponsesText(payload: unknown): string {
 }
 
 /**
- * Live internet lookup via GPT-4o + the OpenAI `web_search` tool.
+ * Concatenate the assistant's answer text from a Gemini Interactions payload.
  *
- * Returns the answer text, the real source URLs, the model id, and whether the
- * live tool actually ran. On any failure of the Responses API path it falls
- * back to a plain built-in-knowledge completion so the feature never dies.
+ * Gemini returns an ordered `steps[]` array. The user-facing answer lives in
+ * `model_output` steps, whose `content[]` carries `{ type: "text", text }`
+ * blocks. A convenience `output_text` field may also be present; we prefer it
+ * when non-empty, else we stitch the text blocks from the model_output steps.
+ */
+function extractInteractionsText(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const obj = payload as Record<string, unknown>;
+  if (typeof obj.output_text === "string" && obj.output_text.trim()) {
+    return obj.output_text.trim();
+  }
+  const parts: string[] = [];
+  const steps = obj.steps;
+  if (Array.isArray(steps)) {
+    for (const step of steps) {
+      if (!step || typeof step !== "object") continue;
+      const s = step as Record<string, unknown>;
+      if (s.type !== "model_output") continue;
+      const content = s.content;
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        if (block && typeof block === "object") {
+          const b = block as Record<string, unknown>;
+          if (b.type === "text" && typeof b.text === "string") parts.push(b.text);
+        }
+      }
+    }
+  }
+  return parts.join("").trim();
+}
+
+/**
+ * Extract source URLs from a Gemini Interactions payload. Sources appear as
+ * `url_citation` annotations on the `model_output` text blocks, and are also
+ * echoed in `google_search_result` steps. We walk the whole payload
+ * defensively for any `url_citation` (or plain `url`) and de-dupe while
+ * preserving first-seen order. This reuses the exact same tolerant strategy as
+ * the OpenAI parser so both providers behave identically for the UI.
+ */
+function extractInteractionsSources(payload: unknown): string[] {
+  // The url_citation / url shapes are identical to the OpenAI Responses
+  // annotations, so the same defensive walker handles both providers.
+  return extractResponsesSources(payload);
+}
+
+/**
+ * Gemini built-in-knowledge fallback via Google's OpenAI-compatibility layer
+ * (`/chat/completions`). Self-contained: it does NOT read AI_BASE_URL, so the
+ * Gemini path works even when AI_BASE_URL still points at OpenAI. Used only
+ * when live `google_search` grounding fails, so the lookup never dies.
+ */
+async function geminiChatFallback(
+  model: string,
+  system: string,
+  user: string,
+  opts: { temperature?: number; maxTokens?: number },
+): Promise<{ content: string; usage?: ChatUsage }> {
+  // The OpenAI-compat chat endpoint lives at ".../v1beta/openai/chat/completions".
+  const base =
+    process.env.AI_GEMINI_OPENAI_BASE_URL ??
+    "https://generativelanguage.googleapis.com/v1beta/openai";
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: opts.maxTokens ?? 600,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
+  // Only set temperature when explicitly requested (Gemini 3 prefers default).
+  if (typeof opts.temperature === "number") body.temperature = opts.temperature;
+
+  const res = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GEMINI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`gemini fallback failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+    usage?: ChatUsage;
+  };
+  return { content: (json.choices?.[0]?.message?.content ?? "").trim(), usage: json.usage };
+}
+
+/**
+ * Live internet lookup via a strong model + a hosted web-search tool.
+ *
+ * Two providers are supported, selected purely by the heavy model id:
+ *   - Gemini (model id starts with "gemini"): Google's `google_search`
+ *     grounding via the native Interactions API. This is the stronger tool for
+ *     community/retail lookups.
+ *   - OpenAI (default): GPT-4o + the OpenAI `web_search` tool via the
+ *     Responses API.
+ *
+ * Either way it returns the answer text, the real source URLs, the model id,
+ * and whether the live tool actually ran. On any failure it falls back to a
+ * plain built-in-knowledge completion so the feature never dies.
  *
  * Throws AiNotConfiguredError when no key is set and AiBudgetExceededError when
  * the owner's monthly cap is already reached (spend is refused, never silent).
@@ -607,6 +735,110 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
 
   const model = AI_WEBSEARCH_MODEL;
   const promptText = `${opts.system}\n${opts.user}`;
+
+  // --- Gemini path: Google `google_search` grounding via Interactions API. --
+  // Selected when the heavy model is a Gemini model. Uses the absolute Google
+  // endpoint + x-goog-api-key header (NOT AI_BASE_URL / Bearer). Google warns
+  // against low temperature on Gemini 3 (looping), so we honor an explicit
+  // opts.temperature but otherwise leave it at Gemini's default of 1.0.
+  if (IS_GEMINI_WEBSEARCH) {
+    try {
+      const body: Record<string, unknown> = {
+        model,
+        // Combine the system framing and the user ask into one input string;
+        // Gemini 3 responds best to a single, direct instruction block.
+        input: `${opts.system}\n\n${opts.user}`,
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          max_output_tokens: opts.maxTokens ?? 900,
+          // Only set temperature when the caller explicitly asks; otherwise
+          // let Gemini use its recommended default (1.0).
+          ...(typeof opts.temperature === "number"
+            ? { temperature: opts.temperature }
+            : {}),
+        },
+      };
+      const res = await fetch(GEMINI_INTERACTIONS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const payload = (await res.json()) as {
+          output_text?: string;
+          steps?: unknown;
+          usage?: {
+            prompt_token_count?: number;
+            candidates_token_count?: number;
+            total_token_count?: number;
+            input_tokens?: number;
+            output_tokens?: number;
+            total_tokens?: number;
+          };
+        };
+        const text = extractInteractionsText(payload);
+        const sources = extractInteractionsSources(payload);
+        const usage: ChatUsage = {
+          prompt_tokens: payload.usage?.prompt_token_count ?? payload.usage?.input_tokens,
+          completion_tokens:
+            payload.usage?.candidates_token_count ?? payload.usage?.output_tokens,
+          total_tokens: payload.usage?.total_token_count ?? payload.usage?.total_tokens,
+        };
+        await record(
+          { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+          model,
+          promptText,
+          text,
+          usage,
+          true,
+        );
+        return { text, sources, model, usedWebSearch: true };
+      }
+
+      // Non-OK: log and fall through to the built-in-knowledge fallback.
+      await record(
+        { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+        model,
+        promptText,
+        "",
+        undefined,
+        false,
+        `gemini google_search HTTP ${res.status} — falling back to built-in knowledge`,
+      );
+    } catch (err) {
+      if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
+      await record(
+        { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+        model,
+        promptText,
+        "",
+        undefined,
+        false,
+        `gemini google_search error: ${String(err).slice(0, 160)} — falling back`,
+      );
+    }
+
+    // Gemini failed → built-in-knowledge fallback (no live sources). We hit
+    // Gemini's OpenAI-compat /chat/completions layer directly so this path is
+    // self-contained and does NOT depend on AI_BASE_URL pointing at Google.
+    const g = await geminiChatFallback(model, opts.system, opts.user, {
+      ...(typeof opts.temperature === "number" ? { temperature: opts.temperature } : {}),
+      maxTokens: opts.maxTokens ?? 900,
+    });
+    await record(
+      { ...opts.context, feature: opts.context?.feature ?? "ai.websearch.fallback" },
+      model,
+      promptText,
+      g.content,
+      g.usage,
+      true,
+    );
+    return { text: g.content, sources: [], model, usedWebSearch: false };
+  }
 
   // --- Primary path: Responses API with the hosted web_search tool. ---------
   try {
