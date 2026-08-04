@@ -98,14 +98,24 @@ export class AiLookupError extends Error {
 
 /**
  * How long (ms) a single AI web-search HTTP call may run before we abort it.
- * This MUST fail well inside Vercel's function ceiling (Hobby = 300s hard kill)
- * so the lookup returns a clean, friendly message instead of the browser's
- * "unexpected response from server" page you get when the function is killed
- * mid-flight. ~55s leaves plenty of margin. Override via AI_WEBSEARCH_TIMEOUT_MS.
+ *
+ * This MUST still fail just inside Vercel's function ceiling (Hobby = 300s hard
+ * kill) so the lookup returns a clean, friendly "took too long" message instead
+ * of the browser's "unexpected response from server" page you get when Vercel
+ * kills the function mid-flight.
+ *
+ * T-323: the owner asked us to use the full 5 minutes. A deep Gemini google_search
+ * grounding run occasionally needs more than the old ~55s cap, which made a first
+ * lookup time out even though the answer would have arrived. We now allow ~290s
+ * \u2014 the whole Hobby budget minus a ~10s safety margin so our own AbortController
+ * fires FIRST and we can still format + return the friendly message inside the
+ * 300s the drafts page grants (see `export const maxDuration = 300`). Override
+ * via AI_WEBSEARCH_TIMEOUT_MS (e.g. lower it once Vercel is upgraded, or raise it
+ * beyond 300s on a paid plan with a matching maxDuration).
  */
 const AI_WEBSEARCH_TIMEOUT_MS = (() => {
   const raw = Number(process.env.AI_WEBSEARCH_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : 55_000;
+  return Number.isFinite(raw) && raw > 0 ? raw : 290_000;
 })();
 
 /**
