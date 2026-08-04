@@ -27,7 +27,7 @@ import {
   NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
 } from "@/lib/orders/order-pricing-core";
 
-const S: PricingSettings = { ...DEFAULT_PRICING, min_markup_multiple: 2, round_to_minor_units: 5 };
+const S: PricingSettings = { ...DEFAULT_PRICING, min_markup_multiple: 2 };
 
 describe("T-319 tax-inclusive onboarding auto price", () => {
   it("Michael's example: $5.00 cost → $15.00 out the door (cannabis)", () => {

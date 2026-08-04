@@ -103,8 +103,8 @@ export async function savePricingSettings(
     const row: Record<string, unknown> = {
       id: true,
       min_markup_multiple: Math.max(1, Number(s.min_markup_multiple) || 2),
-      default_tax_rate: Math.max(0, Number(s.default_tax_rate) || 0),
-      round_to_minor_units: Math.max(1, Math.round(Number(s.round_to_minor_units) || 5)),
+      // T-322: default_tax_rate / round_to_minor_units removed \u2014 they were dead
+      // settings that changed no pricing math. We no longer write them.
       updated_by: updatedBy,
     };
     const { error } = await admin.from("pricing_settings").upsert(row, { onConflict: "id" });

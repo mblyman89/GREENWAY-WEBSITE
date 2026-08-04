@@ -54,16 +54,19 @@ export function taxInclusiveDivisorFor(category: string | null | undefined): num
     : TAX_INCLUSIVE_DIVISOR;
 }
 
+// T-322: `default_tax_rate` and `round_to_minor_units` were removed. Neither
+// fed any live pricing math: the authoritative tax comes from the statutory
+// constants in order-pricing-core.ts, and T-319 made auto prices round UP to
+// the next whole dollar (roundUpToNextDollarMinor), so the old cent-rounding
+// step was dead. Keeping them around was a foot-gun (they looked configurable
+// but changed nothing). The pricing_settings table may still have the old
+// columns; we simply no longer read or write them.
 export type PricingSettings = {
   min_markup_multiple: number;
-  default_tax_rate: number;
-  round_to_minor_units: number;
 };
 
 export const DEFAULT_PRICING: PricingSettings = {
   min_markup_multiple: 2.0,
-  default_tax_rate: 0,
-  round_to_minor_units: 5,
 };
 
 /** Round a minor-units amount UP to the nearest `step` (so we never dip below floor). */
@@ -217,7 +220,7 @@ export async function getPricingSettings(): Promise<PricingSettings> {
     const admin = createSupabaseAdminClient();
     const { data } = await admin
       .from("pricing_settings")
-      .select("min_markup_multiple, default_tax_rate, round_to_minor_units")
+      .select("min_markup_multiple")
       .eq("id", true)
       .maybeSingle();
     const row = data as PricingSettings | null;
