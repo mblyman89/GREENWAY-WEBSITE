@@ -55,8 +55,14 @@ export function AiLookupPanel({
   const [pending, startTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
 
-  function run(e?: React.FormEvent) {
-    e?.preventDefault();
+  // Runs the lookup. Called from the Search button's onClick and the input's
+  // Enter key. It is deliberately NOT wired to a <form onSubmit>: this panel
+  // renders INSIDE the row's `approve` <form>, and nested <form>s are invalid
+  // HTML — the browser drops the inner one, so a submit here would post the
+  // OUTER approve form (a full-page reload) instead of running this action.
+  // Using a plain button + programmatic call keeps everything in-place.
+  function run(e?: { preventDefault?: () => void }) {
+    e?.preventDefault?.();
     if (!query.trim()) return;
     setError(null);
     setData(null);
@@ -105,7 +111,7 @@ export function AiLookupPanel({
         className="mt-1 inline-flex items-center gap-1 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/15"
         aria-label="Open AI lookup"
       >
-        <span aria-hidden>\ud83d\udd0d</span> AI Lookup
+        <span aria-hidden>🔍</span> AI Lookup
       </button>
     );
   }
@@ -114,7 +120,7 @@ export function AiLookupPanel({
     <div className="mt-1 w-72 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2">
       <div className="mb-1 flex items-center justify-between">
         <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--admin-accent)]">
-          <span aria-hidden>\ud83e\udd16</span> AI Lookup
+          <span aria-hidden>🤖</span> AI Lookup
         </span>
         <button
           type="button"
@@ -122,7 +128,7 @@ export function AiLookupPanel({
           className="text-[11px] text-[var(--admin-text-faint)] hover:text-[var(--admin-text)]"
           aria-label="Close AI lookup"
         >
-          \u2715
+          ✕
         </button>
       </div>
 
@@ -133,19 +139,35 @@ export function AiLookupPanel({
         </p>
       ) : (
         <>
-          {/* Google-style box + button. Nothing runs until the button is clicked. */}
-          <form onSubmit={run} className="flex items-center gap-1">
+          {/* Google-style box + button. Nothing runs until the button is clicked
+              (or Enter is pressed). This is a plain <div>, NOT a <form>: the
+              panel lives inside the row's approve <form>, and nested <form>s are
+              invalid HTML, so a real submit here would reload the whole page and
+              never call the lookup action. */}
+          <div className="flex items-center gap-1">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Strain or product + brand\u2026"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  run();
+                }
+              }}
+              placeholder="Strain or product + brand…"
               className="h-8 w-full text-[11px]"
               aria-label="AI lookup search terms"
             />
-            <Button type="submit" variant="special" size="sm" disabled={pending || !query.trim()}>
-              {pending ? "\u2026" : "Search"}
+            <Button
+              type="button"
+              onClick={() => run()}
+              variant="special"
+              size="sm"
+              disabled={pending || !query.trim()}
+            >
+              {pending ? "…" : "Search"}
             </Button>
-          </form>
+          </div>
 
           {error && <p className="mt-1.5 text-[11px] text-[var(--admin-danger)]">{error}</p>}
 
@@ -167,7 +189,7 @@ export function AiLookupPanel({
                             : "rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-[var(--admin-text-muted)]"
                         }
                       >
-                        {data.strainTypeConfidence}%{data.autofillStrainType ? " \u00b7 AI-filled, review" : ""}
+                        {data.strainTypeConfidence}%{data.autofillStrainType ? " · AI-filled, review" : ""}
                       </span>
                     </div>
                   )}
@@ -184,7 +206,7 @@ export function AiLookupPanel({
                         data.flavorNotes.length ? `Flavor: ${data.flavorNotes.join(", ")}` : "",
                       ]
                         .filter(Boolean)
-                        .join(" \u00b7 ")}
+                        .join(" · ")}
                     </p>
                   )}
 
@@ -197,7 +219,7 @@ export function AiLookupPanel({
                         data.size ? `Size: ${data.size}` : "",
                       ]
                         .filter(Boolean)
-                        .join(" \u00b7 ")}
+                        .join(" · ")}
                     </p>
                   )}
                   {data.description && (
@@ -247,7 +269,7 @@ export function AiLookupPanel({
                     </div>
                   )}
                   <div className="text-[10px] text-[var(--admin-text-faint)]">
-                    {data.usedWebSearch ? "Live web search" : "AI knowledge"} \u00b7 {data.model}
+                    {data.usedWebSearch ? "Live web search" : "AI knowledge"} · {data.model}
                   </div>
 
                   {/* Save-to-KB / enrichment draft: everything is a DRAFT the
@@ -273,7 +295,7 @@ export function AiLookupPanel({
                             onClick={saveToKb}
                             disabled={savePending}
                           >
-                            {savePending ? "Saving\u2026" : "Save to KB?"}
+                            {savePending ? "Saving…" : "Save to KB?"}
                           </Button>
                         </div>
                       )}
