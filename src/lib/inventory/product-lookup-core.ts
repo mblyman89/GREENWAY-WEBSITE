@@ -2,21 +2,21 @@
  * src/lib/inventory/product-lookup-core.ts
  *
  * PURE CORE for the AI Product/Strain Lookup on the Product Onboarding page
- * (T-314). No network, no server-only imports \u2014 fully unit-testable offline.
+ * (T-314). No network, no server-only imports — fully unit-testable offline.
  *
  * What this module owns:
  *  - The no-guessing, WA I-502-compliant SYSTEM PROMPT the model receives.
  *  - The USER prompt builder from a product name + optional vendor/brand + any
  *    hint the operator typed into the Google-style box.
- *  - The output SCHEMA (flat \u2014 the schema DSL has no nested-object arrays).
+ *  - The output SCHEMA (flat — the schema DSL has no nested-object arrays).
  *  - postProcessLookup(): sanitizes the raw model output into a safe, typed
  *    result. It (a) coerces the strain type to a canonical value, (b) filters
  *    effects through the compliance allow-list (experiential OK, medical/curative
- *    OUT \u2014 e.g. "reduces inflammation" is rejected), (c) filters free text
+ *    OUT — e.g. "reduces inflammation" is rejected), (c) filters free text
  *    (summary) through the compliance linter, (d) grades AUTOFILL eligibility on
  *    the >= 90% bar shared with SLICE 93.
  *
- * Standing rules honored: never guess (low confidence \u2192 honest miss, never a
+ * Standing rules honored: never guess (low confidence → honest miss, never a
  * made-up field), money-agnostic, sensory + allowed-effects only, reuse the
  * SLICE 93 confidence bar and the existing compliance engine.
  */
@@ -54,7 +54,7 @@ export const LOOKUP_AUTO_MIN_CONFIDENCE = STRAIN_TYPE_AUTO_MIN_CONFIDENCE; // 90
 export type RawProductLookup = {
   /** Best strain type, or "unknown" when not a flower/strain or not found. */
   strain_type: string;
-  /** 0..1 \u2014 the model's own confidence in the strain_type specifically. */
+  /** 0..1 — the model's own confidence in the strain_type specifically. */
   strain_type_confidence: number;
   /** Sensory/experiential summary (NO medical claims). Empty when nothing found. */
   summary: string;
@@ -66,8 +66,10 @@ export type RawProductLookup = {
   flavor_notes: string[];
   /** Lineage/parentage when known (plain text), else empty. */
   lineage: string;
-  /** True only when the model actually recognized/located this product. */
+  /** True when the model located the product OR found web/community info on it. */
   found: boolean;
+  /** 0..1 OVERALL confidence in the whole result (distinct from strain_type). */
+  confidence?: number;
 
   // -------------------------------------------------------------------------
   // T-315 ALL-INCLUSIVE fields (additive). Populated for ANY product type so a
@@ -106,8 +108,23 @@ export type ProductLookupResult = {
   aromaNotes: string[];
   flavorNotes: string[];
   lineage: string;
-  /** The model located the product at all. */
+  /** The model located the product OR found web/community info on it. */
   found: boolean;
+  /**
+   * 0..100 OVERALL confidence in the whole result (community-inclusive). Falls
+   * back to the strain-type confidence when the model omits an overall score.
+   * This is what the UI shows as the headline confidence %.
+   */
+  confidence: number;
+  /**
+   * True when the model returned ANY usable content at all (a real strain type,
+   * summary, effects, aroma, flavor, lineage, description, short description,
+   * category, ratio, size, or an image candidate) — REGARDLESS of `found`.
+   * The UI uses this to decide whether to SHOW the findings (so community info
+   * is surfaced for the owner to review, never silently suppressed). Distinct
+   * from hasKbDraft / hasEnrichmentDraft, which gate the auto-save path.
+   */
+  hasAnyFindings: boolean;
   /**
    * True when there is worthwhile detail to offer as a "Save to KB?" draft
    * (a real strain type and/or summary/effects/aroma/flavor/lineage).
@@ -244,57 +261,74 @@ export function coercePotencyRatio(raw: unknown): string {
  * the model's behavior is defined for the lookup feature.
  */
 export const PRODUCT_LOOKUP_SYSTEM = `
-You are a meticulous cannabis product research assistant for a licensed
+You are a thorough cannabis product research assistant for a licensed
 Washington State (I-502) retailer. You look up a specific product (often a
-flower strain, but sometimes an edible, vape, concentrate, pre-roll, or
-accessory) and report ONLY what you can actually verify.
+flower strain, but sometimes an edible, vape, concentrate, pre-roll, beverage,
+tincture, topical, or accessory) and report what the internet and the cannabis
+community say about it. Search widely: brand sites, licensed menus, Leafly,
+AllBud, dispensary listings, review sites, and community forums all count.
 
-HARD RULES (never break):
-- NEVER GUESS. If you cannot verify a detail from real, reputable sources or
-  solid knowledge, leave it blank and lower your confidence. It is always
-  better to return "found": false than to invent a strain type, lineage, or
-  description.
-- Set "found": false and "strain_type": "unknown" when you do not actually
-  recognize or locate the product.
-- Report "strain_type_confidence" honestly on a 0..1 scale. Only claim high
-  confidence (>= 0.9) when the strain type is genuinely well-established.
+YOUR JOB — BE GENEROUS BUT HONEST:
+- REPORT WHAT YOU FIND. If reputable sources or the community describe this
+  product, gather it and report it. Community consensus is valuable — you do
+  NOT need an official "from the manufacturer" source to report a detail.
+- Do not hold back useful information just because it is not 100% certain.
+  Instead, tell the truth about HOW confident you are (see confidence below).
+  The retailer reviews everything and decides what to keep — your job is to
+  surface the findings, not to censor them.
+- Fill "found": true whenever you locate the product OR find community/web
+  information describing it. Only set "found": false when you genuinely find
+  NOTHING at all about this specific product after searching.
+- The ONE thing you must never do is INVENT a specific fact (a made-up lineage,
+  a fake potency number, a fabricated image URL). Reporting what sources say =
+  good. Making up a fact from nothing = not allowed. When unsure of a single
+  field, lower that field's confidence or leave that one field blank — but
+  still report everything else you did find.
 
-WASHINGTON I-502 COMPLIANCE (never violate):
+CONFIDENCE (be honest, not shy):
+- "strain_type_confidence": 0..1, your confidence in the STRAIN TYPE specifically.
+- "confidence": 0..1, your OVERALL confidence in the whole result. High (>=0.85)
+  when multiple sources agree; medium (0.5–0.85) for solid single-source or
+  strong community consensus; low (<0.5) for thin or conflicting info — but
+  STILL report what you found at low confidence so the retailer can review it.
+
+WASHINGTON I-502 COMPLIANCE (never violate — this is the law, not a preference):
 - NO health, medical, therapeutic, or curative claims. Do NOT say a product
   treats, cures, heals, relieves, prevents, or reduces any condition, symptom,
   disease, pain, anxiety, inflammation, etc.
 - You MAY describe EXPERIENTIAL character with plain adjectives (relaxed, calm,
   sleepy, uplifted, happy, focused, creative, energetic, euphoric, giggly,
-  talkative, hungry, mellow, etc.) framed as the general vibe \u2014 never as a
+  talkative, hungry, mellow, etc.) framed as the general vibe — never as a
   treatment.
 - NO dosing advice, no safety/efficacy claims, nothing appealing to minors, no
   alcohol/tobacco/vehicle associations.
-- Keep the summary sensory and tasteful: aroma, flavor, format, lineage/strain
-  type, and general experiential character only.
+- Keep copy sensory and tasteful: aroma, flavor, format, lineage/strain type,
+  and general experiential character.
 
-STRAIN TYPE: one of exactly \u2014 indica, sativa, hybrid, indica-hybrid,
-sativa-hybrid, cbd, unknown. Use "unknown" for non-flower products or when not
-established.
+STRAIN TYPE: one of exactly — indica, sativa, hybrid, indica-hybrid,
+sativa-hybrid, cbd, unknown. Use "unknown" for non-flower products or when the
+type is genuinely not established anywhere.
 
-ALL PRODUCTS (flower AND non-flower \u2014 edibles, beverages, vapes, concentrates,
+ALL PRODUCTS (flower AND non-flower — edibles, beverages, vapes, concentrates,
 pre-rolls, tinctures, topicals, accessories). In addition to the strain fields,
-also report, ONLY when you can verify it:
-- "description": a tasteful marketing description (sensory, format, flavor,
-  experiential vibe). NO medical/curative claims. Leave "" if unsure.
-- "short_description": a single catchy line under ~120 chars, same rules. "".
-- "category": exactly one of \u2014 flower, pre-roll, vape, concentrate, edible,
-  beverage, tincture, topical, capsule, accessory, other. "" if unsure.
-- "potency_ratio": the cannabinoid ratio as printed on the package, e.g.
-  "1:1" or "20:1". "" if none is stated. Do NOT invent a ratio.
+also report everything you can find:
+- "description": a rich, tasteful marketing description (sensory, format,
+  flavor, lineage, experiential vibe). NO medical/curative claims.
+- "short_description": a single catchy line under ~120 chars, same rules.
+- "category": exactly one of — flower, pre-roll, vape, concentrate, edible,
+  beverage, tincture, topical, capsule, accessory, other. "" only if truly unclear.
+- "potency_ratio": the cannabinoid ratio as printed/reported, e.g. "1:1" or
+  "20:1". "" if none is stated. Do NOT invent a ratio.
 - "size": the net size/quantity as printed, e.g. "12oz", "3.5g", "10pk". "".
 - "image_candidates": up to a dozen DIRECT image URLs (http/https) that clearly
   show THIS product from reputable sources (the maker's site, the brand page,
   a licensed menu). Absolute URLs only. Do NOT include logos, icons, banners,
-  or unrelated images. Do NOT fabricate URLs \u2014 return [] if you are unsure.
+  or unrelated images. Do NOT fabricate URLs — return [] if you have none.
 
-Return your findings in the exact JSON shape requested. Prefer fewer, verified
-details over many guessed ones. It is always better to leave a field blank than
-to guess.
+Return your findings in the exact JSON shape requested. Favor giving the
+retailer MORE to review (honestly graded by confidence) over giving them a bare
+"nothing found." Only a fabricated fact is off-limits — reporting what the web
+and community say is exactly your purpose.
 `.trim();
 
 /** Build the user prompt from the operator's search box + row context. */
@@ -318,15 +352,19 @@ export function buildLookupUserPrompt(input: {
   if (vendor) lines.push(`Vendor / brand: ${vendor}`);
   lines.push("");
   lines.push(
-    "Look this up. If it is a cannabis flower strain, identify its strain type " +
-      "and (only if verified) lineage, aroma, flavor, and general experiential " +
-      "character. If it is a non-flower product (edible, vape, concentrate, " +
-      "pre-roll, beverage, tincture, topical, accessory), set strain_type to " +
-      "\"unknown\" and describe only what you can verify about the product. " +
-      "For EVERY product also fill description, short_description, category, " +
-      "potency_ratio, size, and image_candidates when \\u2014 and only when \\u2014 " +
-      "you can verify them from reputable sources. Never guess; leave a field " +
-      "blank rather than inventing it.",
+    "Look this up thoroughly across brand sites, licensed menus, Leafly, AllBud, " +
+      "dispensary listings, and community/review sources. If it is a cannabis " +
+      "flower strain, identify its strain type plus lineage, aroma, flavor, and " +
+      "general experiential character as reported by sources and the community. " +
+      "If it is a non-flower product (edible, vape, concentrate, pre-roll, " +
+      "beverage, tincture, topical, accessory), set strain_type to \"unknown\" " +
+      "and describe the product richly from what you find. For EVERY product " +
+      "also fill description, short_description, category, potency_ratio, size, " +
+      "and image_candidates from what sources and the community report. Report " +
+      "everything you find and grade your confidence honestly; the retailer " +
+      "reviews and edits it. The only hard rule: never fabricate a specific fact " +
+      "(a made-up lineage, fake number, or invented URL) — leave that one field " +
+      "blank instead, but still return everything else you found.",
   );
   return lines.join("\n");
 }
@@ -357,6 +395,10 @@ export function postProcessLookup(
   const strainType = coerceStrainType(raw?.strain_type);
   const strainTypeConfidence = toPct(raw?.strain_type_confidence);
   const found = Boolean(raw?.found);
+  // Overall confidence: prefer the model's explicit overall score; fall back to
+  // the strain-type confidence when it's absent. Community-inclusive headline.
+  const overallRaw = typeof raw?.confidence === "number" ? raw.confidence : undefined;
+  const confidence = overallRaw !== undefined ? toPct(overallRaw) : strainTypeConfidence;
 
   // Effects: keep only allow-listed experiential words; medical/curative OUT.
   const effectsIn = Array.isArray(raw?.effects) ? raw.effects.map((e) => String(e)) : [];
@@ -371,7 +413,7 @@ export function postProcessLookup(
   const lineage = String(raw?.lineage ?? "").trim();
 
   // T-315: description / short_description are compliance-gated just like the
-  // summary \u2014 any true medical/curative claim drops the whole field.
+  // summary — any true medical/curative claim drops the whole field.
   const descLint = lintCopy(raw?.description ?? "", extraBanned);
   const description = descLint.disposition === "block" ? "" : (descLint.publicText ?? "");
   const shortLint = lintCopy(raw?.short_description ?? "", extraBanned);
@@ -397,11 +439,29 @@ export function postProcessLookup(
       flavorNotes.length > 0 ||
       lineage.length > 0);
 
-  // T-315: enrichment-worthiness is separate \u2014 it's about the marketing copy
+  // T-315: enrichment-worthiness is separate — it's about the marketing copy
   // and images we can stage on the enrichment page for ANY product.
   const hasEnrichmentDraft =
     found &&
     (description.length > 0 || shortDescription.length > 0 || imageCandidates.length > 0);
+
+  // "Any findings" is content-driven and does NOT depend on `found`. This is
+  // what lets the UI surface community/low-confidence info for the owner to
+  // review instead of silently hiding it behind an honest-miss. If the model
+  // gathered anything usable, we show it (clearly graded by confidence).
+  const hasAnyFindings =
+    strainType !== "unknown" ||
+    summary.length > 0 ||
+    effectCheck.allowed.length > 0 ||
+    aromaNotes.length > 0 ||
+    flavorNotes.length > 0 ||
+    lineage.length > 0 ||
+    description.length > 0 ||
+    shortDescription.length > 0 ||
+    category.length > 0 ||
+    potencyRatio.length > 0 ||
+    size.length > 0 ||
+    imageCandidates.length > 0;
 
   return {
     strainType,
@@ -414,6 +474,8 @@ export function postProcessLookup(
     flavorNotes,
     lineage,
     found,
+    confidence,
+    hasAnyFindings,
     hasKbDraft,
     description,
     shortDescription,
@@ -465,7 +527,7 @@ export function lookupToStrainSuggestion(
 }
 
 // ---------------------------------------------------------------------------
-// PURE SELF-TEST \u2014 registered in scripts/compliance/run-pure-selftests.ts.
+// PURE SELF-TEST — registered in scripts/compliance/run-pure-selftests.ts.
 // Offline: exercises coercion, the 90% bar, compliance filtering (inflammation
 // stays OUT, relaxing stays IN), and the honest-miss path.
 // ---------------------------------------------------------------------------
@@ -545,12 +607,62 @@ export function __runProductLookupTests(): { passed: number } {
   assert(miss.hasKbDraft === false, "miss no draft");
   assert(miss.strainType === "unknown", "miss unknown");
 
-  // Prompt builders produce non-empty text.
-  assert(PRODUCT_LOOKUP_SYSTEM.includes("NEVER GUESS"), "system has no-guess rule");
+  // Prompt builders produce non-empty text. The prompt now forbids FABRICATION
+  // (report what the community/web says; only invented facts are off-limits).
+  assert(PRODUCT_LOOKUP_SYSTEM.includes("INVENT"), "system forbids inventing facts");
+  assert(PRODUCT_LOOKUP_SYSTEM.includes("community"), "system embraces community info");
+  assert(PRODUCT_LOOKUP_SYSTEM.includes("I-502"), "system keeps I-502 rails");
   assert(
     buildLookupUserPrompt({ query: "Blue Dream", vendorOrBrand: "Acme" }).includes("Blue Dream"),
     "user prompt has query",
   );
+
+  // ---- Un-suppression: findings show even when found=false ----------------
+  // A low-confidence community hit (found=false) with real content must still
+  // be surfaced via hasAnyFindings, so the owner can review it. The overall
+  // `confidence` reflects the model's honest overall score when provided.
+  const community = postProcessLookup({
+    strain_type: "hybrid",
+    strain_type_confidence: 0.4,
+    summary: "Community reports a sweet, earthy, mellow character.",
+    effects: ["relaxed", "happy"],
+    aroma_notes: ["sweet", "earthy"],
+    flavor_notes: [],
+    lineage: "",
+    found: false,
+    confidence: 0.6,
+  });
+  assert(community.hasAnyFindings === true, "community hit surfaces findings");
+  assert(community.found === false, "community hit still found=false");
+  assert(community.autofillStrainType === false, "low conf still no autofill");
+  assert(community.confidence === 60, "overall confidence uses model's score");
+  assert(community.summary.length > 0, "community summary kept");
+
+  // Overall confidence falls back to strain-type confidence when omitted.
+  const noOverall = postProcessLookup({
+    strain_type: "indica",
+    strain_type_confidence: 0.7,
+    summary: "",
+    effects: [],
+    aroma_notes: [],
+    flavor_notes: [],
+    lineage: "",
+    found: true,
+  });
+  assert(noOverall.confidence === 70, "overall confidence falls back to strain conf");
+
+  // A true empty miss has NO findings.
+  const emptyMiss = postProcessLookup({
+    strain_type: "unknown",
+    strain_type_confidence: 0,
+    summary: "",
+    effects: [],
+    aroma_notes: [],
+    flavor_notes: [],
+    lineage: "",
+    found: false,
+  });
+  assert(emptyMiss.hasAnyFindings === false, "true empty miss has no findings");
 
   // ---- T-315: all-inclusive fields ----------------------------------------
   // Category coercion (allow-list + synonyms; never guess).

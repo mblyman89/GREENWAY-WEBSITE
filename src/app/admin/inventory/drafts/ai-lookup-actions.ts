@@ -8,7 +8,7 @@
  *    gated result. A plain "not found" is a NORMAL success (found:false), never
  *    an error. Autofill eligibility is decided by the pure core's >= 90% bar.
  *  - saveLookupToKbAction:  saves what the AI found as a kb_strains DRAFT
- *    (status='draft', source='enrichment') \u2014 a draft for the owner to approve so
+ *    (status='draft', source='enrichment') — a draft for the owner to approve so
  *    future lots auto-attach it. Compliance is re-checked server-side before the
  *    write; the client payload is NEVER trusted.
  *
@@ -64,11 +64,17 @@ export type ProductLookupActionResult =
   | {
       ok: true;
       found: boolean;
+      /** 0..100 OVERALL confidence in the whole result (community-inclusive). */
+      confidence: number;
+      /** True when the model returned ANY usable content (surface for review). */
+      hasAnyFindings: boolean;
       strainType: GreenwayStrainType;
       strainTypeConfidence: number;
       autofillStrainType: boolean;
       summary: string;
       effects: string[];
+      /** Effects the model proposed that were dropped by the compliance gate. */
+      rejectedEffects: { effect: string; reason: string }[];
       aromaNotes: string[];
       flavorNotes: string[];
       lineage: string;
@@ -151,11 +157,14 @@ export async function productLookupAction(
     return {
       ok: true,
       found: r.found,
+      confidence: r.confidence,
+      hasAnyFindings: r.hasAnyFindings,
       strainType: r.strainType,
       strainTypeConfidence: r.strainTypeConfidence,
       autofillStrainType: r.autofillStrainType,
       summary: r.summary,
       effects: r.effects,
+      rejectedEffects: r.rejectedEffects,
       aromaNotes: r.aromaNotes,
       flavorNotes: r.flavorNotes,
       lineage: r.lineage,
@@ -217,7 +226,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
   }
 
   const name = String(payload.name ?? "").trim();
-  if (!name) return { ok: false, error: "Nothing to save \u2014 missing a product name." };
+  if (!name) return { ok: false, error: "Nothing to save — missing a product name." };
 
   // Re-sanitize server-side: the client is never trusted. Rebuild a raw shape
   // from the payload and run it back through the compliance gate. This covers
@@ -265,7 +274,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
 
   const wrote: string[] = [];
   try {
-    // 1) Strain KB draft (unchanged behavior) \u2014 only when strain-worthy.
+    // 1) Strain KB draft (unchanged behavior) — only when strain-worthy.
     if (isStrainWorthy) {
       await upsertKbStrain(
         {
@@ -299,7 +308,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
     // 2) ENRICHMENT feed (T-315): stage description / short_description / image
     //    candidates as PENDING ai_suggestions keyed to the POS product key, so
     //    they appear on the enrichment page for the owner to Accept / Import.
-    //    DRAFTS ONLY \u2014 nothing here publishes or imports on its own.
+    //    DRAFTS ONLY — nothing here publishes or imports on its own.
     if (hasEnrichment) {
       const existing = await listSuggestions("product", posKey, "pending");
       const alreadyHas = (fieldKey: string, value: string) =>
@@ -340,7 +349,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
           entity_id: posKey,
           field_key: RESEARCH_IMAGES_FIELD,
           suggested_value: packedImages,
-          input_summary: `AI onboarding lookup \u00b7 ${packedImages.split("\n").length} image candidate(s) for ${name}`,
+          input_summary: `AI onboarding lookup · ${packedImages.split("\n").length} image candidate(s) for ${name}`,
           generated_by: session.userId,
           confidence: conf,
           source: src,
@@ -365,7 +374,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
     }
 
     if (wrote.length === 0) {
-      return { ok: false, error: "Those details were already staged \u2014 nothing new to save." };
+      return { ok: false, error: "Those details were already staged — nothing new to save." };
     }
     return { ok: true };
   } catch (err) {

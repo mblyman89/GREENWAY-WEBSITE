@@ -477,7 +477,7 @@ export async function* generateStream(opts: GenerateOptions): AsyncGenerator<str
 }
 
 // ---------------------------------------------------------------------------
-// LIVE WEB SEARCH \u2014 GPT-4o with the OpenAI Responses API `web_search` tool.
+// LIVE WEB SEARCH — GPT-4o with the OpenAI Responses API `web_search` tool.
 //
 // T-314 (AI product/strain lookup). This is the ONE place in the provider that
 // can reach the live internet: it uses OpenAI's hosted `web_search` tool via the
@@ -601,7 +601,7 @@ function extractResponsesText(payload: unknown): string {
 export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSearchResult> {
   if (!isAiConfigured) throw new AiNotConfiguredError();
 
-  // Hard budget guard \u2014 never spend past the owner's cap.
+  // Hard budget guard — never spend past the owner's cap.
   const budget = await getBudgetStatus();
   if (budget.blocked) throw new AiBudgetExceededError(budget.reason ?? "AI budget exceeded.");
 
@@ -660,7 +660,7 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
       "",
       undefined,
       false,
-      `web_search HTTP ${res.status} \u2014 falling back to built-in knowledge`,
+      `web_search HTTP ${res.status} — falling back to built-in knowledge`,
     );
   } catch (err) {
     if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
@@ -671,7 +671,7 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
       "",
       undefined,
       false,
-      `web_search error: ${String(err).slice(0, 160)} \u2014 falling back`,
+      `web_search error: ${String(err).slice(0, 160)} — falling back`,
     );
   }
 

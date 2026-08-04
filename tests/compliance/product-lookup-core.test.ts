@@ -135,8 +135,12 @@ describe("product-lookup-core (T-314)", () => {
     expect(p).toContain("Acme Farms");
   });
 
-  it("system prompt bakes in the no-guess + compliance rules", () => {
-    expect(PRODUCT_LOOKUP_SYSTEM).toContain("NEVER GUESS");
+  it("system prompt forbids fabrication but embraces community info + keeps I-502 rails", () => {
+    // T-316 "unchain the beast": the model should report what the web/community
+    // says (generous), while the ONE hard rule is never to INVENT a fact, and
+    // the I-502 compliance rails stay intact (no medical/curative claims).
+    expect(PRODUCT_LOOKUP_SYSTEM).toContain("INVENT");
+    expect(PRODUCT_LOOKUP_SYSTEM).toContain("community");
     expect(PRODUCT_LOOKUP_SYSTEM).toContain("I-502");
   });
 
