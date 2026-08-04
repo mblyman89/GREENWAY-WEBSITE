@@ -12,6 +12,7 @@ import {
   finalizeManifestDispositions,
   gatherSampleCapNotice,
   logManifestEvent,
+  setManifestInvoiceOverride,
 } from "@/lib/inventory/intake-store";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
@@ -367,6 +368,33 @@ export async function reExtractManifestAiAction(manifestId: string) {
   });
   if (readInvoice) params.set("inv", readInvoice);
   redirect(`/admin/inventory/intake/${manifestId}?${params.toString()}`);
+}
+
+/**
+ * Correct the Invoice/Order # for one manifest (migration 0151). The value the
+ * intake table shows is derived from the vendor payload; this lets the owner
+ * override it when it's wrong (or clear the override with a blank value).
+ * Additive-only — touches ONLY the invoice_number_override column. Scoped to a
+ * single manifestId; never loops the table.
+ */
+export async function setInvoiceNumberAction(manifestId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const value = ((formData.get("invoice_number") as string | null) ?? "").trim();
+
+  const res = await setManifestInvoiceOverride(manifestId, value, session.userId);
+
+  // Revalidate both the list (Invoice # column) and the detail page.
+  revalidatePath("/admin/inventory/intake");
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+
+  if (!res.ok) {
+    // NOTE: use the `invoice=` param (not `error=`) so the failure banner stays
+    // on the email hero table where the edit happens. Routing it through the
+    // shared `error=` param would force it into MANUAL_ERROR_CODES and wrongly
+    // auto-open the Manual tools tab (see receiving-tabs-core.ts).
+    redirect("/admin/inventory/intake?invoice=error");
+  }
+  redirect(`/admin/inventory/intake?invoice=${res.cleared ? "cleared" : "saved"}`);
 }
 
 /**

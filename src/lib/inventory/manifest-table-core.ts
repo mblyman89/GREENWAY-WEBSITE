@@ -181,7 +181,16 @@ export function invoiceNumberForRow(row: {
   raw_payload: unknown;
   source_format: string;
   manifest_number: string | null;
+  /**
+   * Migration 0151: owner-entered correction. When present and non-blank it
+   * WINS over the derived value (payload scan / manifest-number fallback).
+   */
+  invoice_number_override?: string | null;
 }): string | null {
+  // Owner override always wins when set to a non-blank value.
+  const override = (row.invoice_number_override ?? "").trim();
+  if (override) return override;
+
   const fromPayload = extractInvoiceNumber(row.raw_payload);
   if (fromPayload) return fromPayload;
   return row.manifest_number ?? null;
