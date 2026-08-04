@@ -309,11 +309,24 @@ STRAIN TYPE: one of exactly — indica, sativa, hybrid, indica-hybrid,
 sativa-hybrid, cbd, unknown. Use "unknown" for non-flower products or when the
 type is genuinely not established anywhere.
 
+THIS VENDOR'S VERSION FIRST: a vendor/brand is usually given. Prioritize what
+THAT specific vendor/brand publishes about THEIR version of this product (their
+own site, their menu listing, licensed-menu pages that name them). Their
+lineage, potency, terpenes, size, and imagery can differ from the generic
+strain \u2014 prefer the vendor-specific facts, and only widen to the general
+community when the vendor says nothing. Report as MUCH as you can find so the
+retailer has the full picture; they review and trim.
+
 ALL PRODUCTS (flower AND non-flower — edibles, beverages, vapes, concentrates,
 pre-rolls, tinctures, topicals, accessories). In addition to the strain fields,
 also report everything you can find:
-- "description": a rich, tasteful marketing description (sensory, format,
-  flavor, lineage, experiential vibe). NO medical/curative claims.
+- "description": a rich, thorough, tasteful marketing description that gathers
+  EVERYTHING useful you found about THIS vendor's product \u2014 sensory character,
+  format, flavor, lineage/genetics, and, when the sources state them, the
+  reported THC/CBD potency percentages, the terpene profile, the grower/farm or
+  producer, harvest/batch notes, and any awards or notable reviews. Fold these
+  extra facts into flowing prose (do NOT invent any of them; only include what
+  sources actually report). NO medical/curative claims.
 - "short_description": a single catchy line under ~120 chars, same rules.
 - "category": exactly one of — flower, pre-roll, vape, concentrate, edible,
   beverage, tincture, topical, capsule, accessory, other. "" only if truly unclear.
@@ -352,7 +365,13 @@ export function buildLookupUserPrompt(input: {
   if (vendor) lines.push(`Vendor / brand: ${vendor}`);
   lines.push("");
   lines.push(
-    "Look this up thoroughly across brand sites, licensed menus, Leafly, AllBud, " +
+    (vendor
+      ? `Focus FIRST on ${vendor}'s own version of this product (their site, ` +
+        "their menu listing, licensed-menu pages that name them); prefer their " +
+        "vendor-specific facts over the generic strain, and only widen to the " +
+        "broader community when they say nothing. "
+      : "") +
+      "Look this up thoroughly across brand sites, licensed menus, Leafly, AllBud, " +
       "dispensary listings, and community/review sources. If it is a cannabis " +
       "flower strain, identify its strain type plus lineage, aroma, flavor, and " +
       "general experiential character as reported by sources and the community. " +
@@ -360,11 +379,14 @@ export function buildLookupUserPrompt(input: {
       "beverage, tincture, topical, accessory), set strain_type to \"unknown\" " +
       "and describe the product richly from what you find. For EVERY product " +
       "also fill description, short_description, category, potency_ratio, size, " +
-      "and image_candidates from what sources and the community report. Report " +
-      "everything you find and grade your confidence honestly; the retailer " +
-      "reviews and edits it. The only hard rule: never fabricate a specific fact " +
-      "(a made-up lineage, fake number, or invented URL) — leave that one field " +
-      "blank instead, but still return everything else you found.",
+      "and image_candidates from what sources and the community report. Pack the " +
+      "description with EVERYTHING useful you found \u2014 including reported THC/CBD " +
+      "percentages, terpene profile, grower/farm, harvest/batch, and awards when " +
+      "sources state them. Report everything you find and grade your confidence " +
+      "honestly; the retailer reviews and edits it. The only hard rule: never " +
+      "fabricate a specific fact (a made-up lineage, fake number, or invented " +
+      "URL) — leave that one field blank instead, but still return everything " +
+      "else you found.",
   );
   return lines.join("\n");
 }

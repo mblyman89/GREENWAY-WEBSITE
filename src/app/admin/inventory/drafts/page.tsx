@@ -39,6 +39,11 @@ import { labelForCategory } from "@/lib/pos/category-registry-core";
 import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
 
 export const dynamic = "force-dynamic";
+// T-318: the AI product lookup (a server action invoked on this route) runs a
+// live Gemini google_search grounding call that can take a while. Give the
+// function the full Vercel Hobby ceiling (300s) so it isn't cut short before
+// our own ~55s in-code fetch timeout can return a clean, friendly message.
+export const maxDuration = 300;
 
 function fmtPct(n: number | null): string {
   if (n === null || n === undefined) return "—";

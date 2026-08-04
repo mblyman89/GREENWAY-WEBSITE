@@ -79,6 +79,81 @@ export class AiNotConfiguredError extends Error {
   }
 }
 
+/**
+ * A single, catchable error the web-search lookup throws when it cannot finish
+ * for a reason the OPERATOR can act on (took too long, out of AI credits, key
+ * rejected). Carries a short, plain-English `friendly` message the UI can show
+ * verbatim — no stack traces, no HTTP jargon. This lets the server action
+ * surface a helpful in-panel note INSTEAD of the raw browser "unexpected
+ * response from server" page you get when a function is silently killed.
+ */
+export class AiLookupError extends Error {
+  readonly friendly: string;
+  constructor(friendly: string, technical?: string) {
+    super(technical ?? friendly);
+    this.name = "AiLookupError";
+    this.friendly = friendly;
+  }
+}
+
+/**
+ * How long (ms) a single AI web-search HTTP call may run before we abort it.
+ * This MUST fail well inside Vercel's function ceiling (Hobby = 300s hard kill)
+ * so the lookup returns a clean, friendly message instead of the browser's
+ * "unexpected response from server" page you get when the function is killed
+ * mid-flight. ~55s leaves plenty of margin. Override via AI_WEBSEARCH_TIMEOUT_MS.
+ */
+const AI_WEBSEARCH_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.AI_WEBSEARCH_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 55_000;
+})();
+
+/**
+ * fetch() with a hard timeout via AbortController. On timeout it throws an
+ * Error whose name is "AbortError" (matching the platform), which callers
+ * detect to raise a friendly "took too long" message. Any caller-supplied
+ * `signal` is respected too. The timer is always cleared.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** True when an error is an AbortController timeout (from fetchWithTimeout). */
+function isAbortError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "AbortError" || /aborted|abort(ed)?\b/i.test(err.message))
+  );
+}
+
+/**
+ * Map an HTTP status from an AI provider to a short, plain-English message the
+ * operator can act on. Returns undefined for statuses we don't have friendly
+ * copy for (caller then falls back to built-in knowledge as before).
+ */
+function friendlyStatusMessage(status: number): string | undefined {
+  if (status === 401 || status === 403) {
+    return "The AI key was rejected. Double-check the Gemini API key in your Vercel settings, then try again.";
+  }
+  if (status === 429) {
+    return "You're out of AI Studio prepay credits (or hit a rate limit). Add credits at aistudio.google.com \u2192 Billing, then try again.";
+  }
+  if (status >= 500) {
+    return "The AI service had a temporary problem on its end. Wait a moment and try the lookup again.";
+  }
+  return undefined;
+}
+
 type ChatUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 
 /** Common helper: record a usage row from provider usage or a heuristic. */
@@ -690,16 +765,22 @@ async function geminiChatFallback(
   // Only set temperature when explicitly requested (Gemini 3 prefers default).
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
 
-  const res = await fetch(`${base}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${GEMINI_API_KEY}`,
+  const res = await fetchWithTimeout(
+    `${base}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GEMINI_API_KEY}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    AI_WEBSEARCH_TIMEOUT_MS,
+  );
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    const friendly = friendlyStatusMessage(res.status);
+    if (friendly) throw new AiLookupError(friendly, `gemini fallback (${res.status}): ${text.slice(0, 200)}`);
     throw new Error(`gemini fallback failed (${res.status}): ${text.slice(0, 300)}`);
   }
   const json = (await res.json()) as {
@@ -751,6 +832,13 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
         tools: [{ type: "google_search" }],
         generation_config: {
           max_output_tokens: opts.maxTokens ?? 900,
+          // Gemini 3 defaults to thinking_level "high" (its SLOWEST setting):
+          // combined with live google_search grounding that regularly ran past
+          // Vercel Hobby's 300s function ceiling and got the whole function
+          // killed (the browser then shows "unexpected response from server").
+          // "medium" is the balanced setting the owner chose \u2014 noticeably faster
+          // while still reasoning about the sources. Override via AI_THINKING_LEVEL.
+          thinking_level: process.env.AI_THINKING_LEVEL ?? "medium",
           // Only set temperature when the caller explicitly asks; otherwise
           // let Gemini use its recommended default (1.0).
           ...(typeof opts.temperature === "number"
@@ -758,14 +846,20 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
             : {}),
         },
       };
-      const res = await fetch(GEMINI_INTERACTIONS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GEMINI_API_KEY,
+      // Hard timeout so a slow grounding run fails FAST with a friendly message
+      // instead of hanging until Vercel kills the function at 300s.
+      const res = await fetchWithTimeout(
+        GEMINI_INTERACTIONS_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
-      });
+        AI_WEBSEARCH_TIMEOUT_MS,
+      );
 
       if (res.ok) {
         const payload = (await res.json()) as {
@@ -799,7 +893,13 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
         return { text, sources, model, usedWebSearch: true };
       }
 
-      // Non-OK: log and fall through to the built-in-knowledge fallback.
+      // Non-OK. For operator-actionable statuses (bad key, out of credits,
+      // provider outage) there is NO point spending a second call on the
+      // built-in-knowledge fallback \u2014 it hits the same account and fails the
+      // same way, just slower. Log it, then throw a friendly, catchable error
+      // the UI can show verbatim (instead of hanging toward the 300s kill).
+      const friendly = friendlyStatusMessage(res.status);
+      const detail = await res.text().catch(() => "");
       await record(
         { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
         model,
@@ -807,10 +907,42 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
         "",
         undefined,
         false,
-        `gemini google_search HTTP ${res.status} — falling back to built-in knowledge`,
+        friendly
+          ? `gemini google_search HTTP ${res.status} — ${friendly}`
+          : `gemini google_search HTTP ${res.status} — falling back to built-in knowledge`,
       );
+      if (friendly) {
+        throw new AiLookupError(
+          friendly,
+          `gemini google_search HTTP ${res.status}: ${detail.slice(0, 200)}`,
+        );
+      }
+      // Other non-OK (e.g. a transient 4xx): fall through to fallback below.
     } catch (err) {
-      if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
+      if (
+        err instanceof AiNotConfiguredError ||
+        err instanceof AiBudgetExceededError ||
+        err instanceof AiLookupError
+      ) {
+        throw err;
+      }
+      // A timeout means grounding ran too long. Don't burn a second call \u2014 tell
+      // the operator plainly so they can simply try again.
+      if (isAbortError(err)) {
+        await record(
+          { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+          model,
+          promptText,
+          "",
+          undefined,
+          false,
+          `gemini google_search timed out after ${Math.round(AI_WEBSEARCH_TIMEOUT_MS / 1000)}s`,
+        );
+        throw new AiLookupError(
+          "The web search took too long and was stopped. Try the lookup again \u2014 it usually finishes on a second attempt.",
+          `gemini google_search aborted after ${AI_WEBSEARCH_TIMEOUT_MS}ms`,
+        );
+      }
       await record(
         { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
         model,
@@ -842,23 +974,27 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
 
   // --- Primary path: Responses API with the hosted web_search tool. ---------
   try {
-    const res = await fetch(`${AI_BASE_URL}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${AI_API_KEY}`,
+    const res = await fetchWithTimeout(
+      `${AI_BASE_URL}/responses`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${AI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: opts.temperature ?? 0.3,
+          max_output_tokens: opts.maxTokens ?? 900,
+          tools: [{ type: "web_search" }],
+          input: [
+            { role: "system", content: opts.system },
+            { role: "user", content: opts.user },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model,
-        temperature: opts.temperature ?? 0.3,
-        max_output_tokens: opts.maxTokens ?? 900,
-        tools: [{ type: "web_search" }],
-        input: [
-          { role: "system", content: opts.system },
-          { role: "user", content: opts.user },
-        ],
-      }),
-    });
+      AI_WEBSEARCH_TIMEOUT_MS,
+    );
 
     if (res.ok) {
       const payload = (await res.json()) as {
@@ -895,7 +1031,30 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
       `web_search HTTP ${res.status} — falling back to built-in knowledge`,
     );
   } catch (err) {
-    if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
+    if (
+      err instanceof AiNotConfiguredError ||
+      err instanceof AiBudgetExceededError ||
+      err instanceof AiLookupError
+    ) {
+      throw err;
+    }
+    // A timeout already burned most of the budget window; don't chase it with a
+    // fallback call that would push toward the function kill. Fail friendly.
+    if (isAbortError(err)) {
+      await record(
+        { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
+        model,
+        promptText,
+        "",
+        undefined,
+        false,
+        `web_search timed out after ${Math.round(AI_WEBSEARCH_TIMEOUT_MS / 1000)}s`,
+      );
+      throw new AiLookupError(
+        "The web search took too long and was stopped. Try the lookup again \u2014 it usually finishes on a second attempt.",
+        `web_search aborted after ${AI_WEBSEARCH_TIMEOUT_MS}ms`,
+      );
+    }
     await record(
       { ...opts.context, feature: opts.context?.feature ?? "ai.websearch" },
       model,
