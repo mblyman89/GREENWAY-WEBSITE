@@ -285,11 +285,16 @@ export default async function MenuImportsPage({
           <section className="rounded-xl border border-red-500/25 bg-red-500/5 p-5">
             <h2 className="text-sm font-semibold text-white">Clean Slate — reset test data</h2>
             <p className="mt-1 text-xs text-white/50">
-              Permanently deletes <strong>only</strong> the imports and staged menu versions marked as
+              Permanently deletes <strong>only</strong> the imports and menu versions marked as
               test data ({testCounts.imports} test import{testCounts.imports === 1 ? "" : "s"} ·{" "}
               {testCounts.versions} test version{testCounts.versions === 1 ? "" : "s"} right now). It never
-              touches your real imports, your published menu, or your validated cannabis knowledge base.
-              Published versions are protected even if mis-flagged.
+              touches your <strong>real</strong> imports, your real menu, or your validated cannabis
+              knowledge base.
+            </p>
+            <p className="mt-2 text-xs text-[var(--admin-gold)]/90">
+              If a <strong>test</strong> version is currently LIVE on the shop, this removes it and
+              automatically restores your previous real menu (or leaves the menu empty if there was
+              never a real one). Your real published menu is never deleted.
             </p>
             {testCounts.imports === 0 && testCounts.versions === 0 ? (
               <p className="mt-3 text-xs text-white/40">No test data to clean right now.</p>

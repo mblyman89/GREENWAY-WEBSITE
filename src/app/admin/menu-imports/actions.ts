@@ -309,8 +309,10 @@ export async function cleanSlateTestDataAction(formData: FormData): Promise<void
   }
 
   let cleaned: string;
+  let livePublishedChanged = false;
   try {
     const summary = await cleanSlateTestData();
+    livePublishedChanged = summary.publishedVersionDeleted > 0;
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -318,12 +320,26 @@ export async function cleanSlateTestDataAction(formData: FormData): Promise<void
       entityType: "pos_import",
       after: summary,
     });
+    // Plain-English result. Call out the LIVE-menu change explicitly (Slice 2):
+    // a published test version is removed from the storefront, and the previous
+    // real menu is restored if one exists.
     cleaned = `${summary.menuVersionsDeleted} test version(s) and ${summary.posImportsDeleted} test import(s) removed.`;
+    if (summary.publishedVersionDeleted > 0) {
+      cleaned += summary.restoredVersionId
+        ? " A test version was live on the shop — it has been removed and your previous real menu is now live again."
+        : " A test version was live on the shop — it has been removed. There was no previous real menu to restore, so the live menu is now empty until you publish a real import.";
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Clean Slate failed.";
     redirect("/admin/menu-imports?error=" + encodeURIComponent(message));
   }
 
+  // If the live published version changed, refresh the public storefront so it
+  // reads the restored (or now-empty) snapshot instead of the deleted test one.
   revalidatePath("/admin/menu-imports");
+  if (livePublishedChanged) {
+    revalidatePath("/admin/publish");
+    revalidatePublicMenuSurfaces();
+  }
   redirect("/admin/menu-imports?cleaned=" + encodeURIComponent(cleaned));
 }
