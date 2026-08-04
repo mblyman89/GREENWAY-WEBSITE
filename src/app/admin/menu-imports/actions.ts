@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData } from "@/lib/pos/import-service";
+import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData, backfillImportLots } from "@/lib/pos/import-service";
 import { getPublishedVersion, diffVersions, archiveStaleIntakeDrafts } from "@/lib/pos/menu-version";
 import { recordFactReview } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
@@ -167,6 +167,46 @@ export async function publishVersion(formData: FormData): Promise<void> {
   revalidatePublicMenuSurfaces();
 
   redirect(dest + "?published=1");
+}
+
+/**
+ * T-327 (roadmap Slice 1) — BACKFILL compliance inventory lots for an import
+ * that was published before the lot-creation feature existed (so it has a live
+ * menu but no inventory_lots). Calls the idempotent backfillImportLots service,
+ * which re-runs the exact publish-time routine. Confirm-free (it never removes
+ * anything and can be re-clicked safely), permission-gated, audit-logged.
+ */
+export async function backfillLotsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("menu.publish");
+  const importId = String(formData.get("importId") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const dest = publishReturnBase(from, importId);
+  if (!importId) {
+    redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import id."));
+  }
+
+  let ok: string;
+  try {
+    const summary = await backfillImportLots(importId, session.userId);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "pos_import.backfill_lots",
+      entityType: "pos_import",
+      entityId: importId,
+      after: summary,
+    });
+    ok =
+      summary.created > 0
+        ? `Created ${summary.created} inventory lot(s). They now appear in Inventory Manager and Receiving.`
+        : `No new lots needed — ${summary.alreadyPresent} lot(s) already exist for this import.`;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Backfill failed.";
+    redirect(dest + "?error=" + encodeURIComponent(message));
+  }
+
+  revalidatePath(dest);
+  redirect(dest + "?backfilled=" + encodeURIComponent(ok));
 }
 
 /**
