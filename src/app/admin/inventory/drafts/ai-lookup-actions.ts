@@ -27,6 +27,7 @@ import {
   lookupProduct,
   isAiConfigured,
 } from "@/lib/inventory/product-lookup-ai";
+import { AiLookupError } from "@/lib/ai/provider";
 import {
   postProcessLookup,
   LOOKUP_HONEST_MISS,
@@ -200,6 +201,11 @@ export async function productLookupAction(
       },
     };
   } catch (err) {
+    // Operator-actionable failures (took too long, out of AI credits, bad key)
+    // carry a plain-English `friendly` message we show verbatim \u2014 no HTTP jargon.
+    if (err instanceof AiLookupError) {
+      return { ok: false, error: err.friendly };
+    }
     return {
       ok: false,
       error: `The lookup couldn't complete: ${String(err).slice(0, 160)}`,
