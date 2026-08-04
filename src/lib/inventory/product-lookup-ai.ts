@@ -6,7 +6,7 @@
  *
  * Flow:
  *   1. KB FIRST (free, instant): if we already know this strain, return it with
- *      full confidence \u2014 no spend, no network. (Handled by the caller via the
+ *      full confidence — no spend, no network. (Handled by the caller via the
  *      SLICE 93 suggestion; this module focuses on the AI hop.)
  *   2. LIVE WEB SEARCH: GPT-4o + the OpenAI web_search tool (provider.generate\u2011
  *      WebSearch) reads the real internet and returns an answer + source URLs.
@@ -15,7 +15,7 @@
  *   3. SANITIZE via the pure core (postProcessLookup): compliance gate +
  *      >= 90% autofill bar. Medical/curative copy dropped; never guesses.
  *
- * Standing rules honored: no guessing (low confidence \u2192 honest miss), full
+ * Standing rules honored: no guessing (low confidence → honest miss), full
  * gpt-4o pinned by the provider's web-search path (not router-downshifted),
  * budget-guarded + usage-logged by the provider, compliance-baked.
  *
@@ -69,6 +69,7 @@ Respond with ONLY a JSON object (no prose, no code fences) with EXACTLY these ke
   "flavor_notes": ["..."],
   "lineage": "parents if verified, else empty string",
   "found": true,
+  "confidence": 0.0,
   "description": "full marketing description (sensory/experiential only), or empty string",
   "short_description": "one catchy line under ~120 chars, or empty string",
   "category": "flower|pre-roll|vape|concentrate|edible|beverage|tincture|topical|capsule|accessory|other or empty string",
@@ -100,7 +101,9 @@ export async function lookupProduct(input: {
     system: PRODUCT_LOOKUP_SYSTEM,
     user: `${user}${SHAPE_HINT}`,
     temperature: 0.3,
-    maxTokens: 900,
+    // Web-search + full T-315 JSON needs headroom: 900 truncated longer answers
+    // (a truncated reply loses `found`/`confidence` and looked like a miss).
+    maxTokens: 2000,
     context: {
       feature: "inventory.product_lookup",
       ...input.context,
@@ -113,7 +116,7 @@ export async function lookupProduct(input: {
   // looks like a product image, and offer them as ADDITIONAL candidates. This
   // means we can still surface images even when the model forgets the
   // image_candidates array. The pure core (cleanImageCandidates) then dedupes,
-  // drops logos/icons/svg, and caps the list \u2014 nothing is auto-imported.
+  // drops logos/icons/svg, and caps the list — nothing is auto-imported.
   const fromSources = ws.sources.filter((u) => IMAGE_URL_RE.test(u));
   raw.image_candidates = [...(raw.image_candidates ?? []), ...fromSources];
 
@@ -136,6 +139,8 @@ function coerceRaw(parsed: unknown): RawProductLookup {
   const arr = (v: unknown): string[] =>
     Array.isArray(v) ? v.map((x) => String(x ?? "").trim()).filter(Boolean) : [];
   const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  const optNum = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
   return {
     strain_type: String(o.strain_type ?? "unknown"),
     strain_type_confidence: num(o.strain_type_confidence),
@@ -145,6 +150,7 @@ function coerceRaw(parsed: unknown): RawProductLookup {
     flavor_notes: arr(o.flavor_notes),
     lineage: String(o.lineage ?? ""),
     found: Boolean(o.found),
+    confidence: optNum(o.confidence),
     // T-315 all-inclusive fields.
     description: String(o.description ?? ""),
     short_description: String(o.short_description ?? ""),
