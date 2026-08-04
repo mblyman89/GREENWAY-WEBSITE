@@ -18,11 +18,20 @@ import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
 // Option A: per-product website Type/Category override (migration 0150).
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
+// T-324: after-tax price correction (current price read + pure formula math).
+import { getLotAfterTaxPrice } from "@/lib/inventory/price-write-store";
+import {
+  priceFormulaLabel,
+  afterTaxFloorMinor,
+  baseFromAfterTax,
+  fmtUsd,
+} from "@/lib/inventory/price-correction-core";
 import {
   adjustLotAction,
   setLotStatusAction,
   updateLotDetailsAction,
   updateLotWebsiteClassificationAction,
+  updateLotAfterTaxPriceAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +83,7 @@ export default async function LotDetailPage({
   // SLICE 77: vendors + brands feed the correction form's pickers; the
   // enrichment record (keyed by the lot's POS product key) surfaces the
   // customer-facing photo/description right here.
-  const [adjustments, manifest, vendors, brands, enrichment, categoryTypes, inventoryTypes, override] =
+  const [adjustments, manifest, vendors, brands, enrichment, categoryTypes, inventoryTypes, override, currentAfterTaxMinor] =
     await Promise.all([
       listLotAdjustments(id),
       lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
@@ -86,6 +95,9 @@ export default async function LotDetailPage({
       listWebsiteCategoryTypes({ includeInactive: false }),
       listInventoryTypes({ includeInactive: false }),
       lot.pos_product_key ? getOverrideForKey(lot.pos_product_key) : Promise.resolve(null),
+      // T-324: the CURRENT after-tax (out-the-door) price of THIS lot's variant
+      // on the published menu — null until the product has been published.
+      getLotAfterTaxPrice(lot.pos_product_key),
     ]);
   const enrichImageId = enrichment?.primary_media_id ?? enrichment?.image_media_ids?.[0] ?? null;
   const enrichImageUrl = enrichImageId
@@ -106,6 +118,15 @@ export default async function LotDetailPage({
   const statusAction = setLotStatusAction.bind(null, id);
   const detailsAction = updateLotDetailsAction.bind(null, id);
   const classificationAction = updateLotWebsiteClassificationAction.bind(null, id);
+  const priceAction = updateLotAfterTaxPriceAction.bind(null, id);
+
+  // T-324: everything the price row + edit field need. The category that drives
+  // the tax divisor/floor is the SAME website category the menu/cart use.
+  const priceCategory = categoryResolution.websiteCategory;
+  const priceFormula = priceFormulaLabel(currentAfterTaxMinor, priceCategory);
+  const priceFloorMinor = afterTaxFloorMinor(lot.unit_cost_minor_units, priceCategory);
+  const currentBaseMinor =
+    currentAfterTaxMinor != null ? baseFromAfterTax(currentAfterTaxMinor, priceCategory) : null;
 
   const today = new Date().toISOString().slice(0, 10);
   const expired = lot.expires_on != null && lot.expires_on < today;
@@ -162,6 +183,39 @@ export default async function LotDetailPage({
                   : "muted"
             }
           />
+        </div>
+
+        {/* T-324 — SELL PRICE (product-details section). The big number is the
+            after-tax / out-the-door price the customer pays; the formula below
+            it shows the full math (Base × tax = out-the-door) so it's crystal
+            clear how the price is built. Editing lives in the corrections
+            section below. */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Sell price (after tax, out-the-door)
+              </p>
+              <p className="mt-1 text-3xl font-bold text-[var(--admin-accent)]">
+                {currentAfterTaxMinor != null ? fmtUsd(currentAfterTaxMinor) : "—"}
+              </p>
+              {/* The full formula, right below the after-tax value. */}
+              <p className="mt-1 text-sm text-[var(--admin-text-muted)]">{priceFormula}</p>
+            </div>
+            <div className="text-right text-xs text-[var(--admin-text-faint)]">
+              {currentAfterTaxMinor != null ? (
+                <>
+                  <p>Legal floor: {priceFloorMinor != null ? fmtUsd(priceFloorMinor) : "— (cost unknown)"}</p>
+                  <p className="mt-0.5">Edit it in “Correct the sell price” below ↓</p>
+                </>
+              ) : (
+                <p className="max-w-[16rem]">
+                  No published price yet. A price appears once this product is
+                  onboarded and published to the menu.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -420,6 +474,88 @@ export default async function LotDetailPage({
               </p>
             )}
           </div>
+        </div>
+
+        {/* T-324 — correct the SELL price. You type the AFTER-TAX (out-the-door)
+            price the customer pays; we back out the pre-tax base and enforce the
+            legal cost+tax floor. Saving updates ONLY this product on the live
+            menu + POS (and any staged menu) — mastered-together siblings are
+            untouched. */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Correct the sell price</h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
+            Enter the <strong>after-tax, out-the-door</strong> price the customer
+            pays at the register. We fold in{" "}
+            {priceCategory && ["merch", "accessories", "accessory", "paraphernalia"].includes(priceCategory)
+              ? "9.3% sales tax"
+              : "37% excise + 9.3% sales tax"}{" "}
+            and show the pre-tax base, so the math is always clear. Saving updates{" "}
+            <strong>this product only</strong> — everywhere it appears (the live
+            menu and the register) — and never changes any other product it may
+            be grouped with. It can never go below the legal cost+tax floor
+            {priceFloorMinor != null ? <> (<strong>{fmtUsd(priceFloorMinor)}</strong> for this lot)</> : null}.
+          </p>
+          {lot.pos_product_key ? (
+            currentAfterTaxMinor != null ? (
+              <form action={priceAction} className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-xs">
+                    <span className="text-[var(--admin-text-faint)]">Current out-the-door: </span>
+                    <span className="font-semibold text-[var(--admin-text)]">{fmtUsd(currentAfterTaxMinor)}</span>
+                  </div>
+                  <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-xs">
+                    <span className="text-[var(--admin-text-faint)]">Current pre-tax base: </span>
+                    <span className="font-semibold text-[var(--admin-text)]">
+                      {currentBaseMinor != null ? fmtUsd(currentBaseMinor) : "—"}
+                    </span>
+                  </div>
+                </div>
+                <Field
+                  label="New after-tax price ($)"
+                  help={
+                    priceFloorMinor != null
+                      ? `The out-the-door price the customer pays. Minimum allowed for this lot is ${fmtUsd(priceFloorMinor)} (cost + tax).`
+                      : "The out-the-door price the customer pays. Cost is unknown for this lot, so no floor can be enforced."
+                  }
+                  htmlFor="after_tax_price"
+                  required
+                >
+                  <Input
+                    id="after_tax_price"
+                    name="after_tax_price"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={fmtUsd(currentAfterTaxMinor).replace("$", "")}
+                    defaultValue={(currentAfterTaxMinor / 100).toFixed(2)}
+                  />
+                </Field>
+                <p className="text-[11px] text-[var(--admin-text-faint)]">
+                  Reverse math: the price you type is divided by{" "}
+                  {priceCategory && ["merch", "accessories", "accessory", "paraphernalia"].includes(priceCategory)
+                    ? "1.093"
+                    : "1.463"}{" "}
+                  to get the pre-tax base. Example — {priceFormula}. The new base
+                  updates automatically from whatever you enter.
+                </p>
+                <Button type="submit" variant="save" size="sm">
+                  Save sell price
+                </Button>
+              </form>
+            ) : (
+              <p className="text-sm text-[var(--admin-text-faint)]">
+                This product doesn&apos;t have a published menu price yet, so
+                there&apos;s nothing to correct. It gets a price when it&apos;s
+                onboarded and published to the menu; come back here after that to
+                adjust it.
+              </p>
+            )
+          ) : (
+            <p className="text-sm text-[var(--admin-text-faint)]">
+              This lot isn&apos;t linked to a POS product key yet, so it has no
+              menu price to edit. The link is made automatically when the product
+              goes onto the menu.
+            </p>
+          )}
         </div>
 
         {/* Option A — correct THIS product's WEBSITE Type & Category (what the
