@@ -601,14 +601,29 @@ export async function countTestData(): Promise<{ imports: number; versions: numb
  * (migration 0066). Never touches real data or the knowledge base. Returns the
  * server-side deletion summary.
  */
-export async function cleanSlateTestData(): Promise<{ menuVersionsDeleted: number; posImportsDeleted: number }> {
+export async function cleanSlateTestData(): Promise<{
+  menuVersionsDeleted: number;
+  stagedVersionsDeleted: number;
+  publishedVersionDeleted: number;
+  posImportsDeleted: number;
+  restoredVersionId: string | null;
+}> {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.rpc("clean_slate_test_data");
   if (error) throw new Error(`Clean Slate failed: ${error.message}`);
-  const summary = (data ?? {}) as { menu_versions_deleted?: number; pos_imports_deleted?: number };
+  const summary = (data ?? {}) as {
+    menu_versions_deleted?: number;
+    staged_versions_deleted?: number;
+    published_version_deleted?: number;
+    pos_imports_deleted?: number;
+    restored_version_id?: string | null;
+  };
   return {
     menuVersionsDeleted: summary.menu_versions_deleted ?? 0,
+    stagedVersionsDeleted: summary.staged_versions_deleted ?? 0,
+    publishedVersionDeleted: summary.published_version_deleted ?? 0,
     posImportsDeleted: summary.pos_imports_deleted ?? 0,
+    restoredVersionId: summary.restored_version_id ?? null,
   };
 }
 
