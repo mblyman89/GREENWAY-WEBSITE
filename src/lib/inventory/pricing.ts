@@ -6,16 +6,53 @@
  *   • Hard floor: price can NEVER be below `min_markup_multiple` × cost (default 2x).
  *   • Suggested price: starts at the floor, then nudges up for fast movers and
  *     eases (toward the floor, never below) for slow/aged stock — using sales
- *     velocity. Tax is applied on top at sale time, not baked into the floor.
+ *     velocity.
  *
- * All money is in MINOR UNITS (cents). Pure functions: no DB access here so they
- * are trivially testable; the store layer feeds in cost + velocity.
+ * TAX-INCLUSIVE PRICING (T-319, owner Michael's rule):
+ *   Our menu and register show TAX-INCLUSIVE, out-the-door prices (see
+ *   order-pricing-core.ts). So the owner's "2× markup" must be taken on the
+ *   PRE-TAX cost and THEN have the tax folded on top — otherwise the 2× erodes
+ *   once tax is baked into the shelf price. The auto price is therefore:
+ *
+ *       base         = cost × min_markup_multiple          (e.g. 2× cost)
+ *       taxInclusive = base × divisor(category)            (1.463 cannabis / 1.093 merch)
+ *       autoPrice    = round UP to the next WHOLE DOLLAR    (clean menu numbers)
+ *
+ *   Worked example (Michael's): $5.00 cost → 2× = $10.00 base → ×1.463 = $14.63
+ *   tax-inclusive → rounds UP to $15.00 out the door. The divisor is the SAME
+ *   statutory rate the cart/menu use (single source of truth), so the shelf
+ *   price the customer pays matches what onboarding set.
+ *
+ * All money is in MINOR UNITS (cents). Pure functions: no DB access in the math
+ * so they are trivially testable; the store layer feeds in cost + velocity.
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 // Mastering Slice 1: intake variant ids encode their lot key + this suffix.
 import { ONBOARDED_VARIANT_SUFFIX } from "@/lib/pos/variant-lot-core";
+// T-319: the statutory tax model is the SINGLE SOURCE OF TRUTH for tax. We
+// fold the SAME divisor the menu/cart use so onboarding prices are truly
+// tax-inclusive and never drift from the shelf price.
+import {
+  TAX_INCLUSIVE_DIVISOR,
+  NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
+  isNonCannabisCategory,
+} from "@/lib/orders/order-pricing-core";
+
+/** One whole dollar in minor units. Menu prices round UP to this for clean numbers. */
+export const WHOLE_DOLLAR_MINOR = 100;
+
+/**
+ * The tax-inclusive divisor for a product category. Cannabis goods carry the
+ * 37% WSLCB excise + 9.3% local sales tax (1.463); merch/accessories carry only
+ * the 9.3% local sales tax (1.093). Mirrors the cart/menu exactly.
+ */
+export function taxInclusiveDivisorFor(category: string | null | undefined): number {
+  return isNonCannabisCategory(category)
+    ? NON_CANNABIS_TAX_INCLUSIVE_DIVISOR
+    : TAX_INCLUSIVE_DIVISOR;
+}
 
 export type PricingSettings = {
   min_markup_multiple: number;
@@ -42,16 +79,32 @@ export function roundNearest(amountMinor: number, step: number): number {
 }
 
 /**
- * The hard price floor = cost × min markup, rounded UP to the rounding step.
+ * Round a minor-units amount UP to the next WHOLE DOLLAR (T-319). $14.63 → $15.00,
+ * $10.00 → $10.00 (already whole). Owner prefers clean whole-dollar shelf prices.
+ */
+export function roundUpToNextDollarMinor(amountMinor: number): number {
+  return roundUpTo(amountMinor, WHOLE_DOLLAR_MINOR);
+}
+
+/**
+ * The hard price floor = the TAX-INCLUSIVE 2× auto price (T-319):
+ *   base         = cost × min_markup_multiple
+ *   taxInclusive = base × divisor(category)   (cannabis 1.463 / merch 1.093)
+ *   floor        = round UP to the next whole dollar
+ *
+ * Because our shelf/menu prices are tax-inclusive, this keeps the owner's full
+ * 2× markup intact AFTER tax (a $5 cost floors at $15 out the door, not ~$10).
  * Returns null when cost is unknown (can't enforce a floor without cost).
  */
 export function priceFloorMinor(
   costMinor: number | null | undefined,
   settings: PricingSettings = DEFAULT_PRICING,
+  category?: string | null,
 ): number | null {
   if (costMinor == null || costMinor <= 0) return null;
-  const raw = costMinor * settings.min_markup_multiple;
-  return roundUpTo(raw, settings.round_to_minor_units);
+  const base = costMinor * settings.min_markup_multiple; // pre-tax 2× markup
+  const taxInclusive = base * taxInclusiveDivisorFor(category); // fold tax on top
+  return roundUpToNextDollarMinor(taxInclusive); // clean whole-dollar shelf price
 }
 
 export type VelocitySignal = {
@@ -73,17 +126,21 @@ export type PriceSuggestion = {
  * Suggest a price from cost + velocity.
  *
  * Strategy (transparent, never below floor):
- *   - Baseline = floor (2× cost).
+ *   - Baseline = floor (the tax-inclusive 2× auto price, T-319).
  *   - Fast mover (high units/day): add up to +25% to capture margin on demand.
  *   - Slow/aged (low units/day, lots on hand, old): keep at/just above floor to
- *     move it — but we never go below the 2× floor (that's a hard rule).
+ *     move it — but we never go below the floor (that's a hard rule).
+ *
+ * `category` selects the tax divisor (cannabis vs merch); the suggested price is
+ * also rounded UP to a clean whole dollar so the menu shows tidy numbers.
  */
 export function suggestPrice(
   costMinor: number | null | undefined,
   velocity: VelocitySignal | null,
   settings: PricingSettings = DEFAULT_PRICING,
+  category?: string | null,
 ): PriceSuggestion {
-  const floor = priceFloorMinor(costMinor, settings);
+  const floor = priceFloorMinor(costMinor, settings, category);
   if (floor == null) {
     return {
       floorMinor: null,
@@ -92,11 +149,12 @@ export function suggestPrice(
     };
   }
 
+  const mult = settings.min_markup_multiple;
   if (!velocity || velocity.daysAvailable <= 0) {
     return {
       floorMinor: floor,
       suggestedMinor: floor,
-      rationale: "New product, no sales history yet — starting at the 2× floor.",
+      rationale: `New product, no sales history yet — starting at the ${mult}× (tax-inclusive, rounded up to the next dollar) floor.`,
     };
   }
 
@@ -118,11 +176,13 @@ export function suggestPrice(
     multiplier = 1.0;
     const aged = velocity.daysAvailable > 60;
     why = aged
-      ? `Slow mover (~${perDay.toFixed(2)} sold/day, ${velocity.daysAvailable}d old) — hold at the 2× floor to move it.`
-      : `Low movement so far — hold at the 2× floor.`;
+      ? `Slow mover (~${perDay.toFixed(2)} sold/day, ${velocity.daysAvailable}d old) — hold at the ${mult}× floor to move it.`
+      : `Low movement so far — hold at the ${mult}× floor.`;
   }
 
-  let suggested = roundNearest(floor * multiplier, settings.round_to_minor_units);
+  // Nudge above the floor, then round UP to the next whole dollar for a clean
+  // shelf number, and never below the floor.
+  let suggested = roundUpToNextDollarMinor(floor * multiplier);
   if (suggested < floor) suggested = floor; // never below floor
 
   return { floorMinor: floor, suggestedMinor: suggested, rationale: why };
@@ -133,16 +193,17 @@ export function validatePrice(
   priceMinor: number,
   costMinor: number | null | undefined,
   settings: PricingSettings = DEFAULT_PRICING,
+  category?: string | null,
 ): { ok: true } | { ok: false; floorMinor: number; error: string } {
-  const floor = priceFloorMinor(costMinor, settings);
+  const floor = priceFloorMinor(costMinor, settings, category);
   if (floor == null) return { ok: true }; // no cost = can't enforce; allow.
   if (priceMinor < floor) {
     return {
       ok: false,
       floorMinor: floor,
-      error: `Price must be at least the ${settings.min_markup_multiple}× cost floor of $${(
+      error: `Price must be at least the ${settings.min_markup_multiple}× cost + tax floor of $${(
         floor / 100
-      ).toFixed(2)}.`,
+      ).toFixed(2)} (tax-inclusive, rounded up to the next dollar).`,
     };
   }
   return { ok: true };
