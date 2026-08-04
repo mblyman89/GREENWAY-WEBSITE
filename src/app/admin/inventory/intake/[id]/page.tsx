@@ -45,6 +45,7 @@ import {
   promoteManifestToKbAction,
   notifyVendorSampleCapAction,
   linkManifestPoAction,
+  reExtractManifestAiAction,
 } from "../actions";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -85,6 +86,10 @@ export default async function ManifestReviewPage({
     kbstrains?: string;
     kblicense?: string;
     polink?: string;
+    ai?: string;
+    filled?: string;
+    role?: string;
+    inv?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -106,6 +111,10 @@ export default async function ManifestReviewPage({
     kbstrains,
     kblicense,
     polink,
+    ai,
+    filled,
+    role,
+    inv,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -231,6 +240,7 @@ export default async function ManifestReviewPage({
   const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
   const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
   const transportAction = updateManifestTransportAction.bind(null, id);
+  const reExtractAiAction = reExtractManifestAiAction.bind(null, id);
   // PR-A: document-AI parse status for the plain-English statement in the
   // transport section (what LlamaParse read, or the honest reason it didn't).
   const parseStatus = await getParseStatusForManifestNumber(manifest.manifest_number);
@@ -340,6 +350,30 @@ export default async function ManifestReviewPage({
         {transport && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Transport details saved to the chain-of-custody record.
+          </div>
+        )}
+        {ai === "1" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            <strong>AI extract finished.</strong>{" "}
+            Read the {role && role !== "document" ? role : "document"} PDF
+            {inv ? ` — invoice/order # ${inv}` : ""}
+            {filled && filled !== "0"
+              ? `; filled ${filled} empty transport field${filled === "1" ? "" : "s"} (driver license / vehicle where present).`
+              : "; no new transport fields to fill (already complete or not present)."}{" "}
+            See the AI status line in the transport section below for the engine and any honest reason.
+          </div>
+        )}
+        {ai === "nodocs" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+            <strong>Nothing to extract.</strong> No archived PDF documents are on file for this
+            manifest yet. If the email just arrived, give the attachments a few seconds to finish
+            archiving, then try again.
+          </div>
+        )}
+        {error === "aiextract" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+            <strong>AI extract couldn&apos;t run.</strong> That manifest could not be loaded. Refresh
+            and try again.
           </div>
         )}
         {error === "sample_cap" && (
@@ -727,6 +761,20 @@ export default async function ManifestReviewPage({
             </span>{" "}
             <span className="opacity-90">{parseStatus.statement}</span>
           </div>
+          {/* Hybrid on-demand: re-read THIS manifest's archived PDFs with the document AI.
+              Scoped to a single manifestId — it never touches other rows in the table.
+              Fills only empty transport fields and re-scans the invoice/order number. */}
+          <form action={reExtractAiAction} className="mb-4 flex flex-wrap items-center gap-3">
+            <Button type="submit" variant="special" size="sm">
+              🤖 Run AI extract
+            </Button>
+            <span className="text-xs text-[var(--admin-text-muted)]">
+              Re-reads the PDFs archived for <span className="font-semibold">this</span> manifest
+              (manifest &amp; invoice) with LlamaParse, then fills only the empty transport fields
+              and re-checks the invoice/order #. Safe to run after the docs finish attaching — it
+              only touches this delivery, never the other orders in the table.
+            </span>
+          </form>
           {transportSuggestion.usedUsual && (
             <div className="mb-4 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-xs text-[var(--admin-gold)]">
               💡 {describeSuggestion(vendorDisplay, transportSuggestion.suggestedFields)}{" "}

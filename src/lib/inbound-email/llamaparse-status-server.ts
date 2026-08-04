@@ -40,15 +40,34 @@ export async function recordManifestParseStatus(
   outcome: RecoveryOutcome | null,
   actor?: { actorId?: string | null; actorEmail?: string | null },
 ): Promise<void> {
-  if (!manifestNumber || !outcome) return;
+  // Without a manifest number there is no join key for the badge, so nothing to
+  // record. (Everything else DOES get an honest row — see below.)
+  if (!manifestNumber) return;
+
+  // BUG-2 FIX (never silent): previously a NULL outcome returned here and wrote
+  // NOTHING, so the intake table showed a blank "—" (no ledger row) instead of
+  // an honest status. A null outcome means the vision recovery capturer was
+  // never exercised for this PDF (e.g. the text path satisfied it, or the
+  // primary PDF changed) — that is a "fell back / did not run" case, NOT a
+  // success. Record it explicitly as engine "none" so the reader derives "FB"
+  // with a plain reason, and the column is NEVER blank. Owner rule: fail loudly
+  // and honestly.
+  const resolved: RecoveryOutcome =
+    outcome ?? {
+      engine: "none",
+      ok: false,
+      error: "AI recovery did not run for this document",
+      note: "no parse recorded",
+    };
+
   await logAiUsage({
     feature: INTAKE_FEATURE,
     entityType: "manifest",
     entityId: manifestNumber,
     // Engine prefix the reader decodes: "llamaparse" | "unpdf" | "none".
-    model: outcome.engine,
-    ok: outcome.ok,
-    errorNote: outcome.ok ? null : outcome.error ?? outcome.note ?? "parse did not run",
+    model: resolved.engine,
+    ok: resolved.ok,
+    errorNote: resolved.ok ? null : resolved.error ?? resolved.note ?? "parse did not run",
     actorId: actor?.actorId ?? null,
     actorEmail: actor?.actorEmail ?? null,
   });

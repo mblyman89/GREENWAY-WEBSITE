@@ -35,6 +35,7 @@
 
 import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
 import { emptyTransport, combineDateAndTime } from "@/lib/inventory/intake-parser";
+import { readDriverLicenseNumber } from "@/lib/inventory/transport-fields-core";
 
 /**
  * A GrowFlow manifest is recognizable by the "Manifest ID:GF..." token plus the
@@ -221,6 +222,14 @@ export function parseGrowFlowManifest(text: string): ParsedManifest | null {
   if (remindersM) {
     const note = remindersM[1].replace(/\s+/g, " ").trim();
     transport.route_notes = note.length > 0 ? note : null;
+  }
+
+  // ADDITIVE gap-fill (fill-only-when-empty): capture the driver's LICENSE
+  // NUMBER when a GrowFlow manifest variant carries one in a driver block. The
+  // pure reader is anchored to the driver block so the origin/carrier license
+  // can't be mistaken for it. Never overrides; never affects lines.
+  if (!transport.driver_license_number) {
+    transport.driver_license_number = readDriverLicenseNumber(text);
   }
 
   // ── Lines ────────────────────────────────────────────────────────────────

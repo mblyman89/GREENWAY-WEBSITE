@@ -148,3 +148,58 @@ export async function listManifestDocLinks(
   }
   return out;
 }
+
+/** One archived document with its actual bytes (for re-parsing on demand). */
+export type ArchivedDoc = {
+  role: DocRole;
+  filename: string;
+  contentType: string | null;
+  bytes: Uint8Array;
+};
+
+/**
+ * Download the archived documents for a SINGLE manifest as raw bytes so the
+ * on-demand "Run AI extract" action can re-parse them. READ-ONLY, scoped to one
+ * manifestId (never a table-wide loop), never throws — returns [] on any
+ * problem. Ordered by archive order so the primary/manifest PDF comes first.
+ */
+export async function downloadManifestDocs(manifestId: string): Promise<ArchivedDoc[]> {
+  const out: ArchivedDoc[] = [];
+  if (!isSupabaseServiceConfigured || !manifestId) return out;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("manifest_documents")
+      .select("role, filename, content_type, storage_path")
+      .eq("manifest_id", manifestId)
+      .order("created_at", { ascending: true });
+    if (error || !data) return out;
+    const rows = data as {
+      role: DocRole;
+      filename: string;
+      content_type: string | null;
+      storage_path: string;
+    }[];
+    for (const row of rows) {
+      try {
+        const { data: blob, error: dlErr } = await admin.storage
+          .from(BUCKET)
+          .download(row.storage_path);
+        if (dlErr || !blob) continue;
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        if (buf.byteLength === 0) continue;
+        out.push({
+          role: row.role,
+          filename: row.filename,
+          contentType: row.content_type,
+          bytes: buf,
+        });
+      } catch {
+        // one document failing to download must not abort the rest
+      }
+    }
+  } catch (err) {
+    console.error("[manifest-docs] downloadManifestDocs failed:", err);
+  }
+  return out;
+}
