@@ -82,6 +82,7 @@ import { __runRecallHoldCoreTests } from "../../src/lib/pos/recall-hold-core";
 import { __runPinThrottleCoreTests } from "../../src/lib/security/pin-throttle-core";
 import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
+import { __runPriceVariantMatchCoreTests } from "../../src/lib/inventory/price-variant-match-core";
 import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-correction-core";
 import { __runImportLotCoreTests } from "../../src/lib/pos/import-lot-core";
 import { __runCardBrandCoreTests } from "../../src/lib/menu/card-brand-core";
@@ -335,6 +336,7 @@ async function main() {
   __runPinThrottleCoreTests();
   __runScanToCartCoreTests();
   __runVariantLotCoreTests();
+  __runPriceVariantMatchCoreTests();
   __runPriceCorrectionCoreTests();
   __runImportLotCoreTests();
   __runCardBrandCoreTests();
