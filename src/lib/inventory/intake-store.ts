@@ -1633,6 +1633,40 @@ export async function updateManifestTransport(
 }
 
 /**
+ * Set (or clear) the owner's Invoice/Order # correction for one manifest
+ * (migration 0151). Additive-only: it writes ONLY the invoice_number_override
+ * column and never touches classification, line items, or lifecycle. A blank
+ * value clears the override so the intake UI reverts to the derived value.
+ * Audited via manifest_events. Scoped to a single manifestId.
+ */
+export async function setManifestInvoiceOverride(
+  manifestId: string,
+  value: string | null,
+  actorId: string | null,
+): Promise<{ ok: true; cleared: boolean } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const trimmed = (value ?? "").trim();
+  const next = trimmed.length === 0 ? null : trimmed;
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("inbound_manifests")
+    .update({ invoice_number_override: next, updated_by: actorId })
+    .eq("id", manifestId);
+  if (error) return { ok: false, error: error.message };
+
+  await logManifestEvent(
+    manifestId,
+    "invoice_number_override",
+    next ? `Invoice # corrected to "${next}".` : "Invoice # correction cleared.",
+    actorId,
+  );
+  return { ok: true, cleared: next === null };
+}
+
+/**
  * H15a — seed transport / ETA drafts from the parsed document at staging time.
  * Best-effort: skips silently when the parser found nothing; never fails the
  * stage (staging already succeeded — transport is enrichment, not a gate).

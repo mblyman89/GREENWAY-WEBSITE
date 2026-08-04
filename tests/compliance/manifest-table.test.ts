@@ -247,6 +247,61 @@ describe("H15c — invoiceNumberForRow", () => {
       invoiceNumberForRow({ raw_payload: null, source_format: "wcia", manifest_number: null }),
     ).toBeNull();
   });
+
+  it("0151: owner override WINS over the payload's external_id", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload: { external_id: "0000020830" },
+        source_format: "wcia",
+        manifest_number: "15410217973875889",
+        invoice_number_override: "CORRECTED-123",
+      }),
+    ).toBe("CORRECTED-123");
+  });
+
+  it("0151: owner override WINS over the manifest-number fallback", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload: "Internal Shipping Document ... no invoice # anywhere",
+        source_format: "pdf-manifest",
+        manifest_number: "11374279827298553",
+        invoice_number_override: "MANUAL-INV-9",
+      }),
+    ).toBe("MANUAL-INV-9");
+  });
+
+  it("0151: a blank/whitespace override is IGNORED (derived value still used)", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload: { external_id: "0000020830" },
+        source_format: "wcia",
+        manifest_number: "15410217973875889",
+        invoice_number_override: "   ",
+      }),
+    ).toBe("0000020830");
+  });
+
+  it("0151: override is trimmed", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload: null,
+        source_format: "wcia",
+        manifest_number: null,
+        invoice_number_override: "  INV-42  ",
+      }),
+    ).toBe("INV-42");
+  });
+
+  it("0151: null override behaves exactly like before (backward compatible)", () => {
+    expect(
+      invoiceNumberForRow({
+        raw_payload: { external_id: "0000020830" },
+        source_format: "wcia",
+        manifest_number: "X",
+        invoice_number_override: null,
+      }),
+    ).toBe("0000020830");
+  });
 });
 
 describe("H15c — movingBadge", () => {

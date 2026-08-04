@@ -25,6 +25,12 @@ export type InboundManifest = {
   coa_links: ManifestCoaLink[];
   status: string; // pending | in_transit | received | accepted | partially_accepted | rejected
   notes: string | null;
+  /**
+   * Owner-entered Invoice/Order # correction (migration 0151). When non-null it
+   * OVERRIDES the value derived from raw_payload/manifest_number in the intake
+   * UI. Null means "use the derived value" (the original behavior).
+   */
+  invoice_number_override?: string | null;
   // Denormalized lot rollups for the partial-accept badge (migration 0059).
   accepted_lot_count?: number;
   rejected_lot_count?: number;

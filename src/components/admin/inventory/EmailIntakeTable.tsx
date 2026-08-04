@@ -31,6 +31,7 @@ import {
 } from "@/lib/inventory/manifest-table-core";
 import { CONCIERGE_HINTS } from "@/lib/inventory/guided-accept-core";
 import type { ParseStatus } from "@/lib/inbound-email/llamaparse-status-core";
+import { InvoiceNumberCell } from "@/components/admin/inventory/InvoiceNumberCell";
 
 export type ManifestDownloadLinks = {
   manifestUrl: string | null;
@@ -57,10 +58,17 @@ export function EmailIntakeTable({
   linksByManifestId,
   docsByManifestId,
   parseStatusByManifest,
+  setInvoiceAction,
   view = "action",
   processedCount = 0,
 }: {
   rows: InboundManifest[];
+  /**
+   * Server action (migration 0151) to correct a row's Invoice #. Bound per-row
+   * to that manifest's id inside the table. When omitted the Invoice # renders
+   * read-only (e.g. an "all"/report view that shouldn't edit).
+   */
+  setInvoiceAction?: (manifestId: string, formData: FormData) => void | Promise<void>;
   /** manifest id → download links pulled from the email fetch trail. */
   linksByManifestId: Map<string, ManifestDownloadLinks>;
   /**
@@ -165,6 +173,7 @@ export function EmailIntakeTable({
               {rows.map((m) => {
                 const badge = movingBadge(m.status, m.eta_date);
                 const invoiceNo = invoiceNumberForRow(m);
+                const invoiceOverridden = Boolean((m.invoice_number_override ?? "").trim());
                 const links = linksByManifestId.get(m.id);
                 const eta = classifyEta(m.eta_date);
                 return (
@@ -181,7 +190,17 @@ export function EmailIntakeTable({
                         {m.manifest_number ?? "(no number)"}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-[var(--admin-text-muted)]">{invoiceNo ?? "—"}</td>
+                    <td className="px-4 py-3 text-[var(--admin-text-muted)]">
+                      {setInvoiceAction ? (
+                        <InvoiceNumberCell
+                          displayValue={invoiceNo}
+                          isOverridden={invoiceOverridden}
+                          action={setInvoiceAction.bind(null, m.id)}
+                        />
+                      ) : (
+                        (invoiceNo ?? "—")
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       {(() => {
                         const ps = m.manifest_number

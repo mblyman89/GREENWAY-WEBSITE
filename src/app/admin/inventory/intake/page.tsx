@@ -29,6 +29,7 @@ import {
   listKbBackfillManifestIdsAction,
   promoteManifestChunkToKbAction,
   reprocessIntelligenceAction,
+  setInvoiceNumberAction,
 } from "./actions";
 import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
 import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
@@ -63,11 +64,24 @@ export default async function IntakePage({
     tab?: string;
     back?: string;
     view?: string;
+    invoice?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
-  const { error, kbdone, kbnew, kberr, repdone, replots, repitems, reperr, tab, back, view } =
-    await searchParams;
+  const {
+    error,
+    kbdone,
+    kbnew,
+    kberr,
+    repdone,
+    replots,
+    repitems,
+    reperr,
+    tab,
+    back,
+    view,
+    invoice,
+  } = await searchParams;
 
   // SLICE 101 — the owner's table filter: default hides accepted + partially
   // accepted rows (done processing) so the manifests still needing attention
@@ -293,6 +307,22 @@ export default async function IntakePage({
           </div>
         )}
 
+        {invoice === "saved" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Invoice # updated — your correction now shows on this manifest everywhere the invoice number appears.
+          </div>
+        )}
+        {invoice === "cleared" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
+            Invoice # correction cleared — this manifest is back to the value read from its documents.
+          </div>
+        )}
+        {invoice === "error" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+            Couldn&apos;t save that Invoice # correction. Please try again — if it keeps failing, the change did not persist.
+          </div>
+        )}
+
         {/* H15d — two tabs: the "Incoming (email)" hero view staff live on,
             and the "Manual tools" drawer holding the wall of import forms. */}
         <ReceivingTabs active={activeTab} />
@@ -307,6 +337,7 @@ export default async function IntakePage({
           linksByManifestId={linksByManifestId}
           docsByManifestId={docsByManifestId}
           parseStatusByManifest={parseStatusByManifest}
+          setInvoiceAction={setInvoiceNumberAction}
           view={intakeView}
           processedCount={countProcessedRows(manifests)}
         />
