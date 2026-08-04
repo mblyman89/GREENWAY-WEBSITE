@@ -24,7 +24,7 @@ import {
 } from "@/lib/pos/fact-review-core";
 import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
 import { buildPublishVerdict, type PublishVerdict } from "@/lib/pos/publish-guard-core";
-import { publishVersion } from "../actions";
+import { publishVersion, backfillLotsAction } from "../actions";
 
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
   safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
@@ -45,7 +45,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { id } = await params;
@@ -152,6 +152,20 @@ export default async function ImportReviewPage({
     };
   }).lotPlan ?? null;
 
+  // T-327 (Slice 1): has this import already minted its compliance lots? The
+  // lot-creation routine writes an `import_lots_created` (or, on a repeat,
+  // `import_lots_already_created`) info diagnostic. If NEITHER is present and
+  // the version is published + non-test, the import predates lot creation (or
+  // was published before the feature) and the owner can BACKFILL its lots.
+  const hasCreatedLots = diagnostics.some(
+    (d) => d.code === "import_lots_created" || d.code === "import_lots_already_created",
+  );
+  const canBackfillLots =
+    canPublish &&
+    version?.status === "published" &&
+    !imp.is_test &&
+    !hasCreatedLots;
+
   return (
     <div>
       <AdminPageHeader
@@ -169,6 +183,11 @@ export default async function ImportReviewPage({
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">
+        {sp.backfilled && (
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
+            {decodeURIComponent(sp.backfilled)}
+          </div>
+        )}
         {sp.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(sp.error)}
@@ -352,6 +371,30 @@ export default async function ImportReviewPage({
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {/* T-327 (Slice 1) — Backfill lots for an import published BEFORE the
+            lot-creation feature (live menu, but no inventory records yet). */}
+        {canBackfillLots && (
+          <section className="rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-5">
+            <h2 className="text-sm font-semibold text-white">
+              Missing inventory records for this import
+            </h2>
+            <p className="mt-1 text-xs text-white/60">
+              This import is live on the menu but has <strong>no inventory lots</strong> in the back
+              office &mdash; it was published before inventory records were created automatically.
+              Click below to create them now: one traceable lot per product, exactly like a receiving
+              delivery, so every sale decrements real stock and margin reports work. This is safe to
+              click &mdash; existing lots are skipped, so it never doubles inventory.
+            </p>
+            <form action={backfillLotsAction} className="mt-4">
+              <input type="hidden" name="importId" value={imp.id} />
+              <input type="hidden" name="from" value={sp.back === "publish" ? "publish" : ""} />
+              <Button type="submit" variant="confirm">
+                Create inventory records now
+              </Button>
+            </form>
           </section>
         )}
 

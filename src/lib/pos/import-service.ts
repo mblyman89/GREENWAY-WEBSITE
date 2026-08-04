@@ -611,3 +611,101 @@ export async function cleanSlateTestData(): Promise<{ menuVersionsDeleted: numbe
     posImportsDeleted: summary.pos_imports_deleted ?? 0,
   };
 }
+
+/**
+ * T-327 (roadmap Slice 1): BACKFILL compliance inventory lots for an import
+ * that was already PUBLISHED but never got lots.
+ *
+ * Why this exists: `createImportLots` only runs inside `publishMenuVersion`
+ * (line ~374), and only for a non-test import. Imports PUBLISHED before the
+ * lot-creation feature shipped (SLICE 46, PR #678, 2026-07-25) therefore have a
+ * live menu but ZERO inventory_lots. This function re-runs the SAME idempotent
+ * routine so the owner can heal those imports with one click — no re-upload, no
+ * menu churn, no duplicate risk (createImportLots dedupes by
+ * ccrs_inventory_external_id).
+ *
+ * Guards (never guess — refuse anything unsafe):
+ *   • the import must exist;
+ *   • it must NOT be a test import (test data never mints real lots);
+ *   • its menu version must be PUBLISHED (a still-staged version should be
+ *     published through the normal button, which creates lots as part of the
+ *     publish — backfill is strictly a post-publish remedy).
+ *
+ * Returns the before/after lot count for THIS import's synthetic manifest so the
+ * caller can report exactly how many lots were created.
+ */
+export async function backfillImportLots(
+  importId: string,
+  actorId: string | null,
+): Promise<{ created: number; alreadyPresent: number; totalNow: number }> {
+  const admin = createSupabaseAdminClient();
+
+  // 1. Load + guard the import.
+  const { data: importRow, error: impErr } = await admin
+    .from("pos_imports")
+    .select("id, is_test")
+    .eq("id", importId)
+    .single();
+  if (impErr || !importRow) throw new Error(`Backfill failed: import ${importId} not found.`);
+  const imp = importRow as Pick<PosImport, "id" | "is_test">;
+  if (imp.is_test) {
+    throw new Error(
+      "Backfill refused: this is a TEST import. Test imports never create real inventory. " +
+        "Re-import with Test mode OFF, then publish.",
+    );
+  }
+
+  // 2. The import's version must be PUBLISHED.
+  const { data: versionRow } = await admin
+    .from("menu_versions")
+    .select("id, status")
+    .eq("import_id", importId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const version = versionRow as { id: string; status: string } | null;
+  if (!version) {
+    throw new Error("Backfill refused: this import has no menu version yet.");
+  }
+  if (version.status !== "published") {
+    throw new Error(
+      "Backfill refused: this import's version is not published. " +
+        "Use the Publish button — publishing already creates the inventory lots.",
+    );
+  }
+
+  // 3. Count the lots that already exist under this import's synthetic manifest
+  //    BEFORE we act, so we can report a truthful "created" delta even though
+  //    createImportLots is idempotent.
+  const manifestNumber = `POS-IMPORT-${importId.slice(0, 8)}`;
+  const before = await countLotsForManifestNumber(admin, manifestNumber);
+
+  // 4. Run the SAME routine the publish path runs. Idempotent: existing
+  //    barcodes are skipped; it writes its own import_lots_created /
+  //    import_lots_already_created diagnostics.
+  await createImportLots(importId, actorId);
+
+  // 5. Recount and report the delta.
+  const after = await countLotsForManifestNumber(admin, manifestNumber);
+  const created = Math.max(0, after - before);
+  return { created, alreadyPresent: before, totalNow: after };
+}
+
+/** Count inventory_lots that hang off a synthetic POS-import manifest number. */
+async function countLotsForManifestNumber(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  manifestNumber: string,
+): Promise<number> {
+  const { data: mrow } = await admin
+    .from("inbound_manifests")
+    .select("id")
+    .eq("manifest_number", manifestNumber)
+    .maybeSingle();
+  const manifestId = (mrow as { id: string } | null)?.id ?? null;
+  if (!manifestId) return 0;
+  const { count } = await admin
+    .from("inventory_lots")
+    .select("id", { count: "exact", head: true })
+    .eq("manifest_id", manifestId);
+  return count ?? 0;
+}
