@@ -22,6 +22,9 @@ import { validateCategoryDraft } from "@/lib/pos/category-registry-core";
 import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+// T-324: after-tax price correction (pure math + write path).
+import { parsePriceCorrection } from "@/lib/inventory/price-correction-core";
+import { applyLotAfterTaxPrice } from "@/lib/inventory/price-write-store";
 
 const VALID_REASONS = new Set([
   "receive",
@@ -365,6 +368,100 @@ export async function updateLotWebsiteClassificationAction(lotId: string, formDa
 
   // The override wins at read time on the menu and in the back office, so
   // refresh both surfaces.
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/menu");
+  redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+/**
+ * T-324 — correct the AFTER-TAX (out-the-door) SELL price of ONE lot, from the
+ * Inventory Detail corrections section.
+ *
+ * The owner types the price the customer pays at the register (tax already
+ * folded in). We:
+ *   1. HARD-BLOCK any price below the statutory cost+tax floor
+ *      (ceil(cost × divisor) — RCW 69.50.357 / WAC 314-55-155; CCRS/LCB do not
+ *      tolerate below-acquisition-cost pricing) with a plain-English reason.
+ *   2. Write the new price to EXACTLY this lot's menu variant
+ *      (source_variant_id = "${pos_product_key}-onboarded") on every LIVE menu
+ *      version — the published one (customers see it immediately) and any
+ *      staged one — and re-derive that card's "starting at" rollup to the
+ *      cheapest variant. It NEVER touches any sibling variant's price, so
+ *      mastered-together products are completely unaffected.
+ *   3. Record the change in the audit trail (old → new, base + tax breakdown).
+ *
+ * The category that drives the tax divisor + floor is the SAME website category
+ * the menu/cart use for this product (resolveWebsiteCategoryForLot), so the
+ * back office can never disagree with what the register charges.
+ */
+export async function updateLotAfterTaxPriceAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const lot = await getLotById(lotId);
+  if (!lot) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("That lot no longer exists."));
+  }
+  const key = (lot.pos_product_key ?? "").trim();
+  if (!key) {
+    redirect(
+      `/admin/inventory/${lotId}?error=` +
+        encodeURIComponent(
+          "This lot isn't linked to a POS product key yet, so it has no menu price to edit. The link is made automatically when the product goes onto the menu.",
+        ),
+    );
+  }
+
+  // The website category the menu/cart use for THIS product — the single source
+  // of truth for the tax divisor and the floor (never guess the category).
+  const resolution = await resolveWebsiteCategoryForLot({
+    posProductKey: lot.pos_product_key,
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    category: lot.category,
+  });
+
+  // Validate + reverse-math + HARD FLOOR, all in the pure core (identical math
+  // to the display formula and the register's floor).
+  const parsed = parsePriceCorrection({
+    afterTaxDollars: formData.get("after_tax_price") as string | null,
+    costMinor: lot.unit_cost_minor_units,
+    category: resolution.websiteCategory,
+  });
+  if (!parsed.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(parsed.error));
+  }
+
+  const before = lot; // captured for the audit "old → new"
+  const result = await applyLotAfterTaxPrice(key, parsed.afterTaxMinor);
+  if (!result.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(result.error));
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.after_tax_price_edited",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: {
+      pos_product_key: key,
+      product_name: before.product_name,
+      cost_minor_units: before.unit_cost_minor_units,
+    },
+    after: {
+      pos_product_key: key,
+      website_category: resolution.websiteCategory,
+      after_tax_minor_units: parsed.afterTaxMinor,
+      pre_tax_base_minor_units: parsed.baseMinor,
+      tax_inclusive_divisor: parsed.divisor,
+      cost_tax_floor_minor_units: parsed.floorMinor,
+      menu_versions_updated: result.variantsUpdated,
+    },
+  });
+
+  // The variant/card price is what the menu + POS bundle read, so refresh both
+  // the back office and the customer menu.
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
   revalidatePath("/menu");
