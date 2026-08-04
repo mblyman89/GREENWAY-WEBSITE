@@ -35,6 +35,7 @@
 
 import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
 import { emptyTransport, combineDateAndTime } from "@/lib/inventory/intake-parser";
+import { readDriverLicenseNumber } from "@/lib/inventory/transport-fields-core";
 
 /** A blank sparse line pre-filled for the PDF path (no lab / price data). */
 function blankPdfLine(raw: unknown, warnings: string[]): ParsedLine {
@@ -302,6 +303,16 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
         if (note.length > 15 && /[a-z]/.test(note)) transport.route_notes = note;
       }
     }
+  }
+
+  // ADDITIVE gap-fill (fill-only-when-empty): the driver's LICENSE NUMBER is the
+  // one transport field this parser historically left null even when the doc
+  // carries it (WA-State manifest "Driver's Name: … License #: H0M3R"). The
+  // pure reader is anchored to the driver block so the ORIGIN-licensee
+  // "License #:" can never be mistaken for the DL. Never overrides a value we
+  // already found; never affects classification or line items.
+  if (!transport.driver_license_number) {
+    transport.driver_license_number = readDriverLicenseNumber(flat);
   }
 
   // ── line items ─────────────────────────────────────────────────────────

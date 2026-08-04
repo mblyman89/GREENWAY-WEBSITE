@@ -42,14 +42,29 @@ import {
   type ConfidenceGate,
 } from "@/lib/inbound-email/llamaparse-core";
 
-const LLAMA_API_KEY = process.env.LLAMA_CLOUD_API_KEY ?? "";
+// BUG-1 FIX (call-time env read): read LLAMA_CLOUD_API_KEY / LLAMA_CLOUD_BASE_URL
+// at CALL TIME, not at module load. Vercel injects env vars per running
+// instance; a module-load `const` froze the key at cold-start, so re-entering
+// the key in the dashboard WITHOUT a fresh deploy left the warm function using
+// the stale/empty value (the exact "worked, then went dark" symptom). Reading
+// process.env inside these helpers means a key change takes effect immediately.
+function llamaApiKey(): string {
+  return process.env.LLAMA_CLOUD_API_KEY ?? "";
+}
 // US region default; EU users set LLAMA_CLOUD_BASE_URL=https://api.cloud.eu.llamaindex.ai
-const LLAMA_BASE_URL = (
-  process.env.LLAMA_CLOUD_BASE_URL ?? "https://api.cloud.llamaindex.ai"
-).replace(/\/+$/, "");
+function llamaBaseUrl(): string {
+  return (process.env.LLAMA_CLOUD_BASE_URL ?? "https://api.cloud.llamaindex.ai").replace(
+    /\/+$/,
+    "",
+  );
+}
 
-/** True when the LlamaCloud key is configured. Callers soft-disable when false. */
-export const isLlamaParseConfigured = Boolean(LLAMA_API_KEY);
+/** True when the LlamaCloud key is configured. Evaluated at CALL TIME so a
+ * Vercel key change is picked up without a redeploy. Callers soft-disable when
+ * this returns false. */
+export function isLlamaParseConfigured(): boolean {
+  return Boolean(llamaApiKey());
+}
 
 /** Provenance for the usage ledger. */
 export type LlamaParseContext = {
@@ -105,8 +120,9 @@ async function pollJob(
   maxWaitMs = 90_000,
 ): Promise<unknown> {
   const started = Date.now();
-  const statusUrl = `${LLAMA_BASE_URL}/api/v1/parsing/job/${jobId}`;
-  const resultUrl = `${LLAMA_BASE_URL}/api/v1/parsing/job/${jobId}/result/markdown`;
+  const base = llamaBaseUrl();
+  const statusUrl = `${base}/api/v1/parsing/job/${jobId}`;
+  const resultUrl = `${base}/api/v1/parsing/job/${jobId}/result/markdown`;
   // Small backoff loop.
   while (Date.now() - started < maxWaitMs) {
     const s = await fetch(statusUrl, { headers });
@@ -138,13 +154,15 @@ export async function parsePdf(
   opts: BuildParseOptions = {},
   ctx: LlamaParseContext = {},
 ): Promise<LlamaParseOutcome> {
-  if (!isLlamaParseConfigured) {
+  const apiKey = llamaApiKey();
+  if (!apiKey) {
     return emptyOutcome("none", "LLAMA_CLOUD_API_KEY not set", "provider not configured");
   }
+  const base = llamaBaseUrl();
 
   const plan = buildParseRequest(opts);
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${LLAMA_API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
   };
 
@@ -155,7 +173,7 @@ export async function parsePdf(
     form.append("file", blob, plan.filename);
     for (const [k, v] of Object.entries(plan.fields)) form.append(k, v);
 
-    const up = await fetch(`${LLAMA_BASE_URL}/api/v1/parsing/upload`, {
+    const up = await fetch(`${base}/api/v1/parsing/upload`, {
       method: "POST",
       headers, // do NOT set Content-Type; fetch sets the multipart boundary
       body: form,

@@ -262,6 +262,114 @@ export async function updateManifestTransportAction(
 }
 
 /**
+ * "Run AI extract" — the owner-requested on-demand button (hybrid pattern).
+ *
+ * SCOPED TO ONE MANIFEST by design: it takes a single `manifestId`, re-reads
+ * ONLY that manifest's ARCHIVED documents (never a table-wide loop, so it can
+ * never touch another vendor's order), re-runs the LlamaParse-primary parse,
+ * records an HONEST AI status (so the table badge is never blank), and
+ * backfills any transport field that is still empty (fill-only-empty — it never
+ * overwrites a value staff already verified). It NEVER re-classifies, never
+ * changes line items, and never touches the accept/activate path — so it cannot
+ * endanger the CCRS-critical intake. Idempotent: safe to click repeatedly.
+ *
+ * Why re-read the ARCHIVE (not the live email): the email webhook can race its
+ * own attachments (docs settle a few seconds later), which is exactly why an
+ * auto-run right at arrival sometimes saw an incomplete set. The archive is the
+ * settled, complete copy — so the button always reads the real documents.
+ */
+export async function reExtractManifestAiAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+
+  const { getManifestById } = await import("@/lib/inventory/store");
+  const manifest = await getManifestById(manifestId);
+  if (!manifest) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=aiextract`);
+  }
+
+  const { downloadManifestDocs } = await import("@/lib/inventory/manifest-docs");
+  const docs = await downloadManifestDocs(manifestId);
+  const pdfDocs = docs.filter(
+    (d) =>
+      (d.contentType ?? "").toLowerCase().includes("pdf") ||
+      d.filename.toLowerCase().endsWith(".pdf"),
+  );
+  if (pdfDocs.length === 0) {
+    // Honest, non-blank status even when there's nothing to read.
+    await recordManifestParseStatus(manifest.manifest_number, {
+      engine: "none",
+      ok: false,
+      error: "No archived PDF documents to read for this manifest",
+      note: "no pdf on file",
+    });
+    revalidatePath(`/admin/inventory/intake/${manifestId}`);
+    redirect(`/admin/inventory/intake/${manifestId}?ai=nodocs`);
+  }
+
+  // Prefer the manifest-role PDF, else fall back to the first PDF (an invoice).
+  const ordered = [...pdfDocs].sort((a, b) => {
+    const rank = (r: string) => (r === "manifest" ? 0 : r === "invoice" ? 1 : 2);
+    return rank(a.role) - rank(b.role);
+  });
+
+  const cap = makeCapturingRecovery();
+  let filledFields = 0;
+  let readInvoice: string | null = manifest.manifest_number ?? null;
+  let usedRole = "";
+  let parsedOk = false;
+
+  for (const doc of ordered) {
+    const res = await parsePdfManifest(doc.bytes, cap.recover);
+    if (!res.ok) continue;
+    parsedOk = true;
+    usedRole = doc.role;
+    // Backfill transport fill-only-empty (single-manifest, audited). Includes
+    // the newly-captured driver license number where present.
+    const { backfillManifestTransport } = await import("@/lib/inventory/intake-store");
+    filledFields = await backfillManifestTransport(
+      manifestId,
+      res.manifest.transport,
+      session.userId,
+      `Run AI extract (${doc.role || "document"})`,
+    );
+    // Re-scan the invoice/order number from the freshly parsed text (read-only
+    // convenience for the summary; the stored raw_payload is unchanged here).
+    try {
+      const { extractInvoiceNumberFromText } = await import(
+        "@/lib/inventory/manifest-table-core"
+      );
+      readInvoice = extractInvoiceNumberFromText(res.text) ?? readInvoice;
+    } catch {
+      /* summary-only; ignore */
+    }
+    break; // the first PDF that parses is the primary; done.
+  }
+
+  // Record the honest AI status against the manifest number (never blank).
+  await recordManifestParseStatus(
+    manifest.manifest_number,
+    cap.lastOutcome() ?? {
+      engine: "none",
+      ok: false,
+      error: parsedOk
+        ? "Parsed via basic text (AI recovery did not run)"
+        : "Could not read the archived PDF",
+      note: parsedOk ? "text fallback" : "unreadable",
+    },
+    { actorId: session.userId },
+  );
+
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  const params = new URLSearchParams({
+    ai: "1",
+    filled: String(filledFields),
+    role: usedRole || "document",
+  });
+  if (readInvoice) params.set("inv", readInvoice);
+  redirect(`/admin/inventory/intake/${manifestId}?${params.toString()}`);
+}
+
+/**
  * Reject the WHOLE manifest at the dock. Requires a reason (guard rail).
  * Refused product never enters inventory and is NEVER destroyed; we file
  * nothing with CCRS (the vendor corrects their own manifest).

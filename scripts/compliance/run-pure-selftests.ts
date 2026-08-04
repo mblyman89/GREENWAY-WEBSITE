@@ -133,6 +133,7 @@ import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-gener
 import { __runEmailHarvestTests } from "../../src/lib/inbound-email/email-harvest-core";
 import { __runLlamaparseCoreTests } from "../../src/lib/inbound-email/llamaparse-core";
 import { __runLlamaParseStatusCoreTests } from "../../src/lib/inbound-email/llamaparse-status-core";
+import { __runTransportFieldsCoreTests } from "../../src/lib/inventory/transport-fields-core";
 import { __runIntakeChecklistCoreTests } from "../../src/lib/inventory/intake-checklist-core";
 import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
@@ -510,6 +511,7 @@ async function main() {
   assertNoFailures("core-values-core", __runCoreValuesTests());
   assertNoFailures("llamaparse-core", __runLlamaparseCoreTests());
   console.log(__runLlamaParseStatusCoreTests());
+  console.log(__runTransportFieldsCoreTests());
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
