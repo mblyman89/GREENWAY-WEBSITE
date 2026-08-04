@@ -836,9 +836,13 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
           // combined with live google_search grounding that regularly ran past
           // Vercel Hobby's 300s function ceiling and got the whole function
           // killed (the browser then shows "unexpected response from server").
-          // "medium" is the balanced setting the owner chose \u2014 noticeably faster
-          // while still reasoning about the sources. Override via AI_THINKING_LEVEL.
-          thinking_level: process.env.AI_THINKING_LEVEL ?? "medium",
+          // "low" is Google's latency-minimizing setting (per the official
+          // Gemini 3 docs it is the recommended choice for high-throughput,
+          // latency-sensitive calls) and is the owner's chosen default here.
+          // It still reasons over the grounded search sources, just with far
+          // less deliberation, so first-token latency is much lower. Override
+          // via AI_THINKING_LEVEL (e.g. "medium"/"high") without a code change.
+          thinking_level: process.env.AI_THINKING_LEVEL ?? "low",
           // Only set temperature when the caller explicitly asks; otherwise
           // let Gemini use its recommended default (1.0).
           ...(typeof opts.temperature === "number"
