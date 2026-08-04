@@ -273,7 +273,14 @@ export async function seedDraftsForManifest(
 
     // Pricing: compute the 2× floor + a velocity-aware suggested price.
     const velocity = await getVelocityForProduct(lot.pos_product_key, 60);
-    const suggestion = suggestPrice(lot.unit_cost_minor_units, velocity, pricingSettings);
+    // T-319: pass the category so the auto price folds the RIGHT tax divisor
+    // (cannabis 1.463 vs merch 1.093) and lands on a clean whole dollar.
+    const suggestion = suggestPrice(
+      lot.unit_cost_minor_units,
+      velocity,
+      pricingSettings,
+      lot.category,
+    );
 
     // PLAIN INSERT (dedupe already planned above) — READ the error. The old
     // upsert targeted a PARTIAL unique index (impossible in ON CONFLICT via
@@ -470,7 +477,9 @@ export async function approveDraftWithPrice(
   const cost = row?.unit_cost_minor_units ?? null;
 
   const settings = await getPricingSettings();
-  const check = validatePrice(priceMinor, cost, settings);
+  // T-319: validate the override against the SAME tax-inclusive, whole-dollar
+  // floor the auto price used (category picks the tax divisor).
+  const check = validatePrice(priceMinor, cost, settings, row?.category ?? null);
   if (!check.ok) {
     return { ok: false, error: check.error };
   }
