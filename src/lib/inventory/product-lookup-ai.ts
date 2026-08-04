@@ -100,7 +100,14 @@ export async function lookupProduct(input: {
   const ws = await generateWebSearch({
     system: PRODUCT_LOOKUP_SYSTEM,
     user: `${user}${SHAPE_HINT}`,
-    temperature: 0.3,
+    // T-321: do NOT force a low temperature here. This call runs on Gemini 3's
+    // google_search grounding path, and Google's official Gemini 3 docs warn
+    // that setting temperature below the default (1.0) "may lead to unexpected
+    // behavior, such as looping or degraded performance" \u2014 i.e. it made our
+    // lookups slower. Omitting temperature lets the provider fall back to
+    // Gemini's recommended default, which is both faster and what Google's own
+    // web AI uses. The strict JSON SHAPE_HINT + postProcessLookup already keep
+    // the output well-formed, so we do not need a low temperature for stability.
     // Web-search + full T-315 JSON needs headroom: 900 truncated longer answers
     // (a truncated reply loses `found`/`confidence` and looked like a miss).
     maxTokens: 2000,
