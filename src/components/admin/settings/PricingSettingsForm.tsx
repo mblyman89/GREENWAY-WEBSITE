@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * PricingSettingsForm (Slice 63) — edits pricing_settings: the minimum markup
- * multiple (hard price floor over cost), rounding step (in cents), and an
- * optional default tax rate used for price estimates. The pricing engine +
- * catalog drafts read these values.
+ * PricingSettingsForm — edits pricing_settings. T-322: this now has ONE control,
+ * the minimum markup multiple (the hard price floor over cost). The old
+ * "round to cents" and "default tax rate" inputs were removed because they were
+ * dead: auto prices round UP to the next whole dollar (T-319) and the real tax
+ * is the statutory rate computed at the sale, not a configurable field.
  */
 import { useTransition } from "react";
 import { Button, Card, CardHeader, Field, Input } from "@/components/admin/ui";
@@ -49,31 +50,13 @@ export function PricingSettingsForm({ settings }: { settings: PricingSettings })
               defaultValue={settings.min_markup_multiple}
             />
           </Field>
-          <Field
-            label="Round prices to (cents)"
-            help="Suggested prices round to the nearest this many cents. 5 → prices end in .x0 or .x5."
-          >
-            <Input
-              name="roundTo"
-              type="number"
-              step="1"
-              min="1"
-              defaultValue={settings.round_to_minor_units}
-            />
-          </Field>
-          <Field
-            label="Default tax rate (for estimates)"
-            help="Optional. Used only for on-screen price estimates — the authoritative tax is computed at the sale."
-          >
-            <Input
-              name="defaultTaxRate"
-              type="number"
-              step="0.001"
-              min="0"
-              defaultValue={settings.default_tax_rate}
-            />
-          </Field>
         </div>
+        <p className="px-5 pb-4 text-sm text-[var(--admin-muted)]">
+          Auto prices use this markup, add the correct tax to make the shelf
+          price tax-inclusive, then round up to the next whole dollar. The tax
+          rate itself is set by law and computed automatically at the sale, so
+          there is nothing to configure here.
+        </p>
         <div className="flex justify-end border-t border-[var(--admin-border)] px-5 py-3">
           <Button type="submit" disabled={pending}>
             {pending ? "Saving…" : "Save pricing settings"}

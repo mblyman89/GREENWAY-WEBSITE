@@ -34,7 +34,7 @@ export default async function SettingsHomePage() {
     ? `Excise ${(tax.exciseRateBps / 100).toString()}% · Sales ${((tax.stateSalesRateBps + tax.localSalesRateBps) / 100).toString()}%`
     : undefined;
   const pricingStatus = pricing
-    ? `Min markup ${pricing.min_markup_multiple}× · round to ${pricing.round_to_minor_units}¢`
+    ? `Min markup ${pricing.min_markup_multiple}× · rounds up to whole dollar (tax-inclusive)`
     : undefined;
 
   const groups: SettingsGroup[] = [

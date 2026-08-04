@@ -151,8 +151,7 @@ export async function savePricingSettingsAction(fd: FormData): Promise<ActionRes
 
   const next: PricingSettings = {
     min_markup_multiple: Math.max(1, num(fd, "minMarkup", before?.min_markup_multiple ?? 2)),
-    default_tax_rate: Math.max(0, num(fd, "defaultTaxRate", before?.default_tax_rate ?? 0)),
-    round_to_minor_units: Math.max(1, Math.round(num(fd, "roundTo", before?.round_to_minor_units ?? 5))),
+    // T-322: default_tax_rate / round_to_minor_units removed (dead settings).
   };
 
   const res = await savePricingSettings(next, session.profile.id);
