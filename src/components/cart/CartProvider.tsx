@@ -13,6 +13,7 @@ import {
 import { snapshotToEngineRule } from "@/lib/promotions/published-rules-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { CartEstimator } from "@/components/cart/CartEstimator";
+import { CartLimitMeter } from "@/components/cart/CartLimitMeter";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 
 // ---------------------------------------------------------------------------
@@ -581,6 +582,12 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                   <span className="text-2xl font-black text-[var(--orange)]">{formatMinorCurrency(totalMinorUnits)}</span>
                 </div>
               </div>
+
+              {/* WAC 314-55-095 legal-limit meter — mirrors the front-end POS
+                  register so the shopper sees the same purchase-limit picture
+                  before pickup. Informational only; final limits confirmed in
+                  store (the server order gate is the authority). */}
+              <CartLimitMeter items={items} />
 
               {/* Task T / PR 2: register-final loyalty + medical + tier-nudge estimator */}
               <CartEstimator
