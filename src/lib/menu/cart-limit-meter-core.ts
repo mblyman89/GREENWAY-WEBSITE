@@ -104,6 +104,29 @@ export function hasTrackedWeight(evaluation: LimitEvaluation): boolean {
   return evaluation.buckets.some((b) => b.usedGrams > 0);
 }
 
+/**
+ * The over-limit verdict for the customer checkout SOFT-BLOCK. Washington's
+ * WAC 314-55-095 / RCW 69.50.360 single-transaction maximums are ALSO the
+ * customer's RCW 69.50.4013 possession maximums (the LCB states you may "buy
+ * AND possess" the same amounts) — so an over-limit basket can never become a
+ * legal order OR a legal amount to carry out the door. There is no compliant
+ * "split at pickup." The customer checkout button is therefore locked when
+ * `over` is true; the reasons name the exact bucket(s) so the shopper knows
+ * what to remove.
+ *
+ * This is the storefront's advisory block (defense in depth): the server order
+ * gate and the POS completion gate remain the ultimate authority, so a shopper
+ * cannot bypass it by editing the page. Empty/all-untracked carts are never
+ * over. NEVER throws.
+ */
+export function cartLimitBlock(items: readonly CartLimitLineInput[]): {
+  over: boolean;
+  reasons: string[];
+} {
+  const evaluation = evaluateCartMeter(items);
+  return { over: evaluation.blocked, reasons: evaluation.reasons };
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
@@ -205,6 +228,30 @@ export function __runCartLimitMeterCoreTests(): void {
     "active buckets are usable + concentrate",
   );
   ok(hasTrackedWeight(mixed) === true, "mixed cart carries tracked weight");
+
+  // cartLimitBlock: the customer checkout soft-block verdict.
+  ok(cartLimitBlock([]).over === false, "empty cart is not over");
+  ok(
+    cartLimitBlock([{ category: "merch", quantity: 9, variantLabel: "each" }]).over === false,
+    "merch-only cart is not over",
+  );
+  ok(
+    cartLimitBlock([{ category: "flower", quantity: 8, variantLabel: "3.5g" }]).over === false,
+    "exactly at the 28g flower limit is not over",
+  );
+  const blockOver = cartLimitBlock([{ category: "flower", quantity: 9, variantLabel: "3.5g" }]);
+  ok(blockOver.over === true, "31.5g flower cart is over");
+  ok(blockOver.reasons.length === 1, "over cart names one bucket reason");
+  ok(
+    blockOver.reasons[0].toLowerCase().includes("useable") ||
+      blockOver.reasons[0].toLowerCase().includes("oz"),
+    "reason describes the exceeded bucket",
+  );
+  // Infused prerolls tripping the 7g concentrate wall also block checkout.
+  ok(
+    cartLimitBlock([{ category: "infused-preroll", quantity: 8, variantLabel: "1g" }]).over === true,
+    "8x1g infused prerolls (8g > 7g concentrate) blocks checkout",
+  );
 
   if (failed > 0) {
     throw new Error(`cart-limit-meter-core self-tests FAILED (${failed}): ${failures.join("; ")}`);

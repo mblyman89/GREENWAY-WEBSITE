@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   __runCartLimitMeterCoreTests,
   activeBuckets,
+  cartLimitBlock,
   cartLimitLines,
   evaluateCartMeter,
   hasTrackedWeight,
@@ -82,5 +83,21 @@ describe("cart-limit-meter-core", () => {
 
   it("pins the near-limit threshold to the register's 80%", () => {
     expect(NEAR_LIMIT_RATIO).toBe(0.8);
+  });
+
+  it("locks customer checkout only when a category is over the legal limit", () => {
+    // Empty / merch-only / at-limit carts are NOT over → checkout stays open.
+    expect(cartLimitBlock([]).over).toBe(false);
+    expect(cartLimitBlock([{ category: "merch", quantity: 9, variantLabel: "each" }]).over).toBe(false);
+    expect(cartLimitBlock([{ category: "flower", quantity: 8, variantLabel: "3.5g" }]).over).toBe(false);
+
+    // 31.5g flower (9 × 3.5g) is over 28g → checkout locked, with a reason.
+    const overFlower = cartLimitBlock([{ category: "flower", quantity: 9, variantLabel: "3.5g" }]);
+    expect(overFlower.over).toBe(true);
+    expect(overFlower.reasons).toHaveLength(1);
+    expect(overFlower.reasons[0].toLowerCase()).toContain("oz");
+
+    // Infused prerolls tripping the 7g concentrate wall also lock checkout.
+    expect(cartLimitBlock([{ category: "infused-preroll", quantity: 8, variantLabel: "1g" }]).over).toBe(true);
   });
 });
