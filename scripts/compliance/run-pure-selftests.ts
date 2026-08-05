@@ -220,6 +220,7 @@ import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventor
 import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-gate-core";
 import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
 import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
+import { __runExciseSendCoreTests } from "../../src/lib/compliance/excise-send-core";
 import { __runCcrsManifestCsvTests } from "../../src/lib/inventory/ccrs-manifest-csv-core";
 import { __runScanCoreTests } from "../../src/lib/inventory/cycle-count-scan-core";
 import { __runDispositionTests } from "../../src/lib/inventory/intake-disposition-core";
@@ -474,6 +475,7 @@ async function main() {
   assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());
   assertNoFailures("compliance-health-core", __runComplianceHealthTests());
   __runExcisePaymentCoreTests();
+  __runExciseSendCoreTests();
   assertNoFailures("ccrs-manifest-csv-core", __runCcrsManifestCsvTests());
   __runScanCoreTests();
   assertNoFailures("intake-disposition-core", __runDispositionTests());

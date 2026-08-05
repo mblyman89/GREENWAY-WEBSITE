@@ -29,8 +29,11 @@ import {
   PAYMENT_METHODS,
   EXCISE_REPORT_EMAIL,
   EXCISE_MAIL_ADDRESS,
+  EXCISE_SENDER_CC,
 } from "@/lib/compliance/excise-payment-core";
-import { saveExciseDraftAction } from "./actions";
+import { sendEligibility } from "@/lib/compliance/excise-send-core";
+import { isExciseSendConfigured, resolveExciseSenderFrom } from "@/lib/compliance/excise-send";
+import { saveExciseDraftAction, sendExciseToWslcbAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +92,7 @@ const inputCls =
 export default async function ExcisePage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string; ok?: string; error?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; ok?: string; error?: string; sent?: string }>;
 }) {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");
@@ -132,11 +135,31 @@ export default async function ExcisePage({
 
   const exportHref = `/admin/reports/compliance/excise-export?${qs}`;
 
+  // Send-to-WSLCB state. Eligibility WITHOUT the perjury tick tells us the
+  // "data" blockers (missing header / load failures); the checkbox is the final
+  // gate and is enforced again server-side. `alreadySent` shows the sent stamp.
+  const preCert = data
+    ? sendEligibility(
+        { identity: data.identity, boxes: data.boxes, dueDate: data.dueDate, warnings: data.warnings },
+        true, // assume certified to surface only the DATA blockers here
+      )
+    : null;
+  const dataBlockers = preCert ? preCert.blockers : [];
+  const emailConfigured = isExciseSendConfigured();
+  const senderFrom = resolveExciseSenderFrom();
+  const alreadySent = draft?.sent_at ?? null;
+
   return (
     <div className="space-y-5">
       {sp.ok ? (
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] px-5 py-3 text-xs font-bold text-emerald-200">
           Draft saved. The figures below and the downloaded LIQ-1295 now reflect your edits.
+        </div>
+      ) : null}
+      {sp.sent ? (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] px-5 py-3 text-xs font-bold text-emerald-200">
+          Sent to the WSLCB at {EXCISE_REPORT_EMAIL} (cc {EXCISE_SENDER_CC}). A copy of the filled LIQ-1295 was attached.
+          Remember to submit your payment separately below.
         </div>
       ) : null}
       {sp.error ? (
@@ -401,6 +424,83 @@ export default async function ExcisePage({
             </div>
           ) : (
             <p className="text-xs text-white/40">Generating the regulatory file requires the &ldquo;Change settings&rdquo; permission.</p>
+          )}
+        </Section>
+      ) : null}
+
+      {/* Send to WSLCB */}
+      {data ? (
+        <Section
+          id="field-send"
+          title="Send to WSLCB"
+          subtitle={`Emails the filled LIQ-1295 to ${EXCISE_REPORT_EMAIL} (cc ${EXCISE_SENDER_CC}) with the spreadsheet attached. Payment is separate.`}
+        >
+          {alreadySent ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 text-xs text-emerald-100">
+              <p className="font-black uppercase tracking-[0.12em] text-emerald-300">Sent</p>
+              <p className="mt-1">
+                This return was sent to the WSLCB on{" "}
+                <span className="font-bold">{new Date(alreadySent).toLocaleString()}</span>
+                {draft?.sent_to ? ` at ${draft.sent_to}` : ""}
+                {draft?.sent_file_name ? ` (${draft.sent_file_name})` : ""}. You can re-send below if you filed a
+                correction.
+              </p>
+            </div>
+          ) : null}
+
+          {!canEdit ? (
+            <p className="text-xs text-white/40">Sending the LIQ-1295 requires the &ldquo;Change settings&rdquo; permission.</p>
+          ) : !emailConfigured ? (
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-4 text-xs text-orange-100/90">
+              <p className="font-bold">In-app sending isn&apos;t configured yet.</p>
+              <p className="mt-1">
+                Add a <code className="text-white/70">RESEND_API_KEY</code> and verify the sender domain for{" "}
+                <code className="text-white/70">{senderFrom}</code>, then this button will email the form automatically.
+                Until then, use <a href="#form-liq1295" className="underline underline-offset-2">Download filled LIQ-1295</a>{" "}
+                above and email it to <code className="text-white/70">{EXCISE_REPORT_EMAIL}</code> yourself.
+              </p>
+            </div>
+          ) : dataBlockers.length > 0 ? (
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-4">
+              <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-orange-300">
+                Fix these before you can send
+              </p>
+              <ul className="space-y-1 text-xs text-orange-100/80">
+                {dataBlockers.map((b, i) => (
+                  <li key={i}>
+                    <a href={anchorFor(b)} className="underline decoration-orange-300/40 underline-offset-2 hover:text-orange-100">
+                      &#9656; {b}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] text-orange-100/50">The Send button lights up once these are resolved.</p>
+            </div>
+          ) : (
+            <form action={sendExciseToWslcbAction} className="space-y-3">
+              <input type="hidden" name="month" value={month} />
+              <input type="hidden" name="year" value={year} />
+              <label className="flex items-start gap-2 text-xs text-white/70">
+                <input type="checkbox" name="certified" required className="mt-0.5" />
+                <span>
+                  I certify this return is <span className="font-bold text-white/90">true and correct under penalty of
+                  perjury</span> (LIQ-1295 signature block). Sending emails it to the WSLCB from{" "}
+                  <code className="text-white/70">{senderFrom}</code>.
+                </span>
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-black text-black transition hover:opacity-90"
+                >
+                  &#9993; Send to WSLCB
+                </button>
+                <span className="text-xs text-white/40">
+                  Amount to pay: {fmt(amountDue)} &middot; due {data.dueDate}. Save your draft first so the attachment
+                  reflects your edits.
+                </span>
+              </div>
+            </form>
           )}
         </Section>
       ) : null}

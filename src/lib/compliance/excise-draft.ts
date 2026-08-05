@@ -47,6 +47,13 @@ export type ExciseReturnDraft = {
   amount_paid_minor: number | null;
   paid_at: string | null;
   updated_at: string | null;
+  // Sent-to-WSLCB tracking (migration 0153; null until sent).
+  sent_at: string | null;
+  sent_to: string | null;
+  sent_cc: string | null;
+  sent_from: string | null;
+  sent_message_id: string | null;
+  sent_file_name: string | null;
 };
 
 const DRAFT_COLUMNS =
@@ -54,19 +61,59 @@ const DRAFT_COLUMNS =
   "contact_phone, contact_email, is_revised, is_no_sales, is_final, " +
   "box1_cannabis_sales_minor, box2_less_medical_minor, box6_additional_excise_minor, " +
   "box8_assessed_penalty_minor, box9_approved_credits_minor, notes, payment_method, " +
+  "payment_status, payment_confirmation, amount_paid_minor, paid_at, updated_at, " +
+  "sent_at, sent_to, sent_cc, sent_from, sent_message_id, sent_file_name";
+
+/** Base columns present before migration 0153 (no sent-tracking columns). */
+const DRAFT_COLUMNS_BASE =
+  "id, report_month, report_year, license_number, trade_name, location_address, city, " +
+  "contact_phone, contact_email, is_revised, is_no_sales, is_final, " +
+  "box1_cannabis_sales_minor, box2_less_medical_minor, box6_additional_excise_minor, " +
+  "box8_assessed_penalty_minor, box9_approved_credits_minor, notes, payment_method, " +
   "payment_status, payment_confirmation, amount_paid_minor, paid_at, updated_at";
 
-/** Load the saved draft for a period, or null when none exists / no DB. */
+/** Fill the sent-tracking fields with nulls (used pre-migration-0153). */
+function withNullSentFields(row: Record<string, unknown> | null): ExciseReturnDraft | null {
+  if (!row) return null;
+  // The base-columns query omits the sent_* tracking columns; default any that
+  // are absent to null so the returned object always matches ExciseReturnDraft.
+  return {
+    ...(row as ExciseReturnDraft),
+    sent_at: (row.sent_at as string | null | undefined) ?? null,
+    sent_to: (row.sent_to as string | null | undefined) ?? null,
+    sent_cc: (row.sent_cc as string | null | undefined) ?? null,
+    sent_from: (row.sent_from as string | null | undefined) ?? null,
+    sent_message_id: (row.sent_message_id as string | null | undefined) ?? null,
+    sent_file_name: (row.sent_file_name as string | null | undefined) ?? null,
+  };
+}
+
+/**
+ * Load the saved draft for a period, or null when none exists / no DB.
+ *
+ * Migration-tolerant (standing rule): tries the full column set first; if the
+ * sent-tracking columns don't exist yet (0153 not applied), falls back to the
+ * base columns so the page never breaks before the migration is run.
+ */
 export async function getExciseDraft(month: number, year: number): Promise<ExciseReturnDraft | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("excise_return_drafts")
     .select(DRAFT_COLUMNS)
     .eq("report_year", year)
     .eq("report_month", month)
     .maybeSingle();
-  return (data as ExciseReturnDraft | null) ?? null;
+  if (!error) return (data as ExciseReturnDraft | null) ?? null;
+
+  // Fallback: pre-0153 schema (sent_* columns not present).
+  const { data: base } = await admin
+    .from("excise_return_drafts")
+    .select(DRAFT_COLUMNS_BASE)
+    .eq("report_year", year)
+    .eq("report_month", month)
+    .maybeSingle();
+  return withNullSentFields((base as Record<string, unknown> | null) ?? null);
 }
 
 /** The full set of editable inputs an employee can save. */
@@ -142,6 +189,44 @@ export async function saveExciseDraft(
   const { error } = await admin
     .from("excise_return_drafts")
     .upsert(row, { onConflict: "report_year,report_month" });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Record a successful WSLCB submission on the draft (migration 0153). Upserts by
+ * period so a send is stamped even if no draft row existed yet. Caller MUST have
+ * enforced permission and actually sent the email first.
+ */
+export async function markExciseSent(input: {
+  month: number;
+  year: number;
+  sentBy: string | null;
+  to: string;
+  cc: string;
+  from: string;
+  messageId: string | null;
+  fileName: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("excise_return_drafts")
+    .upsert(
+      {
+        report_month: input.month,
+        report_year: input.year,
+        sent_at: new Date().toISOString(),
+        sent_by: input.sentBy,
+        sent_to: input.to,
+        sent_cc: input.cc,
+        sent_from: input.from,
+        sent_message_id: input.messageId,
+        sent_file_name: input.fileName,
+        updated_by: input.sentBy,
+      },
+      { onConflict: "report_year,report_month" },
+    );
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

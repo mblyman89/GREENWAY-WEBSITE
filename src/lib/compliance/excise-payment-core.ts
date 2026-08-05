@@ -31,6 +31,18 @@
 /** The canonical destination for the completed LIQ-1295 form. */
 export const EXCISE_REPORT_EMAIL = "cannabistaxes@lcb.wa.gov";
 
+/**
+ * The address the submission is SENT FROM. Must be on a Resend-verified domain
+ * or the send is rejected. Defaults to Michael's Greenway address; overridable
+ * via env (EXCISE_SENDER_FROM) without a code change if the verified sender
+ * differs. Read the env at the call site (server-only), not here (this module
+ * is pure) — this is just the fallback default.
+ */
+export const EXCISE_SENDER_FROM_DEFAULT = "michael@greenwaymarijuana.com";
+
+/** The address CC'd on every submission so the store keeps its own copy. */
+export const EXCISE_SENDER_CC = "contact@greenwaymarijuana.com";
+
 /** CCRS portal (SAW login) — "Make a Payment" ACH path. */
 export const CCRS_PORTAL_URL = "https://cannabisreporting.lcb.wa.gov/";
 
