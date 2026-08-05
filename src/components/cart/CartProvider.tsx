@@ -14,6 +14,7 @@ import { snapshotToEngineRule } from "@/lib/promotions/published-rules-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { CartEstimator } from "@/components/cart/CartEstimator";
 import { CartLimitMeter } from "@/components/cart/CartLimitMeter";
+import { cartLimitBlock } from "@/lib/menu/cart-limit-meter-core";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 
 // ---------------------------------------------------------------------------
@@ -540,6 +541,13 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
     clearCart,
   } = useMockCart();
 
+  // WA WAC 314-55-095 / RCW 69.50.360 + 69.50.4013 soft-block: an over-limit
+  // basket can never be a legal order OR a legal amount to carry out, so we
+  // LOCK "Proceed to Checkout" until the shopper trims it. The server order
+  // gate stays the ultimate authority (this cannot be bypassed by editing the
+  // page). Computed from the SAME pure core the meter renders.
+  const { over: overLimit } = cartLimitBlock(items);
+
   if (!isOpen) return null;
 
   return (
@@ -584,9 +592,10 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
               </div>
 
               {/* WAC 314-55-095 legal-limit meter — mirrors the front-end POS
-                  register so the shopper sees the same purchase-limit picture
-                  before pickup. Informational only; final limits confirmed in
-                  store (the server order gate is the authority). */}
+                  register. When a category goes over, checkout is LOCKED below
+                  (overLimit) because the WA transaction limit is also the
+                  customer's possession limit. The server order gate remains the
+                  ultimate authority. */}
               <CartLimitMeter items={items} />
 
               {/* Task T / PR 2: register-final loyalty + medical + tier-nudge estimator */}
@@ -598,9 +607,19 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
               />
 
               <div className="grid gap-3">
-                <Link href="/checkout" onClick={onClose} className="w-full rounded-full bg-[var(--orange)] px-6 py-3.5 text-center text-sm font-black uppercase tracking-[0.14em] text-black transition hover:bg-white">
-                  Proceed to Checkout
-                </Link>
+                {overLimit ? (
+                  <div
+                    aria-disabled="true"
+                    className="w-full cursor-not-allowed rounded-full border border-red-500/40 bg-red-500/10 px-6 py-3.5 text-center text-sm font-black uppercase tracking-[0.14em] text-red-300"
+                    title="Remove items to get under Washington's legal limit"
+                  >
+                    Over Legal Limit
+                  </div>
+                ) : (
+                  <Link href="/checkout" onClick={onClose} className="w-full rounded-full bg-[var(--orange)] px-6 py-3.5 text-center text-sm font-black uppercase tracking-[0.14em] text-black transition hover:bg-white">
+                    Proceed to Checkout
+                  </Link>
+                )}
                 <Link href="/menu" onClick={onClose} className="w-full rounded-full border border-white/15 px-6 py-3 text-center text-xs font-black uppercase tracking-[0.14em] text-white transition hover:border-[var(--greenway)] hover:text-[var(--greenway)]">
                   Keep Shopping
                 </Link>
@@ -610,7 +629,8 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
               </div>
 
               <p className="px-1 pt-1 text-center text-[0.62rem] leading-4 text-zinc-600">
-                Taxes are estimated. Final pricing, taxes, and purchase limits are confirmed in store. Valid 21+ ID required at pickup.
+                Taxes are estimated. Final pricing and taxes are confirmed in store. Washington law
+                limits how much you may buy and carry per visit. Valid 21+ ID required at pickup.
               </p>
             </div>
           )}

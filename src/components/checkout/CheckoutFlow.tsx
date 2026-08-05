@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
 import { CartEstimator } from "@/components/cart/CartEstimator";
 import { CartLimitMeter } from "@/components/cart/CartLimitMeter";
+import { cartLimitBlock } from "@/lib/menu/cart-limit-meter-core";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { generateOrderNumber, persistCompletedOrder } from "@/lib/checkout/order";
@@ -62,6 +63,13 @@ export function CheckoutFlow() {
 
   const valid = useMemo(() => isValid(info), [info]);
 
+  // WA WAC 314-55-095 / RCW 69.50.360 + 69.50.4013 soft-block: an over-limit
+  // basket can never be a legal order OR a legal amount to carry out the door,
+  // so the Place Order button is LOCKED until the shopper trims it. The server
+  // order gate remains the ultimate authority (this cannot be bypassed by
+  // editing the page). Computed from the SAME pure core the meter renders.
+  const { over: overLimit } = useMemo(() => cartLimitBlock(items), [items]);
+
   function updateField<K extends keyof CustomerInfo>(key: K, value: string) {
     setInfoSaved(false);
     setInfo((current) => ({ ...current, [key]: value }));
@@ -81,6 +89,15 @@ export function CheckoutFlow() {
       return;
     }
     if (items.length === 0 || submitting) return;
+    // Compliance stop: never place an order that exceeds WA's legal purchase /
+    // possession limit. The button is already disabled when over-limit; this
+    // guard is defense in depth (the server order gate is the final authority).
+    if (overLimit) {
+      setServerError(
+        "This order exceeds Washington's legal purchase and possession limit. Please remove items to continue.",
+      );
+      return;
+    }
     setServerError(null);
     setSubmitting(true);
 
@@ -338,13 +355,23 @@ export function CheckoutFlow() {
           </div>
         ) : null}
 
+        {overLimit ? (
+          <div className="mt-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-4">
+            <p className="text-sm font-bold leading-6 text-red-300">
+              This order exceeds Washington&apos;s legal purchase and possession limit. Washington
+              law (RCW 69.50.360 &amp; 69.50.4013) caps how much you may buy and carry in a single
+              visit — please remove items to continue.
+            </p>
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={handlePlaceOrder}
-          disabled={submitting}
+          disabled={submitting || overLimit}
           className="mt-5 w-full rounded-full bg-[var(--orange)] px-6 py-4 text-base font-black uppercase tracking-[0.16em] text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {submitting ? "Placing Order…" : "Place Order"}
+          {overLimit ? "Over Legal Limit" : submitting ? "Placing Order…" : "Place Order"}
         </button>
 
         <Link
@@ -356,8 +383,9 @@ export function CheckoutFlow() {
 
         <p className="mx-auto mt-6 max-w-xl text-center text-[0.7rem] leading-5 text-zinc-500">
           This is a pickup order placed for in-store collection at Greenway Marijuana, 4851 Geiger Rd SE, Port Orchard, WA.
-          You must be 21 or older with a valid government-issued photo ID at pickup. Taxes shown are estimated; final pricing,
-          taxes, and purchase limits are confirmed in store. No payment is collected online — pay when you pick up.
+          You must be 21 or older with a valid government-issued photo ID at pickup. Taxes shown are estimated; final pricing
+          and taxes are confirmed in store. Washington law limits how much cannabis you may buy and carry per visit, so orders
+          are capped at the legal limit. No payment is collected online — pay when you pick up.
         </p>
       </div>
     </section>

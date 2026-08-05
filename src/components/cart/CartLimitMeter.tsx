@@ -101,9 +101,9 @@ export function CartLimitMeter({ items }: CartLimitMeterProps) {
 
       {status === "over" ? (
         <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold leading-5 text-red-200">
-          This cart is over Washington&apos;s single-transaction purchase limit. We can&apos;t sell
-          the full amount in one visit — trim the highlighted category, or we&apos;ll adjust the
-          quantity with you at pickup.
+          This exceeds Washington&apos;s legal purchase and possession limit for the highlighted
+          category. Please remove items to continue — Washington law (RCW 69.50.360 &amp;
+          69.50.4013) caps how much you may buy and carry in a single visit.
         </p>
       ) : status === "near" ? (
         <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold leading-5 text-amber-200">
