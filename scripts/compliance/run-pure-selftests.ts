@@ -11,6 +11,7 @@ import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engi
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
+import { __runCartLimitMeterCoreTests } from "../../src/lib/menu/cart-limit-meter-core";
 import { __runChunkedInTests } from "../../src/lib/supabase/chunked-in";
 import { __runExemptSaleRecordTests } from "../../src/lib/medical/exempt-sale-record-core";
 import { __runSalesHoursCoreTests } from "../../src/lib/compliance/sales-hours-core";
@@ -270,6 +271,7 @@ async function main() {
   __runPromoGuardTests();
   __runSalesLimitTests();
   __runSalesLimitGateTests();
+  __runCartLimitMeterCoreTests();
   await __runChunkedInTests();
   const exempt = __runExemptSaleRecordTests();
   if (exempt.failed > 0) throw new Error(`exempt-sale-record-core: ${exempt.failed} failure(s)`);

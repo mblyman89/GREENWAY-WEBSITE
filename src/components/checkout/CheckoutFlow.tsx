@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
 import { CartEstimator } from "@/components/cart/CartEstimator";
+import { CartLimitMeter } from "@/components/cart/CartLimitMeter";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { generateOrderNumber, persistCompletedOrder } from "@/lib/checkout/order";
@@ -312,6 +313,13 @@ export function CheckoutFlow() {
               <dd className="text-2xl font-black text-[var(--orange)]">{formatMinorCurrency(totalMinorUnits)}</dd>
             </div>
           </dl>
+        </div>
+
+        {/* WAC 314-55-095 legal-limit meter — mirrors the front-end POS
+            register so the shopper sees the same purchase-limit picture before
+            pickup. Informational only; final limits confirmed in store. */}
+        <div className="mt-5">
+          <CartLimitMeter items={items} />
         </div>
 
         {/* Task T / PR 2: register-final loyalty + medical + tier-nudge estimator */}
