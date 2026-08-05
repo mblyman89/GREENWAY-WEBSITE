@@ -5,8 +5,11 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
-import { saveExciseDraft, type ExciseDraftInput } from "@/lib/compliance/excise-draft";
+import { saveExciseDraft, resolveExciseReturn, markExciseSent, type ExciseDraftInput } from "@/lib/compliance/excise-draft";
 import { isPaymentMethod } from "@/lib/compliance/excise-payment-core";
+import { buildLiq1295Xlsx, makeLiq1295FileName, logExciseReturnBatch } from "@/lib/compliance/excise-return";
+import { sendEligibility } from "@/lib/compliance/excise-send-core";
+import { sendExciseReturnEmail } from "@/lib/compliance/excise-send";
 
 const BASE = "/admin/reports/excise";
 
@@ -92,4 +95,93 @@ export async function saveExciseDraftAction(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?month=${month}&year=${year}&ok=1`);
+}
+
+/**
+ * "Send to WSLCB": email the completed LIQ-1295 to cannabistaxes@lcb.wa.gov
+ * (cc contact@greenwaymarijuana.com) with the filled .xlsx attached.
+ *
+ * Server-side we RE-RESOLVE the return and RE-CHECK eligibility (never trust the
+ * client), require the perjury certification, then send via Resend. On success
+ * we stamp sent_at (markExciseSent), log a batch row as "sent", and audit. If
+ * email isn't configured, we report that so the UI can point to manual download.
+ */
+export async function sendExciseToWslcbAction(formData: FormData) {
+  const session = await requirePermission("settings.manage");
+  if (!can(session.profile.role, "settings.manage")) {
+    redirect(`${BASE}?error=${encodeURIComponent("Sending the LIQ-1295 requires admin.")}`);
+  }
+
+  const month = Number(formData.get("month"));
+  const year = Number(formData.get("year"));
+  if (!(month >= 1 && month <= 12) || !(year >= 2014)) {
+    redirect(`${BASE}?error=${encodeURIComponent("Invalid reporting period.")}`);
+  }
+
+  const certified = formData.get("certified") === "on";
+  const qs = `month=${month}&year=${year}`;
+
+  // Re-resolve from live data + saved draft, then re-check the gate server-side.
+  const { data } = await resolveExciseReturn(month, year);
+  const gate = sendEligibility(
+    { identity: data.identity, boxes: data.boxes, dueDate: data.dueDate, warnings: data.warnings },
+    certified,
+  );
+  if (!gate.canSend) {
+    redirect(`${BASE}?${qs}&error=${encodeURIComponent(`Cannot send yet: ${gate.blockers[0]}`)}`);
+  }
+
+  const fileName = makeLiq1295FileName(data.identity.licenseNumber, month, year);
+  const xlsx = await buildLiq1295Xlsx(data);
+
+  const result = await sendExciseReturnEmail({
+    email: {
+      identity: data.identity,
+      boxes: data.boxes,
+      dueDate: data.dueDate,
+      flags: data.flags,
+      fileName,
+    },
+    xlsx,
+    replyTo: data.identity.email || null,
+  });
+
+  if (!result.sent) {
+    redirect(`${BASE}?${qs}&error=${encodeURIComponent(`Could not send: ${result.reason} You can still Download the form and email it manually.`)}`);
+  }
+
+  await markExciseSent({
+    month,
+    year,
+    sentBy: session.profile.id,
+    to: result.to,
+    cc: result.cc,
+    from: result.from,
+    messageId: result.messageId,
+    fileName,
+  });
+
+  // Log the batch as an actual SEND (distinct from a plain download "generated").
+  await logExciseReturnBatch(data, fileName, session.profile.id);
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "excise.sent_to_wslcb",
+    entityType: "excise_return_drafts",
+    entityId: `${year}-${String(month).padStart(2, "0")}`,
+    after: {
+      month,
+      year,
+      to: result.to,
+      cc: result.cc,
+      from: result.from,
+      message_id: result.messageId,
+      file_name: fileName,
+      amount_to_pay: data.boxes.box10_amountToPay,
+    },
+  });
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?${qs}&sent=1`);
 }
