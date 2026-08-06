@@ -15,7 +15,7 @@
 import "server-only";
 import type { PublishedPromotion } from "@/lib/promotions/types";
 import type { GreenwayCategory } from "@/lib/leafly/types";
-import { getPublishedPromotions } from "@/lib/promotions/promotions-store";
+import { getPublishedPromotions, listNeverDiscountKeys } from "@/lib/promotions/promotions-store";
 import { storeWeekday } from "@/lib/reports/timezone";
 
 export type PosCartLine = {
@@ -161,6 +161,12 @@ export type EvaluateOpts = {
   taxRate?: number;
   /** Extra promotions to consider beyond the published set (e.g. seeded daily deals). */
   extraPromotions?: PublishedPromotion[];
+  /**
+   * PR-P4: product keys that must NEVER be discounted by ANY promotion. Folded
+   * into every active promotion's exclusions before matching, so a listed
+   * product keeps its regular price at the register. Defaults to none.
+   */
+  neverDiscountKeys?: string[];
 };
 
 /**
@@ -174,7 +180,20 @@ export function evaluateCart(
 ): PosCartTotals {
   const now = opts.now ?? new Date();
   const taxRate = opts.taxRate ?? 0;
-  const active = [...promotions, ...(opts.extraPromotions ?? [])].filter((p) => isPromoActive(p, now));
+  const activeRaw = [...promotions, ...(opts.extraPromotions ?? [])].filter((p) => isPromoActive(p, now));
+
+  // PR-P4: bake the global never-discount keys into EVERY active promotion's
+  // exclusions so promoMatchesLine vetoes those products under every deal
+  // ("exclusions win"). No-op when the list is empty.
+  const neverKeys = Array.from(
+    new Set((opts.neverDiscountKeys ?? []).map((k) => k.trim()).filter(Boolean)),
+  );
+  const active = neverKeys.length
+    ? activeRaw.map((p) => ({
+        ...p,
+        excludeProductKeys: Array.from(new Set([...p.excludeProductKeys, ...neverKeys])),
+      }))
+    : activeRaw;
 
   const lines: PosDiscountedLine[] = [];
   let subtotalRegular = 0;
@@ -235,6 +254,10 @@ export async function autoDiscountCart(
   cart: PosCartLine[],
   opts: EvaluateOpts = {},
 ): Promise<PosCartTotals> {
-  const promotions = await getPublishedPromotions();
-  return evaluateCart(cart, promotions, opts);
+  const [promotions, neverDiscountKeys] = await Promise.all([
+    getPublishedPromotions(),
+    // Fail-safe: on any error this returns [] and deals behave as before.
+    listNeverDiscountKeys(),
+  ]);
+  return evaluateCart(cart, promotions, { ...opts, neverDiscountKeys });
 }

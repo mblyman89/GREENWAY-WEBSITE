@@ -479,6 +479,131 @@ export async function deleteSavedAudience(id: string): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// PR-P4: the global "never discount" list.
+// Individual products that must NEVER receive ANY promotion. The engine treats
+// these keys as an exclusion on EVERY rule ("exclusions win"), so a listed
+// product keeps its regular price everywhere. Enforcement is by pos_product_key
+// (the SAME key EngineCartLine.productKey / EngineRule.excludeProductKeys use).
+// Fail-safe: a missing table (migration 0155 not run) => empty list, so the
+// engine behaves exactly as before this feature until the migration is applied.
+// ---------------------------------------------------------------------------
+
+export type NeverDiscountEntry = {
+  id: string;
+  productKey: string;
+  productName: string | null;
+  reason: string | null;
+  createdAt: string;
+};
+
+/** Full never-discount list for the admin screen. Fail-safe [] on any error. */
+export async function listNeverDiscount(): Promise<NeverDiscountEntry[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("promotion_never_discount")
+      .select("id, pos_product_key, product_name, reason, created_at")
+      .order("product_name", { ascending: true });
+    if (error || !data) return [];
+    return data.map((r) => ({
+      id: r.id as string,
+      productKey: (r.pos_product_key as string) ?? "",
+      productName: (r.product_name as string | null) ?? null,
+      reason: (r.reason as string | null) ?? null,
+      createdAt: (r.created_at as string) ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Just the product keys (lightweight) the discount engine excludes from every
+ * rule. Fail-safe []: on ANY error the engine simply applies no global
+ * exclusions (deals behave as before), never a hard failure at the register.
+ */
+export async function listNeverDiscountKeys(): Promise<string[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("promotion_never_discount")
+      .select("pos_product_key");
+    if (error || !data) return [];
+    return data
+      .map((r) => (r.pos_product_key as string) ?? "")
+      .filter((k) => k.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+export type NeverDiscountResult =
+  | { ok: true; id: string; alreadyListed: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Add a product to the never-discount list. Idempotent from the UI's view: if
+ * the key is already listed we return ok with alreadyListed=true (never an
+ * error). Friendly errors (never throws) when the table is missing.
+ */
+export async function addNeverDiscount(
+  productKey: string,
+  productName: string | null,
+  reason: string | null,
+  createdBy: string | null,
+): Promise<NeverDiscountResult> {
+  const key = (productKey ?? "").trim();
+  if (!key) return { ok: false, error: "Pick a product to protect from discounts." };
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Database not configured; cannot update the never-discount list." };
+  }
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("promotion_never_discount")
+      .insert({
+        pos_product_key: key,
+        product_name: productName?.trim() || null,
+        reason: reason?.trim() || null,
+        created_by: createdBy,
+      })
+      .select("id")
+      .single();
+    if (error || !data) {
+      // 23505 = unique_violation: the key is already on the list (that's fine).
+      if (error?.code === "23505") {
+        const { data: existing } = await admin
+          .from("promotion_never_discount")
+          .select("id")
+          .eq("pos_product_key", key)
+          .single();
+        return { ok: true, id: (existing?.id as string) ?? "", alreadyListed: true };
+      }
+      if (error?.code === "42P01") {
+        return { ok: false, error: "The never-discount list isn't set up yet (migration 0155 not run)." };
+      }
+      return { ok: false, error: error?.message ?? "Could not update the never-discount list." };
+    }
+    return { ok: true, id: data.id as string, alreadyListed: false };
+  } catch {
+    return { ok: false, error: "Could not update the never-discount list (unexpected error)." };
+  }
+}
+
+/** Remove a product from the never-discount list by row id. Best-effort. */
+export async function removeNeverDiscount(id: string): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.from("promotion_never_discount").delete().eq("id", id);
+  } catch {
+    // best-effort
+  }
+}
+
 function ruleMatches(
   item: MenuLite,
   rules: { scope: PromoScope; value: string | null }[],
