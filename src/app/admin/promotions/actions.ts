@@ -13,9 +13,21 @@ import {
   listPromotions,
   detectConflicts,
   getPublishedPromotions,
+  listSelectableProducts,
+  listSavedAudiences,
+  createSavedAudience,
+  deleteSavedAudience,
   type PromotionInput,
   type RuleInput,
+  type SavedAudience,
+  type CreateAudienceResult,
 } from "@/lib/promotions/promotions-store";
+import {
+  resolveSelection,
+  describePredicate,
+  type SelectionPredicate,
+  type SelectionMatch,
+} from "@/lib/promotions/promotion-selector-core";
 import type {
   DiscountType,
   PostStatus,
@@ -496,4 +508,74 @@ export async function generatePromotionsAdviceAction(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Advisor failed." };
   }
+}
+
+// ---------------------------------------------------------------------------
+// PR-P2: deterministic selection brain — resolve a predicate + smart audiences
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a SelectionPredicate against the LIVE published menu and return the
+ * exact matched products with per-match reasons + advisory warnings. Pure
+ * resolution (no AI) — this is the validation table the manual rule builder
+ * (and, in PR-P3, the AI selector) render before applying anything.
+ */
+export async function resolvePredicateAction(
+  predicate: SelectionPredicate,
+): Promise<{
+  ok: true;
+  description: string;
+  matched: SelectionMatch[];
+  totalMenu: number;
+  warnings: string[];
+}> {
+  await requirePermission("promotions.manage");
+  const products = await listSelectableProducts();
+  const result = resolveSelection(products, predicate);
+  return {
+    ok: true,
+    description: describePredicate(predicate),
+    matched: result.matched,
+    totalMenu: products.length,
+    warnings: result.warnings,
+  };
+}
+
+/** List saved smart audiences (named, reusable predicates). */
+export async function listAudiencesAction(): Promise<SavedAudience[]> {
+  await requirePermission("promotions.manage");
+  return listSavedAudiences();
+}
+
+/** Save a smart audience. Returns a friendly error string on failure. */
+export async function saveAudienceAction(input: {
+  name: string;
+  description?: string | null;
+  predicate: SelectionPredicate;
+}): Promise<CreateAudienceResult> {
+  const session = await requirePermission("promotions.manage");
+  const res = await createSavedAudience(
+    input.name,
+    input.description ?? null,
+    input.predicate,
+    session.userId,
+  );
+  if (res.ok) {
+    await recordAudit({
+      action: "promotion.audience.create",
+      entityType: "promotion_saved_audience",
+      entityId: res.id,
+      after: { name: input.name.trim() },
+    });
+    revalidatePath("/admin/promotions");
+  }
+  return res;
+}
+
+/** Delete a smart audience. */
+export async function deleteAudienceAction(id: string): Promise<{ ok: true }> {
+  await requirePermission("promotions.manage");
+  await deleteSavedAudience(id);
+  revalidatePath("/admin/promotions");
+  return { ok: true };
 }

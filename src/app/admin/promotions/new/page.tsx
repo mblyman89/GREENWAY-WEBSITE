@@ -2,7 +2,11 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { PromotionForm } from "@/components/admin/promotions/PromotionForm";
-import { listMenuBrands, listMenuProducts } from "@/lib/promotions/promotions-store";
+import {
+  listMenuBrands,
+  listMenuProducts,
+  listSavedAudiences,
+} from "@/lib/promotions/promotions-store";
 import { isAiConfigured } from "@/lib/promotions/ai-copy";
 import { createPromotionAction } from "../actions";
 
@@ -15,9 +19,9 @@ export default async function NewPromotionPage({
 }) {
   await requirePermission("promotions.manage");
   const { error } = await searchParams;
-  const [brands, products] = isSupabaseServiceConfigured
-    ? await Promise.all([listMenuBrands(), listMenuProducts()])
-    : [[], []];
+  const [brands, products, audiences] = isSupabaseServiceConfigured
+    ? await Promise.all([listMenuBrands(), listMenuProducts(), listSavedAudiences()])
+    : [[], [], []];
 
   return (
     <div>
@@ -35,6 +39,7 @@ export default async function NewPromotionPage({
           action={createPromotionAction}
           brands={brands}
           products={products}
+          audiences={audiences}
           submitLabel="Create draft"
           aiEnabled={isAiConfigured}
         />
