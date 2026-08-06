@@ -9,6 +9,7 @@ import { __runTaxBaseCoreTests } from "../../src/lib/reports/tax-base-core";
 import { __runExciseReturnTests } from "../../src/lib/compliance/excise-return-core";
 import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engine-core";
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
+import { __runPromotionSelectorTests } from "../../src/lib/promotions/promotion-selector-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
 import { __runCartLimitMeterCoreTests } from "../../src/lib/menu/cart-limit-meter-core";
@@ -270,6 +271,7 @@ async function main() {
   __runTaxBaseCoreTests();
   __runDiscountEngineTests();
   __runPromoGuardTests();
+  assertNoFailures("promotion-selector-core", __runPromotionSelectorTests());
   __runSalesLimitTests();
   __runSalesLimitGateTests();
   __runCartLimitMeterCoreTests();

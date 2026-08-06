@@ -21,6 +21,11 @@ import { getEnrichmentsForKeys, mediaUrlsForIds } from "@/lib/enrichment/store";
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import { DAILY_DEAL_SEEDS } from "./daily-deal-seed";
 import type {
+  SelectableProduct,
+  SelectableCompound,
+  SelectionPredicate,
+} from "./promotion-selector-core";
+import type {
   PromotionRow,
   PromotionTargetRow,
   PromotionExclusionRow,
@@ -238,6 +243,198 @@ export async function listMenuProducts(): Promise<MenuProductOption[]> {
     });
 }
 
+// ---------------------------------------------------------------------------
+// PR-P2: the SELECTABLE product adapter (rich attributes for the selector brain)
+// ---------------------------------------------------------------------------
+
+/** Parse a potency string ("22.4%", "100mg", "  18 % ") to a number, or null. */
+function parsePotencyNumber(raw: string | number | null | undefined): number | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const n = Number.parseFloat(s.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Coerce compounds_json (unknown) into numeric {type,value,unit} readings. */
+function parseCompounds(raw: unknown): SelectableCompound[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SelectableCompound[] = [];
+  for (const c of raw) {
+    if (c && typeof c === "object") {
+      const type = String((c as Record<string, unknown>).type ?? "").trim();
+      const value = parsePotencyNumber((c as Record<string, unknown>).value as string);
+      const unit = String((c as Record<string, unknown>).unit ?? "").trim();
+      if (type && value != null) out.push({ type, value, unit });
+    }
+  }
+  return out;
+}
+
+/**
+ * The published menu as SelectableProduct[] for the deterministic selection
+ * brain (promotion-selector-core). Rich attributes: strain, cannabinoids,
+ * weight, size labels, inventory, ratio, plus caller-friendly flags:
+ *   - onSaleAlready: the product currently falls under a PUBLISHED promotion.
+ *   - newArrival: heuristic — among the newest 15% of the menu by created_at.
+ * Empty when no menu is published. Never throws (fail-safe to []).
+ */
+export async function listSelectableProducts(): Promise<SelectableProduct[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const version = await getPublishedVersion();
+  if (!version) return [];
+  const items = await getVersionItems(version.id);
+  if (items.length === 0) return [];
+
+  // Which product keys are already inside a published promotion? (best-effort)
+  const onSaleKeys = new Set<string>();
+  try {
+    const published = await getPublishedPromotions();
+    for (const promo of published) {
+      // Build a lightweight PromotionWithRules-ish shape for previewAffected.
+      const affected = await previewAffectedProducts({
+        targets: [
+          ...(promo.storewide ? [{ scope: "all" as PromoScope, value: null }] : []),
+          ...promo.targetCategories.map((v) => ({ scope: "category" as PromoScope, value: v })),
+          ...promo.targetBrands.map((v) => ({ scope: "brand" as PromoScope, value: v })),
+          ...promo.targetProductKeys.map((v) => ({ scope: "product" as PromoScope, value: v })),
+        ],
+        exclusions: [
+          ...promo.excludeCategories.map((v) => ({ scope: "category" as PromoScope, value: v })),
+          ...promo.excludeBrands.map((v) => ({ scope: "brand" as PromoScope, value: v })),
+          ...promo.excludeProductKeys.map((v) => ({ scope: "product" as PromoScope, value: v })),
+        ],
+      });
+      for (const a of affected) onSaleKeys.add(a.key);
+    }
+  } catch {
+    // On-sale enrichment is best-effort; never block the picker over it.
+  }
+
+  // New-arrival heuristic: newest ~15% by created_at (ties broken by sort_order).
+  const sortedByAge = [...items].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+  const newCount = Math.max(1, Math.floor(items.length * 0.15));
+  const newArrivalKeys = new Set(sortedByAge.slice(0, newCount).map((i) => i.source_item_id));
+
+  return items.map((i) => {
+    const variantLabels = i.variants.map((v) => v.label).filter(Boolean);
+    const invLevels = i.variants.map((v) => v.inventory_level).filter((n) => Number.isFinite(n));
+    const minInventoryLevel = invLevels.length ? Math.min(...invLevels) : null;
+    return {
+      key: i.source_item_id,
+      name: i.name,
+      brand: i.brand_name ?? "",
+      vendor: i.vendor_name ?? "",
+      categories: i.filter_categories?.length ? i.filter_categories : [i.category],
+      strainType: i.strain_type ?? "unknown",
+      strainName: i.strain_name ?? null,
+      priceMinorUnits: i.price_minor_units,
+      netWeightGrams: i.net_weight_grams ?? null,
+      variantLabels,
+      minInventoryLevel,
+      thcPercent: parsePotencyNumber(i.thc),
+      cbdPercent: parsePotencyNumber(i.cbd),
+      compounds: parseCompounds(i.compounds_json),
+      ratioLabel: i.ratio_label ?? null,
+      inventoryStatus: i.inventory_status,
+      onSaleAlready: onSaleKeys.has(i.source_item_id),
+      newArrival: newArrivalKeys.has(i.source_item_id),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// PR-P2: saved "smart audiences" (named, reusable SelectionPredicates)
+// ---------------------------------------------------------------------------
+
+export type SavedAudience = {
+  id: string;
+  name: string;
+  description: string | null;
+  predicate: SelectionPredicate;
+  createdAt: string;
+};
+
+/**
+ * All saved smart audiences. Fail-safe: returns [] when the table does not yet
+ * exist (migration 0154 not applied) or on any error — the UI simply shows "no
+ * saved audiences yet" and the manual builder still works.
+ */
+export async function listSavedAudiences(): Promise<SavedAudience[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("promotion_saved_audiences")
+      .select("id, name, description, predicate, created_at")
+      .order("name", { ascending: true });
+    if (error || !data) return [];
+    return data.map((r) => ({
+      id: r.id as string,
+      name: (r.name as string) ?? "",
+      description: (r.description as string | null) ?? null,
+      predicate: ((r.predicate as SelectionPredicate) ?? {}) as SelectionPredicate,
+      createdAt: (r.created_at as string) ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export type CreateAudienceResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/**
+ * Create a smart audience. Returns a friendly error (never throws) when the
+ * table is missing (migration not yet run) or the name collides, so the UI can
+ * surface a clear message.
+ */
+export async function createSavedAudience(
+  name: string,
+  description: string | null,
+  predicate: SelectionPredicate,
+  createdBy: string | null,
+): Promise<CreateAudienceResult> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Give the audience a name." };
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Database not configured; cannot save audiences." };
+  }
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("promotion_saved_audiences")
+      .insert({ name: trimmed, description: description?.trim() || null, predicate, created_by: createdBy })
+      .select("id")
+      .single();
+    if (error || !data) {
+      // 23505 = unique_violation (duplicate name); 42P01 = undefined_table.
+      if (error?.code === "23505") return { ok: false, error: `An audience named "${trimmed}" already exists.` };
+      if (error?.code === "42P01") {
+        return { ok: false, error: "Saved audiences aren't set up yet (migration 0154 not run)." };
+      }
+      return { ok: false, error: error?.message ?? "Could not save the audience." };
+    }
+    return { ok: true, id: data.id as string };
+  } catch {
+    return { ok: false, error: "Could not save the audience (unexpected error)." };
+  }
+}
+
+/** Delete a saved audience. Best-effort; never throws. */
+export async function deleteSavedAudience(id: string): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.from("promotion_saved_audiences").delete().eq("id", id);
+  } catch {
+    // best-effort
+  }
+}
+
 function ruleMatches(
   item: MenuLite,
   rules: { scope: PromoScope; value: string | null }[],
@@ -261,9 +458,19 @@ export type AffectedProduct = {
   imageUrl?: string | null;
 };
 
+/**
+ * Minimal structural shape previewAffectedProducts needs: just the target and
+ * exclusion rules. PromotionWithRules satisfies this; so does an ad-hoc object
+ * built from a PublishedPromotion's resolved arrays (listSelectableProducts).
+ */
+export type PromotionRuleSets = {
+  targets: { scope: PromoScope; value: string | null }[];
+  exclusions: { scope: PromoScope; value: string | null }[];
+};
+
 /** Products in the published menu a promotion would apply to (targets minus exclusions). */
 export async function previewAffectedProducts(
-  promo: PromotionWithRules,
+  promo: PromotionRuleSets,
 ): Promise<AffectedProduct[]> {
   const menu = await loadPublishedMenuLite();
   if (menu.length === 0) return [];

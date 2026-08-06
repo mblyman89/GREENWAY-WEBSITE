@@ -26,10 +26,12 @@ import {
   type Weekday,
 } from "@/lib/promotions/types";
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
+import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
 import { PromotionAiMechanics } from "@/components/admin/promotions/PromotionAiMechanics";
 import { PromotionProductPicker } from "@/components/admin/promotions/PromotionProductPicker";
-import type { MenuProductOption } from "@/lib/promotions/promotions-store";
+import { PromotionRuleBuilder } from "@/components/admin/promotions/PromotionRuleBuilder";
+import type { MenuProductOption, SavedAudience } from "@/lib/promotions/promotions-store";
 import { Button } from "@/components/admin/ui";
 import { StickyActionBar } from "@/components/admin/ux";
 
@@ -39,6 +41,8 @@ type Props = {
   brands: string[];
   /** Published-menu products for the individual include/exclude picker. */
   products?: MenuProductOption[];
+  /** Saved smart audiences (named reusable predicates) for the rule builder. */
+  audiences?: SavedAudience[];
   submitLabel: string;
   /** Whether the AI copy writer is available (AI_API_KEY present). */
   aiEnabled?: boolean;
@@ -76,6 +80,7 @@ export function PromotionForm({
   promotion,
   brands,
   products = [],
+  audiences = [],
   submitLabel,
   aiEnabled = false,
 }: Props) {
@@ -531,6 +536,30 @@ export function PromotionForm({
             products={products}
             initialInclude={selectedProducts}
             initialExclude={excludedProducts}
+          />
+        </div>
+
+        {/* Smart rule builder (PR-P2) — attribute-based selection with a live
+            preview + reasons, applied as included products or saved as a reusable
+            smart audience. */}
+        <div>
+          <p className="mb-2 text-xs text-white/50">
+            Smart rules{" "}
+            <span className="text-white/30">
+              (select many products at once by attribute — size, THC, brand,
+              cannabinoid, price… — preview exactly what it hits, then apply)
+            </span>
+          </p>
+          <PromotionRuleBuilder
+            categoryValues={GREENWAY_CATEGORY_VALUES}
+            strainOptions={strainTypeDefinitions.map((d) => ({ value: d.value, label: d.label }))}
+            brands={brands}
+            initialAudiences={audiences.map((a) => ({
+              id: a.id,
+              name: a.name,
+              description: a.description,
+              predicate: a.predicate,
+            }))}
           />
         </div>
       </section>
