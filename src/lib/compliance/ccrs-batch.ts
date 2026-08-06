@@ -25,7 +25,7 @@ import {
   CCRS_UPLOAD_ORDER,
   uploadGroupOf,
   normalizeStrainType,
-  validateProductClassification,
+  deriveCcrsClassificationFromType,
   clampText,
   classifyWarning,
   verifySaleNumericColumns,
@@ -268,20 +268,24 @@ function buildProductFile(
     }
     const productName = disamb.name;
 
-    // C1: validate the category/type against the CCRS enum. DRAFTS-ONLY policy —
-    // we KEEP the POS-supplied values (canonicalized when valid) and never invent
-    // a value. Invalid pairs raise an ERROR-level warning so the employee fixes
-    // the mapping before submitting.
-    const cls = validateProductClassification(rawCategory, rawType);
+    // C1 (Slice 55, owner-confirmed): the CCRS (InventoryCategory, InventoryType)
+    // is derived from the vendor-set LCB TYPE alone (pos_inventory_type). The
+    // house/merchandising label (pos_inventory_category, e.g. "Pre-roll",
+    // "Gummies") is a STOREFRONT concept and is NOT used as a CCRS category — it
+    // only feeds the composed Name above. Deriving the category from the type
+    // (an inversion of the CCRS enum) is deterministic and never guesses; a
+    // blank/unknown type still raises the pre-existing ERROR safety net so a
+    // human fixes the source. NEVER-INVENT policy preserved.
+    const cls = deriveCcrsClassificationFromType(rawType);
     let category = rawCategory;
     let type = rawType;
     if (cls.ok) {
       category = cls.category;
       type = cls.type;
-      // SLICE 51: a legacy 2021-vocabulary value ("Usable Marijuana",
-      // "Marijuana Mix …", concentrate under IntermediateProduct) was
-      // accepted and canonicalized to the current Table 2 spelling. Surface
-      // an ADVISORY note (never blocks) so staff see what was translated.
+      // Advisory (never blocks): a legacy 2021-vocabulary value ("Usable
+      // Marijuana", inhalation concentrate under IntermediateProduct) was
+      // canonicalized to the current Table 2 spelling/category. Surface it so
+      // staff see what was translated.
       if (cls.aliased && cls.aliasNote) {
         warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
       }
