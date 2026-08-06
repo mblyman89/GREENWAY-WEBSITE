@@ -28,6 +28,8 @@ import {
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
 import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
 import { PromotionAiMechanics } from "@/components/admin/promotions/PromotionAiMechanics";
+import { PromotionProductPicker } from "@/components/admin/promotions/PromotionProductPicker";
+import type { MenuProductOption } from "@/lib/promotions/promotions-store";
 import { Button } from "@/components/admin/ui";
 import { StickyActionBar } from "@/components/admin/ux";
 
@@ -35,6 +37,8 @@ type Props = {
   action: (formData: FormData) => void | Promise<void>;
   promotion?: PromotionWithRules | null;
   brands: string[];
+  /** Published-menu products for the individual include/exclude picker. */
+  products?: MenuProductOption[];
   submitLabel: string;
   /** Whether the AI copy writer is available (AI_API_KEY present). */
   aiEnabled?: boolean;
@@ -67,16 +71,36 @@ function readNum(obj: Record<string, unknown>, key: string): number | "" {
   return Number.isFinite(n) && n > 0 ? n : "";
 }
 
-export function PromotionForm({ action, promotion, brands, submitLabel, aiEnabled = false }: Props) {
+export function PromotionForm({
+  action,
+  promotion,
+  brands,
+  products = [],
+  submitLabel,
+  aiEnabled = false,
+}: Props) {
   const selectedBrands = new Set(
     promotion?.targets.filter((t) => t.scope === "brand").map((t) => t.value ?? "") ?? [],
   );
   const selectedCategories = new Set(
     promotion?.targets.filter((t) => t.scope === "category").map((t) => t.value ?? "") ?? [],
   );
+  const selectedProducts =
+    promotion?.targets
+      .filter((t) => t.scope === "product")
+      .map((t) => t.value ?? "")
+      .filter(Boolean) ?? [];
   const excludedCategories = new Set(
     promotion?.exclusions.filter((e) => e.scope === "category").map((e) => e.value ?? "") ?? [],
   );
+  const excludedBrands = new Set(
+    promotion?.exclusions.filter((e) => e.scope === "brand").map((e) => e.value ?? "") ?? [],
+  );
+  const excludedProducts =
+    promotion?.exclusions
+      .filter((e) => e.scope === "product")
+      .map((e) => e.value ?? "")
+      .filter(Boolean) ?? [];
   const storewide = promotion?.targets.some((t) => t.scope === "all") ?? false;
 
   // Stored mechanics (promotions.config jsonb) → editor defaults.
@@ -493,29 +517,77 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             </div>
           )}
         </div>
+
+        {/* Individual product targeting (PR-P1) */}
+        <div>
+          <p className="mb-2 text-xs text-white/50">
+            Specific products{" "}
+            <span className="text-white/30">
+              (search the live menu to force individual products into — or out of —
+              this deal)
+            </span>
+          </p>
+          <PromotionProductPicker
+            products={products}
+            initialInclude={selectedProducts}
+            initialExclude={excludedProducts}
+          />
+        </div>
       </section>
 
       {/* Exclusions */}
       <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Exclusions (optional)</h2>
-        <p className="text-xs text-white/40">Carve out categories that should NOT get this deal.</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {GREENWAY_CATEGORY_VALUES.map((cat) => (
-            <label
-              key={`ex-${cat}`}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white/60"
-            >
-              <input
-                type="checkbox"
-                name="exclude_category"
-                value={cat}
-                defaultChecked={excludedCategories.has(cat)}
-                className="h-3.5 w-3.5 accent-[var(--admin-orange)]"
-              />
-              {cat}
-            </label>
-          ))}
+        <p className="text-xs text-white/40">
+          Carve out categories, brands, or individual products that should NOT get
+          this deal. Exclusions always win over targets.
+        </p>
+
+        {/* Category exclusions */}
+        <div>
+          <p className="mb-2 text-xs text-white/50">Categories</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {GREENWAY_CATEGORY_VALUES.map((cat) => (
+              <label
+                key={`ex-${cat}`}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white/60"
+              >
+                <input
+                  type="checkbox"
+                  name="exclude_category"
+                  value={cat}
+                  defaultChecked={excludedCategories.has(cat)}
+                  className="h-3.5 w-3.5 accent-[var(--admin-orange)]"
+                />
+                {cat}
+              </label>
+            ))}
+          </div>
         </div>
+
+        {/* Brand exclusions (PR-P1) */}
+        {brands.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs text-white/50">Brands</p>
+            <div className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto rounded-lg border border-white/10 bg-black/40 p-2 sm:grid-cols-3">
+              {brands.map((brand) => (
+                <label
+                  key={`ex-brand-${brand}`}
+                  className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-white/60 hover:bg-white/5"
+                >
+                  <input
+                    type="checkbox"
+                    name="exclude_brand"
+                    value={brand}
+                    defaultChecked={excludedBrands.has(brand)}
+                    className="h-3.5 w-3.5 accent-[var(--admin-orange)]"
+                  />
+                  {brand}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* GW-035: pinned save — this form is long enough that the buttons

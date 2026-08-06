@@ -6,6 +6,7 @@ import { PromotionForm } from "@/components/admin/promotions/PromotionForm";
 import {
   getPromotion,
   listMenuBrands,
+  listMenuProducts,
   previewAffectedProductsWithImages,
 } from "@/lib/promotions/promotions-store";
 import { formatMinorCurrency } from "@/lib/leafly/format";
@@ -48,8 +49,9 @@ export default async function EditPromotionPage({
   const promotion = await getPromotion(id);
   if (!promotion) notFound();
 
-  const [brands, affected, guard] = await Promise.all([
+  const [brands, products, affected, guard] = await Promise.all([
     listMenuBrands(),
+    listMenuProducts(),
     previewAffectedProductsWithImages(promotion),
     guardPromotionPublish(promotion),
   ]);
@@ -90,6 +92,7 @@ export default async function EditPromotionPage({
               action={updatePromotionAction}
               promotion={promotion}
               brands={brands}
+              products={products}
               submitLabel="Save changes"
               aiEnabled={isAiConfigured}
             />

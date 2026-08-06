@@ -208,6 +208,36 @@ export async function listMenuBrands(): Promise<string[]> {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
+/** A single published-menu product, lightweight, for the include/exclude picker. */
+export type MenuProductOption = {
+  key: string;
+  name: string;
+  brand: string;
+  categories: string[];
+  priceMinorUnits: number;
+};
+
+/**
+ * Every product in the currently published menu, for the individual-product
+ * include/exclude picker on the promotion form. Empty when no menu is
+ * published. Sorted by brand then name so the searchable list reads cleanly.
+ */
+export async function listMenuProducts(): Promise<MenuProductOption[]> {
+  const menu = await loadPublishedMenuLite();
+  return menu
+    .map((i) => ({
+      key: i.key,
+      name: i.name,
+      brand: i.brand,
+      categories: i.categories,
+      priceMinorUnits: i.priceMinorUnits,
+    }))
+    .sort((a, b) => {
+      const byBrand = a.brand.localeCompare(b.brand);
+      return byBrand !== 0 ? byBrand : a.name.localeCompare(b.name);
+    });
+}
+
 function ruleMatches(
   item: MenuLite,
   rules: { scope: PromoScope; value: string | null }[],
