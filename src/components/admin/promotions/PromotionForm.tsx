@@ -31,6 +31,7 @@ import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
 import { PromotionAiMechanics } from "@/components/admin/promotions/PromotionAiMechanics";
 import { PromotionProductPicker } from "@/components/admin/promotions/PromotionProductPicker";
 import { PromotionRuleBuilder } from "@/components/admin/promotions/PromotionRuleBuilder";
+import { PromotionSmartSelector } from "@/components/admin/promotions/PromotionSmartSelector";
 import type { MenuProductOption, SavedAudience } from "@/lib/promotions/promotions-store";
 import { Button } from "@/components/admin/ui";
 import { StickyActionBar } from "@/components/admin/ux";
@@ -537,6 +538,14 @@ export function PromotionForm({
             initialInclude={selectedProducts}
             initialExclude={excludedProducts}
           />
+        </div>
+
+        {/* Smart Selector (PR-P3) — plain-English targeting. The AI drafts a
+            SelectionPredicate (never product keys); the server sanitizes it
+            against the live menu and resolves it with the SAME deterministic
+            core as the rule builder, so the manager reviews exact products. */}
+        <div>
+          <PromotionSmartSelector aiEnabled={aiEnabled} />
         </div>
 
         {/* Smart rule builder (PR-P2) — attribute-based selection with a live
