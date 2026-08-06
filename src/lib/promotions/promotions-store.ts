@@ -346,6 +346,50 @@ export async function listSelectableProducts(): Promise<SelectableProduct[]> {
 }
 
 // ---------------------------------------------------------------------------
+// PR-P3: live menu "vocabulary" for the AI Smart Selector.
+// Derived from the SAME source the predicate resolves against
+// (listSelectableProducts), so any AI-drafted brand/category/vendor/strain/
+// status that isn't in this vocabulary can be safely dropped — the AI can only
+// reference things that are actually on the shelf. Fail-safe empty on error.
+// ---------------------------------------------------------------------------
+
+export type MenuVocabulary = {
+  brands: string[];
+  categories: string[];
+  vendors: string[];
+  strainTypes: string[];
+  inventoryStatuses: string[];
+};
+
+export async function listMenuVocabulary(): Promise<MenuVocabulary> {
+  try {
+    const products = await listSelectableProducts();
+    const brands = new Set<string>();
+    const categories = new Set<string>();
+    const vendors = new Set<string>();
+    const strainTypes = new Set<string>();
+    const inventoryStatuses = new Set<string>();
+    for (const p of products) {
+      if (p.brand) brands.add(p.brand);
+      if (p.vendor) vendors.add(p.vendor);
+      for (const c of p.categories) if (c) categories.add(c);
+      if (p.strainType) strainTypes.add(p.strainType);
+      if (p.inventoryStatus) inventoryStatuses.add(p.inventoryStatus);
+    }
+    const sorted = (s: Set<string>) => Array.from(s).sort((a, b) => a.localeCompare(b));
+    return {
+      brands: sorted(brands),
+      categories: sorted(categories),
+      vendors: sorted(vendors),
+      strainTypes: sorted(strainTypes),
+      inventoryStatuses: sorted(inventoryStatuses),
+    };
+  } catch {
+    return { brands: [], categories: [], vendors: [], strainTypes: [], inventoryStatuses: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // PR-P2: saved "smart audiences" (named, reusable SelectionPredicates)
 // ---------------------------------------------------------------------------
 

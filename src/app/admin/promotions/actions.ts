@@ -14,6 +14,7 @@ import {
   detectConflicts,
   getPublishedPromotions,
   listSelectableProducts,
+  listMenuVocabulary,
   listSavedAudiences,
   createSavedAudience,
   deleteSavedAudience,
@@ -48,6 +49,9 @@ import {
 // the promotions track) was never callable from any page — now wired here.
 import { draftEngineConfig } from "@/lib/promotions/engine-ai";
 import type { EngineConfig } from "@/lib/promotions/discount-engine-core";
+// PR-P3: AI Smart Selector — plain English -> SelectionPredicate, resolved
+// against the live menu by the deterministic core (zero hallucination).
+import { draftSelectionPredicate } from "@/lib/promotions/promotion-selector-ai";
 
 export type PromotionCopyResult =
   | {
@@ -520,6 +524,89 @@ export async function generatePromotionsAdviceAction(
  * resolution (no AI) — this is the validation table the manual rule builder
  * (and, in PR-P3, the AI selector) render before applying anything.
  */
+export type SelectionPredicateDraftResult =
+  | {
+      ok: true;
+      predicate: SelectionPredicate;
+      /** Plain-English restatement of the AI's predicate. */
+      restatement: string;
+      /** The AI's own one-sentence summary (may be empty). */
+      summary: string;
+      /** true when the draft matched no attributes (would select nothing). */
+      empty: boolean;
+      /** The exact products the predicate hits against the live menu. */
+      matched: SelectionMatch[];
+      totalMenu: number;
+      /** Sanitization + resolution warnings, in plain English. */
+      warnings: string[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * PR-P3: draft a product SELECTION from plain English. The AI emits a typed
+ * SelectionPredicate (never product keys); we sanitize it against the live menu
+ * vocabulary (dropping anything not on the shelf), then resolve it with the
+ * deterministic core so the manager sees the EXACT products before applying.
+ * DRAFTS-ONLY — the caller only pre-fills the form. Permission
+ * `promotions.manage`. Gated on AI_API_KEY.
+ */
+export async function draftSelectionPredicateAction(input: {
+  request: string;
+}): Promise<SelectionPredicateDraftResult> {
+  const session = await requirePermission("promotions.manage");
+
+  if (!isPromoAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY in your environment to enable the Smart Selector. You can still use the smart rule builder by hand.",
+    };
+  }
+
+  const request = (input.request ?? "").trim().slice(0, 500);
+  if (!request) {
+    return {
+      ok: false,
+      error: "Describe what to select first (e.g. “indica eighths under $30 that aren’t already on sale”).",
+    };
+  }
+
+  try {
+    const vocab = await listMenuVocabulary();
+    const { predicate, warnings, empty, summary, restatement } = await draftSelectionPredicate({
+      request,
+      vocab,
+    });
+
+    // Resolve against the live menu with the SAME deterministic core the rule
+    // builder uses — the AI never touches product identity.
+    const products = await listSelectableProducts();
+    const resolved = resolveSelection(products, predicate);
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "promotion.ai_selection_predicate",
+      entityType: "promotion",
+      after: { request, predicate, matchedCount: resolved.matched.length, summary },
+    });
+
+    return {
+      ok: true,
+      predicate,
+      restatement,
+      summary,
+      empty,
+      matched: resolved.matched,
+      totalMenu: products.length,
+      warnings: [...warnings, ...resolved.warnings],
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "AI request failed. Please try again.";
+    return { ok: false, error: message };
+  }
+}
+
 export async function resolvePredicateAction(
   predicate: SelectionPredicate,
 ): Promise<{
