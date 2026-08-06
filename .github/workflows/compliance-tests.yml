@@ -35,4 +35,3 @@ jobs:
           src/lib/compliance src/lib/orders src/lib/reports src/lib/security
           src/lib/naming src/lib/specials src/lib/promotions src/lib/medical
           src/lib/supabase src/lib/printing
-
