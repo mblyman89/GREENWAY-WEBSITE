@@ -403,6 +403,91 @@ export function validateProductClassification(
 }
 
 /**
+ * Derive the CCRS (InventoryCategory, InventoryType) from the LCB TYPE ALONE.
+ * PURE. (Slice 55 — owner-confirmed model.)
+ *
+ * WHY: every product Greenway sells is described by a vendor-set LCB inventory
+ * TYPE — it arrives on the CCRS manifest/JSON (POS intake) or in the Products
+ * spreadsheet "Inventory Type" column (the one-time Cultivera import) and is
+ * stored in `pos_inventory_type`. The CCRS *category* is a deterministic
+ * function of that type: `CCRS_INVENTORY_TYPES` is a category->types map, so we
+ * invert it. The house/merchandising label (`pos_inventory_category`,
+ * e.g. "Pre-roll", "Gummies") is a STOREFRONT concept and MUST NOT be used as a
+ * CCRS category — that mismatch is exactly the "\"Pre-roll\" is not a valid CCRS
+ * category" error this function eliminates.
+ *
+ * NEVER-INVENT policy preserved: we never guess a category. If the type is
+ * blank or does not resolve to a known CCRS type (even after the documented
+ * legacy-alias translation), we return ok:false with a precise, employee-facing
+ * error so the existing ERROR-level safety net still fires on genuinely broken
+ * data (the caller keeps surfacing it, so nothing regresses).
+ *
+ * DETERMINISM / the one ambiguity: every CCRS type belongs to exactly ONE
+ * category EXCEPT "Waste" (valid under HarvestedMaterial, IntermediateProduct
+ * and EndProduct). A retailer never sells "Waste", so for retail data there is
+ * no ambiguity; we still handle it explicitly rather than guess — see below.
+ */
+export function deriveCcrsClassificationFromType(
+  rawType: string | null | undefined,
+): ProductClassificationResult {
+  const typeIn = (rawType ?? "").trim();
+  if (!typeIn) {
+    return { ok: false, category: "", type: "", error: "InventoryType is missing." };
+  }
+
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const normType = norm(typeIn);
+
+  // 1) Exact modern type match. Walk categories in the enum's own order so the
+  //    single ambiguous type ("Waste") resolves to its FIRST category
+  //    (HarvestedMaterial) deterministically rather than guessing. Retail data
+  //    never contains "Waste", so this branch is a defensive tie-break only.
+  for (const cat of CCRS_INVENTORY_CATEGORIES) {
+    const match = CCRS_INVENTORY_TYPES[cat].find((t) => norm(t) === normType);
+    if (match) {
+      return { ok: true, category: cat, type: match };
+    }
+  }
+
+  // 2) Documented legacy vocabulary (2021 Data Model): the alias entry already
+  //    carries BOTH the modern category and the modern type spelling.
+  const legacy = CCRS_LEGACY_TYPE_ALIASES[normType];
+  if (legacy) {
+    return {
+      ok: true,
+      category: legacy.category,
+      type: legacy.type,
+      aliased: true,
+      aliasNote: `Legacy LCB value "${typeIn}" (2021 Data Model vocabulary) canonicalized to "${legacy.type}" under ${legacy.category} (current CCRS Table 2).`,
+    };
+  }
+
+  // 3) Inhalation concentrates whose spelling is unchanged but which moved
+  //    IntermediateProduct -> EndProduct in v2023+.
+  if (CCRS_MOVED_TO_END_PRODUCT.has(normType)) {
+    const modernType = CCRS_INVENTORY_TYPES.EndProduct.find((t) => norm(t) === normType);
+    if (modernType) {
+      return {
+        ok: true,
+        category: "EndProduct",
+        type: modernType,
+        aliased: true,
+        aliasNote: `"${modernType}" moved from IntermediateProduct to EndProduct in CCRS v2023+ — category derived from the LCB type.`,
+      };
+    }
+  }
+
+  // 4) Unknown/broken type — never guess. Keep the ERROR so a human fixes the
+  //    source data (this is the pre-existing safety net, not new machinery).
+  return {
+    ok: false,
+    category: "",
+    type: typeIn,
+    error: `InventoryType "${typeIn}" is not a recognized CCRS type, so its CCRS category can't be determined (expected an LCB type such as ${CCRS_INVENTORY_TYPES.EndProduct.slice(0, 4).join(", ")}, …).`,
+  };
+}
+
+/**
  * Clamp a text value to a max length (C2). PURE. Returns the clamped value plus
  * whether it was truncated (so the caller can warn — DRAFTS-ONLY, the employee
  * should shorten the source rather than ship a silently-cut field). CCRS text
@@ -982,6 +1067,59 @@ export function __runCcrsBatchCoreTests(): void {
     assert(modern.ok === true && modern.ok && modern.type === "Usable Cannabis" && !modern.aliased, "modern pair returned verbatim, not aliased");
     // Genuinely invalid values are still rejected — aliasing never guesses.
     assert(validateProductClassification("EndProduct", "Vape Juice").ok === false, "unknown type still rejected");
+  }
+
+  // Slice 55: deriveCcrsClassificationFromType — the CCRS category is derived
+  // from the LCB TYPE alone (the house/merchandising category is NOT consulted).
+  {
+    // Modern retail type → EndProduct, exact spelling.
+    const d1 = deriveCcrsClassificationFromType("Usable Cannabis");
+    assert(d1.ok === true && d1.ok && d1.category === "EndProduct" && d1.type === "Usable Cannabis", "type-only: Usable Cannabis → EndProduct");
+    // Case/space tolerant, canonical output.
+    const d2 = deriveCcrsClassificationFromType("  solid   edible ");
+    assert(d2.ok === true && d2.ok && d2.category === "EndProduct" && d2.type === "Solid Edible", "type-only: case/space tolerant");
+    // Every EndProduct type resolves to EndProduct.
+    for (const t of CCRS_INVENTORY_TYPES.EndProduct) {
+      const d = deriveCcrsClassificationFromType(t);
+      // "Waste" is the one multi-category type; the enum-order tie-break lands it
+      // on HarvestedMaterial (retail never sells Waste — defensive only).
+      if (t === "Waste") {
+        assert(d.ok === true && d.ok && d.category === "HarvestedMaterial", "type-only: Waste tie-breaks to HarvestedMaterial deterministically");
+      } else {
+        assert(d.ok === true && d.ok && d.category === "EndProduct" && d.type === t, `type-only: EndProduct type "${t}"`);
+      }
+    }
+    // Non-EndProduct types still resolve to their own category (not forced End).
+    assert(deriveCcrsClassificationFromType("Clones").ok === true && (deriveCcrsClassificationFromType("Clones") as { category: string }).category === "PropagationMaterial", "type-only: Clones → PropagationMaterial");
+    assert((deriveCcrsClassificationFromType("Cannabis Mix") as { category: string }).category === "IntermediateProduct", "type-only: Cannabis Mix → IntermediateProduct");
+    // Legacy vocabulary carries its category through the alias.
+    const dLeg = deriveCcrsClassificationFromType("Usable Marijuana");
+    assert(dLeg.ok === true && dLeg.ok && dLeg.category === "EndProduct" && dLeg.type === "Usable Cannabis" && dLeg.aliased === true, "type-only: legacy 'Usable Marijuana' → EndProduct/Usable Cannabis (aliased)");
+    // Inhalation concentrate spelling unchanged, category derived as EndProduct.
+    const dConc = deriveCcrsClassificationFromType("Concentrate for Inhalation");
+    assert(dConc.ok === true && dConc.ok && dConc.category === "EndProduct" && dConc.type === "Concentrate for Inhalation", "type-only: inhalation concentrate → EndProduct");
+    // The house/merchandising label must NEVER resolve as a type.
+    assert(deriveCcrsClassificationFromType("Pre-roll").ok === false, "type-only: house label 'Pre-roll' is not a CCRS type → error (safety net)");
+    assert(deriveCcrsClassificationFromType("Gummies").ok === false, "type-only: house label 'Gummies' is not a CCRS type → error");
+    // Blank/unknown → precise error (pre-existing safety net, never guesses).
+    assert(deriveCcrsClassificationFromType("").ok === false, "type-only: blank type → error");
+    assert(deriveCcrsClassificationFromType(null).ok === false, "type-only: null type → error");
+    assert(deriveCcrsClassificationFromType("Vape Juice").ok === false, "type-only: unknown type → error, never invented");
+    // KEY INVARIANT: whatever this derives, the independent pair-validator agrees
+    // (so the CSV post-write verifier never rejects our own output).
+    for (const t of ["Usable Cannabis", "Solid Edible", "Liquid Edible", "Tincture", "Topical Ointment", "Capsule", "Concentrate for Inhalation", "Hydrocarbon Concentrate", "Non-Solvent Based Concentrate", "Cannabis Mix Infused"]) {
+      const d = deriveCcrsClassificationFromType(t);
+      assert(d.ok === true, `derive ok for ${t}`);
+      if (d.ok) {
+        const back = validateProductClassification(d.category, d.type);
+        assert(back.ok === true, `pair-validator agrees with derived (${d.category}/${d.type})`);
+      }
+    }
+    // Legacy input also round-trips: derived modern pair validates.
+    {
+      const d = deriveCcrsClassificationFromType("Usable Marijuana");
+      if (d.ok) assert(validateProductClassification(d.category, d.type).ok === true, "derived-from-legacy pair validates");
+    }
   }
 
   // clampText (C2): under-limit unchanged; over-limit truncated + flagged.
