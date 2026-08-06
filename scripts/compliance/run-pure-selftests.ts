@@ -11,6 +11,7 @@ import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engi
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runPromotionSelectorTests } from "../../src/lib/promotions/promotion-selector-core";
 import { __runPromotionSelectorAiTests } from "../../src/lib/promotions/promotion-selector-ai-core";
+import { __runGuidedPromotionTests } from "../../src/lib/promotions/guided-promotion-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
 import { __runCartLimitMeterCoreTests } from "../../src/lib/menu/cart-limit-meter-core";
@@ -274,6 +275,7 @@ async function main() {
   __runPromoGuardTests();
   assertNoFailures("promotion-selector-core", __runPromotionSelectorTests());
   assertNoFailures("promotion-selector-ai", __runPromotionSelectorAiTests());
+  assertNoFailures("guided-promotion-core", __runGuidedPromotionTests());
   __runSalesLimitTests();
   __runSalesLimitGateTests();
   __runCartLimitMeterCoreTests();

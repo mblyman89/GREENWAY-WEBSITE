@@ -20,7 +20,12 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, StatusPill } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { listPromotions, detectConflicts } from "@/lib/promotions/promotions-store";
+import {
+  listPromotions,
+  detectConflicts,
+  listMenuBrands,
+  resolveStaffNames,
+} from "@/lib/promotions/promotions-store";
 import { auditPublishedPromotions } from "@/lib/promotions/promo-guard";
 import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 import { isAiConfigured } from "@/lib/ai/provider";
@@ -29,6 +34,7 @@ import type { PromotionRow, Weekday, DiscountType } from "@/lib/promotions/types
 import { storeWeekday } from "@/lib/reports/timezone";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 import { PromotionsAdvisorPanel } from "@/components/admin/promotions/PromotionsAdvisorPanel";
+import { GuidedThursdayLauncher } from "@/components/admin/promotions/GuidedThursdayLauncher";
 import { getContentForRender } from "@/lib/cms/render-content";
 import {
   resolveSpecialsPresentation,
@@ -120,12 +126,22 @@ export default async function PromotionsAdminPage({
     );
   }
 
-  const [promos, conflicts, audit, presentationJson] = await Promise.all([
+  const [promos, conflicts, audit, presentationJson, menuBrands] = await Promise.all([
     listPromotions(),
     detectConflicts(),
     auditPublishedPromotions(),
     getContentForRender("specials.deals.presentation"),
+    listMenuBrands(),
   ]);
+
+  // PR-P5 governance: resolve the staff who created/last-changed each promotion
+  // to friendly names so the table can show "changed by …" without exposing IDs.
+  const staffIds = Array.from(
+    new Set(
+      promos.flatMap((p) => [p.updated_by, p.created_by].filter((x): x is string => Boolean(x))),
+    ),
+  );
+  const staffNames = await resolveStaffNames(staffIds);
   // SLICE 106: the /specials weekly-deal grid PRESENTATION (which weekday cards
   // show / are hidden). Prices/offers still come from these promotions — this
   // only affects whether the deal's CARD is visible on the public Specials page.
@@ -251,6 +267,9 @@ export default async function PromotionsAdminPage({
         {scheduleItems.length > 0 && (
           <WeeklyScheduleStrip items={scheduleItems} todayWeekday={todayWeekday} />
         )}
+
+        {/* ── Guided Thursday brand sale (PR-P5) ─────────────────────────── */}
+        <GuidedThursdayLauncher brands={menuBrands} />
 
         {/* ── Where this shows up (SLICE 106) ─────────────────────────────── */}
         <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
@@ -502,15 +521,45 @@ export default async function PromotionsAdminPage({
                 <th className="px-4 py-3 font-semibold">Schedule</th>
                 <th className="px-4 py-3 font-semibold">Discount</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Last changed</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
-              {filtered.length === 0 && (
+              {filtered.length === 0 && promos.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-[var(--admin-text-faint)]">
-                    {promos.length === 0
-                      ? "No promotions yet. The storefront is currently showing the built-in daily-deal defaults. Create one to override them."
-                      : "No promotions match the current filters."}
+                  <td colSpan={5} className="px-4 py-10">
+                    <div className="mx-auto max-w-md text-center">
+                      <p className="text-2xl" aria-hidden>
+                        🌱
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-[var(--admin-text)]">
+                        No promotions yet — your storefront is running on the built-in daily-deal
+                        defaults.
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                        Create your first promotion to take control. The quickest start is a Thursday
+                        brand sale — pick brands and a percent, and we&apos;ll pre-fill everything for
+                        you to review.
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        <Link
+                          href="/admin/promotions/new"
+                          className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#6bc945]"
+                        >
+                          + New promotion
+                        </Link>
+                        <span className="text-xs text-[var(--admin-text-faint)]">
+                          or use the Thursday brand-sale setup above ↑
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {filtered.length === 0 && promos.length > 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-[var(--admin-text-faint)]">
+                    No promotions match the current filters.
                   </td>
                 </tr>
               )}
@@ -546,6 +595,20 @@ export default async function PromotionsAdminPage({
                   <td className="px-4 py-3">
                     <StatusPill status={p.status} />
                   </td>
+                  <td className="px-4 py-3 text-[var(--admin-text-muted)]">
+                    <span className="whitespace-nowrap">{p.updated_at.slice(0, 10)}</span>
+                    {(() => {
+                      const who =
+                        (p.updated_by && staffNames.get(p.updated_by)) ||
+                        (p.created_by && staffNames.get(p.created_by)) ||
+                        null;
+                      return who ? (
+                        <span className="block text-xs text-[var(--admin-text-faint)]">
+                          by {who}
+                        </span>
+                      ) : null;
+                    })()}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -553,7 +616,10 @@ export default async function PromotionsAdminPage({
         </div>
         <p className="text-xs text-[var(--admin-text-faint)]">
           Showing {filtered.length} of {promos.length} promotion{promos.length === 1 ? "" : "s"}.
-          Deals never stack; the register clamps every price at the product&apos;s CCRS cost floor.
+          Deals never stack; the register clamps every price at the product&apos;s CCRS cost floor.{" "}
+          <Link href="/admin/audit" className="text-[var(--admin-accent)] hover:underline">
+            View full change history →
+          </Link>
         </p>
       </div>
     </div>
