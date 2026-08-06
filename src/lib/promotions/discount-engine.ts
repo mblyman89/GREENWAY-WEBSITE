@@ -21,7 +21,7 @@
  */
 import "server-only";
 
-import { getPublishedPromotions } from "./promotions-store";
+import { getPublishedPromotions, listNeverDiscountKeys } from "./promotions-store";
 import type { PublishedPromotion } from "./types";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import {
@@ -81,8 +81,21 @@ export async function loadPublishedRules(): Promise<EngineRule[]> {
 export async function loadPublishedRuleSnapshots(): Promise<PublishedRuleSnapshot[]> {
   try {
     const published = await getPublishedPromotions();
-    if (!published.length) return seedRuleSnapshots();
-    const configs = await rawConfigsFor(published);
+    if (!published.length) {
+      // No DB promotions: the storefront runs on the committed daily-deal seeds.
+      // Still honour the never-discount list against those seed deals.
+      const neverKeys = await listNeverDiscountKeys();
+      const seeds = seedRuleSnapshots();
+      if (!neverKeys.length) return seeds;
+      return seeds.map((s) => ({
+        ...s,
+        excludeProductKeys: Array.from(new Set([...s.excludeProductKeys, ...neverKeys])),
+      }));
+    }
+    const [configs, neverKeys] = await Promise.all([
+      rawConfigsFor(published),
+      listNeverDiscountKeys(),
+    ]);
     return published.map((p) => {
       const raw = configs.get(p.id);
       const config = raw
@@ -90,7 +103,16 @@ export async function loadPublishedRuleSnapshots(): Promise<PublishedRuleSnapsho
         : p.id.startsWith("seed-")
           ? seedConfigFor(p.promoKey)
           : {};
-      return snapshotFromPublished(p, config);
+      const snapshot = snapshotFromPublished(p, config);
+      // PR-P4: fold the global never-discount keys into the snapshot the CLIENT
+      // cart + product cards price with, so the storefront honours the list
+      // WITHOUT any client-side fetch — the exclusion rides the serialized rule.
+      if (neverKeys.length) {
+        snapshot.excludeProductKeys = Array.from(
+          new Set([...snapshot.excludeProductKeys, ...neverKeys]),
+        );
+      }
+      return snapshot;
     });
   } catch {
     // The storefront must never lose its deals over a transient DB error.
@@ -120,7 +142,10 @@ async function rawConfigsFor(
 
 /** Re-attach raw config jsonb from the DB (seed fallbacks carry seed config). */
 async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]> {
-  const configById = await rawConfigsFor(active);
+  const [configById, neverKeys] = await Promise.all([
+    rawConfigsFor(active),
+    listNeverDiscountKeys(),
+  ]);
 
   return active.map((p) => {
     const rule = promotionToRule(p);
@@ -130,6 +155,12 @@ async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]
     // seed itself (e.g. Tuesday's either/or) — attach it when the DB had none.
     if (!raw && p.id.startsWith("seed-")) {
       rule.config = seedConfigFor(p.promoKey);
+    }
+    // PR-P4: bake the global never-discount keys into EVERY rule's exclusions
+    // so every server pricing path (order pricing, POS, below-cost audit)
+    // protects those products from all deals. "Exclusions win."
+    if (neverKeys.length) {
+      rule.excludeProductKeys = Array.from(new Set([...rule.excludeProductKeys, ...neverKeys]));
     }
     return rule;
   });

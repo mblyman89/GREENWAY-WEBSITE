@@ -18,10 +18,15 @@ import {
   listSavedAudiences,
   createSavedAudience,
   deleteSavedAudience,
+  listNeverDiscount,
+  addNeverDiscount,
+  removeNeverDiscount,
   type PromotionInput,
   type RuleInput,
   type SavedAudience,
   type CreateAudienceResult,
+  type NeverDiscountEntry,
+  type NeverDiscountResult,
 } from "@/lib/promotions/promotions-store";
 import {
   resolveSelection,
@@ -664,5 +669,61 @@ export async function deleteAudienceAction(id: string): Promise<{ ok: true }> {
   await requirePermission("promotions.manage");
   await deleteSavedAudience(id);
   revalidatePath("/admin/promotions");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// PR-P4: the global "never discount" list (products always excluded from every
+// deal). Permission `promotions.manage`. Every change is audited.
+// ---------------------------------------------------------------------------
+
+/** List the never-discount products. */
+export async function listNeverDiscountAction(): Promise<NeverDiscountEntry[]> {
+  await requirePermission("promotions.manage");
+  return listNeverDiscount();
+}
+
+/** Add a product to the never-discount list. Idempotent (already-listed = ok). */
+export async function addNeverDiscountAction(input: {
+  productKey: string;
+  productName?: string | null;
+  reason?: string | null;
+}): Promise<NeverDiscountResult> {
+  const session = await requirePermission("promotions.manage");
+  const res = await addNeverDiscount(
+    input.productKey,
+    input.productName ?? null,
+    input.reason ?? null,
+    session.userId,
+  );
+  if (res.ok && !res.alreadyListed) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "promotion.never_discount.add",
+      entityType: "promotion_never_discount",
+      entityId: res.id,
+      after: { productKey: input.productKey.trim(), productName: input.productName ?? null, reason: input.reason ?? null },
+    });
+    // Prices depend on this list — revalidate the storefront + admin surfaces.
+    revalidatePath("/admin/promotions");
+    revalidatePath("/", "layout");
+  }
+  return res;
+}
+
+/** Remove a product from the never-discount list. */
+export async function removeNeverDiscountAction(id: string): Promise<{ ok: true }> {
+  const session = await requirePermission("promotions.manage");
+  await removeNeverDiscount(id);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "promotion.never_discount.remove",
+    entityType: "promotion_never_discount",
+    entityId: id,
+  });
+  revalidatePath("/admin/promotions");
+  revalidatePath("/", "layout");
   return { ok: true };
 }

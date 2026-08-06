@@ -519,10 +519,39 @@ function blendSavings(
 // NO STACKING (owner hard block): each line keeps exactly ONE promotion — the
 // highest savings; priority breaks ties. Legacy `stackable` configs are ignored.
 // ---------------------------------------------------------------------------
+/**
+ * PR-P4: the global "never discount" list. Given the owner's protected product
+ * keys, return a copy of the rules with those keys merged into EVERY rule's
+ * excludeProductKeys. Because ruleMatchesLine treats exclusions as an absolute
+ * veto ("exclusions win"), a listed product then keeps its regular price under
+ * every promotion — storewide sales, daily deals, brand sales, all of it. Pure
+ * and order-preserving; a no-op when the list is empty so nothing changes for
+ * stores that never use the feature.
+ */
+export function applyNeverDiscount(rules: EngineRule[], neverDiscountKeys: string[]): EngineRule[] {
+  if (!neverDiscountKeys.length) return rules;
+  // Normalise + de-dup the protected keys once (matching is case-insensitive in
+  // ruleMatchesLine via hasCi, but we keep the raw values here for clarity).
+  const extra = Array.from(new Set(neverDiscountKeys.map((k) => k.trim()).filter(Boolean)));
+  if (!extra.length) return rules;
+  return rules.map((rule) => {
+    const merged = new Set(rule.excludeProductKeys);
+    for (const k of extra) merged.add(k);
+    return { ...rule, excludeProductKeys: Array.from(merged) };
+  });
+}
+
 export function computePromotions(
   lines: EngineCartLine[],
   rules: EngineRule[],
+  /**
+   * PR-P4: product keys that must NEVER be discounted by ANY rule. Merged into
+   * every rule's exclusions before evaluation. Defaults to none so all existing
+   * callers and tests are unaffected.
+   */
+  neverDiscountKeys: string[] = [],
 ): EngineResult {
+  rules = applyNeverDiscount(rules, neverDiscountKeys);
   // Start every line at regular price.
   const best = new Map<string, EngineLineResult>();
   for (const l of lines) {
@@ -967,6 +996,52 @@ export function __runDiscountEngineTests(): void {
     // NOT 720 (stacked) — the single best deal (20%) applies.
     expect("no stacking", r.lines[0].unitPriceMinorUnits === 800);
     expect("no stacking single rule", r.lines[0].appliedRuleId === "r20");
+  }
+
+  // PR-P4: GLOBAL NEVER-DISCOUNT LIST.
+  {
+    // A storewide 20% flower deal; one protected key must keep regular price.
+    const rule = baseRule({ discountType: "percent", discountPercent: 20, targetCategories: ["flower"] });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"], productKey: "PROTECTED" },
+      { lineId: "b", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"], productKey: "NORMAL" },
+    ];
+    const r = computePromotions(lines, [rule], ["PROTECTED"]);
+    expect("never-discount keeps regular", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 1000);
+    expect("never-discount others still discounted", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 800);
+  }
+
+  // never-discount beats even a storewide deal AND every other rule (defense).
+  {
+    const storewide = baseRule({ id: "sw", discountType: "percent", discountPercent: 30, storewide: true });
+    const brandDeal = baseRule({ id: "bd", discountType: "percent", discountPercent: 25, targetBrands: ["Artizen"] });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 2000, quantity: 1, categories: ["flower"], brand: "Artizen", productKey: "KEEP" },
+    ];
+    const r = computePromotions(lines, [storewide, brandDeal], ["KEEP"]);
+    expect("never-discount beats every rule", r.lines[0].unitPriceMinorUnits === 2000);
+    expect("never-discount no applied rule", !r.lines[0].appliedRuleId);
+  }
+
+  // applyNeverDiscount: pure merge is a no-op when the list is empty.
+  {
+    const rule = baseRule({ excludeProductKeys: ["X"] });
+    const same = applyNeverDiscount([rule], []);
+    expect("never-discount empty no-op", same[0] === rule);
+    const merged = applyNeverDiscount([rule], ["Y", "Y", " "]);
+    expect("never-discount merges + dedups", JSON.stringify(merged[0].excludeProductKeys) === JSON.stringify(["X", "Y"]));
+    // Original rule is not mutated (pure copy).
+    expect("never-discount does not mutate input", JSON.stringify(rule.excludeProductKeys) === JSON.stringify(["X"]));
+  }
+
+  // case-insensitive: the exclusion match ignores key casing (via hasCi).
+  {
+    const rule = baseRule({ discountType: "percent", discountPercent: 20, targetCategories: ["flower"] });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"], productKey: "abc-123" },
+    ];
+    const r = computePromotions(lines, [rule], ["ABC-123"]);
+    expect("never-discount case-insensitive", r.lines[0].unitPriceMinorUnits === 1000);
   }
 
   console.log(`discount-engine: ${passed} passed, ${failed} failed`);
