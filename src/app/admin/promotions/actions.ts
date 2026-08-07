@@ -21,6 +21,7 @@ import {
   listNeverDiscount,
   addNeverDiscount,
   removeNeverDiscount,
+  listMenuBrands,
   type PromotionInput,
   type RuleInput,
   type SavedAudience,
@@ -34,6 +35,10 @@ import {
   type SelectionPredicate,
   type SelectionMatch,
 } from "@/lib/promotions/promotion-selector-core";
+import {
+  buildPlannedPromotions,
+  type PlannedWeek,
+} from "@/lib/promotions/thursday-planner-core";
 import type {
   DiscountType,
   PostStatus,
@@ -362,6 +367,100 @@ export async function createPromotionAction(formData: FormData): Promise<void> {
   });
   revalidatePath("/admin/promotions");
   redirect(`/admin/promotions/${id}?saved=1`);
+}
+
+/**
+ * PR-P6 — Thursday brand-sale multi-week planner.
+ *
+ * Takes a plan of upcoming Thursdays (each with its own brand(s) + optional
+ * percent) and creates ONE DATE-WINDOWED draft promotion per week. Every draft
+ * has weekday=null and a start/end window covering exactly that one Pacific
+ * Thursday, so the discount engine turns each week's deal on that day and off
+ * at end of day — next week's brand takes over on its own, no manual cleanup.
+ *
+ * Created as DRAFTS: Michael reviews and publishes as usual, so the CCRS
+ * below-cost publish guard and every other publish-time check stay intact.
+ * The pure planner (thursday-planner-core) validates brands against the live
+ * menu, drops unknown ones, skips empty weeks, and clamps percents — this
+ * action is only the thin DB/audit shell around it.
+ */
+export type ThursdayPlanResult = {
+  ok: boolean;
+  scheduledCount: number;
+  skippedCount: number;
+  createdIds: string[];
+  warnings: string[];
+  error?: string;
+};
+
+export async function schedulePlannedThursdaysAction(
+  plan: PlannedWeek[],
+  defaultPercent: number,
+): Promise<ThursdayPlanResult> {
+  const session = await requirePermission("promotions.manage");
+
+  const menuBrands = await listMenuBrands();
+  const built = buildPlannedPromotions(plan, menuBrands, defaultPercent);
+
+  // Nothing valid to create — hand the warnings back so the UI can explain why.
+  if (built.drafts.length === 0) {
+    return {
+      ok: false,
+      scheduledCount: 0,
+      skippedCount: built.skippedCount,
+      createdIds: [],
+      warnings: built.warnings,
+      error: "Nothing to schedule — pick at least one menu brand for a Thursday.",
+    };
+  }
+
+  const createdIds: string[] = [];
+  const warnings = [...built.warnings];
+
+  for (const draft of built.drafts) {
+    const input: PromotionInput = {
+      config: {},
+      promo_key: null,
+      title: draft.title,
+      description: `Auto-scheduled Thursday brand sale for ${draft.label}. Runs only on this Thursday, then ends on its own.`,
+      discount_type: "percent",
+      discount_percent: draft.discountPercent,
+      discount_fixed: 0,
+      multi_item_percent: null,
+      per_item_sale: true,
+      bonus_note: null,
+      weekday: null, // dated one-off: the start/end window makes it a single-day deal
+      starts_at: draft.startsAtUtc,
+      ends_at: draft.endsAtUtc,
+      priority: 0,
+    };
+    const targets: RuleInput[] = draft.brands.map((b) => ({ scope: "brand", value: b }));
+
+    const id = await createPromotion(input, targets, [], session.userId);
+    if (!id) {
+      warnings.push(`${draft.label}: could not be created (saved the others).`);
+      continue;
+    }
+    createdIds.push(id);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "promotion.create",
+      entityType: "promotion",
+      entityId: id,
+      after: { ...input, targets, plannedThursday: draft.ymd },
+    });
+  }
+
+  revalidatePath("/admin/promotions");
+
+  return {
+    ok: createdIds.length > 0,
+    scheduledCount: createdIds.length,
+    skippedCount: built.skippedCount,
+    createdIds,
+    warnings,
+  };
 }
 
 export async function updatePromotionAction(formData: FormData): Promise<void> {

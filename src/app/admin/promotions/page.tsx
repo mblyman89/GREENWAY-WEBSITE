@@ -231,6 +231,12 @@ export default async function PromotionsAdminPage({
               Never-discount list
             </Link>
             <Link
+              href="/admin/promotions/thursday-planner"
+              className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+            >
+              Thursday planner
+            </Link>
+            <Link
               href="/admin/promotions/simulator"
               className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
             >
@@ -270,6 +276,15 @@ export default async function PromotionsAdminPage({
 
         {/* ── Guided Thursday brand sale (PR-P5) ─────────────────────────── */}
         <GuidedThursdayLauncher brands={menuBrands} />
+        <p className="-mt-3 text-xs text-white/55">
+          Want to line up a different brand for the next several Thursdays at once?{" "}
+          <Link
+            href="/admin/promotions/thursday-planner"
+            className="text-[var(--admin-accent)] hover:underline"
+          >
+            Open the Thursday planner →
+          </Link>
+        </p>
 
         {/* ── Where this shows up (SLICE 106) ─────────────────────────────── */}
         <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
