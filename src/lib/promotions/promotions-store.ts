@@ -213,6 +213,34 @@ export async function listMenuBrands(): Promise<string[]> {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * PR-P5 governance: resolve a set of staff_profiles ids to friendly display
+ * names (full_name, falling back to email). Returns a Map keyed by id; ids
+ * with no profile are simply absent. Fail-safe empty when the DB isn't set up
+ * or the table is missing — the caller then shows nothing extra.
+ */
+export async function resolveStaffNames(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!unique.length || !isSupabaseServiceConfigured) return out;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("staff_profiles")
+      .select("id, full_name, email")
+      .in("id", unique);
+    if (error) return out; // missing table / RLS / transient → nothing extra
+    for (const row of data ?? []) {
+      const id = row.id as string;
+      const name = ((row.full_name as string) || (row.email as string) || "").trim();
+      if (id && name) out.set(id, name);
+    }
+  } catch {
+    // never let a governance lookup break the page
+  }
+  return out;
+}
+
 /** A single published-menu product, lightweight, for the include/exclude picker. */
 export type MenuProductOption = {
   key: string;
