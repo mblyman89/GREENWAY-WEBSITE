@@ -582,6 +582,9 @@ export async function saveCultiveraDetailStrainsToKbAction(
       // SLICE 90 — the description saves are no longer silent: audit them too.
       descriptionsSaved: res.descriptionsSaved,
       descriptionsKept: res.descriptionsKept,
+      // PR-D1 — the KB write-back failures are no longer silent.
+      kbWriteFailed: res.kbWriteFailed,
+      kbWriteFailReason: res.kbWriteFailReason,
       failed: res.failed,
     },
   });
@@ -602,6 +605,7 @@ export async function saveCultiveraDetailStrainsToKbAction(
     saved: res.descriptionsSaved,
     kept: res.descriptionsKept,
     fallbacks: res.descriptionFallbacks,
+    kbFailed: res.kbWriteFailed,
   });
   const failPart = res.failed > 0
     ? ` ${res.failed} could not be saved — you can try again to fill the gaps.`

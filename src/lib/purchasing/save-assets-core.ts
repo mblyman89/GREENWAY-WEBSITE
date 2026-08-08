@@ -96,6 +96,8 @@ export function strainDescriptionsSentence(counts: {
   saved: number;
   kept: number;
   fallbacks: number;
+  /** PR-D1 — strains whose image saved but whose KB description write failed. */
+  kbFailed?: number;
 }): string {
   const parts: string[] = [];
   if (counts.saved > 0) {
@@ -112,7 +114,14 @@ export function strainDescriptionsSentence(counts: {
     counts.fallbacks > 0
       ? ` ${counts.fallbacks} used the product-line description as a flagged stand-in.`
       : "";
-  return `${lead}${standIn}`;
+  // PR-D1 — say it out loud when a description could NOT be written (the image
+  // is still safe). This is the message the old silent catch never surfaced.
+  const failed = counts.kbFailed ?? 0;
+  const failPart =
+    failed > 0
+      ? ` ${failed} description${failed === 1 ? "" : "s"} could not be written to the Knowledge Base this time (the image${failed === 1 ? " is" : "s are"} still saved) — try again to fill the gap.`
+      : "";
+  return `${lead}${standIn}${failPart}`;
 }
 
 /** Detail-page bulk button: images + descriptions + KB links, per strain. */
@@ -222,6 +231,25 @@ export function __runSaveAssetsCoreTests(): void {
   ok(
     strainDescriptionsSentence({ saved: 0, kept: 4, fallbacks: 0 }).includes("4 kept"),
     "kept-only summary",
+  );
+  // PR-D1 — a KB write failure is reported, not swallowed.
+  ok(
+    strainDescriptionsSentence({ saved: 0, kept: 0, fallbacks: 0, kbFailed: 2 }).includes(
+      "2 descriptions could not be written to the Knowledge Base",
+    ),
+    "kb-failed summary is surfaced",
+  );
+  ok(
+    strainDescriptionsSentence({ saved: 1, kept: 0, fallbacks: 0, kbFailed: 1 }).includes(
+      "1 description could not be written",
+    ),
+    "kb-failed singular grammar",
+  );
+  ok(
+    strainDescriptionsSentence({ saved: 2, kept: 0, fallbacks: 0, kbFailed: 0 }).indexOf(
+      "could not be written",
+    ) === -1,
+    "no kb-failed clause when zero",
   );
 
   // Button labels pinned.

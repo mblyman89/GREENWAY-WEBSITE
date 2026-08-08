@@ -2127,3 +2127,54 @@ export async function setFaqActive(
     return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
   }
 }
+
+// ---------------------------------------------------------------------------
+// PR-D1 — kb_products viewer coverage (reuses the existing KbProductRow type +
+// listKbProducts reader above). The KB "Library" page shows strains +
+// categories but NOT the per-SKU kb_products rows, so a saved Cultivera
+// description had NOWHERE to be viewed. The viewer page lists rows via
+// listKbProducts("all", …); this adds the headline coverage counts.
+// ---------------------------------------------------------------------------
+
+/** Headline coverage numbers for the kb_products viewer. */
+export type KbProductCoverage = {
+  total: number;
+  withDescription: number;
+  missingDescription: number;
+  withImage: number;
+};
+
+/**
+ * Coverage counts for kb_products. Uses cheap head+count queries so it stays
+ * fast even on a large backbone; degrades to all-zero pre-migration.
+ */
+export async function getKbProductCoverage(): Promise<KbProductCoverage> {
+  const empty: KbProductCoverage = {
+    total: 0,
+    withDescription: 0,
+    missingDescription: 0,
+    withImage: 0,
+  };
+  if (!isSupabaseServiceConfigured) return empty;
+  try {
+    const admin = createSupabaseAdminClient();
+    const head = () => admin.from("kb_products").select("id", { count: "exact", head: true });
+    const [totalRes, withDescRes, withImgRes] = await Promise.all([
+      head(),
+      head().not("description", "is", null).neq("description", ""),
+      head().not("primary_media_id", "is", null),
+    ]);
+    if (totalRes.error) return empty;
+    const total = totalRes.count ?? 0;
+    const withDescription = withDescRes.error ? 0 : withDescRes.count ?? 0;
+    const withImage = withImgRes.error ? 0 : withImgRes.count ?? 0;
+    return {
+      total,
+      withDescription,
+      missingDescription: Math.max(0, total - withDescription),
+      withImage,
+    };
+  } catch {
+    return empty;
+  }
+}
