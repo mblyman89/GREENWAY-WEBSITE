@@ -169,6 +169,16 @@ export function normalizeStrainKey(value: string | null | undefined): string {
 export function strainImagesToSave(
   variants: StrainVariantLike[],
   line: { brand?: string | null; lineImageUrl?: string | null; lineDescription?: string | null },
+  /**
+   * PR-D3 — optional per-strain description OVERRIDE, keyed by the same
+   * normalizeStrainKey() used for grouping. When a strain's key is present, its
+   * value is the exact description to save (already resolved from the buyer's
+   * manual product-vs-category choice) and the auto smart-pick is skipped for
+   * that strain. `descriptionIsFallback` then reflects whether the override
+   * text matches the product-line description. Strains NOT in the map keep the
+   * exact PR-D2 auto behavior — full backward compatibility.
+   */
+  descriptionOverrides?: Map<string, string | null> | null,
 ): StrainImageSaveItem[] {
   const lineImageUrl = (line.lineImageUrl ?? "").trim() || null;
   const order: string[] = [];
@@ -210,14 +220,25 @@ export function strainImagesToSave(
     // a FLAGGED stand-in (mirrors the image fallback exactly).
     // PR-D2 — pass the strain name so the smart picker can prefer the
     // product-line description when the strain's own text is just its name.
-    const desc = resolveMenuDescription(entry.ownDescription, line.lineDescription ?? null, entry.strainName);
+    const auto = resolveMenuDescription(entry.ownDescription, line.lineDescription ?? null, entry.strainName);
+    // PR-D3 — if the buyer made a manual choice for this strain, that exact
+    // text overrides the auto pick; otherwise use the auto (PR-D2) result.
+    const hasOverride = descriptionOverrides ? descriptionOverrides.has(key) : false;
+    const overrideText = hasOverride ? (descriptionOverrides!.get(key) ?? null) : null;
+    const finalText = hasOverride ? overrideText : auto.text;
+    // Flag as a category stand-in when the saved text equals the product-line
+    // description (true for the auto fallback AND for a manual "category" pick).
+    const lineDesc = (line.lineDescription ?? "").trim();
+    const finalIsFallback = hasOverride
+      ? !!finalText && !!lineDesc && finalText.trim() === lineDesc
+      : auto.isFallback;
     out.push({
       strainName: entry.strainName,
       identity: kbIdentityForItem({ name: entry.strainName, brand: line.brand ?? null }),
       imageUrl,
       imageIsFallback: entry.ownImage == null,
-      description: desc.text,
-      descriptionIsFallback: desc.isFallback,
+      description: finalText,
+      descriptionIsFallback: finalIsFallback,
     });
   }
   return out;

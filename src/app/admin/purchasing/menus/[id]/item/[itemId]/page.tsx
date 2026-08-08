@@ -6,6 +6,7 @@ import { Badge, Button, Section } from "@/components/admin/ui";
 import { getSnapshot, getSnapshotItem } from "@/lib/purchasing/cultivera-store";
 import { detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
 import { strainImagesToSave } from "@/lib/purchasing/cultivera-kb-link-core";
+import { buildStrainDescriptionChoices } from "@/lib/purchasing/strain-description-choice-core";
 import {
   resolveMenuDescription,
   DESCRIPTION_FALLBACK_BADGE,
@@ -14,7 +15,7 @@ import {
 import { priceLabel } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { VARIANT_QTY_PARAM_PREFIX } from "@/lib/purchasing/cultivera-po-core";
 import { FetchSizesButton } from "./fetch-sizes-button";
-import { SaveImageToKbButton } from "./save-to-kb-button";
+import { StrainDescriptionChooser } from "./StrainDescriptionChooser";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,11 @@ export default async function CultiveraItemDetailPage({
     lineImageUrl: item.image_url ?? null,
     // SLICE 85 — the product-line description stands in (flagged) for strains
     // whose sizes carry no lineage/description of their own; KB saves record it.
+    lineDescription: lineDescription ?? null,
+  });
+  // PR-D3 — per-strain description choices (both candidates + the PR-D2
+  // recommendation) for the manual chooser. Same grouping as saveableStrains.
+  const descriptionChoices = buildStrainDescriptionChoices(variants, {
     lineDescription: lineDescription ?? null,
   });
   const vendorLabel = snap.seller_name ?? snap.cultivera_market_slug ?? "Unknown vendor";
@@ -128,15 +134,6 @@ export default async function CultiveraItemDetailPage({
                 enable per-size pricing.
               </p>
             )}
-            {/* CV-7b: ONE button saves one image per DISTINCT strain on this
-                detail page to the media library and binds each to the durable
-                KB product backbone (every size variant inherits it). */}
-            <SaveImageToKbButton
-              snapshotId={id}
-              itemId={itemId}
-              strainCount={saveableStrains.length}
-              disabled={saveableStrains.length === 0}
-            />
             {saveableStrains.length === 0 && (
               <p className="max-w-[14rem] text-right text-[0.65rem] text-[var(--admin-text-faint)]">
                 {variants.length === 0
@@ -146,6 +143,19 @@ export default async function CultiveraItemDetailPage({
             )}
           </div>
         </div>
+
+        {/* PR-D3 — manual description chooser. Both candidates per strain, the
+            PR-D2 pick pre-selected; one button saves the chosen descriptions +
+            images to the Knowledge Base. Shown only once there are sizes. */}
+        {variants.length > 0 && (
+          <StrainDescriptionChooser
+            snapshotId={id}
+            itemId={itemId}
+            choices={descriptionChoices}
+            strainCount={saveableStrains.length}
+            disabled={saveableStrains.length === 0}
+          />
+        )}
 
         <Section
           title={`Sizes & pricing (${variants.length})`}

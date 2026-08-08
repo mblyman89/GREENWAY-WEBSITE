@@ -75,11 +75,29 @@ import {
   saveCultiveraItemToKb,
   saveCultiveraDetailStrainsToKb,
 } from "@/lib/purchasing/cultivera-media";
+import {
+  parseStrainChoices,
+  type StrainDescriptionSource,
+} from "@/lib/purchasing/strain-description-choice-core";
 
 const BASE = "/admin/purchasing/menus";
 
 function str(formData: FormData, key: string): string {
   return ((formData.get(key) as string | null) ?? "").trim();
+}
+
+/**
+ * PR-D3 — parse the chooser's compact choices field (a JSON object
+ * { strainKey: "product"|"category" }) into a validated Map. Tolerant: bad or
+ * missing JSON => an empty map (every strain then uses the PR-D2 auto pick).
+ */
+function parseChoicesField(raw: string): Map<string, StrainDescriptionSource> {
+  if (!raw) return new Map();
+  try {
+    return parseStrainChoices(JSON.parse(raw));
+  } catch {
+    return new Map();
+  }
 }
 
 /** One vendor row the search island renders — already-safe strings only. */
@@ -547,6 +565,10 @@ export async function saveCultiveraDetailStrainsToKbAction(
   }
 
   const vendorLabel = (snap.seller_name ?? "").trim() || (snap.cultivera_market_slug ?? "").trim() || "";
+  // PR-D3 — the chooser sends the buyer's manual product-vs-category picks as a
+  // compact JSON map (strainKey -> "product"|"category"). Absent => every strain
+  // uses the PR-D2 auto pick. Parsing is tolerant and never throws.
+  const choices = parseChoicesField(str(formData, "choices"));
   const res = await saveCultiveraDetailStrainsToKb(
     variants,
     {
@@ -559,6 +581,7 @@ export async function saveCultiveraDetailStrainsToKbAction(
     },
     vendorLabel,
     session.userId,
+    choices,
   );
 
   if (res.strains === 0) {
@@ -586,6 +609,9 @@ export async function saveCultiveraDetailStrainsToKbAction(
       kbWriteFailed: res.kbWriteFailed,
       kbWriteFailReason: res.kbWriteFailReason,
       failed: res.failed,
+      // PR-D3 — how many strains the buyer manually moved off the recommended
+      // description source (empty => everything used the smart default).
+      manualChoices: choices.size,
     },
   });
 
