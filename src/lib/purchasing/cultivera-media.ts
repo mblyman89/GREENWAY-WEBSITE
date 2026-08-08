@@ -31,8 +31,14 @@ import {
 import {
   kbIdentityForItem,
   strainImagesToSave,
+  normalizeStrainKey,
   type StrainVariantLike,
 } from "@/lib/purchasing/cultivera-kb-link-core";
+import {
+  buildStrainDescriptionChoices,
+  resolveChosenDescription,
+  type StrainDescriptionSource,
+} from "@/lib/purchasing/strain-description-choice-core";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
 import type { DescriptionSaveOutcome } from "@/lib/purchasing/save-assets-core";
 
@@ -301,12 +307,46 @@ export async function saveCultiveraDetailStrainsToKb(
   },
   vendorLabel: string,
   uploadedBy: string | null,
+  /**
+   * PR-D3 — the buyer's manual product-vs-category choices, keyed by
+   * normalizeStrainKey(). Absent/empty => every strain uses the PR-D2 auto pick
+   * (fully backward compatible). Present entries resolve to the exact text the
+   * buyer chose (with a safe fall-back to the other source if the chosen one is
+   * empty) and that overrides the auto pick for that strain only.
+   */
+  choices?: Map<string, StrainDescriptionSource> | null,
 ): Promise<SaveDetailStrainsResult> {
-  const plan = strainImagesToSave(variants, {
-    brand: line.brand,
-    lineImageUrl: line.lineImageUrl,
-    lineDescription: line.lineDescription ?? null,
-  });
+  // PR-D3 — turn the buyer's choices into a per-strain text-override map that
+  // strainImagesToSave() applies. We compute both candidates the same way the
+  // chooser UI does, so what the buyer saw is exactly what we save.
+  let descriptionOverrides: Map<string, string | null> | null = null;
+  if (choices && choices.size > 0) {
+    descriptionOverrides = new Map<string, string | null>();
+    const candidateChoices = buildStrainDescriptionChoices(variants, {
+      lineDescription: line.lineDescription ?? null,
+    });
+    const byKey = new Map(candidateChoices.map((c) => [c.strainKey, c]));
+    for (const [rawKey, source] of choices) {
+      const key = normalizeStrainKey(rawKey) || rawKey;
+      const cand = byKey.get(key);
+      if (!cand) continue; // unknown strain — ignore, use auto
+      descriptionOverrides.set(
+        key,
+        resolveChosenDescription(cand.productOption.text, cand.categoryOption.text, source, cand.strainName),
+      );
+    }
+    if (descriptionOverrides.size === 0) descriptionOverrides = null;
+  }
+
+  const plan = strainImagesToSave(
+    variants,
+    {
+      brand: line.brand,
+      lineImageUrl: line.lineImageUrl,
+      lineDescription: line.lineDescription ?? null,
+    },
+    descriptionOverrides,
+  );
   const result: SaveDetailStrainsResult = {
     ok: true,
     strains: plan.length,
