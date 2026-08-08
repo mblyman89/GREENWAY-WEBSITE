@@ -15,6 +15,9 @@ import { lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
 import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
 import { listVendors, listAllBrands } from "@/lib/vendors/store";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
+// PR-D1b: read the durable KB backbone (where vendor-menu saves land) KB-first,
+// so a saved photo + description is visible on THIS product's detail page.
+import { getKbProductByPosKey } from "@/lib/ai/kb/store";
 // Option A: per-product website Type/Category override (migration 0150).
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
@@ -44,6 +47,15 @@ function fmtMoney(minor: number | null): string {
 function fmtQty(qty: number, unit: string): string {
   const n = Number.isInteger(qty) ? qty.toString() : qty.toFixed(2);
   return `${n} ${unit}`;
+}
+
+// PR-D1b — compact "last saved" label for the KB backbone panel; blank when
+// the timestamp is missing or unparseable.
+function formatKbSaved(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "—";
+  return t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 const REASONS = [
@@ -83,13 +95,16 @@ export default async function LotDetailPage({
   // SLICE 77: vendors + brands feed the correction form's pickers; the
   // enrichment record (keyed by the lot's POS product key) surfaces the
   // customer-facing photo/description right here.
-  const [adjustments, manifest, vendors, brands, enrichment, categoryTypes, inventoryTypes, override, currentAfterTaxMinor] =
+  const [adjustments, manifest, vendors, brands, enrichment, kbProduct, categoryTypes, inventoryTypes, override, currentAfterTaxMinor] =
     await Promise.all([
       listLotAdjustments(id),
       lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
       listVendors(),
       listAllBrands(),
       lot.pos_product_key ? getEnrichment(lot.pos_product_key) : Promise.resolve(null),
+      // PR-D1b: the durable KB record for THIS product (vendor-menu saves land
+      // here). Read KB-first, mirroring the customer menu's read path.
+      lot.pos_product_key ? getKbProductByPosKey(lot.pos_product_key) : Promise.resolve(null),
       // Option A: the LIVE registries feed the override pickers, and the current
       // stored override prefills them (so re-opening shows the owner's choice).
       listWebsiteCategoryTypes({ includeInactive: false }),
@@ -100,9 +115,14 @@ export default async function LotDetailPage({
       getLotAfterTaxPrice(lot.pos_product_key),
     ]);
   const enrichImageId = enrichment?.primary_media_id ?? enrichment?.image_media_ids?.[0] ?? null;
-  const enrichImageUrl = enrichImageId
-    ? (await mediaUrlsForIds([enrichImageId])).get(enrichImageId) ?? null
-    : null;
+  // PR-D1b: the KB record's saved image (primary, else first in its gallery).
+  const kbImageId = kbProduct?.primary_media_id ?? kbProduct?.image_media_ids?.[0] ?? null;
+  // Resolve both media ids in ONE query, then pick each url back out.
+  const mediaUrlMap = await mediaUrlsForIds(
+    [enrichImageId, kbImageId].filter((x): x is string => Boolean(x)),
+  );
+  const enrichImageUrl = enrichImageId ? mediaUrlMap.get(enrichImageId) ?? null : null;
+  const kbImageUrl = kbImageId ? mediaUrlMap.get(kbImageId) ?? null : null;
 
   // Convert the raw LCB classification to OUR website category for display
   // (Request B). Read-only — the stored LCB category/inventory_type are never
@@ -418,6 +438,85 @@ export default async function LotDetailPage({
                 Save corrections
               </Button>
             </form>
+          </div>
+
+          {/* PR-D1b — the durable KB backbone record for THIS product. Vendor-menu
+              saves (Cultivera / LeafLink / GrowFlow) land in kb_products, and the
+              customer menu reads it KB-first — but this page used to show ONLY the
+              enrichment layer, so a KB-only save was invisible here. Now you can
+              confirm the exact saved photo + description attached to this product. */}
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">Saved to Knowledge Base</h2>
+              {kbProduct && (
+                <span
+                  className={
+                    kbProduct.status === "published"
+                      ? "rounded-full bg-[var(--admin-accent-soft)] px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-accent)]"
+                      : "rounded-full bg-[var(--admin-surface-2)] px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-text-muted)]"
+                  }
+                >
+                  {kbProduct.status}
+                </span>
+              )}
+            </div>
+            <p className="mb-3 text-[11px] text-[var(--admin-text-faint)]">
+              The durable per-product record — the backbone the customer menu and
+              the AI read first. This is where a saved vendor-menu photo &amp;
+              description live.
+            </p>
+            {lot.pos_product_key ? (
+              kbProduct ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-4">
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--admin-border)] bg-black">
+                      {kbImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={kbImageUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--admin-text-faint)]">no photo saved</div>
+                      )}
+                    </div>
+                    <div className="min-w-0 text-sm">
+                      <p className="font-medium text-[var(--admin-text)]">
+                        {kbProduct.display_name || lot.product_name || "(unnamed)"}
+                      </p>
+                      {(kbProduct.description || kbProduct.short_description) ? (
+                        <p className="mt-1 line-clamp-4 text-xs text-[var(--admin-text-muted)]">
+                          {kbProduct.description || kbProduct.short_description}
+                        </p>
+                      ) : (
+                        <span className="mt-1 inline-block rounded bg-[var(--admin-gold-soft)] px-2 py-0.5 text-[0.7rem] font-semibold text-[var(--admin-gold)]">
+                          no description saved
+                        </span>
+                      )}
+                      <p className="mt-1 truncate text-[11px] text-[var(--admin-text-faint)]">
+                        {kbProduct.source ? `Source: ${kbProduct.source}` : "Source: —"}
+                        {` · Saved ${formatKbSaved(kbProduct.updated_at)}`}
+                      </p>
+                    </div>
+                  </div>
+                  <Button href={`/admin/knowledge-base/products`} variant="neutral" size="sm">
+                    View in KB Product records →
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm text-[var(--admin-text-muted)]">
+                  <p>
+                    Nothing saved to the Knowledge Base for this product yet — save a
+                    photo &amp; description from a vendor menu and it will appear here.
+                  </p>
+                  <Button href={`/admin/knowledge-base/products`} variant="neutral" size="sm">
+                    Open KB Product records →
+                  </Button>
+                </div>
+              )
+            ) : (
+              <p className="text-sm text-[var(--admin-text-faint)]">
+                This lot isn&apos;t linked to a POS product key yet, so there&apos;s no
+                Knowledge Base record to show.
+              </p>
+            )}
           </div>
 
           {/* SLICE 77 — what shoppers see: the enrichment record for this

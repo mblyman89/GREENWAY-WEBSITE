@@ -1711,6 +1711,45 @@ export async function listKbProducts(
 }
 
 /**
+ * PR-D1b — fetch the ONE saved kb_products record for a specific product by its
+ * POS product key. The inventory detail page uses this so it reads the durable
+ * KB backbone (where vendor-menu saves land) KB-FIRST, exactly like the customer
+ * menu already does — instead of only the product_enrichments layer, which left
+ * a KB-only save (e.g. a Cultivera photo + description) invisible there.
+ *
+ * When more than one variant shares a POS key we return the most recently
+ * updated. Read-only, pre-migration safe (FULL→BASE column fallback), never
+ * throws — returns null when nothing is saved / DB unavailable.
+ */
+export async function getKbProductByPosKey(
+  posProductKey: string,
+): Promise<KbProductRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const key = posProductKey.trim();
+  if (!key) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const run = (cols: string) =>
+      admin
+        .from("kb_products")
+        .select(cols)
+        .eq("pos_product_key", key)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    // Potency-aware columns first; retry on the base set if 0084 isn't applied.
+    let { data, error } = await run(KB_PRODUCT_FULL_COLS);
+    if (error) {
+      ({ data, error } = await run(KB_PRODUCT_BASE_COLS));
+    }
+    if (error || !data) return null;
+    return data as unknown as KbProductRow;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Slice H9c — attach an imported media asset to a kb_products row's gallery.
  * Reads the current gallery, applies the pure merge (append + set primary when
  * empty; never reorder/remove), and writes back. Returns a small summary for
