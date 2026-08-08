@@ -159,6 +159,7 @@ import { __runLeaflinkKbLinkCoreTests } from "../../src/lib/purchasing/leaflink-
 import { __runMenuDescriptionCoreTests } from "../../src/lib/purchasing/menu-description-core";
 import { __runDescriptionQualityCoreTests } from "../../src/lib/purchasing/description-quality-core";
 import { __runStrainDescriptionChoiceCoreTests } from "../../src/lib/purchasing/strain-description-choice-core";
+import { __runMenuReadinessCoreTests } from "../../src/lib/purchasing/menu-readiness-core";
 import { __runSaveAssetsCoreTests } from "../../src/lib/purchasing/save-assets-core";
 import { __runCultiveraKbLinkCoreTests } from "../../src/lib/purchasing/cultivera-kb-link-core";
 import { __runGrowflowMenuUiCoreTests } from "../../src/lib/purchasing/growflow-menu-ui-core";
@@ -428,6 +429,7 @@ async function main() {
   __runMenuDescriptionCoreTests();
   __runDescriptionQualityCoreTests();
   __runStrainDescriptionChoiceCoreTests();
+  __runMenuReadinessCoreTests();
   __runSaveAssetsCoreTests();
   __runCultiveraKbLinkCoreTests();
   __runGrowflowMenuUiCoreTests();
