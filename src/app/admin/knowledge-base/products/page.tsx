@@ -18,7 +18,8 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listKbProducts, getKbProductCoverage } from "@/lib/ai/kb/store";
 import { resolveMediaUrls } from "@/lib/media/store";
-import { KbProductsViewer } from "./KbProductsViewer";
+import { scoreMenuReadiness, isMenuReady } from "@/lib/purchasing/menu-readiness-core";
+import { KbProductsViewer, type KbProductReadinessRow } from "./KbProductsViewer";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,22 @@ export default async function KbProductsPage() {
   const imageUrls: Record<string, string> = {};
   for (const [id, url] of urlMap) imageUrls[id] = url;
 
+  // PR-D4 — grade every product's menu-readiness server-side (pure + fast), so
+  // the list can show a health chip + "fix next" helper per row and a headline
+  // "X of Y menu-ready" summary. Read-only: scoring never writes.
+  const readiness: KbProductReadinessRow[] = products.map((p) => ({
+    id: p.id,
+    result: scoreMenuReadiness({
+      hasImage: Boolean(p.primary_media_id),
+      description: p.description,
+      productName: p.display_name,
+      category: p.category,
+      aromaNotes: p.aroma_notes,
+      flavorNotes: p.flavor_notes,
+    }),
+  }));
+  const readyCount = readiness.filter((r) => isMenuReady(r.result)).length;
+
   return (
     <div>
       <AdminPageHeader
@@ -99,9 +116,9 @@ export default async function KbProductsPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="Product records" value={coverage.total} accent="muted" />
           <StatCard
-            label="With a description"
-            value={coverage.withDescription}
-            accent={coverage.withDescription > 0 ? "green" : "muted"}
+            label="Menu-ready"
+            value={readyCount}
+            accent={readyCount === coverage.total && coverage.total > 0 ? "green" : "gold"}
           />
           <StatCard
             label="Missing description"
@@ -115,7 +132,7 @@ export default async function KbProductsPage() {
           />
         </div>
 
-        <KbProductsViewer products={products} imageUrls={imageUrls} />
+        <KbProductsViewer products={products} imageUrls={imageUrls} readiness={readiness} />
       </div>
     </div>
   );
