@@ -136,6 +136,12 @@ export default async function KnowledgeBasePage({
               accent="green"
             />
             <KbNavCard
+              href="/admin/knowledge-base/products"
+              title="Product records"
+              description="Per-product backbone — the saved descriptions & images from vendor menus. Confirm a save worked here."
+              accent="green"
+            />
+            <KbNavCard
               href="/admin/knowledge-base/brands"
               title="Brand facts"
               description="What each brand is known for, so copy matches their voice."

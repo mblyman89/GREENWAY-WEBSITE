@@ -262,6 +262,15 @@ export type SaveDetailStrainsResult = {
   descriptionsSaved: number;
   /** SLICE 90 — strains whose KB row already had curated prose (kept, gap-fill). */
   descriptionsKept: number;
+  /**
+   * PR-D1 — strains whose IMAGE saved but whose KB write-back (description +
+   * backbone binding) did NOT land. This used to be swallowed silently, which
+   * is exactly why descriptions could look like they "didn't save" while
+   * images did. Surfaced now so the button can say so out loud.
+   */
+  kbWriteFailed: number;
+  /** PR-D1 — first KB write-back failure reason (for the audit trail). */
+  kbWriteFailReason: string | null;
   /** Strains that failed to save. */
   failed: number;
   error: string | null;
@@ -308,6 +317,8 @@ export async function saveCultiveraDetailStrainsToKb(
     descriptionFallbacks: 0,
     descriptionsSaved: 0,
     descriptionsKept: 0,
+    kbWriteFailed: 0,
+    kbWriteFailReason: null,
     failed: 0,
     error: null,
   };
@@ -358,10 +369,28 @@ export async function saveCultiveraDetailStrainsToKb(
         // button's summary can report it (saved vs kept-curated).
         if (wb.descriptionOutcome === "saved") result.descriptionsSaved += 1;
         else if (wb.descriptionOutcome === "kept_existing") result.descriptionsKept += 1;
+        // PR-D1 — a description was offered but the KB write did not land
+        // (kb_unavailable) or the whole write-back failed: count it so the
+        // summary can say "N descriptions couldn't be written" instead of the
+        // old silent no-op. The image is still safe in the library.
+        if (!wb.ok || wb.descriptionOutcome === "kb_unavailable") {
+          result.kbWriteFailed += 1;
+          if (!result.kbWriteFailReason) {
+            result.kbWriteFailReason =
+              wb.skippedReason ?? "The Knowledge Base write did not complete.";
+          }
+        }
         await recordUsage(asset.id, "kb_product", strain.identity.posProductKey, "primary_image");
         result.boundToKb += 1;
-      } catch {
-        /* best-effort: KB association is non-fatal to the media save */
+      } catch (kbErr) {
+        // Best-effort: a KB hiccup must never block the image save — but it is
+        // NO LONGER silent (PR-D1). Capture it so the button + audit can report
+        // that the description didn't save this time.
+        result.kbWriteFailed += 1;
+        if (!result.kbWriteFailReason) {
+          result.kbWriteFailReason =
+            kbErr instanceof Error ? kbErr.message : "The Knowledge Base write failed.";
+        }
       }
     } catch (err) {
       result.failed += 1;
