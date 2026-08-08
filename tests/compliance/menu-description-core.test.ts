@@ -31,14 +31,61 @@ describe("menu-description-core", () => {
   });
 
   it("both missing -> null, unflagged", () => {
-    expect(resolveMenuDescription(null, null)).toEqual({ text: null, isFallback: false });
-    expect(resolveMenuDescription("", "   ")).toEqual({ text: null, isFallback: false });
+    expect(resolveMenuDescription(null, null)).toEqual({ text: null, isFallback: false, fallbackReason: "none" });
+    expect(resolveMenuDescription("", "   ")).toEqual({ text: null, isFallback: false, fallbackReason: "none" });
   });
 
   it("badge copy is pinned (UI + docs reference these strings)", () => {
     expect(DESCRIPTION_FALLBACK_BADGE).toBe("category description");
     expect(DESCRIPTION_FALLBACK_TITLE).toContain("no description of its own");
     expect(DESCRIPTION_FALLBACK_TITLE).toContain("stand-in");
+  });
+});
+
+describe("PR-D2 smart description picker", () => {
+  it("without a productName, own description always wins (legacy SLICE 85)", () => {
+    const r = resolveMenuDescription("Blue Dream", "A smooth, uplifting hybrid.");
+    expect(r.text).toBe("Blue Dream");
+    expect(r.isFallback).toBe(false);
+    expect(r.fallbackReason).toBe("none");
+  });
+
+  it("good own prose still wins when a productName is provided", () => {
+    const r = resolveMenuDescription(
+      "A smooth, uplifting hybrid with notes of berry and citrus.",
+      "Generic flower category prose.",
+      "Blue Dream",
+    );
+    expect(r.isFallback).toBe(false);
+    expect(r.fallbackReason).toBe("none");
+  });
+
+  it("own description that is just the NAME -> category stands in (name_echo)", () => {
+    const r = resolveMenuDescription(
+      "Blue Dream 3.5g",
+      "Hang-dried, hand-trimmed flower for a smooth, terpene-rich smoke.",
+      "Blue Dream",
+    );
+    expect(r.isFallback).toBe(true);
+    expect(r.fallbackReason).toBe("name_echo");
+    expect(r.text).toContain("Hang-dried");
+  });
+
+  it("own description too thin -> category stands in (low_value)", () => {
+    const r = resolveMenuDescription(
+      "Indica",
+      "A deeply relaxing indica-dominant selection for winding down.",
+      "Northern Lights",
+    );
+    expect(r.isFallback).toBe(true);
+    expect(r.fallbackReason).toBe("low_value");
+  });
+
+  it("weak own but NO category prose -> keep the weak own text, never blank it", () => {
+    const r = resolveMenuDescription("Blue Dream", null, "Blue Dream");
+    expect(r.text).toBe("Blue Dream");
+    expect(r.isFallback).toBe(false);
+    expect(r.fallbackReason).toBe("none");
   });
 });
 

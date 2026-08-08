@@ -122,6 +122,9 @@ export async function saveLeaflinkItemMedia(
         const resolvedDescription = resolveMenuDescription(
           item.description ?? null,
           leaflinkCategoryDescription(item.raw),
+          // PR-D2 — the product name lets the smart picker prefer the category
+          // description when the item's own text is just its name.
+          item.name ?? null,
         );
         descriptionWasFallback = resolvedDescription.isFallback;
         const wb = await writeBackProductFacts(

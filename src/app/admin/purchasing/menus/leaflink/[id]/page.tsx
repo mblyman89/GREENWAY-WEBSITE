@@ -19,7 +19,7 @@ import { SAVE_ASSETS_ITEM_LABEL } from "@/lib/purchasing/save-assets-core";
 import {
   resolveMenuDescription,
   DESCRIPTION_FALLBACK_BADGE,
-  DESCRIPTION_FALLBACK_TITLE,
+  descriptionFallbackTitle,
 } from "@/lib/purchasing/menu-description-core";
 import { SaveLeaflinkItemMediaButton } from "./media-buttons";
 import { AutoSaveAllButton } from "../../auto-save-all-button";
@@ -210,6 +210,9 @@ export default async function LeaflinkSnapshotPage({
                 const desc = resolveMenuDescription(
                   it.description,
                   leaflinkCategoryDescription(it.raw),
+                  // PR-D2 — the item name lets the smart picker prefer the
+                  // category description when the item's own text is its name.
+                  it.name ?? null,
                 );
                 return (
                   <div
@@ -251,7 +254,7 @@ export default async function LeaflinkSnapshotPage({
                       {desc.text && (
                         <div className="space-y-1">
                           {desc.isFallback && (
-                            <span title={DESCRIPTION_FALLBACK_TITLE}>
+                            <span title={descriptionFallbackTitle(desc.fallbackReason)}>
                               <Badge tone="gold">{DESCRIPTION_FALLBACK_BADGE}</Badge>
                             </span>
                           )}

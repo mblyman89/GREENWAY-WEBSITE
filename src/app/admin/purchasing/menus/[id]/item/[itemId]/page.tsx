@@ -9,7 +9,7 @@ import { strainImagesToSave } from "@/lib/purchasing/cultivera-kb-link-core";
 import {
   resolveMenuDescription,
   DESCRIPTION_FALLBACK_BADGE,
-  DESCRIPTION_FALLBACK_TITLE,
+  descriptionFallbackTitle,
 } from "@/lib/purchasing/menu-description-core";
 import { priceLabel } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { VARIANT_QTY_PARAM_PREFIX } from "@/lib/purchasing/cultivera-po-core";
@@ -194,7 +194,10 @@ export default async function CultiveraItemDetailPage({
                       // SLICE 85 — this size's OWN lineage/description first;
                       // else the product-line description as a flagged
                       // stand-in (mirrors the placeholder-image badge).
-                      const vDesc = resolveMenuDescription(v.description, description ?? null);
+                      // PR-D2 — pass the variant name so the smart picker can
+                      // prefer the product-line description when this size's own
+                      // text is just its name.
+                      const vDesc = resolveMenuDescription(v.description, description ?? null, v.cleanName ?? v.name);
                       const inputMax = Math.min(
                         v.maxOrderLimit ?? Number.MAX_SAFE_INTEGER,
                         v.availableQty ?? Number.MAX_SAFE_INTEGER,
@@ -247,9 +250,10 @@ export default async function CultiveraItemDetailPage({
                                 </span>
                               )}
                               {vDesc.isFallback && (
-                                // SLICE 85 — the product-line description is
-                                // standing in for this size's own prose.
-                                <span title={DESCRIPTION_FALLBACK_TITLE}>
+                                // SLICE 85 / PR-D2 — the product-line description
+                                // is standing in; the tooltip explains WHY (empty,
+                                // name-echo, or too thin).
+                                <span title={descriptionFallbackTitle(vDesc.fallbackReason)}>
                                   <Badge tone="gold">{DESCRIPTION_FALLBACK_BADGE}</Badge>
                                 </span>
                               )}
