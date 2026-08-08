@@ -208,7 +208,9 @@ export function strainImagesToSave(
     if (!imageUrl) continue; // nothing to save for this strain
     // SLICE 85 — own description first, else the product-line description as
     // a FLAGGED stand-in (mirrors the image fallback exactly).
-    const desc = resolveMenuDescription(entry.ownDescription, line.lineDescription ?? null);
+    // PR-D2 — pass the strain name so the smart picker can prefer the
+    // product-line description when the strain's own text is just its name.
+    const desc = resolveMenuDescription(entry.ownDescription, line.lineDescription ?? null, entry.strainName);
     out.push({
       strainName: entry.strainName,
       identity: kbIdentityForItem({ name: entry.strainName, brand: line.brand ?? null }),
