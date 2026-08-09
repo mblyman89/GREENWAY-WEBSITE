@@ -19,6 +19,8 @@ import {
   toIntOrNull,
   mapCashLoadCsv,
   mapSimpleSummaryCsv,
+  mapFundsMovementCsv,
+  classifyFundsMovementLeg,
   bankPostingWindow,
   __runAtmCoreTests,
 } from "@/lib/atm/atm-core";
@@ -138,31 +140,96 @@ describe("mapCashLoadCsv (VERIFIED columns: Terminal Number|Location|Group|Trx T
   });
 });
 
-describe("mapSimpleSummaryCsv (VERIFIED columns: Terminal|...|Settlement Date|Total Trxs|WO Trxs|Surch WDs|Surch|Settlement)", () => {
-  it("maps fee/surcharge + settlement to cents", () => {
+describe("mapSimpleSummaryCsv (CONFIRMED real columns: Terminal|Location|Settlement Date|Total Trxs|WD Trxs|Surcharge WDs|Surch|Settlement)", () => {
+  it("maps fee/surcharge + settlement to cents (real headers)", () => {
     const csv =
-      "Terminal,Location,Settlement Date,Total Trxs,WO Trxs,Surch WDs,Surch,Settlement\r\n" +
-      'HG26499,CASCADE GENERAL PARTNERS,08/05/2026,61,58,58,"$145.00","$5,000.00"\r\n';
+      '"Terminal","Location","Settlement Date","Total Trxs","WD Trxs","Surcharge WDs","Surch","Settlement"\r\n' +
+      '"HG26499","CASCADE GENERAL PARTNERS","8/2/26","114","96","96","$240.00","$9,020.00"\r\n';
     const { rows, problems } = mapSimpleSummaryCsv(csv);
     expect(problems).toHaveLength(0);
     expect(rows[0]).toMatchObject({
       terminalId: "HG26499",
-      settlementDate: "2026-08-05",
-      totalTrx: 61,
-      withdrawalTrx: 58,
-      surchargedWdTrx: 58,
-      surchargeCents: 14500,
-      settlementTotalCents: 500000,
-      // vault-cash leg intentionally null until confirmed via Bank Deposits report
+      settlementDate: "2026-08-02",
+      totalTrx: 114,
+      withdrawalTrx: 96,
+      surchargedWdTrx: 96,
+      surchargeCents: 24000,
+      settlementTotalCents: 902000,
+      // vault-cash leg is null here; it comes from the FundsMovement "Transaction" leg
       terminalTransactionCents: null,
     });
+  });
+  it("remains backward-compatible with the legacy-guessed labels (WO Trxs / Surch WDs)", () => {
+    const csv =
+      "Terminal,Location,Settlement Date,Total Trxs,WO Trxs,Surch WDs,Surch,Settlement\r\n" +
+      'HG26499,CASCADE,8/2/26,114,96,96,"$240.00","$9,020.00"\r\n';
+    const { rows } = mapSimpleSummaryCsv(csv);
+    expect(rows[0]).toMatchObject({ withdrawalTrx: 96, surchargedWdTrx: 96 });
   });
   it("stays faithful to duplicate source rows (dedupe is the store's job)", () => {
     const csv =
       "Terminal,Settlement Date,Surch\r\n" +
-      "HG26499,08/05/2026,$1.00\r\n" +
-      "HG26499,08/05/2026,$1.00\r\n";
+      "HG26499,8/5/26,$1.00\r\n" +
+      "HG26499,8/5/26,$1.00\r\n";
     expect(mapSimpleSummaryCsv(csv).rows).toHaveLength(2);
+  });
+});
+
+describe("mapFundsMovementCsv (CONFIRMED real columns; deposit-side truth, long format)", () => {
+  const header =
+    '"Market Partner Code","Market Partner","Acct #","Group","Location","Settlement Date","Terminal","Settlement Type","Amount"\r\n';
+
+  it("groups by (date, terminal) and SUMS the Transaction and Surcharge legs", () => {
+    const csv =
+      header +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Transaction","$4,980.00"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Surcharge","$157.50"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Transaction","$100.00"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Surcharge","$5.00"\r\n';
+    const { rows, problems } = mapFundsMovementCsv(csv);
+    expect(problems).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      terminalId: "HG26499",
+      settlementDate: "2026-07-02",
+      terminalTransactionCents: 508000, // $4,980 + $100
+      surchargeCents: 16250, // $157.50 + $5.00
+      accountTail: "******6228",
+      legCount: 4,
+    });
+  });
+
+  it("returns grouped rows sorted by date ascending", () => {
+    const csv =
+      header +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Transaction","$100.00"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/1/26","HG26499","Transaction","$3,860.00"\r\n';
+    const { rows } = mapFundsMovementCsv(csv);
+    expect(rows.map((r) => r.settlementDate)).toEqual(["2026-07-01", "2026-07-02"]);
+  });
+
+  it("records unrecognized Settlement Type as a problem and never guesses", () => {
+    const csv = header + '"02-110K804","x","******6228","","CASCADE","7/3/26","HG26499","Chargeback","$10.00"\r\n';
+    const { rows, problems } = mapFundsMovementCsv(csv);
+    expect(rows).toHaveLength(0);
+    expect(problems).toHaveLength(1);
+  });
+
+  it("reports a header-level problem when required columns are absent", () => {
+    const { rows, problems } = mapFundsMovementCsv("Market Partner,Amount\r\nx,$1.00\r\n");
+    expect(rows).toHaveLength(0);
+    expect(problems).toHaveLength(1);
+  });
+});
+
+describe("classifyFundsMovementLeg (strict on meaning, tolerant on case/spacing)", () => {
+  it("recognizes the two known legs", () => {
+    expect(classifyFundsMovementLeg("Transaction")).toBe("transaction");
+    expect(classifyFundsMovementLeg(" surcharge ")).toBe("surcharge");
+  });
+  it("returns null for anything else", () => {
+    expect(classifyFundsMovementLeg("Interchange")).toBeNull();
+    expect(classifyFundsMovementLeg("")).toBeNull();
   });
 });
 
