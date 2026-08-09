@@ -39,4 +39,60 @@ describe("strain-type-suggest core", () => {
   it("stamps an honest, auditable source tag", () => {
     expect(houseSuggestedSourceTag("sativa-hybrid")).toBe("house-suggested (sativa-hybrid typical)");
   });
+
+  it("learns over time: a new active saved strain grows the pool by one", () => {
+    const seed = buildStrainTypeSuggestion("sativa");
+    const learned = buildStrainTypeSuggestion("sativa", {
+      extraRows: [
+        {
+          slug: "__vitest_unique_sativa__",
+          strain_type: "sativa",
+          terpenes: ["myrcene"],
+          aroma_notes: ["citrus"],
+          flavor_notes: ["orange"],
+        },
+      ],
+    });
+    expect(learned.sampleSize).toBe(seed.sampleSize + 1);
+  });
+
+  it("de-dupes by slug so a saved strain never double-counts its seed copy", () => {
+    const seed = buildStrainTypeSuggestion("indica");
+    const withDupe = buildStrainTypeSuggestion("indica", {
+      extraRows: [
+        {
+          // 'afghani' is a seed indica; reusing its slug must not grow the count.
+          slug: "afghani",
+          strain_type: "indica",
+          terpenes: ["myrcene"],
+          aroma_notes: ["earthy"],
+          flavor_notes: ["pine"],
+        },
+      ],
+    });
+    expect(withDupe.sampleSize).toBe(seed.sampleSize);
+  });
+
+  it("empty options equals the seed-only baseline (backward compatible)", () => {
+    expect(JSON.stringify(buildStrainTypeSuggestion("hybrid", {}))).toBe(
+      JSON.stringify(buildStrainTypeSuggestion("hybrid")),
+    );
+  });
+
+  it("ignores blank fields on a saved strain (can't skew a field it lacks)", () => {
+    // A saved strain with NO terpenes must not change the terpene ranking.
+    const seed = buildStrainTypeSuggestion("hybrid");
+    const withBlank = buildStrainTypeSuggestion("hybrid", {
+      extraRows: [
+        {
+          slug: "__vitest_blank_terps__",
+          strain_type: "hybrid",
+          terpenes: [],
+          aroma_notes: ["sweet"],
+          flavor_notes: ["berry"],
+        },
+      ],
+    });
+    expect(withBlank.terpenes).toEqual(seed.terpenes);
+  });
 });
