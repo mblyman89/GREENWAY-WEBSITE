@@ -28,6 +28,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { checkCompliance, checkEffects } from "@/lib/ai/compliance";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
+import { listKbProductCategoriesAll } from "@/lib/ai/kb/store";
+import { resolveCategoryForType } from "@/lib/ai/kb/ccrs-category-match-core";
 import {
   decideDescriptionOutcome,
   type DescriptionSaveOutcome,
@@ -192,31 +194,35 @@ async function resolveKbBrandId(brandSlug: string): Promise<string | null> {
 }
 
 /**
- * 7c.2 \u2014 Resolve the kb_product_categories id for a POS/website category value
+ * 7c.2 \u2014 Resolve the kb_product_categories id for a value that comes off intake
  * (best-effort). kb_products.product_category_id \u2192 kb_product_categories.id.
- * Matches on slug first (slugified category), then on a case-insensitive name.
- * Returns null when the table isn't available or no match exists. Never throws.
+ *
+ * The value we're handed is the raw CCRS/LCB inventory-type string the vendor
+ * attached in CCRS (e.g. "Usable Marijuana", "Concentrate for Inhalation",
+ * "Solid Marijuana Infused Edible"). Owner (Michael) directive: the KB is the
+ * source of truth and each KB category already stores the exact CCRS names it
+ * corresponds to in `wa_inventory_types[]`.
+ *
+ * Precedence (delegated to the PURE `resolveCategoryForType` core so it's
+ * unit-tested and deterministic): slug \u2192 name \u2192 CCRS name membership \u2192 none.
+ * The slug/name legs are kept FIRST and unchanged, so anything that already
+ * resolved still resolves identically; we only ADD the CCRS-name join that used
+ * to silently miss (a CCRS string is rarely a category slug or name, so
+ * product_category_id came back null even though the KB knew the mapping).
+ *
+ * We load all categories once (via listKbProductCategoriesAll) and match in
+ * memory \u2014 no per-value round-trips. Returns null when the table isn't
+ * available or no confident match exists (never guesses). Never throws.
  */
 async function resolveProductCategoryId(category: string | null | undefined): Promise<string | null> {
   const value = String(category ?? "").trim();
   if (!value) return null;
   try {
-    const admin = createSupabaseAdminClient();
-    const slug = slugifyDashed(value);
-    if (slug) {
-      const { data: bySlug } = await admin
-        .from("kb_product_categories")
-        .select("id")
-        .eq("slug", slug)
-        .maybeSingle();
-      if (bySlug?.id) return bySlug.id as string;
-    }
-    const { data: byName } = await admin
-      .from("kb_product_categories")
-      .select("id")
-      .ilike("name", value)
-      .maybeSingle();
-    return (byName?.id as string) ?? null;
+    const categories = await listKbProductCategoriesAll(500);
+    if (!categories.length) return null;
+    // KbProductCategoryRow is a structural superset of CcrsMatchCategory
+    // (id, slug, name, wa_inventory_types, sort_order), so it feeds directly.
+    return resolveCategoryForType(value, categories).id;
   } catch {
     return null;
   }
