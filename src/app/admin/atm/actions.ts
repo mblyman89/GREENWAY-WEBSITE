@@ -20,6 +20,7 @@ import {
   clearAtmCredentials,
   insertManualCashLoad,
 } from "@/lib/atm/store";
+import { ingestAtmCsvs, runAtmLiveSync } from "@/lib/atm/sync-server";
 import { validateManualCashLoad } from "@/lib/atm/atm-ui-core";
 
 const ROOT = "/admin/atm";
@@ -131,4 +132,50 @@ export async function recordManualCashLoadAction(formData: FormData): Promise<vo
   });
 
   back({ tab: "loads", msg: "Cash load recorded." });
+}
+
+/**
+ * Manually import PAI report CSVs (Health tab). Michael pastes/uploads any of
+ * the three exports (Cash Load, Simple Summary, Bank Deposits) and this ingests
+ * them via the server orchestrator (parse → plan → idempotent upsert). Safe to
+ * re-run: the same report overwrites rather than duplicating. Audit
+ * `atm.sync.manual` records counts + problem count, never file contents.
+ */
+export async function importAtmCsvsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const cashLoadCsv = String(formData.get("cash_load_csv") ?? "");
+  const simpleSummaryCsv = String(formData.get("simple_summary_csv") ?? "");
+  const fundsMovementCsv = String(formData.get("funds_movement_csv") ?? "");
+
+  const result = await ingestAtmCsvs({ cashLoadCsv, simpleSummaryCsv, fundsMovementCsv });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.sync.manual",
+    entityType: "atm_connection",
+    entityId: null,
+    after: {
+      ok: result.ok,
+      settlements_upserted: result.summary.settlementsUpserted,
+      cash_loads_upserted: result.summary.cashLoadsUpserted,
+      problem_count: result.summary.problems.length,
+    },
+  });
+
+  if (result.ok) back({ tab: "health", msg: result.message });
+  back({ tab: "health", error: result.message });
+}
+
+/**
+ * "Sync now (live)" button (Health tab). Attempts the automatic PAI pull. Until
+ * the live login/download is wired (A-2c-2, after PAI support confirms the
+ * exact endpoints), this returns an honest "not connected yet" message pointing
+ * Michael at the manual import above. Never guesses an endpoint.
+ */
+export async function runAtmLiveSyncAction(): Promise<void> {
+  await requirePermission("settings.manage");
+  const result = await runAtmLiveSync();
+  back({ tab: "health", error: result.error });
 }

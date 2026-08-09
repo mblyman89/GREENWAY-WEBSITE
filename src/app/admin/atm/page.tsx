@@ -35,6 +35,8 @@ import {
   saveAtmConnectionAction,
   clearAtmCredentialsAction,
   recordManualCashLoadAction,
+  importAtmCsvsAction,
+  runAtmLiveSyncAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -197,6 +199,7 @@ function HealthTab({
   conn: Awaited<ReturnType<typeof getAtmConnection>>;
 }) {
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-2">
       <div className={cardCls}>
         <h2 className="mb-1 text-sm font-bold text-white">PAI Reports connection</h2>
@@ -307,11 +310,73 @@ function HealthTab({
           <Row label="Last sync" value={conn.lastSyncAt || "Never"} />
           <Row label="Last error" value={conn.lastError || "—"} />
         </dl>
-        <p className="mt-4 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-white/50">
-          &ldquo;Test connection&rdquo; and the automatic daily pull will appear here in the next slice, once PAI issues
-          your read-only user and your real report exports confirm the exact columns.
-        </p>
+        <form action={runAtmLiveSyncAction} className="mt-4 border-t border-white/10 pt-4">
+          <button type="submit" className={btnGhost}>
+            Sync now (live)
+          </button>
+          <p className="mt-2 text-xs text-white/40">
+            The automatic daily pull from PAI isn&rsquo;t connected yet. Use &ldquo;Import PAI report CSVs&rdquo; below to
+            load your exports today; we&rsquo;ll switch on the live pull once PAI confirms the exact download links.
+          </p>
+        </form>
       </div>
+
+      <div className={`${cardCls} lg:col-span-2`}>
+        <h2 className="mb-1 text-sm font-bold text-white">Import PAI report CSVs</h2>
+        <p className="mb-4 text-xs text-white/50">
+          Download your reports from paireports.com and paste each CSV below (or copy the file contents). You can import
+          any one, two, or all three &mdash; and it&rsquo;s safe to re-import: the same report updates the existing rows
+          instead of duplicating them. Amounts are read straight from your files; nothing is guessed.
+        </p>
+
+        <form action={importAtmCsvsAction} className="grid gap-4 lg:grid-cols-3">
+          <div>
+            <label className={labelCls} htmlFor="cash_load_csv">
+              ATM Cash Load Report
+            </label>
+            <textarea
+              id="cash_load_csv"
+              name="cash_load_csv"
+              rows={7}
+              className={`${inputCls} font-mono text-xs`}
+              placeholder="Paste the Cash Load Report CSV here (Trx Time, Cash Load, Balance)…"
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="simple_summary_csv">
+              Simple Summary Report
+            </label>
+            <textarea
+              id="simple_summary_csv"
+              name="simple_summary_csv"
+              rows={7}
+              className={`${inputCls} font-mono text-xs`}
+              placeholder="Paste the Simple Summary Report CSV here (counts, surcharge, settlement)…"
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="funds_movement_csv">
+              Bank Deposits (Funds Movement)
+            </label>
+            <textarea
+              id="funds_movement_csv"
+              name="funds_movement_csv"
+              rows={7}
+              className={`${inputCls} font-mono text-xs`}
+              placeholder="Paste the Bank Deposits / Funds Movement CSV here (the two deposit legs)…"
+            />
+          </div>
+          <div className="lg:col-span-3 flex flex-wrap items-center gap-2 pt-1">
+            <button type="submit" className={btnPrimary}>
+              Import reports
+            </button>
+            <span className="text-xs text-white/40">
+              After importing, check the Transactions &amp; Fees and Cash Loads tabs to see your data.
+            </span>
+          </div>
+        </form>
+      </div>
+    </div>
     </div>
   );
 }

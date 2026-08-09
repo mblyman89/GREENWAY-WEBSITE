@@ -281,6 +281,7 @@ import { __runTimeclockCoreTests } from "../../src/lib/staffing/timeclock-core";
 import { __runVendorGoldminerTests } from "../../src/lib/inventory/vendor-goldminer-core";
 import { __runAtmCoreTests } from "../../src/lib/atm/atm-core";
 import { __runAtmUiCoreTests } from "../../src/lib/atm/atm-ui-core";
+import { __runAtmSyncCoreTests } from "../../src/lib/atm/atm-sync-core";
 import { __runPlaidCoreTests } from "../../src/lib/plaid/plaid-core";
 
 // Helper for suites that return { passed, failed } without throwing on
@@ -552,6 +553,7 @@ async function main() {
   assertNoFailures("vendor-goldminer", __runVendorGoldminerTests());
   __runAtmCoreTests();
   __runAtmUiCoreTests();
+  __runAtmSyncCoreTests();
   __runPlaidCoreTests();
   assertNoFailures("canva-core", __runCanvaCoreTests());
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());

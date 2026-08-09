@@ -357,3 +357,112 @@ function numOrNull(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
 }
+
+// ---------------------------------------------------------------------------
+// Slice A-2c \u2014 idempotent UPSERT writers used by the ingestion engine
+// (sync-server.ts). The plan shapes come from atm-sync-core (pure). We upsert
+// on the tables' unique indexes so re-importing the same report is a no-op:
+//   \u2022 atm_settlements  \u2192 conflict on (settlement_date, terminal_id)
+//   \u2022 atm_cash_loads   \u2192 conflict on (terminal_id, loaded_at)
+// All money stays in CENTS. Errors are RETURNED, never thrown, so a bad import
+// surfaces as an honest message instead of a 500.
+// ---------------------------------------------------------------------------
+
+/** A settlement row ready to write (matches atm_settlements columns). */
+export type UpsertAtmSettlementRow = {
+  settlement_date: string;
+  terminal_id: string;
+  total_trx: number | null;
+  withdrawal_trx: number | null;
+  surcharged_wd_trx: number | null;
+  terminal_transaction_cents: number | null;
+  surcharge_cents: number | null;
+  settlement_total_cents: number | null;
+  raw: Record<string, unknown>;
+};
+
+/**
+ * Upsert settlement rows on (settlement_date, terminal_id). Idempotent: a
+ * re-import overwrites the same row instead of duplicating it. Returns the
+ * count written, or an error string.
+ */
+export async function upsertAtmSettlements(
+  rows: UpsertAtmSettlementRow[],
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  if (rows.length === 0) return { ok: true, count: 0 };
+  const admin = createSupabaseAdminClient();
+  try {
+    const { error } = await admin
+      .from("atm_settlements")
+      .upsert(rows, { onConflict: "settlement_date,terminal_id" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, count: rows.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error writing settlements." };
+  }
+}
+
+/** A cash-load row ready to write (matches atm_cash_loads columns). */
+export type UpsertAtmCashLoadRow = {
+  terminal_id: string;
+  loaded_at: string;
+  load_date: string | null;
+  cash_load_cents: number;
+  balance_after_cents: number | null;
+  source: "pai" | "manual";
+  raw: Record<string, unknown>;
+};
+
+/**
+ * Upsert cash-load rows on (terminal_id, loaded_at). Idempotent: re-importing
+ * the same load event overwrites rather than duplicates. Returns count or error.
+ */
+export async function upsertAtmCashLoads(
+  rows: UpsertAtmCashLoadRow[],
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  if (rows.length === 0) return { ok: true, count: 0 };
+  const admin = createSupabaseAdminClient();
+  try {
+    const { error } = await admin
+      .from("atm_cash_loads")
+      .upsert(rows, { onConflict: "terminal_id,loaded_at" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, count: rows.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error writing cash loads." };
+  }
+}
+
+/**
+ * Record the outcome of a sync/import on the single connection row so the
+ * Health chip honestly reflects the last run: 'ok' on success (clears
+ * last_error), 'error' otherwise (keeps the reason). Best-effort \u2014 never throws.
+ */
+export async function setAtmSyncResult(
+  result: { ok: boolean; error?: string | null; at?: string },
+): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  const at = result.at ?? new Date().toISOString();
+  try {
+    const { data: existing } = await admin
+      .from("atm_connection")
+      .select("id")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!existing?.id) return;
+    await admin
+      .from("atm_connection")
+      .update({
+        status: result.ok ? "ok" : "error",
+        last_sync_at: at,
+        last_error: result.ok ? null : (result.error ?? "Unknown error").slice(0, 500),
+      })
+      .eq("id", existing.id);
+  } catch {
+    // best-effort health write; the ingest result itself is the source of truth.
+  }
+}
