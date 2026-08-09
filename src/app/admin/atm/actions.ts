@@ -175,7 +175,22 @@ export async function importAtmCsvsAction(formData: FormData): Promise<void> {
  * Michael at the manual import above. Never guesses an endpoint.
  */
 export async function runAtmLiveSyncAction(): Promise<void> {
-  await requirePermission("settings.manage");
+  const session = await requirePermission("settings.manage");
   const result = await runAtmLiveSync();
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.sync.live",
+    entityType: "atm_connection",
+    entityId: null,
+    after: {
+      ok: result.ok,
+      settlements_upserted: result.summary?.settlementsUpserted ?? 0,
+      cash_loads_upserted: result.summary?.cashLoadsUpserted ?? 0,
+    },
+  });
+
+  if (result.ok) back({ tab: "health", msg: result.message });
   back({ tab: "health", error: result.error });
 }

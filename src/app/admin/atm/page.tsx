@@ -315,8 +315,9 @@ function HealthTab({
             Sync now (live)
           </button>
           <p className="mt-2 text-xs text-white/40">
-            The automatic daily pull from PAI isn&rsquo;t connected yet. Use &ldquo;Import PAI report CSVs&rdquo; below to
-            load your exports today; we&rsquo;ll switch on the live pull once PAI confirms the exact download links.
+            This signs in to PAI with your saved login and pulls your three reports automatically (it also runs once
+            daily). If PAI hands back a web page instead of a CSV, you&rsquo;ll see a note here &mdash; capture the exact
+            download command once and we&rsquo;ll set it. You can always use &ldquo;Import PAI report CSVs&rdquo; below.
           </p>
         </form>
       </div>

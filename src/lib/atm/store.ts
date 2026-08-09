@@ -120,6 +120,58 @@ export async function getAtmConnection(): Promise<AtmConnectionView> {
   }
 }
 
+/**
+ * SERVER-ONLY, INTERNAL: read the connection with the DECRYPTED credentials.
+ *
+ * This is the ONLY reader that returns the plaintext username/password, and it
+ * exists solely so pai-client.ts can log into PAI during a sync. The result
+ * MUST NEVER be sent to the browser or logged. The public getAtmConnection()
+ * (above) is the safe, client-shippable view (booleans + masked hint only).
+ *
+ * Returns null when the DB is unconfigured or there is no row / no credentials
+ * yet, so callers degrade gracefully instead of throwing.
+ */
+export type AtmConnectionSecrets = {
+  id: string;
+  portalBaseUrl: string;
+  terminalId: string;
+  companyLabel: string;
+  username: string; // decrypted
+  password: string; // decrypted
+  reportConfig: Record<string, unknown>;
+};
+
+export async function getAtmConnectionSecrets(): Promise<AtmConnectionSecrets | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("atm_connection")
+      .select(COLS)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const row = data as Row;
+
+    const username = row.pai_username_enc ? decryptSecret(row.pai_username_enc) : "";
+    const password = row.pai_password_enc ? decryptSecret(row.pai_password_enc) : "";
+    if (username.trim() === "" || password.trim() === "") return null;
+
+    return {
+      id: row.id,
+      portalBaseUrl: (row.portal_base_url ?? EMPTY_VIEW.portalBaseUrl).trim() || EMPTY_VIEW.portalBaseUrl,
+      terminalId: (row.terminal_id ?? "").trim(),
+      companyLabel: (row.company_label ?? "").trim(),
+      username,
+      password,
+      reportConfig: row.report_config ?? {},
+    };
+  } catch {
+    return null;
+  }
+}
+
 export type SaveAtmConnectionInput = {
   portalBaseUrl: string;
   terminalId: string;
