@@ -17,6 +17,7 @@
  * plain-English audit summary. The server action validates ids against the
  * real vendors/brands tables on top of this.
  */
+import { strainTypeValues } from "@/lib/menu/strain-taxonomy";
 
 /** The ONLY lot columns hand-editing may touch. */
 export const EDITABLE_LOT_FIELDS = [
@@ -43,15 +44,23 @@ export const LOCKED_LOT_FIELDS = [
   "pos_product_key",
 ] as const;
 
-/** Strain-type values the back office renders (lot-table-core labels). */
-export const STRAIN_TYPE_OPTIONS = [
-  "indica",
-  "sativa",
-  "hybrid",
-  "indica-hybrid",
-  "sativa-hybrid",
-  "cbd",
-] as const;
+/**
+ * Strain-type values the back-office lot-edit dropdown renders.
+ *
+ * DERIVED from the single source of truth `strainTypeValues`
+ * (src/lib/menu/strain-taxonomy.ts) so the two lists can never drift apart.
+ * We exclude "unknown" on purpose: the lot-edit dropdown is where a human
+ * PICKS a concrete strain type, so "Unknown" is not an offered choice (an
+ * unset value simply clears the field to NULL). `__runLotEditCoreTests` has a
+ * drift assertion that fails the build if this ever diverges from the source.
+ *
+ * This is strain-type PRESENTATION only. It is completely separate from CCRS:
+ * the CCRS batch normalizer collapses strain types to the CCRS-valid set on
+ * export and is untouched here.
+ */
+export const STRAIN_TYPE_OPTIONS: readonly string[] = strainTypeValues.filter(
+  (v) => v !== "unknown",
+);
 
 export type LotEditPatch = {
   vendor_id: string | null;
@@ -210,6 +219,21 @@ export function __runLotEditCoreTests(): { passed: number } {
   for (const t of STRAIN_TYPE_OPTIONS) {
     ok(parseLotEditInput({ strain_type: t }).ok, `strain type ${t} allowed`);
   }
+
+  // DRIFT GUARD — STRAIN_TYPE_OPTIONS is DERIVED from the shared source of
+  // truth `strainTypeValues`. It must equal that list minus "unknown", in the
+  // same order, so the dropdown can never silently diverge from the taxonomy.
+  const expectedOptions = strainTypeValues.filter((v) => v !== "unknown");
+  ok(
+    STRAIN_TYPE_OPTIONS.length === expectedOptions.length &&
+      STRAIN_TYPE_OPTIONS.every((v, i) => v === expectedOptions[i]),
+    "STRAIN_TYPE_OPTIONS matches strainTypeValues minus 'unknown' (no drift)",
+  );
+  ok(!STRAIN_TYPE_OPTIONS.includes("unknown"), "'unknown' is not an offered edit option");
+  ok(
+    STRAIN_TYPE_OPTIONS.every((v) => (strainTypeValues as readonly string[]).includes(v)),
+    "every edit option is a member of the shared strain taxonomy",
+  );
 
   // Vendor⇄brand consistency.
   ok(brandMatchesVendor(null, ID_A), "no brand always matches");
