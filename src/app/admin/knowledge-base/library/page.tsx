@@ -15,8 +15,10 @@ import {
   type SuggestPoolRow,
 } from "@/lib/ai/kb/strain-type-suggest-core";
 import { strainTypeValues } from "@/lib/menu/strain-taxonomy";
+import { loadUnmappedCcrsReview } from "@/lib/ai/kb/unmapped-ccrs-server";
 import { KbLibrary } from "../KbLibrary";
 import { KbFlash } from "../KbFlash";
+import { UnmappedCcrsPanel } from "../UnmappedCcrsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +30,14 @@ export default async function KbLibraryPage({
   await requirePermission("products.enrich");
   const { msg, error } = await searchParams;
 
-  const [counts, strains, productCategories, terpeneRows] = await Promise.all([
-    getKbCounts(),
-    listKbStrainsFull(2500),
-    listKbProductCategoriesAll(500),
-    listKbTerpenesFull(500),
-  ]);
+  const [counts, strains, productCategories, terpeneRows, unmappedCcrs] =
+    await Promise.all([
+      getKbCounts(),
+      listKbStrainsFull(2500),
+      listKbProductCategoriesAll(500),
+      listKbTerpenesFull(500),
+      loadUnmappedCcrsReview(),
+    ]);
 
   // Smart-selector vocab (terpenes/aroma/flavor) + per-type house suggestions,
   // both computed server-side from the verified seed + live terpene reference
@@ -77,6 +81,12 @@ export default async function KbLibraryPage({
       />
       <div className="px-5 py-6 sm:px-8 space-y-6">
         <KbFlash msg={msg} error={error} />
+        <UnmappedCcrsPanel
+          items={unmappedCcrs.items}
+          summary={unmappedCcrs.summary}
+          targets={unmappedCcrs.categories}
+          returnTo="/admin/knowledge-base/library"
+        />
         <KbLibrary
           strains={strains}
           strainsMigrated={counts.migrated}

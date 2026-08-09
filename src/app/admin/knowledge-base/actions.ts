@@ -15,6 +15,7 @@ import {
   setKbNoteActive,
   upsertKbProductCategory,
   setProductCategoryActive,
+  getKbProductCategoryBySlug,
   reviewKbProduct,
   reviewKbBrand,
   attachKbProductImage,
@@ -28,6 +29,10 @@ import { updateBrandFacts } from "@/lib/vendors/store";
 import { seedMedicalBannedPhrases } from "@/lib/ai/kb/seed-banned";
 import { validateNoteInput } from "@/lib/ai/kb/kb-notes-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
+import {
+  canonicalizeCcrsTypeName,
+  normalizeCcrsName,
+} from "@/lib/ai/kb/ccrs-vocabulary-core";
 import {
   upsertImageSubstitute,
   setSubstituteActive,
@@ -272,6 +277,87 @@ export async function toggleProductCategoryAction(formData: FormData): Promise<v
   revalidatePath(PATH);
   if (!result.ok) back(result.message ?? "Couldn't update the product type.", false);
   back(active ? "Product type re-enabled." : "Product type hidden from the AI.");
+}
+
+// Pages that render the "unmapped CCRS types" review panel (Slice 3). The map
+// action revalidates both and returns the operator to whichever they used.
+const LIBRARY_PATH = "/admin/knowledge-base/library";
+const SETTINGS_TYPES_PATH = "/admin/settings/types";
+const ALLOWED_MAP_RETURNS = new Set<string>([LIBRARY_PATH, SETTINGS_TYPES_PATH]);
+
+/** Redirect back to the page the map form was submitted from, with a flash. */
+function backToMapSurface(returnTo: string, message: string, ok = true): never {
+  const base = ALLOWED_MAP_RETURNS.has(returnTo) ? returnTo : LIBRARY_PATH;
+  const key = ok ? "msg" : "error";
+  const suffix = base === SETTINGS_TYPES_PATH ? "&tab=inventory" : "";
+  redirect(`${base}?${key}=${encodeURIComponent(message)}${suffix}`);
+}
+
+/**
+ * SLICE 3 — one-click "map this CCRS type". Appends a CCRS inventory-type name
+ * to a KB product category's wa_inventory_types, growing the CCRS→category map
+ * as intake sees new (or older) types. Read-modify-write so EVERY other field
+ * is preserved; idempotent (re-mapping the same name is a no-op). We store the
+ * canonical modern CCRS spelling when the name is recognized, else the raw name
+ * exactly as intake saw it (never invents). Never guesses a target — the
+ * operator picks the category. Revalidates both surfaces.
+ */
+export async function mapCcrsTypeToKbCategoryAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const returnTo = String(formData.get("returnTo") ?? LIBRARY_PATH);
+  const rawType = String(formData.get("ccrs_type") ?? "").trim();
+  const targetSlug = String(formData.get("category_slug") ?? "").trim();
+
+  if (!rawType) backToMapSurface(returnTo, "No CCRS type was provided.", false);
+  if (!targetSlug) backToMapSurface(returnTo, "Please choose a product type to map it to.", false);
+
+  const target = await getKbProductCategoryBySlug(targetSlug);
+  if (!target) backToMapSurface(returnTo, "That product type no longer exists — refresh and try again.", false);
+
+  // Store the canonical modern spelling when CCRS recognizes it; otherwise keep
+  // the raw name exactly (older dialect / typo stays as-is, never invented).
+  const storeAs = canonicalizeCcrsTypeName(rawType) ?? rawType;
+
+  // Append idempotently, preserving order and existing entries.
+  const existing = target.wa_inventory_types ?? [];
+  const already = existing.some(
+    (t) => normalizeCcrsName(t) === normalizeCcrsName(storeAs),
+  );
+  const nextTypes = already ? existing : [...existing, storeAs];
+
+  const result = await upsertKbProductCategory(
+    {
+      slug: target.slug,
+      name: target.name,
+      group_key: target.group_key,
+      summary: target.summary,
+      aliases: target.aliases ?? [],
+      wa_inventory_types: nextTypes,
+      sort_order: target.sort_order,
+      active: target.active,
+    },
+    session.profile.id,
+  );
+
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.product_category.map_ccrs_type",
+    entityType: "kb_product_category",
+    entityId: target.slug,
+    after: { ccrs_type: storeAs, category: target.slug },
+  }).catch(() => {});
+
+  revalidatePath(PATH);
+  revalidatePath(LIBRARY_PATH);
+  revalidatePath(SETTINGS_TYPES_PATH);
+
+  if (!result.ok) backToMapSurface(returnTo, result.message ?? "Couldn't map the CCRS type.", false);
+  backToMapSurface(
+    returnTo,
+    already
+      ? `"${storeAs}" was already mapped to ${target.name}.`
+      : `Mapped "${storeAs}" to ${target.name}.`,
+  );
 }
 
 /** Toggle a strain active/inactive. */
