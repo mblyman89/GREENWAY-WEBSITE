@@ -38,7 +38,7 @@ import {
   type ChipTone,
 } from "@/lib/plaid/plaid-ui-core";
 import { PlaidLinkButton } from "./PlaidLinkButton";
-import { assignPlaidAccountRoleAction } from "./actions";
+import { assignPlaidAccountRoleAction, runPlaidSyncNowAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -243,6 +243,23 @@ export default async function PlaidPage({
 
         {tab === "health" ? (
           <div className="space-y-6">
+            <div className={cardCls}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="mb-1 text-sm font-semibold text-white">Pull latest transactions</h2>
+                  <p className="text-sm text-white/60">
+                    Fetch new, changed, and removed transactions for every connected bank. This runs
+                    on its own too &mdash; use this button any time you want the newest activity now.
+                  </p>
+                </div>
+                <form action={runPlaidSyncNowAction}>
+                  <button type="submit" className={btnGhost}>
+                    Sync now
+                  </button>
+                </form>
+              </div>
+            </div>
+
             <div className={cardCls}>
               <h2 className="mb-1 text-sm font-semibold text-white">Connection health</h2>
               <p className="mb-4 text-sm text-white/60">

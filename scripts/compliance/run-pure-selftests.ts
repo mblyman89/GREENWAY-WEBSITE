@@ -284,6 +284,7 @@ import { __runAtmUiCoreTests } from "../../src/lib/atm/atm-ui-core";
 import { __runAtmSyncCoreTests } from "../../src/lib/atm/atm-sync-core";
 import { __runPaiEndpointsTests } from "../../src/lib/atm/pai-endpoints";
 import { __runPlaidUiCoreTests } from "../../src/lib/plaid/plaid-ui-core";
+import { __runPlaidSyncCoreTests } from "../../src/lib/plaid/sync-core";
 import { __runPlaidCoreTests } from "../../src/lib/plaid/plaid-core";
 
 // Helper for suites that return { passed, failed } without throwing on
@@ -558,6 +559,7 @@ async function main() {
   __runAtmSyncCoreTests();
   __runPaiEndpointsTests();
   __runPlaidUiCoreTests();
+  __runPlaidSyncCoreTests();
   __runPlaidCoreTests();
   assertNoFailures("canva-core", __runCanvaCoreTests());
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());
