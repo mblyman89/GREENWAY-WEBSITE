@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/admin/ui/Button";
 import type { KbProductCategoryRow } from "@/lib/ai/kb/store";
 import { PRODUCT_CATEGORY_GROUPS } from "@/lib/ai/kb/product-categories-data";
+import { CcrsTypePicker } from "./CcrsTypePicker";
 import {
   upsertProductCategoryAction,
   toggleProductCategoryAction,
@@ -229,18 +230,10 @@ export function ProductCategoryEditor({
             placeholder="chews, fruit chews"
           />
         </label>
-        <label className="text-sm">
-          <span className={labelCls}>
-            WA CCRS inventory types (comma-separated)
-          </span>
-          <input
-            name="wa_inventory_types"
-            value={form.wa_inventory_types}
-            onChange={(e) => set("wa_inventory_types", e.target.value)}
-            className={inputCls}
-            placeholder="Solid Marijuana Infused Edible"
-          />
-        </label>
+        <CcrsTypePicker
+          value={form.wa_inventory_types}
+          onChange={(next) => set("wa_inventory_types", next)}
+        />
 
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input
