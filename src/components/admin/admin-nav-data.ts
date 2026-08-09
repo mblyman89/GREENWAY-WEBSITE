@@ -134,6 +134,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "\ud83d\udc64", group: "Admin" }, // 👤 user
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" }, // 🔌 integrations
   { label: "Banking", href: "/admin/settings/banking", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Admin" }, // bank / ACH origination
+  { label: "ATM", href: "/admin/atm", permission: "settings.manage", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udda8\ufe0f", group: "Admin" }, // 🖨️ hardware
   { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal limits
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "\ud83e\udde0", group: "Admin" }, // 🧠 AI
