@@ -35,6 +35,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { getPlaidClient } from "@/lib/plaid/client";
 import { plaidDollarsToCents } from "@/lib/plaid/plaid-core";
 import { roleAssignmentCheck } from "@/lib/plaid/plaid-ui-core";
+import { runAllPlaidSync } from "@/lib/plaid/sync-server";
 import {
   upsertPlaidItem,
   upsertPlaidAccount,
@@ -219,4 +220,45 @@ export async function assignPlaidAccountRoleAction(formData: FormData): Promise<
     tab: "health",
     msg: check.role ? `Account role set to "${check.role}".` : "Account role cleared.",
   });
+}
+
+/**
+ * "Sync now" — manually pull the latest transactions for every linked bank
+ * connection (bible §SLICE P3). Delegates to the server-only sync driver, which
+ * is best-effort and NEVER throws to the UI: it returns a plain-English summary
+ * (how many added / updated / removed) or a friendly problem message per item.
+ * We surface that summary on the Health tab and record an audit entry.
+ *
+ * The driver already persists each connection's resume point (cursor) and any
+ * error status in the store, so a partial failure still saves whatever synced.
+ */
+export async function runPlaidSyncNowAction(): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const result = await runAllPlaidSync();
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "plaid.sync.manual",
+    entityType: "plaid_sync",
+    entityId: "manual",
+    after: {
+      ok: result.ok,
+      items_synced: result.items.length,
+      items: result.items.map((i) => ({
+        item_id: i.itemId,
+        institution_name: i.institutionName,
+        ok: i.ok,
+        added: i.counts.added,
+        modified: i.counts.modified,
+        removed: i.counts.removed,
+        skipped: i.counts.skipped,
+        error_code: i.errorCode ?? null,
+      })),
+    },
+  });
+
+  if (result.ok) back({ tab: "health", msg: result.message });
+  back({ tab: "health", error: result.message });
 }
