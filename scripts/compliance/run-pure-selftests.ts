@@ -209,6 +209,9 @@ import { __runEnrichmentLookupQueryCoreTests } from "../../src/lib/enrichment/lo
 // pure (only the strains-data seed + taxonomy) and runs here.
 import { __runStrainTypeSuggestCoreTests } from "../../src/lib/ai/kb/strain-type-suggest-core";
 import { __runStrainVocabCoreTests } from "../../src/lib/ai/kb/strain-vocab-core";
+// ccrs-category-match-core is pure (no server-only imports; the DB loader lives
+// in writeback.ts and just feeds it category rows), so it runs here.
+import { __runCcrsCategoryMatchCoreTests } from "../../src/lib/ai/kb/ccrs-category-match-core";
 import { __runWebauthnCoreTests } from "../../src/lib/auth/webauthn-core";
 import { __runNormalizeTests } from "../../src/lib/cms/email-events/normalize-core";
 import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
@@ -474,6 +477,7 @@ async function main() {
   __runEnrichmentLookupQueryCoreTests();
   __runStrainTypeSuggestCoreTests();
   __runStrainVocabCoreTests();
+  __runCcrsCategoryMatchCoreTests();
   assertNoFailures("webauthn-core", __runWebauthnCoreTests());
   __runNormalizeTests();
   __runVerifyTests();
