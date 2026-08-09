@@ -15,12 +15,17 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { saveAtmConnection, clearAtmCredentials } from "@/lib/atm/store";
+import {
+  saveAtmConnection,
+  clearAtmCredentials,
+  insertManualCashLoad,
+} from "@/lib/atm/store";
+import { validateManualCashLoad } from "@/lib/atm/atm-ui-core";
 
 const ROOT = "/admin/atm";
 
-function back(qs: { msg?: string; error?: string }): never {
-  const p = new URLSearchParams({ tab: "health" });
+function back(qs: { tab?: string; msg?: string; error?: string }): never {
+  const p = new URLSearchParams({ tab: qs.tab ?? "health" });
   if (qs.msg) p.set("msg", qs.msg);
   if (qs.error) p.set("error", qs.error);
   revalidatePath(ROOT);
@@ -81,4 +86,49 @@ export async function clearAtmCredentialsAction(): Promise<void> {
   });
 
   back({ msg: "PAI credentials cleared." });
+}
+
+/**
+ * Record a hand-entered cash load (Cash Loads tab, optional owner fallback per
+ * the bible). Cash loads normally pull automatically from PAI; this is here for
+ * the rare case Michael loads cash before the auto-pull runs. Amount is parsed
+ * to integer CENTS by the pure validator (never guessed). Audit `atm.load.recorded`
+ * carries the amount + date but no secret.
+ */
+export async function recordManualCashLoadAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const terminalId = String(formData.get("terminal_id") ?? "").trim();
+  const amount = String(formData.get("amount") ?? "");
+  const date = String(formData.get("load_date") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+
+  const parsed = validateManualCashLoad({ amount, date });
+  if (!parsed.ok) back({ tab: "loads", error: parsed.error });
+  if (!terminalId) back({ tab: "loads", error: "Enter the terminal number (e.g. HG26499)." });
+
+  const result = await insertManualCashLoad({
+    terminalId,
+    loadedAtIso: parsed.isoDate,
+    cents: parsed.cents,
+    note,
+  });
+  if (!result.ok) back({ tab: "loads", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.load.recorded",
+    entityType: "atm_cash_loads",
+    entityId: terminalId,
+    after: {
+      terminal_id: terminalId,
+      load_date: parsed.isoDate,
+      cash_load_cents: parsed.cents,
+      source: "manual",
+      has_note: note.length > 0,
+    },
+  });
+
+  back({ tab: "loads", msg: "Cash load recorded." });
 }

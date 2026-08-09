@@ -210,3 +210,150 @@ export async function clearAtmCredentials(): Promise<{ ok: true } | { ok: false;
     return { ok: false, error: e instanceof Error ? e.message : "Unknown error clearing credentials." };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Slice A-2b-ui — read settlements & cash loads for the two data tabs, plus the
+// owner manual cash-load fallback insert. All money stays in CENTS. These read
+// tables are populated by the A-2c PAI sync (and/or manual entry); until then
+// they return empty arrays so the tabs render an honest empty state.
+// ---------------------------------------------------------------------------
+
+export type AtmSettlementRow = {
+  id: string;
+  settlementDate: string; // ISO yyyy-mm-dd
+  terminalId: string;
+  totalTrx: number | null;
+  withdrawalTrx: number | null;
+  surchargedWdTrx: number | null;
+  terminalTransactionCents: number | null;
+  surchargeCents: number | null;
+  settlementTotalCents: number | null;
+};
+
+const SETTLEMENT_COLS =
+  "id,settlement_date,terminal_id,total_trx,withdrawal_trx,surcharged_wd_trx,terminal_transaction_cents,surcharge_cents,settlement_total_cents";
+
+/** List settlements, newest settlement_date first. Empty when DB unconfigured. */
+export async function listAtmSettlements(limit = 400): Promise<AtmSettlementRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("atm_settlements")
+      .select(SETTLEMENT_COLS)
+      .order("settlement_date", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return (data as Array<Record<string, unknown>>).map((r) => ({
+      id: String(r.id),
+      settlementDate: String(r.settlement_date ?? ""),
+      terminalId: String(r.terminal_id ?? ""),
+      totalTrx: numOrNull(r.total_trx),
+      withdrawalTrx: numOrNull(r.withdrawal_trx),
+      surchargedWdTrx: numOrNull(r.surcharged_wd_trx),
+      terminalTransactionCents: numOrNull(r.terminal_transaction_cents),
+      surchargeCents: numOrNull(r.surcharge_cents),
+      settlementTotalCents: numOrNull(r.settlement_total_cents),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export type AtmCashLoadRow = {
+  id: string;
+  terminalId: string;
+  loadedAtRaw: string | null;
+  loadDate: string | null;
+  cashLoadCents: number;
+  balanceAfterCents: number | null;
+  source: "pai" | "manual";
+};
+
+const CASH_LOAD_COLS =
+  "id,terminal_id,loaded_at,load_date,cash_load_cents,balance_after_cents,source,raw";
+
+/** List cash loads, newest loaded_at first. Empty when DB unconfigured. */
+export async function listAtmCashLoads(limit = 400): Promise<AtmCashLoadRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("atm_cash_loads")
+      .select(CASH_LOAD_COLS)
+      .order("loaded_at", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return (data as Array<Record<string, unknown>>).map((r) => {
+      const raw = (r.raw ?? {}) as Record<string, unknown>;
+      // Prefer the verbatim report "Trx Time" captured in raw; fall back to loaded_at.
+      const rawTrxTime =
+        typeof raw["Trx Time"] === "string"
+          ? (raw["Trx Time"] as string)
+          : typeof raw.loaded_at_raw === "string"
+            ? (raw.loaded_at_raw as string)
+            : null;
+      return {
+        id: String(r.id),
+        terminalId: String(r.terminal_id ?? ""),
+        loadedAtRaw: rawTrxTime ?? (r.loaded_at ? String(r.loaded_at) : null),
+        loadDate: r.load_date ? String(r.load_date) : null,
+        cashLoadCents: Number(r.cash_load_cents ?? 0),
+        balanceAfterCents: numOrNull(r.balance_after_cents),
+        source: r.source === "manual" ? "manual" : "pai",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export type InsertManualCashLoadInput = {
+  terminalId: string;
+  loadedAtIso: string; // ISO yyyy-mm-dd (from the validated form)
+  cents: number; // integer cents (already validated)
+  note: string;
+};
+
+/**
+ * Insert a hand-entered cash load (source='manual'). The load time is set to
+ * noon UTC on the chosen date so it sorts sensibly and does not collide with a
+ * PAI auto-pulled load at a real instant. The note is kept in `raw` for audit.
+ */
+export async function insertManualCashLoad(
+  input: InsertManualCashLoadInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const terminalId = (input.terminalId ?? "").trim();
+  if (!terminalId) return { ok: false, error: "A terminal number is required to record a cash load." };
+  if (!Number.isInteger(input.cents) || input.cents <= 0) {
+    return { ok: false, error: "Cash-load amount must be a positive whole number of cents." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.loadedAtIso)) {
+    return { ok: false, error: "Load date must be a valid yyyy-mm-dd." };
+  }
+  const admin = createSupabaseAdminClient();
+  const note = (input.note ?? "").trim();
+  try {
+    const { error } = await admin.from("atm_cash_loads").insert({
+      terminal_id: terminalId,
+      loaded_at: `${input.loadedAtIso}T12:00:00Z`,
+      load_date: input.loadedAtIso,
+      cash_load_cents: input.cents,
+      balance_after_cents: null, // unknown for a manual entry — never guessed
+      source: "manual",
+      raw: note ? { note, loaded_at_raw: input.loadedAtIso } : { loaded_at_raw: input.loadedAtIso },
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error recording cash load." };
+  }
+}
+
+/** Coerce a DB numeric/text/null into number|null without inventing a value. */
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}

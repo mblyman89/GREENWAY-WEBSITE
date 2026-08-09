@@ -20,15 +20,22 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
-import { getAtmConnection } from "@/lib/atm/store";
+import { getAtmConnection, listAtmSettlements, listAtmCashLoads } from "@/lib/atm/store";
 import {
   resolveAtmTab,
   atmConnectionStatusLine,
   atmSecurityPosture,
   passwordHint,
+  buildSettlementRowView,
+  summarizeSettlements,
+  buildCashLoadsView,
   type AtmTab,
 } from "@/lib/atm/atm-ui-core";
-import { saveAtmConnectionAction, clearAtmCredentialsAction } from "./actions";
+import {
+  saveAtmConnectionAction,
+  clearAtmCredentialsAction,
+  recordManualCashLoadAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +71,9 @@ export default async function AtmPage({
   const tab: AtmTab = resolveAtmTab(sp.tab);
 
   const conn = await getAtmConnection();
+  // Only pull the data a given tab needs (keeps the health tab snappy).
+  const settlements = tab === "transactions" ? await listAtmSettlements() : [];
+  const cashLoads = tab === "loads" ? await listAtmCashLoads() : [];
   const encryptionOn = isAtRestEncryptionConfigured();
   const posture = atmSecurityPosture({ encryptionOn });
   const statusView = atmConnectionStatusLine({
@@ -168,21 +178,9 @@ export default async function AtmPage({
         {tab === "health" ? (
           <HealthTab conn={conn} />
         ) : tab === "transactions" ? (
-          <ComingSoon
-            title="Transactions & Fees"
-            lines={[
-              "This tab will list each settlement day with money withdrawn, your surcharge revenue, and the two expected bank deposits (cash-out + surcharge).",
-              "It arrives in the next slice (A-2b), wired to the automatic PAI pull once your real Simple Summary and Bank Deposits exports confirm the columns.",
-            ]}
-          />
+          <SettlementsTab settlements={settlements} />
         ) : (
-          <ComingSoon
-            title="Cash Loads"
-            lines={[
-              "This tab will track the physical cash you load into terminal HG26499 (pulled automatically from PAI's Cash Load report) and show how much should be inside the machine right now.",
-              "It arrives in the next slice (A-2b).",
-            ]}
-          />
+          <CashLoadsTab cashLoads={cashLoads} terminalId={conn.terminalId} />
         )}
       </div>
     </div>
@@ -327,7 +325,233 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ComingSoon({ title, lines }: { title: string; lines: string[] }) {
+// ---------------------------------------------------------------------------
+// Transactions & Fees tab — settlement table + fee-totals card
+// ---------------------------------------------------------------------------
+
+function SettlementsTab({
+  settlements,
+}: {
+  settlements: Awaited<ReturnType<typeof listAtmSettlements>>;
+}) {
+  const summary = summarizeSettlements(settlements);
+  const rows = settlements.map((s) => buildSettlementRowView(s));
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        title="No settlements yet"
+        lines={[
+          "This tab lists each settlement day: how many cash withdrawals happened, your surcharge revenue (you keep 100%), and the two deposits your bank should receive — one for the cash withdrawn, one for your surcharge.",
+          "It fills in automatically once the daily PAI pull runs (the next step, A-2c). Nothing is missing on your end — there's just no synced data yet.",
+        ]}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Fee-totals summary card */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Surcharge revenue"
+          value={summary.totalSurchargeUsd}
+          hint={`${summary.count} settlement day${summary.count === 1 ? "" : "s"} — you keep 100%`}
+          tone="green"
+        />
+        <StatCard
+          label="Cash withdrawn (re-deposit leg)"
+          value={summary.totalTxnUsd}
+          hint="Vault cash returned to the bank"
+        />
+        <StatCard
+          label="Total expected at bank"
+          value={summary.totalExpectedUsd}
+          hint={
+            summary.earliestDate && summary.latestDate
+              ? `${summary.earliestDate} → ${summary.latestDate}`
+              : "Across both deposit legs"
+          }
+        />
+      </div>
+
+      <div className={cardCls}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-white">Settlements by day</h2>
+          <span className="text-xs text-white/40">{rows.length} shown</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-white/40">
+                <th className="py-2 pr-3 font-semibold">Settlement date</th>
+                <th className="py-2 pr-3 font-semibold">Withdrawals</th>
+                <th className="py-2 pr-3 text-right font-semibold">Cash withdrawn</th>
+                <th className="py-2 pr-3 text-right font-semibold">Surcharge</th>
+                <th className="py-2 pl-3 text-right font-semibold">Expected deposit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.settlementDate}-${r.terminalId}-${i}`} className="border-b border-white/5">
+                  <td className="py-2 pr-3 font-medium text-white/80">{r.settlementDate}</td>
+                  <td className="py-2 pr-3 text-white/60">{r.withdrawalsLabel}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-white/80">{r.txnUsd}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums text-emerald-300">{r.surchargeUsd}</td>
+                  <td className="py-2 pl-3 text-right font-semibold tabular-nums text-white">{r.expectedDepositUsd}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-white/40">
+          The bank receives TWO separate deposits per settlement — one for the cash withdrawn, one for your
+          surcharge. Matching each deposit against your bank feed arrives with reconciliation (Slice A-3).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cash Loads tab — expected-in-machine card + manual entry + load history
+// ---------------------------------------------------------------------------
+
+function CashLoadsTab({
+  cashLoads,
+  terminalId,
+}: {
+  cashLoads: Awaited<ReturnType<typeof listAtmCashLoads>>;
+  terminalId: string;
+}) {
+  const view = buildCashLoadsView(cashLoads);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <StatCard
+          label="Expected cash in machine"
+          value={view.expectedInMachineUsd}
+          hint={
+            view.expectedInMachineCents === null
+              ? "PAI hasn't reported a balance yet"
+              : "From the most recent reported balance"
+          }
+          tone="green"
+        />
+        <StatCard
+          label="Total cash loaded"
+          value={view.totalLoadedUsd}
+          hint={`${view.loadCount} load${view.loadCount === 1 ? "" : "s"} on record`}
+        />
+      </div>
+
+      {/* Manual entry fallback */}
+      <div className={cardCls}>
+        <h2 className="mb-1 text-sm font-bold text-white">Record a cash load (manual)</h2>
+        <p className="mb-4 text-xs text-white/50">
+          Cash loads normally pull in automatically from PAI. Use this only if you need to log a load by
+          hand — for example, before the next automatic sync runs. Amounts are stored exactly, in cents.
+        </p>
+        <form action={recordManualCashLoadAction} className="grid gap-4 sm:grid-cols-4">
+          <div className="sm:col-span-1">
+            <label className={labelCls} htmlFor="cl_terminal">Terminal</label>
+            <input
+              id="cl_terminal"
+              name="terminal_id"
+              className={inputCls}
+              defaultValue={terminalId || "HG26499"}
+              placeholder="HG26499"
+            />
+          </div>
+          <div className="sm:col-span-1">
+            <label className={labelCls} htmlFor="cl_amount">Amount (USD)</label>
+            <input id="cl_amount" name="amount" className={inputCls} inputMode="decimal" placeholder="2000.00" />
+          </div>
+          <div className="sm:col-span-1">
+            <label className={labelCls} htmlFor="cl_date">Load date</label>
+            <input id="cl_date" name="load_date" type="date" className={inputCls} />
+          </div>
+          <div className="sm:col-span-1 flex items-end">
+            <button type="submit" className={`${btnPrimary} w-full`}>Record load</button>
+          </div>
+          <div className="sm:col-span-4">
+            <label className={labelCls} htmlFor="cl_note">Note (optional)</label>
+            <input id="cl_note" name="note" className={inputCls} placeholder="e.g. loaded before morning open" />
+          </div>
+        </form>
+      </div>
+
+      <div className={cardCls}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-white">Load history</h2>
+          <span className="text-xs text-white/40">{view.rows.length} shown</span>
+        </div>
+        {view.rows.length === 0 ? (
+          <p className="text-sm text-white/60">
+            No cash loads recorded yet. They&rsquo;ll appear here automatically once the daily PAI pull runs
+            (Slice A-2c), or you can log one by hand above.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-white/40">
+                  <th className="py-2 pr-3 font-semibold">Loaded</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Cash load</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Balance after</th>
+                  <th className="py-2 pl-3 font-semibold">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.rows.map((r, i) => (
+                  <tr key={`${r.loadedAt}-${i}`} className="border-b border-white/5">
+                    <td className="py-2 pr-3 font-medium text-white/80">{r.loadedAt}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-white/80">{r.cashLoadUsd}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-white/60">{r.balanceAfterUsd}</td>
+                    <td className="py-2 pl-3 text-white/50">{r.sourceLabel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-3 text-xs text-white/40">
+          You load the machine with physical cash (not from the ATM bank account), so loads do not expect a
+          matching bank debit. &ldquo;Expected cash in machine&rdquo; uses PAI&rsquo;s own reported balance.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared small building blocks
+// ---------------------------------------------------------------------------
+
+function StatCard({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "neutral" | "green";
+}) {
+  return (
+    <div className={cardCls}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/40">{label}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums ${tone === "green" ? "text-emerald-300" : "text-white"}`}>
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-xs text-white/40">{hint}</p> : null}
+    </div>
+  );
+}
+
+function EmptyState({ title, lines }: { title: string; lines: string[] }) {
   return (
     <div className={cardCls}>
       <h2 className="mb-2 text-sm font-bold text-white">{title}</h2>
@@ -336,9 +560,6 @@ function ComingSoon({ title, lines }: { title: string; lines: string[] }) {
           {l}
         </p>
       ))}
-      <span className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/60">
-        Coming in the next slice
-      </span>
     </div>
   );
 }
