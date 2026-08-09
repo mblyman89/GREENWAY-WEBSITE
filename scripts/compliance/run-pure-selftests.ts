@@ -215,6 +215,9 @@ import { __runCcrsCategoryMatchCoreTests } from "../../src/lib/ai/kb/ccrs-catego
 // ccrs-vocabulary-core is pure (derives from compliance/ccrs-batch-core, which
 // is itself pure and tsx-safe), so it runs here.
 import { __runCcrsVocabularyCoreTests } from "../../src/lib/ai/kb/ccrs-vocabulary-core";
+// unmapped-ccrs-core is pure (imports only ccrs-vocabulary-core + ccrs-batch-core
+// constants; the DB loader lives in unmapped-ccrs-server.ts), so it runs here.
+import { __runUnmappedCcrsCoreTests } from "../../src/lib/ai/kb/unmapped-ccrs-core";
 import { __runWebauthnCoreTests } from "../../src/lib/auth/webauthn-core";
 import { __runNormalizeTests } from "../../src/lib/cms/email-events/normalize-core";
 import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
@@ -482,6 +485,7 @@ async function main() {
   __runStrainVocabCoreTests();
   __runCcrsCategoryMatchCoreTests();
   __runCcrsVocabularyCoreTests();
+  __runUnmappedCcrsCoreTests();
   assertNoFailures("webauthn-core", __runWebauthnCoreTests());
   __runNormalizeTests();
   __runVerifyTests();

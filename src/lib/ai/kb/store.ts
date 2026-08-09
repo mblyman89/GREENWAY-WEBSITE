@@ -1297,6 +1297,32 @@ export async function listKbProductCategoriesAll(
   }
 }
 
+/**
+ * Fetch one product category by slug (INCLUDING inactive), for read-modify-write
+ * flows like the "map this CCRS type" action that must preserve every other
+ * field when appending a wa_inventory_types entry. Returns null if missing or
+ * pre-migration (never throws).
+ */
+export async function getKbProductCategoryBySlug(
+  slug: string,
+): Promise<KbProductCategoryRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_categories")
+      .select(
+        "id,slug,name,group_key,summary,aliases,wa_inventory_types,sort_order,active",
+      )
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as KbProductCategoryRow;
+  } catch {
+    return null;
+  }
+}
+
 export type UpsertStrainInput = {
   slug?: string | null;
   name: string;

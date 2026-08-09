@@ -20,6 +20,8 @@ import {
 // SLICE 78: real cross-surface usage counts + live-menu orphan detection.
 import { countAllCategoryUsage, findMenuOrphans } from "@/lib/pos/category-registry";
 import type { ReassignCounts } from "@/lib/pos/category-registry-core";
+import { loadUnmappedCcrsReview } from "@/lib/ai/kb/unmapped-ccrs-server";
+import { UnmappedCcrsPanel } from "@/app/admin/knowledge-base/UnmappedCcrsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -78,10 +80,11 @@ export default async function TypesPage({
     );
   }
 
-  const [categories, inventoryTypes, menuOrphans] = await Promise.all([
+  const [categories, inventoryTypes, menuOrphans, unmappedCcrs] = await Promise.all([
     listWebsiteCategoryTypes({ includeInactive: true }),
     listInventoryTypes({ includeInactive: true }),
     findMenuOrphans(),
+    loadUnmappedCcrsReview(),
   ]);
   // SLICE 78: real per-surface usage (live menu, staged drafts, onboarding
   // picks, type mappings) for every category — powers the usage badges and
@@ -170,7 +173,11 @@ export default async function TypesPage({
         {tab === "website" ? (
           <WebsiteCategoriesTab categories={categories} usage={usage} menuOrphans={menuOrphans} />
         ) : (
-          <InventoryTypesTab inventoryTypes={inventoryTypes} categories={categories} />
+          <InventoryTypesTab
+            inventoryTypes={inventoryTypes}
+            categories={categories}
+            unmappedCcrs={unmappedCcrs}
+          />
         )}
       </div>
     </div>
@@ -366,9 +373,11 @@ function WebsiteCategoriesTab({
 function InventoryTypesTab({
   inventoryTypes,
   categories,
+  unmappedCcrs,
 }: {
   inventoryTypes: Awaited<ReturnType<typeof listInventoryTypes>>;
   categories: Awaited<ReturnType<typeof listWebsiteCategoryTypes>>;
+  unmappedCcrs: Awaited<ReturnType<typeof loadUnmappedCcrsReview>>;
 }) {
   const activeCategories = categories.filter((c) => c.is_active);
   const categoryLabel = (value: string | null) =>
@@ -395,6 +404,17 @@ function InventoryTypesTab({
 
   return (
     <div className="space-y-6">
+      {/* SLICE 3 — the CCRS→KB self-growth review, computed once and shared with
+          the Knowledge Base library page. Distinct from the POS-type → website-
+          category list below: this connects the regulator's CCRS inventory types
+          to the KB product types the AI writes from. */}
+      <UnmappedCcrsPanel
+        items={unmappedCcrs.items}
+        summary={unmappedCcrs.summary}
+        targets={unmappedCcrs.categories}
+        returnTo="/admin/settings/types"
+      />
+
       <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]/60 px-4 py-3 text-xs text-white/60">
         These are the inventory types Greenway carries, preloaded and grouped by
         the website category each maps to. Built-in types are ready to use out of
