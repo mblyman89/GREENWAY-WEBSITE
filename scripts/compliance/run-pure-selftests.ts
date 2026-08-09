@@ -280,6 +280,7 @@ import { __runZipTests } from "../../src/lib/reports/zip";
 import { __runTimeclockCoreTests } from "../../src/lib/staffing/timeclock-core";
 import { __runVendorGoldminerTests } from "../../src/lib/inventory/vendor-goldminer-core";
 import { __runAtmCoreTests } from "../../src/lib/atm/atm-core";
+import { __runAtmUiCoreTests } from "../../src/lib/atm/atm-ui-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -549,6 +550,7 @@ async function main() {
   __runTimeclockCoreTests();
   assertNoFailures("vendor-goldminer", __runVendorGoldminerTests());
   __runAtmCoreTests();
+  __runAtmUiCoreTests();
   assertNoFailures("canva-core", __runCanvaCoreTests());
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());

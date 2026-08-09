@@ -1,0 +1,344 @@
+/**
+ * /admin/atm — ATM/PAI back office (Slice A-2a: page shell + Health tab).
+ *
+ * Owner (Michael, Greenway Marijuana) runs one PAI ATM (terminal HG26499) on
+ * the PAI Reports portal (paireports.com). This page is its single home:
+ *   Tab 1 — Health (opens first): PAI connection status, honest security
+ *           posture, and the credential/setup form (encrypted at rest).
+ *   Tab 2 — Transactions & Fees: settlement/surcharge tables  → built in A-2b.
+ *   Tab 3 — Cash Loads: physical cash loads + expected-in-machine → A-2b.
+ *
+ * Gate: settings.manage = owner + admin ONLY (same as Banking/Payroll).
+ * Renders even when the DB/PAI isn't configured (unconfigured-friendly card).
+ *
+ * A-2a deliberately ships NO network code — the live PAI login/download and
+ * the sync engine come in A-2b, once Michael sends real report CSVs so the
+ * column mappers are written against real headers (never guessed).
+ */
+import Link from "next/link";
+import { requirePermission } from "@/lib/auth/session";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
+import { getAtmConnection } from "@/lib/atm/store";
+import {
+  resolveAtmTab,
+  atmConnectionStatusLine,
+  atmSecurityPosture,
+  passwordHint,
+  type AtmTab,
+} from "@/lib/atm/atm-ui-core";
+import { saveAtmConnectionAction, clearAtmCredentialsAction } from "./actions";
+
+export const dynamic = "force-dynamic";
+
+const inputCls =
+  "w-full rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-emerald-400/50 focus:outline-none";
+const labelCls = "mb-1 block text-xs font-semibold uppercase tracking-wide text-white/50";
+const btnPrimary =
+  "rounded-[var(--admin-radius)] bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400";
+const btnGhost =
+  "rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/[0.06]";
+const cardCls =
+  "rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-5";
+
+function tabCls(active: boolean): string {
+  return `rounded-[var(--admin-radius)] px-4 py-2 text-sm font-semibold ${
+    active ? "bg-emerald-500 text-emerald-950" : "border border-white/15 text-white/70 hover:bg-white/[0.06]"
+  }`;
+}
+
+function chipCls(tone: "neutral" | "green" | "orange"): string {
+  if (tone === "green") return "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300";
+  if (tone === "orange") return "border-amber-500/40 bg-amber-500/[0.08] text-amber-300";
+  return "border-white/15 bg-white/[0.04] text-white/70";
+}
+
+export default async function AtmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; msg?: string; error?: string }>;
+}) {
+  await requirePermission("settings.manage");
+  const sp = await searchParams;
+  const tab: AtmTab = resolveAtmTab(sp.tab);
+
+  const conn = await getAtmConnection();
+  const encryptionOn = isAtRestEncryptionConfigured();
+  const posture = atmSecurityPosture({ encryptionOn });
+  const statusView = atmConnectionStatusLine({
+    status: conn.status,
+    terminalId: conn.terminalId,
+    lastSyncAt: conn.lastSyncAt,
+    lastError: conn.lastError,
+    hasCredentials: conn.hasUsername || conn.hasPassword,
+  });
+
+  return (
+    <div>
+      <AdminPageHeader
+        title="ATM"
+        subtitle="Your PAI ATM (terminal HG26499) on paireports.com — connection health, transactions & surcharge revenue, and cash loads, all in one place. Owner/admin eyes only."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Admin", href: "/admin" }, { label: "ATM" }]} />}
+        help={
+          <HelpPanel
+            id="atm-home"
+            title="How the ATM page works"
+            steps={[
+              "Health (this first tab) is where you connect the app to your PAI Reports portal. Your PAI username and password are encrypted before they're stored and are never shown back to the screen.",
+              "Once connected, the app will pull your settlement report (money withdrawn + your surcharge revenue) and your cash-load report automatically — so you can see everything without logging into PAI.",
+              "The bank receives TWO separate deposits per settlement (one for cash withdrawn, one for your surcharge). The Transactions tab will show both, and a later step will match them against your bank feed.",
+              "Cash Loads will track the physical cash you put into the machine and tell you how much should be inside right now.",
+              "The security strip at the top tells the truth: if at-rest encryption isn't turned on yet, it says so and names the exact fix.",
+            ]}
+          >
+            <p>
+              This is built the same way as the Banking vault: encrypt at rest, mask everywhere,
+              audit every change, and never send a secret back to the browser. The Transactions and
+              Cash Loads tabs, plus the automatic daily pull from PAI, arrive in the next slice once
+              your real report exports confirm the exact columns.
+            </p>
+          </HelpPanel>
+        }
+      />
+
+      <div className="px-5 py-6 sm:px-8">
+        {sp.msg ? (
+          <div className="mb-4 rounded-[var(--admin-radius)] border border-emerald-500/30 bg-emerald-500/[0.06] px-4 py-3 text-sm font-semibold text-emerald-300">
+            {sp.msg}
+          </div>
+        ) : null}
+        {sp.error ? (
+          <div className="mb-4 rounded-[var(--admin-radius)] border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-sm font-semibold text-red-300">
+            {sp.error}
+          </div>
+        ) : null}
+
+        {/* Connection status chip */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${chipCls(statusView.tone)}`}
+          >
+            ● {statusView.label}
+          </span>
+          <span className="text-xs text-white/50">{statusView.detail}</span>
+        </div>
+
+        {/* Security posture strip — honest, computed */}
+        <div className="mb-6 flex flex-wrap gap-2">
+          {posture.map((item) => (
+            <span
+              key={item.key}
+              title={item.note}
+              className={`inline-flex cursor-help items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                item.ok
+                  ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300"
+                  : "border-amber-500/40 bg-amber-500/[0.08] text-amber-300"
+              }`}
+            >
+              {item.ok ? "✓" : "⚠"} {item.label}
+            </span>
+          ))}
+        </div>
+        {posture.some((p) => !p.ok) ? (
+          <div className="mb-6 rounded-[var(--admin-radius)] border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-200">
+            {posture
+              .filter((p) => !p.ok)
+              .map((p) => (
+                <p key={p.key} className="py-0.5">
+                  <span className="font-semibold">{p.label}:</span> {p.note}
+                </p>
+              ))}
+          </div>
+        ) : null}
+
+        {/* Tabs — Health opens first */}
+        <div className="mb-6 flex flex-wrap gap-2">
+          <Link href="/admin/atm?tab=health" className={tabCls(tab === "health")}>
+            Health
+          </Link>
+          <Link href="/admin/atm?tab=transactions" className={tabCls(tab === "transactions")}>
+            Transactions &amp; Fees
+          </Link>
+          <Link href="/admin/atm?tab=loads" className={tabCls(tab === "loads")}>
+            Cash Loads
+          </Link>
+        </div>
+
+        {tab === "health" ? (
+          <HealthTab conn={conn} />
+        ) : tab === "transactions" ? (
+          <ComingSoon
+            title="Transactions & Fees"
+            lines={[
+              "This tab will list each settlement day with money withdrawn, your surcharge revenue, and the two expected bank deposits (cash-out + surcharge).",
+              "It arrives in the next slice (A-2b), wired to the automatic PAI pull once your real Simple Summary and Bank Deposits exports confirm the columns.",
+            ]}
+          />
+        ) : (
+          <ComingSoon
+            title="Cash Loads"
+            lines={[
+              "This tab will track the physical cash you load into terminal HG26499 (pulled automatically from PAI's Cash Load report) and show how much should be inside the machine right now.",
+              "It arrives in the next slice (A-2b).",
+            ]}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Health tab — connection/config (the only fully-built tab in A-2a)
+// ---------------------------------------------------------------------------
+
+function HealthTab({
+  conn,
+}: {
+  conn: Awaited<ReturnType<typeof getAtmConnection>>;
+}) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className={cardCls}>
+        <h2 className="mb-1 text-sm font-bold text-white">PAI Reports connection</h2>
+        <p className="mb-4 text-xs text-white/50">
+          Enter the login for your PAI Reports portal (paireports.com). Best practice: use a
+          <span className="font-semibold text-white/70"> read-only sub-user</span> from PAI support, not your main
+          owner login. Your password is encrypted before it is stored and is never shown back here.
+        </p>
+
+        <form action={saveAtmConnectionAction} className="space-y-4">
+          <div>
+            <label className={labelCls} htmlFor="portal_base_url">
+              Portal base URL
+            </label>
+            <input
+              id="portal_base_url"
+              name="portal_base_url"
+              className={inputCls}
+              defaultValue={conn.portalBaseUrl}
+              placeholder="https://paireports.com/myreports/"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelCls} htmlFor="terminal_id">
+                Terminal number
+              </label>
+              <input
+                id="terminal_id"
+                name="terminal_id"
+                className={inputCls}
+                defaultValue={conn.terminalId}
+                placeholder="HG26499"
+              />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="company_label">
+                Company / portfolio label
+              </label>
+              <input
+                id="company_label"
+                name="company_label"
+                className={inputCls}
+                defaultValue={conn.companyLabel}
+                placeholder="CASCADE GENERAL PARTNERS"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="pai_username">
+              PAI username
+            </label>
+            <input
+              id="pai_username"
+              name="pai_username"
+              className={inputCls}
+              autoComplete="off"
+              defaultValue=""
+              placeholder={conn.hasUsername ? `Saved (${conn.usernameHint}) — type to replace` : "you@example.com"}
+            />
+            {conn.hasUsername ? (
+              <p className="mt-1 text-xs text-white/40">A username is saved. Leave blank to keep it, or type a new one.</p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className={labelCls} htmlFor="pai_password">
+              PAI password
+            </label>
+            <input
+              id="pai_password"
+              name="pai_password"
+              type="password"
+              className={inputCls}
+              autoComplete="new-password"
+              placeholder={conn.hasPassword ? "•••••••• (saved) — type to replace" : "Enter password"}
+            />
+            <p className="mt-1 text-xs text-white/40">{passwordHint(conn.hasPassword)}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button type="submit" className={btnPrimary}>
+              Save connection
+            </button>
+          </div>
+        </form>
+
+        {conn.hasUsername || conn.hasPassword ? (
+          <form action={clearAtmCredentialsAction} className="mt-4 border-t border-white/10 pt-4">
+            <button type="submit" className={btnGhost}>
+              Clear saved credentials
+            </button>
+          </form>
+        ) : null}
+      </div>
+
+      <div className={cardCls}>
+        <h2 className="mb-1 text-sm font-bold text-white">Status</h2>
+        <dl className="divide-y divide-white/5 text-sm">
+          <Row label="Connection" value={conn.status === "ok" ? "Connected" : conn.status === "error" ? "Error" : "Not connected"} />
+          <Row label="Terminal" value={conn.terminalId || "—"} />
+          <Row label="Company" value={conn.companyLabel || "—"} />
+          <Row label="Portal" value={conn.portalBaseUrl} />
+          <Row label="Username on file" value={conn.hasUsername ? conn.usernameHint : "—"} />
+          <Row label="Password on file" value={conn.hasPassword ? "Yes (encrypted)" : "—"} />
+          <Row label="Last sync" value={conn.lastSyncAt || "Never"} />
+          <Row label="Last error" value={conn.lastError || "—"} />
+        </dl>
+        <p className="mt-4 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-white/50">
+          &ldquo;Test connection&rdquo; and the automatic daily pull will appear here in the next slice, once PAI issues
+          your read-only user and your real report exports confirm the exact columns.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <dt className="text-white/50">{label}</dt>
+      <dd className="truncate text-right font-medium text-white/80">{value}</dd>
+    </div>
+  );
+}
+
+function ComingSoon({ title, lines }: { title: string; lines: string[] }) {
+  return (
+    <div className={cardCls}>
+      <h2 className="mb-2 text-sm font-bold text-white">{title}</h2>
+      {lines.map((l, i) => (
+        <p key={i} className="mb-2 text-sm text-white/60">
+          {l}
+        </p>
+      ))}
+      <span className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/60">
+        Coming in the next slice
+      </span>
+    </div>
+  );
+}
