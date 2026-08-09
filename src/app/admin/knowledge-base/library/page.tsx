@@ -9,7 +9,11 @@ import {
 } from "@/lib/ai/kb/store";
 import { isAiConfigured } from "@/lib/ai/suggestions";
 import { buildStrainVocab } from "@/lib/ai/kb/strain-vocab-core";
-import { buildStrainTypeSuggestion, type StrainTypeSuggestion } from "@/lib/ai/kb/strain-type-suggest-core";
+import {
+  buildStrainTypeSuggestion,
+  type StrainTypeSuggestion,
+  type SuggestPoolRow,
+} from "@/lib/ai/kb/strain-type-suggest-core";
 import { strainTypeValues } from "@/lib/menu/strain-taxonomy";
 import { KbLibrary } from "../KbLibrary";
 import { KbFlash } from "../KbFlash";
@@ -35,9 +39,26 @@ export default async function KbLibraryPage({
   // both computed server-side from the verified seed + live terpene reference
   // so the big STRAINS_RICH dataset never ships to the client bundle.
   const vocab = buildStrainVocab(terpeneRows);
+
+  // Learn over time: fold the operator's OWN saved strains into the suggestion
+  // pool alongside the verified seed. Only ACTIVE, non-draft strains count, so
+  // hidden or half-reviewed rows never skew the "typical for this type" chips.
+  // Uses the strains we already loaded above — no extra DB query. De-dupe by
+  // slug happens inside buildStrainTypeSuggestion (a saved strain overrides its
+  // seed copy so nothing is counted twice).
+  const learnedRows: SuggestPoolRow[] = strains
+    .filter((s) => s.active === true && s.status !== "draft")
+    .map((s) => ({
+      slug: s.slug,
+      strain_type: s.strain_type,
+      terpenes: s.terpenes,
+      aroma_notes: s.aroma_notes,
+      flavor_notes: s.flavor_notes,
+    }));
+
   const strainTypeSuggestions: Record<string, StrainTypeSuggestion> = {};
   for (const t of strainTypeValues) {
-    strainTypeSuggestions[t] = buildStrainTypeSuggestion(t);
+    strainTypeSuggestions[t] = buildStrainTypeSuggestion(t, { extraRows: learnedRows });
   }
 
   return (
