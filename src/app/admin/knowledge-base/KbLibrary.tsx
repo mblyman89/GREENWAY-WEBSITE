@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { KbStrainFull, KbProductCategoryRow } from "@/lib/ai/kb/store";
+import type { StrainVocab } from "@/lib/ai/kb/strain-vocab-core";
+import type { StrainTypeSuggestion } from "@/lib/ai/kb/strain-type-suggest-core";
 import { StrainEditor } from "./StrainEditor";
 import { ProductCategoryEditor } from "./ProductCategoryEditor";
 
@@ -21,12 +23,18 @@ export function KbLibrary({
   strainsTotal,
   productCategories,
   productCategoriesMigrated,
+  vocab,
+  strainTypeSuggestions,
+  aiEnabled,
 }: {
   strains: KbStrainFull[];
   strainsMigrated: boolean;
   strainsTotal: number;
   productCategories: KbProductCategoryRow[];
   productCategoriesMigrated: boolean;
+  vocab: StrainVocab;
+  strainTypeSuggestions: Record<string, StrainTypeSuggestion>;
+  aiEnabled: boolean;
 }) {
   const [view, setView] = useState<View>("strains");
 
@@ -68,6 +76,9 @@ export function KbLibrary({
           strains={strains}
           migrated={strainsMigrated}
           total={strainsTotal}
+          vocab={vocab}
+          strainTypeSuggestions={strainTypeSuggestions}
+          aiEnabled={aiEnabled}
         />
       ) : (
         <ProductCategoryEditor

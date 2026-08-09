@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/admin/ui/Button";
 import type { KbStrainFull } from "@/lib/ai/kb/store";
+import type { StrainVocab } from "@/lib/ai/kb/strain-vocab-core";
+import type { StrainTypeSuggestion } from "@/lib/ai/kb/strain-type-suggest-core";
+import { houseSuggestedSourceTag } from "@/lib/ai/kb/strain-type-suggest-core";
 import { upsertStrainAction, toggleStrainAction } from "./actions";
 import {
   strainTypeDefinitions,
@@ -11,6 +14,11 @@ import {
 } from "@/lib/menu/strain-taxonomy";
 import { scoreStrain } from "@/lib/ai/kb/quality";
 import { QualityBadge } from "./QualityBadge";
+import { TermMultiSelect } from "./TermMultiSelect";
+import { StrainLookupPanel } from "./StrainLookupPanel";
+import type { StrainLookupActionResult } from "./strain-lookup-actions";
+
+type LookupOk = Extract<StrainLookupActionResult, { ok: true }>;
 
 // Canonical strain-type options for the staff dropdown. Sourced from the single
 // taxonomy so the leaning hybrids (Indica-Hybrid / Sativa-Hybrid) stay in sync
@@ -88,13 +96,25 @@ export function StrainEditor({
   strains,
   migrated,
   total,
+  vocab,
+  strainTypeSuggestions,
+  aiEnabled,
 }: {
   strains: KbStrainFull[];
   migrated: boolean;
   total: number;
+  vocab: StrainVocab;
+  strainTypeSuggestions: Record<string, StrainTypeSuggestion>;
+  aiEnabled: boolean;
 }) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The strain name the look-up panel should start from (set when you click
+  // "Enrich with Gemini" on a row so it targets that exact strain).
+  const [lookupSeed, setLookupSeed] = useState("");
+  // Auto-run trigger for the look-up panel (Enrich-in-place). Bumping the key
+  // remounts the panel with the seeded name so it re-runs cleanly.
+  const [lookupKey, setLookupKey] = useState(0);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   // Two independent terpene checkboxes ("Has terpenes" / "No terpenes"). When
@@ -108,6 +128,44 @@ export function StrainEditor({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // Change handler for the three sensory list fields (terpenes / aroma / flavor).
+  // If the new value contains any term that is a house-suggested (type-typical)
+  // value from the chips, we honestly tag `sources` with
+  // "house-suggested (<type> typical)" so the provenance is auditable and never
+  // silently passed off as a real finding. The tag is added once (de-duped) and
+  // is removed again if no house-suggested terms remain selected across all
+  // three fields.
+  function setListWithHouseTag(key: "terpenes" | "aroma_notes" | "flavor_notes", value: string) {
+    setForm((f) => {
+      const next = { ...f, [key]: value };
+      if (!suggestion || !acceptedHouseTag) return next;
+      const suggested = new Set(
+        [
+          ...suggestion.terpenes,
+          ...suggestion.aromaNotes,
+          ...suggestion.flavorNotes,
+        ].map((t) => t.toLowerCase()),
+      );
+      const anySuggestedSelected = (["terpenes", "aroma_notes", "flavor_notes"] as const)
+        .flatMap((k) => next[k].split(",").map((s) => s.trim().toLowerCase()))
+        .filter(Boolean)
+        .some((t) => suggested.has(t));
+      const currentSources = next.sources
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const hasTag = currentSources.some((s) => s.toLowerCase() === acceptedHouseTag.toLowerCase());
+      if (anySuggestedSelected && !hasTag) {
+        next.sources = [...currentSources, acceptedHouseTag].join(", ");
+      } else if (!anySuggestedSelected && hasTag) {
+        next.sources = currentSources
+          .filter((s) => s.toLowerCase() !== acceptedHouseTag.toLowerCase())
+          .join(", ");
+      }
+      return next;
+    });
+  }
+
   function startEdit(s: KbStrainFull) {
     setForm(rowToForm(s));
     setEditingId(s.id);
@@ -119,7 +177,94 @@ export function StrainEditor({
   function reset() {
     setForm(EMPTY);
     setEditingId(null);
+    setLookupSeed("");
   }
+
+  // Merge two comma-lists (existing + found), de-duped case-insensitively,
+  // keeping the operator's existing picks first so a look-up never deletes work.
+  function mergeCsv(existing: string, found: string[]): string {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const push = (raw: string) => {
+      const t = raw.trim();
+      if (!t) return;
+      const key = t.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(t);
+    };
+    existing
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach(push);
+    found.forEach(push);
+    return out.join(", ");
+  }
+
+  // Fill the form from a Gemini look-up. We only fill EMPTY scalar fields (so we
+  // never clobber something you already typed or a row you're editing) and MERGE
+  // the list fields. The name always reflects what was searched. Everything is
+  // then yours to review/edit before you press Add strain — nothing is saved.
+  function fillFromLookup(r: LookupOk) {
+    setForm((f) => {
+      const fillScalar = (current: string, next: string) =>
+        current.trim() ? current : next;
+      return {
+        ...f,
+        name: f.name.trim() ? f.name : r.strainName,
+        strain_type:
+          f.strain_type && f.strain_type !== "hybrid"
+            ? f.strain_type
+            : r.strainType !== "unknown"
+              ? r.strainType
+              : f.strain_type,
+        lineage: fillScalar(f.lineage, r.lineage),
+        aliases: mergeCsv(f.aliases, r.aliases),
+        terpenes: mergeCsv(f.terpenes, r.terpenes),
+        aroma_notes: mergeCsv(f.aroma_notes, r.aromaNotes),
+        flavor_notes: mergeCsv(f.flavor_notes, r.flavorNotes),
+        dominant_cannabinoid: fillScalar(f.dominant_cannabinoid, r.dominantCannabinoid),
+        potency_note: fillScalar(f.potency_note, r.potencyNote),
+        bud_structure: fillScalar(f.bud_structure, r.budStructure),
+        origin: fillScalar(f.origin, r.origin),
+        summary: fillScalar(f.summary, r.summary),
+        // Record real Gemini sources for provenance (merged, de-duped).
+        sources: mergeCsv(f.sources, r.sources),
+        confidence:
+          f.confidence.trim()
+            ? f.confidence
+            : r.confidence > 0
+              ? (r.confidence / 100).toFixed(2)
+              : f.confidence,
+      };
+    });
+    if (typeof document !== "undefined") {
+      document.getElementById("strain-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  // "Enrich with Gemini" on a row: load that strain into the form, then seed +
+  // trigger the look-up panel so it searches for that exact strain name.
+  function enrichRow(s: KbStrainFull) {
+    setForm(rowToForm(s));
+    setEditingId(s.id);
+    setLookupSeed(s.name);
+    setLookupKey((k) => k + 1);
+    if (typeof document !== "undefined") {
+      document.getElementById("strain-lookup")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  // The house-suggested chips for the CURRENTLY selected strain type (computed
+  // server-side; empty for CBD/unknown). These are one-tap adds, never
+  // pre-selected — the honest, WA-safe prefill for fields Gemini couldn't fill.
+  // Plain derived value (no useMemo): a single map lookup, and the React
+  // Compiler memoizes it for us. Using useMemo here tripped
+  // react-hooks/preserve-manual-memoization because we index by a field of the
+  // `form` object.
+  const suggestion = strainTypeSuggestions[canonicalStrainType(form.strain_type)];
+  const acceptedHouseTag = suggestion ? houseSuggestedSourceTag(suggestion.type) : "";
 
   // Type filter.
   //
@@ -198,6 +343,17 @@ export function StrainEditor({
         them. Brand info isn&apos;t here — that lives on the Vendors page.
       </p>
 
+      {/* Gemini strain look-up — one job: find strain info and fill the form
+          below for review. Nothing saves here. */}
+      <div id="strain-lookup" className="mt-4 scroll-mt-24">
+        <StrainLookupPanel
+          key={lookupKey}
+          aiEnabled={aiEnabled}
+          initialName={lookupSeed}
+          onFill={(r) => fillFromLookup(r)}
+        />
+      </div>
+
       {/* The form posts to the server action. State is controlled so we can pre-fill on edit. */}
       <form id="strain-form" action={upsertStrainAction} className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
@@ -258,37 +414,38 @@ export function StrainEditor({
             placeholder="e.g. bluedream, blue dream haze"
           />
         </label>
-        <label className="text-sm">
-          <span className={labelCls}>Dominant terpenes (comma-separated)</span>
-          <input
-            name="terpenes"
-            value={form.terpenes}
-            onChange={(e) => set("terpenes", e.target.value)}
-            className={inputCls}
-            placeholder="e.g. myrcene, pinene, caryophyllene"
-          />
-        </label>
+        <TermMultiSelect
+          name="terpenes"
+          label="Dominant terpenes"
+          value={form.terpenes}
+          onChange={(v) => setListWithHouseTag("terpenes", v)}
+          options={vocab.terpenes}
+          suggestions={suggestion?.terpenes ?? []}
+          datalistId="dl-terpenes"
+          placeholder="Type or pick a terpene…"
+        />
 
-        <label className="text-sm">
-          <span className={labelCls}>Aroma notes (comma-separated, sensory only)</span>
-          <input
-            name="aroma_notes"
-            value={form.aroma_notes}
-            onChange={(e) => set("aroma_notes", e.target.value)}
-            className={inputCls}
-            placeholder="e.g. berry, sweet, herbal"
-          />
-        </label>
-        <label className="text-sm">
-          <span className={labelCls}>Flavor notes (comma-separated, sensory only)</span>
-          <input
-            name="flavor_notes"
-            value={form.flavor_notes}
-            onChange={(e) => set("flavor_notes", e.target.value)}
-            className={inputCls}
-            placeholder="e.g. blueberry, sweet, vanilla"
-          />
-        </label>
+        <TermMultiSelect
+          name="aroma_notes"
+          label="Aroma notes (sensory only)"
+          value={form.aroma_notes}
+          onChange={(v) => setListWithHouseTag("aroma_notes", v)}
+          options={vocab.aromaNotes}
+          suggestions={suggestion?.aromaNotes ?? []}
+          datalistId="dl-aroma"
+          placeholder="Type or pick an aroma…"
+        />
+
+        <TermMultiSelect
+          name="flavor_notes"
+          label="Flavor notes (sensory only)"
+          value={form.flavor_notes}
+          onChange={(v) => setListWithHouseTag("flavor_notes", v)}
+          options={vocab.flavorNotes}
+          suggestions={suggestion?.flavorNotes ?? []}
+          datalistId="dl-flavor"
+          placeholder="Type or pick a flavor…"
+        />
 
         <label className="text-sm">
           <span className={labelCls}>Dominant cannabinoid</span>
@@ -584,6 +741,16 @@ export function StrainEditor({
                         >
                           Edit
                         </button>
+                        {aiEnabled ? (
+                          <button
+                            type="button"
+                            onClick={() => enrichRow(s)}
+                            className="text-xs text-[var(--admin-accent)] hover:underline"
+                            title="Load this strain into the form and look it up with Gemini"
+                          >
+                            Enrich with Gemini
+                          </button>
+                        ) : null}
                         <form action={toggleStrainAction}>
                           <input type="hidden" name="id" value={s.id} />
                           <input type="hidden" name="active" value={(!s.active).toString()} />

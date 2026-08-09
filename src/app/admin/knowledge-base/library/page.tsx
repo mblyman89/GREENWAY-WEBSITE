@@ -5,7 +5,12 @@ import {
   getKbCounts,
   listKbStrainsFull,
   listKbProductCategoriesAll,
+  listKbTerpenesFull,
 } from "@/lib/ai/kb/store";
+import { isAiConfigured } from "@/lib/ai/suggestions";
+import { buildStrainVocab } from "@/lib/ai/kb/strain-vocab-core";
+import { buildStrainTypeSuggestion, type StrainTypeSuggestion } from "@/lib/ai/kb/strain-type-suggest-core";
+import { strainTypeValues } from "@/lib/menu/strain-taxonomy";
 import { KbLibrary } from "../KbLibrary";
 import { KbFlash } from "../KbFlash";
 
@@ -19,11 +24,21 @@ export default async function KbLibraryPage({
   await requirePermission("products.enrich");
   const { msg, error } = await searchParams;
 
-  const [counts, strains, productCategories] = await Promise.all([
+  const [counts, strains, productCategories, terpeneRows] = await Promise.all([
     getKbCounts(),
     listKbStrainsFull(2500),
     listKbProductCategoriesAll(500),
+    listKbTerpenesFull(500),
   ]);
+
+  // Smart-selector vocab (terpenes/aroma/flavor) + per-type house suggestions,
+  // both computed server-side from the verified seed + live terpene reference
+  // so the big STRAINS_RICH dataset never ships to the client bundle.
+  const vocab = buildStrainVocab(terpeneRows);
+  const strainTypeSuggestions: Record<string, StrainTypeSuggestion> = {};
+  for (const t of strainTypeValues) {
+    strainTypeSuggestions[t] = buildStrainTypeSuggestion(t);
+  }
 
   return (
     <div>
@@ -47,6 +62,9 @@ export default async function KbLibraryPage({
           strainsTotal={counts.strains}
           productCategories={productCategories}
           productCategoriesMigrated={productCategories.length > 0}
+          vocab={vocab}
+          strainTypeSuggestions={strainTypeSuggestions}
+          aiEnabled={isAiConfigured}
         />
       </div>
     </div>

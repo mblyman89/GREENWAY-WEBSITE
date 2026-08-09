@@ -203,6 +203,12 @@ import { __runKbNotesTests } from "../../src/lib/ai/kb/kb-notes-core";
 import { __runProductImageEditTests } from "../../src/lib/ai/kb/product-images-core";
 import { __runProductResearchCoreTests } from "../../src/lib/enrichment/research-core";
 import { __runEnrichmentLookupQueryCoreTests } from "../../src/lib/enrichment/lookup-query-core";
+// strain-lookup-core imports the server-only compliance module (like
+// product-lookup-core), so it is NOT run here; its self-tests run via
+// tests/compliance/strain-lookup-core.test.ts. strain-type-suggest-core is
+// pure (only the strains-data seed + taxonomy) and runs here.
+import { __runStrainTypeSuggestCoreTests } from "../../src/lib/ai/kb/strain-type-suggest-core";
+import { __runStrainVocabCoreTests } from "../../src/lib/ai/kb/strain-vocab-core";
 import { __runWebauthnCoreTests } from "../../src/lib/auth/webauthn-core";
 import { __runNormalizeTests } from "../../src/lib/cms/email-events/normalize-core";
 import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
@@ -466,6 +472,8 @@ async function main() {
   assertNoFailures("product-image-edit", __runProductImageEditTests());
   __runProductResearchCoreTests();
   __runEnrichmentLookupQueryCoreTests();
+  __runStrainTypeSuggestCoreTests();
+  __runStrainVocabCoreTests();
   assertNoFailures("webauthn-core", __runWebauthnCoreTests());
   __runNormalizeTests();
   __runVerifyTests();
