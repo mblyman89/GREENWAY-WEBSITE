@@ -19,6 +19,8 @@ import {
   parseImageDraftLines,
   RESEARCH_IMAGES_FIELD,
 } from "@/lib/enrichment/research-core";
+import { buildEnrichmentLookupQuery } from "@/lib/enrichment/lookup-query-core";
+import { EnrichmentAiLookupPanel } from "./EnrichmentAiLookupPanel";
 import {
   updateProductEnrichment,
   setEnrichmentStatus,
@@ -76,6 +78,15 @@ export default async function ProductEditorPage({
   const suggestions = allSuggestions.filter((s) => s.field_key !== RESEARCH_IMAGES_FIELD);
   const crawlerOn = isCrawlerConfigured();
   const searchUrl = buildWebSearchUrl(item.name, item.brand_name);
+  // SLICE 78 \u2014 the in-page Gemini look-up starts from a sharpened query:
+  // brand + name + strain + category (blanks skipped, dupes de-duped). The
+  // operator can edit it before running; nothing runs until they click.
+  const lookupQuery = buildEnrichmentLookupQuery({
+    name: item.name ?? "",
+    brand: item.brand_name ?? "",
+    category: item.category ?? "",
+    strainName: item.strain_name ?? "",
+  });
   const center = await getEnrichmentCommandCenter({ item });
   // SLICE 75 — the guidance panel is permanent; this flips it to its green
   // "fully enriched" state when every checklist row is done.
@@ -462,6 +473,34 @@ export default async function ProductEditorPage({
           </div>
         )}
 
+        {/* SLICE 78 — Gemini AI product look-up (drafts only). Sits ABOVE the
+            crawl4ai box: Gemini finds product + strain info AND the source URLs;
+            a "Deep-read →" button hands any source straight to the crawler below
+            (#research-url) so you never hunt a URL by hand. */}
+        <div id="lookup" className="scroll-mt-24 rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
+          <p className="text-sm font-semibold text-[var(--admin-gold)]">
+            AI product look-up (Gemini) {isAiConfigured ? "" : "(disabled)"}
+          </p>
+          <p className="mt-1 text-[11px] text-white/45">
+            Ask Gemini to research this product and its strain from the live web. Everything it finds
+            arrives as an editable draft worksheet — keep what&apos;s right, discard the rest, then save.
+            Nothing is applied automatically, and it never runs until you click. Great for Cultivera
+            imports that skipped receiving. You can also point it at a specific strain name to pull in
+            terpene &amp; aroma richness (adds the colorful pills to the product page — even for edibles).
+          </p>
+          <div className="mt-3">
+            <EnrichmentAiLookupPanel
+              productKey={key}
+              productName={item.name ?? ""}
+              vendorOrBrand={item.brand_name ?? ""}
+              initialQuery={lookupQuery}
+              aiEnabled={isAiConfigured}
+              crawlerInputId="research-url"
+              crawlerAnchorId="research"
+            />
+          </div>
+        </div>
+
         {/* SLICE 74 — deep product web research (GPT + crawl4ai, drafts only) */}
         <div id="research" className="scroll-mt-24 rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -489,6 +528,7 @@ export default async function ProductEditorPage({
               <input type="hidden" name="key" value={key} />
               <input type="hidden" name="posName" value={item.name} />
               <input
+                id="research-url"
                 name="url"
                 type="url"
                 required
