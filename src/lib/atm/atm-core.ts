@@ -235,11 +235,11 @@ export type SettlementRow = {
   terminalId: string;
   settlementDate: string; // ISO yyyy-mm-dd
   totalTrx: number | null;
-  withdrawalTrx: number | null; // WO Trxs
-  surchargedWdTrx: number | null; // Surch WDs
-  terminalTransactionCents: number | null; // vault cash leg (from Settlement/interchange)
-  surchargeCents: number | null; // fee revenue (Surch)
-  settlementTotalCents: number | null; // Settlement column
+  withdrawalTrx: number | null; // "WD Trxs"
+  surchargedWdTrx: number | null; // "Surcharge WDs"
+  terminalTransactionCents: number | null; // vault-cash deposit leg (from FundsMovement "Transaction")
+  surchargeCents: number | null; // fee revenue ("Surch", or FundsMovement "Surcharge")
+  settlementTotalCents: number | null; // "Settlement" column (Simple Summary only)
   raw: Record<string, string>;
 };
 
@@ -308,12 +308,16 @@ export function mapCashLoadCsv(csv: string): MapResult<CashLoadRow> {
 }
 
 // ---------------------------------------------------------------------------
-// Mapper: Simple Summary Report → SettlementRow[]  (fee/surcharge by settlement date)
-// Verified columns (Detail=Low):
-//   Terminal | Location | Settlement Date | Total Trxs | WO Trxs | Surch WDs | Surch | Settlement
-// NOTE: the vault-cash (terminal_transaction) leg is best confirmed against the
-// Bank Deposits report; here we capture Surch (fee) + Settlement precisely and
-// leave terminalTransactionCents null unless a clearly-named column is present.
+// Mapper: Simple Summary / Terminal Trx Data → SettlementRow[]
+//   (transaction counts + surcharge & settlement totals by settlement date)
+// CONFIRMED columns from Michael's REAL export (TerminalTrxData-*.csv):
+//   Terminal | Location | Settlement Date | Total Trxs | WD Trxs | Surcharge WDs | Surch | Settlement
+// (The PAI portal reference had earlier GUESSED "WO Trxs"/"Surch WDs"; the real
+//  labels are "WD Trxs" and "Surcharge WDs". We accept both, real first.)
+// NOTE: this report does NOT carry the vault-cash (terminal_transaction) deposit
+// leg. That leg is the deposit-side truth from the FundsMovement report
+// (Settlement Type = "Transaction"); see mapFundsMovementCsv below. So we leave
+// terminalTransactionCents null here and capture Surch (fee) + Settlement total.
 // ---------------------------------------------------------------------------
 export function mapSimpleSummaryCsv(csv: string): MapResult<SettlementRow> {
   const table = parseCsv(csv);
@@ -326,8 +330,10 @@ export function mapSimpleSummaryCsv(csv: string): MapResult<SettlementRow> {
   const iTerminal = pickColumn(map, ["terminal", "terminalnumber", "terminalid"]);
   const iDate = pickColumn(map, ["settlementdate", "settlement", "date"]);
   const iTotal = pickColumn(map, ["totaltrxs", "totaltrx", "totaltransactions"]);
-  const iWo = pickColumn(map, ["wotrxs", "wotrx", "withdrawaltrxs"]);
-  const iSurchWd = pickColumn(map, ["surchwds", "surchargedwds", "surchwd"]);
+  // "WD Trxs" (real) -> "wdtrxs"; legacy-guessed "WO Trxs" -> "wotrxs" kept as fallback.
+  const iWo = pickColumn(map, ["wdtrxs", "wdtrx", "wotrxs", "wotrx", "withdrawaltrxs"]);
+  // "Surcharge WDs" (real) -> "surchargewds"; legacy-guessed "Surch WDs" -> "surchwds".
+  const iSurchWd = pickColumn(map, ["surchargewds", "surchargewd", "surchwds", "surchargedwds", "surchwd"]);
   const iSurch = pickColumn(map, ["surch", "surcharge", "surchargeamount"]);
   // The amount column is labeled just "Settlement" (normalizes to "settlement").
   // The date column is "Settlement Date" (normalizes to "settlementdate"), so
@@ -370,6 +376,146 @@ export function mapSimpleSummaryCsv(csv: string): MapResult<SettlementRow> {
       surchargeCents: iSurch >= 0 ? dollarsToCents(cells[iSurch]) : null,
       settlementTotalCents: iSettlement >= 0 ? dollarsToCents(cells[iSettlement]) : null,
       raw: rowObject(header, cells),
+    });
+  }
+  return { rows, problems };
+}
+
+// ---------------------------------------------------------------------------
+// Mapper: FundsMovement By Account By Day → grouped deposit legs
+//   (the DEPOSIT-SIDE TRUTH; PAI's equivalent of the "Bank Deposits" report)
+// CONFIRMED columns from Michael's REAL export (FundsMovementByAccountByDay-*.csv):
+//   Market Partner Code | Market Partner | Acct # | Group | Location |
+//   Settlement Date | Terminal | Settlement Type | Amount
+//
+// LONG/tidy format: one row per money leg, and there can be MULTIPLE rows per
+// (Settlement Date, Terminal) for the SAME Settlement Type. "Settlement Type" is
+// one of {"Transaction", "Surcharge"}:
+//   • Transaction = the vault-cash re-deposit the bank receives  → terminalTransactionCents
+//   • Surcharge   = the fee revenue (Michael keeps 100%)         → surchargeCents
+// The bank posts these as TWO SEPARATE deposits per settlement (Michael's Q5).
+//
+// We GROUP by (settlementDate, terminalId) and SUM each leg, so the result is one
+// FundsMovementRow per settlement day carrying both expected deposit legs. Rows
+// are returned sorted by (date, terminal) for stable output. Unknown Settlement
+// Type values are recorded as problems and skipped — we never guess.
+// ---------------------------------------------------------------------------
+
+export type FundsMovementRow = {
+  terminalId: string;
+  settlementDate: string; // ISO yyyy-mm-dd
+  terminalTransactionCents: number | null; // summed "Transaction" legs
+  surchargeCents: number | null; // summed "Surcharge" legs
+  accountTail: string | null; // masked bank account (e.g. "******6228") if present
+  legCount: number; // how many source rows folded into this group
+};
+
+/** Classify a "Settlement Type" cell into a known leg, or null if unrecognized. */
+export function classifyFundsMovementLeg(
+  settlementType: string | null | undefined,
+): "transaction" | "surcharge" | null {
+  const s = normalizeHeader(settlementType ?? "");
+  if (s === "transaction" || s === "transactions" || s === "txn" || s === "trx") return "transaction";
+  if (s === "surcharge" || s === "surcharges" || s === "surch") return "surcharge";
+  return null;
+}
+
+export function mapFundsMovementCsv(csv: string): MapResult<FundsMovementRow> {
+  const table = parseCsv(csv);
+  const problems: MapProblem[] = [];
+  const rows: FundsMovementRow[] = [];
+  if (table.length === 0) return { rows, problems };
+
+  const header = table[0];
+  const map = headerIndex(header);
+  const iTerminal = pickColumn(map, ["terminal", "terminalnumber", "terminalid"]);
+  const iDate = pickColumn(map, ["settlementdate", "date"]);
+  const iType = pickColumn(map, ["settlementtype", "type", "movementtype"]);
+  const iAmount = pickColumn(map, ["amount", "amt", "settlement"]);
+  const iAcct = pickColumn(map, ["acct", "acctnumber", "account", "accountnumber"]);
+
+  if (iTerminal < 0 || iDate < 0 || iType < 0 || iAmount < 0) {
+    problems.push({
+      row: 0,
+      message:
+        "funds-movement CSV missing required column(s): need Terminal, Settlement Date, Settlement Type and Amount",
+    });
+    return { rows, problems };
+  }
+
+  // Accumulate legs into a keyed group; preserve first-seen order for stability.
+  type Group = {
+    terminalId: string;
+    settlementDate: string;
+    txnCents: number | null;
+    surchargeCents: number | null;
+    accountTail: string | null;
+    legCount: number;
+    order: number;
+  };
+  const groups = new Map<string, Group>();
+  let seq = 0;
+
+  for (let r = 1; r < table.length; r += 1) {
+    const cells = table[r];
+    if (cells.length === 1 && cells[0].trim() === "") continue; // blank line
+    const terminalId = (cells[iTerminal] ?? "").trim();
+    const settlementDate = parseUsDate(cells[iDate]);
+    if (!terminalId) {
+      problems.push({ row: r, message: "missing terminal id" });
+      continue;
+    }
+    if (!settlementDate) {
+      problems.push({ row: r, message: `unparseable Settlement Date: "${cells[iDate] ?? ""}"` });
+      continue;
+    }
+    const leg = classifyFundsMovementLeg(cells[iType]);
+    if (leg === null) {
+      problems.push({
+        row: r,
+        message: `unrecognized Settlement Type: "${(cells[iType] ?? "").trim()}"`,
+      });
+      continue;
+    }
+    const amountCents = dollarsToCents(cells[iAmount]);
+    if (amountCents === null) {
+      problems.push({ row: r, message: `unparseable Amount: "${cells[iAmount] ?? ""}"` });
+      continue;
+    }
+
+    const key = `${settlementDate}\u0000${terminalId}`;
+    let g = groups.get(key);
+    if (!g) {
+      seq += 1;
+      g = {
+        terminalId,
+        settlementDate,
+        txnCents: null,
+        surchargeCents: null,
+        accountTail: iAcct >= 0 ? (cells[iAcct] ?? "").trim() || null : null,
+        legCount: 0,
+        order: seq,
+      };
+      groups.set(key, g);
+    }
+    if (leg === "transaction") g.txnCents = (g.txnCents ?? 0) + amountCents;
+    else g.surchargeCents = (g.surchargeCents ?? 0) + amountCents;
+    g.legCount += 1;
+  }
+
+  const ordered = Array.from(groups.values()).sort((a, b) => {
+    if (a.settlementDate !== b.settlementDate) return a.settlementDate < b.settlementDate ? -1 : 1;
+    if (a.terminalId !== b.terminalId) return a.terminalId < b.terminalId ? -1 : 1;
+    return a.order - b.order;
+  });
+  for (const g of ordered) {
+    rows.push({
+      terminalId: g.terminalId,
+      settlementDate: g.settlementDate,
+      terminalTransactionCents: g.txnCents,
+      surchargeCents: g.surchargeCents,
+      accountTail: g.accountTail,
+      legCount: g.legCount,
     });
   }
   return { rows, problems };
@@ -484,37 +630,99 @@ export function __runAtmCoreTests(): void {
   expect("int blank → null", toIntOrNull("") === null);
   expect("int garbage → null", toIntOrNull("12x") === null);
 
-  // --- mapCashLoadCsv (verified columns) ---
+  // --- mapCashLoadCsv (CONFIRMED real headers: quoted "$2,360" whole-dollars) ---
+  // Header + rows mirror Michael's real ATMCashLoadReport-*.csv export exactly.
   const loadCsv =
-    "Terminal Number,Location,Group,Trx Time,Cash Load,Balance\r\n" +
-    'HG26499,CASCADE GENERAL PARTNERS,,08/01/2026 9:54:19 AM,"$2,000.00","$1,800.00"\r\n';
+    '"Terminal Number","Location","Group","Trx Time","Cash Load","Balance"\r\n' +
+    '"HG26499","CASCADE GENERAL PARTNERS","","8/8/26 8:49:11 PM","$2,360","$3,080"\r\n';
   const lr = mapCashLoadCsv(loadCsv);
   expect("cashload: 1 row, 0 problems", lr.rows.length === 1 && lr.problems.length === 0);
   expect("cashload: terminal", lr.rows[0].terminalId === "HG26499");
-  expect("cashload: cents", lr.rows[0].cashLoadCents === 200000);
-  expect("cashload: balance cents", lr.rows[0].balanceAfterCents === 180000);
-  expect("cashload: date", lr.rows[0].loadDate === "2026-08-01");
+  expect("cashload: cents", lr.rows[0].cashLoadCents === 236000);
+  expect("cashload: balance cents", lr.rows[0].balanceAfterCents === 308000);
+  expect("cashload: date (M/D/YY)", lr.rows[0].loadDate === "2026-08-08");
+  expect("cashload: keeps raw Trx Time", lr.rows[0].loadedAtRaw === "8/8/26 8:49:11 PM");
   const lrBad = mapCashLoadCsv("Location,Group\r\nx,y\r\n");
   expect("cashload: missing cols → problem", lrBad.rows.length === 0 && lrBad.problems.length === 1);
 
-  // --- mapSimpleSummaryCsv (verified columns) ---
+  // --- mapSimpleSummaryCsv (CONFIRMED real headers: "WD Trxs" / "Surcharge WDs") ---
+  // Header + row mirror Michael's real TerminalTrxData-*.csv export exactly.
   const sumCsv =
-    "Terminal,Location,Settlement Date,Total Trxs,WO Trxs,Surch WDs,Surch,Settlement\r\n" +
-    'HG26499,CASCADE GENERAL PARTNERS,08/05/2026,61,58,58,"$145.00","$5,000.00"\r\n';
+    '"Terminal","Location","Settlement Date","Total Trxs","WD Trxs","Surcharge WDs","Surch","Settlement"\r\n' +
+    '"HG26499","CASCADE GENERAL PARTNERS","8/2/26","114","96","96","$240.00","$9,020.00"\r\n';
   const sr = mapSimpleSummaryCsv(sumCsv);
   expect("summary: 1 row, 0 problems", sr.rows.length === 1 && sr.problems.length === 0);
-  expect("summary: date", sr.rows[0].settlementDate === "2026-08-05");
-  expect("summary: total trx", sr.rows[0].totalTrx === 61);
-  expect("summary: wo trx", sr.rows[0].withdrawalTrx === 58);
-  expect("summary: surch wd", sr.rows[0].surchargedWdTrx === 58);
-  expect("summary: surch cents", sr.rows[0].surchargeCents === 14500);
-  expect("summary: settlement cents", sr.rows[0].settlementTotalCents === 500000);
-  expect("summary: txn leg null (confirm via Bank Deposits)", sr.rows[0].terminalTransactionCents === null);
+  expect("summary: date", sr.rows[0].settlementDate === "2026-08-02");
+  expect("summary: total trx", sr.rows[0].totalTrx === 114);
+  expect("summary: WD trx (real 'WD Trxs')", sr.rows[0].withdrawalTrx === 96);
+  expect("summary: surcharge WD (real 'Surcharge WDs')", sr.rows[0].surchargedWdTrx === 96);
+  expect("summary: surch cents", sr.rows[0].surchargeCents === 24000);
+  expect("summary: settlement cents", sr.rows[0].settlementTotalCents === 902000);
+  expect(
+    "summary: txn leg null here (comes from FundsMovement 'Transaction')",
+    sr.rows[0].terminalTransactionCents === null,
+  );
+
+  // Backward-compatible: still parses the legacy-guessed labels ("WO Trxs"/"Surch WDs").
+  const srLegacy = mapSimpleSummaryCsv(
+    "Terminal,Location,Settlement Date,Total Trxs,WO Trxs,Surch WDs,Surch,Settlement\r\n" +
+      'HG26499,CASCADE,8/2/26,114,96,96,"$240.00","$9,020.00"\r\n',
+  );
+  expect(
+    "summary: legacy labels still map WD/Surch",
+    srLegacy.rows[0].withdrawalTrx === 96 && srLegacy.rows[0].surchargedWdTrx === 96,
+  );
 
   // Idempotent-friendly: two identical rows both parse (dedupe is the store's job
   // via the unique index; the mapper is faithful to the source).
-  const sr2 = mapSimpleSummaryCsv(sumCsv + 'HG26499,CASCADE,08/05/2026,61,58,58,"$145.00","$5,000.00"\r\n');
+  const sr2 = mapSimpleSummaryCsv(sumCsv + '"HG26499","CASCADE","8/2/26","114","96","96","$240.00","$9,020.00"\r\n');
   expect("summary: faithful to duplicate source rows", sr2.rows.length === 2);
+
+  // --- mapFundsMovementCsv (CONFIRMED real headers; deposit-side truth) ---
+  // Mirrors Michael's real FundsMovementByAccountByDay-*.csv: long format, one row
+  // per leg, MULTIPLE legs per (date, terminal). 7/2/26 has two "Transaction"
+  // rows ($4,980.00 + $100.00) and two "Surcharge" rows ($157.50 + $5.00), which
+  // must be SUMMED into a single grouped settlement row.
+  const fmHeader =
+    '"Market Partner Code","Market Partner","Acct #","Group","Location","Settlement Date","Terminal","Settlement Type","Amount"\r\n';
+  const fmCsv =
+    fmHeader +
+    '"02-110K804","American ATM Network","******6228","","CASCADE GENERAL PARTNERS","7/1/26","HG26499","Transaction","$3,860.00"\r\n' +
+    '"02-110K804","American ATM Network","******6228","","CASCADE GENERAL PARTNERS","7/1/26","HG26499","Surcharge","$120.00"\r\n' +
+    '"02-110K804","American ATM Network","******6228","","CASCADE GENERAL PARTNERS","7/2/26","HG26499","Transaction","$4,980.00"\r\n' +
+    '"02-110K804","American ATM Network","******6228","","CASCADE GENERAL PARTNERS","7/2/26","HG26499","Surcharge","$157.50"\r\n' +
+    '"02-110K804","American ATM Network","******6228","","CASCADE GENERAL PARTNERS","7/2/26","HG26499","Transaction","$100.00"\r\n' +
+    '"02-110K804","American ATM Network","******6228","","CASCADE GENERAL PARTNERS","7/2/26","HG26499","Surcharge","$5.00"\r\n';
+  const fm = mapFundsMovementCsv(fmCsv);
+  expect("funds: 2 grouped rows, 0 problems", fm.rows.length === 2 && fm.problems.length === 0);
+  // Sorted by date ascending: 7/1 first, 7/2 second.
+  expect("funds: 7/1 date", fm.rows[0].settlementDate === "2026-07-01");
+  expect("funds: 7/1 terminal", fm.rows[0].terminalId === "HG26499");
+  expect("funds: 7/1 txn leg", fm.rows[0].terminalTransactionCents === 386000);
+  expect("funds: 7/1 surcharge leg", fm.rows[0].surchargeCents === 12000);
+  expect("funds: 7/1 legCount 2", fm.rows[0].legCount === 2);
+  expect("funds: 7/1 account tail masked", fm.rows[0].accountTail === "******6228");
+  // 7/2 must SUM the two Transaction legs and the two Surcharge legs.
+  expect("funds: 7/2 txn summed ($4,980 + $100)", fm.rows[1].terminalTransactionCents === 508000);
+  expect("funds: 7/2 surcharge summed ($157.50 + $5.00)", fm.rows[1].surchargeCents === 16250);
+  expect("funds: 7/2 legCount 4", fm.rows[1].legCount === 4);
+
+  // Unknown Settlement Type is recorded as a problem and skipped (never guessed).
+  const fmUnknown = mapFundsMovementCsv(
+    fmHeader +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/3/26","HG26499","Chargeback","$10.00"\r\n',
+  );
+  expect(
+    "funds: unknown type → 0 rows, 1 problem",
+    fmUnknown.rows.length === 0 && fmUnknown.problems.length === 1,
+  );
+  // classifier is tolerant of case/spacing but strict on meaning.
+  expect("funds: classify Transaction", classifyFundsMovementLeg("Transaction") === "transaction");
+  expect("funds: classify Surcharge", classifyFundsMovementLeg(" surcharge ") === "surcharge");
+  expect("funds: classify unknown → null", classifyFundsMovementLeg("Interchange") === null);
+  // Missing required column → single header-level problem.
+  const fmBad = mapFundsMovementCsv("Market Partner,Amount\r\nx,$1.00\r\n");
+  expect("funds: missing cols → problem", fmBad.rows.length === 0 && fmBad.problems.length === 1);
 
   // --- bankPostingWindow (business-day math, weekend rollover) ---
   // 2026-08-05 is a Wednesday. +1 bday = Thu 08-06, +3 bday = Mon 08-10.
