@@ -57,13 +57,14 @@ export function validateResearchUrl(raw: string | null | undefined): ResearchUrl
 // ---------------------------------------------------------------------------
 
 /**
- * Pre-filled DuckDuckGo search for this product (brand + name). DDG is the
- * same keyless engine the crawler's discovery module uses — no account, no
- * API key, no tracking parameters.
+ * Pre-filled Google search for this product (brand + name). Opens the familiar
+ * Google results page in a new tab — the owner asked for Google here (the old
+ * DuckDuckGo tab looked unfamiliar). No account or API key needed; it's just a
+ * plain search URL the operator clicks to find the maker's own product page.
  */
 export function buildWebSearchUrl(name: string, brand?: string | null): string {
   const q = [brand ?? "", name].map((s) => s.trim()).filter(Boolean).join(" ").trim();
-  return "https://duckduckgo.com/?q=" + encodeURIComponent(q || "cannabis product");
+  return "https://www.google.com/search?q=" + encodeURIComponent(q || "cannabis product");
 }
 
 // ---------------------------------------------------------------------------
@@ -161,18 +162,18 @@ export function __runProductResearchCoreTests(): void {
   const norm = validateResearchUrl("HTTPS://Example.com/Path");
   ok(norm.ok && norm.url === "https://example.com/Path", "normalizes scheme/host case, keeps path case");
 
-  // Search link.
+  // Search link (Google).
   ok(
     buildWebSearchUrl("Grape Gas 3.5g", "Phat Panda") ===
-      "https://duckduckgo.com/?q=Phat%20Panda%20Grape%20Gas%203.5g",
+      "https://www.google.com/search?q=Phat%20Panda%20Grape%20Gas%203.5g",
     "search link: brand + name, URL-encoded",
   );
   ok(
-    buildWebSearchUrl("Blue Dream", null) === "https://duckduckgo.com/?q=Blue%20Dream",
+    buildWebSearchUrl("Blue Dream", null) === "https://www.google.com/search?q=Blue%20Dream",
     "search link: no brand → name only",
   );
   ok(
-    buildWebSearchUrl("   ", "") === "https://duckduckgo.com/?q=cannabis%20product",
+    buildWebSearchUrl("   ", "") === "https://www.google.com/search?q=cannabis%20product",
     "search link: blank inputs never build an empty query",
   );
 

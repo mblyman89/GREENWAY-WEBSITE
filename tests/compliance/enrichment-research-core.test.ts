@@ -42,12 +42,12 @@ describe("SLICE 74 — research-core (deep product web research)", () => {
     if (!r.ok) expect(r.reason.length).toBeGreaterThan(10);
   });
 
-  it("search link pre-fills brand + name, URL-encoded, never empty", () => {
+  it("search link pre-fills brand + name on Google, URL-encoded, never empty", () => {
     expect(buildWebSearchUrl("Grape Gas 3.5g", "Phat Panda")).toBe(
-      "https://duckduckgo.com/?q=Phat%20Panda%20Grape%20Gas%203.5g",
+      "https://www.google.com/search?q=Phat%20Panda%20Grape%20Gas%203.5g",
     );
-    expect(buildWebSearchUrl("Blue Dream", null)).toBe("https://duckduckgo.com/?q=Blue%20Dream");
-    expect(buildWebSearchUrl("   ", "")).toBe("https://duckduckgo.com/?q=cannabis%20product");
+    expect(buildWebSearchUrl("Blue Dream", null)).toBe("https://www.google.com/search?q=Blue%20Dream");
+    expect(buildWebSearchUrl("   ", "")).toBe("https://www.google.com/search?q=cannabis%20product");
   });
 
   it("packs image candidates: dedupes, drops junk and SVGs, caps the list", () => {
