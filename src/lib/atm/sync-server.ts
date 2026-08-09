@@ -42,6 +42,7 @@ import {
   upsertAtmCashLoads,
   setAtmSyncResult,
 } from "./store";
+import { pullAllPaiReports } from "./pai-client";
 
 export type IngestAtmCsvsInput = {
   /** ATM Cash Load Report CSV (Trx Time / Cash Load / Balance). */
@@ -124,23 +125,57 @@ export async function ingestAtmCsvs(
   return { ok, message, summary, error: writeError ?? undefined };
 }
 
+export type LiveSyncResult =
+  | { ok: true; message: string; summary: IngestSummary }
+  | { ok: false; error: string; summary?: IngestSummary };
+
 /**
- * Automatic live pull from PAI. HONEST STUB.
+ * Automatic live pull from PAI (Slice A-2c-2).
  *
- * The exact PAI live-login form fields and the DownloadCSV `.event` URLs (with
- * date-filter params) are NOT yet confirmed — Michael reaches PAI support
- * Monday, and we will NOT guess a single HTTP detail. Until then this returns a
- * clear, non-alarming message and does NOT flip the health chip to error (this
- * is "not configured yet", not "broken"). A-2c-2 replaces this body with the
- * real pai-client.ts login + DownloadCSV → ingestAtmCsvs() call.
+ * Logs into paireports.com with the saved (encrypted) credentials, downloads
+ * the three report CSVs, and feeds them through the SAME verified ingest engine
+ * the manual import uses. Report .event paths are confirmed from Michael's
+ * portal; the one still-unconfirmed bit (the exact CSV custom-command value) is
+ * an OVERRIDABLE default in pai-endpoints.ts — if PAI's account differs, the
+ * client detects the HTML-instead-of-CSV response and returns a helpful message
+ * rather than importing garbage. Never guesses; never throws to the UI.
+ *
+ * Works identically with Michael's MAIN login or a future READ-ONLY sub-user.
  */
-export async function runAtmLiveSync(): Promise<{ ok: false; error: string }> {
-  return {
-    ok: false,
-    error:
-      "Live PAI sync isn’t connected yet. For now, use “Import PAI report CSVs” to " +
-      "upload your Cash Load, Simple Summary, and Bank Deposits exports — those load " +
-      "instantly. We’ll switch on the automatic daily pull once PAI confirms the exact " +
-      "download links (planned after you speak with their support).",
-  };
+export async function runAtmLiveSync(): Promise<LiveSyncResult> {
+  const pull = await pullAllPaiReports();
+
+  if (!pull.ok) {
+    // Record the failure on the health chip and surface the reason plainly.
+    await setAtmSyncResult({ ok: false, error: pull.error });
+    // Bubble up any per-report reasons we did collect (e.g. one report failed).
+    const detail = (pull.reports ?? [])
+      .filter((r) => !r.ok)
+      .map((r) => (r.ok ? "" : `${r.kind}: ${r.error}`))
+      .filter(Boolean)
+      .join(" · ");
+    return { ok: false, error: detail ? `${pull.error} (${detail})` : pull.error };
+  }
+
+  // Collect the CSVs we did get; note any report that failed as a problem.
+  const csvs: { cashLoadCsv?: string; simpleSummaryCsv?: string; fundsMovementCsv?: string } = {};
+  const problems: string[] = [];
+  for (const r of pull.reports) {
+    if (r.ok) {
+      if (r.kind === "cashLoad") csvs.cashLoadCsv = r.csv;
+      else if (r.kind === "simpleSummary") csvs.simpleSummaryCsv = r.csv;
+      else if (r.kind === "fundsMovement") csvs.fundsMovementCsv = r.csv;
+    } else {
+      problems.push(`${r.kind} not downloaded: ${r.error}`);
+    }
+  }
+
+  // Reuse the verified ingest path (it also records health on completion).
+  const ingest = await ingestAtmCsvs(csvs);
+
+  // Fold any download-level problems into the message so nothing is hidden.
+  const message = problems.length > 0 ? `${ingest.message} (${problems.length} report(s) skipped)` : ingest.message;
+
+  if (!ingest.ok) return { ok: false, error: message, summary: ingest.summary };
+  return { ok: true, message, summary: ingest.summary };
 }

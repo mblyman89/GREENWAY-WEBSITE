@@ -1,15 +1,16 @@
 /**
  * src/app/api/cron/atm-sync/route.ts  (SLICE A-2c)
  *
- * Daily cron for the ATM/PAI automatic pull. Calls runAtmLiveSync(), which
- * (once A-2c-2 wires pai-client.ts) logs into paireports.com, downloads the
- * Cash Load / Simple Summary / Bank Deposits CSVs for the target window, and
- * feeds them through the same verified ingest engine the manual import uses.
+ * Daily cron for the ATM/PAI automatic pull. Calls runAtmLiveSync(), which logs
+ * into paireports.com with the saved (encrypted) credentials, downloads the
+ * Cash Load / Simple Summary / Bank Deposits CSVs, and feeds them through the
+ * same verified ingest engine the manual import uses (idempotent upserts, so a
+ * daily re-pull with overlap never duplicates rows).
  *
- * TODAY runAtmLiveSync() is an HONEST STUB (returns ok:false, "not connected
- * yet") because the exact PAI download endpoints are not yet confirmed — we do
- * NOT guess them. The cron still runs harmlessly and reports the stub message,
- * so the wiring is proven end-to-end and A-2c-2 is a drop-in.
+ * The report .event paths are confirmed from Michael's portal; the one still-
+ * unconfirmed bit (the exact CSV custom-command value) is an OVERRIDABLE
+ * default — if PAI's account differs, the pull returns a helpful message rather
+ * than importing garbage. Never guesses a single HTTP detail.
  *
  * Scheduled by vercel.json ("0 14 * * *" UTC ≈ 6–7am Pacific, before the other
  * two crons). Vercel Cron invokes with `Authorization: Bearer ${CRON_SECRET}`.
@@ -59,7 +60,11 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   const result = await runAtmLiveSync();
-  return NextResponse.json({ ok: result.ok, message: result.error });
+  return NextResponse.json(
+    result.ok
+      ? { ok: true, message: result.message, summary: result.summary }
+      : { ok: false, error: result.error },
+  );
 }
 
 // Vercel Cron uses GET; POST supported for manual triggers.
