@@ -63,8 +63,15 @@ export type PaiReportPlan = {
   kind: PaiReportKind;
   /** Absolute URL of the report page (ReportCmd=Filter) — the "open report". */
   filterUrl: string;
-  /** Absolute URL for the CSV custom-command fetch. */
+  /** Absolute URL for the CSV custom-command fetch (no filter — legacy 2-step). */
   downloadUrl: string;
+  /**
+   * Absolute URL that combines Filter + CustomCommand + the F_<Column> date
+   * filter in ONE request — the robust pattern from PAI's official SDK. This is
+   * what the client actually fetches so the date filter travels WITH the CSV
+   * download for every report (not just the one PAI happened to persist).
+   */
+  combinedUrl: string;
   /** The CustomCmdList value used (default or config override). */
   customCmdList: string;
   /** True when customCmdList is still the UNVERIFIED SDK default. */
@@ -134,11 +141,25 @@ export function resolvePaiDateFieldName(
   kind: PaiReportKind,
   reportConfig?: Record<string, unknown> | null,
 ): { name: string; usingDefault: boolean } {
-  const cfg =
-    reportConfig && typeof reportConfig.dateFieldName === "string"
-      ? (reportConfig.dateFieldName as string).trim()
-      : "";
-  if (cfg !== "") return { name: cfg, usingDefault: false };
+  // report_config.dateFieldName may be EITHER:
+  //   • a plain string  → a single override applied to every report (legacy), OR
+  //   • an object keyed by report kind → a PER-REPORT override, e.g.
+  //       { dateFieldName: { fundsMovement: "F_PostDate", cashLoad: "F_TrxDate" } }
+  // The per-report form is what we need here: each PAI report names its date
+  // filter column differently, and we CONFIRM each one rather than guess.
+  const raw = reportConfig?.dateFieldName;
+
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (s !== "") return { name: s, usingDefault: false };
+  } else if (raw && typeof raw === "object") {
+    const perKind = (raw as Record<string, unknown>)[kind];
+    if (typeof perKind === "string") {
+      const s = perKind.trim();
+      if (s !== "") return { name: s, usingDefault: false };
+    }
+  }
+
   const col = PAI_DATE_COLUMN[kind].replace(/\s+/g, "");
   return { name: `F_${col}`, usingDefault: true };
 }
@@ -177,6 +198,11 @@ export function resolvePaiReportPlan(
   let dateFilterApplied = false;
   let usingDefaultDateField = false;
 
+  // The date-filter query fragment (e.g. "&F_SettlementDate=02%2F29%2F2024...").
+  // Built once and appended to BOTH the filter URL and the combined download URL
+  // so the filter travels WITH the CSV request (see combinedUrl below).
+  let dateFilterFragment = "";
+
   // Apply a date range ONLY when one is explicitly requested (history/backfill).
   // The normal daily pull passes no range → identical to today's working path.
   // PAI expects ONE field holding a range string "MM/DD/YYYY - MM/DD/YYYY".
@@ -184,7 +210,8 @@ export function resolvePaiReportPlan(
     const rangeValue = buildPaiRangeValue(dateRange);
     if (rangeValue !== "") {
       const field = resolvePaiDateFieldName(kind, reportConfig);
-      filterUrl += `&${encodeURIComponent(field.name)}=${encodeURIComponent(rangeValue)}`;
+      dateFilterFragment = `&${encodeURIComponent(field.name)}=${encodeURIComponent(rangeValue)}`;
+      filterUrl += dateFilterFragment;
       dateFilterApplied = true;
       usingDefaultDateField = field.usingDefault;
     }
@@ -194,10 +221,23 @@ export function resolvePaiReportPlan(
     `${joinUrl(base, event)}?ReportCmd=CustomCommand` +
     `&CustomCmdList=${encodeURIComponent(customCmdList)}`;
 
+  // COMBINED URL — the ROBUST, documented pattern from PAI's official SDK
+  // (gopai/reporting-sdk PAIClient.retrieveReportUsingBuilder): the SAME request
+  // carries BOTH ReportCmd=Filter AND ReportCmd=CustomCommand&CustomCmdList=...
+  // AND the F_<Column> filter. Sending the filter in a SEPARATE request (as we
+  // did before) relied on PAI persisting the last filter in the session — which
+  // happened to work for one report but not the others. Combining them makes the
+  // date filter travel WITH the CSV download for every report.
+  const combinedUrl =
+    `${joinUrl(base, event)}?ReportCmd=Filter&ReportCmd=CustomCommand` +
+    `&CustomCmdList=${encodeURIComponent(customCmdList)}` +
+    dateFilterFragment;
+
   return {
     kind,
     filterUrl,
     downloadUrl,
+    combinedUrl,
     customCmdList,
     usingDefaultCustomCmd,
     dateFilterApplied,
@@ -340,7 +380,7 @@ export function __runPaiEndpointsTests(): void {
   const bad = resolvePaiReportPlan("simpleSummary", null, null, { from: "nope", to: "2026-08-11" });
   assert(bad.dateFilterApplied === false, "bad range ignored (no filter applied)");
 
-  // report_config can OVERRIDE the field name → clears the default flag.
+  // report_config can OVERRIDE the field name (STRING form) → clears default flag.
   const nameOverride = resolvePaiReportPlan(
     "simpleSummary",
     null,
@@ -351,6 +391,48 @@ export function __runPaiEndpointsTests(): void {
   assert(
     nameOverride.filterUrl.includes(`SettlementDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
     "captured field name used",
+  );
+
+  // PER-REPORT override (OBJECT form) — each report can carry its own confirmed
+  // filter field name. This is the fix for Bank Deposits / Cash Loads returning
+  // only PAI's default window because their real filter column differs.
+  const perReportCfg = {
+    dateFieldName: { fundsMovement: "F_PostDate", cashLoad: "F_TrxDate" },
+  };
+  const fmPer = resolvePaiReportPlan("fundsMovement", null, perReportCfg, { from: "2024-02-29", to: "2026-08-11" });
+  assert(fmPer.usingDefaultDateField === false, "per-report override clears default flag (fundsMovement)");
+  assert(
+    fmPer.combinedUrl.includes(`F_PostDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
+    "per-report fundsMovement field name used in combinedUrl",
+  );
+  const clPer = resolvePaiReportPlan("cashLoad", null, perReportCfg, { from: "2024-02-29", to: "2026-08-11" });
+  assert(
+    clPer.combinedUrl.includes(`F_TrxDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
+    "per-report cashLoad field name used in combinedUrl",
+  );
+  // A report NOT listed in the per-report object falls back to the default name.
+  const ssPer = resolvePaiReportPlan("simpleSummary", null, perReportCfg, { from: "2024-02-29", to: "2026-08-11" });
+  assert(ssPer.usingDefaultDateField === true, "report not in per-report object → default field name");
+
+  // resolvePaiDateFieldName: per-report object override + string override + default.
+  const fnObj = resolvePaiDateFieldName("fundsMovement", { dateFieldName: { fundsMovement: "F_X" } });
+  assert(fnObj.name === "F_X" && !fnObj.usingDefault, "per-report object override on resolvePaiDateFieldName");
+  const fnStr = resolvePaiDateFieldName("cashLoad", { dateFieldName: "F_Y" });
+  assert(fnStr.name === "F_Y" && !fnStr.usingDefault, "string override applies to any report");
+
+  // --- combinedUrl: the robust single-request pattern (PAI official SDK) ------
+
+  // Default (no range): combinedUrl carries Filter + CustomCommand together.
+  assert(
+    ss.combinedUrl ===
+      "https://www.paireports.com/myreports/GetTerminalTrxDataReport.event?ReportCmd=Filter&ReportCmd=CustomCommand&CustomCmdList=DownloadCSV",
+    "combinedUrl default = Filter + CustomCommand in one URL",
+  );
+  // With a range: combinedUrl ALSO carries the F_<Column> date filter.
+  assert(
+    ranged.combinedUrl.includes("ReportCmd=Filter&ReportCmd=CustomCommand") &&
+      ranged.combinedUrl.includes(`F_SettlementDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
+    "combinedUrl with range carries filter + command together",
   );
 
   // resolvePaiDateFieldName convention + override.
