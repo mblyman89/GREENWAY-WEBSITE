@@ -20,9 +20,11 @@ import {
   clearAtmCredentials,
   insertManualCashLoad,
   mergeAtmReportConfig,
+  getAtmConnection,
 } from "@/lib/atm/store";
 import { ingestAtmCsvs, runAtmLiveSync } from "@/lib/atm/sync-server";
-import { discoverReportFilterFields } from "@/lib/atm/pai-client";
+import { discoverReportFilterFields, selectPaiReport, probeReportCandidates } from "@/lib/atm/pai-client";
+import type { PaiReportKind } from "@/lib/atm/pai-endpoints";
 import { validateManualCashLoad } from "@/lib/atm/atm-ui-core";
 
 const ROOT = "/admin/atm";
@@ -320,4 +322,149 @@ export async function discoverPaiReportFieldsAction(): Promise<void> {
     : "Discovery finished — but I didn’t save anything automatically (see the per-report notes).";
   // The multi-line summary is passed through as the friendly message.
   back({ tab: "health", msg: `${lead}\n${result.summary}` });
+}
+
+const REPORT_KINDS: PaiReportKind[] = ["cashLoad", "simpleSummary", "fundsMovement"];
+const KIND_LABEL: Record<PaiReportKind, string> = {
+  cashLoad: "Cash Loads",
+  simpleSummary: "Simple Summary",
+  fundsMovement: "Bank Deposits",
+};
+
+/**
+ * Save WHICH PAI report is the true source for a given kind (Simple Summary /
+ * Bank Deposits / Cash Loads). Michael picks the exact report from the list the
+ * Discovery step printed; we resolve it against PAI's live list to its stable
+ * GUID and store it in report_config.reportSelection. The next Discovery then
+ * matches that report CONFIDENTLY (no guessing) and reads its real date column.
+ * Audit: atm.select.report.
+ */
+export async function selectPaiReportAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const rawKind = String(formData.get("kind") ?? "").trim();
+  const kind = REPORT_KINDS.find((k) => k === rawKind);
+  if (!kind) back({ tab: "health", error: "Please choose which report (Simple Summary, Bank Deposits, or Cash Loads)." });
+
+  const reportGuid = String(formData.get("reportGuid") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!reportGuid && !name) {
+    back({ tab: "health", error: "Please pick a report from the list before saving." });
+  }
+
+  const result = await selectPaiReport(kind!, { reportGuid, name });
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.profile.email,
+      action: "atm.select.report",
+      entityType: "atm_connection",
+      entityId: null,
+      after: { ok: false, kind, reportGuid, name, error: result.error },
+    });
+    back({ tab: "health", error: result.error });
+  }
+
+  // Merge into report_config.reportSelection (preserve other kinds' choices).
+  // mergeAtmReportConfig is a SHALLOW merge, so we deep-merge reportSelection
+  // here: read the existing selections and add just this kind.
+  const view = await getAtmConnection();
+  const currentSel =
+    (view.reportConfig as Record<string, unknown> | null)?.reportSelection;
+  const nextSel: Record<string, unknown> = {
+    ...(currentSel && typeof currentSel === "object" && !Array.isArray(currentSel)
+      ? (currentSel as Record<string, unknown>)
+      : {}),
+    [result.kind]: result.selection,
+  };
+  const saved = await mergeAtmReportConfig({ reportSelection: nextSel });
+  if (!saved.ok) {
+    back({ tab: "health", error: `Chose the report but couldn’t save it: ${saved.error}` });
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.select.report",
+    entityType: "atm_connection",
+    entityId: null,
+    after: { ok: true, kind, selection: result.selection, chosenLabel: result.chosenLabel },
+  });
+
+  back({
+    tab: "health",
+    msg:
+      `Saved “${KIND_LABEL[result.kind]}” → ${result.chosenLabel}.\n` +
+      `Now click “Discover report fields (no F12)” again — it will read that report’s real date column — then “Backfill history”.`,
+  });
+}
+
+/**
+ * PROBE which report is the true source for a kind by TRYING each candidate and
+ * seeing what data comes back (no guessing). When exactly one candidate clearly
+ * leads (most data + a date column) we SAVE it automatically as the selection;
+ * otherwise we show the ranked table so Michael can pick. Audit: atm.probe.report.
+ */
+export async function probeReportCandidatesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const rawKind = String(formData.get("kind") ?? "").trim();
+  const kind = REPORT_KINDS.find((k) => k === rawKind);
+  if (!kind) back({ tab: "health", error: "Please choose which report to test (Simple Summary, Bank Deposits, or Cash Loads)." });
+
+  const result = await probeReportCandidates(kind!);
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.profile.email,
+      action: "atm.probe.report",
+      entityType: "atm_connection",
+      entityId: null,
+      after: { ok: false, kind, error: result.error },
+    });
+    back({ tab: "health", error: result.error });
+  }
+
+  // Auto-save the clear winner (if any) as the selection — deep-merge the map.
+  let savedNote = "";
+  if (result.autoWinner) {
+    const view = await getAtmConnection();
+    const currentSel = (view.reportConfig as Record<string, unknown> | null)?.reportSelection;
+    const nextSel: Record<string, unknown> = {
+      ...(currentSel && typeof currentSel === "object" && !Array.isArray(currentSel)
+        ? (currentSel as Record<string, unknown>)
+        : {}),
+      [result.kind]: { reportGuid: result.autoWinner.reportGuid, name: result.autoWinner.name },
+    };
+    const saved = await mergeAtmReportConfig({ reportSelection: nextSel });
+    savedNote = saved.ok
+      ? `\nSaved “${KIND_LABEL[result.kind]}” → ${result.autoWinner.label}. Next: click “Discover report fields (no F12)”, then “Backfill history”.`
+      : `\n(Couldn’t auto-save the winner: ${saved.error} — you can still pick it manually.)`;
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.probe.report",
+    entityType: "atm_connection",
+    entityId: null,
+    after: {
+      ok: true,
+      kind,
+      autoSaved: !!result.autoWinner && savedNote.startsWith("\nSaved"),
+      winner: result.autoWinner
+        ? { guid: result.autoWinner.reportGuid, label: result.autoWinner.label }
+        : null,
+      candidates: result.candidates.map((c) => ({
+        guid: c.reportGuid,
+        label: c.label,
+        rows: c.summary.rowCount,
+        cols: c.summary.columns.length,
+        dateColumns: c.summary.dateColumns,
+        score: c.score,
+      })),
+    },
+  });
+
+  back({ tab: "health", msg: `${result.summary}${savedNote}` });
 }

@@ -31,6 +31,7 @@
  */
 
 import type { PaiReportKind } from "./pai-endpoints";
+import { parseCsv } from "./atm-core";
 
 // ---------------------------------------------------------------------------
 // 1) The Data-API query that lists every report config (name + GUID).
@@ -117,22 +118,112 @@ export type PaiConfigMatch = {
   best: PaiReportConfigId | null;
   /** True only when exactly one candidate matched (safe to auto-use). */
   confident: boolean;
+  /** True when `best` came from Michael's saved selection (not the fuzzy hints). */
+  fromSelection?: boolean;
 };
 
 /**
- * Match one report kind to its config row(s). A row matches when any of the
- * kind's title hints appears as a substring of the row's Name or ExternalName
- * (normalized). Returns every candidate + a `confident` flag that is true ONLY
- * when exactly one row matched — so callers never auto-pick from ambiguity.
+ * Michael's saved per-kind report choice: the EXACT report Name he confirmed
+ * (matched to a config row by GUID when available, else by exact Name). Stored
+ * in report_config.reportSelection, keyed by PaiReportKind. Optional; when a
+ * kind has a selection we HONOR it instead of guessing from the fuzzy hints.
  */
-export function matchReportConfig(kind: PaiReportKind, rows: PaiReportConfigId[]): PaiConfigMatch {
+export type PaiReportSelection = {
+  /** The report's ReportGUID (preferred — stable even if two names collide). */
+  reportGuid?: string;
+  /** The exact report Name Michael confirmed (fallback when GUID isn't stored). */
+  name?: string;
+};
+
+/**
+ * Resolve Michael's typed report choice (an exact report Name and/or GUID) to a
+ * concrete config row, then produce the `reportSelection[kind]` value to SAVE —
+ * always preferring the resolved GUID (stable even when two reports share a
+ * name). Returns { ok:false } WITHOUT guessing when the chosen name/guid doesn't
+ * match exactly one row (0 rows, or >1 rows with no GUID to disambiguate). PURE.
+ */
+export function resolveReportChoice(
+  rows: PaiReportConfigId[],
+  choice: { reportGuid?: string; name?: string },
+): { ok: true; selection: PaiReportSelection; row: PaiReportConfigId } | { ok: false; error: string } {
+  const guid = (choice.reportGuid ?? "").trim();
+  const name = (choice.name ?? "").trim();
+  if (!guid && !name) return { ok: false, error: "No report was chosen." };
+
+  if (guid) {
+    const byGuid = rows.filter((r) => r.reportGuid.trim() === guid);
+    if (byGuid.length === 1) {
+      return { ok: true, selection: { reportGuid: byGuid[0].reportGuid, name: byGuid[0].name }, row: byGuid[0] };
+    }
+    if (byGuid.length === 0) return { ok: false, error: "That report ID wasn’t in PAI’s current list." };
+  }
+
+  const want = normalizeName(name);
+  const byName = rows.filter((r) => normalizeName(r.name) === want || normalizeName(r.externalName) === want);
+  if (byName.length === 1) {
+    return { ok: true, selection: { reportGuid: byName[0].reportGuid, name: byName[0].name }, row: byName[0] };
+  }
+  if (byName.length === 0) return { ok: false, error: "That report name wasn’t found in PAI’s current list." };
+  return {
+    ok: false,
+    error: `That name matches ${byName.length} reports. I need the exact report ID to be sure — I won’t guess.`,
+  };
+}
+
+/** Parse report_config.reportSelection into a typed, per-kind map. PURE, null-safe. */
+export function parseReportSelection(raw: unknown): Partial<Record<PaiReportKind, PaiReportSelection>> {
+  const out: Partial<Record<PaiReportKind, PaiReportSelection>> = {};
+  if (!isRecord(raw)) return out;
+  for (const kind of ["cashLoad", "simpleSummary", "fundsMovement"] as const) {
+    const sel = raw[kind];
+    if (!isRecord(sel)) continue;
+    const guid = typeof sel.reportGuid === "string" ? sel.reportGuid.trim() : "";
+    const name = typeof sel.name === "string" ? sel.name.trim() : "";
+    if (guid || name) out[kind] = { ...(guid ? { reportGuid: guid } : {}), ...(name ? { name } : {}) };
+  }
+  return out;
+}
+
+/**
+ * Match one report kind to its config row(s).
+ *
+ * PRECEDENCE (never guess):
+ *   1) If Michael saved a `selection` for this kind, use it — match the row by
+ *      GUID first (exact), then by exact normalized Name. A resolved selection
+ *      is CONFIDENT (fromSelection=true), even if several rows share a name.
+ *   2) Otherwise fall back to the fuzzy title hints; confident ONLY when exactly
+ *      one row matches, so we never auto-pick from ambiguity.
+ */
+export function matchReportConfig(
+  kind: PaiReportKind,
+  rows: PaiReportConfigId[],
+  selection?: PaiReportSelection | null,
+): PaiConfigMatch {
+  // 1) Honor an explicit saved selection.
+  if (selection && (selection.reportGuid || selection.name)) {
+    let chosen: PaiReportConfigId | undefined;
+    if (selection.reportGuid) {
+      chosen = rows.find((r) => r.reportGuid.trim() === selection.reportGuid!.trim());
+    }
+    if (!chosen && selection.name) {
+      const want = normalizeName(selection.name);
+      chosen = rows.find((r) => normalizeName(r.name) === want || normalizeName(r.externalName) === want);
+    }
+    if (chosen) {
+      return { kind, candidates: [chosen], best: chosen, confident: true, fromSelection: true };
+    }
+    // Selection didn't resolve (report renamed/removed) → fall through to hints,
+    // but do NOT silently pretend it matched.
+  }
+
+  // 2) Fuzzy hint match.
   const hints = PAI_REPORT_TITLE_HINTS[kind];
   const candidates = rows.filter((r) => {
     const hay = `${normalizeName(r.name)} ${normalizeName(r.externalName)}`;
     return hints.some((h) => hay.includes(normalizeName(h)));
   });
   const confident = candidates.length === 1;
-  return { kind, candidates, best: confident ? candidates[0] : null, confident };
+  return { kind, candidates, best: confident ? candidates[0] : null, confident, fromSelection: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -299,8 +390,9 @@ export function buildDiscovery(
   kind: PaiReportKind,
   allConfigs: PaiReportConfigId[],
   fieldsByGuid: Map<string, PaiReportField[]>,
+  selection?: PaiReportSelection | null,
 ): PaiReportDiscovery {
-  const match = matchReportConfig(kind, allConfigs);
+  const match = matchReportConfig(kind, allConfigs, selection);
   const label = PAI_DISCOVERY_LABEL[kind];
 
   if (match.candidates.length === 0) {
@@ -358,6 +450,75 @@ export function toDateFieldOverride(discoveries: PaiReportDiscovery[]): Record<s
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 5) PROBE analysis — "try it and see what data comes back" (no guessing).
+// ---------------------------------------------------------------------------
+
+/**
+ * What we learned by actually downloading ONE candidate report's CSV with a
+ * small window. This is EVIDENCE, not a guess: a candidate that returns data
+ * rows (and has a date-looking column) is a real match; one that errors or
+ * returns zero rows is not.
+ */
+export type PaiProbeSummary = {
+  /** True when the CSV parsed and had at least one DATA row (beyond the header). */
+  hasData: boolean;
+  /** Number of data rows (header excluded). 0 when empty/unparseable. */
+  rowCount: number;
+  /** The header column labels, in order (empty when unreadable). */
+  columns: string[];
+  /** Columns whose label looks like a date/time column (for the date filter). */
+  dateColumns: string[];
+  /** A short, plain-English verdict for the ranked table. */
+  note: string;
+};
+
+/**
+ * Summarize a probe download of one candidate report. PURE — takes the raw CSV
+ * text (or an error marker) and reports what came back. Never throws. An empty
+ * or error CSV yields hasData:false with a clear note.
+ */
+export function summarizeProbeCsv(csv: string | null | undefined): PaiProbeSummary {
+  const text = (csv ?? "").trim();
+  if (text === "") {
+    return { hasData: false, rowCount: 0, columns: [], dateColumns: [], note: "No data returned (empty response)." };
+  }
+  // A PAI error page is HTML, not CSV — detect it so we don't count it as data.
+  const head = text.slice(0, 200).toLowerCase();
+  if (head.includes("<html") || head.includes("<!doctype") || head.includes("<body")) {
+    return { hasData: false, rowCount: 0, columns: [], dateColumns: [], note: "PAI returned a web page, not a CSV (report not available this way)." };
+  }
+  const table = parseCsv(text);
+  if (table.length === 0) {
+    return { hasData: false, rowCount: 0, columns: [], dateColumns: [], note: "Response wasn’t a readable CSV." };
+  }
+  const columns = (table[0] ?? []).map((c) => c.trim()).filter((c) => c !== "");
+  const rowCount = Math.max(0, table.length - 1);
+  const dateColumns = columns.filter((c) => {
+    const n = normalizeName(c);
+    return DATE_NAME_TOKENS.some((t) => n.includes(t));
+  });
+  const hasData = rowCount > 0 && columns.length > 0;
+  const note = hasData
+    ? `Returned ${rowCount} row(s), ${columns.length} column(s)${dateColumns.length > 0 ? `, date column(s): ${dateColumns.join(", ")}` : " (no obvious date column)"}.`
+    : columns.length > 0
+      ? `Header only, 0 data rows (columns: ${columns.join(", ")}).`
+      : "No usable columns found.";
+  return { hasData, rowCount, columns, dateColumns, note };
+}
+
+/**
+ * Rank probe results for a kind so the strongest candidate floats to the top:
+ * has data AND a date column > has data > header-only > empty/error. Ties keep
+ * their original order (stable). PURE — the caller decides whether to auto-pick.
+ */
+export function scoreProbe(s: PaiProbeSummary): number {
+  if (s.hasData && s.dateColumns.length > 0) return 3;
+  if (s.hasData) return 2;
+  if (s.columns.length > 0) return 1;
+  return 0;
 }
 
 /**
@@ -596,6 +757,79 @@ export function __runPaiDiscoveryTests(): void {
   );
   // A confident single match must NOT dump a numbered list.
   assert(!summarizeDiscovery([dSs]).includes("    1. "), "confident summary does not list candidates");
+
+  // --- resolveReportChoice (never guesses) -----------------------------------
+  const choiceRows: PaiReportConfigId[] = [
+    { reportGuid: "G-1", externalName: "Default Simple Summary Report", name: "Terminal Trx Data" },
+    { reportGuid: "G-2", externalName: "Simple Summary Report w DCC", name: "Trx Data Report w DCC" },
+    { reportGuid: "G-3", externalName: "", name: "Terminal Trx Data" }, // shares NAME with G-1's internal name
+  ];
+  // By GUID → exact one row, selection prefers the GUID.
+  const byGuid = resolveReportChoice(choiceRows, { reportGuid: "G-2" });
+  assert(byGuid.ok && byGuid.selection.reportGuid === "G-2" && byGuid.row.reportGuid === "G-2", "resolveReportChoice by GUID → exact row");
+  // Unknown GUID → error, no guessing.
+  assert(!resolveReportChoice(choiceRows, { reportGuid: "NOPE" }).ok, "resolveReportChoice unknown GUID → error");
+  // By unique ExternalName → resolves, selection carries the row's GUID.
+  const byExt = resolveReportChoice(choiceRows, { name: "Simple Summary Report w DCC" });
+  assert(byExt.ok && byExt.selection.reportGuid === "G-2", "resolveReportChoice by unique external name → row's GUID");
+  // Ambiguous name (matches G-1 internal + G-3 internal) with no GUID → error, never guesses.
+  const ambigName = resolveReportChoice(choiceRows, { name: "Terminal Trx Data" });
+  assert(!ambigName.ok && "error" in ambigName && ambigName.error.includes("2 reports"), "resolveReportChoice ambiguous name → error (no guess)");
+  // Unknown name → error.
+  assert(!resolveReportChoice(choiceRows, { name: "Does Not Exist" }).ok, "resolveReportChoice unknown name → error");
+  // Nothing chosen → error.
+  assert(!resolveReportChoice(choiceRows, {}).ok, "resolveReportChoice with no choice → error");
+
+  // --- parseReportSelection (null-safe, typed) -------------------------------
+  assert(Object.keys(parseReportSelection(null)).length === 0, "parseReportSelection(null) → {}");
+  assert(Object.keys(parseReportSelection("x")).length === 0, "parseReportSelection(non-object) → {}");
+  const sel = parseReportSelection({
+    simpleSummary: { reportGuid: " G-2 ", name: " Trx " },
+    fundsMovement: { name: "Funds Movement By Account By Day" },
+    cashLoad: {}, // empty → dropped
+    bogus: { reportGuid: "Z" }, // unknown kind → ignored
+  });
+  assert(sel.simpleSummary?.reportGuid === "G-2" && sel.simpleSummary?.name === "Trx", "parseReportSelection trims + keeps guid+name");
+  assert(sel.fundsMovement?.name === "Funds Movement By Account By Day" && sel.fundsMovement?.reportGuid === undefined, "parseReportSelection name-only kept");
+  assert(sel.cashLoad === undefined, "parseReportSelection drops empty selection");
+  assert(!("bogus" in sel), "parseReportSelection ignores unknown kinds");
+
+  // --- matchReportConfig honors a saved selection (never guesses) ------------
+  // A saved GUID beats fuzzy ambiguity: dup rows share a name, but selection.reportGuid resolves ONE.
+  const dupSel = matchReportConfig("cashLoad", dup, { reportGuid: "B" });
+  assert(dupSel.confident && dupSel.fromSelection === true && dupSel.best?.reportGuid === "B", "matchReportConfig honors saved GUID over ambiguity");
+  // A saved exact NAME resolves even when the fuzzy hints would be ambiguous.
+  const dupSelName = matchReportConfig("cashLoad", dup, { name: "ATM Cash Load Report (backup)" });
+  assert(dupSelName.confident && dupSelName.fromSelection === true && dupSelName.best?.reportGuid === "B", "matchReportConfig honors saved exact name");
+  // A selection that does NOT resolve falls through to hints (does not fake a match).
+  const staleSel = matchReportConfig("cashLoad", ids, { reportGuid: "GONE" });
+  assert(staleSel.fromSelection !== true && staleSel.best?.reportGuid === "G-CASH", "matchReportConfig stale selection → falls back to hints");
+  // No selection → same as before (fuzzy).
+  assert(matchReportConfig("cashLoad", ids, null).fromSelection === false, "matchReportConfig no selection → fromSelection=false");
+
+  // buildDiscovery threads the selection through (ambiguous rows become confident via GUID).
+  const dSelected = buildDiscovery("cashLoad", dup, new Map([["B", clFields]]), { reportGuid: "B" });
+  assert(dSelected.matched?.reportGuid === "B" && dSelected.datePick.confident, "buildDiscovery uses saved selection to resolve + read fields");
+
+  // --- summarizeProbeCsv + scoreProbe (evidence, not guessing) ---------------
+  // Real CSV with a date column → hasData + dateColumns + score 3.
+  const goodCsv = "Terminal,Settlement Date,Amount\nHG26499,2024-03-01,1234\nHG26499,2024-03-02,999";
+  const sGood = summarizeProbeCsv(goodCsv);
+  assert(sGood.hasData && sGood.rowCount === 2 && sGood.columns.length === 3, "summarizeProbeCsv counts data rows + columns");
+  assert(sGood.dateColumns.includes("Settlement Date"), "summarizeProbeCsv finds the date column");
+  assert(scoreProbe(sGood) === 3, "scoreProbe data+date → 3");
+  // CSV with data but no date column → score 2.
+  const noDate = summarizeProbeCsv("Terminal,Amount\nHG26499,1234");
+  assert(noDate.hasData && noDate.dateColumns.length === 0 && scoreProbe(noDate) === 2, "scoreProbe data, no date → 2");
+  // Header only → score 1.
+  const headerOnly = summarizeProbeCsv("Terminal,Amount");
+  assert(!headerOnly.hasData && headerOnly.columns.length === 2 && scoreProbe(headerOnly) === 1, "scoreProbe header only → 1");
+  // Empty response → score 0.
+  const emptyProbe = summarizeProbeCsv("");
+  assert(!emptyProbe.hasData && emptyProbe.rowCount === 0 && scoreProbe(emptyProbe) === 0, "scoreProbe empty → 0");
+  // PAI HTML error page must NOT be counted as data.
+  const htmlErr = summarizeProbeCsv("<!DOCTYPE html><html><body>Session expired</body></html>");
+  assert(!htmlErr.hasData && htmlErr.note.includes("web page") && scoreProbe(htmlErr) === 0, "summarizeProbeCsv rejects HTML error page");
 
   console.log("pai-discovery: all self-tests passed");
 }

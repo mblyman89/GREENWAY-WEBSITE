@@ -21,6 +21,10 @@ import {
   summarizeDiscovery,
   candidateLabel,
   normalizeName,
+  resolveReportChoice,
+  parseReportSelection,
+  summarizeProbeCsv,
+  scoreProbe,
   PAI_EXPECTED_DATE_COLUMN,
   type PaiReportConfigId,
   type PaiReportField,
@@ -220,6 +224,127 @@ describe("normalizeName + expected columns", () => {
     expect(PAI_EXPECTED_DATE_COLUMN.cashLoad).toBe("Trx Time");
     expect(PAI_EXPECTED_DATE_COLUMN.simpleSummary).toBe("Settlement Date");
     expect(PAI_EXPECTED_DATE_COLUMN.fundsMovement).toBe("Settlement Date");
+  });
+});
+
+describe("resolveReportChoice (never guesses)", () => {
+  const ROWS: PaiReportConfigId[] = [
+    { reportGuid: "G-1", externalName: "Default Simple Summary Report", name: "Terminal Trx Data" },
+    { reportGuid: "G-2", externalName: "Simple Summary Report w DCC", name: "Trx Data Report w DCC" },
+    { reportGuid: "G-3", externalName: "", name: "Terminal Trx Data" },
+  ];
+
+  it("resolves a GUID to exactly one row and prefers the GUID in the selection", () => {
+    const r = resolveReportChoice(ROWS, { reportGuid: "G-2" });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.selection.reportGuid).toBe("G-2");
+  });
+
+  it("errors on an unknown GUID (no guess)", () => {
+    expect(resolveReportChoice(ROWS, { reportGuid: "NOPE" }).ok).toBe(false);
+  });
+
+  it("resolves a unique external name and carries the row's GUID", () => {
+    const r = resolveReportChoice(ROWS, { name: "Simple Summary Report w DCC" });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.selection.reportGuid).toBe("G-2");
+  });
+
+  it("refuses an ambiguous name with no GUID (never guesses)", () => {
+    const r = resolveReportChoice(ROWS, { name: "Terminal Trx Data" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("2 reports");
+  });
+
+  it("errors on an unknown name and on an empty choice", () => {
+    expect(resolveReportChoice(ROWS, { name: "nope" }).ok).toBe(false);
+    expect(resolveReportChoice(ROWS, {}).ok).toBe(false);
+  });
+});
+
+describe("parseReportSelection (null-safe, typed)", () => {
+  it("returns {} for non-objects", () => {
+    expect(Object.keys(parseReportSelection(null)).length).toBe(0);
+    expect(Object.keys(parseReportSelection("x")).length).toBe(0);
+  });
+
+  it("trims values, keeps guid+name, drops empties and unknown kinds", () => {
+    const sel = parseReportSelection({
+      simpleSummary: { reportGuid: " G-2 ", name: " Trx " },
+      fundsMovement: { name: "Funds Movement By Account By Day" },
+      cashLoad: {},
+      bogus: { reportGuid: "Z" },
+    });
+    expect(sel.simpleSummary?.reportGuid).toBe("G-2");
+    expect(sel.simpleSummary?.name).toBe("Trx");
+    expect(sel.fundsMovement?.name).toBe("Funds Movement By Account By Day");
+    expect(sel.fundsMovement?.reportGuid).toBeUndefined();
+    expect(sel.cashLoad).toBeUndefined();
+    expect("bogus" in sel).toBe(false);
+  });
+});
+
+describe("matchReportConfig honors a saved selection", () => {
+  const DUP: PaiReportConfigId[] = [
+    { reportGuid: "A", externalName: "", name: "ATM Cash Load Report" },
+    { reportGuid: "B", externalName: "", name: "ATM Cash Load Report (backup)" },
+  ];
+
+  it("uses a saved GUID to become confident even when hints are ambiguous", () => {
+    const m = matchReportConfig("cashLoad", DUP, { reportGuid: "B" });
+    expect(m.confident).toBe(true);
+    expect(m.fromSelection).toBe(true);
+    expect(m.best?.reportGuid).toBe("B");
+  });
+
+  it("uses a saved exact name", () => {
+    const m = matchReportConfig("cashLoad", DUP, { name: "ATM Cash Load Report (backup)" });
+    expect(m.confident).toBe(true);
+    expect(m.best?.reportGuid).toBe("B");
+  });
+
+  it("falls back to hints (not a fake match) when the selection is stale", () => {
+    const m = matchReportConfig("cashLoad", IDS, { reportGuid: "GONE" });
+    expect(m.fromSelection).not.toBe(true);
+    expect(m.best?.reportGuid).toBe("G-CASH");
+  });
+});
+
+describe("summarizeProbeCsv + scoreProbe (evidence, not guessing)", () => {
+  it("counts data rows/columns and finds the date column → score 3", () => {
+    const s = summarizeProbeCsv("Terminal,Settlement Date,Amount\nHG26499,2024-03-01,1234\nHG26499,2024-03-02,999");
+    expect(s.hasData).toBe(true);
+    expect(s.rowCount).toBe(2);
+    expect(s.columns.length).toBe(3);
+    expect(s.dateColumns).toContain("Settlement Date");
+    expect(scoreProbe(s)).toBe(3);
+  });
+
+  it("data but no date column → score 2", () => {
+    const s = summarizeProbeCsv("Terminal,Amount\nHG26499,1234");
+    expect(s.hasData).toBe(true);
+    expect(s.dateColumns.length).toBe(0);
+    expect(scoreProbe(s)).toBe(2);
+  });
+
+  it("header only → score 1", () => {
+    const s = summarizeProbeCsv("Terminal,Amount");
+    expect(s.hasData).toBe(false);
+    expect(s.columns.length).toBe(2);
+    expect(scoreProbe(s)).toBe(1);
+  });
+
+  it("empty → score 0", () => {
+    const s = summarizeProbeCsv("");
+    expect(s.hasData).toBe(false);
+    expect(scoreProbe(s)).toBe(0);
+  });
+
+  it("rejects a PAI HTML error page (not counted as data)", () => {
+    const s = summarizeProbeCsv("<!DOCTYPE html><html><body>Session expired</body></html>");
+    expect(s.hasData).toBe(false);
+    expect(s.note).toContain("web page");
+    expect(scoreProbe(s)).toBe(0);
   });
 });
 

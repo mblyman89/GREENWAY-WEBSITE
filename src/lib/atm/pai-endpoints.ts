@@ -48,6 +48,41 @@ export const PAI_REPORT_EVENT: Record<PaiReportKind, string> = {
  */
 export const PAI_DEFAULT_CUSTOM_CMD = "DownloadCSV";
 
+/**
+ * The UNIVERSAL report-download endpoint, CONFIRMED from PAI's official SDK
+ * (gopai/reporting-sdk PAIClient.retrieveReportUsingBuilder): any report is
+ * fetched by its GUID via `POST Report.event`, NOT a per-report .event path.
+ * This is what lets us probe ANY candidate report uniformly.
+ */
+export const PAI_REPORT_EVENT_UNIVERSAL = "Report.event";
+
+/**
+ * Build the x-www-form-urlencoded BODY to download a report's CSV BY ITS GUID,
+ * exactly the way PAI's SDK does:
+ *   ReportGUID=<guid>&ReportCmd=Filter&ReportCmd=CustomCommand&CustomCmdList=<cmd>
+ *   [&F_<Col>=<range>&E_<Col>=false ...]
+ * `filters` is an optional list of {column, value} — each becomes the F_/E_ pair.
+ * PURE: returns just the encoded body string. `customCmdList` defaults to the
+ * SDK's DownloadCSV.
+ */
+export function buildPaiGuidDownloadBody(
+  guid: string,
+  opts?: { customCmdList?: string; filters?: Array<{ column: string; value: string }> },
+): string {
+  const params = new URLSearchParams();
+  params.append("ReportGUID", (guid ?? "").trim());
+  params.append("ReportCmd", "Filter");
+  params.append("ReportCmd", "CustomCommand");
+  params.append("CustomCmdList", (opts?.customCmdList ?? "").trim() || PAI_DEFAULT_CUSTOM_CMD);
+  for (const f of opts?.filters ?? []) {
+    const col = (f.column ?? "").trim();
+    if (col === "") continue;
+    params.append(`F_${col}`, f.value ?? "");
+    params.append(`E_${col}`, "false"); // E_ = "exclude column from output" → false = keep it
+  }
+  return params.toString();
+}
+
 /** Default portal base (with the confirmed www.). Overridable by portal_base_url. */
 export const PAI_DEFAULT_BASE = "https://www.paireports.com/myreports/";
 
@@ -451,6 +486,29 @@ export function __runPaiEndpointsTests(): void {
   assert(resolvePaiHistoryStart({ historyStart: "2023-01-01" }) === "2023-01-01", "history start from config");
   assert(resolvePaiHistoryStart({ historyStart: "not-a-date" }) === PAI_DEFAULT_HISTORY_START, "invalid start → default");
   assert(resolvePaiHistoryStart({ historyStart: 20240229 }) === PAI_DEFAULT_HISTORY_START, "non-string start → default");
+
+  // --- Universal GUID download body (PAI SDK: POST Report.event) -------------
+  assert(PAI_REPORT_EVENT_UNIVERSAL === "Report.event", "universal report event path");
+  // Default: GUID + Filter + CustomCommand + DownloadCSV, no F_/E_ pairs.
+  const body = buildPaiGuidDownloadBody("G-123");
+  const bp = new URLSearchParams(body);
+  assert(bp.get("ReportGUID") === "G-123", "guid body carries the ReportGUID");
+  assert(bp.getAll("ReportCmd").join(",") === "Filter,CustomCommand", "guid body carries both ReportCmd values in order");
+  assert(bp.get("CustomCmdList") === "DownloadCSV", "guid body defaults to DownloadCSV");
+  assert(!body.includes("F_"), "guid body has no filter when none requested");
+  // Custom command override.
+  assert(new URLSearchParams(buildPaiGuidDownloadBody("G", { customCmdList: "OpenCSV" })).get("CustomCmdList") === "OpenCSV", "guid body honors customCmdList override");
+  // Blank/whitespace command falls back to the default.
+  assert(new URLSearchParams(buildPaiGuidDownloadBody("G", { customCmdList: "   " })).get("CustomCmdList") === "DownloadCSV", "guid body blank cmd → DownloadCSV");
+  // A filter adds F_<Col>=<value> and E_<Col>=false (keep the column). Spaces preserved (encoded).
+  const filtered = buildPaiGuidDownloadBody("G", { filters: [{ column: "Settlement Date", value: "02/29/2024 - 08/11/2026" }] });
+  const fp = new URLSearchParams(filtered);
+  assert(fp.get("F_Settlement Date") === "02/29/2024 - 08/11/2026", "guid body filter adds F_<Col>=<value>");
+  assert(fp.get("E_Settlement Date") === "false", "guid body filter adds E_<Col>=false (keep column)");
+  // Empty-column filters are skipped (never send a bogus F_).
+  assert(!buildPaiGuidDownloadBody("G", { filters: [{ column: "  ", value: "x" }] }).includes("F_"), "guid body skips blank-column filter");
+  // Trims the GUID.
+  assert(new URLSearchParams(buildPaiGuidDownloadBody("  G-9  ")).get("ReportGUID") === "G-9", "guid body trims the GUID");
 
   console.log("pai-endpoints: all self-tests passed");
 }
