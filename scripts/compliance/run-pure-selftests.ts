@@ -276,6 +276,7 @@ import { __runPoListInsightsCoreTests } from "../../src/lib/purchasing/po-list-i
 import { __runForecastTests } from "../../src/lib/reports/forecast-core";
 import { __runNewsletterStatsTests } from "../../src/lib/reports/newsletter-stats-core";
 import { __runRangeTests } from "../../src/lib/reports/range";
+import { __runNetIncomeCoreTests } from "../../src/lib/reports/net-income-core";
 import { __runZipTests } from "../../src/lib/reports/zip";
 import { __runTimeclockCoreTests } from "../../src/lib/staffing/timeclock-core";
 import { __runVendorGoldminerTests } from "../../src/lib/inventory/vendor-goldminer-core";
@@ -561,6 +562,7 @@ async function main() {
   assertNoFailures("forecast-core", __runForecastTests());
   __runNewsletterStatsTests();
   assertNoFailures("range", __runRangeTests());
+  __runNetIncomeCoreTests();
   __runZipTests();
   __runTimeclockCoreTests();
   assertNoFailures("vendor-goldminer", __runVendorGoldminerTests());
