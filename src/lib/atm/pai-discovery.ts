@@ -31,7 +31,7 @@
  */
 
 import type { PaiReportKind } from "./pai-endpoints";
-import { parseCsv } from "./atm-core";
+import { parseCsv, headerIndex, pickColumn, normalizeHeader, parseUsDate } from "./atm-core";
 
 // ---------------------------------------------------------------------------
 // 1) The Data-API query that lists every report config (name + GUID).
@@ -440,6 +440,122 @@ function pick(
   );
   if (!candidates.includes(name)) candidates.unshift(name);
   return { fieldName: name, filterKey: `F_${name}`, reason, dateCandidates: candidates, confident };
+}
+
+// ---------------------------------------------------------------------------
+// 3b) EMPIRICAL date-field verification helpers (PURE, no I/O).
+//
+// The FIND_CONFIG (Data-API) discovery came back EMPTY for Michael's account,
+// so we never learned the real column name that way. And even when we DO know
+// the human column name (from the CSV header), we do NOT know for certain the
+// exact `F_<...>` PARAMETER name PAI's server expects: the SDK convention
+// strips spaces ("Settlement Date" -> F_SettlementDate) but some deployments
+// keep them ("F_Settlement Date"). Guessing which one is against the standing
+// rules. So instead we TRY each candidate over the full history window and KEEP
+// only the one that PROVABLY widens the returned date span. Evidence, not a
+// guess. These pure helpers build the candidates and measure the span; the
+// server I/O (download with each candidate) lives in pai-client.ts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the ordered, de-duplicated list of candidate `F_<field>` filter keys to
+ * try for a given human column name. We try BOTH known PAI conventions:
+ *   1) spaces PRESERVED  -> "F_Settlement Date"  (what the SDK field.name path implies)
+ *   2) spaces STRIPPED   -> "F_SettlementDate"   (the collapsed SDK convention)
+ * Blank/whitespace input yields no candidates. Never fabricates a column name;
+ * only reshapes the exact header text we were given.
+ */
+export function candidateDateFilterKeys(columnName: string | null | undefined): string[] {
+  const name = (columnName ?? "").trim();
+  if (name === "") return [];
+  const stripped = name.replace(/\s+/g, "");
+  const keys: string[] = [];
+  const add = (k: string) => {
+    if (k !== "" && !keys.includes(k)) keys.push(k);
+  };
+  add(`F_${name}`); // spaces preserved
+  add(`F_${stripped}`); // spaces stripped (SDK convention)
+  return keys;
+}
+
+/** The min/max ISO dates + row count parsed from a report CSV's real date column. */
+export type PaiCsvDateSpan = {
+  /** Number of data rows (excludes the header). */
+  rowCount: number;
+  /** Earliest parsed date (ISO yyyy-mm-dd), or "" when no date parsed. */
+  from: string;
+  /** Latest parsed date (ISO yyyy-mm-dd), or "" when no date parsed. */
+  to: string;
+  /** Whole-day span (to - from) inclusive; 0 when fewer than 2 distinct dates. */
+  spanDays: number;
+};
+
+/**
+ * Measure the date span actually present in a downloaded report CSV, using the
+ * SAME real date column and date parser as the importer (parseUsDate). This is
+ * the yardstick for empirical verification: if a candidate filter key truly
+ * applied the full-history range, the returned CSV's span is WIDER than the
+ * unfiltered/default download's span. Never throws; a bad CSV yields zeros.
+ */
+export function measureCsvDateSpan(kind: PaiReportKind, csv: string | null | undefined): PaiCsvDateSpan {
+  const empty: PaiCsvDateSpan = { rowCount: 0, from: "", to: "", spanDays: 0 };
+  const text = (csv ?? "").trim();
+  if (text === "") return empty;
+  // Reject an HTML error page (session expired / not a CSV).
+  if (/^\s*<(?:!doctype|html)/i.test(text)) return empty;
+
+  const table = parseCsv(text);
+  if (table.length < 2) return empty; // header only (or nothing)
+
+  const header = table[0];
+  const idxMap = headerIndex(header);
+  // The date column for this report (normalized) — same names the importer uses.
+  const dateCol = PAI_EXPECTED_DATE_COLUMN[kind];
+  const iDate = pickColumn(idxMap, [normalizeHeader(dateCol)]);
+  if (iDate < 0) return { rowCount: Math.max(0, table.length - 1), from: "", to: "", spanDays: 0 };
+
+  let min = "";
+  let max = "";
+  let rows = 0;
+  for (let r = 1; r < table.length; r++) {
+    const cells = table[r];
+    if (!cells || cells.length <= iDate) continue;
+    rows++;
+    const iso = parseUsDate(cells[iDate]);
+    if (!iso) continue;
+    if (min === "" || iso < min) min = iso;
+    if (max === "" || iso > max) max = iso;
+  }
+  const spanDays = min !== "" && max !== "" ? isoDaySpan(min, max) : 0;
+  return { rowCount: rows, from: min, to: max, spanDays };
+}
+
+/** Whole days between two ISO yyyy-mm-dd dates (inclusive of neither end); >=0. */
+function isoDaySpan(fromIso: string, toIso: string): number {
+  const a = Date.parse(`${fromIso}T00:00:00Z`);
+  const b = Date.parse(`${toIso}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  const days = Math.round((b - a) / 86_400_000);
+  return days > 0 ? days : 0;
+}
+
+/**
+ * Decide whether a candidate download's span PROVES the filter took effect,
+ * i.e. it reaches materially FURTHER BACK than the baseline (default) download.
+ * We compare the earliest date: a working full-history filter pulls OLDER rows
+ * than the default window. We require the candidate's `from` to be strictly
+ * earlier than the baseline's `from` by at least `minDaysEarlier` days AND the
+ * candidate to actually have rows. Ties / narrower spans are NOT accepted (so
+ * we never claim success on a filter that PAI silently ignored).
+ */
+export function candidateWidensHistory(
+  baseline: PaiCsvDateSpan,
+  candidate: PaiCsvDateSpan,
+  minDaysEarlier = 1,
+): boolean {
+  if (candidate.rowCount <= 0 || candidate.from === "") return false;
+  if (baseline.from === "") return candidate.from !== ""; // baseline had no date at all
+  return isoDaySpan(candidate.from, baseline.from) >= minDaysEarlier;
 }
 
 // ---------------------------------------------------------------------------
@@ -1036,6 +1152,59 @@ export function __runPaiDiscoveryTests(): void {
   // Values are trimmed on the way in.
   const mTrim = mergeDateFieldOverride({}, { cashLoad: "  F_Trx Time  " });
   assert(mTrim.cashLoad === "F_Trx Time", "discovered value is trimmed");
+
+  // --- candidateDateFilterKeys ----------------------------------------------
+  // A spaced column yields BOTH the preserved and stripped candidates, in order.
+  const ck = candidateDateFilterKeys("Settlement Date");
+  assert(ck.length === 2 && ck[0] === "F_Settlement Date" && ck[1] === "F_SettlementDate", "two ordered candidates for spaced name");
+  // A single-word column yields ONE candidate (preserved == stripped, de-duped).
+  const ck1 = candidateDateFilterKeys("Balance");
+  assert(ck1.length === 1 && ck1[0] === "F_Balance", "single candidate for one-word name");
+  // Trims input; blank yields nothing.
+  assert(candidateDateFilterKeys("  Trx Time  ")[0] === "F_Trx Time", "candidate trims input");
+  assert(candidateDateFilterKeys("   ").length === 0 && candidateDateFilterKeys(null).length === 0, "blank -> no candidates");
+
+  // --- measureCsvDateSpan ----------------------------------------------------
+  // Simple Summary CSV: min/max come from the "Settlement Date" column.
+  const ssCsv =
+    "Terminal,Location,Settlement Date,Total Trxs\n" +
+    "HG26499,PO,02/29/2024,10\n" +
+    "HG26499,PO,08/09/2026,12\n" +
+    "HG26499,PO,07/01/2025,11\n";
+  const ssSpan = measureCsvDateSpan("simpleSummary", ssCsv);
+  assert(ssSpan.rowCount === 3, "measureCsvDateSpan counts data rows");
+  assert(ssSpan.from === "2024-02-29" && ssSpan.to === "2026-08-09", "measureCsvDateSpan min/max from date col");
+  assert(ssSpan.spanDays > 800, "measureCsvDateSpan computes a multi-year span");
+  // Cash Load CSV: date col is "Trx Time" (with time component stripped by parseUsDate).
+  const clCsv =
+    "Terminal Number,Location,Group,Trx Time,Cash Load,Balance\n" +
+    "HG26499,PO,G,08/01/2026 10:15:00,100,900\n" +
+    "HG26499,PO,G,08/09/2026 11:00:00,200,700\n";
+  const clSpan = measureCsvDateSpan("cashLoad", clCsv);
+  assert(clSpan.from === "2026-08-01" && clSpan.to === "2026-08-09", "cashLoad Trx Time span (time stripped)");
+  // Empty / HTML / header-only -> zeros (never throws).
+  assert(measureCsvDateSpan("simpleSummary", "").rowCount === 0, "empty CSV -> zero rows");
+  assert(measureCsvDateSpan("simpleSummary", "<!doctype html><html>err</html>").rowCount === 0, "HTML page -> zero rows");
+  assert(measureCsvDateSpan("simpleSummary", "Terminal,Settlement Date").rowCount === 0, "header-only -> zero rows");
+  // Missing date column -> rowCount counted but no from/to.
+  const noDateSpan = measureCsvDateSpan("simpleSummary", "Terminal,Amount\nHG26499,1234\n");
+  assert(noDateSpan.rowCount === 1 && noDateSpan.from === "" && noDateSpan.to === "", "no date col -> rows but empty span");
+
+  // --- candidateWidensHistory ------------------------------------------------
+  const baseNarrow: PaiCsvDateSpan = { rowCount: 14, from: "2026-08-01", to: "2026-08-09", spanDays: 8 };
+  const candWide: PaiCsvDateSpan = { rowCount: 893, from: "2024-02-29", to: "2026-08-09", spanDays: 892 };
+  const candSame: PaiCsvDateSpan = { rowCount: 14, from: "2026-08-01", to: "2026-08-09", spanDays: 8 };
+  const candEmpty: PaiCsvDateSpan = { rowCount: 0, from: "", to: "", spanDays: 0 };
+  assert(candidateWidensHistory(baseNarrow, candWide) === true, "wider candidate (older 'from') accepted");
+  assert(candidateWidensHistory(baseNarrow, candSame) === false, "same window NOT accepted (filter ignored)");
+  assert(candidateWidensHistory(baseNarrow, candEmpty) === false, "empty candidate NOT accepted");
+  // A candidate only 1 day older passes the default threshold; raise threshold -> rejected.
+  const cand1Day: PaiCsvDateSpan = { rowCount: 15, from: "2026-07-31", to: "2026-08-09", spanDays: 9 };
+  assert(candidateWidensHistory(baseNarrow, cand1Day, 1) === true, "1-day-older accepted at threshold 1");
+  assert(candidateWidensHistory(baseNarrow, cand1Day, 30) === false, "1-day-older rejected at threshold 30");
+  // Baseline with no dates at all -> any candidate WITH a date counts.
+  const baseNoDate: PaiCsvDateSpan = { rowCount: 0, from: "", to: "", spanDays: 0 };
+  assert(candidateWidensHistory(baseNoDate, candWide) === true, "no-date baseline -> any dated candidate widens");
 
   console.log("pai-discovery: all self-tests passed");
 }

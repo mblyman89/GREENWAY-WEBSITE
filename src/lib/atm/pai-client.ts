@@ -51,6 +51,10 @@ import {
   toDateFieldOverride,
   summarizeDiscovery,
   summarizeProbeCsv,
+  pickDateField,
+  candidateDateFilterKeys,
+  measureCsvDateSpan,
+  candidateWidensHistory,
   scoreProbeForKind,
   countExpectedColumns,
   PAI_REPORT_COLUMN_TOKENS,
@@ -61,6 +65,7 @@ import {
   type PaiReportConfigId,
   type PaiProbeSummary,
   type PaiReportSelection,
+  type PaiCsvDateSpan,
 } from "./pai-discovery";
 
 /** How long any single PAI HTTP call may take before we give up (ms). */
@@ -435,6 +440,207 @@ export async function discoverReportFilterFields(): Promise<PaiDiscoveryResult> 
     override: toDateFieldOverride(discoveries),
     summary: summarizeDiscovery(discoveries),
   };
+}
+
+// ---------------------------------------------------------------------------
+// EMPIRICAL date-field verification — the no-guess way to fix full-history.
+//
+// The FIND_CONFIG discovery came back empty for this account, and we can't be
+// certain whether PAI wants "F_Settlement Date" (spaces kept) or
+// "F_SettlementDate" (spaces stripped). Rather than GUESS, we PROVE it: for each
+// report that still uses the unverified default, we
+//   (1) download a BASELINE CSV with NO date range and measure its date span;
+//   (2) for each candidate F_ key (both space conventions), download the FULL
+//       history window and measure the span;
+//   (3) KEEP the first candidate whose span reaches materially further back than
+//       the baseline (candidateWidensHistory) — that candidate demonstrably made
+//       PAI honor the range. If no candidate widens it, we confirm NOTHING (the
+//       caller reports honestly; we never claim a fix that didn't happen).
+// Read-only at PAI (downloads only). Never throws; creds never leak.
+// ---------------------------------------------------------------------------
+
+/** Per-report outcome of empirical verification (transparent + auditable). */
+export type PaiVerifyReport = {
+  kind: PaiReportKind;
+  /** The proven F_ filter key, or "" when no candidate widened the history. */
+  filterKey: string;
+  /** The human column name we derived the candidates from (from the CSV header). */
+  columnName: string;
+  /** Baseline (no-range) span, for the note. */
+  baseline: PaiCsvDateSpan;
+  /** The winning candidate's span (equals baseline shape when none won). */
+  proven: PaiCsvDateSpan | null;
+  /** Plain-English note for Michael (what we tried and what happened). */
+  note: string;
+};
+
+export type PaiVerifyResult =
+  | {
+      ok: true;
+      /** Proven per-report override ({kind: "F_<key>"}) — only keys that WORKED. */
+      override: Record<string, string>;
+      reports: PaiVerifyReport[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * For each report kind in `kinds`, empirically confirm the date-filter key by
+ * proving it widens the returned history. Logs in once, probes, logs out. Only
+ * returns keys that DEMONSTRABLY worked. Never throws; never guesses.
+ */
+export async function verifyDateFieldsByProbe(
+  kinds: PaiReportKind[],
+): Promise<PaiVerifyResult> {
+  const secrets = await getAtmConnectionSecrets();
+  if (!secrets) {
+    return {
+      ok: false,
+      error:
+        "PAI login isn’t saved yet. Add your paireports.com username and password on the " +
+        "Connection & health tab first.",
+    };
+  }
+
+  // Pin to the saved report GUIDs so we probe the RIGHT report each time.
+  const savedSelections = parseReportSelection(
+    (secrets.reportConfig as Record<string, unknown> | null)?.reportSelection,
+  );
+  const reportGuids: Partial<Record<PaiReportKind, string | null | undefined>> = {
+    cashLoad: savedSelections.cashLoad?.reportGuid,
+    simpleSummary: savedSelections.simpleSummary?.reportGuid,
+    fundsMovement: savedSelections.fundsMovement?.reportGuid,
+  };
+
+  const fullRange = computePaiHistoryRange(new Date(), secrets.reportConfig);
+
+  // Login URL derived exactly as the pull does (from a default plan's filterUrl).
+  const defaultPlans = resolveAllPaiReportPlans(secrets.portalBaseUrl, secrets.reportConfig, null, reportGuids);
+  const loginUrl = defaultPlans.cashLoad.filterUrl.replace(/\/[^/]*\?.*$/, "/Login.event");
+  const logoutUrl = loginUrl.replace(/Login\.event$/, "DoLogout.event");
+
+  // 1) LOGIN.
+  let cookies = "";
+  try {
+    const res = await fetchWithTimeout(loginUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "text/html,application/xhtml+xml",
+      },
+      body: new URLSearchParams({ Username: secrets.username, Password: secrets.password }).toString(),
+    });
+    cookies = collectCookies(cookies, res.headers.get("set-cookie"));
+    if (!cookies.toLowerCase().includes("jsessionid")) {
+      return {
+        ok: false,
+        error:
+          "Couldn’t sign in to PAI to verify your report date columns. Double-check the saved " +
+          "username and password on the Connection & health tab.",
+      };
+    }
+  } catch {
+    return { ok: false, error: "Couldn’t reach PAI to sign in (network timeout). Try again shortly." };
+  }
+
+  const override: Record<string, string> = {};
+  const reports: PaiVerifyReport[] = [];
+
+  for (const kind of kinds) {
+    // 2) BASELINE — download with NO date range (the proven daily path).
+    const baseDl = await downloadOne(defaultPlans[kind], cookies);
+    if (!baseDl.ok) {
+      reports.push({
+        kind,
+        filterKey: "",
+        columnName: "",
+        baseline: { rowCount: 0, from: "", to: "", spanDays: 0 },
+        proven: null,
+        note: `Couldn’t download a baseline for this report (${baseDl.error}).`,
+      });
+      continue;
+    }
+    const baseline = measureCsvDateSpan(kind, baseDl.csv);
+
+    // Derive the real date column name from the baseline CSV header.
+    const summary = summarizeProbeCsv(baseDl.csv);
+    const headerPick = pickDateField(
+      kind,
+      summary.columns.map((name) => ({ name, type: "", readonly: false })),
+    );
+    const columnName = headerPick.fieldName; // e.g. "Settlement Date" (from the real header)
+    if (columnName === "") {
+      reports.push({
+        kind,
+        filterKey: "",
+        columnName: "",
+        baseline,
+        proven: null,
+        note:
+          summary.columns.length > 0
+            ? `No single date column in the header (columns: ${summary.columns.join(", ")}).`
+            : "The report returned no readable column header.",
+      });
+      continue;
+    }
+
+    // 3) Try each candidate key over the FULL history window; keep the first
+    //    that PROVABLY widens the span vs the baseline.
+    const candidates = candidateDateFilterKeys(columnName);
+    let proven: PaiCsvDateSpan | null = null;
+    let provenKey = "";
+    const tried: string[] = [];
+    for (const key of candidates) {
+      const plans = resolveAllPaiReportPlans(
+        secrets.portalBaseUrl,
+        { ...(secrets.reportConfig as Record<string, unknown> | null), dateFieldName: { [kind]: key } },
+        fullRange,
+        reportGuids,
+      );
+      const dl = await downloadOne(plans[kind], cookies);
+      if (!dl.ok) {
+        tried.push(`${key} (download failed)`);
+        continue;
+      }
+      const span = measureCsvDateSpan(kind, dl.csv);
+      tried.push(`${key} → ${span.from || "?"}…${span.to || "?"} (${span.rowCount} rows)`);
+      if (candidateWidensHistory(baseline, span)) {
+        proven = span;
+        provenKey = key;
+        break;
+      }
+    }
+
+    if (provenKey !== "") {
+      override[kind] = provenKey;
+      reports.push({
+        kind,
+        filterKey: provenKey,
+        columnName,
+        baseline,
+        proven,
+        note:
+          `Confirmed ${provenKey}: full history ${proven?.from}…${proven?.to} ` +
+          `(${proven?.rowCount} rows) vs baseline ${baseline.from || "?"}…${baseline.to || "?"}.`,
+      });
+    } else {
+      reports.push({
+        kind,
+        filterKey: "",
+        columnName,
+        baseline,
+        proven: null,
+        note:
+          `No date-filter key widened this report’s history. Tried: ${tried.join("; ")}. ` +
+          `PAI may not accept a range filter for this report via the download URL.`,
+      });
+    }
+  }
+
+  // 4) LOGOUT (best-effort).
+  await bestEffortLogout(logoutUrl, cookies);
+
+  return { ok: true, override, reports };
 }
 
 /** Best-effort logout — never fails the caller on a logout hiccup. */
