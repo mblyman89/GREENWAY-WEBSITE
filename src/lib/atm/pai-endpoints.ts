@@ -224,10 +224,33 @@ export function resolvePaiDateFieldName(
       const s = perKind.trim();
       if (s !== "") return { name: s, usingDefault: false };
     }
+    // Reserved "*" key = a legacy single override applied to every report
+    // (preserved by mergeDateFieldOverride when the old value was a plain
+    // string). Only used when this report has no per-kind entry of its own.
+    const star = (raw as Record<string, unknown>)["*"];
+    if (typeof star === "string") {
+      const s = star.trim();
+      if (s !== "") return { name: s, usingDefault: false };
+    }
   }
 
   const col = PAI_DATE_COLUMN[kind].replace(/\s+/g, "");
   return { name: `F_${col}`, usingDefault: true };
+}
+
+/**
+ * List the report kinds that DO NOT yet have a confirmed (saved) date-filter
+ * column name in report_config.dateFieldName \u2014 i.e. the ones still using the
+ * unverified SDK-convention default. These are exactly the reports PAI will
+ * silently refuse to date-filter (returning only its small default window)
+ * during a history/backfill pull. The self-heal step discovers + saves their
+ * real column names before pulling. Pure (no I/O) so it is fully unit-tested.
+ */
+export function reportKindsMissingDateField(
+  reportConfig?: Record<string, unknown> | null,
+): PaiReportKind[] {
+  const kinds: PaiReportKind[] = ["cashLoad", "simpleSummary", "fundsMovement"];
+  return kinds.filter((k) => resolvePaiDateFieldName(k, reportConfig).usingDefault);
 }
 
 /** Join a base + path safely with exactly one slash. */
@@ -624,6 +647,46 @@ export function __runPaiEndpointsTests(): void {
   assert(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "a b").endsWith("ReportGUID=a%20b"), "guid GET url encodes the GUID");
   // No GUID → no ReportGUID param (still a valid report-default download URL).
   assert(!buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "  ").includes("ReportGUID="), "guid GET url omits empty GUID");
+
+  // reportKindsMissingDateField: which reports still lack a CONFIRMED date column.
+  // Nothing saved → ALL three are on the guessed default → all three "missing".
+  const missAll = reportKindsMissingDateField(null);
+  assert(
+    missAll.length === 3 &&
+      missAll.includes("cashLoad") &&
+      missAll.includes("simpleSummary") &&
+      missAll.includes("fundsMovement"),
+    "no override → all three reports missing a confirmed date field",
+  );
+  // A per-report override for one report → only the other two remain missing.
+  const missPartial = reportKindsMissingDateField({ dateFieldName: { fundsMovement: "F_Settlement Date" } });
+  assert(
+    missPartial.length === 2 &&
+      missPartial.includes("cashLoad") &&
+      missPartial.includes("simpleSummary") &&
+      !missPartial.includes("fundsMovement"),
+    "one confirmed report → exactly the other two are missing",
+  );
+  // All three confirmed → none missing.
+  const missNone = reportKindsMissingDateField({
+    dateFieldName: { cashLoad: "F_Trx Time", simpleSummary: "F_Settlement Date", fundsMovement: "F_Settlement Date" },
+  });
+  assert(missNone.length === 0, "all three confirmed → none missing");
+  // Legacy plain-string override (applies to every report) → none missing.
+  const missLegacy = reportKindsMissingDateField({ dateFieldName: "F_Some Column" });
+  assert(missLegacy.length === 0, "legacy single-string override → none missing");
+  // Reserved "*" key (legacy string preserved by deep-merge) → none missing.
+  const missStar = reportKindsMissingDateField({ dateFieldName: { "*": "F_Some Column" } });
+  assert(missStar.length === 0, "reserved '*' override applies to every report → none missing");
+  // A per-report entry wins over "*" for its own report, and "*" covers the rest.
+  const starResolveCl = resolvePaiDateFieldName("cashLoad", {
+    dateFieldName: { cashLoad: "F_Trx Time", "*": "F_Fallback" },
+  });
+  assert(starResolveCl.name === "F_Trx Time" && !starResolveCl.usingDefault, "per-report entry beats '*'");
+  const starResolveSs = resolvePaiDateFieldName("simpleSummary", {
+    dateFieldName: { cashLoad: "F_Trx Time", "*": "F_Fallback" },
+  });
+  assert(starResolveSs.name === "F_Fallback" && !starResolveSs.usingDefault, "'*' covers a report with no own entry");
 
   console.log("pai-endpoints: all self-tests passed");
 }

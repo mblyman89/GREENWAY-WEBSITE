@@ -537,6 +537,38 @@ export function toDateFieldOverride(discoveries: PaiReportDiscovery[]): Record<s
   return out;
 }
 
+/**
+ * Deep-merge freshly discovered per-report date-field overrides INTO whatever
+ * report_config.dateFieldName already holds, WITHOUT clobbering existing keys.
+ *
+ * Why this exists: mergeAtmReportConfig() is a SHALLOW top-level merge, so
+ * passing `{ dateFieldName: newOverride }` would REPLACE the whole
+ * dateFieldName object and lose a previously-confirmed report. This helper
+ * produces the correct combined object to save. New values win for the keys
+ * they cover (a re-discovery may legitimately correct a stale name); untouched
+ * keys are preserved. A legacy plain-STRING dateFieldName (a single override
+ * applied to every report) is preserved under the reserved "*" key so it is
+ * not silently dropped. Pure (no I/O) so it is fully unit-tested.
+ */
+export function mergeDateFieldOverride(
+  existing: unknown,
+  discovered: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof existing === "string") {
+    const s = existing.trim();
+    if (s !== "") out["*"] = s;
+  } else if (existing && typeof existing === "object") {
+    for (const [k, v] of Object.entries(existing as Record<string, unknown>)) {
+      if (typeof v === "string" && v.trim() !== "") out[k] = v.trim();
+    }
+  }
+  for (const [k, v] of Object.entries(discovered)) {
+    if (typeof v === "string" && v.trim() !== "") out[k] = v.trim();
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // 5) PROBE analysis — "try it and see what data comes back" (no guessing).
 // ---------------------------------------------------------------------------
@@ -977,6 +1009,33 @@ export function __runPaiDiscoveryTests(): void {
   assert(lp.simpleSummary?.winnerGuid === "G-2", "parseLastProbe keeps the winner GUID");
   assert(lp.fundsMovement === undefined, "parseLastProbe drops empty-candidate kinds");
   assert(!("bogus" in lp), "parseLastProbe ignores unknown kinds");
+
+  // mergeDateFieldOverride: deep-merge new confirmations into what's saved,
+  // NEVER clobbering existing keys (mergeAtmReportConfig is shallow at the top).
+  // Nothing saved yet → result is exactly the discovered overrides.
+  const mNew = mergeDateFieldOverride(null, { cashLoad: "F_Trx Time" });
+  assert(mNew.cashLoad === "F_Trx Time" && Object.keys(mNew).length === 1, "merge into empty");
+  // Existing per-report object + a new report → both kept.
+  const mAdd = mergeDateFieldOverride({ fundsMovement: "F_Settlement Date" }, { cashLoad: "F_Trx Time" });
+  assert(
+    mAdd.fundsMovement === "F_Settlement Date" && mAdd.cashLoad === "F_Trx Time" && Object.keys(mAdd).length === 2,
+    "merge keeps existing + adds new (no clobber)",
+  );
+  // A re-discovery for an existing key → the NEW (corrected) value wins.
+  const mOverwrite = mergeDateFieldOverride({ cashLoad: "F_Old Name" }, { cashLoad: "F_Trx Time" });
+  assert(mOverwrite.cashLoad === "F_Trx Time" && Object.keys(mOverwrite).length === 1, "new value wins on same key");
+  // Legacy plain-STRING existing override → preserved under reserved "*" key.
+  const mLegacy = mergeDateFieldOverride("F_Legacy", { cashLoad: "F_Trx Time" });
+  assert(mLegacy["*"] === "F_Legacy" && mLegacy.cashLoad === "F_Trx Time", "legacy string preserved under '*'");
+  // Blank/whitespace values are dropped from both sides (never save an empty name).
+  const mBlank = mergeDateFieldOverride({ simpleSummary: "  " }, { cashLoad: "  ", fundsMovement: "F_Settlement Date" });
+  assert(
+    !("simpleSummary" in mBlank) && !("cashLoad" in mBlank) && mBlank.fundsMovement === "F_Settlement Date",
+    "blank names are dropped on both sides",
+  );
+  // Values are trimmed on the way in.
+  const mTrim = mergeDateFieldOverride({}, { cashLoad: "  F_Trx Time  " });
+  assert(mTrim.cashLoad === "F_Trx Time", "discovered value is trimmed");
 
   console.log("pai-discovery: all self-tests passed");
 }

@@ -33,6 +33,7 @@ import {
 import {
   buildReportDiagnostic,
   summarizeReportDiagnostics,
+  PAI_REPORT_LABEL,
   type PaiReportDiagnostic,
 } from "./atm-report-diagnostics";
 import {
@@ -46,8 +47,12 @@ import {
   upsertAtmSettlements,
   upsertAtmCashLoads,
   setAtmSyncResult,
+  getAtmConnectionSecrets,
+  mergeAtmReportConfig,
 } from "./store";
-import { pullAllPaiReports } from "./pai-client";
+import { pullAllPaiReports, discoverReportFilterFields } from "./pai-client";
+import { reportKindsMissingDateField, type PaiReportKind } from "./pai-endpoints";
+import { mergeDateFieldOverride } from "./pai-discovery";
 
 export type IngestAtmCsvsInput = {
   /** ATM Cash Load Report CSV (Trx Time / Cash Load / Balance). */
@@ -151,6 +156,22 @@ export async function runAtmLiveSync(options?: {
   /** When true, backfill from the earliest available date (2/29/24) instead of PAI's default window. */
   history?: boolean;
 }): Promise<LiveSyncResult> {
+  // ------------------------------------------------------------------------
+  // SELF-HEAL (history pulls only): make Backfill "just work". PAI only honors
+  // our date range when we send each report's EXACT date-column name; any report
+  // still on the guessed default is silently un-filtered and returns only PAI's
+  // small default window (this is why Cash Loads / Bank Deposits stalled). So
+  // before a full-history pull, if any report still lacks a CONFIRMED date
+  // column, ask PAI for the real names (read-only) and SAVE them first \u2014 no
+  // separate button, no ordering. We DEEP-MERGE so existing confirmations are
+  // never clobbered, and we only ever save CONFIDENT picks (ambiguous reports
+  // are left alone and reported by the pull's per-report diagnostics, never
+  // guessed). Best-effort: a discovery hiccup never blocks the pull itself.
+  let selfHealNote = "";
+  if (options?.history) {
+    selfHealNote = await selfHealDateFields();
+  }
+
   const pull = await pullAllPaiReports(options?.history ? { history: true } : undefined);
 
   if (!pull.ok) {
@@ -230,8 +251,65 @@ export async function runAtmLiveSync(options?: {
   // message so nothing is hidden — Michael sees each report's row count + span.
   const diagLine = summarizeReportDiagnostics(diagnostics);
   const skipped = problems.length > 0 ? ` (${problems.length} report(s) skipped)` : "";
-  const message = `${ingest.message}${skipped} — ${diagLine}`;
+  const healPrefix = selfHealNote ? `${selfHealNote} ` : "";
+  const message = `${healPrefix}${ingest.message}${skipped} — ${diagLine}`;
 
   if (!ingest.ok) return { ok: false, error: message, summary: ingest.summary, diagnostics };
   return { ok: true, message, summary: ingest.summary, diagnostics };
+}
+
+/**
+ * Before a full-history pull, ensure every report has a CONFIRMED date-filter
+ * column saved. Returns a short, plain-English note describing what it did (or
+ * "" when nothing was needed / possible) \u2014 folded into the pull message so
+ * Michael sees it. NEVER throws and NEVER blocks the pull: a discovery/network
+ * hiccup just means we proceed with whatever is saved. NEVER guesses \u2014 only
+ * PAI-confirmed, confident column names are saved (deep-merged, never clobbering
+ * an existing confirmation).
+ */
+async function selfHealDateFields(): Promise<string> {
+  try {
+    const secrets = await getAtmConnectionSecrets();
+    if (!secrets) return ""; // no creds \u2192 the pull itself returns the helpful message
+
+    const missing = reportKindsMissingDateField(secrets.reportConfig);
+    if (missing.length === 0) return ""; // all three already confirmed \u2014 nothing to do
+
+    const discovery = await discoverReportFilterFields();
+    if (!discovery.ok) {
+      // Read-only discovery failed (e.g. no Data-API access). Don't block the
+      // pull; the per-report diagnostics will still show "default field name".
+      return "Couldn’t auto-confirm the report date columns this run (I’ll still pull what I can).";
+    }
+
+    // Only save CONFIDENT overrides for the reports that were actually missing.
+    const confident = discovery.override; // { kind: "F_<Real Name>" } \u2014 confident picks only
+    const toSave: Record<string, string> = {};
+    for (const kind of missing) {
+      const v = confident[kind];
+      if (typeof v === "string" && v.trim() !== "") toSave[kind] = v.trim();
+    }
+
+    if (Object.keys(toSave).length === 0) {
+      // Discovery ran but couldn't confidently name a column for the missing
+      // report(s) \u2014 typically because that report is ambiguous on PAI's side.
+      // Tell Michael plainly (still never guessing).
+      return `Couldn’t auto-confirm a date column for ${missing
+        .map((k) => PAI_REPORT_LABEL[k])
+        .join(", ")} — open “Change which report is used (advanced)” to pick it.`;
+    }
+
+    const existing = (secrets.reportConfig as Record<string, unknown> | null)?.dateFieldName;
+    const merged = mergeDateFieldOverride(existing, toSave);
+    const saved = await mergeAtmReportConfig({ dateFieldName: merged });
+    if (!saved.ok) {
+      return `Found the report date columns but couldn’t save them (${saved.error}); pulling with current settings.`;
+    }
+
+    const fixedLabels = Object.keys(toSave).map((k) => PAI_REPORT_LABEL[k as PaiReportKind]);
+    return `Auto-confirmed date column for ${fixedLabels.join(", ")} — pulling full history now.`;
+  } catch {
+    // Absolutely never let a self-heal problem break the pull.
+    return "";
+  }
 }
