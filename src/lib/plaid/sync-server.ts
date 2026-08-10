@@ -25,7 +25,7 @@ import "server-only";
  * is passed straight to Plaid, and is never logged or returned to the caller.
  */
 import { getPlaidClient } from "./client";
-import { plaidDollarsToCents, planTransactionMerge, mapItemStatus, type PlaidTxnInput } from "./plaid-core";
+import { plaidDollarsToCents, planTransactionMerge, mapItemStatus, extractPlaidError, type PlaidTxnInput } from "./plaid-core";
 import {
   listPlaidItems,
   getPlaidItem,
@@ -63,16 +63,6 @@ export type AllSyncResult = {
   message: string;
   items: ItemSyncResult[];
 };
-
-/** Pull the Plaid error_code from an unknown thrown value (axios error shape). */
-function extractPlaidErrorCode(err: unknown): string | null {
-  if (err && typeof err === "object") {
-    const anyErr = err as { response?: { data?: { error_code?: unknown } } };
-    const code = anyErr.response?.data?.error_code;
-    if (typeof code === "string" && code.trim() !== "") return code;
-  }
-  return null;
-}
 
 /** Refresh the balances we got back on a sync page (free — no extra call). */
 async function refreshBalancesFromPage(
@@ -156,7 +146,7 @@ export async function runItemSync(item: PlaidItemRecord): Promise<ItemSyncResult
       });
       data = resp.data as typeof data;
     } catch (err) {
-      const code = extractPlaidErrorCode(err);
+      const code = extractPlaidError(err).code;
       if (isMutationDuringPagination(code)) {
         // Restart the whole loop from the run's start cursor (Plaid's rule).
         state = onMutationDuringPagination(state);
