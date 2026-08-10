@@ -31,7 +31,7 @@ import {
   buildCashLoadsView,
   type AtmTab,
 } from "@/lib/atm/atm-ui-core";
-import { parseLastProbe } from "@/lib/atm/pai-discovery";
+import { parseLastProbe, parseReportSelection } from "@/lib/atm/pai-discovery";
 import {
   saveAtmConnectionAction,
   clearAtmCredentialsAction,
@@ -210,6 +210,20 @@ function HealthTab({
   // The most-recent probe's ranked candidates per kind, so we can offer a
   // one-click "pick this report" list (no typing GUIDs).
   const lastProbe = parseLastProbe((conn.reportConfig as Record<string, unknown> | null)?.lastProbe);
+  // The report Michael has CHOSEN for each kind (what the sync downloads). Once
+  // these are set, the "test / pick" tools below are just for changing his mind.
+  const savedSelection = parseReportSelection(
+    (conn.reportConfig as Record<string, unknown> | null)?.reportSelection,
+  );
+  const reportKinds = [
+    { kind: "simpleSummary", label: "Simple Summary" },
+    { kind: "fundsMovement", label: "Bank Deposits" },
+    { kind: "cashLoad", label: "Cash Loads" },
+  ] as const;
+  const allChosen = reportKinds.every((k) => {
+    const sel = savedSelection[k.kind];
+    return Boolean(sel && (sel.reportGuid || sel.name));
+  });
   return (
     <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-2">
@@ -324,8 +338,8 @@ function HealthTab({
         </dl>
         <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
           <form action={runAtmLiveSyncAction}>
-            <button type="submit" className={btnGhost}>
-              Sync now (live)
+            <button type="submit" className={btnPrimary}>
+              Sync now
             </button>
           </form>
           <form action={runAtmBackfillAction}>
@@ -333,57 +347,74 @@ function HealthTab({
               Backfill history (from 2/29/24)
             </button>
           </form>
-          <form action={discoverPaiReportFieldsAction}>
-            <button type="submit" className={btnGhost}>
-              Discover report fields (no F12)
-            </button>
-          </form>
         </div>
         <p className="mt-2 text-xs text-white/40">
-          &ldquo;Sync now&rdquo; signs in to PAI and pulls your three reports for the recent window (it also runs once
-          daily). &ldquo;Backfill history&rdquo; does the same but requests everything back to 2/29/2024 &mdash; run it
-          once to load your full history, then the daily sync keeps it current. Re-importing is always safe: the same
-          rows update instead of duplicating. If PAI hands back a web page instead of a CSV, you&rsquo;ll see a note
-          here, and you can always use &ldquo;Import PAI report CSVs&rdquo; below.
+          &ldquo;Sync now&rdquo; signs in to PAI and pulls your reports for the recent window (it also runs once daily).
+          &ldquo;Backfill history&rdquo; loads everything back to 2/29/2024 &mdash; run it once, then the daily sync keeps
+          it current. Re-importing is always safe: the same rows update instead of duplicating.
         </p>
-        <p className="mt-2 text-xs text-white/40">
-          <span className="font-semibold text-white/70">&ldquo;Discover report fields (no F12)&rdquo;</span> asks PAI
-          itself for each report&rsquo;s real date-column name (using the same login) and saves it, so a backfill can
-          pull the <em>full</em> history for all three reports &mdash; no browser inspection needed. It only reads from
-          PAI and changes nothing there. Run it once, then click &ldquo;Backfill history&rdquo;.
-        </p>
+      </div>
 
-        <div className="mt-5 border-t border-white/10 pt-4">
-          <p className="text-sm font-semibold text-white/80">Not sure which report is the right one?</p>
-          <p className="mt-1 text-xs text-white/40">
-            When PAI lists several look-alike reports, click a button below to <em>try each candidate and see which one
-            actually returns data</em> (with a real date column). It downloads a small sample of each &mdash; read-only
-            &mdash; then ranks them. If one clearly wins, it&rsquo;s saved automatically; otherwise you&rsquo;ll get a
-            ranked list to choose from. After a report is chosen, run &ldquo;Discover report fields&rdquo; then
-            &ldquo;Backfill history&rdquo;.
+      <div className={cardCls}>
+        <h2 className="mb-1 text-sm font-bold text-white">Reports in use</h2>
+        <p className="mb-3 text-xs text-white/40">
+          {allChosen
+            ? "These are the reports your sync downloads. You\u2019re all set \u2014 use \u201cSync now\u201d or \u201cBackfill history\u201d above."
+            : "Choose the correct report for each row below so the sync knows exactly what to download."}
+        </p>
+        <dl className="divide-y divide-white/5 text-sm">
+          {reportKinds.map((k) => {
+            const sel = savedSelection[k.kind];
+            const chosen = Boolean(sel && (sel.reportGuid || sel.name));
+            return (
+              <div key={k.kind} className="flex items-start justify-between gap-3 py-2">
+                <dt className="text-white/50">{k.label}</dt>
+                <dd className="text-right">
+                  {chosen ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={chipCls("green")}>Chosen</span>
+                      <span className="text-white/80">{sel?.name || sel?.reportGuid}</span>
+                    </span>
+                  ) : (
+                    <span className={chipCls("orange")}>Not chosen yet</span>
+                  )}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+
+        <details className="mt-4 border-t border-white/10 pt-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white/80">
+            {allChosen ? "Change which report is used (advanced)" : "Find & choose the right report"}
+          </summary>
+
+          <p className="mt-3 text-xs text-white/40">
+            When PAI lists several look-alike reports, click a &ldquo;Test&rdquo; button to <em>try each candidate and
+            see which one actually returns data</em> (read-only &mdash; it downloads a small sample and ranks them). If
+            one clearly wins it&rsquo;s saved automatically; otherwise pick it from the ranked list. After a report is
+            chosen, run &ldquo;Discover report fields&rdquo; then &ldquo;Backfill history&rdquo;.
           </p>
+
           <div className="mt-3 flex flex-wrap gap-2">
-            {(
-              [
-                { kind: "simpleSummary", label: "Test: Simple Summary" },
-                { kind: "fundsMovement", label: "Test: Bank Deposits" },
-                { kind: "cashLoad", label: "Test: Cash Loads" },
-              ] as const
-            ).map((b) => (
-              <form key={b.kind} action={probeReportCandidatesAction}>
-                <input type="hidden" name="kind" value={b.kind} />
+            {reportKinds.map((k) => (
+              <form key={k.kind} action={probeReportCandidatesAction}>
+                <input type="hidden" name="kind" value={k.kind} />
                 <button type="submit" className={btnGhost}>
-                  {b.label}
+                  Test: {k.label}
                 </button>
               </form>
             ))}
+            <form action={discoverPaiReportFieldsAction}>
+              <button type="submit" className={btnGhost}>
+                Discover report fields (no F12)
+              </button>
+            </form>
           </div>
 
-          {(["simpleSummary", "fundsMovement", "cashLoad"] as const).map((kind) => {
+          {reportKinds.map(({ kind, label: kindLabel }) => {
             const probe = lastProbe[kind];
             if (!probe || probe.candidates.length === 0) return null;
-            const kindLabel =
-              kind === "simpleSummary" ? "Simple Summary" : kind === "fundsMovement" ? "Bank Deposits" : "Cash Loads";
             return (
               <form key={kind} action={selectPaiReportAction} className="mt-4 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-3">
                 <input type="hidden" name="kind" value={kind} />
@@ -449,7 +480,7 @@ function HealthTab({
               never guess between two that share a name.
             </p>
           </details>
-        </div>
+        </details>
       </div>
 
       <div className={`${cardCls} lg:col-span-2`}>
