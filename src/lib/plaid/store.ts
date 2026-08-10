@@ -40,6 +40,10 @@ export type PlaidItemRecord = {
   status: PlaidItemStatus;
   errorCode: string | null;
   lastSuccessfulSync: string | null;
+  /** Which credential set linked this item (migration 0159). Default 'primary'. */
+  credentialSet: string;
+  /** Owner label for grouping (migration 0159). NULL = fall back to set owner. */
+  owner: string | null;
 };
 
 export type PlaidAccountRecord = {
@@ -76,10 +80,12 @@ type ItemRow = {
   status: string | null;
   error_code: string | null;
   last_successful_sync: string | null;
+  credential_set: string | null;
+  owner: string | null;
 };
 
 const ITEM_COLS =
-  "id,item_id,access_token,institution_id,institution_name,products,transactions_cursor,status,error_code,last_successful_sync";
+  "id,item_id,access_token,institution_id,institution_name,products,transactions_cursor,status,error_code,last_successful_sync,credential_set,owner";
 
 function normStatus(s: string | null | undefined): PlaidItemStatus {
   const v = (s ?? "").trim().toLowerCase();
@@ -101,6 +107,9 @@ function toItemRecord(row: ItemRow): PlaidItemRecord {
     status: normStatus(row.status),
     errorCode: row.error_code,
     lastSuccessfulSync: row.last_successful_sync,
+    // Legacy rows (pre-0159) read as null → treat as 'primary' (the original keys).
+    credentialSet: (row.credential_set ?? "primary").trim() || "primary",
+    owner: row.owner,
   };
 }
 
@@ -110,6 +119,10 @@ export type InsertPlaidItemInput = {
   institutionId?: string | null;
   institutionName?: string | null;
   products?: string[];
+  /** Which credential set linked this item (default 'primary'). */
+  credentialSet?: string | null;
+  /** Owner label for grouping (e.g. 'Michael', 'Wife'). */
+  owner?: string | null;
 };
 
 /** Insert-or-update an item (dedup on item_id). access_token encrypted at rest. */
@@ -125,6 +138,8 @@ export async function upsertPlaidItem(
       institution_id: input.institutionId ?? null,
       institution_name: input.institutionName ?? null,
       products: input.products ?? [],
+      credential_set: (input.credentialSet ?? "primary").trim() || "primary",
+      owner: input.owner ?? null,
       status: "healthy",
       error_code: null,
     },

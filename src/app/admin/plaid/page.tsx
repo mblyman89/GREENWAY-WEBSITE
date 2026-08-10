@@ -35,7 +35,8 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { isPlaidConfigured, plaidEnv } from "@/lib/plaid/env";
+import { isPlaidConfigured, plaidEnv, plaidCredentialSets } from "@/lib/plaid/env";
+import { linkSetOptions, multipleSetsConfigured } from "@/lib/plaid/plaid-credentials-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import { listPlaidItems, listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
@@ -49,6 +50,8 @@ import {
 } from "@/lib/plaid/plaid-ui-core";
 import {
   groupAccountsByInstitution,
+  groupAccountsByOwnerAndInstitution,
+  distinctOwnerCount,
   resolveSelectedAccountId,
   resolveMoneyView,
   moneyViewLabel,
@@ -136,7 +139,11 @@ export default async function PlaidPage({
   // The institution name lives on the ITEM; join it onto each account so the
   // sidebar can group by bank. buildAccountSummary resolves nickname → name.
   const institutionByItem = new Map<string, string | null>();
-  for (const it of items) institutionByItem.set(it.itemId, it.institutionName);
+  const ownerByItem = new Map<string, string | null>();
+  for (const it of items) {
+    institutionByItem.set(it.itemId, it.institutionName);
+    ownerByItem.set(it.itemId, it.owner);
+  }
 
   const groupableAccounts: GroupableAccount[] = accounts.map((a) => {
     const v = buildAccountSummary(a);
@@ -148,9 +155,19 @@ export default async function PlaidPage({
       currentText: v.currentText,
       currentBalanceCents: a.currentBalanceCents,
       role: a.role,
+      owner: ownerByItem.get(a.itemId) ?? null,
     };
   });
   const accountGroups = groupAccountsByInstitution(groupableAccounts);
+  // When accounts belong to more than one owner (Michael + Wife via the 2nd
+  // Plaid API), the sidebar adds an owner header level above the banks.
+  const ownerGroups = groupAccountsByOwnerAndInstitution(groupableAccounts);
+  const showOwnerLevel = distinctOwnerCount(groupableAccounts) > 1;
+  // Configured link sets → one "Connect" button each (owner-labeled). The
+  // picker only appears when 2+ sets are configured; otherwise it's the plain
+  // single button exactly as before.
+  const linkOptions = linkSetOptions(plaidCredentialSets);
+  const showLinkPicker = multipleSetsConfigured(plaidCredentialSets);
 
   const moneyView: MoneyView = resolveMoneyView(sp.view);
   const moneyRange: MoneyRangeKey = resolveMoneyRange(sp.range);
@@ -198,6 +215,45 @@ export default async function PlaidPage({
     q.set("range", range);
     return `/admin/plaid?${q.toString()}`;
   };
+
+  // One institution block in the Money sidebar (bank header + its accounts).
+  // Reused by both the flat (single-owner) and owner-grouped layouts so the
+  // account row markup stays identical everywhere.
+  const renderInstitutionGroup = (group: (typeof accountGroups)[number]) => (
+    <div key={group.key}>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
+          {group.institutionName}
+        </span>
+        <span className="text-xs text-white/40">{group.subtotalText}</span>
+      </div>
+      <ul className="space-y-1">
+        {group.accounts.map((a) => {
+          const active = a.accountId === selectedAccountId;
+          return (
+            <li key={a.accountId}>
+              <Link
+                href={moneyHref({ account: a.accountId })}
+                className={`flex items-center justify-between gap-2 rounded-[var(--admin-radius)] border px-3 py-2 text-sm ${
+                  active
+                    ? "border-emerald-500/40 bg-emerald-500/[0.08] text-white"
+                    : "border-white/10 bg-white/[0.02] text-white/80 hover:bg-white/[0.05]"
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{a.displayName}</span>
+                  <span className="block text-xs text-white/40">
+                    {a.maskText} · {roleLabel(a.role)}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-white/70">{a.currentText}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 
   return (
     <div>
@@ -301,7 +357,26 @@ export default async function PlaidPage({
                 accounts to share. Repeat for each login (e.g. Timberland, then Citi).
               </p>
               {plaidReady && dbReady ? (
-                <PlaidLinkButton />
+                showLinkPicker ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-white/50">
+                      You have two Plaid accounts connected. Pick whose account this bank belongs to.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      {linkOptions.map((opt) => (
+                        <PlaidLinkButton
+                          key={opt.key}
+                          credentialSetKey={opt.key}
+                          label={`Connect a bank for ${opt.owner}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <PlaidLinkButton
+                    credentialSetKey={linkOptions[0]?.key ?? "primary"}
+                  />
+                )
               ) : (
                 <p className="text-sm text-white/40">Connect Plaid and the database to enable this.</p>
               )}
@@ -320,8 +395,13 @@ export default async function PlaidPage({
                       <div key={item.itemId} className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <p className="text-sm font-semibold text-white">
+                            <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
                               {item.institutionName ?? "Bank connection"}
+                              {showOwnerLevel && item.owner ? (
+                                <span className="rounded-full border border-white/15 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/60">
+                                  {item.owner}
+                                </span>
+                              ) : null}
                             </p>
                             <p className="text-xs text-white/40">
                               {itemAccounts.length} account{itemAccounts.length === 1 ? "" : "s"}
@@ -371,44 +451,28 @@ export default async function PlaidPage({
               {/* LEFT: master — accounts grouped by institution */}
               <aside className={`${cardCls} h-fit`}>
                 <h2 className="mb-1 text-sm font-semibold text-white">Accounts</h2>
-                <p className="mb-4 text-xs text-white/50">Grouped by bank. Pick one to see its money.</p>
-                <div className="space-y-4">
-                  {accountGroups.map((group) => (
-                    <div key={group.key}>
-                      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
-                          {group.institutionName}
-                        </span>
-                        <span className="text-xs text-white/40">{group.subtotalText}</span>
+                <p className="mb-4 text-xs text-white/50">
+                  {showOwnerLevel ? "Grouped by owner, then bank. Pick one to see its money." : "Grouped by bank. Pick one to see its money."}
+                </p>
+                {showOwnerLevel ? (
+                  <div className="space-y-6">
+                    {ownerGroups.map((owner) => (
+                      <div key={owner.key}>
+                        <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-white/10 pb-1.5">
+                          <span className="text-sm font-semibold text-white">{owner.owner}</span>
+                          <span className="text-xs text-white/40">{owner.subtotalText}</span>
+                        </div>
+                        <div className="space-y-4">
+                          {owner.institutions.map((group) => renderInstitutionGroup(group))}
+                        </div>
                       </div>
-                      <ul className="space-y-1">
-                        {group.accounts.map((a) => {
-                          const active = a.accountId === selectedAccountId;
-                          return (
-                            <li key={a.accountId}>
-                              <Link
-                                href={moneyHref({ account: a.accountId })}
-                                className={`flex items-center justify-between gap-2 rounded-[var(--admin-radius)] border px-3 py-2 text-sm ${
-                                  active
-                                    ? "border-emerald-500/40 bg-emerald-500/[0.08] text-white"
-                                    : "border-white/10 bg-white/[0.02] text-white/80 hover:bg-white/[0.05]"
-                                }`}
-                              >
-                                <span className="min-w-0">
-                                  <span className="block truncate font-semibold">{a.displayName}</span>
-                                  <span className="block text-xs text-white/40">
-                                    {a.maskText} · {roleLabel(a.role)}
-                                  </span>
-                                </span>
-                                <span className="shrink-0 text-xs font-semibold text-white/70">{a.currentText}</span>
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {accountGroups.map((group) => renderInstitutionGroup(group))}
+                  </div>
+                )}
               </aside>
 
               {/* RIGHT: detail — selected account's four money views */}
@@ -421,6 +485,7 @@ export default async function PlaidPage({
                           <h2 className="text-base font-semibold text-white">{selectedAccount.displayName}</h2>
                           <p className="text-xs text-white/40">
                             {selectedAccount.maskText} · {roleLabel(selectedAccount.role)}
+                            {showOwnerLevel && selectedAccount.owner ? ` · ${selectedAccount.owner}` : ""}
                           </p>
                         </div>
                         <div className="text-right">
