@@ -285,6 +285,8 @@ import { __runAtmUiCoreTests } from "../../src/lib/atm/atm-ui-core";
 import { __runAtmReconcileCoreTests } from "../../src/lib/atm/atm-reconcile-core";
 import { __runPayrollReconcileCoreTests } from "../../src/lib/payroll/payroll-reconcile-core";
 import { __runPayrollUiCoreTests } from "../../src/lib/payroll/payroll-ui-core";
+import { __runVendorReconcileCoreTests } from "../../src/lib/payments/vendor-reconcile-core";
+import { __runVendorReconcileUiCoreTests } from "../../src/lib/payments/vendor-reconcile-ui-core";
 import { __runAtmSyncCoreTests } from "../../src/lib/atm/atm-sync-core";
 import { __runPaiEndpointsTests } from "../../src/lib/atm/pai-endpoints";
 import { __runAtmReportDiagnosticsTests } from "../../src/lib/atm/atm-report-diagnostics";
@@ -553,6 +555,8 @@ async function main() {
   assertNoFailures("payroll-guardrails-core", __runPayrollGuardrailsCoreTests());
   __runPayrollReconcileCoreTests();
   __runPayrollUiCoreTests();
+  __runVendorReconcileCoreTests();
+  __runVendorReconcileUiCoreTests();
   __runInventoryCatalogTests();
   assertNoFailures("code128-core", __runCode128Tests());
   __runPrinterDiagnosticsTests();

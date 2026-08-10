@@ -7,6 +7,12 @@ import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
 import { Card, CardHeader, Section } from "@/components/admin/ui";
+import { getVendorReconcileInputs } from "@/lib/payments/vendor-reconcile-store";
+import {
+  reconcileVendorPayments,
+  type VendorReconcileResult,
+} from "@/lib/payments/vendor-reconcile-core";
+import { VendorReconcileSection } from "@/components/admin/payments/VendorReconcileSection";
 import { VendorAchForm } from "./VendorAchForm";
 import { ManualPaymentForm } from "./ManualPaymentForm";
 
@@ -33,9 +39,22 @@ export default async function VendorPaymentsPage({
     );
   }
 
-  const settings = await getAchCompanySettings();
+  const [settings, reconcileInputs] = await Promise.all([
+    getAchCompanySettings(),
+    getVendorReconcileInputs(),
+  ]);
   const settingsComplete =
     !!settings.destination_routing && !!settings.company_name && !!settings.originating_dfi;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // P7-a — reconcile each recorded ACH/wire vendor payment against the
+  // Main-account withdrawal that carried it out of the bank.
+  const reconcileResult: VendorReconcileResult = reconcileVendorPayments(
+    reconcileInputs.payments,
+    reconcileInputs.withdrawals,
+    { todayIso: today },
+  );
 
   return (
     <div>
@@ -147,6 +166,18 @@ export default async function VendorPaymentsPage({
               <ManualPaymentForm />
             </div>
           </Card>
+        </Section>
+
+        {/* P7-a — Bank reconciliation: prove every recorded vendor payment cleared. */}
+        <Section
+          title="Bank reconciliation"
+          description="Match the vendor payments you've recorded against the real withdrawals on your Main operating account."
+        >
+          <VendorReconcileSection
+            result={reconcileResult}
+            hasMainAccount={reconcileInputs.hasMainAccount}
+            mainAccountNames={reconcileInputs.mainAccountNames}
+          />
         </Section>
       </div>
     </div>
