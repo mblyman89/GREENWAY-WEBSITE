@@ -360,9 +360,37 @@ export function toDateFieldOverride(discoveries: PaiReportDiscovery[]): Record<s
   return out;
 }
 
-/** A plain-English, multi-line summary of the discovery (for the UI + audit). */
+/**
+ * Human label for one candidate report row, preferring its ExternalName (what
+ * Michael sees in the portal) and falling back to its internal Name. PURE.
+ */
+export function candidateLabel(row: PaiReportConfigId): string {
+  const ext = (row.externalName ?? "").trim();
+  const name = (row.name ?? "").trim();
+  if (ext && name && ext.toLowerCase() !== name.toLowerCase()) return `${ext} (${name})`;
+  return ext || name || row.reportGuid;
+}
+
+/**
+ * A plain-English, multi-line summary of the discovery (for the UI + audit).
+ * CRITICAL for the "no F12, no guessing" promise: when a report is AMBIGUOUS we
+ * now LIST the actual candidate report names (numbered) right in the summary, so
+ * Michael can read them on the page and tell us which one — instead of hunting
+ * through the audit log. PURE.
+ */
 export function summarizeDiscovery(discoveries: PaiReportDiscovery[]): string {
-  return discoveries.map((d) => `• ${d.note}`).join("\n");
+  const lines: string[] = [];
+  for (const d of discoveries) {
+    lines.push(`• ${d.note}`);
+    // Only list names when we could NOT confidently match a single report AND
+    // there is more than one candidate (i.e. the ambiguous case Michael hit).
+    if (!d.matched && d.configCandidates.length > 1) {
+      d.configCandidates.forEach((c, i) => {
+        lines.push(`    ${i + 1}. ${candidateLabel(c)}`);
+      });
+    }
+  }
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -539,6 +567,35 @@ export function __runPaiDiscoveryTests(): void {
   assert(dMissing.matched === null && dMissing.note.includes("Couldn’t find"), "missing report noted");
 
   assert(summarizeDiscovery([dSs]).startsWith("• "), "summary is bulleted");
+
+  // --- candidateLabel + ambiguous summary LISTS the candidate names ----------
+  assert(
+    candidateLabel({ reportGuid: "g", externalName: "Bank Deposits", name: "FundsMovementByAcct" }) ===
+      "Bank Deposits (FundsMovementByAcct)",
+    "candidateLabel shows external + internal when they differ",
+  );
+  assert(
+    candidateLabel({ reportGuid: "g", externalName: "", name: "Only Name" }) === "Only Name",
+    "candidateLabel falls back to internal name",
+  );
+  assert(
+    candidateLabel({ reportGuid: "GUID-X", externalName: "", name: "" }) === "GUID-X",
+    "candidateLabel falls back to the GUID when nameless",
+  );
+  // Build an AMBIGUOUS discovery (2 candidates) and confirm the summary lists them numbered.
+  const ambiguousRows: PaiReportConfigId[] = [
+    { reportGuid: "G-A", externalName: "Bank Deposits Daily", name: "BankDepDaily" },
+    { reportGuid: "G-B", externalName: "Bank Deposits Monthly", name: "BankDepMonthly" },
+  ];
+  const dAmbigList = buildDiscovery("fundsMovement", ambiguousRows, new Map());
+  const ambigSummary = summarizeDiscovery([dAmbigList]);
+  assert(!dAmbigList.matched && dAmbigList.configCandidates.length === 2, "ambiguous discovery keeps both candidates");
+  assert(
+    ambigSummary.includes("1. Bank Deposits Daily") && ambigSummary.includes("2. Bank Deposits Monthly"),
+    "ambiguous summary LISTS the numbered candidate names (no audit-log hunting)",
+  );
+  // A confident single match must NOT dump a numbered list.
+  assert(!summarizeDiscovery([dSs]).includes("    1. "), "confident summary does not list candidates");
 
   console.log("pai-discovery: all self-tests passed");
 }

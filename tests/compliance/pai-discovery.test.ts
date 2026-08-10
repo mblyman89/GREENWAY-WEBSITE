@@ -19,6 +19,7 @@ import {
   buildDiscovery,
   toDateFieldOverride,
   summarizeDiscovery,
+  candidateLabel,
   normalizeName,
   PAI_EXPECTED_DATE_COLUMN,
   type PaiReportConfigId,
@@ -166,6 +167,29 @@ describe("buildDiscovery + toDateFieldOverride (only confident picks are applied
       fundsMovement: "F_Post Date",
     });
     expect(summarizeDiscovery(discoveries)).toContain("•");
+    // A confident summary must NOT dump a numbered candidate list.
+    expect(summarizeDiscovery(discoveries)).not.toContain("    1. ");
+  });
+
+  it("candidateLabel prefers the portal (external) name and falls back safely", () => {
+    expect(candidateLabel({ reportGuid: "g", externalName: "Bank Deposits", name: "FundsMov" })).toBe(
+      "Bank Deposits (FundsMov)",
+    );
+    expect(candidateLabel({ reportGuid: "g", externalName: "", name: "Only Name" })).toBe("Only Name");
+    expect(candidateLabel({ reportGuid: "GUID-X", externalName: "", name: "" })).toBe("GUID-X");
+  });
+
+  it("LISTS the numbered candidate names when a report is ambiguous (no audit-log hunting)", () => {
+    const rows: PaiReportConfigId[] = [
+      { reportGuid: "G-A", externalName: "Bank Deposits Daily", name: "BankDepDaily" },
+      { reportGuid: "G-B", externalName: "Bank Deposits Monthly", name: "BankDepMonthly" },
+    ];
+    const d = buildDiscovery("fundsMovement", rows, new Map());
+    expect(d.matched).toBeNull();
+    expect(d.configCandidates).toHaveLength(2);
+    const summary = summarizeDiscovery([d]);
+    expect(summary).toContain("1. Bank Deposits Daily");
+    expect(summary).toContain("2. Bank Deposits Monthly");
   });
 
   it("excludes an ambiguous report from the applied override", () => {
