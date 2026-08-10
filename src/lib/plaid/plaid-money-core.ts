@@ -63,6 +63,8 @@ export type FlowDirection = "in" | "out";
 export type GroupableAccount = {
   accountId: string;
   institutionName: string | null;
+  /** Owner label (e.g. "Michael", "Wife") from the item's credential set. */
+  owner?: string | null;
   /** Display name already resolved (nickname → bank name) by buildAccountSummary. */
   displayName: string;
   maskText: string;
@@ -119,6 +121,64 @@ export function groupAccountsByInstitution(accounts: GroupableAccount[]): Accoun
     x.institutionName.localeCompare(y.institutionName, "en", { sensitivity: "base" }),
   );
   return groups;
+}
+
+/** Normalize an owner label; blanks fall back to a friendly placeholder. */
+export function ownerGroupLabel(name: string | null | undefined): string {
+  const v = (name ?? "").replace(/\s+/g, " ").trim();
+  return v === "" ? "Unassigned owner" : v;
+}
+
+export type OwnerGroup = {
+  /** Stable key for the owner (label, lowercased). */
+  key: string;
+  owner: string;
+  institutions: AccountGroup[];
+  /** Sum of known currentBalanceCents across the owner's accounts. */
+  subtotalCents: number;
+  subtotalText: string;
+};
+
+/**
+ * How many DISTINCT owners are present among the accounts. The UI uses this to
+ * decide whether to show the owner level at all (1 owner → skip it, just show
+ * banks, exactly as before the 2nd-Plaid-API slice).
+ */
+export function distinctOwnerCount(accounts: GroupableAccount[]): number {
+  const seen = new Set<string>();
+  for (const a of accounts) seen.add(ownerGroupLabel(a.owner).toLowerCase());
+  return seen.size;
+}
+
+/**
+ * Group accounts by OWNER first, then institution within each owner. Owners are
+ * sorted A→Z; institutions inside each owner reuse groupAccountsByInstitution
+ * (so accounts stay A→Z and per-bank subtotals are consistent). Deterministic.
+ * When there's only one owner this still works — the UI can choose to render
+ * just the single owner's institution groups.
+ */
+export function groupAccountsByOwnerAndInstitution(accounts: GroupableAccount[]): OwnerGroup[] {
+  const byOwner = new Map<string, GroupableAccount[]>();
+  for (const a of accounts) {
+    const label = ownerGroupLabel(a.owner);
+    const key = label.toLowerCase();
+    const list = byOwner.get(key) ?? [];
+    list.push(a);
+    byOwner.set(key, list);
+  }
+  const owners: OwnerGroup[] = Array.from(byOwner.entries()).map(([key, list]) => {
+    const institutions = groupAccountsByInstitution(list);
+    const subtotalCents = institutions.reduce((sum, g) => sum + g.subtotalCents, 0);
+    return {
+      key,
+      owner: ownerGroupLabel(list[0].owner),
+      institutions,
+      subtotalCents,
+      subtotalText: formatCentsUsd(subtotalCents),
+    };
+  });
+  owners.sort((x, y) => x.owner.localeCompare(y.owner, "en", { sensitivity: "base" }));
+  return owners;
 }
 
 /**
@@ -461,6 +521,43 @@ export function __runPlaidMoneyCoreTests(): void {
   ok(resolveSelectedAccountId("nope", groups) === "a2", "unknown id → first account of first group (Citi a2)");
   ok(resolveSelectedAccountId(null, groups) === "a2", "null → first account");
   ok(resolveSelectedAccountId("a1", []) === null, "no accounts → null");
+
+  // ownerGroupLabel ---------------------------------------------------------
+  ok(ownerGroupLabel("Michael") === "Michael", "owner label passthrough");
+  ok(ownerGroupLabel("  Michael   B  ") === "Michael B", "owner label whitespace collapsed");
+  ok(ownerGroupLabel("") === "Unassigned owner", "blank owner → placeholder");
+  ok(ownerGroupLabel(null) === "Unassigned owner", "null owner → placeholder");
+  ok(ownerGroupLabel("   ") === "Unassigned owner", "whitespace owner → placeholder");
+
+  // distinctOwnerCount ------------------------------------------------------
+  const ownedAccts: GroupableAccount[] = [
+    { accountId: "b1", institutionName: "Timberland", displayName: "Biz Checking", maskText: "•••• 1111", currentText: "$1,000.00", currentBalanceCents: 100000, role: "main", owner: "Michael" },
+    { accountId: "b2", institutionName: "Citi", displayName: "Costco Visa", maskText: "•••• 2222", currentText: "-$500.00", currentBalanceCents: -50000, role: "credit", owner: "Michael" },
+    { accountId: "b3", institutionName: "Chase", displayName: "Personal Checking", maskText: "•••• 3333", currentText: "$300.00", currentBalanceCents: 30000, role: "main", owner: "Wife" },
+    { accountId: "b4", institutionName: "Chase", displayName: "Savings", maskText: "•••• 4444", currentText: "$500.00", currentBalanceCents: 50000, role: "main", owner: "Wife" },
+  ];
+  ok(distinctOwnerCount(ownedAccts) === 2, "two distinct owners (Michael, Wife)");
+  ok(distinctOwnerCount([ownedAccts[0], ownedAccts[1]]) === 1, "single owner → count 1");
+  ok(distinctOwnerCount([]) === 0, "no accounts → 0 owners");
+  ok(distinctOwnerCount([{ ...ownedAccts[0], owner: "Michael" }, { ...ownedAccts[1], owner: "michael" }]) === 1, "owner distinctness is case-insensitive");
+  ok(distinctOwnerCount([{ ...ownedAccts[0], owner: null }]) === 1, "null owner still counts as one (Unassigned)");
+
+  // groupAccountsByOwnerAndInstitution --------------------------------------
+  const owners = groupAccountsByOwnerAndInstitution(ownedAccts);
+  ok(owners.length === 2, "two owner groups");
+  ok(owners[0].owner === "Michael", "owners sorted A→Z (Michael first)");
+  ok(owners[1].owner === "Wife", "Wife second");
+  ok(owners[0].key === "michael", "owner key is lowercased label");
+  ok(owners[0].institutions.length === 2, "Michael has 2 institutions (Citi, Timberland)");
+  ok(owners[0].institutions[0].institutionName === "Citi", "Michael institutions sorted A→Z");
+  ok(owners[0].subtotalCents === 50000, "Michael subtotal = 100000 + (-50000)");
+  ok(owners[0].subtotalText === "$500.00", "Michael subtotal formatted");
+  ok(owners[1].institutions.length === 1, "Wife has 1 institution (Chase)");
+  ok(owners[1].institutions[0].accounts.length === 2, "Wife's Chase has 2 accounts");
+  ok(owners[1].subtotalCents === 80000, "Wife subtotal = 30000 + 50000");
+  ok(groupAccountsByOwnerAndInstitution([]).length === 0, "no accounts → no owner groups");
+  const oneOwner = groupAccountsByOwnerAndInstitution([ownedAccts[0], ownedAccts[1]]);
+  ok(oneOwner.length === 1 && oneOwner[0].owner === "Michael", "single-owner grouping still works");
 
   // resolveMoneyRange / label -----------------------------------------------
   ok(resolveMoneyRange(undefined) === "this_month", "no range → this_month");

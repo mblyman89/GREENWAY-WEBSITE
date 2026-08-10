@@ -37,6 +37,8 @@ import { CountryCode, Products } from "plaid";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getPlaidClient } from "@/lib/plaid/client";
+import { plaidCredentialSets } from "@/lib/plaid/env";
+import { chooseSetForLink } from "@/lib/plaid/plaid-credentials-core";
 import { plaidDollarsToCents, extractPlaidError, describeLinkTokenError } from "@/lib/plaid/plaid-core";
 import { roleAssignmentCheck, normalizeCustomName } from "@/lib/plaid/plaid-ui-core";
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
@@ -79,12 +81,19 @@ function siteBaseUrl(): string {
  * friendly error string. This is called from the client PlaidLinkButton via a
  * server action, so it returns a value rather than redirecting.
  */
-export async function createPlaidLinkTokenAction(): Promise<
-  { ok: true; linkToken: string } | { ok: false; error: string }
-> {
+export async function createPlaidLinkTokenAction(
+  credentialSetKey?: string,
+): Promise<{ ok: true; linkToken: string } | { ok: false; error: string }> {
   const session = await requirePermission("settings.manage");
 
-  const plaid = getPlaidClient();
+  // Pick the credential set to link under (which person's Plaid account). The
+  // picker only offers configured sets; we guard again here. Default primary.
+  const set = chooseSetForLink(plaidCredentialSets, credentialSetKey);
+  if (!set) {
+    return { ok: false, error: "That Plaid account isn't configured yet. Add its keys in Vercel, then try again." };
+  }
+
+  const plaid = getPlaidClient(set.key);
   if (!plaid) {
     return { ok: false, error: "Plaid isn't configured yet. Add the Plaid keys in Vercel, then try again." };
   }
@@ -123,13 +132,18 @@ export async function createPlaidLinkTokenAction(): Promise<
  */
 export async function exchangePlaidPublicTokenAction(
   publicToken: string,
+  credentialSetKey?: string,
 ): Promise<{ ok: true; accounts: number } | { ok: false; error: string }> {
   const session = await requirePermission("settings.manage");
 
   const token = (publicToken ?? "").trim();
   if (!token) return { ok: false, error: "Missing connection token from Plaid. Please try connecting again." };
 
-  const plaid = getPlaidClient();
+  // Must exchange + fetch accounts with the SAME set that minted the link token.
+  const set = chooseSetForLink(plaidCredentialSets, credentialSetKey);
+  if (!set) return { ok: false, error: "That Plaid account isn't configured yet." };
+
+  const plaid = getPlaidClient(set.key);
   if (!plaid) return { ok: false, error: "Plaid isn't configured yet." };
 
   let accessToken: string;
@@ -160,13 +174,16 @@ export async function exchangePlaidPublicTokenAction(
     accounts = [];
   }
 
-  // Record the item (access_token encrypted inside the store).
+  // Record the item (access_token encrypted inside the store), tagged with the
+  // credential set it was linked under + that set's owner label (for grouping).
   const itemResult = await upsertPlaidItem({
     itemId,
     accessToken,
     institutionId,
     institutionName,
     products: [Products.Transactions],
+    credentialSet: set.key,
+    owner: set.owner,
   });
   if (!itemResult.ok) return { ok: false, error: itemResult.error };
 
@@ -200,6 +217,8 @@ export async function exchangePlaidPublicTokenAction(
       institution_name: institutionName,
       accounts_recorded: recorded,
       products: [Products.Transactions],
+      credential_set: set.key,
+      owner: set.owner,
     },
   });
 

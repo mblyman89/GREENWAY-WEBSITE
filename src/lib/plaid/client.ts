@@ -1,56 +1,69 @@
 import "server-only";
 
 /**
- * src/lib/plaid/client.ts — the server-only PlaidApi singleton (Slice P1).
+ * src/lib/plaid/client.ts — the server-only PlaidApi clients (Slice P1, extended
+ * by the credential-sets slice).
  *
- * Env-driven basePath (sandbox/production) + the PLAID-CLIENT-ID / PLAID-SECRET
- * request headers. The secret lives ONLY here on the server (env.ts reads it
- * from process.env) and is never shipped to the browser.
+ * Each CREDENTIAL SET ({clientId, secret, env}, owned by a person) gets its OWN
+ * PlaidApi client, because every Plaid call about an Item must use the SAME
+ * credentials that Item was linked under. Clients are cached per set key. The
+ * secrets live ONLY here on the server (env.ts reads them from process.env) and
+ * are never shipped to the browser.
  *
- * Nothing here performs a network call — it just constructs the client. The
- * actual API calls (linkTokenCreate, itemPublicTokenExchange, accountsGet,
- * transactionsSync, liabilitiesGet) arrive in later slices (P2–P5). Callers
- * must check isPlaidConfigured before using the client so an unconfigured
- * deploy fails gracefully instead of throwing.
+ * Nothing here performs a network call — it just constructs clients. Callers
+ * check the set is configured (getPlaidClient returns null otherwise) so an
+ * unconfigured deploy fails gracefully instead of throwing.
+ *
+ * BACK-COMPAT: getPlaidClient() with no argument returns the PRIMARY set's
+ * client — identical behavior to before this slice.
  */
 import { Configuration, PlaidApi, type PlaidEnvironments } from "plaid";
+import { plaidCredentialSets, PLAID_API_VERSION } from "./env";
 import {
-  plaidClientId,
-  plaidSecret,
-  plaidBasePath,
-  PLAID_API_VERSION,
-  isPlaidConfigured,
-} from "./env";
+  plaidBasePathFor,
+  getCredentialSet,
+  type CredentialSetKey,
+} from "./plaid-credentials-core";
 
 // Keep a reference to the SDK's env map type without needing a runtime import
 // of a specific member (production/sandbox); we resolve the URL ourselves in
-// env.ts so we don't depend on which keys exist in a given SDK version.
+// plaid-credentials-core so we don't depend on which keys exist in a given SDK.
 export type PlaidEnvironmentsType = typeof PlaidEnvironments;
 
-let cached: PlaidApi | null = null;
+const cache = new Map<CredentialSetKey, PlaidApi>();
 
 /**
- * Get (or lazily build) the shared PlaidApi client. Returns null when Plaid is
- * not configured, so callers can degrade gracefully:
+ * Get (or lazily build) the PlaidApi client for a credential set. Returns null
+ * when that set is not configured, so callers can degrade gracefully:
  *
- *   const plaid = getPlaidClient();
+ *   const plaid = getPlaidClient(item.credentialSet);
  *   if (!plaid) return { ok: false, error: "Plaid is not configured yet." };
  */
-export function getPlaidClient(): PlaidApi | null {
-  if (!isPlaidConfigured) return null;
-  if (cached) return cached;
+export function getPlaidClient(setKey: CredentialSetKey = "primary"): PlaidApi | null {
+  const set = getCredentialSet(plaidCredentialSets, setKey);
+  if (!set || !set.configured) return null;
+
+  const hit = cache.get(setKey);
+  if (hit) return hit;
 
   const configuration = new Configuration({
-    basePath: plaidBasePath(),
+    basePath: plaidBasePathFor(set.env),
     baseOptions: {
       headers: {
-        "PLAID-CLIENT-ID": plaidClientId,
-        "PLAID-SECRET": plaidSecret,
+        "PLAID-CLIENT-ID": set.clientId,
+        "PLAID-SECRET": set.secret,
         "Plaid-Version": PLAID_API_VERSION,
       },
     },
   });
 
-  cached = new PlaidApi(configuration);
-  return cached;
+  const client = new PlaidApi(configuration);
+  cache.set(setKey, client);
+  return client;
+}
+
+/** True when the given credential set can talk to Plaid. */
+export function isPlaidClientConfigured(setKey: CredentialSetKey = "primary"): boolean {
+  const set = getCredentialSet(plaidCredentialSets, setKey);
+  return Boolean(set && set.configured);
 }

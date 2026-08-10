@@ -20,7 +20,8 @@ import "server-only";
  */
 import { createHash, createPublicKey, verify as cryptoVerify, type JsonWebKey } from "node:crypto";
 import { getPlaidClient } from "./client";
-import { isPlaidConfigured } from "./env";
+import { isPlaidConfigured, plaidCredentialSets } from "./env";
+import type { CredentialSetKey } from "./plaid-credentials-core";
 import {
   splitJwt,
   preCheckPlaidJwt,
@@ -28,7 +29,11 @@ import {
   PLAID_WEBHOOK_MAX_AGE_SECONDS,
 } from "./plaid-webhook-core";
 
-/** In-process cache of JWKs by kid (keys rarely rotate; a cold start re-fetches). */
+/**
+ * In-process cache of JWKs by "setKey:kid". The verification key is issued by
+ * the Plaid account (credential set) that received the webhook, so we cache per
+ * set. Keys rarely rotate; a cold start re-fetches.
+ */
 const jwkCache = new Map<string, JsonWebKey>();
 
 /** Read the Plaid-Verification header case-insensitively from a Headers-like map. */
@@ -38,17 +43,29 @@ export function readPlaidVerificationHeader(headers: Headers): string {
   return (headers.get("plaid-verification") ?? "").trim();
 }
 
-/** Fetch (and cache) the JWK for a kid. Returns null on any failure. */
-async function getVerificationJwk(kid: string): Promise<JsonWebKey | null> {
-  const cached = jwkCache.get(kid);
+/** The configured credential set keys to try when verifying (in fixed order). */
+function configuredSetKeys(): CredentialSetKey[] {
+  return plaidCredentialSets.filter((s) => s.configured).map((s) => s.key);
+}
+
+/**
+ * Fetch (and cache) the JWK for a kid FROM A SPECIFIC credential set's client.
+ * Returns null on any failure (unconfigured set, network, missing key).
+ */
+async function getVerificationJwkForSet(
+  setKey: CredentialSetKey,
+  kid: string,
+): Promise<JsonWebKey | null> {
+  const cacheKey = `${setKey}:${kid}`;
+  const cached = jwkCache.get(cacheKey);
   if (cached) return cached;
-  const plaid = getPlaidClient();
+  const plaid = getPlaidClient(setKey);
   if (!plaid) return null;
   try {
     const resp = await plaid.webhookVerificationKeyGet({ key_id: kid });
     const key = resp.data.key as unknown as JsonWebKey;
     if (!key || typeof key !== "object") return null;
-    jwkCache.set(kid, key);
+    jwkCache.set(cacheKey, key);
     return key;
   } catch {
     return null;
@@ -80,22 +97,32 @@ export async function verifyPlaidWebhook(
   const pre = preCheckPlaidJwt(jwt, nowSeconds, PLAID_WEBHOOK_MAX_AGE_SECONDS);
   if (!pre.ok) return { ok: false, reason: pre.reason };
 
-  // 2) Fetch the public key for this kid.
-  const jwk = await getVerificationJwk(pre.kid);
-  if (!jwk) return { ok: false, reason: "could not fetch/parse the Plaid verification key" };
-
-  // 3) Verify the ES256 signature over "header.payload" using the JWK.
   const parts = splitJwt(jwt);
   if (!parts) return { ok: false, reason: "malformed JWT (post-precheck)" };
+  const signingInput = Buffer.from(`${parts.header}.${parts.payload}`, "utf8");
+  const signature = Buffer.from(parts.signature, "base64url");
+
+  // 2+3) Try each configured credential set: fetch its JWK for this kid and
+  // verify the ES256 signature. The webhook's key belongs to the Plaid account
+  // (set) that received it; a valid signature under any configured set proves
+  // authenticity. Stop at the first set whose key verifies.
   let signatureValid = false;
-  try {
-    const pubKey = createPublicKey({ key: jwk, format: "jwk" });
-    const signingInput = Buffer.from(`${parts.header}.${parts.payload}`, "utf8");
-    const signature = Buffer.from(parts.signature, "base64url");
-    signatureValid = cryptoVerify("SHA256", signingInput, { key: pubKey, dsaEncoding: "ieee-p1363" }, signature);
-  } catch {
-    signatureValid = false;
+  let fetchedAnyKey = false;
+  for (const setKey of configuredSetKeys()) {
+    const jwk = await getVerificationJwkForSet(setKey, pre.kid);
+    if (!jwk) continue;
+    fetchedAnyKey = true;
+    try {
+      const pubKey = createPublicKey({ key: jwk, format: "jwk" });
+      if (cryptoVerify("SHA256", signingInput, { key: pubKey, dsaEncoding: "ieee-p1363" }, signature)) {
+        signatureValid = true;
+        break;
+      }
+    } catch {
+      /* try the next set */
+    }
   }
+  if (!fetchedAnyKey) return { ok: false, reason: "could not fetch/parse the Plaid verification key" };
   if (!signatureValid) return { ok: false, reason: "JWT signature did not verify against the Plaid key" };
 
   // 4) SHA-256 the RAW body and constant-time compare to the claimed hash.

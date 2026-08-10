@@ -25,6 +25,8 @@ import "server-only";
  * is passed straight to Plaid, and is never logged or returned to the caller.
  */
 import { getPlaidClient } from "./client";
+import { isPlaidConfigured } from "./env";
+import { normalizeSetKey } from "./plaid-credentials-core";
 import { plaidDollarsToCents, planTransactionMerge, mapItemStatus, extractPlaidError, type PlaidTxnInput } from "./plaid-core";
 import {
   listPlaidItems,
@@ -109,8 +111,9 @@ export async function runItemSync(item: PlaidItemRecord): Promise<ItemSyncResult
     counts: emptyCounts(),
   };
 
-  const plaid = getPlaidClient();
-  if (!plaid) return { ...base, message: "Plaid isn't configured." };
+  // Use the SAME credential set this item was linked under (default 'primary').
+  const plaid = getPlaidClient(normalizeSetKey(item.credentialSet));
+  if (!plaid) return { ...base, message: "Plaid isn't configured for this connection's account." };
   if (!item.accessToken) {
     await setPlaidItemStatus(item.itemId, "error", "MISSING_ACCESS_TOKEN");
     return { ...base, message: "This connection is missing its access token. Please re-link it.", errorCode: "MISSING_ACCESS_TOKEN" };
@@ -216,8 +219,9 @@ export async function runPlaidSyncForItem(itemId: string): Promise<ItemSyncResul
 
 /** Sync ALL items (used by "Sync now" with no id, and by the scheduled run in P4). */
 export async function runAllPlaidSync(): Promise<AllSyncResult> {
-  const plaid = getPlaidClient();
-  if (!plaid) return { ok: false, message: "Plaid isn't configured yet.", items: [] };
+  // At least one credential set must be configured; each item picks its own set
+  // inside runItemSync, so we don't build a single top-level client here.
+  if (!isPlaidConfigured) return { ok: false, message: "Plaid isn't configured yet.", items: [] };
 
   const items = await listPlaidItems();
   if (items.length === 0) return { ok: true, message: "No bank connections to sync yet.", items: [] };
