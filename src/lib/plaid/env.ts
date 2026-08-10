@@ -12,8 +12,12 @@
 // SECURITY: PLAID_SECRET is server-only and must NEVER be exposed to the
 // browser. There is deliberately no NEXT_PUBLIC_ variant.
 
-export const plaidClientId = process.env.PLAID_CLIENT_ID ?? "";
-export const plaidSecret = process.env.PLAID_SECRET ?? "";
+// .trim() defends against the single most common cause of a "Plaid rejected
+// the account keys" error: an invisible trailing space or newline accidentally
+// pasted into the Vercel env var. Plaid compares the key EXACTLY, so " abc\n"
+// != "abc". We trim both credentials (resolvePlaidEnv already trims PLAID_ENV).
+export const plaidClientId = (process.env.PLAID_CLIENT_ID ?? "").trim();
+export const plaidSecret = (process.env.PLAID_SECRET ?? "").trim();
 
 /** Raw PLAID_ENV, normalized to a value the SDK understands. */
 export type PlaidEnvName = "sandbox" | "production";

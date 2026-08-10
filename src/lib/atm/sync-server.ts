@@ -31,6 +31,11 @@ import {
   mapFundsMovementCsv,
 } from "./atm-core";
 import {
+  buildReportDiagnostic,
+  summarizeReportDiagnostics,
+  type PaiReportDiagnostic,
+} from "./atm-report-diagnostics";
+import {
   planCashLoadUpserts,
   planSettlementUpserts,
   summarizeIngest,
@@ -126,8 +131,8 @@ export async function ingestAtmCsvs(
 }
 
 export type LiveSyncResult =
-  | { ok: true; message: string; summary: IngestSummary }
-  | { ok: false; error: string; summary?: IngestSummary };
+  | { ok: true; message: string; summary: IngestSummary; diagnostics?: PaiReportDiagnostic[] }
+  | { ok: false; error: string; summary?: IngestSummary; diagnostics?: PaiReportDiagnostic[] };
 
 /**
  * Automatic live pull from PAI (Slice A-2c-2).
@@ -161,24 +166,72 @@ export async function runAtmLiveSync(options?: {
   }
 
   // Collect the CSVs we did get; note any report that failed as a problem.
+  // ALSO build an honest PER-REPORT DIAGNOSTIC (row count + earliest→latest date
+  // + whether the backfill date filter was applied) so a single backfill run
+  // shows exactly what each of the three reports returned — this is how we tell,
+  // WITHOUT GUESSING, whether the Bank Deposits / Cash Loads reports simply have
+  // shorter PAI history vs. need a different date field vs. failed to parse.
   const csvs: { cashLoadCsv?: string; simpleSummaryCsv?: string; fundsMovementCsv?: string } = {};
   const problems: string[] = [];
+  const diagnostics: PaiReportDiagnostic[] = [];
   for (const r of pull.reports) {
     if (r.ok) {
       if (r.kind === "cashLoad") csvs.cashLoadCsv = r.csv;
       else if (r.kind === "simpleSummary") csvs.simpleSummaryCsv = r.csv;
       else if (r.kind === "fundsMovement") csvs.fundsMovementCsv = r.csv;
+
+      // Parse (again, cheaply) just to read out the dates present for the
+      // diagnostic. The authoritative write still goes through ingestAtmCsvs.
+      let dates: (string | null)[] = [];
+      let problemCount = 0;
+      if (r.kind === "cashLoad") {
+        const m = mapCashLoadCsv(r.csv);
+        dates = m.rows.map((x) => x.loadDate);
+        problemCount = m.problems.length;
+      } else if (r.kind === "simpleSummary") {
+        const m = mapSimpleSummaryCsv(r.csv);
+        dates = m.rows.map((x) => x.settlementDate);
+        problemCount = m.problems.length;
+      } else {
+        const m = mapFundsMovementCsv(r.csv);
+        dates = m.rows.map((x) => x.settlementDate);
+        problemCount = m.problems.length;
+      }
+      diagnostics.push(
+        buildReportDiagnostic({
+          kind: r.kind,
+          downloaded: true,
+          dates,
+          problemCount,
+          dateFilterApplied: r.dateFilterApplied,
+          usingDefaultDateField: r.usingDefaultDateField,
+        }),
+      );
     } else {
       problems.push(`${r.kind} not downloaded: ${r.error}`);
+      diagnostics.push(
+        buildReportDiagnostic({
+          kind: r.kind,
+          downloaded: false,
+          dates: [],
+          problemCount: 0,
+          dateFilterApplied: r.dateFilterApplied,
+          usingDefaultDateField: r.usingDefaultDateField,
+          downloadError: r.error,
+        }),
+      );
     }
   }
 
   // Reuse the verified ingest path (it also records health on completion).
   const ingest = await ingestAtmCsvs(csvs);
 
-  // Fold any download-level problems into the message so nothing is hidden.
-  const message = problems.length > 0 ? `${ingest.message} (${problems.length} report(s) skipped)` : ingest.message;
+  // Fold download-level problems AND the per-report diagnostics into the
+  // message so nothing is hidden — Michael sees each report's row count + span.
+  const diagLine = summarizeReportDiagnostics(diagnostics);
+  const skipped = problems.length > 0 ? ` (${problems.length} report(s) skipped)` : "";
+  const message = `${ingest.message}${skipped} — ${diagLine}`;
 
-  if (!ingest.ok) return { ok: false, error: message, summary: ingest.summary };
-  return { ok: true, message, summary: ingest.summary };
+  if (!ingest.ok) return { ok: false, error: message, summary: ingest.summary, diagnostics };
+  return { ok: true, message, summary: ingest.summary, diagnostics };
 }

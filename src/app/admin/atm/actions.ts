@@ -188,6 +188,16 @@ export async function runAtmLiveSyncAction(): Promise<void> {
       ok: result.ok,
       settlements_upserted: result.summary?.settlementsUpserted ?? 0,
       cash_loads_upserted: result.summary?.cashLoadsUpserted ?? 0,
+      report_diagnostics: (result.diagnostics ?? []).map((d) => ({
+        kind: d.kind,
+        downloaded: d.downloaded,
+        rows: d.rowCount,
+        min_date: d.minDate,
+        max_date: d.maxDate,
+        date_filter_applied: d.dateFilterApplied,
+        using_default_date_field: d.usingDefaultDateField,
+        note: d.note,
+      })),
     },
   });
 
@@ -216,6 +226,19 @@ export async function runAtmBackfillAction(): Promise<void> {
       ok: result.ok,
       settlements_upserted: result.summary?.settlementsUpserted ?? 0,
       cash_loads_upserted: result.summary?.cashLoadsUpserted ?? 0,
+      // Durable per-report record so we can see (without guessing) whether Bank
+      // Deposits / Cash Loads simply lack older PAI history vs. need a different
+      // date field vs. failed to parse: row count + date span per report.
+      report_diagnostics: (result.diagnostics ?? []).map((d) => ({
+        kind: d.kind,
+        downloaded: d.downloaded,
+        rows: d.rowCount,
+        min_date: d.minDate,
+        max_date: d.maxDate,
+        date_filter_applied: d.dateFilterApplied,
+        using_default_date_field: d.usingDefaultDateField,
+        note: d.note,
+      })),
     },
   });
 

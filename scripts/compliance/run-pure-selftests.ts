@@ -283,6 +283,7 @@ import { __runAtmCoreTests } from "../../src/lib/atm/atm-core";
 import { __runAtmUiCoreTests } from "../../src/lib/atm/atm-ui-core";
 import { __runAtmSyncCoreTests } from "../../src/lib/atm/atm-sync-core";
 import { __runPaiEndpointsTests } from "../../src/lib/atm/pai-endpoints";
+import { __runAtmReportDiagnosticsTests } from "../../src/lib/atm/atm-report-diagnostics";
 import { __runPlaidUiCoreTests } from "../../src/lib/plaid/plaid-ui-core";
 import { __runPlaidSyncCoreTests } from "../../src/lib/plaid/sync-core";
 import { __runPlaidCoreTests } from "../../src/lib/plaid/plaid-core";
@@ -558,6 +559,7 @@ async function main() {
   __runAtmUiCoreTests();
   __runAtmSyncCoreTests();
   __runPaiEndpointsTests();
+  __runAtmReportDiagnosticsTests();
   __runPlaidUiCoreTests();
   __runPlaidSyncCoreTests();
   __runPlaidCoreTests();
