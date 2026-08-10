@@ -14,11 +14,13 @@
 import { describe, expect, it } from "vitest";
 import {
   PAI_REPORT_EVENT,
+  PAI_REPORT_EVENT_UNIVERSAL,
   PAI_DEFAULT_CUSTOM_CMD,
   PAI_DEFAULT_BASE,
   joinUrl,
   resolvePaiReportPlan,
   resolveAllPaiReportPlans,
+  buildPaiGuidDownloadBody,
   __runPaiEndpointsTests,
 } from "@/lib/atm/pai-endpoints";
 
@@ -110,6 +112,37 @@ describe("resolveAllPaiReportPlans", () => {
     expect(all.cashLoad.kind).toBe("cashLoad");
     expect(all.simpleSummary.kind).toBe("simpleSummary");
     expect(all.fundsMovement.kind).toBe("fundsMovement");
+  });
+});
+
+describe("buildPaiGuidDownloadBody (PAI SDK: POST Report.event by GUID)", () => {
+  it("uses the confirmed universal Report.event path", () => {
+    expect(PAI_REPORT_EVENT_UNIVERSAL).toBe("Report.event");
+  });
+
+  it("builds GUID + Filter + CustomCommand + DownloadCSV by default (no filters)", () => {
+    const p = new URLSearchParams(buildPaiGuidDownloadBody("G-123"));
+    expect(p.get("ReportGUID")).toBe("G-123");
+    expect(p.getAll("ReportCmd")).toEqual(["Filter", "CustomCommand"]);
+    expect(p.get("CustomCmdList")).toBe("DownloadCSV");
+  });
+
+  it("honors a custom command and falls back to DownloadCSV when blank", () => {
+    expect(new URLSearchParams(buildPaiGuidDownloadBody("G", { customCmdList: "OpenCSV" })).get("CustomCmdList")).toBe("OpenCSV");
+    expect(new URLSearchParams(buildPaiGuidDownloadBody("G", { customCmdList: "   " })).get("CustomCmdList")).toBe("DownloadCSV");
+  });
+
+  it("adds F_<Col>=<value> and E_<Col>=false for each filter, and skips blank columns", () => {
+    const p = new URLSearchParams(
+      buildPaiGuidDownloadBody("G", { filters: [{ column: "Settlement Date", value: "02/29/2024 - 08/11/2026" }] }),
+    );
+    expect(p.get("F_Settlement Date")).toBe("02/29/2024 - 08/11/2026");
+    expect(p.get("E_Settlement Date")).toBe("false");
+    expect(buildPaiGuidDownloadBody("G", { filters: [{ column: "  ", value: "x" }] })).not.toContain("F_");
+  });
+
+  it("trims the GUID", () => {
+    expect(new URLSearchParams(buildPaiGuidDownloadBody("  G-9  ")).get("ReportGUID")).toBe("G-9");
   });
 });
 

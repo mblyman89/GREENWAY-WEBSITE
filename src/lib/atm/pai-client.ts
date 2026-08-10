@@ -31,7 +31,9 @@ import {
   resolveAllPaiReportPlans,
   computePaiHistoryRange,
   joinUrl,
+  buildPaiGuidDownloadBody,
   PAI_DEFAULT_BASE,
+  PAI_REPORT_EVENT_UNIVERSAL,
   type PaiReportKind,
   type PaiReportPlan,
 } from "./pai-endpoints";
@@ -39,12 +41,22 @@ import {
   PAI_LIST_CONFIGS_QUERY,
   parseReportConfigIds,
   parseReportFields,
+  parseReportSelection,
+  resolveReportChoice,
+  candidateLabel,
   matchReportConfig,
   buildDiscovery,
   toDateFieldOverride,
   summarizeDiscovery,
+  summarizeProbeCsv,
+  scoreProbe,
+  PAI_REPORT_TITLE_HINTS,
+  normalizeName,
   type PaiReportField,
   type PaiReportDiscovery,
+  type PaiReportConfigId,
+  type PaiProbeSummary,
+  type PaiReportSelection,
 } from "./pai-discovery";
 
 /** How long any single PAI HTTP call may take before we give up (ms). */
@@ -359,12 +371,17 @@ export async function discoverReportFilterFields(): Promise<PaiDiscoveryResult> 
     };
   }
 
-  // 3) For each report we care about, if we matched exactly one config row,
+  // 3) For each report we care about, if we matched exactly one config row
+  //    (either from Michael's saved selection or an unambiguous hint match),
   //    FIND_CONFIG it to read that report's real fields.
+  const selections = parseReportSelection(
+    (secrets.reportConfig as Record<string, unknown> | null)?.reportSelection,
+  );
+  const selFor = (kind: PaiReportKind): PaiReportSelection | null => selections[kind] ?? null;
   const kinds: PaiReportKind[] = ["cashLoad", "simpleSummary", "fundsMovement"];
   const fieldsByGuid = new Map<string, PaiReportField[]>();
   for (const kind of kinds) {
-    const match = matchReportConfig(kind, allConfigs);
+    const match = matchReportConfig(kind, allConfigs, selFor(kind));
     if (!match.confident || !match.best) continue; // ambiguous/none → reported, not guessed
     const guid = match.best.reportGuid;
     if (fieldsByGuid.has(guid)) continue;
@@ -390,7 +407,7 @@ export async function discoverReportFilterFields(): Promise<PaiDiscoveryResult> 
   await bestEffortLogout(logoutUrl, cookies);
 
   // 5) Build the per-report discovery (pure) + the confident override.
-  const discoveries = kinds.map((kind) => buildDiscovery(kind, allConfigs, fieldsByGuid));
+  const discoveries = kinds.map((kind) => buildDiscovery(kind, allConfigs, fieldsByGuid, selFor(kind)));
   return {
     ok: true,
     discoveries,
@@ -409,4 +426,261 @@ async function bestEffortLogout(logoutUrl: string, cookies: string): Promise<voi
   } catch {
     // ignore — the session expires on its own.
   }
+}
+
+/**
+ * Log into PAI and return the enumerated ReportConfigs rows (name + GUID), then
+ * log out. Read-only. Returns { ok:false, error } with a friendly message on any
+ * failure. Shared by discovery and report selection so both see the SAME list.
+ */
+async function loginAndListConfigs(): Promise<
+  | { ok: true; rows: ReturnType<typeof parseReportConfigIds> }
+  | { ok: false; error: string }
+> {
+  const secrets = await getAtmConnectionSecrets();
+  if (!secrets) {
+    return {
+      ok: false,
+      error:
+        "PAI login isn’t saved yet. Add your paireports.com username and password on the " +
+        "Connection & health tab first.",
+    };
+  }
+  const base = (secrets.portalBaseUrl ?? "").trim() || PAI_DEFAULT_BASE;
+  const loginUrl = joinUrl(base, "Login.event");
+  const logoutUrl = joinUrl(base, "DoLogout.event");
+  const queryUrl = joinUrl(base, "Query.event");
+
+  let cookies = "";
+  try {
+    const res = await fetchWithTimeout(loginUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({ Username: secrets.username, Password: secrets.password }).toString(),
+    });
+    cookies = collectCookies(cookies, res.headers.get("set-cookie"));
+    if (!cookies.toLowerCase().includes("jsessionid")) {
+      return { ok: false, error: "Couldn’t sign in to PAI. Double-check the saved username and password." };
+    }
+  } catch {
+    return { ok: false, error: "Couldn’t reach PAI to sign in (network timeout). Try again shortly." };
+  }
+
+  let rows: ReturnType<typeof parseReportConfigIds> = [];
+  try {
+    const res = await fetchWithTimeout(queryUrl, {
+      method: "POST",
+      headers: {
+        Cookie: cookies,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "*/*",
+      },
+      body: new URLSearchParams({ query: PAI_LIST_CONFIGS_QUERY }).toString(),
+    });
+    rows = parseReportConfigIds(await res.text());
+  } catch {
+    rows = [];
+  }
+  await bestEffortLogout(logoutUrl, cookies);
+
+  if (rows.length === 0) {
+    return { ok: false, error: "Signed in to PAI, but its report list came back empty or unreadable." };
+  }
+  return { ok: true, rows };
+}
+
+/** Result of resolving a report selection against PAI's live report list. */
+export type PaiSelectReportResult =
+  | { ok: true; kind: PaiReportKind; selection: PaiReportSelection; chosenLabel: string }
+  | { ok: false; error: string };
+
+/**
+ * Resolve Michael's chosen report (by exact name and/or GUID) against PAI's live
+ * report list and return the `reportSelection[kind]` value to SAVE. NEVER
+ * guesses — if the choice doesn't resolve to exactly one report it returns an
+ * error. The caller (server action) persists the returned selection into
+ * report_config.reportSelection. Read-only against PAI.
+ */
+export async function selectPaiReport(
+  kind: PaiReportKind,
+  choice: { reportGuid?: string; name?: string },
+): Promise<PaiSelectReportResult> {
+  const listed = await loginAndListConfigs();
+  if (!listed.ok) return { ok: false, error: listed.error };
+  const resolved = resolveReportChoice(listed.rows, choice);
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  return { ok: true, kind, selection: resolved.selection, chosenLabel: candidateLabel(resolved.row) };
+}
+
+// ---------------------------------------------------------------------------
+// PROBE — "try each candidate and show what actually returns data" (no guess).
+//
+// PAI's official SDK downloads ANY report by its GUID via POST Report.event
+// (retrieveReportUsingBuilder). So for a report kind we take every candidate
+// report the list matched, download a SMALL sample of each BY GUID, and report
+// what came back (rows / columns / date column). Evidence — not a guess — tells
+// us which report is the real one. Read-only; downloads a sample only.
+// ---------------------------------------------------------------------------
+
+/** One candidate report, plus what probing it actually returned. */
+export type PaiProbeCandidate = {
+  reportGuid: string;
+  name: string;
+  externalName: string;
+  label: string;
+  summary: PaiProbeSummary;
+  score: number;
+};
+
+export type PaiProbeResult =
+  | {
+      ok: true;
+      kind: PaiReportKind;
+      /** Candidates, ranked best-first (most data + a date column at the top). */
+      candidates: PaiProbeCandidate[];
+      /** The single clear winner when exactly one candidate ranked strictly highest. */
+      autoWinner: PaiProbeCandidate | null;
+      /** Plain-English, multi-line summary for the UI + audit. */
+      summary: string;
+    }
+  | { ok: false; error: string };
+
+/** How many candidates we'll probe for one kind (safety cap on load/time). */
+const PAI_PROBE_MAX_CANDIDATES = 14;
+
+/**
+ * Probe every candidate report for one kind and rank them by what they return.
+ * Downloads a sample of each candidate BY GUID (Report.event) with the SDK's
+ * DownloadCSV command and NO date filter (so a wrong date-column name can't hide
+ * data). Never throws; secrets never leak into any returned string.
+ */
+export async function probeReportCandidates(kind: PaiReportKind): Promise<PaiProbeResult> {
+  const secrets = await getAtmConnectionSecrets();
+  if (!secrets) {
+    return {
+      ok: false,
+      error:
+        "PAI login isn’t saved yet. Add your paireports.com username and password on the " +
+        "Connection & health tab first.",
+    };
+  }
+  const base = (secrets.portalBaseUrl ?? "").trim() || PAI_DEFAULT_BASE;
+  const loginUrl = joinUrl(base, "Login.event");
+  const logoutUrl = joinUrl(base, "DoLogout.event");
+  const queryUrl = joinUrl(base, "Query.event");
+  const reportUrl = joinUrl(base, PAI_REPORT_EVENT_UNIVERSAL);
+  const customCmd =
+    typeof secrets.reportConfig?.customCmdList === "string"
+      ? (secrets.reportConfig.customCmdList as string).trim()
+      : "";
+
+  // 1) LOGIN.
+  let cookies = "";
+  try {
+    const res = await fetchWithTimeout(loginUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({ Username: secrets.username, Password: secrets.password }).toString(),
+    });
+    cookies = collectCookies(cookies, res.headers.get("set-cookie"));
+    if (!cookies.toLowerCase().includes("jsessionid")) {
+      return { ok: false, error: "Couldn’t sign in to PAI. Double-check the saved username and password." };
+    }
+  } catch {
+    return { ok: false, error: "Couldn’t reach PAI to sign in (network timeout). Try again shortly." };
+  }
+
+  // 2) LIST configs.
+  let allConfigs: ReturnType<typeof parseReportConfigIds> = [];
+  try {
+    const res = await fetchWithTimeout(queryUrl, {
+      method: "POST",
+      headers: {
+        Cookie: cookies,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "*/*",
+      },
+      body: new URLSearchParams({ query: PAI_LIST_CONFIGS_QUERY }).toString(),
+    });
+    allConfigs = parseReportConfigIds(await res.text());
+  } catch {
+    allConfigs = [];
+  }
+  if (allConfigs.length === 0) {
+    await bestEffortLogout(logoutUrl, cookies);
+    return { ok: false, error: "Signed in to PAI, but its report list came back empty or unreadable." };
+  }
+
+  // The candidates for this kind = rows whose name matches the kind's hints.
+  const hints = PAI_REPORT_TITLE_HINTS[kind];
+  const candidateRows: PaiReportConfigId[] = allConfigs.filter((r) => {
+    const hay = `${normalizeName(r.name)} ${normalizeName(r.externalName)}`;
+    return hints.some((h) => hay.includes(normalizeName(h)));
+  });
+  if (candidateRows.length === 0) {
+    await bestEffortLogout(logoutUrl, cookies);
+    return { ok: false, error: `PAI’s report list has no report that looks like “${kind}”.` };
+  }
+
+  // 3) PROBE each candidate by GUID (capped), summarize its CSV.
+  const probed: PaiProbeCandidate[] = [];
+  for (const row of candidateRows.slice(0, PAI_PROBE_MAX_CANDIDATES)) {
+    let csv = "";
+    try {
+      const res = await fetchWithTimeout(reportUrl, {
+        method: "POST",
+        headers: {
+          Cookie: cookies,
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": PAI_USER_AGENT,
+          Accept: "*/*",
+        },
+        body: buildPaiGuidDownloadBody(row.reportGuid, { customCmdList: customCmd }),
+      });
+      csv = await res.text();
+    } catch {
+      csv = "";
+    }
+    const summary = summarizeProbeCsv(csv);
+    probed.push({
+      reportGuid: row.reportGuid,
+      name: row.name,
+      externalName: row.externalName,
+      label: candidateLabel(row),
+      summary,
+      score: scoreProbe(summary),
+    });
+  }
+
+  await bestEffortLogout(logoutUrl, cookies);
+
+  // 4) RANK best-first (stable). Auto-winner ONLY when one strictly leads.
+  const ranked = [...probed].sort((a, b) => b.score - a.score || b.summary.rowCount - a.summary.rowCount);
+  const top = ranked[0];
+  const strictlyLeads =
+    !!top &&
+    top.score >= 2 &&
+    (ranked.length === 1 || ranked[1].score < top.score || ranked[1].summary.rowCount < top.summary.rowCount);
+  const autoWinner = strictlyLeads ? top : null;
+
+  const lines = ranked.map((c, i) => {
+    const flag = c.score >= 3 ? "✅" : c.score === 2 ? "•" : c.score === 1 ? "◦" : "✗";
+    return `${i + 1}. ${flag} ${c.label} — ${c.summary.note}`;
+  });
+  const header = autoWinner
+    ? `Clear winner: “${autoWinner.label}” (returned the most data with a date column).`
+    : "No single clear winner — pick the one below that has the rows/date column you expect.";
+  const summary = `${header}\n${lines.join("\n")}`;
+
+  return { ok: true, kind, candidates: ranked, autoWinner, summary };
 }

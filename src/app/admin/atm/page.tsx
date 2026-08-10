@@ -39,6 +39,8 @@ import {
   runAtmLiveSyncAction,
   runAtmBackfillAction,
   discoverPaiReportFieldsAction,
+  probeReportCandidatesAction,
+  selectPaiReportAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +54,10 @@ const btnGhost =
   "rounded-[var(--admin-radius)] border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/[0.06]";
 const cardCls =
   "rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-5";
+const selectInput =
+  "mt-1 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white focus:border-emerald-400/50 focus:outline-none";
+const textInput =
+  "mt-1 w-full rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-emerald-400/50 focus:outline-none";
 
 function tabCls(active: boolean): string {
   return `rounded-[var(--admin-radius)] px-4 py-2 text-sm font-semibold ${
@@ -342,6 +348,66 @@ function HealthTab({
           pull the <em>full</em> history for all three reports &mdash; no browser inspection needed. It only reads from
           PAI and changes nothing there. Run it once, then click &ldquo;Backfill history&rdquo;.
         </p>
+
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <p className="text-sm font-semibold text-white/80">Not sure which report is the right one?</p>
+          <p className="mt-1 text-xs text-white/40">
+            When PAI lists several look-alike reports, click a button below to <em>try each candidate and see which one
+            actually returns data</em> (with a real date column). It downloads a small sample of each &mdash; read-only
+            &mdash; then ranks them. If one clearly wins, it&rsquo;s saved automatically; otherwise you&rsquo;ll get a
+            ranked list to choose from. After a report is chosen, run &ldquo;Discover report fields&rdquo; then
+            &ldquo;Backfill history&rdquo;.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(
+              [
+                { kind: "simpleSummary", label: "Test: Simple Summary" },
+                { kind: "fundsMovement", label: "Test: Bank Deposits" },
+                { kind: "cashLoad", label: "Test: Cash Loads" },
+              ] as const
+            ).map((b) => (
+              <form key={b.kind} action={probeReportCandidatesAction}>
+                <input type="hidden" name="kind" value={b.kind} />
+                <button type="submit" className={btnGhost}>
+                  {b.label}
+                </button>
+              </form>
+            ))}
+          </div>
+
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs font-semibold text-white/60">
+              Pick a report by name (if you already know which one)
+            </summary>
+            <form action={selectPaiReportAction} className="mt-3 flex flex-wrap items-end gap-2">
+              <label className="flex flex-col text-xs text-white/50">
+                Report
+                <select name="kind" className={selectInput} defaultValue="simpleSummary">
+                  <option value="simpleSummary">Simple Summary</option>
+                  <option value="fundsMovement">Bank Deposits</option>
+                  <option value="cashLoad">Cash Loads</option>
+                </select>
+              </label>
+              <label className="flex flex-1 flex-col text-xs text-white/50">
+                Exact report name (paste from the list above)
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="e.g. Default Simple Summary Report"
+                  className={textInput}
+                />
+              </label>
+              <button type="submit" className={btnGhost}>
+                Save this report
+              </button>
+            </form>
+            <p className="mt-1 text-xs text-white/40">
+              Paste the report name exactly as shown in the list (the part in parentheses is the internal name; either
+              the internal name or the display name works). I&rsquo;ll match it to PAI and save it &mdash; and I&rsquo;ll
+              never guess between two that share a name.
+            </p>
+          </details>
+        </div>
       </div>
 
       <div className={`${cardCls} lg:col-span-2`}>
