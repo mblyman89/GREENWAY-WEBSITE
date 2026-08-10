@@ -20,7 +20,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
-import { getAtmConnection, listAtmSettlements, listAtmCashLoads } from "@/lib/atm/store";
+import { getAtmConnection, listAtmSettlements, listAtmCashLoads, getAtmReconcileInputs } from "@/lib/atm/store";
 import {
   resolveAtmTab,
   atmConnectionStatusLine,
@@ -29,8 +29,12 @@ import {
   buildSettlementRowView,
   summarizeSettlements,
   buildCashLoadsView,
+  centsToUsd,
+  atmReconcileChip,
+  atmReconcileHeadline,
   type AtmTab,
 } from "@/lib/atm/atm-ui-core";
+import { reconcileSettlements, formatDiff } from "@/lib/atm/atm-reconcile-core";
 import { parseLastProbe, parseReportSelection } from "@/lib/atm/pai-discovery";
 import {
   saveAtmConnectionAction,
@@ -85,6 +89,7 @@ export default async function AtmPage({
   // Only pull the data a given tab needs (keeps the health tab snappy).
   const settlements = tab === "transactions" ? await listAtmSettlements() : [];
   const cashLoads = tab === "loads" ? await listAtmCashLoads() : [];
+  const reconcileInputs = tab === "reconcile" ? await getAtmReconcileInputs() : null;
   const encryptionOn = isAtRestEncryptionConfigured();
   const posture = atmSecurityPosture({ encryptionOn });
   const statusView = atmConnectionStatusLine({
@@ -108,7 +113,8 @@ export default async function AtmPage({
             steps={[
               "Health (this first tab) is where you connect the app to your PAI Reports portal. Your PAI username and password are encrypted before they're stored and are never shown back to the screen.",
               "Once connected, the app will pull your settlement report (money withdrawn + your surcharge revenue) and your cash-load report automatically — so you can see everything without logging into PAI.",
-              "The bank receives TWO separate deposits per settlement (one for cash withdrawn, one for your surcharge). The Transactions tab will show both, and a later step will match them against your bank feed.",
+              "The bank receives TWO separate deposits per settlement (one for cash withdrawn, one for your surcharge). The Transactions tab shows both, and the Reconcile tab matches each one against the real deposit in your ATM bank account — line by line.",
+              "Reconcile is your at-a-glance verdict: green means every expected deposit arrived and ties out; anything off or missing is highlighted so you can chase it. Tag your ATM account under Bank Feeds → Health first so it knows where to look.",
               "Cash Loads will track the physical cash you put into the machine and tell you how much should be inside right now.",
               "The security strip at the top tells the truth: if at-rest encryption isn't turned on yet, it says so and names the exact fix.",
             ]}
@@ -184,14 +190,19 @@ export default async function AtmPage({
           <Link href="/admin/atm?tab=loads" className={tabCls(tab === "loads")}>
             Cash Loads
           </Link>
+          <Link href="/admin/atm?tab=reconcile" className={tabCls(tab === "reconcile")}>
+            Reconcile
+          </Link>
         </div>
 
         {tab === "health" ? (
           <HealthTab conn={conn} />
         ) : tab === "transactions" ? (
           <SettlementsTab settlements={settlements} />
-        ) : (
+        ) : tab === "loads" ? (
           <CashLoadsTab cashLoads={cashLoads} terminalId={conn.terminalId} />
+        ) : (
+          <ReconcileTab inputs={reconcileInputs} />
         )}
       </div>
     </div>
@@ -748,6 +759,216 @@ function CashLoadsTab({
           matching bank debit. &ldquo;Expected cash in machine&rdquo; uses PAI&rsquo;s own reported balance.
         </p>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reconcile tab (P6a) — match each settlement's two deposit legs against the
+// deposits that actually posted in the ATM bank account. Built to be wielded by
+// a novice: a plain-English verdict banner up top, then a line-item table where
+// anything needing attention is highlighted.
+// ---------------------------------------------------------------------------
+
+function todayIsoUtc(): string {
+  const d = new Date();
+  const p2 = (x: number) => String(x).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
+}
+
+function ReconcileTab({
+  inputs,
+}: {
+  inputs: Awaited<ReturnType<typeof getAtmReconcileInputs>> | null;
+}) {
+  // DB unconfigured (inputs === null only when not the reconcile tab; guard anyway).
+  if (!inputs) {
+    return <EmptyState title="Reconciliation" lines={["Loading reconciliation…"]} />;
+  }
+
+  // Guidance when the ATM bank account hasn't been tagged yet — the #1 setup step.
+  if (!inputs.hasAtmAccount) {
+    return (
+      <EmptyState
+        title="Tag your ATM bank account first"
+        lines={[
+          "Reconciliation matches your ATM settlements against the deposits that land in your dedicated ATM bank account. First, tell the app which connected account that is.",
+          'Go to Bank Feeds → the Health tab, find your ATM account, and set its job to "ATM deposits." Then come back here and your deposits will match up automatically.',
+          "You only do this once. After that, every settlement's two deposits (cash withdrawn + your surcharge) are matched here line by line.",
+        ]}
+      />
+    );
+  }
+
+  if (inputs.settlements.length === 0) {
+    return (
+      <EmptyState
+        title="No settlements to reconcile yet"
+        lines={[
+          "Your ATM bank account is connected — nice. Once your PAI settlements sync in (Transactions & Fees tab), each one's two deposits will be matched against your bank feed right here.",
+          "Nothing is wrong; there's just no settlement data to match yet.",
+        ]}
+      />
+    );
+  }
+
+  const result = reconcileSettlements(inputs.settlements, inputs.deposits, { todayIso: todayIsoUtc() });
+  const { legs, summary, unexplainedDeposits } = result;
+  const headline = atmReconcileHeadline({
+    allClear: summary.allClear,
+    legCount: summary.legCount,
+    mismatch: summary.mismatch,
+    unmatched: summary.unmatched,
+    awaiting: summary.awaiting,
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Verdict banner — the whole point, in one glance. */}
+      <div
+        className={`rounded-[var(--admin-radius)] border p-5 ${
+          headline.tone === "green"
+            ? "border-emerald-500/30 bg-emerald-500/[0.06]"
+            : headline.tone === "orange"
+              ? "border-amber-500/40 bg-amber-500/[0.08]"
+              : "border-white/10 bg-white/[0.02]"
+        }`}
+      >
+        <h2
+          className={`text-lg font-bold ${
+            headline.tone === "green" ? "text-emerald-300" : headline.tone === "orange" ? "text-amber-300" : "text-white"
+          }`}
+        >
+          {headline.title}
+        </h2>
+        <p className="mt-1 text-sm text-white/70">{headline.detail}</p>
+      </div>
+
+      {/* Count + money summary. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Matched" value={String(summary.matched)} hint="Deposits that arrived & tie out" tone="green" />
+        <StatCard label="Awaiting" value={String(summary.awaiting)} hint="Still within the bank's posting window" />
+        <StatCard label="Amount off" value={String(summary.mismatch)} hint="Posted, but not the expected amount" />
+        <StatCard label="Not deposited" value={String(summary.unmatched)} hint="Window passed — please chase" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Total expected at bank" value={centsToUsd(summary.totalExpectedCents)} hint="Across all matched/expected legs" />
+        <StatCard label="Total matched" value={centsToUsd(summary.totalMatchedCents)} hint="Actually posted so far" />
+        <StatCard
+          label="Difference"
+          value={formatDiff(summary.netDifferenceCents)}
+          hint={summary.netDifferenceCents === 0 ? "Ties out to the penny" : "Matched minus expected"}
+          tone={summary.netDifferenceCents === 0 ? "green" : "neutral"}
+        />
+      </div>
+
+      {/* Line-item reconciliation table — two legs per settlement, as the bank shows them. */}
+      <div className={cardCls}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-white">Deposit-by-deposit match</h2>
+          <span className="text-xs text-white/40">{legs.length} legs</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-white/40">
+                <th className="py-2 pr-3 font-semibold">Settlement date</th>
+                <th className="py-2 pr-3 font-semibold">Deposit</th>
+                <th className="py-2 pr-3 text-right font-semibold">Expected</th>
+                <th className="py-2 pr-3 text-right font-semibold">Posted</th>
+                <th className="py-2 pr-3 font-semibold">Posted on</th>
+                <th className="py-2 pl-3 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {legs.map((l) => {
+                const chip = atmReconcileChip(l.status);
+                return (
+                  <tr
+                    key={l.key}
+                    className={`border-b border-white/5 ${chip.needsAttention ? "bg-amber-500/[0.04]" : ""}`}
+                  >
+                    <td className="py-2 pr-3 font-medium text-white/80">{l.settlementDate}</td>
+                    <td className="py-2 pr-3 text-white/70">{l.legLabel}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-white/80">
+                      {l.expectedCents === null ? "—" : centsToUsd(l.expectedCents)}
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-white/80">
+                      {l.matchedCents === null ? "—" : centsToUsd(l.matchedCents)}
+                    </td>
+                    <td className="py-2 pr-3 text-white/50">{l.bankPostedDate ?? "—"}</td>
+                    <td className="py-2 pl-3">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${chipCls(chip.tone)}`}
+                        title={l.message}
+                      >
+                        ● {chip.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-white/40">
+          Each settlement lands as TWO separate deposits — the cash withdrawn from your machine and your surcharge —
+          so we match them line by line, exactly as your bank shows them. Hover a status for the details.
+        </p>
+      </div>
+
+      {/* Rows that need action, spelled out. */}
+      {legs.some((l) => atmReconcileChip(l.status).needsAttention) ? (
+        <div className={`${cardCls} border-amber-500/30`}>
+          <h2 className="mb-2 text-sm font-bold text-amber-300">What to check</h2>
+          <ul className="space-y-2">
+            {legs
+              .filter((l) => atmReconcileChip(l.status).needsAttention)
+              .map((l) => (
+                <li key={`act-${l.key}`} className="text-sm text-white/70">
+                  <span className="font-semibold text-white/85">{l.settlementDate} · {l.legLabel}:</span> {l.message}
+                </li>
+              ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Deposits we couldn't tie to any settlement leg. */}
+      {unexplainedDeposits.length > 0 ? (
+        <div className={cardCls}>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-bold text-white">Deposits we couldn&apos;t match</h2>
+            <span className="text-xs text-white/40">
+              {unexplainedDeposits.length} · {centsToUsd(summary.unexplainedDepositCents)}
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-white/50">
+            These deposits landed in the ATM account but don&apos;t line up with any settlement leg (yet). That&apos;s
+            usually a manual transfer, or settlement data that hasn&apos;t synced. Nothing here is lost — it&apos;s just
+            not explained by ATM settlements.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-white/40">
+                  <th className="py-2 pr-3 font-semibold">Posted on</th>
+                  <th className="py-2 pr-3 font-semibold">Description</th>
+                  <th className="py-2 pl-3 text-right font-semibold">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unexplainedDeposits.map((d) => (
+                  <tr key={`ux-${d.transactionId}`} className="border-b border-white/5">
+                    <td className="py-2 pr-3 text-white/60">{d.date}</td>
+                    <td className="py-2 pr-3 text-white/70">{d.description ?? "Deposit"}</td>
+                    <td className="py-2 pl-3 text-right tabular-nums text-white/80">{centsToUsd(d.amountCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

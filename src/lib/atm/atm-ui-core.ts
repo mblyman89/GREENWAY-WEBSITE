@@ -27,7 +27,7 @@
  * connection is configured there is nothing else to show — the owner lands on
  * the setup/status card.
  */
-export type AtmTab = "health" | "transactions" | "loads";
+export type AtmTab = "health" | "transactions" | "loads" | "reconcile";
 
 /**
  * Resolve the ?tab= query param. Unknown/missing → health (the safe default
@@ -38,7 +38,73 @@ export function resolveAtmTab(param: string | null | undefined): AtmTab {
   const p = (param ?? "").trim().toLowerCase();
   if (p === "transactions" || p === "settlements" || p === "fees") return "transactions";
   if (p === "loads" || p === "cash-loads" || p === "cash") return "loads";
+  if (p === "reconcile" || p === "reconciliation" || p === "recon" || p === "match") return "reconcile";
   return "health";
+}
+
+// ---------------------------------------------------------------------------
+// Reconciliation status chips (P6a) — plain-English label + <Badge> tone +
+// a one-line "what this means / do I act?" helper so a novice reads it at a
+// glance. Kept here (pure) so the page just maps status → view.
+// ---------------------------------------------------------------------------
+
+export type AtmReconcileStatus = "matched" | "mismatch" | "awaiting" | "unmatched";
+
+export type AtmReconcileChip = {
+  label: string;
+  tone: "neutral" | "green" | "orange";
+  /** True when this row needs the owner's attention. */
+  needsAttention: boolean;
+};
+
+export function atmReconcileChip(status: AtmReconcileStatus): AtmReconcileChip {
+  switch (status) {
+    case "matched":
+      return { label: "Matched", tone: "green", needsAttention: false };
+    case "mismatch":
+      return { label: "Amount off", tone: "orange", needsAttention: true };
+    case "awaiting":
+      return { label: "Awaiting deposit", tone: "neutral", needsAttention: false };
+    case "unmatched":
+    default:
+      return { label: "Not deposited", tone: "orange", needsAttention: true };
+  }
+}
+
+/**
+ * Headline for the summary banner: green when everything that CAN be settled has
+ * settled (no mismatch, no unmatched), otherwise a call to action. Pure.
+ */
+export function atmReconcileHeadline(input: {
+  allClear: boolean;
+  legCount: number;
+  mismatch: number;
+  unmatched: number;
+  awaiting: number;
+}): { tone: "green" | "orange" | "neutral"; title: string; detail: string } {
+  if (input.legCount === 0) {
+    return {
+      tone: "neutral",
+      title: "Nothing to reconcile yet",
+      detail: "Once your ATM settlements sync and your ATM bank account is connected, deposits will match up here.",
+    };
+  }
+  if (input.allClear) {
+    const waiting = input.awaiting > 0 ? ` ${input.awaiting} deposit${input.awaiting === 1 ? "" : "s"} still on the way — that's normal.` : "";
+    return {
+      tone: "green",
+      title: "Everything ties out ✓",
+      detail: `Every expected ATM deposit has arrived and matches.${waiting}`,
+    };
+  }
+  const parts: string[] = [];
+  if (input.unmatched > 0) parts.push(`${input.unmatched} expected deposit${input.unmatched === 1 ? "" : "s"} never arrived`);
+  if (input.mismatch > 0) parts.push(`${input.mismatch} deposit${input.mismatch === 1 ? "" : "s"} posted for the wrong amount`);
+  return {
+    tone: "orange",
+    title: "Needs your attention",
+    detail: `${parts.join(" · ")}. Review the highlighted rows below.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -439,7 +505,28 @@ export function __runAtmUiCoreTests(): void {
   ok(resolveAtmTab("loads") === "loads", "loads passes through");
   ok(resolveAtmTab("cash-loads") === "loads", "cash-loads alias → loads");
   ok(resolveAtmTab("cash") === "loads", "cash alias → loads");
+  ok(resolveAtmTab("reconcile") === "reconcile", "reconcile passes through");
+  ok(resolveAtmTab("reconciliation") === "reconcile", "reconciliation alias → reconcile");
+  ok(resolveAtmTab("RECON") === "reconcile", "case-insensitive recon alias");
+  ok(resolveAtmTab("match") === "reconcile", "match alias → reconcile");
   ok(resolveAtmTab("nonsense") === "health", "unknown → health");
+
+  // atmReconcileChip --------------------------------------------------------
+  ok(atmReconcileChip("matched").tone === "green" && !atmReconcileChip("matched").needsAttention, "matched chip green, no attention");
+  ok(atmReconcileChip("mismatch").tone === "orange" && atmReconcileChip("mismatch").needsAttention, "mismatch chip orange, needs attention");
+  ok(atmReconcileChip("awaiting").tone === "neutral" && !atmReconcileChip("awaiting").needsAttention, "awaiting chip neutral, no attention");
+  ok(atmReconcileChip("unmatched").tone === "orange" && atmReconcileChip("unmatched").needsAttention, "unmatched chip orange, needs attention");
+  ok(atmReconcileChip("matched").label === "Matched", "matched label");
+  ok(atmReconcileChip("unmatched").label === "Not deposited", "unmatched label plain-English");
+
+  // atmReconcileHeadline ----------------------------------------------------
+  ok(atmReconcileHeadline({ allClear: true, legCount: 0, mismatch: 0, unmatched: 0, awaiting: 0 }).tone === "neutral", "empty → neutral headline");
+  const clear = atmReconcileHeadline({ allClear: true, legCount: 4, mismatch: 0, unmatched: 0, awaiting: 2 });
+  ok(clear.tone === "green" && clear.title.startsWith("Everything ties out"), "allClear → green ties-out headline");
+  ok(clear.detail.includes("2 deposits still on the way"), "allClear mentions awaiting count");
+  const bad = atmReconcileHeadline({ allClear: false, legCount: 4, mismatch: 1, unmatched: 2, awaiting: 0 });
+  ok(bad.tone === "orange" && bad.title === "Needs your attention", "problems → orange headline");
+  ok(bad.detail.includes("2 expected deposits never arrived") && bad.detail.includes("1 deposit posted for the wrong amount"), "headline enumerates both problem kinds");
 
   // atmConnectionStatusLine -------------------------------------------------
   const okView = atmConnectionStatusLine({
