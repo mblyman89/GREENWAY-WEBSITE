@@ -14,6 +14,9 @@ import {
   mapItemStatus,
   normalizeTxn,
   planTransactionMerge,
+  extractPlaidError,
+  describeLinkTokenCode,
+  describeLinkTokenError,
   __runPlaidCoreTests,
 } from "@/lib/plaid/plaid-core";
 
@@ -138,6 +141,67 @@ describe("normalizeTxn / planTransactionMerge (idempotent merge)", () => {
     });
     expect(plan.skipped).toHaveLength(1);
     expect(plan.upserts).toHaveLength(0);
+  });
+});
+
+describe("extractPlaidError (reads code/message/display/type/request_id, null-safe)", () => {
+  it("reads every field from a Plaid axios error body", () => {
+    const e = extractPlaidError({
+      response: {
+        data: {
+          error_type: "INVALID_INPUT",
+          error_code: "UNAUTHORIZED_ENVIRONMENT",
+          error_message: "you are not authorized to create items in this api environment.",
+          display_message: null,
+          request_id: "HNTDNrA8F1shFEW",
+        },
+      },
+    });
+    expect(e.type).toBe("INVALID_INPUT");
+    expect(e.code).toBe("UNAUTHORIZED_ENVIRONMENT");
+    expect(e.message).toContain("not authorized");
+    expect(e.requestId).toBe("HNTDNrA8F1shFEW");
+  });
+  it("missing body / null input \u2192 all null (never throws)", () => {
+    expect(extractPlaidError(new Error("network"))).toEqual({ code: null, message: null, display: null, type: null, requestId: null });
+    expect(extractPlaidError(null)).toEqual({ code: null, message: null, display: null, type: null, requestId: null });
+  });
+  it("blank strings \u2192 null", () => {
+    const e = extractPlaidError({ response: { data: { error_code: "   ", request_id: "  " } } });
+    expect(e.code).toBeNull();
+    expect(e.requestId).toBeNull();
+  });
+});
+
+describe("describeLinkTokenCode / describeLinkTokenError (distinct causes, safe tail)", () => {
+  it("does NOT collapse INVALID_API_KEYS and UNAUTHORIZED_ENVIRONMENT into one message", () => {
+    expect(describeLinkTokenCode("INVALID_API_KEYS")).not.toBe(describeLinkTokenCode("UNAUTHORIZED_ENVIRONMENT"));
+  });
+  it("UNAUTHORIZED_ENVIRONMENT points at Production approval", () => {
+    const s = describeLinkTokenCode("UNAUTHORIZED_ENVIRONMENT").toLowerCase();
+    expect(s).toContain("production");
+    expect(s).toContain("approved");
+  });
+  it("INVALID_API_KEYS points at secret + redeploy", () => {
+    const s = describeLinkTokenCode("INVALID_API_KEYS").toLowerCase();
+    expect(s).toContain("secret");
+    expect(s).toContain("redeploy");
+  });
+  it("is case-insensitive and echoes unknown codes", () => {
+    expect(describeLinkTokenCode("unauthorized_environment").toLowerCase()).toContain("production");
+    expect(describeLinkTokenCode("SOME_FUTURE_CODE")).toContain("SOME_FUTURE_CODE");
+  });
+  it("appends a safe [code \u00b7 request_id] tail when given full info", () => {
+    const s = describeLinkTokenError({ code: "UNAUTHORIZED_ENVIRONMENT", message: null, display: null, type: "INVALID_INPUT", requestId: "REQ123" });
+    expect(s).toContain("UNAUTHORIZED_ENVIRONMENT");
+    expect(s).toContain("request_id: REQ123");
+  });
+  it("no tail when there is no code or request_id", () => {
+    const s = describeLinkTokenError({ code: null, message: null, display: null, type: null, requestId: null });
+    expect(s).not.toContain("[");
+  });
+  it("bare code string still works (back-compat)", () => {
+    expect(describeLinkTokenError("UNAUTHORIZED_ENVIRONMENT").toLowerCase()).toContain("production");
   });
 });
 
