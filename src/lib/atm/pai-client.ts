@@ -51,7 +51,9 @@ import {
   toDateFieldOverride,
   summarizeDiscovery,
   summarizeProbeCsv,
-  scoreProbe,
+  scoreProbeForKind,
+  countExpectedColumns,
+  PAI_REPORT_COLUMN_TOKENS,
   PAI_REPORT_TITLE_HINTS,
   normalizeName,
   type PaiReportField,
@@ -686,8 +688,8 @@ export async function probeReportCandidates(kind: PaiReportKind): Promise<PaiPro
         csvB = "";
       }
       const summaryB = summarizeProbeCsv(csvB);
-      // Keep whichever attempt scored higher (more data wins; ties keep A).
-      if (scoreProbe(summaryB) > scoreProbe(summary)) summary = summaryB;
+      // Keep whichever attempt FITS the mapper better (column-fit wins; ties keep A).
+      if (scoreProbeForKind(kind, summaryB) > scoreProbeForKind(kind, summary)) summary = summaryB;
     }
 
     probed.push({
@@ -696,28 +698,42 @@ export async function probeReportCandidates(kind: PaiReportKind): Promise<PaiPro
       externalName: row.externalName,
       label: candidateLabel(row),
       summary,
-      score: scoreProbe(summary),
+      // KIND-AWARE score: which report FITS the mapper's columns, not which is
+      // biggest. This stops a raw per-transaction report from beating the daily
+      // summary just by returning more rows.
+      score: scoreProbeForKind(kind, summary),
     });
   }
 
   await bestEffortLogout(logoutUrl, cookies);
 
-  // 4) RANK best-first (stable). Auto-winner ONLY when one strictly leads.
+  // 4) RANK best-first by column-fit score; row count is only a SECONDARY
+  //    tiebreak (so among equally-fitting reports the fuller one wins). Stable.
   const ranked = [...probed].sort((a, b) => b.score - a.score || b.summary.rowCount - a.summary.rowCount);
   const top = ranked[0];
+  const runnerUp = ranked[1];
+  // Expected-column hits for the top candidate — the honest "does this fit?" number.
+  const topHits = top ? countExpectedColumns(kind, top.summary.columns) : 0;
+  const needed = PAI_REPORT_COLUMN_TOKENS[kind].length;
+  // Auto-save ONLY when the top candidate has data AND STRICTLY out-fits the
+  // runner-up on expected columns (a clear column-fit lead — never a row-count
+  // tie). If two reports fit equally, we do NOT guess — Michael picks.
   const strictlyLeads =
     !!top &&
-    top.score >= 2 &&
-    (ranked.length === 1 || ranked[1].score < top.score || ranked[1].summary.rowCount < top.summary.rowCount);
+    top.summary.hasData &&
+    topHits >= 2 &&
+    (!runnerUp || top.score > runnerUp.score);
   const autoWinner = strictlyLeads ? top : null;
 
   const lines = ranked.map((c, i) => {
-    const flag = c.score >= 3 ? "✅" : c.score === 2 ? "•" : c.score === 1 ? "◦" : "✗";
-    return `${i + 1}. ${flag} ${c.label} — ${c.summary.note}`;
+    const hits = countExpectedColumns(kind, c.summary.columns);
+    const fit = c.summary.hasData ? `matches ${hits}/${needed} expected columns` : "no data";
+    const flag = c.summary.hasData && hits >= 2 ? "✅" : c.summary.hasData ? "•" : c.summary.columns.length > 0 ? "◦" : "✗";
+    return `${i + 1}. ${flag} ${c.label} — ${c.summary.note} (${fit})`;
   });
   const header = autoWinner
-    ? `Clear winner: “${autoWinner.label}” (returned the most data with a date column).`
-    : "No single clear winner — pick the one below that has the rows/date column you expect.";
+    ? `Best fit: “${autoWinner.label}” — matches ${topHits}/${needed} of the columns this report needs. Saved it for you.`
+    : "No single best fit — pick the one below whose columns match what you expect (higher “expected columns” is better).";
   const summary = `${header}\n${lines.join("\n")}`;
 
   return { ok: true, kind, candidates: ranked, autoWinner, summary };

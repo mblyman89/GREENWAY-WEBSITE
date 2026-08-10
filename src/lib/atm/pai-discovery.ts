@@ -105,6 +105,40 @@ export const PAI_REPORT_TITLE_HINTS: Record<PaiReportKind, string[]> = {
   fundsMovement: ["funds movement", "bank deposit"],
 };
 
+/**
+ * The COLUMNS each report's verified mapper needs (atm-core.ts). Used to rank
+ * probe candidates by WHICH REPORT ACTUALLY FITS — not merely which returned
+ * the most rows. This matters because a report family can contain several
+ * look-alikes at different granularity (e.g. a raw per-transaction "Trx Data"
+ * report returns MORE rows than the daily "Simple Summary" our mapper expects).
+ * Rewarding row count alone would auto-pick the wrong grain; matching the
+ * mapper's required columns is EVIDENCE of the right report, not a guess.
+ *
+ * Tokens are normalized (lowercase, spaces removed) fragments matched against
+ * each candidate's normalized column labels. Kept in sync with the pickColumn
+ * lists in mapCashLoadCsv / mapSimpleSummaryCsv / mapFundsMovementCsv.
+ */
+export const PAI_REPORT_COLUMN_TOKENS: Record<PaiReportKind, string[]> = {
+  cashLoad: ["terminal", "trxtime", "cashload"],
+  simpleSummary: ["terminal", "settlementdate", "totaltrxs", "surch", "settlement"],
+  fundsMovement: ["settlementtype", "amount", "settlementdate", "acct"],
+};
+
+/**
+ * How many of a kind's expected mapper columns appear in a probed CSV's header.
+ * PURE. Case/space-insensitive substring match (so "Total Trxs" matches token
+ * "totaltrxs", "Surcharge" matches "surch", etc.). Never throws.
+ */
+export function countExpectedColumns(kind: PaiReportKind, columns: string[]): number {
+  const norm = columns.map((c) => normalizeName(c).replace(/\s+/g, ""));
+  const tokens = PAI_REPORT_COLUMN_TOKENS[kind];
+  let hits = 0;
+  for (const t of tokens) {
+    if (norm.some((c) => c.includes(t))) hits += 1;
+  }
+  return hits;
+}
+
 /** Lowercase + collapse whitespace for tolerant, non-guessing comparison. */
 export function normalizeName(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -168,6 +202,57 @@ export function resolveReportChoice(
     ok: false,
     error: `That name matches ${byName.length} reports. I need the exact report ID to be sure — I won’t guess.`,
   };
+}
+
+/** One saved probe candidate the page can render as a one-click pick option. */
+export type PaiProbePick = {
+  reportGuid: string;
+  name: string;
+  label: string;
+  rowCount: number;
+  hasData: boolean;
+};
+
+/** A kind's most-recent probe result, persisted so the page can offer picks. */
+export type PaiLastProbe = {
+  at: string;
+  candidates: PaiProbePick[];
+  winnerGuid: string | null;
+};
+
+/**
+ * Parse report_config.lastProbe into a typed, per-kind map of the last probe's
+ * ranked candidates. PURE, null-safe. Drops malformed entries (never invents a
+ * GUID). The page uses this to render a radio list so Michael picks a report by
+ * one click instead of typing an ID.
+ */
+export function parseLastProbe(raw: unknown): Partial<Record<PaiReportKind, PaiLastProbe>> {
+  const out: Partial<Record<PaiReportKind, PaiLastProbe>> = {};
+  if (!isRecord(raw)) return out;
+  for (const kind of ["cashLoad", "simpleSummary", "fundsMovement"] as const) {
+    const entry = raw[kind];
+    if (!isRecord(entry) || !Array.isArray(entry.candidates)) continue;
+    const candidates: PaiProbePick[] = [];
+    for (const c of entry.candidates) {
+      if (!isRecord(c)) continue;
+      const reportGuid = typeof c.reportGuid === "string" ? c.reportGuid.trim() : "";
+      if (reportGuid === "") continue; // never invent a GUID
+      candidates.push({
+        reportGuid,
+        name: typeof c.name === "string" ? c.name : "",
+        label: typeof c.label === "string" && c.label.trim() !== "" ? c.label : reportGuid,
+        rowCount: typeof c.rowCount === "number" && Number.isFinite(c.rowCount) ? c.rowCount : 0,
+        hasData: c.hasData === true,
+      });
+    }
+    if (candidates.length === 0) continue;
+    out[kind] = {
+      at: typeof entry.at === "string" ? entry.at : "",
+      candidates,
+      winnerGuid: typeof entry.winnerGuid === "string" ? entry.winnerGuid : null,
+    };
+  }
+  return out;
 }
 
 /** Parse report_config.reportSelection into a typed, per-kind map. PURE, null-safe. */
@@ -510,15 +595,34 @@ export function summarizeProbeCsv(csv: string | null | undefined): PaiProbeSumma
 }
 
 /**
- * Rank probe results for a kind so the strongest candidate floats to the top:
- * has data AND a date column > has data > header-only > empty/error. Ties keep
- * their original order (stable). PURE — the caller decides whether to auto-pick.
+ * BASE rank for a probe result, kind-agnostic: has data AND a date column > has
+ * data > header-only > empty/error. Ties keep their original order (stable).
+ * PURE. Prefer scoreProbeForKind when a kind is known (column-fit aware).
  */
 export function scoreProbe(s: PaiProbeSummary): number {
   if (s.hasData && s.dateColumns.length > 0) return 3;
   if (s.hasData) return 2;
   if (s.columns.length > 0) return 1;
   return 0;
+}
+
+/**
+ * KIND-AWARE rank that answers "which candidate is the RIGHT report" — not just
+ * which returned the most rows. PURE. Composition (higher is better):
+ *   • +100 per expected mapper column present (dominant signal — the report
+ *     whose columns fit the mapper is the correct one, regardless of row count).
+ *   •  +10 if it returned data rows, +10 if it has a date column (so an empty
+ *     but column-correct report still ranks, and a date column breaks ties).
+ * Row count is deliberately NOT part of the score (only used as a final,
+ * secondary tiebreak by the caller) so a raw per-transaction report can't beat
+ * the daily summary just by being larger.
+ */
+export function scoreProbeForKind(kind: PaiReportKind, s: PaiProbeSummary): number {
+  const colHits = countExpectedColumns(kind, s.columns);
+  let score = colHits * 100;
+  if (s.hasData) score += 10;
+  if (s.dateColumns.length > 0) score += 10;
+  return score;
 }
 
 /**
@@ -830,6 +934,49 @@ export function __runPaiDiscoveryTests(): void {
   // PAI HTML error page must NOT be counted as data.
   const htmlErr = summarizeProbeCsv("<!DOCTYPE html><html><body>Session expired</body></html>");
   assert(!htmlErr.hasData && htmlErr.note.includes("web page") && scoreProbe(htmlErr) === 0, "summarizeProbeCsv rejects HTML error page");
+
+  // --- countExpectedColumns + scoreProbeForKind (fit, not size) -------------
+  // Real daily Simple Summary header → matches Terminal/Settlement Date/Total Trxs/Surch/Settlement.
+  const ssCols = ["Terminal", "Location", "Settlement Date", "Total Trxs", "WD Trxs", "Surcharge WDs", "Surch", "Settlement"];
+  assert(countExpectedColumns("simpleSummary", ssCols) === 5, "simpleSummary daily header matches all 5 expected columns");
+  // A raw per-transaction "Trx Data" header (more rows, different columns) fits FEWER expected cols.
+  const trxCols = ["Terminal", "Trx Date", "Trx Time", "Card", "Amount", "Response"];
+  assert(countExpectedColumns("simpleSummary", trxCols) < 5, "raw Trx Data header fits fewer expected simpleSummary columns");
+  // Column-fit dominates row count: fewer-row summary must out-score bigger raw report.
+  const summaryDaily: PaiProbeSummary = { hasData: true, rowCount: 65, columns: ssCols, dateColumns: ["Settlement Date"], note: "" };
+  const summaryRaw: PaiProbeSummary = { hasData: true, rowCount: 235, columns: trxCols, dateColumns: ["Trx Date"], note: "" };
+  assert(
+    scoreProbeForKind("simpleSummary", summaryDaily) > scoreProbeForKind("simpleSummary", summaryRaw),
+    "scoreProbeForKind: column-fit beats raw row count (daily summary > bigger raw report)",
+  );
+  // fundsMovement + cashLoad token checks.
+  assert(countExpectedColumns("fundsMovement", ["Acct #", "Settlement Date", "Settlement Type", "Amount"]) === 4, "fundsMovement matches its 4 expected columns");
+  assert(countExpectedColumns("cashLoad", ["Terminal Number", "Trx Time", "Cash Load", "Balance"]) === 3, "cashLoad matches its 3 expected columns");
+  // Empty columns → zero hits, and an empty summary scores below any data+fit summary.
+  assert(countExpectedColumns("simpleSummary", []) === 0, "no columns → zero expected hits");
+  assert(scoreProbeForKind("simpleSummary", summaryDaily) > scoreProbeForKind("simpleSummary", { hasData: false, rowCount: 0, columns: [], dateColumns: [], note: "" }), "fitting summary out-scores empty");
+
+  // --- parseLastProbe (null-safe, never invents a GUID) ---------------------
+  assert(Object.keys(parseLastProbe(null)).length === 0, "parseLastProbe(null) → {}");
+  assert(Object.keys(parseLastProbe("x")).length === 0, "parseLastProbe(non-object) → {}");
+  const lp = parseLastProbe({
+    simpleSummary: {
+      at: "2024-03-01T00:00:00Z",
+      winnerGuid: "G-2",
+      candidates: [
+        { reportGuid: " G-1 ", name: "A", label: "Report A", rowCount: 235, hasData: true },
+        { reportGuid: "G-2", name: "B", label: "Report B", rowCount: 65, hasData: true },
+        { name: "no guid", label: "dropped" }, // no GUID → dropped
+      ],
+    },
+    fundsMovement: { candidates: [] }, // empty → dropped
+    bogus: { candidates: [{ reportGuid: "Z" }] }, // unknown kind → ignored
+  });
+  assert(lp.simpleSummary?.candidates.length === 2, "parseLastProbe drops GUID-less candidates");
+  assert(lp.simpleSummary?.candidates[0].reportGuid === "G-1", "parseLastProbe trims the GUID");
+  assert(lp.simpleSummary?.winnerGuid === "G-2", "parseLastProbe keeps the winner GUID");
+  assert(lp.fundsMovement === undefined, "parseLastProbe drops empty-candidate kinds");
+  assert(!("bogus" in lp), "parseLastProbe ignores unknown kinds");
 
   console.log("pai-discovery: all self-tests passed");
 }
