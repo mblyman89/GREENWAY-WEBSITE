@@ -425,21 +425,54 @@ export async function probeReportCandidatesAction(formData: FormData): Promise<v
     back({ tab: "health", error: result.error });
   }
 
-  // Auto-save the clear winner (if any) as the selection — deep-merge the map.
+  // Persist the ranked candidate list for THIS kind so the page can render a
+  // one-click "pick this report" radio list (each candidate carries its GUID —
+  // Michael never has to type an ID). Deep-merge under report_config.lastProbe.
+  // Also auto-save the clear winner (if any) as the selection.
   let savedNote = "";
-  if (result.autoWinner) {
+  {
     const view = await getAtmConnection();
-    const currentSel = (view.reportConfig as Record<string, unknown> | null)?.reportSelection;
-    const nextSel: Record<string, unknown> = {
-      ...(currentSel && typeof currentSel === "object" && !Array.isArray(currentSel)
-        ? (currentSel as Record<string, unknown>)
-        : {}),
-      [result.kind]: { reportGuid: result.autoWinner.reportGuid, name: result.autoWinner.name },
+    const rc = (view.reportConfig as Record<string, unknown> | null) ?? {};
+    const currentProbe =
+      rc.lastProbe && typeof rc.lastProbe === "object" && !Array.isArray(rc.lastProbe)
+        ? (rc.lastProbe as Record<string, unknown>)
+        : {};
+    const nextProbe: Record<string, unknown> = {
+      ...currentProbe,
+      [result.kind]: {
+        at: new Date().toISOString(),
+        candidates: result.candidates.map((c) => ({
+          reportGuid: c.reportGuid,
+          name: c.name,
+          label: c.label,
+          rowCount: c.summary.rowCount,
+          hasData: c.summary.hasData,
+        })),
+        winnerGuid: result.autoWinner ? result.autoWinner.reportGuid : null,
+      },
     };
-    const saved = await mergeAtmReportConfig({ reportSelection: nextSel });
-    savedNote = saved.ok
-      ? `\nSaved “${KIND_LABEL[result.kind]}” → ${result.autoWinner.label}. Next: click “Discover report fields (no F12)”, then “Backfill history”.`
-      : `\n(Couldn’t auto-save the winner: ${saved.error} — you can still pick it manually.)`;
+
+    const patch: Record<string, unknown> = { lastProbe: nextProbe };
+
+    if (result.autoWinner) {
+      const currentSel =
+        rc.reportSelection && typeof rc.reportSelection === "object" && !Array.isArray(rc.reportSelection)
+          ? (rc.reportSelection as Record<string, unknown>)
+          : {};
+      patch.reportSelection = {
+        ...currentSel,
+        [result.kind]: { reportGuid: result.autoWinner.reportGuid, name: result.autoWinner.name },
+      };
+    }
+
+    const saved = await mergeAtmReportConfig(patch);
+    if (result.autoWinner) {
+      savedNote = saved.ok
+        ? `\nSaved “${KIND_LABEL[result.kind]}” → ${result.autoWinner.label}. Next: click “Discover report fields (no F12)”, then “Backfill history”.`
+        : `\n(Couldn’t auto-save the winner: ${saved.error} — you can still pick it manually below.)`;
+    } else if (!saved.ok) {
+      savedNote = `\n(Couldn’t save the probe list: ${saved.error})`;
+    }
   }
 
   await recordAudit({

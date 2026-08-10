@@ -23,8 +23,11 @@ import {
   normalizeName,
   resolveReportChoice,
   parseReportSelection,
+  parseLastProbe,
   summarizeProbeCsv,
   scoreProbe,
+  scoreProbeForKind,
+  countExpectedColumns,
   PAI_EXPECTED_DATE_COLUMN,
   type PaiReportConfigId,
   type PaiReportField,
@@ -345,6 +348,59 @@ describe("summarizeProbeCsv + scoreProbe (evidence, not guessing)", () => {
     expect(s.hasData).toBe(false);
     expect(s.note).toContain("web page");
     expect(scoreProbe(s)).toBe(0);
+  });
+});
+
+describe("countExpectedColumns + scoreProbeForKind (right report, not biggest)", () => {
+  const SS_DAILY = ["Terminal", "Location", "Settlement Date", "Total Trxs", "WD Trxs", "Surcharge WDs", "Surch", "Settlement"];
+  const SS_RAW = ["Terminal", "Trx Date", "Trx Time", "Card", "Amount", "Response"];
+
+  it("counts how many expected mapper columns a header contains", () => {
+    expect(countExpectedColumns("simpleSummary", SS_DAILY)).toBe(5);
+    expect(countExpectedColumns("simpleSummary", SS_RAW)).toBeLessThan(5);
+    expect(countExpectedColumns("fundsMovement", ["Acct #", "Settlement Date", "Settlement Type", "Amount"])).toBe(4);
+    expect(countExpectedColumns("cashLoad", ["Terminal Number", "Trx Time", "Cash Load", "Balance"])).toBe(3);
+    expect(countExpectedColumns("simpleSummary", [])).toBe(0);
+  });
+
+  it("ranks the fitting daily summary above a bigger raw report (column-fit beats row count)", () => {
+    const daily = { hasData: true, rowCount: 65, columns: SS_DAILY, dateColumns: ["Settlement Date"], note: "" };
+    const raw = { hasData: true, rowCount: 235, columns: SS_RAW, dateColumns: ["Trx Date"], note: "" };
+    expect(scoreProbeForKind("simpleSummary", daily)).toBeGreaterThan(scoreProbeForKind("simpleSummary", raw));
+  });
+
+  it("ranks a fitting report above an empty one", () => {
+    const daily = { hasData: true, rowCount: 65, columns: SS_DAILY, dateColumns: ["Settlement Date"], note: "" };
+    const empty = { hasData: false, rowCount: 0, columns: [], dateColumns: [], note: "" };
+    expect(scoreProbeForKind("simpleSummary", daily)).toBeGreaterThan(scoreProbeForKind("simpleSummary", empty));
+  });
+});
+
+describe("parseLastProbe (one-click pick list; never invents a GUID)", () => {
+  it("returns {} for non-objects", () => {
+    expect(Object.keys(parseLastProbe(null)).length).toBe(0);
+    expect(Object.keys(parseLastProbe("x")).length).toBe(0);
+  });
+
+  it("keeps GUID-bearing candidates, trims GUIDs, drops empties and unknown kinds", () => {
+    const lp = parseLastProbe({
+      simpleSummary: {
+        at: "2024-03-01T00:00:00Z",
+        winnerGuid: "G-2",
+        candidates: [
+          { reportGuid: " G-1 ", name: "A", label: "Report A", rowCount: 235, hasData: true },
+          { reportGuid: "G-2", name: "B", label: "Report B", rowCount: 65, hasData: true },
+          { name: "no guid", label: "dropped" },
+        ],
+      },
+      fundsMovement: { candidates: [] },
+      bogus: { candidates: [{ reportGuid: "Z" }] },
+    });
+    expect(lp.simpleSummary?.candidates.length).toBe(2);
+    expect(lp.simpleSummary?.candidates[0].reportGuid).toBe("G-1");
+    expect(lp.simpleSummary?.winnerGuid).toBe("G-2");
+    expect(lp.fundsMovement).toBeUndefined();
+    expect("bogus" in lp).toBe(false);
   });
 });
 

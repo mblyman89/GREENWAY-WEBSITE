@@ -31,6 +31,7 @@ import {
   buildCashLoadsView,
   type AtmTab,
 } from "@/lib/atm/atm-ui-core";
+import { parseLastProbe } from "@/lib/atm/pai-discovery";
 import {
   saveAtmConnectionAction,
   clearAtmCredentialsAction,
@@ -206,6 +207,9 @@ function HealthTab({
 }: {
   conn: Awaited<ReturnType<typeof getAtmConnection>>;
 }) {
+  // The most-recent probe's ranked candidates per kind, so we can offer a
+  // one-click "pick this report" list (no typing GUIDs).
+  const lastProbe = parseLastProbe((conn.reportConfig as Record<string, unknown> | null)?.lastProbe);
   return (
     <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-2">
@@ -374,6 +378,44 @@ function HealthTab({
               </form>
             ))}
           </div>
+
+          {(["simpleSummary", "fundsMovement", "cashLoad"] as const).map((kind) => {
+            const probe = lastProbe[kind];
+            if (!probe || probe.candidates.length === 0) return null;
+            const kindLabel =
+              kind === "simpleSummary" ? "Simple Summary" : kind === "fundsMovement" ? "Bank Deposits" : "Cash Loads";
+            return (
+              <form key={kind} action={selectPaiReportAction} className="mt-4 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-3">
+                <input type="hidden" name="kind" value={kind} />
+                <p className="text-xs font-semibold text-white/70">
+                  Pick the correct <span className="text-emerald-300">{kindLabel}</span> report (from your last test):
+                </p>
+                <div className="mt-2 space-y-1.5">
+                  {probe.candidates.map((c, i) => (
+                    <label key={c.reportGuid} className="flex cursor-pointer items-start gap-2 text-xs text-white/70">
+                      <input
+                        type="radio"
+                        name="reportGuid"
+                        value={c.reportGuid}
+                        defaultChecked={c.reportGuid === probe.winnerGuid || (probe.winnerGuid === null && i === 0)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium text-white/85">{c.label}</span>
+                        <span className="text-white/40">
+                          {" "}
+                          — {c.hasData ? `${c.rowCount} row(s)` : "no data"}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <button type="submit" className={`${btnGhost} mt-2`}>
+                  Save this {kindLabel} report
+                </button>
+              </form>
+            );
+          })}
 
           <details className="mt-4">
             <summary className="cursor-pointer text-xs font-semibold text-white/60">
