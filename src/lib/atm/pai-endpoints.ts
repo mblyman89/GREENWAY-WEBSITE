@@ -51,6 +51,14 @@ export const PAI_DEFAULT_CUSTOM_CMD = "DownloadCSV";
 /** Default portal base (with the confirmed www.). Overridable by portal_base_url. */
 export const PAI_DEFAULT_BASE = "https://www.paireports.com/myreports/";
 
+/**
+ * The earliest date to request on a history/backfill pull. CONFIRMED by Michael:
+ * the furthest back his PAI portal allows is 2/29/2024, so that's where the first
+ * pull starts. Overridable per connection via report_config.historyStart (ISO
+ * yyyy-mm-dd), e.g. if a future account has deeper history.
+ */
+export const PAI_DEFAULT_HISTORY_START = "2024-02-29";
+
 export type PaiReportPlan = {
   kind: PaiReportKind;
   /** Absolute URL of the report page (ReportCmd=Filter) — the "open report". */
@@ -61,7 +69,79 @@ export type PaiReportPlan = {
   customCmdList: string;
   /** True when customCmdList is still the UNVERIFIED SDK default. */
   usingDefaultCustomCmd: boolean;
+  /** True when a date range was applied to filterUrl (backfill/history pull). */
+  dateFilterApplied: boolean;
+  /**
+   * True when the date range was applied using the UNVERIFIED default FIELD NAME
+   * (the range VALUE FORMAT is confirmed from Michael's portal; only the form
+   * field's name is still the SDK-convention default until captured). Lets the
+   * UI say "history window is best-effort until the field name is captured."
+   */
+  usingDefaultDateField: boolean;
 };
+
+/**
+ * An inclusive date window in ISO yyyy-mm-dd (internal representation). It is
+ * FORMATTED into PAI's confirmed on-screen format when sent (see below).
+ */
+export type PaiDateRange = { from: string; to: string };
+
+/**
+ * The PAI report column each report is date-filtered on — CONFIRMED from
+ * Michael's portal screenshots (2026-08): the settlement reports filter on
+ * "Settlement Date"; the Cash Load report on "Trx Time".
+ */
+export const PAI_DATE_COLUMN: Record<PaiReportKind, string> = {
+  cashLoad: "Trx Time",
+  simpleSummary: "Settlement Date",
+  fundsMovement: "Settlement Date",
+};
+
+/**
+ * CONFIRMED from Michael's portal (2026-08): PAI's date filter is a SINGLE text
+ * field whose value is a RANGE STRING in the form `M/D/YYYY - M/D/YYYY`
+ * (e.g. `08/01/2026 - 08/31/2026`). The helper text confirms: "Enter single date
+ * or date range in the form M/D/YYYY ... A date range is specified with two dates
+ * separated by a hyphen." So we send ONE field, not two From/To fields.
+ *
+ * Convert an ISO yyyy-mm-dd date to PAI's M/D/YYYY (zero-padded MM/DD/YYYY is
+ * accepted, as the portal itself renders 08/01/2026). Returns "" for bad input.
+ */
+export function formatPaiDate(iso: string | null | undefined): string {
+  const s = (iso ?? "").trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return "";
+  const [, y, mo, d] = m;
+  return `${mo}/${d}/${y}`;
+}
+
+/** Build PAI's range-string value `MM/DD/YYYY - MM/DD/YYYY` from an ISO range. */
+export function buildPaiRangeValue(range: PaiDateRange): string {
+  const from = formatPaiDate(range.from);
+  const to = formatPaiDate(range.to);
+  if (from === "" || to === "") return "";
+  return `${from} - ${to}`;
+}
+
+/**
+ * Resolve the SINGLE date-filter form field NAME for a report. The VALUE FORMAT
+ * is confirmed; the field NAME is the one remaining unknown, so it stays
+ * overridable via report_config.dateFieldName and defaults to the SDK convention
+ * `F_[Column]` (spaces removed, e.g. "Settlement Date" → F_SettlementDate).
+ * Returns the field name + whether it's still the unverified default.
+ */
+export function resolvePaiDateFieldName(
+  kind: PaiReportKind,
+  reportConfig?: Record<string, unknown> | null,
+): { name: string; usingDefault: boolean } {
+  const cfg =
+    reportConfig && typeof reportConfig.dateFieldName === "string"
+      ? (reportConfig.dateFieldName as string).trim()
+      : "";
+  if (cfg !== "") return { name: cfg, usingDefault: false };
+  const col = PAI_DATE_COLUMN[kind].replace(/\s+/g, "");
+  return { name: `F_${col}`, usingDefault: true };
+}
 
 /** Join a base + path safely with exactly one slash. */
 export function joinUrl(base: string, path: string): string {
@@ -80,6 +160,7 @@ export function resolvePaiReportPlan(
   kind: PaiReportKind,
   baseUrl: string | null | undefined,
   reportConfig?: Record<string, unknown> | null,
+  dateRange?: PaiDateRange | null,
 ): PaiReportPlan {
   const base = (baseUrl ?? "").trim() || PAI_DEFAULT_BASE;
   const event = PAI_REPORT_EVENT[kind];
@@ -91,24 +172,80 @@ export function resolvePaiReportPlan(
   const customCmdList = configured !== "" ? configured : PAI_DEFAULT_CUSTOM_CMD;
   const usingDefaultCustomCmd = configured === "";
 
-  const filterUrl = `${joinUrl(base, event)}?ReportCmd=Filter`;
+  // Base filter URL (open the report as currently configured in the portal).
+  let filterUrl = `${joinUrl(base, event)}?ReportCmd=Filter`;
+  let dateFilterApplied = false;
+  let usingDefaultDateField = false;
+
+  // Apply a date range ONLY when one is explicitly requested (history/backfill).
+  // The normal daily pull passes no range → identical to today's working path.
+  // PAI expects ONE field holding a range string "MM/DD/YYYY - MM/DD/YYYY".
+  if (dateRange) {
+    const rangeValue = buildPaiRangeValue(dateRange);
+    if (rangeValue !== "") {
+      const field = resolvePaiDateFieldName(kind, reportConfig);
+      filterUrl += `&${encodeURIComponent(field.name)}=${encodeURIComponent(rangeValue)}`;
+      dateFilterApplied = true;
+      usingDefaultDateField = field.usingDefault;
+    }
+  }
+
   const downloadUrl =
     `${joinUrl(base, event)}?ReportCmd=CustomCommand` +
     `&CustomCmdList=${encodeURIComponent(customCmdList)}`;
 
-  return { kind, filterUrl, downloadUrl, customCmdList, usingDefaultCustomCmd };
+  return {
+    kind,
+    filterUrl,
+    downloadUrl,
+    customCmdList,
+    usingDefaultCustomCmd,
+    dateFilterApplied,
+    usingDefaultDateField,
+  };
 }
 
 /** All three report plans at once (the sync pulls all three). */
 export function resolveAllPaiReportPlans(
   baseUrl: string | null | undefined,
   reportConfig?: Record<string, unknown> | null,
+  dateRange?: PaiDateRange | null,
 ): Record<PaiReportKind, PaiReportPlan> {
   return {
-    cashLoad: resolvePaiReportPlan("cashLoad", baseUrl, reportConfig),
-    simpleSummary: resolvePaiReportPlan("simpleSummary", baseUrl, reportConfig),
-    fundsMovement: resolvePaiReportPlan("fundsMovement", baseUrl, reportConfig),
+    cashLoad: resolvePaiReportPlan("cashLoad", baseUrl, reportConfig, dateRange),
+    simpleSummary: resolvePaiReportPlan("simpleSummary", baseUrl, reportConfig, dateRange),
+    fundsMovement: resolvePaiReportPlan("fundsMovement", baseUrl, reportConfig, dateRange),
   };
+}
+
+/**
+ * Compute the history window to request from PAI: from the connection's earliest
+ * available date (report_config.historyStart, default PAI_DEFAULT_HISTORY_START =
+ * 2024-02-29) through `today`. `today` is injectable for testing. Returns ISO dates.
+ * If the resolved start is somehow after today, it clamps to a single-day window.
+ */
+export function computePaiHistoryRange(
+  today: Date,
+  reportConfig?: Record<string, unknown> | null,
+): PaiDateRange {
+  const toIso = today.toISOString().slice(0, 10);
+  const fromIso = resolvePaiHistoryStart(reportConfig);
+  // Guard: never emit a backwards range.
+  return { from: fromIso <= toIso ? fromIso : toIso, to: toIso };
+}
+
+/**
+ * Read the earliest history date (ISO yyyy-mm-dd) from report_config.historyStart.
+ * Falls back to PAI_DEFAULT_HISTORY_START. Validates the shape so a typo can't
+ * inject a malformed value into the request.
+ */
+export function resolvePaiHistoryStart(reportConfig?: Record<string, unknown> | null): string {
+  const raw = reportConfig?.historyStart;
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  }
+  return PAI_DEFAULT_HISTORY_START;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +293,82 @@ export function __runPaiEndpointsTests(): void {
   // all-three helper returns all kinds.
   const all = resolveAllPaiReportPlans(null, null);
   assert(!!all.cashLoad && !!all.simpleSummary && !!all.fundsMovement, "all three plans present");
+
+  // --- Date-range / history backfill (capture-gated) -----------------------
+
+  // No range → today's exact behavior: no date filter on the URL, flags false.
+  assert(ss.dateFilterApplied === false, "no range → no date filter applied");
+  assert(ss.usingDefaultDateField === false, "no range → not using default date field");
+  assert(!ss.filterUrl.includes("F_"), "no range → no F_ param on filterUrl");
+
+  // formatPaiDate: ISO → M/D/YYYY (portal renders zero-padded MM/DD/YYYY).
+  assert(formatPaiDate("2024-02-29") === "02/29/2024", "formatPaiDate leap day");
+  assert(formatPaiDate("2026-08-11") === "08/11/2026", "formatPaiDate normal");
+  assert(formatPaiDate("garbage") === "", "formatPaiDate bad input → empty");
+  assert(formatPaiDate(null) === "", "formatPaiDate null → empty");
+
+  // buildPaiRangeValue: confirmed "MM/DD/YYYY - MM/DD/YYYY" format.
+  assert(
+    buildPaiRangeValue({ from: "2024-02-29", to: "2026-08-11" }) === "02/29/2024 - 08/11/2026",
+    "range value matches confirmed portal format",
+  );
+  assert(buildPaiRangeValue({ from: "bad", to: "2026-08-11" }) === "", "bad from → empty range value");
+
+  // With a range → ONE field with the range string, using the SDK-default name.
+  const ranged = resolvePaiReportPlan("simpleSummary", null, null, { from: "2024-02-29", to: "2026-08-11" });
+  assert(ranged.dateFilterApplied === true, "range → date filter applied");
+  assert(ranged.usingDefaultDateField === true, "range → flags unverified default field name");
+  // Single field F_SettlementDate = "02/29/2024 - 08/11/2026" (URL-encoded).
+  assert(
+    ranged.filterUrl.includes(`F_SettlementDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
+    "range → single settlement-date field with range string",
+  );
+  assert(!ranged.filterUrl.includes("F_SettlementDateFrom"), "range → NOT two From/To fields");
+  assert(
+    ranged.filterUrl.startsWith("https://www.paireports.com/myreports/GetTerminalTrxDataReport.event?ReportCmd=Filter"),
+    "range → keeps ReportCmd=Filter base",
+  );
+
+  // cashLoad filters on Trx Time → F_TrxTime (single field).
+  const clRange = resolvePaiReportPlan("cashLoad", null, null, { from: "2024-02-29", to: "2026-08-11" });
+  assert(
+    clRange.filterUrl.includes(`F_TrxTime=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
+    "cashLoad Trx Time single field with range string",
+  );
+
+  // Malformed range is ignored (safety — never send a bad filter value).
+  const bad = resolvePaiReportPlan("simpleSummary", null, null, { from: "nope", to: "2026-08-11" });
+  assert(bad.dateFilterApplied === false, "bad range ignored (no filter applied)");
+
+  // report_config can OVERRIDE the field name → clears the default flag.
+  const nameOverride = resolvePaiReportPlan(
+    "simpleSummary",
+    null,
+    { dateFieldName: "SettlementDate" },
+    { from: "2024-02-29", to: "2026-08-11" },
+  );
+  assert(nameOverride.usingDefaultDateField === false, "captured field name clears default flag");
+  assert(
+    nameOverride.filterUrl.includes(`SettlementDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
+    "captured field name used",
+  );
+
+  // resolvePaiDateFieldName convention + override.
+  const fn = resolvePaiDateFieldName("fundsMovement", null);
+  assert(fn.name === "F_SettlementDate" && fn.usingDefault, "date field default convention");
+  const fno = resolvePaiDateFieldName("fundsMovement", { dateFieldName: "X" });
+  assert(fno.name === "X" && !fno.usingDefault, "date field override");
+
+  // computePaiHistoryRange: starts at the confirmed earliest date, ends today.
+  const range = computePaiHistoryRange(new Date("2026-08-11T00:00:00Z"), null);
+  assert(range.to === "2026-08-11", "history range ends today");
+  assert(range.from === "2024-02-29", "history range starts at confirmed 2/29/2024");
+
+  // resolvePaiHistoryStart: config override + fallback + validation.
+  assert(resolvePaiHistoryStart(null) === PAI_DEFAULT_HISTORY_START, "history start default 2024-02-29");
+  assert(resolvePaiHistoryStart({ historyStart: "2023-01-01" }) === "2023-01-01", "history start from config");
+  assert(resolvePaiHistoryStart({ historyStart: "not-a-date" }) === PAI_DEFAULT_HISTORY_START, "invalid start → default");
+  assert(resolvePaiHistoryStart({ historyStart: 20240229 }) === PAI_DEFAULT_HISTORY_START, "non-string start → default");
 
   console.log("pai-endpoints: all self-tests passed");
 }

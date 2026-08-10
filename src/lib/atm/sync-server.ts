@@ -142,8 +142,11 @@ export type LiveSyncResult =
  *
  * Works identically with Michael's MAIN login or a future READ-ONLY sub-user.
  */
-export async function runAtmLiveSync(): Promise<LiveSyncResult> {
-  const pull = await pullAllPaiReports();
+export async function runAtmLiveSync(options?: {
+  /** When true, backfill from the earliest available date (2/29/24) instead of PAI's default window. */
+  history?: boolean;
+}): Promise<LiveSyncResult> {
+  const pull = await pullAllPaiReports(options?.history ? { history: true } : undefined);
 
   if (!pull.ok) {
     // Record the failure on the health chip and surface the reason plainly.

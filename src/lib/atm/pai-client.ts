@@ -29,6 +29,7 @@ import "server-only";
 import { getAtmConnectionSecrets } from "./store";
 import {
   resolveAllPaiReportPlans,
+  computePaiHistoryRange,
   type PaiReportKind,
   type PaiReportPlan,
 } from "./pai-endpoints";
@@ -91,7 +92,10 @@ function collectCookies(existing: string, setCookie: string | null): string {
  * results so a single bad report doesn't sink the others. Never throws; secrets
  * never appear in any returned string.
  */
-export async function pullAllPaiReports(): Promise<PaiPullResult> {
+export async function pullAllPaiReports(options?: {
+  /** When true, request the widest history window (backfill) instead of PAI's default. */
+  history?: boolean;
+}): Promise<PaiPullResult> {
   const secrets = await getAtmConnectionSecrets();
   if (!secrets) {
     return {
@@ -102,7 +106,17 @@ export async function pullAllPaiReports(): Promise<PaiPullResult> {
     };
   }
 
-  const plans = resolveAllPaiReportPlans(secrets.portalBaseUrl, secrets.reportConfig);
+  // History/backfill pull: request from the confirmed earliest date (2/29/2024,
+  // overridable via report_config.historyStart) through today. The date VALUE
+  // FORMAT is confirmed from Michael's portal; only the form field NAME is the
+  // SDK default until captured, which is flagged on the plan and reported
+  // honestly. The normal daily pull passes NO range → byte-for-byte identical to
+  // today's proven-working path.
+  const dateRange = options?.history
+    ? computePaiHistoryRange(new Date(), secrets.reportConfig)
+    : null;
+
+  const plans = resolveAllPaiReportPlans(secrets.portalBaseUrl, secrets.reportConfig, dateRange);
   const loginUrl = plans.cashLoad.filterUrl.replace(/\/[^/]*\?.*$/, "/Login.event");
   const logoutUrl = loginUrl.replace(/Login\.event$/, "DoLogout.event");
 
