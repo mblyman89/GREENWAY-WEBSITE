@@ -31,6 +31,8 @@ describe("tab resolver", () => {
     expect(resolvePlaidTab(undefined)).toBe("connections");
     expect(resolvePlaidTab("health")).toBe("health");
     expect(resolvePlaidTab("HEALTH")).toBe("health");
+    expect(resolvePlaidTab("money")).toBe("money");
+    expect(resolvePlaidTab("ACCOUNTS")).toBe("money");
     expect(resolvePlaidTab("garbage")).toBe("connections");
   });
 });

@@ -19,8 +19,17 @@
  * is NEVER sent to the browser (see actions.ts / store.ts). Everything the page
  * renders is non-sensitive (institution name, last-4 mask, balances, role).
  *
- * Slices ahead: P3 pulls transactions on a schedule, P4 adds the webhook, P5
- * builds the four money-view tabs, P6 reconciles against payroll/vendor payments.
+ * Slices ahead: P3 pulls transactions on a schedule, P4 adds the webhook.
+ *
+ * Slice P5 (this file) adds a third tab — Money — a master–detail screen: a
+ * LEFT sidebar lists every account grouped by institution (nickname + balance),
+ * and the RIGHT detail panel shows the selected account's four money views:
+ *   Activity (statement) · Money in & out (net) · Where it goes (categories) ·
+ *   Pending. All money math lives in the PURE plaid-money-core (cents, Plaid
+ *   sign preserved). The owner (Michael/Wife) grouping level drops in above
+ *   institution when the 2nd-Plaid-API slice adds that tag — no rework here.
+ *
+ * P6 will reconcile against payroll/vendor payments and roll NET up to income.
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
@@ -29,14 +38,33 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { isPlaidConfigured, plaidEnv } from "@/lib/plaid/env";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
-import { listPlaidItems, listPlaidAccounts } from "@/lib/plaid/store";
+import { listPlaidItems, listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
 import {
   resolvePlaidTab,
   buildItemStatusView,
   buildAccountSummary,
+  roleLabel,
   type PlaidTab,
   type ChipTone,
 } from "@/lib/plaid/plaid-ui-core";
+import {
+  groupAccountsByInstitution,
+  resolveSelectedAccountId,
+  resolveMoneyView,
+  moneyViewLabel,
+  resolveMoneyRange,
+  moneyRangeLabel,
+  moneyRangeBounds,
+  filterTxnsInRange,
+  computeMoneyFlow,
+  computeCategoryBreakdown,
+  buildActivityRows,
+  buildPendingRows,
+  type GroupableAccount,
+  type MoneyTxn,
+  type MoneyView,
+  type MoneyRangeKey,
+} from "@/lib/plaid/plaid-money-core";
 import { PlaidLinkButton } from "./PlaidLinkButton";
 import { assignPlaidAccountRoleAction, runPlaidSyncNowAction, setPlaidAccountNameAction } from "./actions";
 
@@ -54,6 +82,18 @@ function tabCls(active: boolean): string {
   }`;
 }
 
+/** Today's date as "YYYY-MM-DD" (UTC), the reference for money-range bounds. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Sub-tab pill for the money detail panel (Activity / Money in & out / …). */
+function subTabCls(active: boolean): string {
+  return `rounded-full px-3 py-1.5 text-xs font-semibold ${
+    active ? "bg-emerald-500 text-emerald-950" : "border border-white/15 text-white/70 hover:bg-white/[0.06]"
+  }`;
+}
+
 function chipCls(tone: ChipTone): string {
   if (tone === "green") return "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300";
   if (tone === "orange") return "border-amber-500/40 bg-amber-500/[0.08] text-amber-300";
@@ -64,7 +104,14 @@ function chipCls(tone: ChipTone): string {
 export default async function PlaidPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; msg?: string; error?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    msg?: string;
+    error?: string;
+    account?: string;
+    view?: string;
+    range?: string;
+  }>;
 }) {
   await requirePermission("settings.manage");
   const sp = await searchParams;
@@ -84,6 +131,73 @@ export default async function PlaidPage({
     list.push(a);
     accountsByItem.set(a.itemId, list);
   }
+
+  // ---- Money tab prep (master–detail) -------------------------------------
+  // The institution name lives on the ITEM; join it onto each account so the
+  // sidebar can group by bank. buildAccountSummary resolves nickname → name.
+  const institutionByItem = new Map<string, string | null>();
+  for (const it of items) institutionByItem.set(it.itemId, it.institutionName);
+
+  const groupableAccounts: GroupableAccount[] = accounts.map((a) => {
+    const v = buildAccountSummary(a);
+    return {
+      accountId: a.accountId,
+      institutionName: institutionByItem.get(a.itemId) ?? null,
+      displayName: v.displayName,
+      maskText: v.maskText,
+      currentText: v.currentText,
+      currentBalanceCents: a.currentBalanceCents,
+      role: a.role,
+    };
+  });
+  const accountGroups = groupAccountsByInstitution(groupableAccounts);
+
+  const moneyView: MoneyView = resolveMoneyView(sp.view);
+  const moneyRange: MoneyRangeKey = resolveMoneyRange(sp.range);
+  const selectedAccountId =
+    tab === "money" ? resolveSelectedAccountId(sp.account, accountGroups) : null;
+
+  // Load only the selected account's transactions (indexed account_id+date desc).
+  const selectedTxns: MoneyTxn[] =
+    tab === "money" && selectedAccountId
+      ? (await listPlaidTransactions(selectedAccountId)).map((t) => ({
+          transactionId: t.transactionId,
+          accountId: t.accountId,
+          amountCents: t.amountCents,
+          date: t.date,
+          name: t.name,
+          merchantName: t.merchantName,
+          categoryPrimary: t.categoryPrimary,
+          categoryDetailed: t.categoryDetailed,
+          pending: t.pending,
+          paymentChannel: t.paymentChannel,
+        }))
+      : [];
+
+  const selectedAccount = selectedAccountId
+    ? groupableAccounts.find((a) => a.accountId === selectedAccountId) ?? null
+    : null;
+
+  // Range-filtered views (activity/pending show ALL history; flow/categories
+  // respect the range picker so the totals answer "for this period").
+  const rangeBounds = moneyRangeBounds(moneyRange, todayIso());
+  const rangedTxns = filterTxnsInRange(selectedTxns, rangeBounds.start, rangeBounds.end);
+  const flow = computeMoneyFlow(rangedTxns);
+  const categories = computeCategoryBreakdown(rangedTxns);
+  const activityRows = buildActivityRows(selectedTxns);
+  const pendingRows = buildPendingRows(selectedTxns);
+
+  // Helper to build a money-tab link that preserves account + view + range.
+  const moneyHref = (over: { account?: string; view?: MoneyView; range?: MoneyRangeKey }) => {
+    const account = over.account ?? selectedAccountId ?? "";
+    const view = over.view ?? moneyView;
+    const range = over.range ?? moneyRange;
+    const q = new URLSearchParams({ tab: "money" });
+    if (account) q.set("account", account);
+    q.set("view", view);
+    q.set("range", range);
+    return `/admin/plaid?${q.toString()}`;
+  };
 
   return (
     <div>
@@ -165,10 +279,13 @@ export default async function PlaidPage({
           </div>
         ) : null}
 
-        {/* Tabs — Connections opens first */}
+        {/* Tabs — Connections opens first; Money is the master–detail screen. */}
         <div className="mb-6 flex flex-wrap gap-2">
           <Link href="/admin/plaid?tab=connections" className={tabCls(tab === "connections")}>
             Connections
+          </Link>
+          <Link href="/admin/plaid?tab=money" className={tabCls(tab === "money")}>
+            Money
           </Link>
           <Link href="/admin/plaid?tab=health" className={tabCls(tab === "health")}>
             Health
@@ -239,6 +356,220 @@ export default async function PlaidPage({
               )}
             </div>
           </div>
+        ) : null}
+
+        {tab === "money" ? (
+          accounts.length === 0 ? (
+            <div className={cardCls}>
+              <p className="text-sm text-white/60">
+                No accounts yet. Connect a bank on the <span className="font-semibold text-white">Connections</span> tab,
+                then your accounts and their money will show up here.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+              {/* LEFT: master — accounts grouped by institution */}
+              <aside className={`${cardCls} h-fit`}>
+                <h2 className="mb-1 text-sm font-semibold text-white">Accounts</h2>
+                <p className="mb-4 text-xs text-white/50">Grouped by bank. Pick one to see its money.</p>
+                <div className="space-y-4">
+                  {accountGroups.map((group) => (
+                    <div key={group.key}>
+                      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
+                          {group.institutionName}
+                        </span>
+                        <span className="text-xs text-white/40">{group.subtotalText}</span>
+                      </div>
+                      <ul className="space-y-1">
+                        {group.accounts.map((a) => {
+                          const active = a.accountId === selectedAccountId;
+                          return (
+                            <li key={a.accountId}>
+                              <Link
+                                href={moneyHref({ account: a.accountId })}
+                                className={`flex items-center justify-between gap-2 rounded-[var(--admin-radius)] border px-3 py-2 text-sm ${
+                                  active
+                                    ? "border-emerald-500/40 bg-emerald-500/[0.08] text-white"
+                                    : "border-white/10 bg-white/[0.02] text-white/80 hover:bg-white/[0.05]"
+                                }`}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate font-semibold">{a.displayName}</span>
+                                  <span className="block text-xs text-white/40">
+                                    {a.maskText} · {roleLabel(a.role)}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-xs font-semibold text-white/70">{a.currentText}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </aside>
+
+              {/* RIGHT: detail — selected account's four money views */}
+              <section className="space-y-6">
+                {selectedAccount ? (
+                  <>
+                    <div className={cardCls}>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div>
+                          <h2 className="text-base font-semibold text-white">{selectedAccount.displayName}</h2>
+                          <p className="text-xs text-white/40">
+                            {selectedAccount.maskText} · {roleLabel(selectedAccount.role)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-semibold text-white">{selectedAccount.currentText}</p>
+                          <p className="text-xs text-white/40">Current balance</p>
+                        </div>
+                      </div>
+
+                      {/* Money-view sub-tabs */}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {(["activity", "flow", "categories", "pending"] as MoneyView[]).map((mv) => (
+                          <Link key={mv} href={moneyHref({ view: mv })} className={subTabCls(moneyView === mv)}>
+                            {moneyViewLabel(mv)}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Range picker — used by Money in & out + Where it goes */}
+                    {moneyView === "flow" || moneyView === "categories" ? (
+                      <div className="flex flex-wrap gap-2">
+                        {(["this_month", "last_month", "this_year", "all"] as MoneyRangeKey[]).map((rk) => (
+                          <Link key={rk} href={moneyHref({ range: rk })} className={subTabCls(moneyRange === rk)}>
+                            {moneyRangeLabel(rk)}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {/* VIEW 1: Activity (statement) */}
+                    {moneyView === "activity" ? (
+                      <div className={cardCls}>
+                        <h3 className="mb-1 text-sm font-semibold text-white">Activity</h3>
+                        <p className="mb-4 text-xs text-white/50">Your statement — newest first. Money in is green, money out is white.</p>
+                        {activityRows.length === 0 ? (
+                          <p className="text-sm text-white/50">No transactions yet. Use “Sync now” on the Health tab to pull activity.</p>
+                        ) : (
+                          <ul className="divide-y divide-white/5">
+                            {activityRows.map((r) => (
+                              <li key={r.transactionId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                                <span className="min-w-0">
+                                  <span className="block truncate text-white/90">
+                                    {r.description}
+                                    {r.pending ? (
+                                      <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/[0.08] px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                        Pending
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span className="block text-xs text-white/40">
+                                    {r.date} · {r.categoryText}
+                                  </span>
+                                </span>
+                                <span className={`shrink-0 font-semibold ${r.direction === "in" ? "text-emerald-300" : "text-white/80"}`}>
+                                  {r.amountText}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {/* VIEW 2: Money in & out (net) */}
+                    {moneyView === "flow" ? (
+                      <div className={cardCls}>
+                        <h3 className="mb-1 text-sm font-semibold text-white">Money in &amp; out</h3>
+                        <p className="mb-4 text-xs text-white/50">{moneyRangeLabel(moneyRange)} · {flow.count} transaction{flow.count === 1 ? "" : "s"}.</p>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <div className="rounded-[var(--admin-radius)] border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+                            <p className="text-xs text-white/50">Money in</p>
+                            <p className="mt-1 text-lg font-semibold text-emerald-300">{flow.inflowText}</p>
+                          </div>
+                          <div className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4">
+                            <p className="text-xs text-white/50">Money out</p>
+                            <p className="mt-1 text-lg font-semibold text-white/85">{flow.outflowText}</p>
+                          </div>
+                          <div className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4">
+                            <p className="text-xs text-white/50">Net</p>
+                            <p className={`mt-1 text-lg font-semibold ${flow.netCents >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                              {flow.netText}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* VIEW 3: Where it goes (categories) */}
+                    {moneyView === "categories" ? (
+                      <div className={cardCls}>
+                        <h3 className="mb-1 text-sm font-semibold text-white">Where the money goes</h3>
+                        <p className="mb-4 text-xs text-white/50">Spending by category, biggest first · {moneyRangeLabel(moneyRange)}.</p>
+                        {categories.length === 0 ? (
+                          <p className="text-sm text-white/50">No spending in this period.</p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {categories.map((c) => (
+                              <li key={c.category}>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <span className="text-white/90">{c.category}</span>
+                                  <span className="text-white/70">
+                                    {c.amountText} <span className="text-white/40">· {c.percent}%</span>
+                                  </span>
+                                </div>
+                                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                                  <div className="h-full rounded-full bg-emerald-500/60" style={{ width: `${c.percent}%` }} />
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {/* VIEW 4: Pending */}
+                    {moneyView === "pending" ? (
+                      <div className={cardCls}>
+                        <h3 className="mb-1 text-sm font-semibold text-white">Pending</h3>
+                        <p className="mb-4 text-xs text-white/50">Transactions that haven’t cleared yet.</p>
+                        {pendingRows.length === 0 ? (
+                          <p className="text-sm text-white/50">Nothing pending — everything has cleared.</p>
+                        ) : (
+                          <ul className="divide-y divide-white/5">
+                            {pendingRows.map((r) => (
+                              <li key={r.transactionId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                                <span className="min-w-0">
+                                  <span className="block truncate text-white/90">{r.description}</span>
+                                  <span className="block text-xs text-white/40">
+                                    {r.date} · {r.categoryText}
+                                  </span>
+                                </span>
+                                <span className={`shrink-0 font-semibold ${r.direction === "in" ? "text-emerald-300" : "text-white/80"}`}>
+                                  {r.amountText}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className={cardCls}>
+                    <p className="text-sm text-white/60">Pick an account on the left to see its money.</p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )
         ) : null}
 
         {tab === "health" ? (

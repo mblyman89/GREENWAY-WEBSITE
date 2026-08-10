@@ -23,10 +23,11 @@ import { mapItemStatus, validateAccountRole, type AccountRole, type ItemStatusVi
 // 1) Tab resolver — the page has two tabs in P2. Unknown/empty → "connections".
 // ---------------------------------------------------------------------------
 
-export type PlaidTab = "connections" | "health";
+export type PlaidTab = "money" | "connections" | "health";
 
 export function resolvePlaidTab(param: string | null | undefined): PlaidTab {
   const v = (param ?? "").trim().toLowerCase();
+  if (v === "money" || v === "accounts" || v === "transactions") return "money";
   if (v === "health") return "health";
   // aliases so a stray value never 404s the tab
   if (v === "status" || v === "connection" || v === "connections") return "connections";
@@ -221,6 +222,8 @@ export function __runPlaidUiCoreTests(): void {
   ok(resolvePlaidTab("") === "connections", "empty → connections");
   ok(resolvePlaidTab("connections") === "connections", "connections passes through");
   ok(resolvePlaidTab("HEALTH") === "health", "case-insensitive health");
+  ok(resolvePlaidTab("money") === "money", "money tab resolves");
+  ok(resolvePlaidTab("ACCOUNTS") === "money", "accounts alias → money");
   ok(resolvePlaidTab("status") === "connections", "status alias → connections");
   ok(resolvePlaidTab("nonsense") === "connections", "unknown → connections");
 
