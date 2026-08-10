@@ -105,9 +105,9 @@ export async function createPlaidLinkTokenAction(): Promise<
     // mapped from the code — no raw request context is exposed.
     const info = extractPlaidError(err);
     console.error(
-      `[plaid] linkTokenCreate failed — code=${info.code ?? "(none)"} message=${info.message ?? "(none)"} webhook=${siteBaseUrl()}/api/webhooks/plaid`,
+      `[plaid] linkTokenCreate failed — code=${info.code ?? "(none)"} type=${info.type ?? "(none)"} request_id=${info.requestId ?? "(none)"} message=${info.message ?? "(none)"} webhook=${siteBaseUrl()}/api/webhooks/plaid`,
     );
-    return { ok: false, error: describeLinkTokenError(info.code) };
+    return { ok: false, error: describeLinkTokenError(info) };
   }
 }
 

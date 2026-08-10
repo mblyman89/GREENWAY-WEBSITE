@@ -155,6 +155,14 @@ export type PlaidErrorInfo = {
   message: string | null;
   /** Plaid's user-safe display_message, when present. */
   display: string | null;
+  /** Plaid's error_type bucket, e.g. "INVALID_INPUT". null if absent. */
+  type: string | null;
+  /**
+   * Plaid's request_id — present on EVERY Plaid error body. This is the single
+   * value Plaid Support asks for, and it is NOT a secret, so it is safe to show
+   * the owner so they can quote it. null if absent.
+   */
+  requestId: string | null;
 };
 
 /**
@@ -163,37 +171,57 @@ export type PlaidErrorInfo = {
  * throws and never assumes a shape — anything missing comes back null. PURE.
  */
 export function extractPlaidError(err: unknown): PlaidErrorInfo {
-  const out: PlaidErrorInfo = { code: null, message: null, display: null };
+  const out: PlaidErrorInfo = { code: null, message: null, display: null, type: null, requestId: null };
   if (err && typeof err === "object") {
     const anyErr = err as {
-      response?: { data?: { error_code?: unknown; error_message?: unknown; display_message?: unknown } };
+      response?: {
+        data?: {
+          error_code?: unknown;
+          error_message?: unknown;
+          display_message?: unknown;
+          error_type?: unknown;
+          request_id?: unknown;
+        };
+      };
     };
     const data = anyErr.response?.data;
     if (data && typeof data === "object") {
       if (typeof data.error_code === "string" && data.error_code.trim() !== "") out.code = data.error_code;
       if (typeof data.error_message === "string" && data.error_message.trim() !== "") out.message = data.error_message;
       if (typeof data.display_message === "string" && data.display_message.trim() !== "") out.display = data.display_message;
+      if (typeof data.error_type === "string" && data.error_type.trim() !== "") out.type = data.error_type;
+      if (typeof data.request_id === "string" && data.request_id.trim() !== "") out.requestId = data.request_id;
     }
   }
   return out;
 }
 
 /**
- * Turn a /link/token/create failure error_code into a specific, owner-actionable
- * sentence (plain English, no jargon), so a real Plaid problem tells Michael what
- * to do instead of a generic "try again". Unknown codes get a safe generic line
- * that still echoes the code so it can be looked up. PURE.
+ * Map a /link/token/create failure error_code to a specific, owner-actionable
+ * sentence (plain English, no jargon). CRITICAL: the four "keys" codes each have
+ * a DIFFERENT real cause and fix per Plaid's official docs
+ * (https://plaid.com/docs/errors/invalid-input), so we DO NOT collapse them into
+ * one generic line anymore — that hid the single fact needed to fix it. Unknown
+ * codes get a safe generic line that echoes the code. PURE.
  */
-export function describeLinkTokenError(errorCode: string | null | undefined): string {
+export function describeLinkTokenCode(errorCode: string | null | undefined): string {
   const code = (errorCode ?? "").trim().toUpperCase();
   switch (code) {
     case "":
       return "Couldn't start the bank connection. Please try again in a moment.";
+    case "UNAUTHORIZED_ENVIRONMENT":
+      // Plaid: "you are not authorized to create items in this api environment."
+      // = the client ID is NOT enabled for Production yet (Production access not
+      // granted/approved). Having a Production key is not the same as being
+      // approved for Production. This is the most likely cause when the keys are
+      // "correct" but the connection is still rejected.
+      return "Your Plaid client ID isn't approved for the Production environment yet. In the Plaid Dashboard, confirm your app is enabled for Production (request/complete Production access if it's still pending), then try again.";
     case "INVALID_API_KEYS":
     case "INVALID_CLIENT_ID":
     case "INVALID_SECRET":
-    case "UNAUTHORIZED_ENVIRONMENT":
-      return "Plaid rejected the account keys. Check that PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV in Vercel all match the same Plaid environment (production keys with PLAID_ENV=production).";
+      // Plaid: "invalid client_id or secret provided" = keys not valid FOR THE
+      // ENVIRONMENT being used (e.g. a Sandbox secret while PLAID_ENV=production).
+      return "Plaid rejected the client ID or secret for this environment. In Vercel, make sure PLAID_ENV is \"production\" and PLAID_SECRET is your Production secret (not the Sandbox one) — then REDEPLOY so the new values take effect.";
     case "PRODUCTS_NOT_SUPPORTED":
     case "PRODUCT_NOT_ENABLED":
     case "PRODUCT_NOT_READY":
@@ -203,7 +231,7 @@ export function describeLinkTokenError(errorCode: string | null | undefined): st
     case "INVALID_WEBHOOK_VERIFICATION_KEY_ID":
       return "Plaid rejected part of the connection request (often the webhook URL). Set NEXT_PUBLIC_SITE_URL in Vercel to your live https:// address, then try again.";
     case "INVALID_PRODUCT":
-      return "This Plaid account can't use one of the requested products. Check the enabled products in the Plaid Dashboard, then try again.";
+      return "This Plaid account can't use one of the requested products (Transactions). Request Transactions/Production access in the Plaid Dashboard, then try again.";
     case "ADDITIONAL_CONSENT_REQUIRED":
       return "Plaid needs additional consent configured for this account. Review your Plaid Dashboard settings, then try again.";
     case "INTERNAL_SERVER_ERROR":
@@ -214,6 +242,26 @@ export function describeLinkTokenError(errorCode: string | null | undefined): st
     default:
       return `Couldn't start the bank connection (${code}). Please try again; if it keeps happening, share this code.`;
   }
+}
+
+/**
+ * Build the full owner-facing link-token error string: the actionable sentence
+ * PLUS a safe diagnostic tail `[CODE · request_id: ...]`. Neither the code nor
+ * the request_id is a secret (they carry no key material), and both are exactly
+ * what Plaid Support — and we — need to pin down the true cause. Accepts the full
+ * PlaidErrorInfo so a bare code still works via `describeLinkTokenCode`. PURE.
+ */
+export function describeLinkTokenError(info: PlaidErrorInfo | string | null | undefined): string {
+  // Back-compat: a bare code string still maps to the sentence (no tail).
+  if (info === null || info === undefined || typeof info === "string") {
+    return describeLinkTokenCode(info ?? null);
+  }
+  const sentence = describeLinkTokenCode(info.code);
+  const bits: string[] = [];
+  if (info.code) bits.push(info.code);
+  if (info.requestId) bits.push(`request_id: ${info.requestId}`);
+  if (bits.length === 0) return sentence;
+  return `${sentence} [${bits.join(" · ")}]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +426,14 @@ export function __runPlaidCoreTests(): void {
   expect("status: healthy message is plain english", mapItemStatus("").message.length > 0);
 
   // --- extractPlaidError (axios error body) ---
+  expect("extractPlaidError: reads request_id + type", (() => {
+    const e = extractPlaidError({ response: { data: { error_code: "UNAUTHORIZED_ENVIRONMENT", error_type: "INVALID_INPUT", request_id: "HNTDNrA8F1shFEW" } } });
+    return e.code === "UNAUTHORIZED_ENVIRONMENT" && e.type === "INVALID_INPUT" && e.requestId === "HNTDNrA8F1shFEW";
+  })());
+  expect("extractPlaidError: blank request_id \u2192 null", (() => {
+    const e = extractPlaidError({ response: { data: { error_code: "X", request_id: "   " } } });
+    return e.requestId === null;
+  })());
   expect("extractPlaidError: reads code/message/display", (() => {
     const e = extractPlaidError({ response: { data: { error_code: "INVALID_API_KEYS", error_message: "bad keys", display_message: "Please retry." } } });
     return e.code === "INVALID_API_KEYS" && e.message === "bad keys" && e.display === "Please retry.";
@@ -396,12 +452,26 @@ export function __runPlaidCoreTests(): void {
   })());
 
   // --- describeLinkTokenError ---
-  expect("linkErr: null \u2192 generic", describeLinkTokenError(null).length > 0);
-  expect("linkErr: INVALID_API_KEYS \u2192 mentions keys", describeLinkTokenError("INVALID_API_KEYS").toLowerCase().includes("keys"));
-  expect("linkErr: PRODUCTS_NOT_SUPPORTED \u2192 mentions Transactions", describeLinkTokenError("PRODUCTS_NOT_SUPPORTED").includes("Transactions"));
-  expect("linkErr: INVALID_FIELD \u2192 mentions webhook/site url", describeLinkTokenError("INVALID_FIELD").toLowerCase().includes("webhook") || describeLinkTokenError("INVALID_FIELD").includes("NEXT_PUBLIC_SITE_URL"));
-  expect("linkErr: case-insensitive", describeLinkTokenError("invalid_api_keys").toLowerCase().includes("keys"));
-  expect("linkErr: unknown code echoed", describeLinkTokenError("SOME_FUTURE_CODE").includes("SOME_FUTURE_CODE"));
+  // describeLinkTokenCode (bare-code sentence)
+  expect("linkErr: null \u2192 generic", describeLinkTokenCode(null).length > 0);
+  expect("linkErr: INVALID_API_KEYS \u2192 mentions secret + redeploy", describeLinkTokenCode("INVALID_API_KEYS").toLowerCase().includes("secret") && describeLinkTokenCode("INVALID_API_KEYS").toLowerCase().includes("redeploy"));
+  expect("linkErr: UNAUTHORIZED_ENVIRONMENT \u2192 distinct (Production approval)", describeLinkTokenCode("UNAUTHORIZED_ENVIRONMENT").toLowerCase().includes("production") && describeLinkTokenCode("UNAUTHORIZED_ENVIRONMENT").toLowerCase().includes("approved"));
+  expect("linkErr: the two key-codes are NOT the same message", describeLinkTokenCode("INVALID_API_KEYS") !== describeLinkTokenCode("UNAUTHORIZED_ENVIRONMENT"));
+  expect("linkErr: PRODUCTS_NOT_SUPPORTED \u2192 mentions Transactions", describeLinkTokenCode("PRODUCTS_NOT_SUPPORTED").includes("Transactions"));
+  expect("linkErr: INVALID_FIELD \u2192 mentions webhook/site url", describeLinkTokenCode("INVALID_FIELD").toLowerCase().includes("webhook") || describeLinkTokenCode("INVALID_FIELD").includes("NEXT_PUBLIC_SITE_URL"));
+  expect("linkErr: case-insensitive", describeLinkTokenCode("unauthorized_environment").toLowerCase().includes("production"));
+  expect("linkErr: unknown code echoed", describeLinkTokenCode("SOME_FUTURE_CODE").includes("SOME_FUTURE_CODE"));
+  // describeLinkTokenError (info overload + diagnostic tail)
+  expect("linkErr: bare string still works (back-compat)", describeLinkTokenError("UNAUTHORIZED_ENVIRONMENT").toLowerCase().includes("production"));
+  expect("linkErr: null info \u2192 generic", describeLinkTokenError(null).length > 0);
+  expect("linkErr: info appends code + request_id tail", (() => {
+    const s = describeLinkTokenError({ code: "UNAUTHORIZED_ENVIRONMENT", message: null, display: null, type: "INVALID_INPUT", requestId: "REQ123" });
+    return s.includes("UNAUTHORIZED_ENVIRONMENT") && s.includes("request_id: REQ123");
+  })());
+  expect("linkErr: info with no code/request_id \u2192 no tail brackets", (() => {
+    const s = describeLinkTokenError({ code: null, message: null, display: null, type: null, requestId: null });
+    return !s.includes("[");
+  })());
 
   // --- normalizeTxn / planTransactionMerge ---
   const sampleAdded: PlaidTxnInput = {
