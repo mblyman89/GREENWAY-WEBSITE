@@ -282,7 +282,11 @@ async function selfHealDateFields(): Promise<string> {
     //   2) FIND_CONFIG discovery — a secondary confirmation for any report the
     //      probe couldn't verify (e.g. a report whose baseline had no rows).
     const toSave: Record<string, string> = {};
-    const probeNotes: string[] = [];
+    // Per-report probe evidence (which keys were tried + the span each returned),
+    // keyed by report kind so we can surface it precisely for whatever stays
+    // unconfirmed at the end. `probeError` holds a login/network failure note.
+    const probeNoteByKind: Partial<Record<PaiReportKind, string>> = {};
+    let probeError = "";
 
     // 1) PRIMARY: empirical verification.
     const probe = await verifyDateFieldsByProbe(missing);
@@ -291,12 +295,10 @@ async function selfHealDateFields(): Promise<string> {
         const v = probe.override[kind];
         if (typeof v === "string" && v.trim() !== "") toSave[kind] = v.trim();
       }
-      // Keep the per-report notes for the ones we could NOT verify (transparency).
-      for (const r of probe.reports) {
-        if (!(r.kind in toSave)) probeNotes.push(`${PAI_REPORT_LABEL[r.kind]}: ${r.note}`);
-      }
+      // Keep each report's note so unconfirmed ones can report exactly why.
+      for (const r of probe.reports) probeNoteByKind[r.kind] = r.note;
     } else {
-      probeNotes.push(`Probe couldn’t run (${probe.error}).`);
+      probeError = probe.error;
     }
 
     // 2) FALLBACK: FIND_CONFIG for anything still unverified.
@@ -313,7 +315,11 @@ async function selfHealDateFields(): Promise<string> {
 
     if (Object.keys(toSave).length === 0) {
       // Nothing could be PROVEN. Be honest — never guess, never claim a fix.
-      const detail = probeNotes.length > 0 ? ` (${probeNotes.join(" | ")})` : "";
+      const noteParts = missing
+        .map((k) => (probeNoteByKind[k] ? `${PAI_REPORT_LABEL[k]}: ${probeNoteByKind[k]}` : ""))
+        .filter((s) => s !== "");
+      if (probeError !== "") noteParts.unshift(`probe couldn’t run (${probeError})`);
+      const detail = noteParts.length > 0 ? ` (${noteParts.join(" | ")})` : "";
       return (
         `Couldn’t confirm a working date filter for ${missing
           .map((k) => PAI_REPORT_LABEL[k])
@@ -332,10 +338,13 @@ async function selfHealDateFields(): Promise<string> {
 
     const fixedLabels = Object.keys(toSave).map((k) => PAI_REPORT_LABEL[k as PaiReportKind]);
     const stillUnfixed = missing.filter((k) => !(k in toSave));
-    const tail =
-      stillUnfixed.length > 0
-        ? ` (still couldn’t confirm ${stillUnfixed.map((k) => PAI_REPORT_LABEL[k]).join(", ")})`
-        : "";
+    // Surface the EXACT probe evidence for any report we couldn't confirm, even
+    // on a partial success, so we can diagnose it (which keys were tried + what
+    // date span each returned) instead of guessing why it stayed narrow.
+    const unfixedDetail = stillUnfixed
+      .map((k) => (probeNoteByKind[k] ? `${PAI_REPORT_LABEL[k]}: ${probeNoteByKind[k]}` : PAI_REPORT_LABEL[k]))
+      .join(" | ");
+    const tail = stillUnfixed.length > 0 ? ` — still couldn’t confirm ${unfixedDetail}` : "";
     return `Confirmed the date column for ${fixedLabels.join(", ")} by verifying full history was returned — pulling it now.${tail}`;
   } catch {
     // Absolutely never let a self-heal problem break the pull.
