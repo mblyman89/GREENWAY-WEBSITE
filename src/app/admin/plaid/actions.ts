@@ -33,7 +33,7 @@ import { CountryCode, Products } from "plaid";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getPlaidClient } from "@/lib/plaid/client";
-import { plaidDollarsToCents } from "@/lib/plaid/plaid-core";
+import { plaidDollarsToCents, extractPlaidError, describeLinkTokenError } from "@/lib/plaid/plaid-core";
 import { roleAssignmentCheck } from "@/lib/plaid/plaid-ui-core";
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
 import {
@@ -45,8 +45,16 @@ import {
 
 const ROOT = "/admin/plaid";
 
-/** Days of transaction history to request up front (bible §SLICE P2). */
+/**
+ * Days of transaction history to request up front. 730 is Plaid's DOCUMENTED
+ * MAXIMUM for transactions.days_requested (verified in Plaid's OpenAPI spec:
+ * LinkTokenTransactions.days_requested → maximum: 730). This is the furthest
+ * back Plaid will backfill at Link time, so Michael gets the deepest history
+ * Plaid allows (~24 months). This value can't be raised on an Item after
+ * Transactions is added, so we request the max on the very first link.
+ */
 const TRANSACTIONS_DAYS_REQUESTED = 730;
+const PLAID_MAX_DAYS_REQUESTED = 730; // hard ceiling per Plaid spec; keep in sync
 
 function back(qs: { tab?: string; msg?: string; error?: string }): never {
   const p = new URLSearchParams({ tab: qs.tab ?? "connections" });
@@ -76,12 +84,14 @@ export async function createPlaidLinkTokenAction(): Promise<
     return { ok: false, error: "Plaid isn't configured yet. Add the Plaid keys in Vercel, then try again." };
   }
 
+  const days = Math.min(TRANSACTIONS_DAYS_REQUESTED, PLAID_MAX_DAYS_REQUESTED);
+
   try {
     const resp = await plaid.linkTokenCreate({
       user: { client_user_id: session.profile.id },
       client_name: "Greenway Marijuana",
       products: [Products.Transactions],
-      transactions: { days_requested: TRANSACTIONS_DAYS_REQUESTED },
+      transactions: { days_requested: days },
       country_codes: [CountryCode.Us],
       language: "en",
       webhook: `${siteBaseUrl()}/api/webhooks/plaid`,
@@ -89,9 +99,15 @@ export async function createPlaidLinkTokenAction(): Promise<
     const linkToken = resp.data.link_token;
     if (!linkToken) return { ok: false, error: "Plaid did not return a link token. Please try again." };
     return { ok: true, linkToken };
-  } catch {
-    // Never surface the raw Plaid error (may echo request context); keep it friendly.
-    return { ok: false, error: "Couldn't start the bank connection. Please try again in a moment." };
+  } catch (err) {
+    // Read Plaid's REAL error (code + technical message) and log it server-side
+    // ONLY (never to the browser). The owner sees a specific, actionable hint
+    // mapped from the code — no raw request context is exposed.
+    const info = extractPlaidError(err);
+    console.error(
+      `[plaid] linkTokenCreate failed — code=${info.code ?? "(none)"} message=${info.message ?? "(none)"} webhook=${siteBaseUrl()}/api/webhooks/plaid`,
+    );
+    return { ok: false, error: describeLinkTokenError(info.code) };
   }
 }
 

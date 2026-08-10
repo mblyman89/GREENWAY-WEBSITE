@@ -144,6 +144,79 @@ export function mapItemStatus(errorCode: string | null | undefined): ItemStatusV
 }
 
 // ---------------------------------------------------------------------------
+// 3b) Plaid error extraction + link-token error guidance
+// ---------------------------------------------------------------------------
+
+/** The bits of a Plaid API error we can safely read + surface. */
+export type PlaidErrorInfo = {
+  /** Machine code, e.g. "INVALID_API_KEYS". null if we couldn't find one. */
+  code: string | null;
+  /** Plaid's technical message (safe for server logs; may name the request). */
+  message: string | null;
+  /** Plaid's user-safe display_message, when present. */
+  display: string | null;
+};
+
+/**
+ * Pull the Plaid error fields out of an unknown thrown value. Plaid errors
+ * arrive as an axios error whose body is at `err.response.data`. This never
+ * throws and never assumes a shape — anything missing comes back null. PURE.
+ */
+export function extractPlaidError(err: unknown): PlaidErrorInfo {
+  const out: PlaidErrorInfo = { code: null, message: null, display: null };
+  if (err && typeof err === "object") {
+    const anyErr = err as {
+      response?: { data?: { error_code?: unknown; error_message?: unknown; display_message?: unknown } };
+    };
+    const data = anyErr.response?.data;
+    if (data && typeof data === "object") {
+      if (typeof data.error_code === "string" && data.error_code.trim() !== "") out.code = data.error_code;
+      if (typeof data.error_message === "string" && data.error_message.trim() !== "") out.message = data.error_message;
+      if (typeof data.display_message === "string" && data.display_message.trim() !== "") out.display = data.display_message;
+    }
+  }
+  return out;
+}
+
+/**
+ * Turn a /link/token/create failure error_code into a specific, owner-actionable
+ * sentence (plain English, no jargon), so a real Plaid problem tells Michael what
+ * to do instead of a generic "try again". Unknown codes get a safe generic line
+ * that still echoes the code so it can be looked up. PURE.
+ */
+export function describeLinkTokenError(errorCode: string | null | undefined): string {
+  const code = (errorCode ?? "").trim().toUpperCase();
+  switch (code) {
+    case "":
+      return "Couldn't start the bank connection. Please try again in a moment.";
+    case "INVALID_API_KEYS":
+    case "INVALID_CLIENT_ID":
+    case "INVALID_SECRET":
+    case "UNAUTHORIZED_ENVIRONMENT":
+      return "Plaid rejected the account keys. Check that PLAID_CLIENT_ID, PLAID_SECRET, and PLAID_ENV in Vercel all match the same Plaid environment (production keys with PLAID_ENV=production).";
+    case "PRODUCTS_NOT_SUPPORTED":
+    case "PRODUCT_NOT_ENABLED":
+    case "PRODUCT_NOT_READY":
+      return "The Transactions product isn't enabled on this Plaid account yet. Enable Transactions (or request Production access) in the Plaid Dashboard, then try again.";
+    case "INVALID_FIELD":
+    case "INVALID_BODY":
+    case "INVALID_WEBHOOK_VERIFICATION_KEY_ID":
+      return "Plaid rejected part of the connection request (often the webhook URL). Set NEXT_PUBLIC_SITE_URL in Vercel to your live https:// address, then try again.";
+    case "INVALID_PRODUCT":
+      return "This Plaid account can't use one of the requested products. Check the enabled products in the Plaid Dashboard, then try again.";
+    case "ADDITIONAL_CONSENT_REQUIRED":
+      return "Plaid needs additional consent configured for this account. Review your Plaid Dashboard settings, then try again.";
+    case "INTERNAL_SERVER_ERROR":
+    case "PLANNED_MAINTENANCE":
+      return "Plaid is temporarily unavailable. Please try again in a few minutes.";
+    case "RATE_LIMIT_EXCEEDED":
+      return "Too many requests to Plaid right now. Please wait a moment and try again.";
+    default:
+      return `Couldn't start the bank connection (${code}). Please try again; if it keeps happening, share this code.`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 4) Transaction merge planner (idempotent upsert / soft-delete)
 // ---------------------------------------------------------------------------
 
@@ -303,6 +376,32 @@ export function __runPlaidCoreTests(): void {
   expect("status: INSTITUTION_DOWN → error, no user action", (() => { const s = mapItemStatus("INSTITUTION_DOWN"); return s.status === "error" && !s.needsUserAction; })());
   expect("status: unknown code → error + echoes code", (() => { const s = mapItemStatus("SOME_NEW_CODE"); return s.status === "error" && s.message.includes("SOME_NEW_CODE"); })());
   expect("status: healthy message is plain english", mapItemStatus("").message.length > 0);
+
+  // --- extractPlaidError (axios error body) ---
+  expect("extractPlaidError: reads code/message/display", (() => {
+    const e = extractPlaidError({ response: { data: { error_code: "INVALID_API_KEYS", error_message: "bad keys", display_message: "Please retry." } } });
+    return e.code === "INVALID_API_KEYS" && e.message === "bad keys" && e.display === "Please retry.";
+  })());
+  expect("extractPlaidError: missing body \u2192 all null", (() => {
+    const e = extractPlaidError(new Error("network"));
+    return e.code === null && e.message === null && e.display === null;
+  })());
+  expect("extractPlaidError: null input \u2192 all null", (() => {
+    const e = extractPlaidError(null);
+    return e.code === null && e.message === null && e.display === null;
+  })());
+  expect("extractPlaidError: blank code \u2192 null", (() => {
+    const e = extractPlaidError({ response: { data: { error_code: "   " } } });
+    return e.code === null;
+  })());
+
+  // --- describeLinkTokenError ---
+  expect("linkErr: null \u2192 generic", describeLinkTokenError(null).length > 0);
+  expect("linkErr: INVALID_API_KEYS \u2192 mentions keys", describeLinkTokenError("INVALID_API_KEYS").toLowerCase().includes("keys"));
+  expect("linkErr: PRODUCTS_NOT_SUPPORTED \u2192 mentions Transactions", describeLinkTokenError("PRODUCTS_NOT_SUPPORTED").includes("Transactions"));
+  expect("linkErr: INVALID_FIELD \u2192 mentions webhook/site url", describeLinkTokenError("INVALID_FIELD").toLowerCase().includes("webhook") || describeLinkTokenError("INVALID_FIELD").includes("NEXT_PUBLIC_SITE_URL"));
+  expect("linkErr: case-insensitive", describeLinkTokenError("invalid_api_keys").toLowerCase().includes("keys"));
+  expect("linkErr: unknown code echoed", describeLinkTokenError("SOME_FUTURE_CODE").includes("SOME_FUTURE_CODE"));
 
   // --- normalizeTxn / planTransactionMerge ---
   const sampleAdded: PlaidTxnInput = {
