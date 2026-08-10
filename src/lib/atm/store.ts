@@ -20,6 +20,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { encryptSecret, decryptSecret, maskAccountTail } from "@/lib/security/at-rest-crypto";
+import { listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
+import { toBankDeposits, type BankDeposit, type ReconcileSettlement } from "@/lib/atm/atm-reconcile-core";
 
 export type AtmConnectionStatus = "unconfigured" | "ok" | "error";
 
@@ -547,4 +549,73 @@ export async function setAtmSyncResult(
   } catch {
     // best-effort health write; the ingest result itself is the source of truth.
   }
+}
+
+// ===========================================================================
+// P6a — Reconciliation inputs
+// Assemble the two plain arrays the PURE atm-reconcile-core needs:
+//   • settlements: each PAI settlement's two expected legs (from atm_settlements)
+//   • deposits: the money-IN transactions on the bank account(s) tagged
+//     role="atm" in Bank Feeds (Plaid), converted to positive magnitudes.
+// The engine (reconcileSettlements) does ALL the matching; this is just I/O.
+// ===========================================================================
+
+export type AtmReconcileInputs = {
+  settlements: ReconcileSettlement[];
+  deposits: BankDeposit[];
+  /** True when at least one bank account is tagged as the ATM-deposits account. */
+  hasAtmAccount: boolean;
+  /** Display names of the ATM-role account(s), for the UI header. */
+  atmAccountNames: string[];
+};
+
+/**
+ * Gather everything the reconciliation engine needs. Deposits come from EVERY
+ * account tagged role="atm" (Michael has one dedicated ATM account, but we
+ * support more than one defensively). Returns empty/flagged inputs when the DB
+ * isn't configured or no ATM account is tagged, so the page shows guidance
+ * instead of crashing.
+ */
+export async function getAtmReconcileInputs(
+  settlementLimit = 400,
+): Promise<AtmReconcileInputs> {
+  if (!isSupabaseServiceConfigured) {
+    return { settlements: [], deposits: [], hasAtmAccount: false, atmAccountNames: [] };
+  }
+
+  const settlementRows = await listAtmSettlements(settlementLimit);
+  const settlements: ReconcileSettlement[] = settlementRows.map((r) => ({
+    settlementId: r.id,
+    settlementDate: r.settlementDate,
+    terminalId: r.terminalId,
+    terminalTransactionCents: r.terminalTransactionCents,
+    surchargeCents: r.surchargeCents,
+  }));
+
+  const accounts = await listPlaidAccounts();
+  const atmAccounts = accounts.filter((a) => a.role === "atm" && a.active);
+  const atmAccountNames = atmAccounts.map((a) => a.customName ?? a.officialName ?? a.name ?? "ATM account");
+
+  const deposits: BankDeposit[] = [];
+  for (const acct of atmAccounts) {
+    const txns = await listPlaidTransactions(acct.accountId);
+    const asDeposits = toBankDeposits(
+      txns.map((t) => ({
+        transactionId: t.transactionId,
+        amountCents: t.amountCents,
+        date: t.date,
+        name: t.name,
+        merchantName: t.merchantName,
+        pending: t.pending,
+      })),
+    );
+    deposits.push(...asDeposits);
+  }
+
+  return {
+    settlements,
+    deposits,
+    hasAtmAccount: atmAccounts.length > 0,
+    atmAccountNames,
+  };
 }
