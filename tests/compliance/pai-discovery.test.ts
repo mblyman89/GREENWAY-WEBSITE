@@ -30,8 +30,12 @@ import {
   scoreProbeForKind,
   countExpectedColumns,
   PAI_EXPECTED_DATE_COLUMN,
+  candidateDateFilterKeys,
+  measureCsvDateSpan,
+  candidateWidensHistory,
   type PaiReportConfigId,
   type PaiReportField,
+  type PaiCsvDateSpan,
   __runPaiDiscoveryTests,
 } from "@/lib/atm/pai-discovery";
 
@@ -438,6 +442,79 @@ describe("mergeDateFieldOverride (deep-merge confirmations, never clobber)", () 
 
   it("trims discovered values", () => {
     expect(mergeDateFieldOverride({}, { cashLoad: "  F_Trx Time  " })).toEqual({ cashLoad: "F_Trx Time" });
+  });
+});
+
+describe("candidateDateFilterKeys (both space conventions, never guesses a name)", () => {
+  it("returns preserved-then-stripped candidates for a spaced column", () => {
+    expect(candidateDateFilterKeys("Settlement Date")).toEqual(["F_Settlement Date", "F_SettlementDate"]);
+  });
+  it("returns a single de-duped candidate for a one-word column", () => {
+    expect(candidateDateFilterKeys("Balance")).toEqual(["F_Balance"]);
+  });
+  it("trims input and drops blanks", () => {
+    expect(candidateDateFilterKeys("  Trx Time  ")).toEqual(["F_Trx Time", "F_TrxTime"]);
+    expect(candidateDateFilterKeys("   ")).toEqual([]);
+    expect(candidateDateFilterKeys(null)).toEqual([]);
+  });
+});
+
+describe("measureCsvDateSpan (real date column, same parser as the importer)", () => {
+  it("finds min/max from Simple Summary Settlement Date", () => {
+    const csv =
+      "Terminal,Location,Settlement Date,Total Trxs\n" +
+      "HG26499,PO,02/29/2024,10\n" +
+      "HG26499,PO,08/09/2026,12\n" +
+      "HG26499,PO,07/01/2025,11\n";
+    const span = measureCsvDateSpan("simpleSummary", csv);
+    expect(span.rowCount).toBe(3);
+    expect(span.from).toBe("2024-02-29");
+    expect(span.to).toBe("2026-08-09");
+    expect(span.spanDays).toBeGreaterThan(800);
+  });
+  it("strips the time from Cash Load Trx Time", () => {
+    const csv =
+      "Terminal Number,Location,Group,Trx Time,Cash Load,Balance\n" +
+      "HG26499,PO,G,08/01/2026 10:15:00,100,900\n" +
+      "HG26499,PO,G,08/09/2026 11:00:00,200,700\n";
+    const span = measureCsvDateSpan("cashLoad", csv);
+    expect(span.from).toBe("2026-08-01");
+    expect(span.to).toBe("2026-08-09");
+  });
+  it("returns zeros for empty / HTML / header-only input (never throws)", () => {
+    expect(measureCsvDateSpan("simpleSummary", "").rowCount).toBe(0);
+    expect(measureCsvDateSpan("simpleSummary", "<!doctype html><html>err</html>").rowCount).toBe(0);
+    expect(measureCsvDateSpan("simpleSummary", "Terminal,Settlement Date").rowCount).toBe(0);
+  });
+  it("counts rows but leaves span empty when the date column is absent", () => {
+    const span = measureCsvDateSpan("simpleSummary", "Terminal,Amount\nHG26499,1234\n");
+    expect(span.rowCount).toBe(1);
+    expect(span.from).toBe("");
+    expect(span.to).toBe("");
+  });
+});
+
+describe("candidateWidensHistory (accepts ONLY a proven-wider span)", () => {
+  const baseNarrow: PaiCsvDateSpan = { rowCount: 14, from: "2026-08-01", to: "2026-08-09", spanDays: 8 };
+  it("accepts a candidate that reaches materially further back", () => {
+    const wide: PaiCsvDateSpan = { rowCount: 893, from: "2024-02-29", to: "2026-08-09", spanDays: 892 };
+    expect(candidateWidensHistory(baseNarrow, wide)).toBe(true);
+  });
+  it("rejects an identical window (filter was ignored)", () => {
+    expect(candidateWidensHistory(baseNarrow, { ...baseNarrow })).toBe(false);
+  });
+  it("rejects an empty candidate", () => {
+    expect(candidateWidensHistory(baseNarrow, { rowCount: 0, from: "", to: "", spanDays: 0 })).toBe(false);
+  });
+  it("respects a higher minDaysEarlier threshold", () => {
+    const oneDay: PaiCsvDateSpan = { rowCount: 15, from: "2026-07-31", to: "2026-08-09", spanDays: 9 };
+    expect(candidateWidensHistory(baseNarrow, oneDay, 1)).toBe(true);
+    expect(candidateWidensHistory(baseNarrow, oneDay, 30)).toBe(false);
+  });
+  it("treats a no-date baseline as widened by any dated candidate", () => {
+    const noDate: PaiCsvDateSpan = { rowCount: 0, from: "", to: "", spanDays: 0 };
+    const wide: PaiCsvDateSpan = { rowCount: 5, from: "2024-01-01", to: "2026-01-01", spanDays: 731 };
+    expect(candidateWidensHistory(noDate, wide)).toBe(true);
   });
 });
 

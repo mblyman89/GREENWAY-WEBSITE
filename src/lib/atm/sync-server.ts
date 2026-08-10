@@ -50,7 +50,7 @@ import {
   getAtmConnectionSecrets,
   mergeAtmReportConfig,
 } from "./store";
-import { pullAllPaiReports, discoverReportFilterFields } from "./pai-client";
+import { pullAllPaiReports, discoverReportFilterFields, verifyDateFieldsByProbe } from "./pai-client";
 import { reportKindsMissingDateField, type PaiReportKind } from "./pai-endpoints";
 import { mergeDateFieldOverride } from "./pai-discovery";
 
@@ -275,39 +275,68 @@ async function selfHealDateFields(): Promise<string> {
     const missing = reportKindsMissingDateField(secrets.reportConfig);
     if (missing.length === 0) return ""; // all three already confirmed \u2014 nothing to do
 
-    const discovery = await discoverReportFilterFields();
-    if (!discovery.ok) {
-      // Read-only discovery failed (e.g. no Data-API access). Don't block the
-      // pull; the per-report diagnostics will still show "default field name".
-      return "Couldn’t auto-confirm the report date columns this run (I’ll still pull what I can).";
+    // We save ONLY keys we can PROVE work. Two evidence sources, in order:
+    //   1) EMPIRICAL probe — try each candidate F_ key over the full window and
+    //      keep the one that demonstrably widens the returned history. This is
+    //      the decisive, no-guess source (works even without Data-API access).
+    //   2) FIND_CONFIG discovery — a secondary confirmation for any report the
+    //      probe couldn't verify (e.g. a report whose baseline had no rows).
+    const toSave: Record<string, string> = {};
+    const probeNotes: string[] = [];
+
+    // 1) PRIMARY: empirical verification.
+    const probe = await verifyDateFieldsByProbe(missing);
+    if (probe.ok) {
+      for (const kind of missing) {
+        const v = probe.override[kind];
+        if (typeof v === "string" && v.trim() !== "") toSave[kind] = v.trim();
+      }
+      // Keep the per-report notes for the ones we could NOT verify (transparency).
+      for (const r of probe.reports) {
+        if (!(r.kind in toSave)) probeNotes.push(`${PAI_REPORT_LABEL[r.kind]}: ${r.note}`);
+      }
+    } else {
+      probeNotes.push(`Probe couldn’t run (${probe.error}).`);
     }
 
-    // Only save CONFIDENT overrides for the reports that were actually missing.
-    const confident = discovery.override; // { kind: "F_<Real Name>" } \u2014 confident picks only
-    const toSave: Record<string, string> = {};
-    for (const kind of missing) {
-      const v = confident[kind];
-      if (typeof v === "string" && v.trim() !== "") toSave[kind] = v.trim();
+    // 2) FALLBACK: FIND_CONFIG for anything still unverified.
+    const stillMissing = missing.filter((k) => !(k in toSave));
+    if (stillMissing.length > 0) {
+      const discovery = await discoverReportFilterFields();
+      if (discovery.ok) {
+        for (const kind of stillMissing) {
+          const v = discovery.override[kind];
+          if (typeof v === "string" && v.trim() !== "") toSave[kind] = v.trim();
+        }
+      }
     }
 
     if (Object.keys(toSave).length === 0) {
-      // Discovery ran but couldn't confidently name a column for the missing
-      // report(s) \u2014 typically because that report is ambiguous on PAI's side.
-      // Tell Michael plainly (still never guessing).
-      return `Couldn’t auto-confirm a date column for ${missing
-        .map((k) => PAI_REPORT_LABEL[k])
-        .join(", ")} — open “Change which report is used (advanced)” to pick it.`;
+      // Nothing could be PROVEN. Be honest — never guess, never claim a fix.
+      const detail = probeNotes.length > 0 ? ` (${probeNotes.join(" | ")})` : "";
+      return (
+        `Couldn’t confirm a working date filter for ${missing
+          .map((k) => PAI_REPORT_LABEL[k])
+          .join(", ")} — the report(s) still return only recent data.${detail} ` +
+        `Open “Change which report is used (advanced)” to set the column, or share one screenshot ` +
+        `of the report’s date-filter box so we can capture the exact field name.`
+      );
     }
 
     const existing = (secrets.reportConfig as Record<string, unknown> | null)?.dateFieldName;
     const merged = mergeDateFieldOverride(existing, toSave);
     const saved = await mergeAtmReportConfig({ dateFieldName: merged });
     if (!saved.ok) {
-      return `Found the report date columns but couldn’t save them (${saved.error}); pulling with current settings.`;
+      return `Confirmed the report date columns but couldn’t save them (${saved.error}); pulling with current settings.`;
     }
 
     const fixedLabels = Object.keys(toSave).map((k) => PAI_REPORT_LABEL[k as PaiReportKind]);
-    return `Auto-confirmed date column for ${fixedLabels.join(", ")} — pulling full history now.`;
+    const stillUnfixed = missing.filter((k) => !(k in toSave));
+    const tail =
+      stillUnfixed.length > 0
+        ? ` (still couldn’t confirm ${stillUnfixed.map((k) => PAI_REPORT_LABEL[k]).join(", ")})`
+        : "";
+    return `Confirmed the date column for ${fixedLabels.join(", ")} by verifying full history was returned — pulling it now.${tail}`;
   } catch {
     // Absolutely never let a self-heal problem break the pull.
     return "";
