@@ -19,8 +19,10 @@ import {
   saveAtmConnection,
   clearAtmCredentials,
   insertManualCashLoad,
+  mergeAtmReportConfig,
 } from "@/lib/atm/store";
 import { ingestAtmCsvs, runAtmLiveSync } from "@/lib/atm/sync-server";
+import { discoverReportFilterFields } from "@/lib/atm/pai-client";
 import { validateManualCashLoad } from "@/lib/atm/atm-ui-core";
 
 const ROOT = "/admin/atm";
@@ -244,4 +246,78 @@ export async function runAtmBackfillAction(): Promise<void> {
 
   if (result.ok) back({ tab: "health", msg: result.message });
   back({ tab: "health", error: result.error });
+}
+
+/**
+ * "Discover report fields (no F12)" button (Health tab). Signs in to PAI with
+ * the saved credentials and asks PAI itself for each report's REAL date-filter
+ * column name — the no-F12 answer to why Bank Deposits / Cash Loads only pulled
+ * PAI's default window. It ONLY READS from PAI. When PAI confidently reports a
+ * real date column for a report, we store it as the per-report
+ * report_config.dateFieldName override (a data change), so the next Backfill
+ * pulls that report's FULL history. Ambiguous/failed reports are reported, never
+ * guessed. Audit: atm.discover.fields (records the discovered names, no secrets).
+ */
+export async function discoverPaiReportFieldsAction(): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const result = await discoverReportFilterFields();
+
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.profile.email,
+      action: "atm.discover.fields",
+      entityType: "atm_connection",
+      entityId: null,
+      after: { ok: false, error: result.error },
+    });
+    back({ tab: "health", error: result.error });
+  }
+
+  // Apply the confident per-report overrides (merge — never clobber other keys).
+  let applied = false;
+  if (Object.keys(result.override).length > 0) {
+    const saved = await mergeAtmReportConfig({ dateFieldName: result.override });
+    applied = saved.ok;
+    if (!saved.ok) {
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.profile.email,
+        action: "atm.discover.fields",
+        entityType: "atm_connection",
+        entityId: null,
+        after: { ok: true, applied: false, save_error: saved.error, discovered: result.override },
+      });
+      back({ tab: "health", error: `Discovered the fields but couldn’t save them: ${saved.error}` });
+    }
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.discover.fields",
+    entityType: "atm_connection",
+    entityId: null,
+    after: {
+      ok: true,
+      applied,
+      discovered: result.override,
+      reports: result.discoveries.map((d) => ({
+        kind: d.kind,
+        matched_name: d.matched?.name ?? null,
+        date_field: d.datePick.fieldName || null,
+        filter_key: d.datePick.filterKey || null,
+        reason: d.datePick.reason,
+        confident: d.datePick.confident,
+        date_candidates: d.datePick.dateCandidates,
+      })),
+    },
+  });
+
+  const appliedCount = Object.keys(result.override).length;
+  const lead = applied
+    ? `Discovered and saved ${appliedCount} report date field(s). Now click “Backfill history” to pull full history for all three.`
+    : "Discovery finished — but I didn’t save anything automatically (see the per-report notes).";
+  // The multi-line summary is passed through as the friendly message.
+  back({ tab: "health", msg: `${lead}\n${result.summary}` });
 }

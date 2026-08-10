@@ -1,0 +1,544 @@
+/**
+ * src/lib/atm/pai-discovery.ts — ATM/PAI Slice A-2c-3 (PURE)
+ *
+ * The no-F12 way to learn each PAI report's REAL date-filter column name.
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ * PAI's date filter is `F_[Column name]=[value]`, where "Column name" is that
+ * report's REAL column name (case-sensitive, report-specific). We CONFIRMED
+ * this from PAI's official SDK/wiki (gopai/reporting-sdk + gopai/paireportsclient):
+ *
+ *   1) The Data API (`Query.event`, body `query=<SQL>`) lists every report the
+ *      user can see:  `SELECT * FROM ReportConfigs r ORDER BY r.Name`
+ *      → rows of { ReportGUID, ExternalName, Name }.
+ *   2) The ReportConfig endpoint (`ReportConfigManagement.event`, verb
+ *      FIND_CONFIG, header Accept: application/json, param GUID=<guid>) returns
+ *      that report's REAL columns:
+ *        ReportConfig { fields[]: { type, readonly, name, data{...} } }
+ *      PAI's own example client prints `field.name` under the header
+ *      "Column Name" — those names are EXACTLY what go into `F_<name>=...`.
+ *
+ * So the real filter column name is DISCOVERABLE programmatically — no browser
+ * F12 inspection. This module holds the PURE (no-I/O) helpers: build the query,
+ * parse the JSON PAI returns, match our three reports to their config rows, and
+ * pick the DATE column per report. The server-only I/O (login → runQuery →
+ * FIND_CONFIG → logout) lives in pai-client.ts and only orchestrates these.
+ *
+ * ── STANDING RULES honored ──────────────────────────────────────────────────
+ *   • NEVER GUESS — matching is tolerant + TRANSPARENT: we return ALL candidate
+ *     column names and flag confidence, so a wrong pick can't happen silently.
+ *   • Pure + fully self-tested (run via scripts/compliance/run-pure-selftests.ts).
+ */
+
+import type { PaiReportKind } from "./pai-endpoints";
+
+// ---------------------------------------------------------------------------
+// 1) The Data-API query that lists every report config (name + GUID).
+// ---------------------------------------------------------------------------
+
+/**
+ * The exact SQL the PAI Data API expects to enumerate the reports this user can
+ * see. Matches PAI's own example client (ReportIdentifierRetriever.findAllConfigs):
+ *   SELECT * FROM ReportConfigs r ORDER BY r.Name
+ * Sent as the `query` form field to Query.event.
+ */
+export const PAI_LIST_CONFIGS_QUERY = "SELECT * FROM ReportConfigs r ORDER BY r.Name";
+
+/** One report-config identity row as returned by the Data API. */
+export type PaiReportConfigId = {
+  reportGuid: string;
+  externalName: string;
+  name: string;
+};
+
+/**
+ * Parse the Data-API response for `SELECT * FROM ReportConfigs`. PAI returns a
+ * JSON array of objects with PascalCase keys (ReportGUID, ExternalName, Name).
+ * We accept a few key spellings defensively (the API has used both PascalCase
+ * and the occasional camelCase in examples) WITHOUT inventing data: a row with
+ * no usable GUID is dropped. Returns [] on any parse failure (never throws).
+ */
+export function parseReportConfigIds(rawJson: string): PaiReportConfigId[] {
+  const text = (rawJson ?? "").trim();
+  if (text === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const arr = Array.isArray(parsed)
+    ? parsed
+    : // Some endpoints wrap the array (e.g. { results: [...] } / { data: [...] }).
+      isRecord(parsed) && Array.isArray((parsed as Record<string, unknown>).results)
+      ? ((parsed as Record<string, unknown>).results as unknown[])
+      : isRecord(parsed) && Array.isArray((parsed as Record<string, unknown>).data)
+        ? ((parsed as Record<string, unknown>).data as unknown[])
+        : [];
+  const out: PaiReportConfigId[] = [];
+  for (const item of arr) {
+    if (!isRecord(item)) continue;
+    const reportGuid = pickString(item, ["ReportGUID", "reportGUID", "ReportGuid", "reportGuid", "GUID", "guid"]);
+    const externalName = pickString(item, ["ExternalName", "externalName"]);
+    const name = pickString(item, ["Name", "name"]);
+    if (reportGuid === "") continue; // no GUID ⇒ unusable, drop it (never guess one)
+    out.push({ reportGuid, externalName, name });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// 2) Match our three reports to their config rows (tolerant + transparent).
+// ---------------------------------------------------------------------------
+
+/**
+ * Human-facing report titles as they appear in Michael's PAI portal (CONFIRMED
+ * from PAI_PORTAL_REFERENCE — the browser <title> and dropdown labels). Used to
+ * MATCH a report kind to its ReportConfigs row by name. We match on normalized
+ * substrings (case/space-insensitive) and return ALL candidates so a wrong pick
+ * is impossible to make silently.
+ */
+export const PAI_REPORT_TITLE_HINTS: Record<PaiReportKind, string[]> = {
+  cashLoad: ["atm cash load", "cash load"],
+  simpleSummary: ["simple summary", "terminal trx data", "terminal transaction"],
+  fundsMovement: ["funds movement", "bank deposit"],
+};
+
+/** Lowercase + collapse whitespace for tolerant, non-guessing comparison. */
+export function normalizeName(s: string | null | undefined): string {
+  return (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+export type PaiConfigMatch = {
+  kind: PaiReportKind;
+  /** All config rows whose Name/ExternalName matched a title hint for this kind. */
+  candidates: PaiReportConfigId[];
+  /** The single best candidate when EXACTLY one matched; null otherwise. */
+  best: PaiReportConfigId | null;
+  /** True only when exactly one candidate matched (safe to auto-use). */
+  confident: boolean;
+};
+
+/**
+ * Match one report kind to its config row(s). A row matches when any of the
+ * kind's title hints appears as a substring of the row's Name or ExternalName
+ * (normalized). Returns every candidate + a `confident` flag that is true ONLY
+ * when exactly one row matched — so callers never auto-pick from ambiguity.
+ */
+export function matchReportConfig(kind: PaiReportKind, rows: PaiReportConfigId[]): PaiConfigMatch {
+  const hints = PAI_REPORT_TITLE_HINTS[kind];
+  const candidates = rows.filter((r) => {
+    const hay = `${normalizeName(r.name)} ${normalizeName(r.externalName)}`;
+    return hints.some((h) => hay.includes(normalizeName(h)));
+  });
+  const confident = candidates.length === 1;
+  return { kind, candidates, best: confident ? candidates[0] : null, confident };
+}
+
+// ---------------------------------------------------------------------------
+// 3) Parse a ReportConfig (FIND_CONFIG) and pick the DATE filter column.
+// ---------------------------------------------------------------------------
+
+/** One field (column) of a report, as returned by FIND_CONFIG. */
+export type PaiReportField = {
+  name: string;
+  type: string;
+  readonly: boolean;
+};
+
+/**
+ * Parse the FIND_CONFIG JSON into a flat list of fields. The SDK's ReportConfig
+ * is `{ fields: [ { type, readonly, name, data{...} } ] }`. PAI wraps a
+ * successful body such that it contains "SuccessResponse"; we tolerate a couple
+ * of shapes (top-level `fields`, or nested under a success wrapper) WITHOUT
+ * inventing anything. Returns [] on any failure (never throws).
+ */
+export function parseReportFields(rawJson: string): PaiReportField[] {
+  const text = (rawJson ?? "").trim();
+  if (text === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const fieldsArr = findFieldsArray(parsed);
+  if (!fieldsArr) return [];
+  const out: PaiReportField[] = [];
+  for (const f of fieldsArr) {
+    if (!isRecord(f)) continue;
+    const name = pickString(f, ["name", "Name"]);
+    if (name === "") continue;
+    const type = pickString(f, ["type", "Type"]);
+    const readonly = pickBool(f, ["readonly", "readOnly", "ReadOnly"]);
+    out.push({ name, type, readonly });
+  }
+  return out;
+}
+
+/**
+ * The CSV date-column each report is keyed on (CONFIRMED from Michael's portal /
+ * PAI_PORTAL_REFERENCE): Cash Load → "Trx Time"; the settlement reports →
+ * "Settlement Date". Used to recognize the DATE field among a report's columns.
+ */
+export const PAI_EXPECTED_DATE_COLUMN: Record<PaiReportKind, string> = {
+  cashLoad: "Trx Time",
+  simpleSummary: "Settlement Date",
+  fundsMovement: "Settlement Date",
+};
+
+/** Tokens that reliably indicate a date/time column name across PAI reports. */
+const DATE_NAME_TOKENS = ["date", "time", "day", "settlement", "posted", "post"];
+/** Field `type` strings PAI uses for date filters (lowercased for compare). */
+const DATE_TYPE_TOKENS = ["date", "datetime", "time"];
+
+export type PaiDateFieldPick = {
+  /** The chosen date column name (e.g. "Settlement Date"), or "" if none found. */
+  fieldName: string;
+  /** The `F_<name>` filter key to send (spaces preserved — PAI expects the real name). */
+  filterKey: string;
+  /** How the pick was made — for an honest, auditable report to Michael. */
+  reason: "expected-column" | "by-type" | "by-name-token" | "none";
+  /** Every date-ish column we saw, so Michael can confirm we picked the right one. */
+  dateCandidates: string[];
+  /** True only when we found a single, unambiguous date column. */
+  confident: boolean;
+};
+
+/**
+ * Pick the DATE filter column for a report from its parsed fields. Strategy,
+ * most-authoritative first (never guesses beyond the evidence):
+ *   1) EXACT match to the report's expected CSV date column (e.g. "Settlement
+ *      Date") — highest confidence.
+ *   2) A field whose `type` is a date/time type — if exactly one, use it.
+ *   3) A field whose NAME contains a date token (date/time/day/settlement/…)
+ *      — if exactly one, use it.
+ * Returns the pick + ALL date-ish candidates + a `confident` flag so an
+ * ambiguous report is reported, not guessed.
+ */
+export function pickDateField(kind: PaiReportKind, fields: PaiReportField[]): PaiDateFieldPick {
+  const expected = PAI_EXPECTED_DATE_COLUMN[kind];
+  const expectedNorm = normalizeName(expected);
+
+  // 1) Exact expected column (case/space-insensitive) — the strongest signal.
+  const exact = fields.find((f) => normalizeName(f.name) === expectedNorm);
+  if (exact) return pick(exact.name, "expected-column", fields, true);
+
+  // Gather date-ish candidates for the weaker strategies + transparency.
+  const byType = fields.filter((f) => DATE_TYPE_TOKENS.includes(normalizeName(f.type)));
+  const byName = fields.filter((f) => {
+    const n = normalizeName(f.name);
+    return DATE_NAME_TOKENS.some((t) => n.includes(t));
+  });
+
+  // 2) A single date-typed field.
+  if (byType.length === 1) return pick(byType[0].name, "by-type", fields, true);
+
+  // 3) A single name-token date field.
+  if (byName.length === 1) return pick(byName[0].name, "by-name-token", fields, true);
+
+  // Ambiguous or none: report every date-ish candidate, pick nothing confidently.
+  const candidates = uniq([...byType, ...byName].map((f) => f.name));
+  return {
+    fieldName: "",
+    filterKey: "",
+    reason: "none",
+    dateCandidates: candidates,
+    confident: false,
+  };
+}
+
+function pick(
+  name: string,
+  reason: PaiDateFieldPick["reason"],
+  fields: PaiReportField[],
+  confident: boolean,
+): PaiDateFieldPick {
+  const candidates = uniq(
+    fields
+      .filter((f) => {
+        const n = normalizeName(f.name);
+        return DATE_TYPE_TOKENS.includes(normalizeName(f.type)) || DATE_NAME_TOKENS.some((t) => n.includes(t));
+      })
+      .map((f) => f.name),
+  );
+  if (!candidates.includes(name)) candidates.unshift(name);
+  return { fieldName: name, filterKey: `F_${name}`, reason, dateCandidates: candidates, confident };
+}
+
+// ---------------------------------------------------------------------------
+// 4) The overall discovery result shape + a human-readable summary.
+// ---------------------------------------------------------------------------
+
+export type PaiReportDiscovery = {
+  kind: PaiReportKind;
+  /** The matched config row (null when unmatched / ambiguous). */
+  matched: PaiReportConfigId | null;
+  /** Every config row that matched this kind's title hints (transparency). */
+  configCandidates: PaiReportConfigId[];
+  /** The date-field pick from that config's fields (empty when no config). */
+  datePick: PaiDateFieldPick;
+  /** A short human note (why we did/didn't get a confident answer). */
+  note: string;
+};
+
+/** Label per report kind for messages (mirrors atm-report-diagnostics). */
+export const PAI_DISCOVERY_LABEL: Record<PaiReportKind, string> = {
+  cashLoad: "Cash Loads",
+  simpleSummary: "Simple Summary",
+  fundsMovement: "Bank Deposits",
+};
+
+/**
+ * Build the per-report discovery from the enumerated config rows + a resolver
+ * that returns a report's parsed fields for a GUID (the I/O is injected so this
+ * stays pure & testable). For each kind: match its config row, then pick its
+ * date field. `getFieldsForGuid` returns [] when the report couldn't be read.
+ */
+export function buildDiscovery(
+  kind: PaiReportKind,
+  allConfigs: PaiReportConfigId[],
+  fieldsByGuid: Map<string, PaiReportField[]>,
+): PaiReportDiscovery {
+  const match = matchReportConfig(kind, allConfigs);
+  const label = PAI_DISCOVERY_LABEL[kind];
+
+  if (match.candidates.length === 0) {
+    return {
+      kind,
+      matched: null,
+      configCandidates: [],
+      datePick: { fieldName: "", filterKey: "", reason: "none", dateCandidates: [], confident: false },
+      note: `Couldn’t find the “${label}” report in your PAI account’s report list.`,
+    };
+  }
+  if (!match.confident) {
+    return {
+      kind,
+      matched: null,
+      configCandidates: match.candidates,
+      datePick: { fieldName: "", filterKey: "", reason: "none", dateCandidates: [], confident: false },
+      note: `Found ${match.candidates.length} reports that could be “${label}”. I won’t guess — pick one and I’ll use it.`,
+    };
+  }
+
+  const guid = match.best!.reportGuid;
+  const fields = fieldsByGuid.get(guid) ?? [];
+  if (fields.length === 0) {
+    return {
+      kind,
+      matched: match.best,
+      configCandidates: match.candidates,
+      datePick: { fieldName: "", filterKey: "", reason: "none", dateCandidates: [], confident: false },
+      note: `Matched the “${label}” report but PAI didn’t return its column list.`,
+    };
+  }
+
+  const datePick = pickDateField(kind, fields);
+  const note = datePick.confident
+    ? `“${label}” date column = “${datePick.fieldName}” → filter key ${datePick.filterKey}.`
+    : datePick.dateCandidates.length > 0
+      ? `“${label}”: more than one date-looking column (${datePick.dateCandidates.join(", ")}). I won’t guess — tell me which one.`
+      : `“${label}”: no date column found in its config.`;
+
+  return { kind, matched: match.best, configCandidates: match.candidates, datePick, note };
+}
+
+/**
+ * Turn the three discoveries into the per-report `dateFieldName` override object
+ * consumed by resolvePaiDateFieldName (pai-endpoints.ts). ONLY confident picks
+ * are included — an ambiguous/failed report is left out so we never write a
+ * guessed field name. Returns {} when nothing was confidently discovered.
+ */
+export function toDateFieldOverride(discoveries: PaiReportDiscovery[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const d of discoveries) {
+    if (d.datePick.confident && d.datePick.filterKey !== "") {
+      out[d.kind] = d.datePick.filterKey;
+    }
+  }
+  return out;
+}
+
+/** A plain-English, multi-line summary of the discovery (for the UI + audit). */
+export function summarizeDiscovery(discoveries: PaiReportDiscovery[]): string {
+  return discoveries.map((d) => `• ${d.note}`).join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// small internal helpers
+// ---------------------------------------------------------------------------
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function pickString(obj: Record<string, unknown>, keys: string[]): string {
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim() !== "") return v.trim();
+  }
+  return "";
+}
+
+function pickBool(obj: Record<string, unknown>, keys: string[]): boolean {
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      if (s === "true") return true;
+      if (s === "false") return false;
+    }
+  }
+  return false;
+}
+
+/** Recursively find the first array under a `fields`/`Fields` key. */
+function findFieldsArray(v: unknown): unknown[] | null {
+  if (Array.isArray(v)) return v; // already the array
+  if (!isRecord(v)) return null;
+  const direct = v.fields ?? (v as Record<string, unknown>).Fields;
+  if (Array.isArray(direct)) return direct;
+  // Look one level down (e.g. under a SuccessResponse / ReportConfig wrapper).
+  for (const key of Object.keys(v)) {
+    const nested = findFieldsArray(v[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function uniq(arr: string[]): string[] {
+  return Array.from(new Set(arr));
+}
+
+// ---------------------------------------------------------------------------
+// Self-tests (pure — run via scripts/compliance/run-pure-selftests.ts)
+// ---------------------------------------------------------------------------
+
+export function __runPaiDiscoveryTests(): void {
+  const assert = (cond: boolean, msg: string) => {
+    if (!cond) throw new Error(`[pai-discovery] ${msg}`);
+  };
+
+  // --- parseReportConfigIds --------------------------------------------------
+  const idsJson = JSON.stringify([
+    { ReportGUID: "G-CASH", ExternalName: "ATMCashLoad", Name: "ATM Cash Load Report" },
+    { ReportGUID: "G-SS", ExternalName: "TerminalTrx", Name: "Simple Summary Report" },
+    { ReportGUID: "G-FM", ExternalName: "FundsMovement", Name: "Funds Movement By Account By Day" },
+  ]);
+  const ids = parseReportConfigIds(idsJson);
+  assert(ids.length === 3, "parseReportConfigIds returns three rows");
+  assert(ids[0].reportGuid === "G-CASH" && ids[0].name === "ATM Cash Load Report", "row 0 parsed");
+  // camelCase + wrapper tolerance.
+  assert(parseReportConfigIds(JSON.stringify({ results: [{ reportGUID: "X", name: "Y" }] }))[0].reportGuid === "X", "wrapper+camel tolerated");
+  // Rows without a GUID are dropped (never invented).
+  assert(parseReportConfigIds(JSON.stringify([{ Name: "no guid" }])).length === 0, "no-GUID row dropped");
+  assert(parseReportConfigIds("not json") .length === 0, "bad json → []");
+  assert(parseReportConfigIds("").length === 0, "empty → []");
+
+  // --- matchReportConfig -----------------------------------------------------
+  const mCash = matchReportConfig("cashLoad", ids);
+  assert(mCash.confident && mCash.best?.reportGuid === "G-CASH", "cashLoad matched confidently");
+  const mFm = matchReportConfig("fundsMovement", ids);
+  assert(mFm.confident && mFm.best?.reportGuid === "G-FM", "fundsMovement matched confidently");
+  const mSs = matchReportConfig("simpleSummary", ids);
+  assert(mSs.confident && mSs.best?.reportGuid === "G-SS", "simpleSummary matched confidently");
+  // Ambiguity → not confident, both candidates returned.
+  const dup = [
+    { reportGuid: "A", externalName: "", name: "ATM Cash Load Report" },
+    { reportGuid: "B", externalName: "", name: "ATM Cash Load Report (backup)" },
+  ];
+  const mDup = matchReportConfig("cashLoad", dup);
+  assert(!mDup.confident && mDup.candidates.length === 2 && mDup.best === null, "ambiguous match → not confident");
+  // No match → empty.
+  assert(matchReportConfig("cashLoad", [{ reportGuid: "Z", externalName: "", name: "User Report" }]).candidates.length === 0, "no match → empty");
+
+  // --- parseReportFields -----------------------------------------------------
+  const cfgJson = JSON.stringify({
+    SuccessResponse: true,
+    fields: [
+      { type: "text", readonly: false, name: "Terminal Number" },
+      { type: "date", readonly: false, name: "Settlement Date" },
+      { type: "money", readonly: true, name: "Surch" },
+    ],
+  });
+  const fields = parseReportFields(cfgJson);
+  assert(fields.length === 3, "parseReportFields returns three fields");
+  assert(fields[1].name === "Settlement Date" && fields[1].type === "date", "date field parsed");
+  // Top-level array form also works.
+  assert(parseReportFields(JSON.stringify([{ name: "X", type: "date" }])).length === 1, "top-level fields array parsed");
+  assert(parseReportFields("nope").length === 0, "bad json fields → []");
+
+  // --- pickDateField ---------------------------------------------------------
+  // 1) Exact expected column wins with highest confidence.
+  const pSs = pickDateField("simpleSummary", fields);
+  assert(pSs.confident && pSs.fieldName === "Settlement Date", "simpleSummary exact date col");
+  assert(pSs.filterKey === "F_Settlement Date", "filterKey preserves the real name (spaces kept)");
+  assert(pSs.reason === "expected-column", "reason = expected-column");
+
+  // 2) by-type when expected name absent but exactly one date-typed field.
+  const fmFields: PaiReportField[] = [
+    { name: "Account", type: "text", readonly: false },
+    { name: "Post Date", type: "date", readonly: false },
+    { name: "Amount", type: "money", readonly: false },
+  ];
+  const pFm = pickDateField("fundsMovement", fmFields);
+  assert(pFm.confident && pFm.fieldName === "Post Date" && pFm.filterKey === "F_Post Date", "fundsMovement by-type picks Post Date");
+  assert(pFm.reason === "by-type", "reason = by-type");
+
+  // 3) by-name-token when no date type but exactly one name-token field.
+  const clFields: PaiReportField[] = [
+    { name: "Terminal Number", type: "text", readonly: false },
+    { name: "Trx Time", type: "text", readonly: false },
+    { name: "Cash Load", type: "money", readonly: false },
+  ];
+  const pCl = pickDateField("cashLoad", clFields);
+  assert(pCl.confident && pCl.fieldName === "Trx Time", "cashLoad exact expected col (Trx Time)");
+
+  // Ambiguous: two date columns and none equals the expected → not confident.
+  const ambig: PaiReportField[] = [
+    { name: "Start Date", type: "date", readonly: false },
+    { name: "End Date", type: "date", readonly: false },
+  ];
+  const pAmbig = pickDateField("fundsMovement", ambig);
+  assert(!pAmbig.confident && pAmbig.fieldName === "" && pAmbig.dateCandidates.length === 2, "ambiguous dates → not confident, both listed");
+
+  // None: no date-ish columns at all.
+  const none = pickDateField("cashLoad", [{ name: "Amount", type: "money", readonly: false }]);
+  assert(!none.confident && none.reason === "none" && none.dateCandidates.length === 0, "no date col → none");
+
+  // --- buildDiscovery + toDateFieldOverride + summary -----------------------
+  const fieldsByGuid = new Map<string, PaiReportField[]>([
+    ["G-SS", fields],
+    ["G-FM", fmFields],
+    ["G-CASH", clFields],
+  ]);
+  const dSs = buildDiscovery("simpleSummary", ids, fieldsByGuid);
+  assert(dSs.datePick.confident && dSs.datePick.filterKey === "F_Settlement Date", "buildDiscovery simpleSummary confident");
+  const dFm = buildDiscovery("fundsMovement", ids, fieldsByGuid);
+  assert(dFm.datePick.filterKey === "F_Post Date", "buildDiscovery fundsMovement → F_Post Date");
+  const dCl = buildDiscovery("cashLoad", ids, fieldsByGuid);
+  assert(dCl.datePick.filterKey === "F_Trx Time", "buildDiscovery cashLoad → F_Trx Time");
+
+  const override = toDateFieldOverride([dSs, dFm, dCl]);
+  assert(
+    override.simpleSummary === "F_Settlement Date" &&
+      override.fundsMovement === "F_Post Date" &&
+      override.cashLoad === "F_Trx Time",
+    "toDateFieldOverride includes all three confident picks",
+  );
+
+  // A non-confident discovery is EXCLUDED from the override (never write a guess).
+  const dAmbig = buildDiscovery("fundsMovement", ids, new Map([["G-FM", ambig]]));
+  assert(!dAmbig.datePick.confident, "ambiguous discovery not confident");
+  assert(toDateFieldOverride([dAmbig]).fundsMovement === undefined, "ambiguous excluded from override");
+
+  // Unmatched report → helpful note, no override entry.
+  const dMissing = buildDiscovery("cashLoad", [{ reportGuid: "Z", externalName: "", name: "User Report" }], new Map());
+  assert(dMissing.matched === null && dMissing.note.includes("Couldn’t find"), "missing report noted");
+
+  assert(summarizeDiscovery([dSs]).startsWith("• "), "summary is bulleted");
+
+  console.log("pai-discovery: all self-tests passed");
+}

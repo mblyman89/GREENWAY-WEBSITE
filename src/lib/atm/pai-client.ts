@@ -30,9 +30,22 @@ import { getAtmConnectionSecrets } from "./store";
 import {
   resolveAllPaiReportPlans,
   computePaiHistoryRange,
+  joinUrl,
+  PAI_DEFAULT_BASE,
   type PaiReportKind,
   type PaiReportPlan,
 } from "./pai-endpoints";
+import {
+  PAI_LIST_CONFIGS_QUERY,
+  parseReportConfigIds,
+  parseReportFields,
+  matchReportConfig,
+  buildDiscovery,
+  toDateFieldOverride,
+  summarizeDiscovery,
+  type PaiReportField,
+  type PaiReportDiscovery,
+} from "./pai-discovery";
 
 /** How long any single PAI HTTP call may take before we give up (ms). */
 const PAI_TIMEOUT_MS = 30_000;
@@ -238,5 +251,162 @@ async function downloadOne(plan: PaiReportPlan, cookies: string): Promise<PaiRep
     return { ok: true, kind: plan.kind, csv: text, ...flags };
   } catch {
     return { ok: false, kind: plan.kind, error: "Timed out downloading this report from PAI.", ...flags };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Slice A-2c-3 — DISCOVER each report's REAL date-filter column (no F12).
+//
+// This is the no-F12 answer to "why does the filter only work for one report?":
+// it asks PAI itself for each report's real column names, exactly the way PAI's
+// official example client does (Data API `Query.event` to list report configs,
+// then `ReportConfigManagement.event` FIND_CONFIG per report to read its
+// fields). It ONLY READS — it never changes anything at PAI and never writes to
+// our DB. The caller (a server action) turns confident results into the
+// per-report `report_config.dateFieldName` override, which the backfill then
+// uses so ALL THREE reports pull full history.
+// ---------------------------------------------------------------------------
+
+export type PaiDiscoveryResult =
+  | {
+      ok: true;
+      discoveries: PaiReportDiscovery[];
+      /** Confident per-report override ({kind: "F_<Real Name>"}) — may be partial. */
+      override: Record<string, string>;
+      /** Plain-English, multi-line summary for the UI + audit. */
+      summary: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Log into PAI, discover each report's real date-filter column name, log out.
+ * Never throws; credentials never appear in any returned string. Reuses the
+ * same session-cookie mechanics as the report pull.
+ */
+export async function discoverReportFilterFields(): Promise<PaiDiscoveryResult> {
+  const secrets = await getAtmConnectionSecrets();
+  if (!secrets) {
+    return {
+      ok: false,
+      error:
+        "PAI login isn’t saved yet. Add your paireports.com username and password on the " +
+        "Connection & health tab first.",
+    };
+  }
+
+  const base = (secrets.portalBaseUrl ?? "").trim() || PAI_DEFAULT_BASE;
+  const loginUrl = joinUrl(base, "Login.event");
+  const logoutUrl = joinUrl(base, "DoLogout.event");
+  const queryUrl = joinUrl(base, "Query.event");
+  const configUrl = joinUrl(base, "ReportConfigManagement.event");
+
+  let cookies = "";
+
+  // 1) LOGIN (identical mechanics to the report pull).
+  try {
+    const body = new URLSearchParams({
+      Username: secrets.username,
+      Password: secrets.password,
+    }).toString();
+    const res = await fetchWithTimeout(loginUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "application/json",
+      },
+      body,
+    });
+    cookies = collectCookies(cookies, res.headers.get("set-cookie"));
+    if (!cookies.toLowerCase().includes("jsessionid")) {
+      return {
+        ok: false,
+        error:
+          "Couldn’t sign in to PAI to read your report settings. Double-check the saved username " +
+          "and password on the Connection & health tab.",
+      };
+    }
+  } catch {
+    return { ok: false, error: "Couldn’t reach PAI to sign in (network timeout). Try again shortly." };
+  }
+
+  // 2) LIST report configs via the Data API (SELECT * FROM ReportConfigs).
+  let allConfigs: ReturnType<typeof parseReportConfigIds>;
+  try {
+    const res = await fetchWithTimeout(queryUrl, {
+      method: "POST",
+      headers: {
+        Cookie: cookies,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "*/*",
+      },
+      body: new URLSearchParams({ query: PAI_LIST_CONFIGS_QUERY }).toString(),
+    });
+    const text = await res.text();
+    allConfigs = parseReportConfigIds(text);
+  } catch {
+    allConfigs = [];
+  }
+
+  if (allConfigs.length === 0) {
+    await bestEffortLogout(logoutUrl, cookies);
+    return {
+      ok: false,
+      error:
+        "Signed in to PAI, but its report list came back empty or unreadable. Your login may not have " +
+        "Data-API access — tell me and we’ll confirm the right PAI permission.",
+    };
+  }
+
+  // 3) For each report we care about, if we matched exactly one config row,
+  //    FIND_CONFIG it to read that report's real fields.
+  const kinds: PaiReportKind[] = ["cashLoad", "simpleSummary", "fundsMovement"];
+  const fieldsByGuid = new Map<string, PaiReportField[]>();
+  for (const kind of kinds) {
+    const match = matchReportConfig(kind, allConfigs);
+    if (!match.confident || !match.best) continue; // ambiguous/none → reported, not guessed
+    const guid = match.best.reportGuid;
+    if (fieldsByGuid.has(guid)) continue;
+    try {
+      const res = await fetchWithTimeout(configUrl, {
+        method: "POST",
+        headers: {
+          Cookie: cookies,
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": PAI_USER_AGENT,
+          Accept: "application/json",
+        },
+        body: new URLSearchParams({ method: "FIND_CONFIG", GUID: guid }).toString(),
+      });
+      const text = await res.text();
+      fieldsByGuid.set(guid, parseReportFields(text));
+    } catch {
+      fieldsByGuid.set(guid, []);
+    }
+  }
+
+  // 4) LOGOUT (best-effort).
+  await bestEffortLogout(logoutUrl, cookies);
+
+  // 5) Build the per-report discovery (pure) + the confident override.
+  const discoveries = kinds.map((kind) => buildDiscovery(kind, allConfigs, fieldsByGuid));
+  return {
+    ok: true,
+    discoveries,
+    override: toDateFieldOverride(discoveries),
+    summary: summarizeDiscovery(discoveries),
+  };
+}
+
+/** Best-effort logout — never fails the caller on a logout hiccup. */
+async function bestEffortLogout(logoutUrl: string, cookies: string): Promise<void> {
+  try {
+    await fetchWithTimeout(logoutUrl, {
+      method: "GET",
+      headers: { Cookie: cookies, "User-Agent": PAI_USER_AGENT },
+    });
+  } catch {
+    // ignore — the session expires on its own.
   }
 }

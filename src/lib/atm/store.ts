@@ -240,6 +240,36 @@ export async function saveAtmConnection(
   }
 }
 
+/**
+ * MERGE a partial report_config patch onto the single connection row (does NOT
+ * overwrite the whole jsonb — other keys like historyStart/customCmdList are
+ * preserved). Used by the "Discover report fields" flow to store the confident
+ * per-report `dateFieldName` override so the backfill uses PAI's REAL date
+ * columns. Never throws; returns the merged config on success.
+ */
+export async function mergeAtmReportConfig(
+  patch: Record<string, unknown>,
+): Promise<{ ok: true; reportConfig: Record<string, unknown> } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  try {
+    const { data: existing } = await admin
+      .from("atm_connection")
+      .select("id,report_config")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!existing?.id) return { ok: false, error: "No PAI connection is saved yet." };
+    const current = (existing.report_config as Record<string, unknown> | null) ?? {};
+    const merged = { ...current, ...patch };
+    const { error } = await admin.from("atm_connection").update({ report_config: merged }).eq("id", existing.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, reportConfig: merged };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error saving report settings." };
+  }
+}
+
 /** Clear the stored credentials (keeps the row + identity, wipes secrets). */
 export async function clearAtmCredentials(): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
