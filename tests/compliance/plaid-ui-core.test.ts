@@ -15,6 +15,7 @@ import {
   maskLabel,
   roleLabel,
   buildAccountSummary,
+  normalizeCustomName,
   roleAssignmentCheck,
   __runPlaidUiCoreTests,
 } from "@/lib/plaid/plaid-ui-core";
@@ -64,6 +65,7 @@ describe("account summary + labels", () => {
       accountId: "a1",
       name: "Business Checking",
       officialName: "OFFICIAL",
+      customName: null,
       mask: "0001",
       type: "depository",
       subtype: "checking",
@@ -81,6 +83,50 @@ describe("account summary + labels", () => {
     expect(roleLabel("atm")).toBe("ATM deposits");
     expect(roleLabel(null)).toBe("Unassigned");
     expect(maskLabel(null)).toBe("—");
+  });
+});
+
+describe("custom account name (owner-assigned nickname)", () => {
+  it("normalizeCustomName trims, collapses spaces, caps length, and blanks to null", () => {
+    expect(normalizeCustomName("  Timberland Checking  ")).toBe("Timberland Checking");
+    expect(normalizeCustomName("Citi  Costco  Visa")).toBe("Citi Costco Visa");
+    expect(normalizeCustomName("")).toBeNull();
+    expect(normalizeCustomName("   ")).toBeNull();
+    expect(normalizeCustomName(null)).toBeNull();
+    expect(normalizeCustomName(undefined)).toBeNull();
+    expect(normalizeCustomName("A".repeat(80))).toHaveLength(60);
+  });
+  it("customName wins over the bank-provided name in the summary", () => {
+    const v = buildAccountSummary({
+      accountId: "a2",
+      name: "Checking Account",
+      officialName: "TIMBERLAND BANK CHECKING",
+      customName: "  Wife Citi Visa  ",
+      mask: "1234",
+      type: "credit",
+      subtype: null,
+      role: "credit",
+      currentBalanceCents: 5000,
+      availableBalanceCents: null,
+    });
+    expect(v.displayName).toBe("Wife Citi Visa");
+    expect(v.customName).toBe("Wife Citi Visa");
+  });
+  it("a blank customName falls back to the bank name and reports empty nickname", () => {
+    const v = buildAccountSummary({
+      accountId: "a3",
+      name: "Business Checking",
+      officialName: null,
+      customName: "   ",
+      mask: null,
+      type: null,
+      subtype: null,
+      role: null,
+      currentBalanceCents: null,
+      availableBalanceCents: null,
+    });
+    expect(v.displayName).toBe("Business Checking");
+    expect(v.customName).toBe("");
   });
 });
 

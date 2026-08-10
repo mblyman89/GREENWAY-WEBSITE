@@ -21,6 +21,10 @@
  *                                      clears it). Validated + role-unique guarded
  *                                      by plaid-ui-core BEFORE writing.
  *                                      Audit: plaid.account.role_assigned.
+ *   • setPlaidAccountNameAction      — owner types a friendly nickname for an
+ *                                      account (or clears it). Normalized by
+ *                                      plaid-ui-core BEFORE writing; never touches
+ *                                      Plaid's own name. Audit: plaid.account.renamed.
  *
  * SECURITY: the Plaid secret lives only in getPlaidClient() (server). The
  * access_token is never returned to the browser and never logged — it goes
@@ -34,13 +38,14 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getPlaidClient } from "@/lib/plaid/client";
 import { plaidDollarsToCents, extractPlaidError, describeLinkTokenError } from "@/lib/plaid/plaid-core";
-import { roleAssignmentCheck } from "@/lib/plaid/plaid-ui-core";
+import { roleAssignmentCheck, normalizeCustomName } from "@/lib/plaid/plaid-ui-core";
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
 import {
   upsertPlaidItem,
   upsertPlaidAccount,
   listPlaidAccounts,
   setPlaidAccountRole,
+  setPlaidAccountCustomName,
 } from "@/lib/plaid/store";
 
 const ROOT = "/admin/plaid";
@@ -235,6 +240,40 @@ export async function assignPlaidAccountRoleAction(formData: FormData): Promise<
   back({
     tab: "health",
     msg: check.role ? `Account role set to "${check.role}".` : "Account role cleared.",
+  });
+}
+
+/**
+ * Set (or clear) an account's owner-assigned nickname so Michael can label each
+ * connected account in plain English (e.g. "Timberland Checking", "Wife's Citi
+ * Costco Visa"). The name is normalized in the PURE core (trimmed, whitespace
+ * collapsed, length-capped, blank -> cleared) BEFORE it's written, and it never
+ * touches Plaid's own `name` (a re-sync can't clobber it). Redirects back to the
+ * Health tab with a friendly result. Audit: plaid.account.renamed.
+ */
+export async function setPlaidAccountNameAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const accountId = String(formData.get("account_id") ?? "").trim();
+  if (!accountId) back({ tab: "health", error: "Missing account. Please try again." });
+
+  const customName = normalizeCustomName(String(formData.get("custom_name") ?? ""));
+
+  const result = await setPlaidAccountCustomName(accountId, customName);
+  if (!result.ok) back({ tab: "health", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "plaid.account.renamed",
+    entityType: "plaid_account",
+    entityId: accountId,
+    after: { account_id: accountId, custom_name: customName },
+  });
+
+  back({
+    tab: "health",
+    msg: customName ? `Account named "${customName}".` : "Account name cleared.",
   });
 }
 

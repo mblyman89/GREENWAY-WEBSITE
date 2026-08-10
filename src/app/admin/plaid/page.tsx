@@ -38,7 +38,7 @@ import {
   type ChipTone,
 } from "@/lib/plaid/plaid-ui-core";
 import { PlaidLinkButton } from "./PlaidLinkButton";
-import { assignPlaidAccountRoleAction, runPlaidSyncNowAction } from "./actions";
+import { assignPlaidAccountRoleAction, runPlaidSyncNowAction, setPlaidAccountNameAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -291,10 +291,12 @@ export default async function PlaidPage({
             </div>
 
             <div className={cardCls}>
-              <h2 className="mb-1 text-sm font-semibold text-white">Account roles</h2>
+              <h2 className="mb-1 text-sm font-semibold text-white">Accounts — names &amp; roles</h2>
               <p className="mb-4 text-sm text-white/60">
-                Tell the app what each account is for. Reconciliation uses these jobs. Each job can
-                belong to only one account.
+                Give each account a friendly name (e.g. &ldquo;Timberland Checking&rdquo; or
+                &ldquo;Wife&apos;s Citi Costco Visa&rdquo;) so the back office is easy to read, and
+                tell the app what each account is for. Reconciliation uses the roles; each role can
+                belong to only one account. Leave the name blank to use the bank&apos;s own name.
               </p>
               {accounts.length === 0 ? (
                 <p className="text-sm text-white/50">No accounts yet — connect a bank first.</p>
@@ -303,40 +305,65 @@ export default async function PlaidPage({
                   {accounts.map((a) => {
                     const v = buildAccountSummary(a);
                     return (
-                      <form
+                      <div
                         key={a.accountId}
-                        action={assignPlaidAccountRoleAction}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-3"
+                        className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-3"
                       >
-                        <input type="hidden" name="account_id" value={a.accountId} />
-                        <div className="min-w-[12rem]">
-                          <p className="text-sm font-semibold text-white">
-                            {v.displayName} <span className="text-white/40">{v.maskText}</span>
-                          </p>
-                          <p className="text-xs text-white/40">
-                            {v.typeText} · {v.currentText}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <label className="sr-only" htmlFor={`role-${a.accountId}`}>
-                            Role for {v.displayName}
-                          </label>
-                          <select
-                            id={`role-${a.accountId}`}
-                            name="role"
-                            defaultValue={a.role ?? ""}
-                            className={selectCls}
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-[12rem]">
+                            <p className="text-sm font-semibold text-white">
+                              {v.displayName} <span className="text-white/40">{v.maskText}</span>
+                            </p>
+                            <p className="text-xs text-white/40">
+                              {v.typeText} · {v.currentText}
+                            </p>
+                          </div>
+                          <form
+                            action={assignPlaidAccountRoleAction}
+                            className="flex items-center gap-2"
                           >
-                            <option value="">Unassigned</option>
-                            <option value="main">Main operating</option>
-                            <option value="atm">ATM deposits</option>
-                            <option value="credit">Credit card</option>
-                          </select>
-                          <button type="submit" className={btnGhost}>
-                            Save
-                          </button>
+                            <input type="hidden" name="account_id" value={a.accountId} />
+                            <label className="sr-only" htmlFor={`role-${a.accountId}`}>
+                              Role for {v.displayName}
+                            </label>
+                            <select
+                              id={`role-${a.accountId}`}
+                              name="role"
+                              defaultValue={a.role ?? ""}
+                              className={selectCls}
+                            >
+                              <option value="">Unassigned</option>
+                              <option value="main">Main operating</option>
+                              <option value="atm">ATM deposits</option>
+                              <option value="credit">Credit card</option>
+                            </select>
+                            <button type="submit" className={btnGhost}>
+                              Save role
+                            </button>
+                          </form>
                         </div>
-                      </form>
+                        <form
+                          action={setPlaidAccountNameAction}
+                          className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/5 pt-2"
+                        >
+                          <input type="hidden" name="account_id" value={a.accountId} />
+                          <label className="sr-only" htmlFor={`name-${a.accountId}`}>
+                            Custom name for {v.displayName}
+                          </label>
+                          <input
+                            id={`name-${a.accountId}`}
+                            name="custom_name"
+                            type="text"
+                            maxLength={60}
+                            defaultValue={v.customName}
+                            placeholder="Type a name for this account…"
+                            className={`${selectCls} min-w-[16rem] flex-1`}
+                          />
+                          <button type="submit" className={btnGhost}>
+                            Save name
+                          </button>
+                        </form>
+                      </div>
                     );
                   })}
                 </div>
