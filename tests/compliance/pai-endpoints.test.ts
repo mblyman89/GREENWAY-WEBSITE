@@ -114,6 +114,57 @@ describe("resolveAllPaiReportPlans", () => {
     expect(all.simpleSummary.kind).toBe("simpleSummary");
     expect(all.fundsMovement.kind).toBe("fundsMovement");
   });
+
+  it("pins the per-kind report GUID onto each plan when supplied", () => {
+    const all = resolveAllPaiReportPlans(null, null, null, {
+      cashLoad: "G-cash",
+      simpleSummary: "",
+      fundsMovement: "G-funds",
+    });
+    expect(all.cashLoad.combinedUrl).toContain("&ReportGUID=G-cash");
+    expect(all.fundsMovement.combinedUrl).toContain("&ReportGUID=G-funds");
+    // Empty guid for a kind → no pin (falls back to PAI's default).
+    expect(all.simpleSummary.combinedUrl).not.toContain("ReportGUID");
+  });
+
+  it("with NO guid map produces the byte-for-byte proven path (no pins)", () => {
+    const all = resolveAllPaiReportPlans(null, null, null);
+    expect(all.cashLoad.combinedUrl).not.toContain("ReportGUID");
+    expect(all.fundsMovement.combinedUrl).not.toContain("ReportGUID");
+  });
+});
+
+describe("reportGuid pinning (serve EXACTLY the saved report — fixes same-named reports)", () => {
+  it("appends &ReportGUID=<guid> to filterUrl, downloadUrl AND combinedUrl", () => {
+    const p = resolvePaiReportPlan("fundsMovement", null, null, null, "G-abc");
+    expect(p.filterUrl).toContain("&ReportGUID=G-abc");
+    expect(p.downloadUrl).toContain("&ReportGUID=G-abc");
+    expect(p.combinedUrl).toContain("&ReportGUID=G-abc");
+  });
+
+  it("URL-encodes the GUID", () => {
+    const p = resolvePaiReportPlan("fundsMovement", null, null, null, "G a/b");
+    expect(p.combinedUrl).toContain(`&ReportGUID=${encodeURIComponent("G a/b")}`);
+  });
+
+  it("omits ReportGUID entirely when the GUID is absent, empty, or whitespace", () => {
+    expect(resolvePaiReportPlan("fundsMovement", null, null).combinedUrl).not.toContain("ReportGUID");
+    expect(resolvePaiReportPlan("fundsMovement", null, null, null, "").combinedUrl).not.toContain("ReportGUID");
+    expect(resolvePaiReportPlan("fundsMovement", null, null, null, "   ").combinedUrl).not.toContain("ReportGUID");
+  });
+
+  it("carries date filter + command + guid together in combinedUrl", () => {
+    const p = resolvePaiReportPlan(
+      "fundsMovement",
+      null,
+      null,
+      { from: "2024-02-29", to: "2026-08-11" },
+      "G-xyz",
+    );
+    expect(p.combinedUrl).toContain("ReportCmd=Filter&ReportCmd=CustomCommand");
+    expect(p.combinedUrl).toContain("F_SettlementDate=");
+    expect(p.combinedUrl).toContain("&ReportGUID=G-xyz");
+  });
 });
 
 describe("buildPaiGuidDownloadBody (PAI SDK: POST Report.event by GUID)", () => {

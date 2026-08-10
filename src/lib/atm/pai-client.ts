@@ -151,7 +151,24 @@ export async function pullAllPaiReports(options?: {
     ? computePaiHistoryRange(new Date(), secrets.reportConfig)
     : null;
 
-  const plans = resolveAllPaiReportPlans(secrets.portalBaseUrl, secrets.reportConfig, dateRange);
+  // Honor Michael's SAVED report choice per kind: pin its GUID onto the URLs so
+  // PAI serves EXACTLY that report (critical when two reports share a name, e.g.
+  // the two "Funds Movement By Account By Day"). No saved GUID → PAI's default
+  // for that .event path, byte-for-byte identical to today's proven path.
+  const savedSelections = parseReportSelection(
+    (secrets.reportConfig as Record<string, unknown> | null)?.reportSelection,
+  );
+  const reportGuids: Partial<Record<PaiReportKind, string | null | undefined>> = {
+    cashLoad: savedSelections.cashLoad?.reportGuid,
+    simpleSummary: savedSelections.simpleSummary?.reportGuid,
+    fundsMovement: savedSelections.fundsMovement?.reportGuid,
+  };
+  const plans = resolveAllPaiReportPlans(
+    secrets.portalBaseUrl,
+    secrets.reportConfig,
+    dateRange,
+    reportGuids,
+  );
   const loginUrl = plans.cashLoad.filterUrl.replace(/\/[^/]*\?.*$/, "/Login.event");
   const logoutUrl = loginUrl.replace(/Login\.event$/, "DoLogout.event");
 
