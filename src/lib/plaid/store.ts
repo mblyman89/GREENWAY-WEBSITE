@@ -378,3 +378,52 @@ export async function applyTransactionMerge(plan: {
 
   return { ok: true, upserted, removed };
 }
+
+// ---------------------------------------------------------------------------
+// Webhook events (Slice P4) — dedup + audit of Plaid webhook deliveries.
+// body_sha256 is the idempotency key (unique index in migration 0157).
+// ---------------------------------------------------------------------------
+
+/**
+ * Record a received webhook delivery. Returns `{duplicate:true}` when we've
+ * already seen this exact body (the unique body_sha256 collided), so the route
+ * can 200 immediately without re-processing. Any other DB error is reported.
+ * Never throws.
+ */
+export async function recordPlaidWebhookEvent(input: {
+  bodySha256: string;
+  webhookType: string | null;
+  webhookCode: string | null;
+  itemId: string | null;
+}): Promise<{ ok: true; duplicate: boolean } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("plaid_webhook_events").insert({
+    body_sha256: input.bodySha256,
+    webhook_type: input.webhookType,
+    webhook_code: input.webhookCode,
+    item_id: input.itemId,
+  });
+  if (error) {
+    // 23505 = unique_violation → we've already stored this exact delivery.
+    if (error.code === "23505" || /duplicate key|unique/i.test(error.message)) {
+      return { ok: true, duplicate: true };
+    }
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, duplicate: false };
+}
+
+/** Mark a recorded webhook delivery as processed (best-effort; never throws). */
+export async function markPlaidWebhookProcessed(bodySha256: string): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin
+      .from("plaid_webhook_events")
+      .update({ processed_at: new Date().toISOString() })
+      .eq("body_sha256", bodySha256);
+  } catch {
+    // best-effort; the dedup row already exists so a missed timestamp is harmless
+  }
+}
