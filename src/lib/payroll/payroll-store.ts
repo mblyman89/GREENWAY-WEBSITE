@@ -24,6 +24,12 @@ import {
   type GuardrailReport,
 } from "@/lib/payroll/payroll-guardrails-core";
 import { decryptSecret, encryptSecret } from "@/lib/security/at-rest-crypto";
+import { listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
+import {
+  toBankWithdrawals,
+  type BankWithdrawal,
+  type ReconcileRun,
+} from "@/lib/payroll/payroll-reconcile-core";
 
 export type AchCompanySettings = {
   destination_routing: string;
@@ -543,4 +549,74 @@ export async function generatePayrollNacha(
     .eq("id", runId);
 
   return { ok: true, filename, file: built.file, totalCents: built.totalCents, entryCount: built.entryCount };
+}
+
+// ---------------------------------------------------------------------------
+// P6b — payroll bank reconciliation inputs
+// ---------------------------------------------------------------------------
+
+export type PayrollReconcileInputs = {
+  runs: ReconcileRun[];
+  withdrawals: BankWithdrawal[];
+  /** True when at least one bank account is tagged as the Main operating account. */
+  hasMainAccount: boolean;
+  /** Display names of the Main-role account(s), for the UI header. */
+  mainAccountNames: string[];
+};
+
+/**
+ * Gather everything the payroll reconciliation engine needs. Only COMPLETED
+ * runs (file_generated | submitted) are reconcilable — a draft has no ACH file
+ * and therefore no bank debit to match. Withdrawals come from every account
+ * tagged role="main" (Michael's operating account; we support more than one
+ * defensively). Returns empty/flagged inputs when the DB isn't configured or no
+ * Main account is tagged, so the page shows guidance instead of crashing.
+ */
+export async function getPayrollReconcileInputs(
+  runLimit = 200,
+): Promise<PayrollReconcileInputs> {
+  if (!isSupabaseServiceConfigured) {
+    return { runs: [], withdrawals: [], hasMainAccount: false, mainAccountNames: [] };
+  }
+
+  const runRows = await listPayrollRuns(runLimit);
+  const runs: ReconcileRun[] = runRows
+    .filter((r) => r.status === "file_generated" || r.status === "submitted")
+    .map((r) => ({
+      runId: r.id,
+      label: r.label,
+      payDate: r.pay_date,
+      totalNetCents: r.total_net_cents,
+      status: r.status,
+      entryCount: r.entry_count,
+    }));
+
+  const accounts = await listPlaidAccounts();
+  const mainAccounts = accounts.filter((a) => a.role === "main" && a.active);
+  const mainAccountNames = mainAccounts.map(
+    (a) => a.customName ?? a.officialName ?? a.name ?? "Main account",
+  );
+
+  const withdrawals: BankWithdrawal[] = [];
+  for (const acct of mainAccounts) {
+    const txns = await listPlaidTransactions(acct.accountId);
+    const asWithdrawals = toBankWithdrawals(
+      txns.map((t) => ({
+        transactionId: t.transactionId,
+        amountCents: t.amountCents,
+        date: t.date,
+        name: t.name,
+        merchantName: t.merchantName,
+        pending: t.pending,
+      })),
+    );
+    withdrawals.push(...asWithdrawals);
+  }
+
+  return {
+    runs,
+    withdrawals,
+    hasMainAccount: mainAccounts.length > 0,
+    mainAccountNames,
+  };
 }
