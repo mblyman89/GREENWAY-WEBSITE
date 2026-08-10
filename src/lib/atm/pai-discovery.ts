@@ -478,6 +478,48 @@ export function candidateDateFilterKeys(columnName: string | null | undefined): 
   return keys;
 }
 
+/**
+ * KNOWN report-specific date-filter keys that DON'T come from a column header.
+ *
+ * Some PAI reports don't filter on a table-column header at all \u2014 they expose a
+ * SEPARATE top-left "Date Range" control whose form field is literally named
+ * `F_Date Range` (a space, value `MM/DD/YYYY - MM/DD/YYYY`). For the Bank
+ * Deposits report (GetFundsMovementByAcctByDayReport, GUID
+ * A24C8843-B5A3-E711-80D1-A0369F80525E) the Settlement Date COLUMN filter is
+ * greyed out, so `F_Settlement Date`/`F_SettlementDate` are silently ignored \u2014
+ * which is exactly the "July-only" stuck window we observed.
+ *
+ * This is F12-CONFIRMED ground truth (Michael captured the working request body:
+ * `...&F_Date+Range=08%2F01%2F2024+-+08%2F01%2F2026&...&CustomCmdList=OpenCSVExcel`),
+ * NOT a guess. We still only ever SAVE this key when the empirical prover shows
+ * it actually widens the returned history vs the no-range baseline.
+ */
+export const PAI_KNOWN_EXTRA_DATE_FILTER_KEYS: Partial<Record<PaiReportKind, string[]>> = {
+  fundsMovement: ["F_Date Range"],
+};
+
+/**
+ * The FULL ordered, de-duplicated candidate list for a report kind: the
+ * header-derived candidates (from the report's real date column) FIRST, then any
+ * KNOWN report-specific extras (e.g. the separate "Date Range" box). Header
+ * candidates lead because when a report DOES filter on its column they're the
+ * canonical form; the extras cover reports whose date control isn't a column.
+ * Deduped so a key is only tried once. Never fabricates: extras come from the
+ * F12-confirmed map above.
+ */
+export function candidateDateFilterKeysForKind(
+  kind: PaiReportKind,
+  columnName: string | null | undefined,
+): string[] {
+  const keys: string[] = [];
+  const add = (k: string) => {
+    if (k !== "" && !keys.includes(k)) keys.push(k);
+  };
+  for (const k of candidateDateFilterKeys(columnName)) add(k);
+  for (const k of PAI_KNOWN_EXTRA_DATE_FILTER_KEYS[kind] ?? []) add(k.trim());
+  return keys;
+}
+
 /** The min/max ISO dates + row count parsed from a report CSV's real date column. */
 export type PaiCsvDateSpan = {
   /** Number of data rows (excludes the header). */
@@ -1163,6 +1205,36 @@ export function __runPaiDiscoveryTests(): void {
   // Trims input; blank yields nothing.
   assert(candidateDateFilterKeys("  Trx Time  ")[0] === "F_Trx Time", "candidate trims input");
   assert(candidateDateFilterKeys("   ").length === 0 && candidateDateFilterKeys(null).length === 0, "blank -> no candidates");
+
+  // --- candidateDateFilterKeysForKind ---------------------------------------
+  // Bank Deposits (fundsMovement) appends the KNOWN separate-box key F_Date Range
+  // AFTER the header-derived candidates, deduped, in order.
+  const fmKeys = candidateDateFilterKeysForKind("fundsMovement", "Settlement Date");
+  assert(
+    fmKeys.length === 3 &&
+      fmKeys[0] === "F_Settlement Date" &&
+      fmKeys[1] === "F_SettlementDate" &&
+      fmKeys[2] === "F_Date Range",
+    "fundsMovement candidates: header-derived first, then F_Date Range",
+  );
+  // The known extra is present even when the header column name is blank.
+  const fmBlank = candidateDateFilterKeysForKind("fundsMovement", "");
+  assert(fmBlank.length === 1 && fmBlank[0] === "F_Date Range", "fundsMovement extra survives a blank header");
+  // Kinds with no known extra behave exactly like candidateDateFilterKeys.
+  const csKeys = candidateDateFilterKeysForKind("cashLoad", "Trx Time");
+  assert(
+    csKeys.length === 2 && csKeys[0] === "F_Trx Time" && csKeys[1] === "F_TrxTime",
+    "cashLoad has no extra key",
+  );
+  const ssKeys = candidateDateFilterKeysForKind("simpleSummary", "Settlement Date");
+  assert(
+    ssKeys.length === 2 && ssKeys[0] === "F_Settlement Date" && ssKeys[1] === "F_SettlementDate",
+    "simpleSummary has no extra key",
+  );
+  assert(
+    PAI_KNOWN_EXTRA_DATE_FILTER_KEYS.fundsMovement?.[0] === "F_Date Range",
+    "known extra map holds F_Date Range for fundsMovement",
+  );
 
   // --- measureCsvDateSpan ----------------------------------------------------
   // Simple Summary CSV: min/max come from the "Settlement Date" column.
