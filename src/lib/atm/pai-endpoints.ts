@@ -248,9 +248,19 @@ export function resolvePaiReportPlan(
   baseUrl: string | null | undefined,
   reportConfig?: Record<string, unknown> | null,
   dateRange?: PaiDateRange | null,
+  /**
+   * The SPECIFIC report GUID to download (Michael's saved reportSelection[kind]).
+   * When set, `&ReportGUID=<guid>` is appended so PAI serves exactly that report
+   * — essential when two reports share a name (e.g. the two "Funds Movement By
+   * Account By Day"). When absent, the per-kind .event path's default is used.
+   */
+  reportGuid?: string | null,
 ): PaiReportPlan {
   const base = (baseUrl ?? "").trim() || PAI_DEFAULT_BASE;
   const event = PAI_REPORT_EVENT[kind];
+  // The chosen report's GUID fragment, appended to every URL when present.
+  const guid = (reportGuid ?? "").trim();
+  const guidFragment = guid === "" ? "" : `&ReportGUID=${encodeURIComponent(guid)}`;
 
   const configured =
     reportConfig && typeof reportConfig.customCmdList === "string"
@@ -260,7 +270,7 @@ export function resolvePaiReportPlan(
   const usingDefaultCustomCmd = configured === "";
 
   // Base filter URL (open the report as currently configured in the portal).
-  let filterUrl = `${joinUrl(base, event)}?ReportCmd=Filter`;
+  let filterUrl = `${joinUrl(base, event)}?ReportCmd=Filter${guidFragment}`;
   let dateFilterApplied = false;
   let usingDefaultDateField = false;
 
@@ -285,7 +295,8 @@ export function resolvePaiReportPlan(
 
   const downloadUrl =
     `${joinUrl(base, event)}?ReportCmd=CustomCommand` +
-    `&CustomCmdList=${encodeURIComponent(customCmdList)}`;
+    `&CustomCmdList=${encodeURIComponent(customCmdList)}` +
+    guidFragment;
 
   // COMBINED URL — the ROBUST, documented pattern from PAI's official SDK
   // (gopai/reporting-sdk PAIClient.retrieveReportUsingBuilder): the SAME request
@@ -297,7 +308,8 @@ export function resolvePaiReportPlan(
   const combinedUrl =
     `${joinUrl(base, event)}?ReportCmd=Filter&ReportCmd=CustomCommand` +
     `&CustomCmdList=${encodeURIComponent(customCmdList)}` +
-    dateFilterFragment;
+    dateFilterFragment +
+    guidFragment;
 
   return {
     kind,
@@ -311,16 +323,27 @@ export function resolvePaiReportPlan(
   };
 }
 
-/** All three report plans at once (the sync pulls all three). */
+/**
+ * All three report plans at once (the sync pulls all three).
+ *
+ * `reportGuids` is Michael's saved per-kind report GUID (from
+ * report_config.reportSelection[kind].reportGuid). When present for a kind,
+ * that GUID is pinned onto the URLs so PAI serves EXACTLY that report — this is
+ * essential when two reports share a name (e.g. the two "Funds Movement By
+ * Account By Day"). Parsing lives in the caller (pai-client) to keep this leaf
+ * module free of imports and avoid a circular dependency with pai-discovery.
+ */
 export function resolveAllPaiReportPlans(
   baseUrl: string | null | undefined,
   reportConfig?: Record<string, unknown> | null,
   dateRange?: PaiDateRange | null,
+  reportGuids?: Partial<Record<PaiReportKind, string | null | undefined>> | null,
 ): Record<PaiReportKind, PaiReportPlan> {
+  const guids = reportGuids ?? {};
   return {
-    cashLoad: resolvePaiReportPlan("cashLoad", baseUrl, reportConfig, dateRange),
-    simpleSummary: resolvePaiReportPlan("simpleSummary", baseUrl, reportConfig, dateRange),
-    fundsMovement: resolvePaiReportPlan("fundsMovement", baseUrl, reportConfig, dateRange),
+    cashLoad: resolvePaiReportPlan("cashLoad", baseUrl, reportConfig, dateRange, guids.cashLoad),
+    simpleSummary: resolvePaiReportPlan("simpleSummary", baseUrl, reportConfig, dateRange, guids.simpleSummary),
+    fundsMovement: resolvePaiReportPlan("fundsMovement", baseUrl, reportConfig, dateRange, guids.fundsMovement),
   };
 }
 
@@ -500,6 +523,53 @@ export function __runPaiEndpointsTests(): void {
       ranged.combinedUrl.includes(`F_SettlementDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`),
     "combinedUrl with range carries filter + command together",
   );
+
+  // --- reportGuid pinning: serve EXACTLY the saved report --------------------
+  // Two reports can share a name (the two "Funds Movement By Account By Day");
+  // pinning &ReportGUID=<guid> makes PAI serve the exact one Michael picked.
+
+  // No guid (undefined/empty/whitespace) → NO ReportGUID param anywhere.
+  assert(!ss.combinedUrl.includes("ReportGUID"), "no guid → no ReportGUID on combinedUrl");
+  assert(!ss.filterUrl.includes("ReportGUID"), "no guid → no ReportGUID on filterUrl");
+  assert(!ss.downloadUrl.includes("ReportGUID"), "no guid → no ReportGUID on downloadUrl");
+  const emptyGuid = resolvePaiReportPlan("fundsMovement", null, null, null, "   ");
+  assert(!emptyGuid.combinedUrl.includes("ReportGUID"), "whitespace guid → no ReportGUID (trimmed to empty)");
+
+  // A concrete guid is appended to ALL THREE urls, URL-encoded.
+  const pinned = resolvePaiReportPlan("fundsMovement", null, null, null, "G-abc 123");
+  const encGuid = encodeURIComponent("G-abc 123");
+  assert(pinned.combinedUrl.includes(`&ReportGUID=${encGuid}`), "guid appended to combinedUrl (encoded)");
+  assert(pinned.filterUrl.includes(`&ReportGUID=${encGuid}`), "guid appended to filterUrl (encoded)");
+  assert(pinned.downloadUrl.includes(`&ReportGUID=${encGuid}`), "guid appended to downloadUrl (encoded)");
+
+  // With BOTH a date range and a guid, combinedUrl carries filter + command + guid.
+  const pinnedRanged = resolvePaiReportPlan(
+    "fundsMovement",
+    null,
+    null,
+    { from: "2024-02-29", to: "2026-08-11" },
+    "G-xyz",
+  );
+  assert(
+    pinnedRanged.combinedUrl.includes("ReportCmd=Filter&ReportCmd=CustomCommand") &&
+      pinnedRanged.combinedUrl.includes("F_SettlementDate=") &&
+      pinnedRanged.combinedUrl.includes("&ReportGUID=G-xyz"),
+    "combinedUrl carries filter + command + guid together",
+  );
+
+  // resolveAllPaiReportPlans threads the per-kind guid map onto each plan.
+  const allPinned = resolveAllPaiReportPlans(null, null, null, {
+    cashLoad: "G-cash",
+    simpleSummary: "",
+    fundsMovement: "G-funds",
+  });
+  assert(allPinned.cashLoad.combinedUrl.includes("&ReportGUID=G-cash"), "resolveAll pins cashLoad guid");
+  assert(allPinned.fundsMovement.combinedUrl.includes("&ReportGUID=G-funds"), "resolveAll pins fundsMovement guid");
+  assert(!allPinned.simpleSummary.combinedUrl.includes("ReportGUID"), "resolveAll: empty guid → no pin");
+  // No guid map at all → identical to the byte-for-byte proven path (no pins).
+  const allDefault = resolveAllPaiReportPlans(null, null, null);
+  assert(!allDefault.cashLoad.combinedUrl.includes("ReportGUID"), "resolveAll no map → no pins (cashLoad)");
+  assert(!allDefault.fundsMovement.combinedUrl.includes("ReportGUID"), "resolveAll no map → no pins (fundsMovement)");
 
   // resolvePaiDateFieldName convention + override.
   const fn = resolvePaiDateFieldName("fundsMovement", null);
