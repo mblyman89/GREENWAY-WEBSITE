@@ -83,6 +83,37 @@ export function buildPaiGuidDownloadBody(
   return params.toString();
 }
 
+/**
+ * Build a GET download URL for a specific report GUID via a PER-REPORT `.event`
+ * path — the SAME mechanic the working live sync uses (resolvePaiReportPlan's
+ * combinedUrl: `<event>?ReportCmd=Filter&ReportCmd=CustomCommand&CustomCmdList=..`),
+ * but pinned to one candidate by appending `&ReportGUID=<guid>`.
+ *
+ * WHY: probing showed the "Terminal Trx Data" (Simple Summary) report family
+ * returns an HTML page for the universal `POST Report.event` GUID call, yet
+ * downloads correctly through this per-report GET `.event` path (that's how
+ * Michael's Simple Summary history backfilled). Funds Movement / Cash Loads
+ * accept both. So the probe tries THIS proven GET path first, then falls back
+ * to the universal POST — never guessing which a given report prefers.
+ *
+ * PURE: `event` is a confirmed per-kind `.event` path (PAI_REPORT_EVENT[kind]).
+ * `customCmdList` defaults to the SDK's DownloadCSV.
+ */
+export function buildPaiGuidDownloadUrl(
+  base: string,
+  event: string,
+  guid: string,
+  opts?: { customCmdList?: string },
+): string {
+  const cmd = (opts?.customCmdList ?? "").trim() || PAI_DEFAULT_CUSTOM_CMD;
+  const g = (guid ?? "").trim();
+  return (
+    `${joinUrl(base, event)}?ReportCmd=Filter&ReportCmd=CustomCommand` +
+    `&CustomCmdList=${encodeURIComponent(cmd)}` +
+    (g === "" ? "" : `&ReportGUID=${encodeURIComponent(g)}`)
+  );
+}
+
 /** Default portal base (with the confirmed www.). Overridable by portal_base_url. */
 export const PAI_DEFAULT_BASE = "https://www.paireports.com/myreports/";
 
@@ -509,6 +540,20 @@ export function __runPaiEndpointsTests(): void {
   assert(!buildPaiGuidDownloadBody("G", { filters: [{ column: "  ", value: "x" }] }).includes("F_"), "guid body skips blank-column filter");
   // Trims the GUID.
   assert(new URLSearchParams(buildPaiGuidDownloadBody("  G-9  ")).get("ReportGUID") === "G-9", "guid body trims the GUID");
+
+  // --- Per-report GET download URL by GUID (proven .event path) -------------
+  const gurl = buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, PAI_REPORT_EVENT.simpleSummary, "G-SS");
+  assert(
+    gurl.startsWith("https://www.paireports.com/myreports/GetTerminalTrxDataReport.event?ReportCmd=Filter&ReportCmd=CustomCommand"),
+    "guid GET url uses the per-kind .event path + Filter/CustomCommand",
+  );
+  assert(gurl.includes("CustomCmdList=DownloadCSV"), "guid GET url defaults to DownloadCSV");
+  assert(gurl.endsWith("&ReportGUID=G-SS"), "guid GET url pins the candidate by GUID");
+  // Custom command respected; GUID trimmed + URL-encoded.
+  assert(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "  a b  ", { customCmdList: "OpenCSV" }).includes("CustomCmdList=OpenCSV"), "guid GET url honors custom cmd");
+  assert(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "a b").endsWith("ReportGUID=a%20b"), "guid GET url encodes the GUID");
+  // No GUID → no ReportGUID param (still a valid report-default download URL).
+  assert(!buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "  ").includes("ReportGUID="), "guid GET url omits empty GUID");
 
   console.log("pai-endpoints: all self-tests passed");
 }

@@ -32,7 +32,9 @@ import {
   computePaiHistoryRange,
   joinUrl,
   buildPaiGuidDownloadBody,
+  buildPaiGuidDownloadUrl,
   PAI_DEFAULT_BASE,
+  PAI_REPORT_EVENT,
   PAI_REPORT_EVENT_UNIVERSAL,
   type PaiReportKind,
   type PaiReportPlan,
@@ -574,6 +576,10 @@ export async function probeReportCandidates(kind: PaiReportKind): Promise<PaiPro
   const logoutUrl = joinUrl(base, "DoLogout.event");
   const queryUrl = joinUrl(base, "Query.event");
   const reportUrl = joinUrl(base, PAI_REPORT_EVENT_UNIVERSAL);
+  // The PER-KIND .event path (the mechanic the working live sync uses). We try
+  // this GET path FIRST when probing, because the Simple Summary family only
+  // downloads via its per-report .event path (the universal POST returns HTML).
+  const perKindEvent = PAI_REPORT_EVENT[kind];
   const customCmd =
     typeof secrets.reportConfig?.customCmdList === "string"
       ? (secrets.reportConfig.customCmdList as string).trim()
@@ -633,25 +639,57 @@ export async function probeReportCandidates(kind: PaiReportKind): Promise<PaiPro
   }
 
   // 3) PROBE each candidate by GUID (capped), summarize its CSV.
+  //    Try the PROVEN per-kind .event GET path FIRST (what the working live sync
+  //    uses — the Simple Summary family only downloads this way); if that didn't
+  //    return usable CSV, fall back to the universal POST Report.event by GUID
+  //    (what Funds Movement / Cash Loads also accept). We keep whichever
+  //    actually returned data — evidence, never a guess about which a report
+  //    prefers.
   const probed: PaiProbeCandidate[] = [];
   for (const row of candidateRows.slice(0, PAI_PROBE_MAX_CANDIDATES)) {
+    // Attempt A — per-kind .event GET path, pinned to this candidate by GUID.
     let csv = "";
     try {
-      const res = await fetchWithTimeout(reportUrl, {
-        method: "POST",
-        headers: {
-          Cookie: cookies,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": PAI_USER_AGENT,
-          Accept: "*/*",
+      const res = await fetchWithTimeout(
+        buildPaiGuidDownloadUrl(base, perKindEvent, row.reportGuid, { customCmdList: customCmd }),
+        {
+          method: "GET",
+          headers: {
+            Cookie: cookies,
+            "User-Agent": PAI_USER_AGENT,
+            Accept: "text/csv,application/octet-stream,*/*",
+          },
         },
-        body: buildPaiGuidDownloadBody(row.reportGuid, { customCmdList: customCmd }),
-      });
+      );
       csv = await res.text();
     } catch {
       csv = "";
     }
-    const summary = summarizeProbeCsv(csv);
+    let summary = summarizeProbeCsv(csv);
+
+    // Attempt B — universal POST Report.event by GUID, only if A didn't produce data.
+    if (!summary.hasData) {
+      let csvB = "";
+      try {
+        const res = await fetchWithTimeout(reportUrl, {
+          method: "POST",
+          headers: {
+            Cookie: cookies,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": PAI_USER_AGENT,
+            Accept: "*/*",
+          },
+          body: buildPaiGuidDownloadBody(row.reportGuid, { customCmdList: customCmd }),
+        });
+        csvB = await res.text();
+      } catch {
+        csvB = "";
+      }
+      const summaryB = summarizeProbeCsv(csvB);
+      // Keep whichever attempt scored higher (more data wins; ties keep A).
+      if (scoreProbe(summaryB) > scoreProbe(summary)) summary = summaryB;
+    }
+
     probed.push({
       reportGuid: row.reportGuid,
       name: row.name,

@@ -21,6 +21,7 @@ import {
   resolvePaiReportPlan,
   resolveAllPaiReportPlans,
   buildPaiGuidDownloadBody,
+  buildPaiGuidDownloadUrl,
   __runPaiEndpointsTests,
 } from "@/lib/atm/pai-endpoints";
 
@@ -143,6 +144,24 @@ describe("buildPaiGuidDownloadBody (PAI SDK: POST Report.event by GUID)", () => 
 
   it("trims the GUID", () => {
     expect(new URLSearchParams(buildPaiGuidDownloadBody("  G-9  ")).get("ReportGUID")).toBe("G-9");
+  });
+});
+
+describe("buildPaiGuidDownloadUrl (per-report .event GET path pinned by GUID)", () => {
+  it("uses the per-kind .event path with Filter + CustomCommand and pins the GUID", () => {
+    const u = buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, PAI_REPORT_EVENT.simpleSummary, "G-SS");
+    expect(u).toContain("GetTerminalTrxDataReport.event?ReportCmd=Filter&ReportCmd=CustomCommand");
+    expect(u).toContain("CustomCmdList=DownloadCSV");
+    expect(u.endsWith("&ReportGUID=G-SS")).toBe(true);
+  });
+
+  it("honors a custom command and URL-encodes / trims the GUID", () => {
+    expect(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "  a b  ", { customCmdList: "OpenCSV" })).toContain("CustomCmdList=OpenCSV");
+    expect(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "a b").endsWith("ReportGUID=a%20b")).toBe(true);
+  });
+
+  it("omits the ReportGUID param when the GUID is blank", () => {
+    expect(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "  ")).not.toContain("ReportGUID=");
   });
 });
 
