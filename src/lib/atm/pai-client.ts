@@ -52,7 +52,7 @@ import {
   summarizeDiscovery,
   summarizeProbeCsv,
   pickDateField,
-  candidateDateFilterKeys,
+  candidateDateFilterKeysForKind,
   measureCsvDateSpan,
   candidateWidensHistory,
   scoreProbeForKind,
@@ -585,8 +585,12 @@ export async function verifyDateFieldsByProbe(
     }
 
     // 3) Try each candidate key over the FULL history window; keep the first
-    //    that PROVABLY widens the span vs the baseline.
-    const candidates = candidateDateFilterKeys(columnName);
+    //    that PROVABLY widens the span vs the baseline. We include BOTH the
+    //    header-derived candidates AND any KNOWN report-specific extra (e.g.
+    //    Bank Deposits' separate "Date Range" box, F_Date Range) \u2014 the extra is
+    //    only ever KEPT if it demonstrably widens history, so this is still
+    //    evidence-based, never a guess.
+    const candidates = candidateDateFilterKeysForKind(kind, columnName);
     let proven: PaiCsvDateSpan | null = null;
     let provenKey = "";
     const tried: string[] = [];

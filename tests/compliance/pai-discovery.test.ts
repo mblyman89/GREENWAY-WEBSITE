@@ -31,6 +31,8 @@ import {
   countExpectedColumns,
   PAI_EXPECTED_DATE_COLUMN,
   candidateDateFilterKeys,
+  candidateDateFilterKeysForKind,
+  PAI_KNOWN_EXTRA_DATE_FILTER_KEYS,
   measureCsvDateSpan,
   candidateWidensHistory,
   type PaiReportConfigId,
@@ -456,6 +458,30 @@ describe("candidateDateFilterKeys (both space conventions, never guesses a name)
     expect(candidateDateFilterKeys("  Trx Time  ")).toEqual(["F_Trx Time", "F_TrxTime"]);
     expect(candidateDateFilterKeys("   ")).toEqual([]);
     expect(candidateDateFilterKeys(null)).toEqual([]);
+  });
+});
+
+describe("candidateDateFilterKeysForKind (adds F12-confirmed report-specific keys)", () => {
+  it("appends F_Date Range for Bank Deposits AFTER header-derived candidates", () => {
+    expect(candidateDateFilterKeysForKind("fundsMovement", "Settlement Date")).toEqual([
+      "F_Settlement Date",
+      "F_SettlementDate",
+      "F_Date Range",
+    ]);
+  });
+  it("still offers F_Date Range for Bank Deposits when the header column is blank", () => {
+    expect(candidateDateFilterKeysForKind("fundsMovement", "")).toEqual(["F_Date Range"]);
+    expect(candidateDateFilterKeysForKind("fundsMovement", null)).toEqual(["F_Date Range"]);
+  });
+  it("leaves reports without a known extra unchanged", () => {
+    expect(candidateDateFilterKeysForKind("cashLoad", "Trx Time")).toEqual(["F_Trx Time", "F_TrxTime"]);
+    expect(candidateDateFilterKeysForKind("simpleSummary", "Settlement Date")).toEqual([
+      "F_Settlement Date",
+      "F_SettlementDate",
+    ]);
+  });
+  it("exposes the F12-confirmed extra key in the known map", () => {
+    expect(PAI_KNOWN_EXTRA_DATE_FILTER_KEYS.fundsMovement).toEqual(["F_Date Range"]);
   });
 });
 
