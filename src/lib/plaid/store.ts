@@ -331,6 +331,97 @@ export async function setPlaidAccountCustomName(
 // ---------------------------------------------------------------------------
 
 /**
+ * A stored transaction, camelCase, money in CENTS with Plaid's sign preserved
+ * (positive = money out, negative = money in). This is the projection the P5
+ * money views read; `removed` rows are already filtered out by the reader.
+ */
+export type PlaidTransactionRecord = {
+  transactionId: string;
+  accountId: string;
+  amountCents: number;
+  date: string;
+  authorizedDate: string | null;
+  name: string | null;
+  merchantName: string | null;
+  categoryPrimary: string | null;
+  categoryDetailed: string | null;
+  pending: boolean;
+  pendingTransactionId: string | null;
+  paymentChannel: string | null;
+};
+
+type TxnRow = {
+  transaction_id: string;
+  account_id: string;
+  amount_cents: number;
+  date: string;
+  authorized_date: string | null;
+  name: string | null;
+  merchant_name: string | null;
+  personal_finance_category_primary: string | null;
+  personal_finance_category_detailed: string | null;
+  pending: boolean;
+  pending_transaction_id: string | null;
+  payment_channel: string | null;
+};
+
+const TXN_COLS =
+  "transaction_id,account_id,amount_cents,date,authorized_date,name,merchant_name," +
+  "personal_finance_category_primary,personal_finance_category_detailed,pending," +
+  "pending_transaction_id,payment_channel";
+
+function toTxnRecord(row: TxnRow): PlaidTransactionRecord {
+  return {
+    transactionId: row.transaction_id,
+    accountId: row.account_id,
+    // bigint arrives as number (safe for money magnitudes) or string; coerce.
+    amountCents: typeof row.amount_cents === "string" ? Number(row.amount_cents) : row.amount_cents,
+    date: row.date,
+    authorizedDate: row.authorized_date,
+    name: row.name,
+    merchantName: row.merchant_name,
+    categoryPrimary: row.personal_finance_category_primary,
+    categoryDetailed: row.personal_finance_category_detailed,
+    pending: !!row.pending,
+    pendingTransactionId: row.pending_transaction_id,
+    paymentChannel: row.payment_channel,
+  };
+}
+
+/** Cap rows a single account-detail view will pull (keeps the page snappy). */
+export const PLAID_TXN_READ_LIMIT = 500;
+
+/**
+ * Read one account's live (not removed) transactions, newest first — the source
+ * for the P5 money views. Uses idx_plaid_transactions_account_date (account_id,
+ * date desc). Returns [] when the DB isn't configured or on any error, so the
+ * page renders an empty state instead of crashing.
+ */
+export async function listPlaidTransactions(
+  accountId: string,
+  limit: number = PLAID_TXN_READ_LIMIT,
+): Promise<PlaidTransactionRecord[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const id = (accountId ?? "").trim();
+  if (id === "") return [];
+  const cap = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), PLAID_TXN_READ_LIMIT) : PLAID_TXN_READ_LIMIT;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("plaid_transactions")
+      .select(TXN_COLS)
+      .eq("account_id", id)
+      .eq("removed", false)
+      .order("date", { ascending: false })
+      .limit(cap);
+    if (error || !data) return [];
+    return (data as unknown as TxnRow[]).map(toTxnRecord);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Apply a merge plan (from plaid-core.planTransactionMerge): upsert added/
  * modified rows (dedup on transaction_id) and soft-delete removed ones. Returns
  * counts so the sync layer can log a summary. Best-effort per batch; the first
