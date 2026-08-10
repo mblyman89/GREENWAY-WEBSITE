@@ -84,6 +84,26 @@ describe("resolvePaiReportPlan (config override — the 'never guess' escape hat
   });
 });
 
+describe("combinedUrl (robust single-request pattern from PAI's official SDK)", () => {
+  it("carries Filter + CustomCommand together (default, no range)", () => {
+    const p = resolvePaiReportPlan("simpleSummary", null, null);
+    expect(p.combinedUrl).toBe(
+      "https://www.paireports.com/myreports/GetTerminalTrxDataReport.event?ReportCmd=Filter&ReportCmd=CustomCommand&CustomCmdList=DownloadCSV",
+    );
+  });
+  it("carries the date filter WITH the download when a range is supplied", () => {
+    const p = resolvePaiReportPlan("fundsMovement", null, null, { from: "2024-02-29", to: "2026-08-11" });
+    expect(p.combinedUrl).toContain("ReportCmd=Filter&ReportCmd=CustomCommand");
+    expect(p.combinedUrl).toContain(`F_SettlementDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`);
+  });
+  it("uses a PER-REPORT date field name override", () => {
+    const cfg = { dateFieldName: { fundsMovement: "F_PostDate" } };
+    const p = resolvePaiReportPlan("fundsMovement", null, cfg, { from: "2024-02-29", to: "2026-08-11" });
+    expect(p.usingDefaultDateField).toBe(false);
+    expect(p.combinedUrl).toContain(`F_PostDate=${encodeURIComponent("02/29/2024 - 08/11/2026")}`);
+  });
+});
+
 describe("resolveAllPaiReportPlans", () => {
   it("returns all three report plans", () => {
     const all = resolveAllPaiReportPlans(null, null);

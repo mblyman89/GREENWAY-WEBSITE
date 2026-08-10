@@ -195,15 +195,14 @@ async function downloadOne(plan: PaiReportPlan, cookies: string): Promise<PaiRep
     usingDefaultDateField: plan.usingDefaultDateField,
   };
   try {
-    // First establish the report context (ReportCmd=Filter), then request the
-    // CSV custom command on the same path — mirrors the portal's own flow
-    // (the "Go!" button re-requests the current report with the CSV command).
-    await fetchWithTimeout(plan.filterUrl, {
-      method: "GET",
-      headers: { Cookie: cookies, "User-Agent": PAI_USER_AGENT, Accept: "text/html" },
-    });
-
-    const res = await fetchWithTimeout(plan.downloadUrl, {
+    // ONE request that carries BOTH ReportCmd=Filter AND the CSV custom command
+    // AND the F_<Column> date filter (plan.combinedUrl). This mirrors PAI's
+    // official SDK (gopai/reporting-sdk retrieveReportUsingBuilder), where Filter
+    // + CustomCommand + F_<Column> are sent together. Sending the filter in a
+    // SEPARATE request relied on PAI persisting the last filter in the session,
+    // which worked for one report but not the others — combining them makes the
+    // date range travel WITH the download for EVERY report.
+    const res = await fetchWithTimeout(plan.combinedUrl, {
       method: "GET",
       headers: {
         Cookie: cookies,
