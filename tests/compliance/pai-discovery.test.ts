@@ -18,6 +18,7 @@ import {
   pickDateField,
   buildDiscovery,
   toDateFieldOverride,
+  mergeDateFieldOverride,
   summarizeDiscovery,
   candidateLabel,
   normalizeName,
@@ -401,6 +402,42 @@ describe("parseLastProbe (one-click pick list; never invents a GUID)", () => {
     expect(lp.simpleSummary?.winnerGuid).toBe("G-2");
     expect(lp.fundsMovement).toBeUndefined();
     expect("bogus" in lp).toBe(false);
+  });
+});
+
+describe("mergeDateFieldOverride (deep-merge confirmations, never clobber)", () => {
+  it("returns just the discovered override when nothing is saved", () => {
+    expect(mergeDateFieldOverride(null, { cashLoad: "F_Trx Time" })).toEqual({ cashLoad: "F_Trx Time" });
+  });
+
+  it("keeps existing per-report entries and adds the new one (no clobber)", () => {
+    expect(mergeDateFieldOverride({ fundsMovement: "F_Settlement Date" }, { cashLoad: "F_Trx Time" })).toEqual({
+      fundsMovement: "F_Settlement Date",
+      cashLoad: "F_Trx Time",
+    });
+  });
+
+  it("lets a re-discovered value correct the same key", () => {
+    expect(mergeDateFieldOverride({ cashLoad: "F_Old Name" }, { cashLoad: "F_Trx Time" })).toEqual({
+      cashLoad: "F_Trx Time",
+    });
+  });
+
+  it("preserves a legacy plain-string override under the reserved '*' key", () => {
+    expect(mergeDateFieldOverride("F_Legacy", { cashLoad: "F_Trx Time" })).toEqual({
+      "*": "F_Legacy",
+      cashLoad: "F_Trx Time",
+    });
+  });
+
+  it("drops blank/whitespace names on both sides", () => {
+    expect(
+      mergeDateFieldOverride({ simpleSummary: "  " }, { cashLoad: "  ", fundsMovement: "F_Settlement Date" }),
+    ).toEqual({ fundsMovement: "F_Settlement Date" });
+  });
+
+  it("trims discovered values", () => {
+    expect(mergeDateFieldOverride({}, { cashLoad: "  F_Trx Time  " })).toEqual({ cashLoad: "F_Trx Time" });
   });
 });
 

@@ -22,6 +22,8 @@ import {
   resolveAllPaiReportPlans,
   buildPaiGuidDownloadBody,
   buildPaiGuidDownloadUrl,
+  reportKindsMissingDateField,
+  resolvePaiDateFieldName,
   __runPaiEndpointsTests,
 } from "@/lib/atm/pai-endpoints";
 
@@ -213,6 +215,45 @@ describe("buildPaiGuidDownloadUrl (per-report .event GET path pinned by GUID)", 
 
   it("omits the ReportGUID param when the GUID is blank", () => {
     expect(buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, "X.event", "  ")).not.toContain("ReportGUID=");
+  });
+});
+
+describe("reportKindsMissingDateField (which reports still need a confirmed date column)", () => {
+  it("flags ALL THREE reports when nothing is saved (all on the guessed default)", () => {
+    const missing = reportKindsMissingDateField(null);
+    expect(missing.sort()).toEqual(["cashLoad", "fundsMovement", "simpleSummary"]);
+  });
+
+  it("leaves exactly the other two missing when one report is confirmed", () => {
+    const missing = reportKindsMissingDateField({ dateFieldName: { fundsMovement: "F_Settlement Date" } });
+    expect(missing.sort()).toEqual(["cashLoad", "simpleSummary"]);
+  });
+
+  it("reports none missing once all three are confirmed", () => {
+    const missing = reportKindsMissingDateField({
+      dateFieldName: {
+        cashLoad: "F_Trx Time",
+        simpleSummary: "F_Settlement Date",
+        fundsMovement: "F_Settlement Date",
+      },
+    });
+    expect(missing).toEqual([]);
+  });
+
+  it("treats a legacy single-string override as covering every report", () => {
+    expect(reportKindsMissingDateField({ dateFieldName: "F_Some Column" })).toEqual([]);
+  });
+
+  it("honors the reserved '*' fallback key (from deep-merging a legacy string)", () => {
+    expect(reportKindsMissingDateField({ dateFieldName: { "*": "F_Some Column" } })).toEqual([]);
+    // A per-report entry still wins over '*' for its own report.
+    expect(resolvePaiDateFieldName("cashLoad", { dateFieldName: { cashLoad: "F_Trx Time", "*": "F_Fallback" } })).toEqual(
+      { name: "F_Trx Time", usingDefault: false },
+    );
+    // '*' covers a report that has no entry of its own.
+    expect(
+      resolvePaiDateFieldName("simpleSummary", { dateFieldName: { cashLoad: "F_Trx Time", "*": "F_Fallback" } }),
+    ).toEqual({ name: "F_Fallback", usingDefault: false });
   });
 });
 
