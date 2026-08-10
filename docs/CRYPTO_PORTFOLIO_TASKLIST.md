@@ -7,23 +7,24 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 
 ---
 
-## C0 — Docs + pure primitives ← **SLICE ONE (in progress)**
-- [ ] Commit `docs/CRYPTO_PORTFOLIO_BIBLE.md`
-- [ ] Commit `docs/CRYPTO_PORTFOLIO_ROADMAP.md`
-- [ ] Commit `docs/CRYPTO_PORTFOLIO_TASKLIST.md`
-- [ ] Create `src/lib/crypto/crypto-core.ts` (pure):
-  - [ ] `Chain` type + `CHAIN_LABELS`, `isEvmChain`
-  - [ ] `CryptoAsset` registry (ETH, USDT, FLR, SGB, XRP, SOLO) w/ verified decimals
-  - [ ] `TxDirection`, `TxType`
-  - [ ] `normalizeMinorUnits`, `formatTokenAmount` (string-safe, no float drift)
-  - [ ] `usdValueCents` (deterministic integer cents)
-  - [ ] address shape validators (`0x…` EVM, `r…` XRPL)
-  - [ ] `__runCryptoCoreTests()`
-- [ ] Wire self-test into `scripts/compliance/run-pure-selftests.ts`
-- [ ] Vitest mirror `tests/compliance/crypto-core.test.ts`
-- [ ] FULL BATTERY green; config restored identical
-- [ ] PR opened, `compliance` green, squash-merged, main synced
-- [ ] Reported to Michael via `ask`
+## C0 — Docs + pure primitives ← **SLICE ONE ✅ DONE (PR #875, merged 84458dbf)**
+- [x] Commit `docs/CRYPTO_PORTFOLIO_BIBLE.md`
+- [x] Commit `docs/CRYPTO_PORTFOLIO_ROADMAP.md`
+- [x] Commit `docs/CRYPTO_PORTFOLIO_TASKLIST.md`
+- [x] Create `src/lib/crypto/crypto-core.ts` (pure):
+  - [x] `Chain` type + `CHAIN_LABELS`, `isEvmChain`, verified EVM chain IDs (1/14/19)
+  - [x] `CryptoAsset` registry (ETH 18, USDT 6, FLR 18, SGB 18, XRP 6, SOLO xrpl-15-sig-digit) w/ verified decimals + two amount models
+  - [x] `TxDirection`, `TxType` (incl. `lp_add`/`lp_remove`), `isDisposalType`
+  - [x] `normalizeMinorUnits`, `formatTokenAmount` (string-safe, no float drift)
+  - [x] `normalizeXrplIssuedAmount` (15-sig-digit decimal-string guard)
+  - [x] `usdValueCents` (deterministic integer cents, round-half-up)
+  - [x] address shape validators (`0x…` EVM, `r…` XRPL) + `isValidAddressForChain`
+  - [x] `__runCryptoCoreTests()`
+- [x] Wire self-test into `scripts/compliance/run-pure-selftests.ts`
+- [x] Vitest mirror `tests/compliance/crypto-core.test.ts`
+- [x] FULL BATTERY green; config restored identical
+- [x] PR opened (#875), `compliance` green, squash-merged, main synced
+- [x] Reported to Michael via `ask`
 
 ## C1 — `crypto_*` schema foundation
 - [ ] Migration `NNNN_crypto_foundation.sql` (tables + indexes + trigger + RLS)
