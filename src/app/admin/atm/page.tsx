@@ -37,6 +37,7 @@ import {
   recordManualCashLoadAction,
   importAtmCsvsAction,
   runAtmLiveSyncAction,
+  runAtmBackfillAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -310,16 +311,25 @@ function HealthTab({
           <Row label="Last sync" value={conn.lastSyncAt || "Never"} />
           <Row label="Last error" value={conn.lastError || "—"} />
         </dl>
-        <form action={runAtmLiveSyncAction} className="mt-4 border-t border-white/10 pt-4">
-          <button type="submit" className={btnGhost}>
-            Sync now (live)
-          </button>
-          <p className="mt-2 text-xs text-white/40">
-            This signs in to PAI with your saved login and pulls your three reports automatically (it also runs once
-            daily). If PAI hands back a web page instead of a CSV, you&rsquo;ll see a note here &mdash; capture the exact
-            download command once and we&rsquo;ll set it. You can always use &ldquo;Import PAI report CSVs&rdquo; below.
-          </p>
-        </form>
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+          <form action={runAtmLiveSyncAction}>
+            <button type="submit" className={btnGhost}>
+              Sync now (live)
+            </button>
+          </form>
+          <form action={runAtmBackfillAction}>
+            <button type="submit" className={btnGhost}>
+              Backfill history (from 2/29/24)
+            </button>
+          </form>
+        </div>
+        <p className="mt-2 text-xs text-white/40">
+          &ldquo;Sync now&rdquo; signs in to PAI and pulls your three reports for the recent window (it also runs once
+          daily). &ldquo;Backfill history&rdquo; does the same but requests everything back to 2/29/2024 &mdash; run it
+          once to load your full history, then the daily sync keeps it current. Re-importing is always safe: the same
+          rows update instead of duplicating. If PAI hands back a web page instead of a CSV, you&rsquo;ll see a note
+          here, and you can always use &ldquo;Import PAI report CSVs&rdquo; below.
+        </p>
       </div>
 
       <div className={`${cardCls} lg:col-span-2`}>

@@ -194,3 +194,31 @@ export async function runAtmLiveSyncAction(): Promise<void> {
   if (result.ok) back({ tab: "health", msg: result.message });
   back({ tab: "health", error: result.error });
 }
+
+/**
+ * "Backfill history" button (Health tab). Same live PAI pull, but requests the
+ * FULL history window — from the earliest available date (2/29/2024, confirmed
+ * by Michael; overridable via report_config.historyStart) through today —
+ * instead of PAI's small default window. Use this once to load everything, then
+ * the daily sync keeps it current. Audit: atm.sync.backfill.
+ */
+export async function runAtmBackfillAction(): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const result = await runAtmLiveSync({ history: true });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "atm.sync.backfill",
+    entityType: "atm_connection",
+    entityId: null,
+    after: {
+      ok: result.ok,
+      settlements_upserted: result.summary?.settlementsUpserted ?? 0,
+      cash_loads_upserted: result.summary?.cashLoadsUpserted ?? 0,
+    },
+  });
+
+  if (result.ok) back({ tab: "health", msg: result.message });
+  back({ tab: "health", error: result.error });
+}
