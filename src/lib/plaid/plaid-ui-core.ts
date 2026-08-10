@@ -110,6 +110,8 @@ export type AccountSummaryInput = {
   accountId: string;
   name: string | null;
   officialName: string | null;
+  /** Owner-assigned nickname; when set (non-blank) it wins over the bank name. */
+  customName: string | null;
   mask: string | null;
   type: string | null;
   subtype: string | null;
@@ -121,6 +123,8 @@ export type AccountSummaryInput = {
 export type AccountSummaryView = {
   accountId: string;
   displayName: string;
+  /** The saved nickname (normalized) or "" — used to pre-fill the rename input. */
+  customName: string;
   maskText: string;
   typeText: string;
   roleText: string;
@@ -129,13 +133,38 @@ export type AccountSummaryView = {
   availableText: string;
 };
 
+/**
+ * The maximum length we store/show for an owner-assigned account nickname. Long
+ * enough for "Wife's Citi Costco Visa (personal)"; short enough to keep rows tidy.
+ */
+export const CUSTOM_NAME_MAX_LEN = 60;
+
+/**
+ * Clean an owner-typed account nickname before it's saved or compared:
+ *   - trims surrounding whitespace,
+ *   - collapses internal runs of whitespace to a single space,
+ *   - caps the length at CUSTOM_NAME_MAX_LEN,
+ *   - returns null for blank/whitespace-only input (i.e. "clear the nickname").
+ * PURE — no I/O. The action layer calls this so the DB never holds a stray
+ * blank string or an unbounded name, and buildAccountSummary reuses the same
+ * rule so what the owner sees matches what was saved.
+ */
+export function normalizeCustomName(input: string | null | undefined): string | null {
+  const collapsed = (input ?? "").replace(/\s+/g, " ").trim();
+  if (collapsed === "") return null;
+  return collapsed.slice(0, CUSTOM_NAME_MAX_LEN);
+}
+
 export function buildAccountSummary(a: AccountSummaryInput): AccountSummaryView {
-  const displayName = (a.name ?? a.officialName ?? "").trim() || "Account";
+  // Owner nickname wins when set; otherwise fall back to the bank-provided name.
+  const nickname = normalizeCustomName(a.customName);
+  const displayName = nickname ?? ((a.name ?? a.officialName ?? "").trim() || "Account");
   const typeParts = [a.type, a.subtype].map((s) => (s ?? "").trim()).filter(Boolean);
   const typeText = typeParts.length ? typeParts.join(" · ") : "—";
   return {
     accountId: a.accountId,
     displayName,
+    customName: nickname ?? "",
     maskText: maskLabel(a.mask),
     typeText,
     roleText: roleLabel(a.role),
@@ -232,6 +261,7 @@ export function __runPlaidUiCoreTests(): void {
     accountId: "acc_1",
     name: "Business Checking",
     officialName: "TIMBERLAND BUSINESS CHECKING",
+    customName: null,
     mask: "0001",
     type: "depository",
     subtype: "checking",
@@ -250,6 +280,7 @@ export function __runPlaidUiCoreTests(): void {
     accountId: "acc_2",
     name: null,
     officialName: "OFFICIAL ONLY",
+    customName: null,
     mask: null,
     type: null,
     subtype: null,
@@ -266,6 +297,7 @@ export function __runPlaidUiCoreTests(): void {
     accountId: "acc_3",
     name: "   ",
     officialName: null,
+    customName: null,
     mask: "9",
     type: "credit",
     subtype: null,
@@ -276,6 +308,46 @@ export function __runPlaidUiCoreTests(): void {
   ok(noName.displayName === "Account", "blank name/official → 'Account'");
   ok(noName.typeText === "credit", "single type part");
   ok(noName.currentText === "-$2,500.00", "credit owed renders negative");
+
+  // normalizeCustomName ----------------------------------------------------
+  ok(normalizeCustomName("  Timberland Checking  ") === "Timberland Checking", "trims whitespace");
+  ok(normalizeCustomName("Citi  Costco  Visa") === "Citi Costco Visa", "collapses internal spaces");
+  ok(normalizeCustomName("") === null, "empty string -> null");
+  ok(normalizeCustomName("   ") === null, "blank -> null");
+  ok(normalizeCustomName(null) === null, "null -> null");
+  ok(normalizeCustomName(undefined) === null, "undefined -> null");
+  ok(normalizeCustomName("A".repeat(80))?.length === 60, "caps at 60 chars");
+  ok(normalizeCustomName("ok") === "ok", "short name passes through");
+
+  // buildAccountSummary with customName override ---------------------------
+  const withNick = buildAccountSummary({
+    accountId: "acc_4",
+    name: "Checking Account",
+    officialName: "TIMBERLAND BANK CHECKING",
+    customName: "  Wife Citi Visa  ",
+    mask: "1234",
+    type: "credit",
+    subtype: null,
+    role: "credit",
+    currentBalanceCents: 5000,
+    availableBalanceCents: null,
+  });
+  ok(withNick.displayName === "Wife Citi Visa", "customName wins over bank name");
+  ok(withNick.customName === withNick.displayName, "view.customName equals normalized displayName");
+  const withNickBlank = buildAccountSummary({
+    accountId: "acc_5",
+    name: "Business Checking",
+    officialName: null,
+    customName: "   ",
+    mask: null,
+    type: null,
+    subtype: null,
+    role: null,
+    currentBalanceCents: null,
+    availableBalanceCents: null,
+  });
+  ok(withNickBlank.displayName === "Business Checking", "blank customName falls back to bank name");
+  ok(withNickBlank.customName === "", "view.customName empty when no nickname");
 
   // roleAssignmentCheck -----------------------------------------------------
   const existing: ExistingRoleAssignment[] = [

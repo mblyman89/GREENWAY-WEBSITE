@@ -48,6 +48,8 @@ export type PlaidAccountRecord = {
   itemId: string;
   name: string | null;
   officialName: string | null;
+  /** Owner-assigned nickname (migration 0158). NULL = fall back to the bank name. */
+  customName: string | null;
   mask: string | null;
   type: string | null;
   subtype: string | null;
@@ -202,6 +204,7 @@ type AccountRow = {
   item_id: string;
   name: string | null;
   official_name: string | null;
+  custom_name: string | null;
   mask: string | null;
   type: string | null;
   subtype: string | null;
@@ -214,7 +217,7 @@ type AccountRow = {
 };
 
 const ACCOUNT_COLS =
-  "id,account_id,item_id,name,official_name,mask,type,subtype,role,current_balance_cents,available_balance_cents,iso_currency_code,balances_updated_at,active";
+  "id,account_id,item_id,name,official_name,custom_name,mask,type,subtype,role,current_balance_cents,available_balance_cents,iso_currency_code,balances_updated_at,active";
 
 function toAccountRecord(row: AccountRow): PlaidAccountRecord {
   const role = row.role === "main" || row.role === "atm" || row.role === "credit" ? row.role : null;
@@ -224,6 +227,7 @@ function toAccountRecord(row: AccountRow): PlaidAccountRecord {
     itemId: row.item_id,
     name: row.name,
     officialName: row.official_name,
+    customName: row.custom_name,
     mask: row.mask,
     type: row.type,
     subtype: row.subtype,
@@ -299,6 +303,25 @@ export async function setPlaidAccountRole(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("plaid_accounts").update({ role }).eq("account_id", accountId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Set (or clear) an account's owner-assigned nickname (migration 0158).
+ * Pass null/blank to clear it (falls back to the bank name). Written ONLY here,
+ * never by a sync, so /accounts refreshes can't clobber the owner's name.
+ */
+export async function setPlaidAccountCustomName(
+  accountId: string,
+  customName: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("plaid_accounts")
+    .update({ custom_name: customName })
+    .eq("account_id", accountId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
