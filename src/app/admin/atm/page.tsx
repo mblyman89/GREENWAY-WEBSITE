@@ -38,6 +38,7 @@ import {
   importAtmCsvsAction,
   runAtmLiveSyncAction,
   runAtmBackfillAction,
+  discoverPaiReportFieldsAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -117,7 +118,7 @@ export default async function AtmPage({
 
       <div className="px-5 py-6 sm:px-8">
         {sp.msg ? (
-          <div className="mb-4 rounded-[var(--admin-radius)] border border-emerald-500/30 bg-emerald-500/[0.06] px-4 py-3 text-sm font-semibold text-emerald-300">
+          <div className="mb-4 whitespace-pre-line rounded-[var(--admin-radius)] border border-emerald-500/30 bg-emerald-500/[0.06] px-4 py-3 text-sm font-semibold text-emerald-300">
             {sp.msg}
           </div>
         ) : null}
@@ -322,6 +323,11 @@ function HealthTab({
               Backfill history (from 2/29/24)
             </button>
           </form>
+          <form action={discoverPaiReportFieldsAction}>
+            <button type="submit" className={btnGhost}>
+              Discover report fields (no F12)
+            </button>
+          </form>
         </div>
         <p className="mt-2 text-xs text-white/40">
           &ldquo;Sync now&rdquo; signs in to PAI and pulls your three reports for the recent window (it also runs once
@@ -329,6 +335,12 @@ function HealthTab({
           once to load your full history, then the daily sync keeps it current. Re-importing is always safe: the same
           rows update instead of duplicating. If PAI hands back a web page instead of a CSV, you&rsquo;ll see a note
           here, and you can always use &ldquo;Import PAI report CSVs&rdquo; below.
+        </p>
+        <p className="mt-2 text-xs text-white/40">
+          <span className="font-semibold text-white/70">&ldquo;Discover report fields (no F12)&rdquo;</span> asks PAI
+          itself for each report&rsquo;s real date-column name (using the same login) and saves it, so a backfill can
+          pull the <em>full</em> history for all three reports &mdash; no browser inspection needed. It only reads from
+          PAI and changes nothing there. Run it once, then click &ldquo;Backfill history&rdquo;.
         </p>
       </div>
 
