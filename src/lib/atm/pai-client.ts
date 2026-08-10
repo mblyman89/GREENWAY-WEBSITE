@@ -39,10 +39,16 @@ const PAI_TIMEOUT_MS = 30_000;
 /** A stable, honest User-Agent so PAI sees a real client, not a spoof. */
 const PAI_USER_AGENT = "GreenwayBackOffice/1.0 (+https://greenwaymarijuana.com)";
 
-/** The plaintext CSV of one report, or a per-report failure — never throws. */
+/**
+ * The plaintext CSV of one report, or a per-report failure — never throws.
+ * Both variants carry the plan's date-filter flags so the caller can build an
+ * honest per-report diagnostic (was the backfill date range even applied to
+ * this report, and did it use the still-unverified default field name) without
+ * re-resolving the plan.
+ */
 export type PaiReportResult =
-  | { ok: true; kind: PaiReportKind; csv: string }
-  | { ok: false; kind: PaiReportKind; error: string };
+  | { ok: true; kind: PaiReportKind; csv: string; dateFilterApplied: boolean; usingDefaultDateField: boolean }
+  | { ok: false; kind: PaiReportKind; error: string; dateFilterApplied: boolean; usingDefaultDateField: boolean };
 
 /** The result of a full pull attempt (login → each report → logout). */
 export type PaiPullResult =
@@ -181,6 +187,13 @@ export async function pullAllPaiReports(options?: {
 
 /** Download one report's CSV using the established session. Never throws. */
 async function downloadOne(plan: PaiReportPlan, cookies: string): Promise<PaiReportResult> {
+  // Carry the plan's date-filter flags onto every result so the caller can
+  // report, per report, whether the backfill range was applied (and whether it
+  // used the still-unverified default field name).
+  const flags = {
+    dateFilterApplied: plan.dateFilterApplied,
+    usingDefaultDateField: plan.usingDefaultDateField,
+  };
   try {
     // First establish the report context (ReportCmd=Filter), then request the
     // CSV custom command on the same path — mirrors the portal's own flow
@@ -200,7 +213,7 @@ async function downloadOne(plan: PaiReportPlan, cookies: string): Promise<PaiRep
     });
 
     if (res.status < 200 || res.status >= 400) {
-      return { ok: false, kind: plan.kind, error: `PAI returned status ${res.status} for this report.` };
+      return { ok: false, kind: plan.kind, error: `PAI returned status ${res.status} for this report.`, ...flags };
     }
     const text = await res.text();
 
@@ -217,13 +230,14 @@ async function downloadOne(plan: PaiReportPlan, cookies: string): Promise<PaiRep
           "PAI returned a web page instead of a CSV for this report — the CSV download command " +
           "for your account may differ from the default. Capture it once (DevTools → Network → " +
           "the report request → Form Data) and we’ll set it exactly.",
+        ...flags,
       };
     }
     if (text.trim() === "") {
-      return { ok: false, kind: plan.kind, error: "PAI returned an empty file for this report." };
+      return { ok: false, kind: plan.kind, error: "PAI returned an empty file for this report.", ...flags };
     }
-    return { ok: true, kind: plan.kind, csv: text };
+    return { ok: true, kind: plan.kind, csv: text, ...flags };
   } catch {
-    return { ok: false, kind: plan.kind, error: "Timed out downloading this report from PAI." };
+    return { ok: false, kind: plan.kind, error: "Timed out downloading this report from PAI.", ...flags };
   }
 }
