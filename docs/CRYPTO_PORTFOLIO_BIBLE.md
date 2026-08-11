@@ -126,9 +126,11 @@ technology family (neither EVM nor XRPL):
 - **Amounts (Cosmos model):** balances/amounts are integer strings in the token's
   smallest unit (`amount` + `denom`), and the human decimals come from the chain's
   `bank` denom **metadata** (`/cosmos/bank/v1beta1/denoms_metadata`, the `exponent`
-  of the display unit). **Coreum native (TX, formerly CORE): base denom `ucoreum`
-  (microcoreum), 1 Coreum = 1,000,000 ucoreum → 6 decimals — VERIFIED via BitGo
-  Coreum docs.** For issued tokens like SARA (Pulsara) we READ the exponent from
+  of the display unit). **Coreum native (TX, formerly CORE): base denom `ucore`
+  (microcore), 1 Coreum = 1,000,000 ucore → 6 decimals — VERIFIED LIVE via the
+  chain's staking `bond_denom` and community-pool denom (authoritative on-chain
+  truth; an earlier note citing BitGo docs said `ucoreum`, which was wrong).**
+  For issued tokens like SARA (Pulsara) we READ the exponent from
   live denom-metadata during the connector slice and store `decimals` as DATA per
   asset — we do NOT hardcode a guessed decimal count. Coreum address prefix =
   `core1…` (bech32), also verified via BitGo. This is the same

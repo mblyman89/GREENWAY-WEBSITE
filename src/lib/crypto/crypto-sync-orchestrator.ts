@@ -7,7 +7,7 @@ import "server-only";
  *
  *   • XRPL wallets (xrp, sologenic, usdt-on-xrpl) → syncXrplWallet (C5)
  *   • EVM wallets (ethereum, flare, songbird)    → syncEvmWallet (C6b)
- *   • Cosmos wallets (coreum, pulsara)            → NOT YET (C8b) — friendly skip
+ *   • Cosmos wallets (coreum, pulsara)            → syncCoreumWallet (C8b)
  *
  * It mirrors Plaid's `runAllPlaidSync` exactly: list every active wallet,
  * dispatch each to the right driver, aggregate the per-wallet results into a
@@ -23,6 +23,7 @@ import { isEvmChain, isCosmosChain, type Chain } from "./crypto-core";
 import { listCryptoWallets, type CryptoWalletRecord } from "./crypto-store";
 import { syncXrplWallet, type XrplWalletSyncResult } from "./xrpl/xrpl-sync-server";
 import { syncEvmWallet, type EvmWalletSyncResult } from "./evm/evm-sync-server";
+import { syncCoreumWallet, type CoreumWalletSyncResult } from "./coreum/coreum-sync-server";
 
 /** The result of syncing a single wallet. Chain-agnostic wrapper. */
 export type WalletSyncResult = {
@@ -67,7 +68,9 @@ function chainLabel(chain: Chain): string {
  * chain-agnostic WalletSyncResult. Never throws — any exception is caught and
  * turned into a failed result so one wallet can't break the whole run.
  *
- * Coreum (Cosmos) is not yet wired (C8b) — returns a friendly "not yet" skip.
+ * Coreum (Cosmos) sync is wired via syncCoreumWallet (C8b) — balances +
+ * full transaction history (two-query sender + recipient, deduplicated) +
+ * DeFi classification (Pulsara DAX swaps / LP activity).
  */
 async function syncOneWallet(wallet: CryptoWalletRecord): Promise<WalletSyncResult> {
   const base = {
@@ -77,16 +80,29 @@ async function syncOneWallet(wallet: CryptoWalletRecord): Promise<WalletSyncResu
     label: wallet.label,
   };
 
-  // ── Cosmos (Coreum / Pulsara) — connector not built yet (C8b) ──────────────
+  // ── Cosmos (Coreum / Pulsara) — C8b driver ──────────────────────────────
   if (isCosmosChain(wallet.chain)) {
-    return {
-      ...base,
-      ok: true,
-      message: `${chainLabel(wallet.chain)} sync coming in a future slice — wallet is connected and watching.`,
-      balancesUpserted: 0,
-      transactionsUpserted: 0,
-      error: null,
-    };
+    try {
+      const res: CoreumWalletSyncResult = await syncCoreumWallet(wallet.id);
+      return {
+        ...base,
+        ok: res.ok,
+        message: res.message,
+        balancesUpserted: res.counts.balancesUpserted,
+        transactionsUpserted: res.counts.transactionsUpserted,
+        error: res.error ?? null,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        ...base,
+        ok: false,
+        message: `Unexpected error syncing ${chainLabel(wallet.chain)} wallet: ${msg}`,
+        balancesUpserted: 0,
+        transactionsUpserted: 0,
+        error: msg,
+      };
+    }
   }
 
   // ── EVM chains (Ethereum, Flare, Songbird) — C6b driver ────────────────────
@@ -153,7 +169,7 @@ async function syncOneWallet(wallet: CryptoWalletRecord): Promise<WalletSyncResu
 /**
  * Sync ALL active crypto wallets. Mirrors Plaid's `runAllPlaidSync`:
  *   1. List every active wallet from the store.
- *   2. Dispatch each to its per-chain driver (XRPL / EVM / skip-Cosmos).
+ *   2. Dispatch each to its per-chain driver (XRPL / EVM / Cosmos).
  *   3. Aggregate into a single plain-English summary.
  *   4. Never throw — returns a friendly result even if the DB isn't configured.
  *

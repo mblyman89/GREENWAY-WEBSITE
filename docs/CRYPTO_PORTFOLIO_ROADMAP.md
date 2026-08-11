@@ -238,7 +238,8 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 - Pure mappers `coreum-map-core.ts`: raw Cosmos tx/events → `crypto_transactions`
   rows. Classifies **Pulsara liquidity-pool** activity (LP add/remove/swap) and
   staking rewards. `__runCoreumMapCoreTests()` with fixture payloads.
-- **Verified facts:** Coreum native = `ucoreum` (6 dec, BitGo-verified); address
+- **Verified facts:** Coreum native = `ucore` (6 dec, VERIFIED LIVE via chain
+  staking `bond_denom` + community-pool denom); address
   prefix `core1…`; chain-id `coreum-mainnet-1`. Pulsara runs ON Coreum → same
   `core1…` address, read through the SAME endpoints (not a separate chain).
 
