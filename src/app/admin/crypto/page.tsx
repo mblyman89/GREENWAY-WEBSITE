@@ -35,6 +35,8 @@ import {
   getCryptoSyncState,
 } from "@/lib/crypto/crypto-store";
 import { getAsset } from "@/lib/crypto/crypto-core";
+import { buildHoldingsTable } from "@/lib/crypto/crypto-holdings-table-core";
+import { HoldingsTable } from "./HoldingsTable";
 import {
   resolveCryptoTab,
   cryptoTabLabel,
@@ -45,8 +47,6 @@ import {
   cryptoPosture,
   buildSyncHealth,
   buildWalletProgress,
-  formatCentsUsd,
-  formatHeldAmount,
   type CryptoTab,
   type SummaryBalanceInput,
 } from "@/lib/crypto/crypto-ui-core";
@@ -126,13 +126,9 @@ export default async function CryptoPage({
 
   const posture = cryptoPosture({ dbReady, walletCount: wallets.length, pricingConfigured });
 
-  // Balances grouped by wallet for the Portfolio holdings list.
-  const balancesByWallet = new Map<string, typeof balances>();
-  for (const b of balances) {
-    const list = balancesByWallet.get(b.walletId) ?? [];
-    list.push(b);
-    balancesByWallet.set(b.walletId, list);
-  }
+  // AREA 4 — per-wallet expandable holdings table view-model (native pinned,
+  // alt coins, hidden scam tokens split out). Built by the pure core.
+  const holdingsTable = buildHoldingsTable({ wallets, balances, assetById });
 
   return (
     <div>
@@ -274,56 +270,28 @@ export default async function CryptoPage({
                   </ul>
                 </div>
 
-                {/* Holdings per wallet */}
+                {/* Holdings per wallet — click a wallet to expand its coins */}
                 <div className={cardCls}>
-                  <h2 className="mb-1 text-sm font-semibold text-white">Holdings</h2>
-                  <p className="mb-4 text-xs text-white/50">
-                    Exact quantities, straight from the chain. USD value fills in as pricing is applied.
-                  </p>
-                  <div className="space-y-4">
-                    {walletRows.map((w) => {
-                      const held = (balancesByWallet.get(w.id) ?? []).filter(
-                        (b) =>
-                          (b.amountRaw !== null && b.amountRaw !== "" && b.amountRaw !== "0") ||
-                          (b.amountDecimal !== null && b.amountDecimal !== "" && Number(b.amountDecimal) !== 0),
-                      );
-                      if (held.length === 0) return null;
-                      return (
-                        <div key={w.id} className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-4">
-                          <p className="text-sm font-semibold text-white">
-                            {w.displayName} <span className="text-white/40">· {w.chainText} · {w.addressShort}</span>
-                          </p>
-                          <ul className="mt-2 space-y-1">
-                            {held.map((b) => {
-                              const asset = assetById.get(b.assetId) ?? getAsset(b.assetId);
-                              const qty = formatHeldAmount({
-                                amountRaw: b.amountRaw,
-                                amountDecimal: b.amountDecimal,
-                                decimals: asset?.decimals ?? b.decimalsAtRead ?? null,
-                              });
-                              return (
-                                <li
-                                  key={b.id}
-                                  className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 py-1.5 text-sm"
-                                >
-                                  <span className="text-white/85">
-                                    {qty} <span className="text-white/50">{asset?.symbol ?? b.assetId}</span>
-                                  </span>
-                                  <span className="text-white/60">
-                                    {b.usdValueCents !== null ? (
-                                      formatCentsUsd(b.usdValueCents)
-                                    ) : (
-                                      <span className="text-amber-300/80">value pending</span>
-                                    )}
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      );
-                    })}
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-white">Holdings</h2>
+                    {holdingsTable.hiddenTotal > 0 ? (
+                      <span className="rounded-full border border-white/15 bg-white/[0.03] px-2 py-0.5 text-[11px] font-semibold text-white/50">
+                        {holdingsTable.hiddenTotal} token{holdingsTable.hiddenTotal === 1 ? "" : "s"} hidden
+                      </span>
+                    ) : null}
                   </div>
+                  <p className="mb-4 text-xs text-white/50">
+                    Click a wallet to open its coins. Exact quantities come straight from the chain;
+                    USD value fills in as pricing is applied. Use <span className="font-semibold text-white/70">Hide</span> on any
+                    scam or junk token — it stays in your records and can be unhidden anytime.
+                  </p>
+                  {holdingsTable.wallets.length === 0 ? (
+                    <p className="text-sm text-white/50">
+                      No coins to show yet. Once a wallet syncs, its balances appear here.
+                    </p>
+                  ) : (
+                    <HoldingsTable wallets={holdingsTable.wallets} />
+                  )}
                 </div>
               </>
             )}
