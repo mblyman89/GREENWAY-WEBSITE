@@ -64,6 +64,7 @@ import { __runCryptoUiCoreTests } from "../../src/lib/crypto/crypto-ui-core";
 import { __runXrplMapCoreTests } from "../../src/lib/crypto/xrpl/xrpl-map-core";
 import { __runXrplClientCoreTests } from "../../src/lib/crypto/xrpl/xrpl-client-core";
 import { __runXrplSyncCoreTests } from "../../src/lib/crypto/xrpl/xrpl-sync-core";
+import { __runEvmMapCoreTests } from "../../src/lib/crypto/evm/evm-map-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -604,6 +605,7 @@ async function main() {
   __runXrplMapCoreTests();
   __runXrplClientCoreTests();
   __runXrplSyncCoreTests();
+  __runEvmMapCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
