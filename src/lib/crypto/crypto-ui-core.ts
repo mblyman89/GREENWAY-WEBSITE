@@ -35,6 +35,10 @@ import {
   type Chain,
 } from "./crypto-core";
 import { formatTokenAmount } from "./crypto-core";
+import {
+  buildBackfillProgress,
+  type BackfillProgressView,
+} from "./crypto-progress-core";
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -516,6 +520,43 @@ function formatWhen(iso: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Backfill progress — bridge the stored sync-state to the pure progress model.
+// ---------------------------------------------------------------------------
+
+/** The subset of a sync-state record the progress view needs (plus the chain). */
+export type WalletProgressStateInput = {
+  backfillCursor: string | null;
+  prevBackfillCursor: string | null;
+  backfillTarget: string | null;
+  transactionsTotal: number | null;
+  backfillComplete: boolean;
+  status: "idle" | "backfilling" | "syncing" | "error";
+  lastSyncedAt: string | null;
+} | null;
+
+/**
+ * Build the render-ready backfill progress view for one wallet. Null state (no
+ * sync yet) reads as "Not started". Delegates the honest per-chain reasoning to
+ * crypto-progress-core (EVM real %, opaque-cursor chains phase + how-far-back +
+ * tx count, plus stuck-loop detection).
+ */
+export function buildWalletProgress(
+  chain: Chain,
+  state: WalletProgressStateInput,
+): BackfillProgressView {
+  return buildBackfillProgress({
+    chain,
+    cursor: state?.backfillCursor ?? null,
+    prevCursor: state?.prevBackfillCursor ?? null,
+    targetCursor: state?.backfillTarget ?? null,
+    transactionsTotal: state?.transactionsTotal ?? null,
+    backfillComplete: state?.backfillComplete ?? false,
+    status: state?.status ?? "idle",
+    lastSyncedAt: state?.lastSyncedAt ?? null,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Pure self-test — wired into scripts/compliance/run-pure-selftests.ts + vitest.
 // ---------------------------------------------------------------------------
 
@@ -698,6 +739,31 @@ export function __runCryptoUiCoreTests(): void {
     "masked != full for long addr",
     maskAddress("0x1234567890abcdef1234567890abcdef12345678") !== "0x1234567890abcdef1234567890abcdef12345678",
   );
+
+  // --- backfill progress bridge (delegates to crypto-progress-core).
+  check("progress null → not started", buildWalletProgress("flare", null).label === "Not started");
+  const prog = buildWalletProgress("flare", {
+    backfillCursor: "100:99",
+    prevBackfillCursor: "50:49",
+    backfillTarget: "200",
+    transactionsTotal: 7,
+    backfillComplete: false,
+    status: "backfilling",
+    lastSyncedAt: "2026-08-11T00:00:00Z",
+  });
+  check("progress evm percent 50", prog.percent === 50 && prog.hasPercent === true);
+  check("progress evm reached block", prog.reachedText === "block 100");
+  const progXrpl = buildWalletProgress("xrpl", {
+    backfillCursor: '{"ledger":106228618,"seq":0}',
+    prevBackfillCursor: null,
+    backfillTarget: null,
+    transactionsTotal: 3,
+    backfillComplete: false,
+    status: "backfilling",
+    lastSyncedAt: null,
+  });
+  check("progress xrpl no percent", progXrpl.hasPercent === false);
+  check("progress xrpl reached ledger", progXrpl.reachedText === "ledger 106,228,618");
 
   if (failures > 0) {
     throw new Error(`crypto-ui-core self-test failed: ${failures} check(s) failed`);

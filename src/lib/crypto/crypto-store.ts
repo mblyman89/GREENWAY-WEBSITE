@@ -34,6 +34,7 @@ import {
   TRANSACTION_COLS,
   MIGRATION_COLS,
   SYNC_STATE_COLS,
+  SYNC_STATE_BASE_COLS,
   PRICE_SNAPSHOT_COLS,
   CRYPTO_TXN_READ_LIMIT,
   CRYPTO_PRICE_READ_LIMIT,
@@ -178,6 +179,29 @@ export async function listCryptoTransactions(
   }
 }
 
+/**
+ * Exact count of transaction rows captured for one wallet. Used as a progress
+ * signal on the Health tab (esp. for opaque-cursor chains where no percent
+ * exists). Returns null on any error/unconfigured so the UI degrades to
+ * "unknown" rather than a wrong 0.
+ */
+export async function countCryptoTransactions(walletId: string): Promise<number | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const id = cleanId(walletId);
+  if (id === "") return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count, error } = await admin
+      .from("crypto_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("wallet_id", id);
+    if (error) return null;
+    return typeof count === "number" ? count : null;
+  } catch {
+    return null;
+  }
+}
+
 /** All recorded token migrations (CORE→TX automatic, SOLO→TX manual, …). */
 export async function listCryptoAssetMigrations(): Promise<CryptoAssetMigrationRecord[]> {
   if (!isSupabaseServiceConfigured) return [];
@@ -201,13 +225,27 @@ export async function getCryptoSyncState(walletId: string): Promise<CryptoSyncSt
   if (id === "") return null;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
+    // Try the full column set (includes the 0161 progress columns). If that
+    // migration hasn't run yet, Postgres errors on the unknown columns — we
+    // then retry with the base columns so the page keeps working pre-migration.
+    const full = await admin
       .from("crypto_sync_state")
       .select(SYNC_STATE_COLS)
       .eq("wallet_id", id)
       .maybeSingle();
-    if (error || !data) return null;
-    return toCryptoSyncStateRecord(data as unknown as SyncStateRow);
+    if (!full.error && full.data) {
+      return toCryptoSyncStateRecord(full.data as unknown as SyncStateRow);
+    }
+    if (full.error) {
+      const base = await admin
+        .from("crypto_sync_state")
+        .select(SYNC_STATE_BASE_COLS)
+        .eq("wallet_id", id)
+        .maybeSingle();
+      if (base.error || !base.data) return null;
+      return toCryptoSyncStateRecord(base.data as unknown as SyncStateRow);
+    }
+    return null;
   } catch {
     return null;
   }
@@ -402,7 +440,22 @@ export async function upsertCryptoSyncState(
     const { error } = await admin
       .from("crypto_sync_state")
       .upsert(row, { onConflict: "wallet_id" });
-    if (error) return { ok: false, error: error.message };
+    if (!error) return { ok: true, count: 1 };
+    // If the progress columns (migration 0161) aren't present yet, retry with
+    // just the base fields so a sync still records its cursor pre-migration.
+    const {
+      backfill_target: _t,
+      prev_backfill_cursor: _p,
+      transactions_total: _n,
+      ...base
+    } = row;
+    void _t;
+    void _p;
+    void _n;
+    const retry = await admin
+      .from("crypto_sync_state")
+      .upsert(base, { onConflict: "wallet_id" });
+    if (retry.error) return { ok: false, error: retry.error.message };
     return { ok: true, count: 1 };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Sync-state write failed." };

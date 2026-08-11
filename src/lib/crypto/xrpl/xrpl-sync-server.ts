@@ -30,7 +30,7 @@ import "server-only";
  * written here (priced in a later slice); we never guess a dollar amount.
  */
 
-import { getCryptoWallet, upsertCryptoBalances, upsertCryptoTransactions, upsertCryptoSyncState, getCryptoSyncState } from "../crypto-store";
+import { getCryptoWallet, upsertCryptoBalances, upsertCryptoTransactions, upsertCryptoSyncState, getCryptoSyncState, countCryptoTransactions } from "../crypto-store";
 import { fetchAccountInfo, fetchAccountLines, fetchAccountTxPage } from "./xrpl-client";
 import {
   mapAccountInfoBalance,
@@ -146,6 +146,9 @@ async function syncHistory(
 ): Promise<{ counts: XrplSyncCounts; complete: boolean }> {
   let counts = emptyXrplSyncCounts();
   let state = initXrplBackfill(deserializeMarker(savedCursor));
+  // Progress facts for the Health tab: the cursor BEFORE this run (stuck
+  // detection). XRPL has no numeric target (opaque marker) → no percent.
+  let prevCursor = savedCursor;
 
   while (shouldContinueBackfill(state)) {
     const page = await fetchAccountTxPage(address, {
@@ -189,6 +192,7 @@ async function syncHistory(
     });
 
     const cursorNow = state.done ? null : serializeMarker(state.marker);
+    const txnsTotal = await countCryptoTransactions(walletId);
     await upsertCryptoSyncState(
       buildSyncStateUpsert({
         walletId,
@@ -197,8 +201,11 @@ async function syncHistory(
         syncedAt: NOW(),
         status: state.done ? "idle" : "backfilling",
         errorMessage: null,
+        prevCursor,
+        transactionsTotal: txnsTotal,
       }),
     );
+    prevCursor = cursorNow;
   }
 
   return { counts, complete: state.done };

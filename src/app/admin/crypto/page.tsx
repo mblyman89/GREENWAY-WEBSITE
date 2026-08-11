@@ -44,6 +44,7 @@ import {
   computePortfolioSummary,
   cryptoPosture,
   buildSyncHealth,
+  buildWalletProgress,
   formatCentsUsd,
   formatHeldAmount,
   type CryptoTab,
@@ -463,18 +464,69 @@ export default async function CryptoPage({
               ) : (
                 <ul className="space-y-2">
                   {walletRows.map((w) => {
-                    const health = buildSyncHealth(syncByWallet.get(w.id) ?? null);
+                    const state = syncByWallet.get(w.id) ?? null;
+                    const health = buildSyncHealth(state);
+                    const progress = buildWalletProgress(w.chain, state);
                     return (
                       <li key={w.id} className="rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-sm font-semibold text-white">
                             {w.displayName} <span className="text-white/40">· {w.chainText}</span>
                           </span>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${chipCls(health.tone)}`}>
-                            ● {health.label}
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${chipCls(progress.tone)}`}>
+                            ● {progress.label}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-white/60">{health.message}</p>
+
+                        {/* Progress bar — a TRUE percentage only when honestly
+                            computable (EVM with a known chain tip). For
+                            opaque-cursor chains we show an indeterminate
+                            activity bar instead, never a fabricated number. */}
+                        {progress.movement === "progressing" || progress.movement === "stalled" || progress.movement === "complete" ? (
+                          <div className="mt-2">
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                              {progress.hasPercent && progress.percent !== null ? (
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    progress.movement === "complete"
+                                      ? "bg-emerald-500"
+                                      : progress.movement === "stalled"
+                                        ? "bg-amber-400"
+                                        : "bg-emerald-400"
+                                  }`}
+                                  style={{ width: `${progress.percent}%` }}
+                                />
+                              ) : (
+                                <div
+                                  className={`h-full w-1/3 rounded-full ${
+                                    progress.movement === "stalled" ? "bg-amber-400/70" : "bg-emerald-400/60"
+                                  }`}
+                                />
+                              )}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/45">
+                              <span>
+                                {progress.hasPercent && progress.percent !== null
+                                  ? `${progress.percent}% synced`
+                                  : "Syncing history"}
+                                {progress.reachedText ? ` · reached ${progress.reachedText}` : ""}
+                              </span>
+                              {progress.transactionsTotal !== null ? (
+                                <span>
+                                  {progress.transactionsTotal.toLocaleString()} transaction
+                                  {progress.transactionsTotal === 1 ? "" : "s"} captured
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <p className="mt-2 text-xs text-white/60">{progress.detail}</p>
+                        {/* Keep the original health line as a subtle secondary
+                            note (last-refreshed / retry guidance). */}
+                        {health.message && health.message !== progress.detail ? (
+                          <p className="mt-1 text-[11px] text-white/35">{health.message}</p>
+                        ) : null}
                       </li>
                     );
                   })}

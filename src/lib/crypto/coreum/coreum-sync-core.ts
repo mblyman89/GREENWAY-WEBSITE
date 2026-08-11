@@ -97,6 +97,11 @@ export type SyncStateUpsertRow = {
   last_synced_at: string | null;
   status: "idle" | "backfilling" | "syncing" | "error";
   error_message: string | null;
+  // Progress-visibility fields (migration 0161; optional so pre-migration
+  // writes omit them and the store's upsert stays valid).
+  backfill_target?: string | null;
+  prev_backfill_cursor?: string | null;
+  transactions_total?: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -490,8 +495,12 @@ export function buildSyncStateUpsert(input: {
   syncedAt: string;
   status: SyncStateUpsertRow["status"];
   errorMessage: string | null;
+  /** The resume cursor from BEFORE this run, for stuck-loop detection. Optional. */
+  prevCursor?: string | null;
+  /** Running count of tx rows captured for the wallet. Optional. */
+  transactionsTotal?: number | null;
 }): SyncStateUpsertRow {
-  return {
+  const row: SyncStateUpsertRow = {
     wallet_id: input.walletId,
     backfill_cursor: input.cursor,
     backfill_complete: input.backfillComplete,
@@ -500,6 +509,13 @@ export function buildSyncStateUpsert(input: {
     status: input.status,
     error_message: input.errorMessage,
   };
+  // Coreum has no numeric backfill target (opaque next_key) → no percent, so we
+  // never set backfill_target here. Only attach the fields we can honestly fill.
+  if (input.prevCursor !== undefined) row.prev_backfill_cursor = input.prevCursor;
+  if (input.transactionsTotal !== undefined) {
+    row.transactions_total = input.transactionsTotal;
+  }
+  return row;
 }
 
 // ---------------------------------------------------------------------------

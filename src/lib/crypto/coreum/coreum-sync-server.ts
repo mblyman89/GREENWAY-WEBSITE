@@ -41,6 +41,7 @@ import {
   upsertCryptoTransactions,
   upsertCryptoSyncState,
   getCryptoSyncState,
+  countCryptoTransactions,
 } from "../crypto-store";
 import { fetchBalances, fetchTxsBySenderPage, fetchTxsByRecipientPage } from "./coreum-client";
 import {
@@ -188,6 +189,10 @@ async function syncHistory(
     return { counts, complete: true };
   }
 
+  // Progress fact: the cursor BEFORE this run, for stuck detection. Coreum has
+  // no numeric target (opaque next_key) → no percent on the Health tab.
+  let prevCursor = savedCursor;
+
   // Deserialize the two-stream cursor.
   const { senderKey, recipientKey } = deserializeCursor(savedCursor);
   // If a stream's key is null AND we had a prior cursor (not a fresh start),
@@ -256,6 +261,7 @@ async function syncHistory(
 
     // Persist the cursor after each page so a crash resumes cleanly.
     const cursorNow = serializeCursor(state);
+    const txnsTotal = await countCryptoTransactions(walletId);
     await upsertCryptoSyncState(
       buildSyncStateUpsert({
         walletId,
@@ -264,8 +270,11 @@ async function syncHistory(
         syncedAt: NOW(),
         status: state.done ? "idle" : "backfilling",
         errorMessage: null,
+        prevCursor,
+        transactionsTotal: txnsTotal,
       }),
     );
+    prevCursor = cursorNow;
   }
 
   return { counts, complete: state.done };
