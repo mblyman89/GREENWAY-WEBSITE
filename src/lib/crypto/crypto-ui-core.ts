@@ -464,7 +464,7 @@ export function buildSyncHealth(state: SyncHealthInput): SyncHealthView {
     return {
       tone: "neutral",
       label: "Not synced yet",
-      message: "No history pulled yet. A full historical backfill runs when syncing is turned on.",
+      message: "No history pulled yet. Use “Sync now” on the Health tab to start the full historical backfill.",
     };
   }
   if (state.status === "error") {

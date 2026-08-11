@@ -10,8 +10,9 @@
  *           holdings are shown as "awaiting price", never a guessed $0.
  *   Tab 2 — Wallets: the "Add wallet (watch-only)" form (address validated for
  *           its chain) + the list of connected wallets.
- *   Tab 3 — Health: watch-only assurance, database/pricing posture, and each
- *           wallet's sync status in plain English.
+ *   Tab 3 — Health: "Sync now" trigger (pulls balances + history for every
+ *           connected wallet), watch-only assurance, database/pricing posture,
+ *           and each wallet's sync status in plain English.
  *
  * Gate: settings.manage = owner + admin only (same as Banking / Bank Feeds).
  * Renders even when the DB isn't configured (unconfigured-friendly), so the site
@@ -19,7 +20,7 @@
  *
  * SECURITY: only PUBLIC addresses are stored — there are no private keys and
  * nothing here can move funds. Balances and transaction history are populated by
- * the connector slices ahead (XRPL → Ethereum → Flare → Coreum), valued in USD
+ * the connector slices (XRPL C4/C5, EVM C6/C6b — wired by C6c's "Sync now"), valued in USD
  * by the pricing slice, then rolled into IRS cost-basis / gain-loss reports.
  */
 import Link from "next/link";
@@ -48,7 +49,7 @@ import {
   type CryptoTab,
   type SummaryBalanceInput,
 } from "@/lib/crypto/crypto-ui-core";
-import { addCryptoWalletAction } from "./actions";
+import { addCryptoWalletAction, runCryptoSyncNowAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,8 @@ const inputCls =
 const labelCls = "mb-1 block text-xs font-semibold uppercase tracking-wide text-white/50";
 const btnPrimary =
   "rounded-[var(--admin-radius)] bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400";
+const btnGhost =
+  "rounded-[var(--admin-radius)] border border-white/15 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white hover:bg-white/[0.08]";
 
 function tabCls(active: boolean): string {
   return `rounded-[var(--admin-radius)] px-4 py-2 text-sm font-semibold ${
@@ -412,6 +415,25 @@ export default async function CryptoPage({
         {tab === "health" ? (
           <div className="space-y-6">
             <div className={cardCls}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="mb-1 text-sm font-semibold text-white">Pull latest activity</h2>
+                  <p className="text-sm text-white/60">
+                    Fetch balances and transaction history for every connected wallet. The first sync
+                    pulls full history (this can take a moment for active wallets); later syncs pick
+                    up only new activity. Each wallet saves its own resume point, so a partial
+                    run &mdash; or a timeout &mdash; just continues next time.
+                  </p>
+                </div>
+                <form action={runCryptoSyncNowAction}>
+                  <button type="submit" className={btnGhost}>
+                    Sync now
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <div className={cardCls}>
               <h2 className="mb-1 text-sm font-semibold text-white">Watch-only — your funds can&apos;t move</h2>
               <p className="text-sm text-white/60">
                 This feature stores only public wallet addresses. It reads balances and history; it has no keys
@@ -432,8 +454,9 @@ export default async function CryptoPage({
             <div className={cardCls}>
               <h2 className="mb-1 text-sm font-semibold text-white">Wallet sync status</h2>
               <p className="mb-4 text-sm text-white/60">
-                Each wallet&apos;s history-sync status in plain English. Syncing turns on with the connector slices
-                ahead; until then wallets read as &ldquo;not synced yet&rdquo;.
+                Each wallet&apos;s history-sync status in plain English. Use &ldquo;Sync now&rdquo; above to pull
+                balances and transactions. The first sync backfills full history; later syncs pick up
+                only new activity.
               </p>
               {walletRows.length === 0 ? (
                 <p className="text-sm text-white/50">No wallets yet — add one on the Wallets tab.</p>

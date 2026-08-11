@@ -17,7 +17,7 @@ Phase 0  Foundations & safety rails        C0
 Phase 1  Data model (schema)               C1
 Phase 2  Read layer + Banking-page shell   C2, C3
 Phase 3  XRPL connector (fastest win)      C4, C5           ← XRP + Sologenic + USDT-on-XRPL
-Phase 4  EVM connector via in-app poller   C6, C6b, C7, C8  ← mappers ✅, then fetch/store wiring; Ethereum + USDT, Flare, Songbird
+Phase 4  EVM connector via in-app poller   C6, C6b, C6c, C7, C8  ← mappers ✅, fetch/store wiring ✅, sync trigger ✅; Ethereum + USDT, Flare, Songbird
 Phase 5  Valuation (USD)                   C9               ← CoinGecko current + historical
 Phase 6  Sync engine (backfill + daily)    C10, C11
 Phase 7  Advanced tx typing (LP etc.)      C12
@@ -190,6 +190,20 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 - Vitest mirrors `tests/compliance/evm-client-core.test.ts` (31 tests) +
   `evm-sync-core.test.ts` (20 tests). Both wired into run-pure-selftests.
 
+### C6c — Sync trigger ("Sync now" wiring)  ✅ SHIPPED
+- The sync orchestrators (syncXrplWallet C5, syncEvmWallet C6b) existed but were
+  NEVER called from anywhere — Michael could connect wallets but nothing pulled
+  data. This slice is the bridge: `runAllCryptoSync()` lists every active wallet,
+  dispatches each to its per-chain driver (XRPL / EVM / Cosmos-skip), and
+  aggregates a plain-English summary that NEVER throws. Mirrors Plaid's
+  `runAllPlaidSync` exactly.
+- `runCryptoSyncNowAction` server action (gate settings.manage →
+  runAllCryptoSync → audit → Health tab with result message) + "Sync now"
+  button on the Health tab. `addWatchOnlyWallet` upgraded to return `walletId`.
+- After this slice: Michael can connect a wallet, click "Sync now", and see real
+  balances + transaction history populate. USD valuation (C9) is the next
+  user-visible improvement.
+
 ### C7 — Flare  ⭐ HEAVIEST EVM SLICE
 - **Flare is Michael's PRIMARY DeFi venue** ("I almost exclusively use Flare for
   all things DeFi"). This is NOT a copy of C6 — it is the most complex and most
@@ -317,4 +331,4 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 - Ships working pre-migration; nothing breaks if tables/data absent.
 - Reported to Michael in plain English via `ask`; docs updated in git.
 
-_Last updated: 2026-08-11 (C6b EVM fetch+store wiring built — client-core, sync-core, server-only client + orchestrator, vitest mirrors; battery + PR pending)._
+_Last updated: 2026-08-11 (C6c sync trigger shipped — runAllCryptoSync orchestrator + runCryptoSyncNowAction + Sync now button on Health tab; wallets now pull real data)._

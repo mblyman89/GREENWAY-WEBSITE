@@ -246,7 +246,7 @@ export async function listCryptoPriceSnapshots(
 // ---------------------------------------------------------------------------
 
 export type AddWalletResult =
-  | { ok: true; created: boolean }
+  | { ok: true; created: boolean; walletId: string }
   | { ok: false; error: string };
 
 /**
@@ -293,17 +293,22 @@ export async function addWatchOnlyWallet(input: {
         .update({ label: input.label, active: true })
         .eq("id", id);
       if (updErr) return { ok: false, error: updErr.message };
-      return { ok: true, created: false };
+      return { ok: true, created: false, walletId: id };
     }
 
-    const { error: insErr } = await admin.from("crypto_wallets").insert({
-      chain: input.chain,
-      address,
-      label: input.label,
-      active: true,
-    });
+    const { data: insData, error: insErr } = await admin
+      .from("crypto_wallets")
+      .insert({
+        chain: input.chain,
+        address,
+        label: input.label,
+        active: true,
+      })
+      .select("id")
+      .single();
     if (insErr) return { ok: false, error: insErr.message };
-    return { ok: true, created: true };
+    const newId = (insData as { id: string }).id;
+    return { ok: true, created: true, walletId: newId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not save the wallet.";
     return { ok: false, error: msg };

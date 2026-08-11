@@ -155,7 +155,27 @@ would have to run). This keeps everything watch-only, key-light, and inside the 
       `EvmWalletSyncResult`.
 - [x] Wire `__runEvmClientCoreTests` + `__runEvmSyncCoreTests` into
       run-pure-selftests + vitest mirrors (51 tests across 2 files)
-- [ ] Battery · PR · merge · report
+- [x] Battery · PR · merge · report
+
+## C6c — Sync trigger ("Sync now" wiring — makes wallets actually pull data)
+The sync orchestrators (syncXrplWallet C5, syncEvmWallet C6b) existed but were
+NEVER called from anywhere — Michael could connect wallets but nothing pulled
+data. This slice wires them in, mirroring Plaid's runPlaidSyncNowAction.
+- [x] `src/lib/crypto/crypto-sync-orchestrator.ts` (server-only): runAllCryptoSync()
+      — list active wallets → dispatch by chain (XRPL→syncXrplWallet,
+      EVM→syncEvmWallet, Cosmos→friendly skip "coming in C8b") → aggregate
+      per-wallet results into plain-English summary → never throws. Also
+      syncOneCryptoWallet(walletId) for single-wallet sync.
+- [x] `addWatchOnlyWallet` in crypto-store.ts upgraded to return `walletId`
+      (backward-compatible: existing callers ignore the new field).
+- [x] `runCryptoSyncNowAction` added to actions.ts (gate settings.manage →
+      runAllCryptoSync → audit "crypto.sync.manual" → back to Health tab
+      with msg/error). Mirrors Plaid's runPlaidSyncNowAction exactly.
+- [x] "Sync now" button + "Pull latest activity" card wired into the Health tab
+      of page.tsx (mirrors Plaid Health tab layout).
+- [x] Updated buildSyncHealth "not synced yet" message + page header comments.
+- [x] Wallet-connect message now guides to "Sync now" on the Health tab.
+- [x] Battery green (self-tests, tsc, eslint 0/0, vitest 277f/3640t, pytest 450, next build) · PR · merge · report
 
 ## C7 — Flare (heaviest DeFi slice: LPs, rewards)
 - [ ] Point the C6b poller at Flare; verify FLR native + tracked tokens; wire to store

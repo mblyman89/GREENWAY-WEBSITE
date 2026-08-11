@@ -531,4 +531,34 @@ auditable USD record**. Design principles:
   `ETHERSCAN_API_URL`, `FLARE_EXPLORER_URL`, `SONGBIRD_EXPLORER_URL` (each has a
   safe built-in default, so they are rarely needed).
 
-_Last updated: 2026-08-11 (C6b EVM fetch+store wiring built — client-core, sync-core, server-only client + orchestrator, vitest mirrors; battery + PR pending)._
+### C6c — Sync trigger ("Sync now" wiring)  ✅ SHIPPED
+**This is the slice that makes wallets actually pull data.** Before C6c, the sync
+orchestrators (syncXrplWallet from C5, syncEvmWallet from C6b) existed as
+fully-built, fully-tested functions but were NEVER called from anywhere in the
+app. Michael could connect wallets (C3's addCryptoWalletAction stored the public
+address) but nothing triggered the backfill/sync. C6c wires them in:
+- **`src/lib/crypto/crypto-sync-orchestrator.ts`** (server-only): `runAllCryptoSync()`
+  lists every active wallet, dispatches each to its per-chain driver (XRPL →
+  syncXrplWallet, EVM → syncEvmWallet, Cosmos → friendly "coming in C8b" skip),
+  and aggregates per-wallet results into a single plain-English summary. NEVER
+  throws — one bad wallet can't break the run. Also exports
+  `syncOneCryptoWallet(walletId)` for single-wallet sync. Mirrors Plaid's
+  `runAllPlaidSync` exactly.
+- **`runCryptoSyncNowAction`** in actions.ts: gate `settings.manage` →
+  `runAllCryptoSync()` → audit `crypto.sync.manual` → redirect to Health tab
+  with the summary message (or error). Mirrors Plaid's `runPlaidSyncNowAction`.
+- **"Sync now" button** on the Health tab of the Crypto Portfolio page, in a
+  "Pull latest activity" card that explains: first sync = full backfill (can
+  take a moment for active wallets), later syncs = incremental, each wallet
+  saves its own resume point so a partial run continues next time.
+- **`addWatchOnlyWallet`** in crypto-store.ts upgraded to return `walletId`
+  (backward-compatible additive change) so future auto-sync-on-connect can
+  target the exact wallet.
+- **After C6c, the user-visible flow is:** connect a wallet (Wallets tab) → click
+  "Sync now" (Health tab) → balances + transaction history populate → sync
+  status badge shows "Backfilling" then "Up to date". USD valuation (C9) is the
+  next improvement; until then balances show exact token amounts (never floats)
+  without a dollar value, and the portfolio total honestly says "awaiting price"
+  rather than guessing $0.
+
+_Last updated: 2026-08-11 (C6c sync trigger shipped — runAllCryptoSync orchestrator + runCryptoSyncNowAction + Sync now button; wallets now pull real data)._
