@@ -71,10 +71,16 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] Battery green (self-tests, tsc, eslint 0/0, vitest 273f/3558t, pytest 450, next build) · PR · merge · report
 
 ## C5 — XRPL balances + backfill
-- [ ] Balances → `crypto_balances`
-- [ ] `account_tx` backfill (marker pagination) → `crypto_transactions`
-- [ ] Cursor to `crypto_sync_state`
-- [ ] Battery · PR · merge · report
+- [x] `xrpl-sync-core.ts` PURE sync brain + `__runXrplSyncCoreTests()`:
+  - [x] `unsignMinor`/`unsignDecimal` (split SIGNED mapped amount → UNSIGNED magnitude + `direction`, exact BigInt/decimal, enforces XRPL 15-sig-digit ceiling)
+  - [x] `buildBalanceUpserts` (MappedBalance → crypto_balances rows; USD left null — never guessed; untracked tokens skipped FK-safe but surfaced via `untrackedBalances`, never dropped)
+  - [x] `buildTransactionUpserts` (MappedTransaction → crypto_transactions rows; unsigned amount + direction; fee once; **full source envelope preserved in `raw` jsonb** for audit; untracked-token note merged into `raw`)
+  - [x] backfill state machine `initXrplBackfill`/`reduceXrplBackfill`/`shouldContinueBackfill` (opaque `marker` walk, oldest-first, page guard `MAX_XRPL_BACKFILL_PAGES`)
+  - [x] `serializeMarker`/`deserializeMarker` (marker ⇄ text cursor), `buildSyncStateUpsert`, `XrplSyncCounts` + `summarizeXrplSync`
+- [x] `crypto-store.ts` server-only writers (idempotent on verified unique indexes; graceful not-configured; chunked): `upsertCryptoBalances` (wallet_id,asset_id), `upsertCryptoTransactions` (wallet_id,tx_hash,event_index), `upsertCryptoSyncState` (wallet_id)
+- [x] `xrpl-sync-server.ts` server-only orchestrator `syncXrplWallet(walletId)`: mark backfilling → balances (account_info + account_lines) → upsert; walk account_tx by marker → map (C4) → upsert per page → persist resume cursor after each page; final cursor null + backfill_complete on finish; never throws (records 'error' state + friendly message, resumes next run). Watch-only, no keys, USD never written.
+- [x] wire `__runXrplSyncCoreTests` into run-pure-selftests + vitest mirror (13 tests incl signed→unsigned, idempotent-key, backfill pagination, raw-payload-retained, error-keeps-cursor proofs)
+- [x] Battery green (self-tests; tsc; eslint 0/0; vitest 274f/3571t; pytest 450; next build) · PR · merge · report
 
 ## C6 — Subsquid squid: Ethereum (+ USDT)
 - [ ] Squid project scaffolded (`crypto-indexer/`)

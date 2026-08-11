@@ -403,4 +403,36 @@ auditable USD record**. Design principles:
   `run-pure-selftests.ts`. Full battery green (self-tests; tsc; eslint 0/0;
   vitest 273 files / 3558 tests; pytest 450; next build).
 
-_Last updated: 2026-08-11 (C4 shipped)._
+- **C5 — XRPL balances + backfill wiring (read → store)** — DONE. Turns the C4
+  reader into real database population. Three parts:
+  - `src/lib/crypto/xrpl/xrpl-sync-core.ts` (PURE brain): the row-builders and
+    the backfill state machine. Its most important job is **splitting C4's
+    SIGNED mapped amounts into an UNSIGNED magnitude plus a `direction`** (the DB
+    stores magnitude + in/out/self), done with exact BigInt/decimal helpers that
+    also enforce XRPL's real 15-significant-digit ceiling — never a float.
+    Transaction rows carry the idempotent natural key `(wallet_id, tx_hash,
+    event_index)` and stash the **entire untouched source envelope in the `raw`
+    jsonb column** so the ledger truth is provable in an audit without re-fetching.
+    A held token we don't yet model is **never dropped** — it's kept with a
+    currency/issuer note. The state machine walks `account_tx` by opaque `marker`
+    oldest-first with a hard page guard.
+  - `src/lib/crypto/crypto-store.ts` (server-only) gains three idempotent writers
+    — `upsertCryptoBalances`, `upsertCryptoTransactions`, `upsertCryptoSyncState`
+    — each targeting the UNIQUE index proven in migration 0160
+    (wallet+asset / wallet+hash+event / wallet), chunked, and graceful when the
+    DB isn't configured (a no-op success, never a crash). USD value is never
+    written here; pricing is a later slice and we never guess a dollar amount.
+  - `src/lib/crypto/xrpl/xrpl-sync-server.ts` (server-only) orchestrator
+    `syncXrplWallet(walletId)`: mark backfilling → fetch balances (`account_info`
+    + `account_lines`) → upsert → walk `account_tx` by marker, mapping and
+    upserting each page, **persisting the resume cursor after every page** so a
+    crash or rate-limit picks up exactly where it left off. It never throws to
+    the UI: any failure records an `error` sync-state with a friendly message and
+    returns, keeping the resume cursor. Watch-only, public address only, no keys.
+  Vitest mirror `tests/compliance/xrpl-sync-core.test.ts` (13 tests, incl.
+  signed→unsigned, idempotent-key, backfill-pagination, raw-payload-retained,
+  and error-keeps-cursor proofs). Self-test wired into `run-pure-selftests.ts`.
+  Full battery green (self-tests; tsc; eslint 0/0; vitest 274 files / 3571 tests;
+  pytest 450; next build).
+
+_Last updated: 2026-08-11 (C5 shipped)._
