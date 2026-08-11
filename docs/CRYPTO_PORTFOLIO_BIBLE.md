@@ -475,4 +475,60 @@ auditable USD record**. Design principles:
   **Architecture note:** the EVM fetch layer is an in-app poller over a free
   explorer/RPC (NOT Subsquid) — see the §2 banner and ROADMAP Phase 4.
 
-_Last updated: 2026-08-11 (C6 EVM mappers shipped; EVM architecture switched to in-app poller)._
+- **C6b (EVM fetch + store wiring, in-app poller) — built (battery + PR pending).**
+  Mirrors the XRPL C4/C5 connect→backfill→daily-refresh pattern, turning the C6
+  mappers into real network reads + database writes for Ethereum, Flare, and
+  Songbird. All three chains speak the same Etherscan-compatible REST API
+  (deep-researched + verified LIVE, PR #885):
+  - **Ethereum** → Etherscan V2 unified multichain (`api.etherscan.io/v2/api`).
+    Requires a FREE API key (`ETHERSCAN_API_KEY` env var). Free tier ≈ 5
+    calls/sec, 100k calls/day.
+  - **Flare** → Flare's official Blockscout explorer
+    (`flare-explorer.flare.network/api`). NO key required.
+  - **Songbird** → Songbird's official Blockscout explorer
+    (`songbird-explorer.flare.network/api`). NO key required.
+  Actions used: `account/balance` (native coin balance in wei), `account/txlist`
+  (native transfers + gas/fee fields), `account/tokentx` (decoded ERC-20 Transfer
+  events), `proxy/eth_blockNumber` (chain tip to bound the backfill).
+  - **`evm-client-core.ts`** (pure): per-chain URL/query builders, 220ms throttle
+    spacing, retry/backoff (500ms→8s cap), rate-limit + retryable-HTTP
+    classification, block-range cursor (`nextStartBlock:lastConsumedBlock`),
+    response interpretation, page-size clamping, block-number proxy parser.
+  - **`evm-sync-core.ts`** (pure): native + ERC-20 balance mapping,
+    `deriveTokenBalancesFromHistory` (sums in−out per contract from the full
+    tokentx history → current net balances), row→mapper-input converters
+    (reconstructs the 3-topic ERC-20 Transfer log shape from decoded tokentx rows
+    so the C6 mapper consumes them unchanged), and the block-range backfill state
+    machine: ascending 10000-block windows; a FULL page narrows the window by
+    half (down to 250 blocks) and re-requests the SAME start block so NO data is
+    ever skipped; at the minimum window + still full, it advances past consumed
+    rows keeping the tight window; empty windows advance + reset; a 50000-window
+    guard prevents a runaway endpoint from spinning forever. **Reuses the
+    chain-agnostic XRPL sync-core row builders + crypto-store writers**
+    (`buildBalanceUpserts`, `buildTransactionUpserts`, `buildSyncStateUpsert`,
+    `untrackedBalances`) — EVM legs persist with ZERO duplicated persistence code.
+  - **`evm-client.ts`** (server-only): per-chain base URL (built-in defaults +
+    optional env overrides `ETHERSCAN_API_URL`/`FLARE_EXPLORER_URL`/
+    `SONGBIRD_EXPLORER_URL`), per-chain API key (only Ethereum reads
+    `ETHERSCAN_API_KEY`; Flare/Songbird keyless), serialized queue + 220ms
+    spacing, AbortController 20s timeout, retry/backoff. Watch-only — no keys,
+    no signing, no writes to the chain.
+  - **`evm-sync-server.ts`** (server-only orchestrator `syncEvmWallet(walletId)`):
+    mark backfilling → fetch tip (proxy eth_blockNumber) → sync balances (native
+    + ERC-20 derived from full tokentx history) → walk txlist+tokentx by ascending
+    block range → map via C6 + sync-core → upsert per window → persist the
+    resume cursor after EVERY window (crash-safe) → final null cursor +
+    backfill_complete on finish; never throws (records an 'error' sync-state +
+    friendly message, resumes from the saved cursor next run). Returns an
+    `EvmWalletSyncResult`.
+  - Vitest mirrors `tests/compliance/evm-client-core.test.ts` (31 tests) +
+    `evm-sync-core.test.ts` (20 tests); both self-tests wired into
+    `run-pure-selftests.ts`.
+
+  **Vercel env vars (for Michael):** `ETHERSCAN_API_KEY` (free key from
+  etherscan.io — Ethereum only). Flare and Songbird need NO env vars (their
+  Blockscout explorer APIs are keyless). Optional overrides:
+  `ETHERSCAN_API_URL`, `FLARE_EXPLORER_URL`, `SONGBIRD_EXPLORER_URL` (each has a
+  safe built-in default, so they are rarely needed).
+
+_Last updated: 2026-08-11 (C6b EVM fetch+store wiring built — client-core, sync-core, server-only client + orchestrator, vitest mirrors; battery + PR pending)._

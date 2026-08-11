@@ -160,15 +160,35 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
   exact uint256 BigInt math, chain-scoped contract resolution, signed direction,
   native-fee-once). Self-tests + vitest mirror (18 tests). Battery green.
 
-### C6b — EVM fetch + store wiring (in-app poller)
-- Deep-research & document the exact FREE fetch API per chain (Etherscan-family
-  free tier for Ethereum; Flare via flarescan/routescan or Flare public RPC
-  `eth_getLogs`; Songbird via its public RPC `eth_getLogs`). Never guess an endpoint.
-- `evm-client-core.ts` (pure fair-use policy: throttle/backoff, request builders,
-  block-range cursor) + `evm-client.ts` (server-only shell, endpoints from env,
-  free tier, no keys) + `evm-sync-server.ts` (orchestrator mirroring
-  `xrpl-sync-server`: connect → backfill by block range → daily incremental;
-  resume cursor per page; never throws).
+### C6b — EVM fetch + store wiring (in-app poller)  ✅ BUILT (battery + PR pending)
+- Deep-research & document the exact FREE fetch API per chain (PR #885). Verified
+  LIVE: Ethereum → Etherscan V2 unified multichain (free key `ETHERSCAN_API_KEY`,
+  ~5 calls/sec); Flare → Flare's official Blockscout explorer (keyless);
+  Songbird → Songbird's official Blockscout explorer (keyless). All three speak
+  the same Etherscan-compatible API: account/balance, account/txlist,
+  account/tokentx, proxy/eth_blockNumber.
+- `evm-client-core.ts` PURE fair-use policy (per-chain URL/query builders, 220ms
+  throttle spacing, retry/backoff 500ms→8s, rate-limit + retryable-HTTP
+  classification, block-range cursor `nextStartBlock:lastConsumedBlock`,
+  response interpretation, page-size clamping, block-number proxy parser) +
+  `__runEvmClientCoreTests()`.
+- `evm-sync-core.ts` PURE sync brain + `__runEvmSyncCoreTests()`: native + token
+  balance mapping, `deriveTokenBalancesFromHistory` (sum in−out per contract),
+  row→mapper-input converters, block-range backfill state machine (10000-block
+  windows, full-page → narrow by half to 250, no data skipped; 50000-window
+  guard), counts/summary. REUSES the chain-agnostic XRPL sync-core row builders +
+  crypto-store writers — EVM legs persist for free.
+- `evm-client.ts` server-only shell (per-chain base URL + optional env overrides,
+  only Ethereum reads `ETHERSCAN_API_KEY`, serialized queue, AbortController
+  timeout, retry/backoff; `fetchNativeBalance`/`fetchTxList`/`fetchTokenTx`/
+  `fetchTipBlockNumber`). Watch-only, no keys, no writes.
+- `evm-sync-server.ts` orchestrator `syncEvmWallet(walletId)`: mark backfilling
+  → fetch tip → sync balances (native + ERC-20 derived from full tokentx
+  history) → walk txlist+tokentx by ascending block range → map via C6 → upsert
+  per window → persist cursor after every window → never throws. Returns
+  `EvmWalletSyncResult`.
+- Vitest mirrors `tests/compliance/evm-client-core.test.ts` (31 tests) +
+  `evm-sync-core.test.ts` (20 tests). Both wired into run-pure-selftests.
 
 ### C7 — Flare  ⭐ HEAVIEST EVM SLICE
 - **Flare is Michael's PRIMARY DeFi venue** ("I almost exclusively use Flare for
@@ -297,4 +317,4 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 - Ships working pre-migration; nothing breaks if tables/data absent.
 - Reported to Michael in plain English via `ask`; docs updated in git.
 
-_Last updated: 2026-08-11 (C6 EVM mappers shipped; Phase 4 switched from Subsquid to in-app poller per Michael's approval)._
+_Last updated: 2026-08-11 (C6b EVM fetch+store wiring built — client-core, sync-core, server-only client + orchestrator, vitest mirrors; battery + PR pending)._
