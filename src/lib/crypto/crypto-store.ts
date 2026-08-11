@@ -69,6 +69,7 @@ import type {
   TransactionUpsertRow,
   SyncStateUpsertRow,
 } from "./xrpl/xrpl-sync-core";
+import type { DiscoveredAssetUpsertRow } from "./evm/evm-token-discovery-core";
 
 // Re-export the public shape contract so callers import from crypto-store.
 export type {
@@ -401,6 +402,35 @@ export async function upsertCryptoBalances(
     return { ok: true, count: written };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Balance write failed." };
+  }
+}
+
+/**
+ * AREA 3 — register discovered alt-coin assets into crypto_assets so their
+ * balances/history can be persisted (balances/transactions FK to this table).
+ * Idempotent on `id`: re-running refreshes symbol/name/decimals in place. Every
+ * row here is a fungible, decimals-VERIFIED ERC-20 (built by the discovery core
+ * from a first-party decimals read) — we never register an unverified token or
+ * an NFT, and we never guess decimals. `updated_at` is refreshed on conflict.
+ */
+export async function ensureCryptoAssets(
+  rows: DiscoveredAssetUpsertRow[],
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  if (!rows || rows.length === 0) return { ok: true, count: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    let written = 0;
+    for (const part of chunk(rows, CRYPTO_UPSERT_CHUNK)) {
+      const { error } = await admin
+        .from("crypto_assets")
+        .upsert(part, { onConflict: "id" });
+      if (error) return { ok: false, error: error.message };
+      written += part.length;
+    }
+    return { ok: true, count: written };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Asset registration failed." };
   }
 }
 
