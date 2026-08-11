@@ -28,7 +28,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 
 ## C1 — `crypto_*` schema foundation ← **SLICE TWO ✅ DONE (PR #877, merged ccb3061b)**
 - [x] Update `crypto-core.ts`: add `coreum` (Cosmos) chain, `isCosmosChain`, `COSMOS_ADDRESS_PREFIX`, `COSMOS_CHAIN_ID`, Cosmos bech32 validator, `decimalsSource` + `migratesToAssetId` fields
-- [x] Add TX (Coreum, `ucoreum`, 6 dec VERIFIED via BitGo), SARA (Pulsara), link SOLO→TX (keep-history)
+- [x] Add TX (Coreum, `ucore`, 6 dec VERIFIED LIVE via chain staking bond_denom + community pool), SARA (Pulsara), link SOLO→TX (keep-history)
 - [x] Fix self-tests (5 chains, 8 assets, Cosmos addresses) + vitest mirror
 - [x] Migration `0160_crypto_foundation.sql`: crypto_assets, crypto_wallets, crypto_balances, crypto_transactions, crypto_asset_migrations, crypto_sync_state, crypto_price_snapshots (+ indexes + trigger + RLS staff-only)
 - [x] Seed `crypto_assets` (8 assets, verified decimals) + record CORE→TX / SOLO→TX migrations

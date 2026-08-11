@@ -46,11 +46,11 @@ describe("crypto-core verified facts", () => {
     );
   });
 
-  it("models Coreum TX with the VERIFIED ucoreum base denom at 6 decimals", () => {
+  it("models Coreum TX with the VERIFIED ucore base denom at 6 decimals", () => {
     const tx = getAsset("tx");
     expect(tx?.chain).toBe("coreum");
     expect(tx?.native).toBe(true);
-    expect(tx?.denom).toBe("ucoreum");
+    expect(tx?.denom).toBe("ucore");
     expect(tx?.decimals).toBe(6);
     expect(tx?.decimalsSource).toBe("verified");
   });

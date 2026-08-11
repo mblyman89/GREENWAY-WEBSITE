@@ -260,11 +260,12 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     name: "TX (Coreum)",
     chain: "coreum",
     amountModel: "evm-minor", // Cosmos integer minor units + decimals
-    // VERIFIED (BitGo Coreum docs): base unit `ucoreum`, 1 Coreum = 1,000,000 ucoreum → 6 dec.
+    // VERIFIED (live LCD denom-metadata API 2026-08-11): base unit `ucore`,
+    // 1 TX = 1,000,000 ucore -> 6 dec. The display unit is "tx" (exponent 6).
     decimals: 6,
     decimalsSource: "verified",
     native: true,
-    denom: "ucoreum", // Coreum base denom (microcoreum) — verified via BitGo docs
+    denom: "ucore", // Coreum native base denom (microcore) — verified via live LCD API
   },
   {
     id: "sara",
@@ -272,10 +273,14 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     name: "Pulsara",
     chain: "coreum",
     amountModel: "evm-minor",
-    decimals: 6, // placeholder by convention; read from live denom-metadata
-    decimalsSource: "denom-convention",
+    decimals: 6, // VERIFIED via live LCD denom-metadata API (exponent 6)
+    decimalsSource: "verified",
     native: false,
-    // Coreum-issued token denom is read live in the connector slice (never guessed).
+    // VERIFIED via live LCD denom-metadata API 2026-08-11: the Pulsara SARA
+    // utility token. There are TWO tokens with symbol "SARA" on Coreum; we
+    // match by the FULL base denom string (never symbol alone).
+    denom:
+      "usara-core1r9gc0rnxnzpq33u82f44aufgdwvyxv4wyepyck98m9v2pxua6naqr8h03z",
   },
 ] as const;
 
@@ -579,7 +584,7 @@ export function __runCryptoCoreTests(): void {
   // Coreum / Pulsara (Cosmos) + the TX migration mapping
   expect("TX on coreum", getAsset("tx")?.chain === "coreum");
   expect("TX native", getAsset("tx")?.native === true);
-  expect("TX denom ucoreum", getAsset("tx")?.denom === "ucoreum");
+  expect("TX denom ucore", getAsset("tx")?.denom === "ucore");
   expect("TX 6 dec (verified)", getAsset("tx")?.decimals === 6);
   expect("TX decimals verified", getAsset("tx")?.decimalsSource === "verified");
   expect("SARA on coreum", getAsset("sara")?.chain === "coreum");
