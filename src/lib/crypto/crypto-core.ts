@@ -387,42 +387,82 @@ export function formatTokenAmount(minor: bigint | number | string, decimals: num
 // ---------------------------------------------------------------------------
 
 /**
- * Validate + canonicalise an XRPL issued-token amount (a decimal string with up
- * to 15 significant digits). Preserves the value exactly as a decimal string;
- * does NOT convert to float. Rejects >15 significant digits and non-decimal
- * input. Canonical form trims insignificant leading/trailing zeros but keeps the
- * value identical (e.g. "00153.750" → "153.75", "0.0100" → "0.01").
+ * Validate + canonicalise an XRPL issued-token amount.
+ *
+ * XRPL issued-token amounts are "String Numbers" (xrpl.org Currency Formats):
+ * base-10 decimals that MAY use scientific notation (`e`/`E`, negative
+ * exponents allowed), can be negative (balances), and whose ACCURACY is
+ * guaranteed to 15 significant digits. Crucially, `rippled` frequently RENDERS
+ * `account_lines` balances with MORE than 15 digits (e.g. "-229810.5408204187"
+ * = 16 sig digits, or "-1380300000000000e-29") — those extra digits are beyond
+ * the ledger's 15-digit accuracy guarantee.
+ *
+ * We therefore ACCEPT any valid XRPL String Number (plain or scientific) and
+ * canonicalise it to AT MOST 15 significant digits, rounded HALF-UP, re-emitted
+ * as a plain decimal string (no scientific notation) so our stored form is
+ * consistent. All math is exact BigInt — we NEVER touch a JS float, so no tax
+ * figure is ever mangled by binary floating point. Rounding to 15 sig digits
+ * matches the ledger's own precision model and every XRPL client library.
+ *
+ * Examples: "00153.750" → "153.75"; "0.0100" → "0.01";
+ * "-229810.5408204187" → "-229810.540820419" (15 sig, half-up);
+ * "-1380300000000000e-29" → "-0.000000000000013803".
+ * Throws only on genuinely non-numeric input (e.g. "1.2.3", "0xff", "").
  */
 export function normalizeXrplIssuedAmount(raw: string | number): string {
   const s = typeof raw === "number" ? String(raw) : raw.trim();
-  if (!/^-?\d+(\.\d+)?$/.test(s)) {
+  // Accept optional sign, integer/fraction mantissa, optional exponent.
+  const m = s.match(/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  if (!m) {
     throw new Error(`normalizeXrplIssuedAmount: not a decimal string: ${JSON.stringify(raw)}`);
   }
-  const neg = s.startsWith("-");
-  const unsigned = neg ? s.slice(1) : s;
-  const [intPartRaw, fracPartRaw = ""] = unsigned.split(".");
-  // Strip insignificant zeros for the sig-digit count and canonical form.
-  const intPart = intPartRaw.replace(/^0+/, "");
-  const fracPart = fracPartRaw.replace(/0+$/, "");
+  const neg = m[1] === "-";
+  const intPartRaw = m[2];
+  const fracPartRaw = m[3] ?? "";
+  const exp = m[4] ? parseInt(m[4], 10) : 0;
 
-  // Count significant digits (leading zeros never significant).
-  let sig: string;
-  if (intPart.length > 0) {
-    sig = intPart + fracPart;
+  // Represent the whole magnitude as an unscaled BigInt `digits` and a base-10
+  // `scale` (number of implied fractional places): value = digits * 10^-scale.
+  // Start from the mantissa's own fractional length, then fold in the exponent.
+  const mantissaDigits = intPartRaw + fracPartRaw;
+  let digits = BigInt(mantissaDigits === "" ? "0" : mantissaDigits);
+  // scale = fraction length - exponent. (exp>0 shifts the point right.)
+  let scale = fracPartRaw.length - exp;
+
+  if (digits === BI_ZERO) return "0";
+
+  // Round the significant digits to at most XRPL_ISSUED_SIG_DIGITS (half-up).
+  const sigStr = digits.toString(); // no leading zeros (digits != 0)
+  const excess = sigStr.length - XRPL_ISSUED_SIG_DIGITS;
+  if (excess > 0) {
+    const divisor = BI_TEN ** BigInt(excess);
+    const half = divisor / BI_TWO;
+    const remainder = digits % divisor;
+    digits = digits / divisor;
+    // Round half-up on the magnitude (sign applied at the end).
+    if (remainder >= half) digits += BI_ONE;
+    scale -= excess; // we removed `excess` low-order places
+    if (digits === BI_ZERO) return "0";
+  }
+
+  // Now format `digits * 10^-scale` as a plain decimal string.
+  let out: string;
+  if (scale <= 0) {
+    // Integer (possibly append zeros): digits * 10^(-scale)
+    out = digits.toString() + "0".repeat(-scale);
   } else {
-    // 0.00x… — leading fractional zeros are not significant.
-    sig = fracPart.replace(/^0+/, "");
-  }
-  if (sig.length > XRPL_ISSUED_SIG_DIGITS) {
-    throw new Error(
-      `normalizeXrplIssuedAmount: ${sig.length} significant digits exceeds XRPL max ${XRPL_ISSUED_SIG_DIGITS}`,
-    );
+    let ds = digits.toString();
+    if (ds.length <= scale) {
+      ds = "0".repeat(scale - ds.length + 1) + ds; // pad so there's a leading int digit
+    }
+    const cut = ds.length - scale;
+    const intPart = ds.slice(0, cut).replace(/^0+/, "") || "0";
+    const fracPart = ds.slice(cut).replace(/0+$/, "");
+    out = fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart;
   }
 
-  const canonInt = intPart.length > 0 ? intPart : "0";
-  const canon = fracPart.length > 0 ? `${canonInt}.${fracPart}` : canonInt;
-  if (canon === "0") return "0"; // normalise -0 → 0
-  return (neg ? "-" : "") + canon;
+  if (out === "0") return "0"; // normalise -0 → 0
+  return (neg ? "-" : "") + out;
 }
 
 // ---------------------------------------------------------------------------
@@ -644,9 +684,40 @@ export function __runCryptoCoreTests(): void {
     "exactly 15 sig digits ok",
     normalizeXrplIssuedAmount("123456789.012345") === "123456789.012345",
   );
-  throws("reject 16 sig digits", () => normalizeXrplIssuedAmount("1234567890123456"));
+  // 16+ significant digits are VALID on XRPL (the 15-digit rule is a precision
+  // guarantee, not a string-length cap). We round to 15 sig digits half-up
+  // using exact BigInt math (never a JS float). These are the real live values
+  // from Michael's SOLO trust line that used to throw "Needs Attention".
+  expect(
+    "round 16-sig integer half-up",
+    normalizeXrplIssuedAmount("1234567890123456") === "1234567890123460",
+  );
+  expect(
+    "round real SOLO balance to 15 sig",
+    normalizeXrplIssuedAmount("-229810.5408204187") === "-229810.540820419",
+  );
+  expect(
+    "accept scientific notation (neg exp)",
+    normalizeXrplIssuedAmount("-1380300000000000e-29") === "-0.000000000000013803",
+  );
+  expect("accept scientific notation (pos exp)", normalizeXrplIssuedAmount("1e3") === "1000");
+  expect(
+    "rounding carry grows magnitude",
+    normalizeXrplIssuedAmount("999999999999999.5") === "1000000000000000",
+  );
+  expect(
+    "half-up rounds up at 15 sig",
+    normalizeXrplIssuedAmount("0.99999999999999951") === "1",
+  );
+  expect(
+    "half-up rounds down below tie",
+    normalizeXrplIssuedAmount("0.99999999999999949") === "0.999999999999999",
+  );
   throws("reject non-decimal", () => normalizeXrplIssuedAmount("1.2.3"));
   throws("reject hex", () => normalizeXrplIssuedAmount("0xff"));
+  throws("reject empty", () => normalizeXrplIssuedAmount(""));
+  throws("reject bare sign", () => normalizeXrplIssuedAmount("-"));
+  throws("reject dangling exponent", () => normalizeXrplIssuedAmount("1e"));
 
   // usdValueCents — priceScale 6 means price passed as cents*1e6.
   // Prices below are passed as plain strings (cents * 1_000_000):
