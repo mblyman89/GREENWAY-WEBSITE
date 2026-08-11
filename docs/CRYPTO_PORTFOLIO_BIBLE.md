@@ -142,6 +142,47 @@ CoinCarp and multiple exchanges (Bitrue, Coins.ph):
   auditable. Exact conversion ratio + mechanics = OPEN QUESTION for Michael /
   to verify from tx.org FAQ before we encode any ratio (never guess a ratio).
 
+### 2.5 ⭐ Flare is Michael's PRIMARY DeFi venue (added 2026-08-10, per Michael)
+
+Michael told us directly: *"I almost exclusively use Flare for all things DeFi.
+My other assets are just sitting in my wallet."* This single fact reshapes where
+the hardest, most tax-critical engineering effort goes:
+
+- **Flare (chain-id 14, EVM) is the ONE chain where real DeFi activity happens**:
+  liquidity-pool adds/removes, swaps, LP-token mint/burn, staking/reward claims,
+  wrapping (WFLR), and delegation. This is exactly the activity the IRS cares
+  about most, because each swap/LP-remove/reward can be a **taxable disposal or
+  income event** with its own cost basis.
+- **His other holdings (ETH, USDT-on-ETH, XRP, SOLO, Coreum/TX, Pulsara/SARA)
+  mostly just SIT in the wallet.** They still need complete, auditable
+  transfer/balance history (we never cut corners), but they are lower-complexity:
+  mostly plain transfers, plus the one Pulsara LP case on Coreum and the CORE/SOLO
+  →TX migration. So the effort budget is deliberately weighted toward Flare.
+- **Engineering consequences (front-loaded so nothing is a surprise later):**
+  - **C7 (Flare connector) is the heaviest EVM slice, not a copy of C6.** Beyond
+    native FLR + ERC-20 transfers, it must capture the *contract-interaction*
+    surface: DEX router swaps, LP pair mint/burn (Uniswap-V2-style
+    `Mint`/`Burn`/`Swap` events), reward/claim events, and WFLR deposit/withdraw.
+    Raw logs are preserved in `crypto_transactions.raw` so classification (C12)
+    can be re-derived if we learn more — never guess a type at ingest.
+  - **C12 (LP & complex-activity classification) is the tax-make-or-break slice**,
+    and Flare is its primary target. `tx_type` (transfer/swap/lp_add/lp_remove/
+    reward/fee/other) must be assigned by a PURE, fixture-tested classifier from
+    the decoded event shape — not by heuristics-that-drift. Every Flare LP/DeFi
+    event must land as an explicit, auditable `tx_type` with the source log kept.
+  - **C13 (cost-basis) must treat LP add/remove correctly**: adding liquidity is
+    typically a disposal of the deposited tokens into an LP position; removing
+    liquidity re-acquires tokens at a new basis; swaps are dispositions. Getting
+    the Flare LP lifecycle right is the core of "IRS-bulletproof" for Michael.
+- **We will give Flare "heavy, expert" treatment when C7/C12 arrive** — Michael
+  explicitly asked for this. Until then: the schema (0160) and read layer (C2)
+  are already built to hold rich DeFi rows (`tx_type` enum incl. lp_add/lp_remove,
+  `raw jsonb`, per-event fee, direction, counterparty), so no rework is needed —
+  only careful population when the Flare connector lands. **DeFi mechanics on
+  Flare (exact DEX/router/pool contracts Michael uses) are an OPEN ITEM to
+  confirm from his wallet history before we hard-code any protocol addresses —
+  never guess a contract.**
+
 ---
 
 ## 3. Architecture (how it fits, read-only, mirroring Plaid)

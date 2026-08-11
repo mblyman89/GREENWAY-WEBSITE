@@ -37,9 +37,16 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] Battery green · config restored identical
 - [x] PR (#877) · `compliance` green · squash-merged · main synced · reported to Michael
 
-## C2 — Crypto store (read-only)
-- [ ] `src/lib/crypto/crypto-store.ts` readers w/ "not configured" resilience
-- [ ] Battery · PR · merge · report
+## C2 — Crypto store (read-only) ← **SLICE THREE ✅ DONE**
+- [x] `src/lib/crypto/crypto-store.ts` readers w/ "not configured" resilience
+      (server-only) + `crypto-store-core.ts` pure shape layer (types, row
+      mappers, coercion helpers, self-test) so amounts stay EXACT strings
+- [x] Readers: listCryptoAssets / listCryptoWallets / getCryptoWallet /
+      listCryptoBalances / listCryptoTransactions / listCryptoAssetMigrations /
+      getCryptoSyncState / listCryptoPriceSnapshots
+- [x] `__runCryptoStoreCoreTests()` wired into pure self-tests + vitest mirror
+- [x] Recorded Flare-is-primary-DeFi intel in Bible §2.5 + Roadmap C7/C12
+- [x] Battery · PR · merge · report
 
 ## C3 — Banking-page Crypto section (shell)
 - [ ] `src/components/admin/crypto/CryptoPortfolioSection.tsx` (StatCards + empty state)

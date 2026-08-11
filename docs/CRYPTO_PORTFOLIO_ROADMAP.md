@@ -116,8 +116,18 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 - Pure mappers `evm-map-core.ts`: squid rows → `CryptoTransaction` (direction,
   decimals, tx_type=transfer baseline). Self-tests.
 
-### C7 — Add Flare to the squid (ready dataset `flare-mainnet`)
+### C7 — Add Flare to the squid (ready dataset `flare-mainnet`)  ⭐ HEAVIEST EVM SLICE
+- **Flare is Michael's PRIMARY DeFi venue** ("I almost exclusively use Flare for
+  all things DeFi"). This is NOT a copy of C6 — it is the most complex and most
+  tax-critical connector slice.
 - Extend the squid to Flare native + tokens; wire to store.
+- Beyond plain transfers, capture the DeFi/contract-interaction surface: DEX
+  router **swaps**, LP pair **mint/burn** (Uniswap-V2-style Mint/Burn/Swap logs),
+  **reward/claim** events, and **WFLR** deposit/withdraw. Preserve raw decoded
+  logs in `crypto_transactions.raw` so C12 can classify (never guess a type at
+  ingest). Confirm the exact DEX/router/pool contracts from Michael's wallet
+  history before hard-coding any protocol address.
+- Give this slice the "heavy, expert" treatment Michael explicitly requested.
 
 ### C8 — Add Songbird via EVM-RPC mode
 - Index Songbird through `EvmRpcDataSourceBuilder` against
@@ -179,10 +189,16 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 
 ## Phase 7 — Advanced transaction typing
 
-### C12 — LP & complex activity classification
+### C12 — LP & complex activity classification  ⭐ TAX MAKE-OR-BREAK (Flare-first)
 - Detect & label liquidity-pool add/remove, swaps, LP-token mint/burn, rewards,
   fees — per chain. Pure classifier cores with fixtures; `tx_type` populated for
   tax correctness. This is where "handle LP transactions" is delivered.
+- **Primary target is FLARE** — Michael's near-exclusive DeFi venue — with the
+  Pulsara/Coreum LP case as the secondary target. `tx_type` must be assigned by a
+  PURE, fixture-tested classifier from the decoded event shape (never drifting
+  heuristics), with the source log kept for audit. This slice + C13 are where the
+  Flare LP lifecycle (add = disposal into position; remove = re-acquire at new
+  basis; swap = disposition) becomes "IRS-bulletproof".
 
 ---
 
