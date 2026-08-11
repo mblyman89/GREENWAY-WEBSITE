@@ -50,6 +50,13 @@ export type CryptoAssetRecord = {
   /** Destination asset id if this asset merges forward (CORE→TX, SOLO→TX). */
   migratesToAssetId: string | null;
   active: boolean;
+  /**
+   * Owner has HIDDEN this asset from the portfolio view (scam/airdrop). It stays
+   * fully in the database for provability; hidden only removes it from the view.
+   * Optional here because the backing column ships in a later migration; until
+   * then it reads as undefined (treated as not-hidden). Never deletes anything.
+   */
+  hidden?: boolean;
 };
 
 /** A watch-only wallet. `address` is a PUBLIC on-chain address only. */
