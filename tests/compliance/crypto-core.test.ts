@@ -93,7 +93,20 @@ describe("crypto-core money math is float-free and exact", () => {
 
   it("preserves XRPL issued-token decimal strings exactly", () => {
     expect(normalizeXrplIssuedAmount("00153.750")).toBe("153.75");
-    expect(() => normalizeXrplIssuedAmount("1234567890123456")).toThrow();
+    // 16+ significant digits are VALID on XRPL (the 15-digit rule is a
+    // precision guarantee, not a string-length cap). We round to 15 sig digits
+    // half-up with exact BigInt math (never a JS float). These are the real
+    // live SOLO trust-line values that used to raise "Needs Attention".
+    expect(normalizeXrplIssuedAmount("1234567890123456")).toBe("1234567890123460");
+    expect(normalizeXrplIssuedAmount("-229810.5408204187")).toBe("-229810.540820419");
+    expect(normalizeXrplIssuedAmount("-1380300000000000e-29")).toBe(
+      "-0.000000000000013803",
+    );
+    expect(normalizeXrplIssuedAmount("999999999999999.5")).toBe("1000000000000000");
+    // Genuinely non-numeric input still throws.
+    expect(() => normalizeXrplIssuedAmount("1.2.3")).toThrow();
+    expect(() => normalizeXrplIssuedAmount("0xff")).toThrow();
+    expect(() => normalizeXrplIssuedAmount("")).toThrow();
   });
 
   it("computes USD value in deterministic integer cents", () => {
