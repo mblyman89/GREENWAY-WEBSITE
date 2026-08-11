@@ -252,6 +252,41 @@ export function blockNumberRequest(
 }
 
 /**
+ * Build a proxy-module eth_getTransactionReceipt request to fetch the full log
+ * set for a single transaction. The Etherscan-compatible `proxy` module returns
+ * a JSON-RPC envelope `{ jsonrpc, id, result: { ..., logs: [...] } }` where
+ * `result.logs` contains EVERY event emitted by EVERY contract in that
+ * transaction. This is what lets the C7 DeFi classifier see pool Mint/Burn/Swap
+ * events that are NOT ERC-20 Transfers (and thus absent from tokentx).
+ *
+ * Like `blockNumberRequest`, this uses the `proxy` module (not `account`), so
+ * we build the query directly rather than via buildEvmQuery.
+ *
+ * Verified on all three chains (Etherscan V2 + Flare/Songbird Blockscout):
+ *   ?module=proxy&action=eth_getTransactionReceipt&txhash=0x...&apikey=...
+ * See research/c7b-receipt-log-research.md for the verified response shape.
+ */
+export function receiptRequest(
+  chain: Chain,
+  txHash: string,
+  apiKey: string | null,
+): EvmExplorerRequest {
+  const base = resolveEvmExplorerBase(chain);
+  const params = new URLSearchParams();
+  params.set("module", "proxy");
+  params.set("action", "eth_getTransactionReceipt");
+  params.set("txhash", txHash);
+  if (chain === "ethereum") {
+    const cid = etherscanChainId(chain);
+    if (cid !== null) params.set("chainid", String(cid));
+  }
+  if (chainNeedsApiKey(chain) && apiKey && apiKey.trim().length > 0) {
+    params.set("apikey", apiKey.trim());
+  }
+  return { url: `${base}?${params.toString()}` };
+}
+
+/**
  * Parse a proxy eth_blockNumber response body. The result is a hex string like
  * "0x10c868" — we decode it to a decimal block number. Returns ok=false with
  * retryable=true for empty/non-JSON or missing result (transient explorer
@@ -689,6 +724,20 @@ export function __runEvmClientCoreTests(): void {
   check("parse blockNumber empty retryable", bnEmpty.ok === false && bnEmpty.retryable === true);
   const bnRate = parseBlockNumberResult({ result: "", message: "Max rate limit reached" });
   check("parse blockNumber rate limit", bnRate.ok === false && bnRate.retryable === true);
+
+  // --- receipt request (proxy module, C7b) ---
+  const rcEth = receiptRequest("ethereum", "0x" + "a".repeat(64), "K");
+  check("receipt uses proxy module", rcEth.url.includes("module=proxy"));
+  check("receipt uses eth_getTransactionReceipt", rcEth.url.includes("action=eth_getTransactionReceipt"));
+  check("receipt has txhash", rcEth.url.includes("txhash=0x"));
+  check("receipt eth has chainid", rcEth.url.includes("chainid=1"));
+  check("receipt eth has key", rcEth.url.includes("apikey=K"));
+  const rcFlare = receiptRequest("flare", "0x" + "b".repeat(64), null);
+  check("receipt flare no chainid", !rcFlare.url.includes("chainid="));
+  check("receipt flare no key", !rcFlare.url.includes("apikey="));
+  check("receipt flare has txhash", rcFlare.url.includes("txhash=0x"));
+  const rcEthNoKey = receiptRequest("ethereum", "0x" + "c".repeat(64), null);
+  check("receipt eth no key omits apikey", !rcEthNoKey.url.includes("apikey="));
 
   console.log("evm-client-core self-tests: all passed");
 }

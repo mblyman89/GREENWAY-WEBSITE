@@ -48,6 +48,7 @@ import {
   txlistRequest,
   tokentxRequest,
   blockNumberRequest,
+  receiptRequest,
   interpretExplorerBody,
   parseBlockNumberResult,
   isRetryableHttpStatus,
@@ -61,6 +62,7 @@ import {
   type EvmTxListRow,
   type EvmTokenTxRow,
 } from "./evm-client-core";
+import { parseReceiptResult, type EvmReceipt, type EvmReceiptResult } from "./evm-receipt-core";
 import { isEvmChain, type Chain } from "../crypto-core";
 
 /**
@@ -279,6 +281,34 @@ export async function fetchTipBlockNumber(chain: Chain): Promise<EvmExplorerResu
   }
   const req = blockNumberRequest(chain, apiKeyForChain(chain));
   return call<number>(req.url, (body) => parseBlockNumberResult(body));
+}
+
+/**
+ * Fetch the full transaction receipt for a single transaction hash (via the
+ * proxy eth_getTransactionReceipt action). The receipt's `logs[]` array
+ * contains EVERY event emitted by EVERY contract in that transaction — ERC-20
+ * Transfers, pool Mint/Burn/Swap/Sync, WFLR Deposit/Withdrawal, everything.
+ * This is what lets the C7 DeFi classifier (evm-defi-core) see pool events and
+ * stamp legs as lp_add / lp_remove / swap instead of the neutral "transfer".
+ *
+ * Returns an `EvmReceiptResult`:
+ *   - ok=true, result=EvmReceipt — the receipt with its full log array.
+ *   - ok=true, result=null — the transaction is pending (not yet mined). This
+ *     is a valid outcome, NOT an error; the caller treats it as "no logs yet."
+ *   - ok=false — a fetch/parse failure (rate limit, network, bad response).
+ *     `retryable` indicates whether a retry might help.
+ *
+ * WATCH-ONLY: reads public chain data only. Never signs or submits anything.
+ */
+export async function fetchTransactionReceipt(
+  chain: Chain,
+  txHash: string,
+): Promise<EvmReceiptResult> {
+  if (!isEvmChain(chain)) {
+    return { ok: false, error: `Not an EVM chain: ${chain}`, retryable: false };
+  }
+  const req = receiptRequest(chain, txHash, apiKeyForChain(chain));
+  return call<EvmReceipt | null>(req.url, (body) => parseReceiptResult(body));
 }
 
 /**
