@@ -23,7 +23,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { parseAddWallet } from "@/lib/crypto/crypto-ui-core";
-import { addWatchOnlyWallet } from "@/lib/crypto/crypto-store";
+import { addWatchOnlyWallet, setCryptoAssetHidden } from "@/lib/crypto/crypto-store";
 import { runAllCryptoSync } from "@/lib/crypto/crypto-sync-orchestrator";
 
 const ROOT = "/admin/crypto";
@@ -126,4 +126,40 @@ export async function runCryptoSyncNowAction(): Promise<void> {
 
   if (result.ok) back({ tab: "health", msg: result.message });
   back({ tab: "health", error: result.message });
+}
+
+/**
+ * AREA 4 — hide or unhide one token from the Portfolio view (scam/airdrop
+ * control Michael asked for). The form carries the asset id and a `hidden`
+ * flag ("1" to hide, "0" to unhide). NOTHING is deleted — this only flips the
+ * `hidden` flag in the store; the asset and all its history stay in the database
+ * for provability, and unhiding is one click. Owner/admin only; audited with the
+ * public asset id (no secrets). Returns to the Portfolio tab with a friendly
+ * message.
+ */
+export async function setCryptoAssetHiddenAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const assetId = String(formData.get("assetId") ?? "").trim();
+  const hidden = String(formData.get("hidden") ?? "") === "1";
+  if (assetId === "") back({ tab: "portfolio", error: "Missing token id." });
+
+  const result = await setCryptoAssetHidden(assetId, hidden);
+  if (!result.ok) back({ tab: "portfolio", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: hidden ? "crypto.asset.hidden" : "crypto.asset.unhidden",
+    entityType: "crypto_asset",
+    entityId: assetId, // public asset id — safe to record
+    after: { asset_id: assetId, hidden },
+  });
+
+  back({
+    tab: "portfolio",
+    msg: hidden
+      ? "Token hidden from your portfolio. It's still saved in your records \u2014 you can unhide it anytime."
+      : "Token is back in your portfolio.",
+  });
 }
