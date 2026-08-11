@@ -63,6 +63,11 @@ import type {
   CryptoSyncStateRecord,
   CryptoPriceSnapshotRecord,
 } from "./crypto-store-core";
+import type {
+  BalanceUpsertRow,
+  TransactionUpsertRow,
+  SyncStateUpsertRow,
+} from "./xrpl/xrpl-sync-core";
 
 // Re-export the public shape contract so callers import from crypto-store.
 export type {
@@ -302,5 +307,99 @@ export async function addWatchOnlyWallet(input: {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not save the wallet.";
     return { ok: false, error: msg };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Writes (C5): connector persistence. These take ALREADY-BUILT snake_case
+// upsert rows from xrpl-sync-core (pure, unit-tested) and write them idempotently
+// against the UNIQUE indexes proven in migration 0160:
+//   crypto_balances       UNIQUE (wallet_id, asset_id)
+//   crypto_transactions   UNIQUE (wallet_id, tx_hash, event_index)
+//   crypto_sync_state     UNIQUE (wallet_id)
+// Because these are plain-column composite unique indexes (not functional), we
+// can target them with supabase-js `.upsert(..., { onConflict })`. Every writer
+// is graceful: a missing DB (not configured) is a no-op success, and any error
+// is returned (never thrown) so a connector run degrades instead of crashing.
+// USD/pricing is never written here — that's a later slice; we never guess value.
+// ---------------------------------------------------------------------------
+
+export type WriteResult = { ok: true; count: number } | { ok: false; error: string };
+
+/** Max rows per upsert request (keeps payloads and statements comfortably small). */
+const CRYPTO_UPSERT_CHUNK = 500;
+
+function chunk<T>(rows: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Upsert current balances for a wallet. Idempotent on (wallet_id, asset_id):
+ * re-running replaces the amount/usd/timestamp for each held asset in place.
+ * Rows are pre-built + validated by xrpl-sync-core; asset_id is guaranteed set.
+ */
+export async function upsertCryptoBalances(
+  rows: BalanceUpsertRow[],
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  if (!rows || rows.length === 0) return { ok: true, count: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    let written = 0;
+    for (const part of chunk(rows, CRYPTO_UPSERT_CHUNK)) {
+      const { error } = await admin
+        .from("crypto_balances")
+        .upsert(part, { onConflict: "wallet_id,asset_id" });
+      if (error) return { ok: false, error: error.message };
+      written += part.length;
+    }
+    return { ok: true, count: written };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Balance write failed." };
+  }
+}
+
+/**
+ * Upsert transaction events for a wallet. Idempotent on
+ * (wallet_id, tx_hash, event_index): the same on-chain event is never
+ * double-counted, so a resumed/repeated backfill is always safe.
+ */
+export async function upsertCryptoTransactions(
+  rows: TransactionUpsertRow[],
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  if (!rows || rows.length === 0) return { ok: true, count: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    let written = 0;
+    for (const part of chunk(rows, CRYPTO_UPSERT_CHUNK)) {
+      const { error } = await admin
+        .from("crypto_transactions")
+        .upsert(part, { onConflict: "wallet_id,tx_hash,event_index" });
+      if (error) return { ok: false, error: error.message };
+      written += part.length;
+    }
+    return { ok: true, count: written };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Transaction write failed." };
+  }
+}
+
+/** Upsert the resumable sync cursor/status for a wallet (one row per wallet). */
+export async function upsertCryptoSyncState(
+  row: SyncStateUpsertRow,
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("crypto_sync_state")
+      .upsert(row, { onConflict: "wallet_id" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, count: 1 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Sync-state write failed." };
   }
 }

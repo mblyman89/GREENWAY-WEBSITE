@@ -123,10 +123,24 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
   partial-payment proof and a failed-TrustSet fee-only proof.
 - Vitest mirror `tests/compliance/xrpl-map-core.test.ts` (13 tests).
 
-### C5 — XRPL balances + backfill wiring (read → store)
-- Fetch balances (`account_info` + `account_lines`) → `crypto_balances`.
-- Backfill `account_tx` (paginated by `marker`) → `crypto_transactions`.
-- Sync-state cursor (`ledger_index_max`) recorded for daily incremental later.
+### C5 — XRPL balances + backfill wiring (read → store) ✅ DONE
+- `xrpl-sync-core.ts` (PURE): the row-builders + backfill state machine. Splits
+  C4's SIGNED mapped amounts into an UNSIGNED magnitude + `direction` (exact,
+  no floats), builds idempotent-keyed upsert rows, keeps the **full source
+  envelope in each tx row's `raw` jsonb** for audit provability, never drops an
+  untracked token (kept with a currency/issuer note), and walks `account_tx`
+  by opaque `marker` (oldest-first, page-guarded). Self-tested.
+- `crypto-store.ts` (server-only) writers: `upsertCryptoBalances`,
+  `upsertCryptoTransactions`, `upsertCryptoSyncState` — idempotent on the
+  migration-0160 unique indexes (wallet+asset / wallet+hash+event / wallet),
+  chunked, graceful when the DB isn't configured.
+- `xrpl-sync-server.ts` (server-only) orchestrator `syncXrplWallet(walletId)`:
+  fetch balances (`account_info` + `account_lines`) → upsert; backfill
+  `account_tx` (paginated by `marker`) → map (C4) → upsert per page; the resume
+  cursor is persisted to `crypto_sync_state` after EACH page so a crash/rate-limit
+  resumes cleanly. Never throws to the UI. Watch-only; USD never written (priced
+  in C9); no keys.
+- Vitest mirror `tests/compliance/xrpl-sync-core.test.ts` (13 tests).
 
 ---
 
