@@ -43,6 +43,7 @@ import {
   upsertCryptoTransactions,
   upsertCryptoSyncState,
   countCryptoTransactions,
+  ensureCryptoAssets,
 } from "../crypto-store";
 import {
   fetchNativeBalance,
@@ -50,7 +51,19 @@ import {
   fetchTokenTx,
   fetchTipBlockNumber,
   fetchTransactionReceipt,
+  fetchTokenList,
+  fetchTokenMeta,
+  fetchTokenDecimalsOnChain,
 } from "./evm-client";
+import {
+  discoverFromTokenList,
+  tokensNeedingDecimals,
+  applyResolvedDecimals,
+  fungibleTokens,
+  buildDiscoveredAssetUpserts,
+  buildDiscoveredBalanceUpserts,
+  type DiscoveredToken,
+} from "./evm-token-discovery-core";
 import {
   mapNativeTransfer,
   mapErc20TransferLogsWithType,
@@ -66,7 +79,6 @@ import {
 } from "./evm-receipt-core";
 import {
   mapEvmNativeBalance,
-  deriveTokenBalancesFromHistory,
   txListRowToNativeTransfer,
   tokenTxRowToEvmLog,
   initEvmBackfill,
@@ -80,7 +92,6 @@ import {
   buildBalanceUpserts,
   buildTransactionUpserts,
   buildSyncStateUpsert,
-  untrackedBalances,
   EVM_DEFAULT_PAGE_SIZE,
   type EvmSyncCounts,
   type BalanceUpsertRow,
@@ -142,7 +153,7 @@ async function syncEvmBalances(
   chain: Chain,
   address: string,
   deadline: BudgetDeadline | null,
-): Promise<{ written: number; untracked: number; stoppedForBudget: boolean }> {
+): Promise<{ written: number; untracked: number; stoppedForBudget: boolean; discoveredAssets: number }> {
   const readAt = NOW();
   const rows: BalanceUpsertRow[] = [];
   let untracked = 0;
@@ -155,55 +166,69 @@ async function syncEvmBalances(
     rows.push(...buildBalanceUpserts(walletId, [mapped], readAt));
   }
 
-  // --- ERC-20 token balances, derived from the full tokentx history ---
-  // We fetch the ENTIRE tokentx history (page by page, ascending) to compute
-  // current net balances per contract. This is separate from the history
-  // backfill (which also persists transaction rows) because the balance
-  // derivation needs the complete set, not a windowed subset. We cap at a
-  // generous page size and follow Etherscan's page/offset pagination until an
-  // empty/partial page is returned.
-  //
-  // TIME BUDGET: each page is a network round-trip (~220ms apart at the shared
-  // rate limit). On Vercel Hobby a serverless function is hard-capped at 60s,
-  // so we check the per-request deadline before fetching each new page and stop
-  // cleanly when it is exhausted. The balance derivation is best-effort across
-  // a single request — a partial page set still yields the balances seen so
-  // far, and the NEXT "Sync now" click re-derives from scratch (token balances
-  // are always computed fresh, not cursor-resumed, so a partial run is safe).
-  let page = 1;
-  const allTokenRows: EvmTokenTxRow[] = [];
-  for (;;) {
-    if (timeBudgetExceeded(Date.now(), deadline)) {
-      stoppedForBudget = true;
-      break;
-    }
-    const res = await fetchTokenTx(chain, address, {
-      startBlock: 0,
-      endBlock: 99999999, // widest range; pagination by page/offset
-      page,
-      offset: EVM_DEFAULT_PAGE_SIZE,
-    });
-    if (!res.ok) break; // don't let a token-balance fetch error fail the whole sync
-    const rowsPage = res.result;
-    if (rowsPage.length === 0) break;
-    for (const r of rowsPage) allTokenRows.push(r);
-    if (rowsPage.length < EVM_DEFAULT_PAGE_SIZE) break; // partial page = done
-    page += 1;
-    if (page > 500) break; // guard: don't page forever on a pathological endpoint
-  }
+  // --- ALL token balances via explorer token-discovery (AREA 3) ---
+  // The `tokenlist` endpoint returns EVERY token the address currently holds,
+  // with the live balance per token — including alt coins we never hand-listed.
+  // We discover them, keep only fungible ERC-20s, verify each token's decimals
+  // from a first-party source (list → getToken → on-chain eth_call — never a
+  // guess), register the verified ones as assets, then persist their balances.
+  // Scam ERC-721/ERC-1155 airdrops are classified non-fungible and can never
+  // become a balance. This replaces the old tokentx history-summation for the
+  // balance snapshot (the live list balance is authoritative and one call).
+  let discoveredAssets = 0;
+  if (!timeBudgetExceeded(Date.now(), deadline)) {
+    const listRes = await fetchTokenList(chain, address);
+    if (listRes.ok && listRes.result.length > 0) {
+      let tokens = discoverFromTokenList(chain, { result: listRes.result });
 
-  if (allTokenRows.length > 0) {
-    const tokenBalances = deriveTokenBalancesFromHistory(chain, address, allTokenRows);
-    rows.push(...buildBalanceUpserts(walletId, tokenBalances, readAt));
-    untracked = untrackedBalances(tokenBalances).length;
+      // Resolve decimals ONLY for the fungible ERC-20s whose list-decimals were
+      // blank — one polite pair of calls each (on-chain eth_call preferred),
+      // stopping cleanly if the time budget runs out (best-effort; the next
+      // "Sync now" re-runs discovery, so nothing is lost).
+      const needing = tokensNeedingDecimals(tokens);
+      if (needing.length > 0) {
+        const promoted = new Map<string, DiscoveredToken>();
+        for (const t of needing) {
+          if (timeBudgetExceeded(Date.now(), deadline)) {
+            stoppedForBudget = true;
+            break;
+          }
+          const callRes = await fetchTokenDecimalsOnChain(chain, t.contract);
+          const ethCallHex = callRes.ok ? callRes.result : null;
+          let getToken = null;
+          if (ethCallHex === null) {
+            const metaRes = await fetchTokenMeta(chain, t.contract);
+            getToken = metaRes.ok ? metaRes.result : null;
+          }
+          promoted.set(t.contract, applyResolvedDecimals(t, { ethCallHex, getToken }));
+        }
+        tokens = tokens.map((t) => promoted.get(t.contract) ?? t);
+      }
+
+      const fungible = fungibleTokens(tokens);
+      // Count fungible tokens we could NOT verify (left unregistered, no balance).
+      untracked = tokens.filter((t) => t.kind === "erc20" && t.decimals === null).length;
+
+      if (fungible.length > 0) {
+        // Register the verified assets FIRST (balances FK to crypto_assets).
+        const assetRows = buildDiscoveredAssetUpserts(fungible);
+        const assetRes = await ensureCryptoAssets(assetRows);
+        if (!assetRes.ok) throw new Error(assetRes.error);
+        discoveredAssets = assetRes.count;
+        // Then their live balances from the list (never guessed; USD null).
+        rows.push(...buildDiscoveredBalanceUpserts(walletId, fungible, readAt));
+      }
+    }
+  } else {
+    stoppedForBudget = true;
   }
 
   if (rows.length > 0) {
     const res = await upsertCryptoBalances(rows);
     if (!res.ok) throw new Error(res.error);
-    return { written: res.count, untracked, stoppedForBudget };
+    return { written: res.count, untracked, stoppedForBudget, discoveredAssets };
   }
-  return { written: 0, untracked, stoppedForBudget };
+  return { written: 0, untracked, stoppedForBudget, discoveredAssets };
 }
 
 /**

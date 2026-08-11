@@ -30,6 +30,10 @@ import {
   tokenListRequest,
   getTokenRequest,
   decimalsEthCallRequest,
+  buildDiscoveredAssetUpsert,
+  buildDiscoveredAssetUpserts,
+  buildDiscoveredBalanceUpsert,
+  buildDiscoveredBalanceUpserts,
   ERC20_DECIMALS_SELECTOR,
 } from "@/lib/crypto/evm/evm-token-discovery-core";
 
@@ -140,6 +144,46 @@ describe("evm-token-discovery-core", () => {
     expect(call!.body).toContain(ERC20_DECIMALS_SELECTOR);
     // Ethereum is not a Blockscout chain -> no eth-rpc discovery call
     expect(decimalsEthCallRequest("ethereum", "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d")).toBeNull();
+  });
+
+  it("registers only verified fungible ERC-20s as assets (never NFT/unverified)", () => {
+    const body = { result: [
+      { balance: "91140000000000", contractAddress: "0x19cf770bbb7b71977b860e7fd8d32fa2513a743c", decimals: "9", name: "FlareFrog", symbol: "FLRFROG", type: "ERC-20" },
+      { balance: "1", contractAddress: "0x0b9527a04af14fb2fc9772487ded5ee8d53ff38e", decimals: "", name: "ATTENTION SECURITY WARNING", symbol: "WARNING", type: "ERC-1155" },
+      { balance: "5", contractAddress: "0xdeadbeef00000000000000000000000000000001", decimals: "", name: "Mystery", symbol: "MYS", type: "ERC-20" },
+    ] };
+    const tokens = discoverFromTokenList("flare", body);
+    const rows = buildDiscoveredAssetUpserts(tokens);
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe("flare:0x19cf770bbb7b71977b860e7fd8d32fa2513a743c");
+    expect(rows[0].decimals).toBe(9);
+    expect(rows[0].decimals_source).toBe("verified");
+    expect(rows[0].amount_model).toBe("evm-minor");
+    expect(rows[0].native).toBe(false);
+    expect(rows[0].active).toBe(true);
+
+    const nft = tokens.find((t) => t.kind === "erc1155")!;
+    expect(buildDiscoveredAssetUpsert(nft)).toBeNull();
+    const mys = tokens.find((t) => t.symbol === "MYS")!;
+    expect(buildDiscoveredAssetUpsert(mys)).toBeNull();
+  });
+
+  it("persists a live balance only for verified fungible tokens, USD never guessed", () => {
+    const body = { result: [
+      { balance: "11075251583124990077101711", contractAddress: "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d", decimals: "18", name: "Wrapped Flare", symbol: "WFLR", type: "ERC-20" },
+      { balance: "1", contractAddress: "0x05850558c51b8fbd914a802d6881f420295226ac", decimals: "", name: "! IMPORTANT ALERT", symbol: "ALERT", type: "ERC-721" },
+    ] };
+    const tokens = discoverFromTokenList("flare", body);
+    const rows = buildDiscoveredBalanceUpserts("wallet-x", tokens, "2026-08-12T00:00:00Z");
+    expect(rows.length).toBe(1);
+    expect(rows[0].asset_id).toBe("flare:0x1d80c49bbbcd1c0911346656b529df9e5c2f783d");
+    expect(rows[0].amount_raw).toBe("11075251583124990077101711");
+    expect(rows[0].decimals_at_read).toBe(18);
+    expect(rows[0].usd_value_cents).toBeNull();
+    expect(rows[0].amount_decimal).toBeNull();
+
+    const nft = tokens.find((t) => t.kind === "erc721")!;
+    expect(buildDiscoveredBalanceUpsert("wallet-x", nft, "t")).toBeNull();
   });
 
   it("gives a stable, collision-free asset id per chain", () => {

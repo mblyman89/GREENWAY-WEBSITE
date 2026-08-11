@@ -389,6 +389,141 @@ export function unverifiedErc20Tokens(tokens: DiscoveredToken[]): DiscoveredToke
   return tokens.filter((t) => t.kind === "erc20" && t.decimals === null);
 }
 
+// ---------------------------------------------------------------------------
+// Persistence row builders (pure). PR B feeds these into crypto-store.
+// ---------------------------------------------------------------------------
+
+/**
+ * A crypto_assets upsert row for a discovered token. Only ever built for a
+ * fungible, decimals-VERIFIED ERC-20 (caller filters via fungibleTokens); the
+ * builder returns null for anything else so an unverified/NFT token can never
+ * be registered as a spendable asset.
+ *
+ * `decimals_source` is always 'verified' — every path that sets fungible=true
+ * came from a first-party decimals read (list/getToken/eth_call), never a guess.
+ * `amount_model` is 'evm-minor' (integer smallest-unit + decimals), matching
+ * how the seed models FLR/WFLR/etc.
+ */
+export type DiscoveredAssetUpsertRow = {
+  id: string;
+  symbol: string;
+  name: string;
+  chain: Chain;
+  amount_model: "evm-minor";
+  decimals: number;
+  decimals_source: "verified";
+  native: false;
+  contract: string;
+  issuer: null;
+  currency_code: null;
+  denom: null;
+  migrates_to_asset_id: null;
+  active: true;
+};
+
+/** Cap a display string so a hostile token name/symbol can't bloat a row. */
+function clampDisplay(s: string, max: number): string {
+  const t = (s ?? "").trim();
+  return t.length > max ? t.slice(0, max) : t;
+}
+
+/**
+ * Build a crypto_assets upsert row from a discovered token, or null if the
+ * token isn't a fungible, decimals-verified ERC-20. Symbol/name are display-
+ * clamped (attacker-controllable); they never affect math. Falls back to a
+ * short contract-derived symbol/name when the token supplied none.
+ */
+export function buildDiscoveredAssetUpsert(
+  token: DiscoveredToken,
+): DiscoveredAssetUpsertRow | null {
+  if (!token.fungible || token.decimals === null || token.kind !== "erc20") {
+    return null;
+  }
+  const shortContract = token.contract.slice(0, 10);
+  const symbol = clampDisplay(token.symbol, 32) || shortContract;
+  const name = clampDisplay(token.name, 128) || `Token ${shortContract}`;
+  return {
+    id: token.assetId,
+    symbol,
+    name,
+    chain: token.chain,
+    amount_model: "evm-minor",
+    decimals: token.decimals,
+    decimals_source: "verified",
+    native: false,
+    contract: token.contract,
+    issuer: null,
+    currency_code: null,
+    denom: null,
+    migrates_to_asset_id: null,
+    active: true,
+  };
+}
+
+/** Build crypto_assets upsert rows for every fungible verified token. */
+export function buildDiscoveredAssetUpserts(
+  tokens: DiscoveredToken[],
+): DiscoveredAssetUpsertRow[] {
+  const out: DiscoveredAssetUpsertRow[] = [];
+  for (const t of tokens) {
+    const row = buildDiscoveredAssetUpsert(t);
+    if (row) out.push(row);
+  }
+  return out;
+}
+
+/** A crypto_balances upsert row (mirrors xrpl-sync-core's BalanceUpsertRow). */
+export type DiscoveredBalanceUpsertRow = {
+  wallet_id: string;
+  asset_id: string;
+  amount_raw: string | null;
+  amount_decimal: null;
+  decimals_at_read: number;
+  usd_value_cents: null;
+  balances_updated_at: string;
+};
+
+/**
+ * Build a crypto_balances upsert row from a discovered token's CURRENT balance
+ * (the tokenlist gives the live balance directly — no history summation). Only
+ * for fungible verified ERC-20 with a usable balance; null otherwise (so a
+ * scam NFT or an unverified token never produces a balance row). USD is left
+ * null — never guessed (priced in a later slice).
+ */
+export function buildDiscoveredBalanceUpsert(
+  walletId: string,
+  token: DiscoveredToken,
+  readAt: string,
+): DiscoveredBalanceUpsertRow | null {
+  if (!token.fungible || token.decimals === null || token.kind !== "erc20") {
+    return null;
+  }
+  if (token.balanceRaw === null) return null;
+  return {
+    wallet_id: walletId,
+    asset_id: token.assetId,
+    amount_raw: token.balanceRaw,
+    amount_decimal: null,
+    decimals_at_read: token.decimals,
+    usd_value_cents: null,
+    balances_updated_at: readAt,
+  };
+}
+
+/** Build crypto_balances upsert rows for every fungible verified token held. */
+export function buildDiscoveredBalanceUpserts(
+  walletId: string,
+  tokens: DiscoveredToken[],
+  readAt: string,
+): DiscoveredBalanceUpsertRow[] {
+  const out: DiscoveredBalanceUpsertRow[] = [];
+  for (const t of tokens) {
+    const row = buildDiscoveredBalanceUpsert(walletId, t, readAt);
+    if (row) out.push(row);
+  }
+  return out;
+}
+
 // ===========================================================================
 // SELF-TESTS (pure). Run by scripts/compliance/run-pure-selftests.ts.
 // ===========================================================================
@@ -528,6 +663,52 @@ export function __runEvmTokenDiscoveryCoreTests(): void {
   check("ethCallResultHex ok", ethCallResultHex({ result: "0x12" }) === "0x12");
   check("ethCallResultHex error null", ethCallResultHex({ error: "execution reverted" }) === null);
   check("ethCallResultHex missing null", ethCallResultHex({}) === null);
+
+  // --- persistence row builders ---
+  const assetRow = buildDiscoveredAssetUpsert(frog!);
+  check("asset row id", assetRow!.id === "flare:0x19cf770bbb7b71977b860e7fd8d32fa2513a743c");
+  check("asset row symbol", assetRow!.symbol === "FLRFROG");
+  check("asset row decimals 9", assetRow!.decimals === 9);
+  check("asset row decimals_source verified", assetRow!.decimals_source === "verified");
+  check("asset row amount_model evm-minor", assetRow!.amount_model === "evm-minor");
+  check("asset row not native", assetRow!.native === false);
+  check("asset row active", assetRow!.active === true);
+  check("asset row contract", assetRow!.contract === "0x19cf770bbb7b71977b860e7fd8d32fa2513a743c");
+  check("asset row NULL for scam nft", buildDiscoveredAssetUpsert(warn!) === null);
+  check("asset row NULL for unverified erc20", buildDiscoveredAssetUpsert(mys!) === null);
+
+  // fallback symbol/name when token supplied none
+  const noNameTok = discoverFromTokenList("flare", { result: [{ contractAddress: "0xabc0000000000000000000000000000000000009", decimals: "18", type: "ERC-20", balance: "1", symbol: "", name: "" }] })[0];
+  const noNameRow = buildDiscoveredAssetUpsert(noNameTok);
+  check("asset row fallback symbol", noNameRow!.symbol === "0xabc00000");
+  check("asset row fallback name", noNameRow!.name === "Token 0xabc00000");
+
+  // display clamp on hostile long name
+  const longTok = discoverFromTokenList("flare", { result: [{ contractAddress: "0xabc000000000000000000000000000000000000a", decimals: "18", type: "ERC-20", balance: "1", symbol: "S".repeat(80), name: "N".repeat(400) }] })[0];
+  const longRow = buildDiscoveredAssetUpsert(longTok);
+  check("asset row symbol clamped 32", longRow!.symbol.length === 32);
+  check("asset row name clamped 128", longRow!.name.length === 128);
+
+  const assetRows = buildDiscoveredAssetUpserts(discovered);
+  check("asset rows only fungible", assetRows.length === 2); // WFLR + FLRFROG
+
+  // --- balance row builders ---
+  const balRow = buildDiscoveredBalanceUpsert("wallet-1", wflr!, "2026-08-12T00:00:00Z");
+  check("bal row asset_id", balRow!.asset_id === "flare:0x1d80c49bbbcd1c0911346656b529df9e5c2f783d");
+  check("bal row amount_raw", balRow!.amount_raw === "11075251583124990077101711");
+  check("bal row decimals_at_read", balRow!.decimals_at_read === 18);
+  check("bal row usd null", balRow!.usd_value_cents === null);
+  check("bal row amount_decimal null", balRow!.amount_decimal === null);
+  check("bal row wallet", balRow!.wallet_id === "wallet-1");
+  check("bal row NULL for scam nft", buildDiscoveredBalanceUpsert("wallet-1", warn!, "t") === null);
+  check("bal row NULL for unverified", buildDiscoveredBalanceUpsert("wallet-1", mys!, "t") === null);
+  const balRows = buildDiscoveredBalanceUpserts("wallet-1", discovered, "2026-08-12T00:00:00Z");
+  check("bal rows only fungible with balance", balRows.length === 2); // WFLR + FLRFROG
+
+  // a fungible token with NO balance yields no balance row (but still an asset)
+  const noBalTok: DiscoveredToken = { ...wflr!, balanceRaw: null };
+  check("bal row NULL when no balance", buildDiscoveredBalanceUpsert("wallet-1", noBalTok, "t") === null);
+  check("asset row still built when no balance", buildDiscoveredAssetUpsert(noBalTok) !== null);
 
   if (fail.length > 0) {
     throw new Error("evm-token-discovery-core self-tests FAILED: " + fail.join(", "));

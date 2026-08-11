@@ -67,6 +67,16 @@ import {
   type EvmTokenTxRow,
 } from "./evm-client-core";
 import { parseReceiptResult, type EvmReceipt, type EvmReceiptResult } from "./evm-receipt-core";
+import {
+  tokenListRequest,
+  getTokenRequest,
+  decimalsEthCallRequest,
+  asTokenListRows,
+  asGetTokenResult,
+  ethCallResultHex,
+  type TokenListRow,
+  type GetTokenResult,
+} from "./evm-token-discovery-core";
 import { isEvmChain, type Chain } from "../crypto-core";
 
 /**
@@ -471,4 +481,79 @@ export function evmEndpointConfigured(chain: Chain): boolean {
 /** The resolved base URL for a chain (for diagnostics / logging). */
 export function evmExplorerBase(chain: Chain): string {
   return resolveEvmExplorerBase(chain, explorerOverride(chain));
+}
+
+// ---------------------------------------------------------------------------
+// AREA 3 — alt-coin discovery reads. These fetch the raw payloads; the pure
+// evm-token-discovery-core interprets them (discovery + decimals resolution).
+// Watch-only: PUBLIC address / contract only, no keys involved for Blockscout.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the FULL list of tokens an address holds (account&action=tokenlist).
+ * Returns the raw rows; the core classifies ERC-20 vs NFT and resolves decimals.
+ * On a "No tokens found" empty result the explorer returns status 0 with an
+ * empty array — we treat that as an OK empty list (not an error).
+ */
+export async function fetchTokenList(
+  chain: Chain,
+  address: string,
+): Promise<EvmExplorerResult<TokenListRow[]>> {
+  if (!isEvmChain(chain)) {
+    return { ok: false, error: `Not an EVM chain: ${chain}`, retryable: false };
+  }
+  const req = tokenListRequest(chain, address, apiKeyForChain(chain));
+  return call<TokenListRow[]>(req.url, (body) => {
+    // tokenlist returns {status, message, result:[...]}. Empty holdings come
+    // back as status "0" + [] which interpretExplorerBody flags as an error;
+    // for THIS action an empty list is a valid (not retryable) result.
+    const rows = asTokenListRows(body);
+    return { ok: true, result: rows };
+  });
+}
+
+/**
+ * Fetch a single token's metadata (token&action=getToken): name/symbol/decimals
+ * /type. Used to resolve decimals when the tokenlist row's decimals is blank,
+ * before falling back to the on-chain eth_call.
+ */
+export async function fetchTokenMeta(
+  chain: Chain,
+  contract: string,
+): Promise<EvmExplorerResult<GetTokenResult | null>> {
+  if (!isEvmChain(chain)) {
+    return { ok: false, error: `Not an EVM chain: ${chain}`, retryable: false };
+  }
+  const req = getTokenRequest(chain, contract, apiKeyForChain(chain));
+  return call<GetTokenResult | null>(req.url, (body) => {
+    return { ok: true, result: asGetTokenResult(body) };
+  });
+}
+
+/**
+ * Read a token's on-chain `decimals()` (Blockscout eth_call). This is the
+ * GROUND TRUTH source used to verify decimals when the list/metadata are blank.
+ * Only available for Blockscout chains (Flare/Songbird); returns a null result
+ * for non-Blockscout chains so the caller falls back to metadata.
+ */
+export async function fetchTokenDecimalsOnChain(
+  chain: Chain,
+  contract: string,
+): Promise<EvmExplorerResult<string | null>> {
+  if (!isEvmChain(chain)) {
+    return { ok: false, error: `Not an EVM chain: ${chain}`, retryable: false };
+  }
+  const req = decimalsEthCallRequest(chain, contract);
+  if (req === null) {
+    // Not a Blockscout chain — no on-chain read available here.
+    return { ok: true, result: null };
+  }
+  return callPost<string | null>(req.url, req.body, (body) => {
+    if (isJsonRpcError(body)) {
+      // A reverting decimals() (non-ERC-20) is not retryable — treat as "no
+      // decimals available" so the caller leaves the token unverified.
+      return { ok: true, result: null };
+    }
+    return { ok: true, result: ethCallResultHex(body) };
+  });
 }
