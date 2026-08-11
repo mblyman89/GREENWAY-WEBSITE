@@ -31,8 +31,9 @@
  *     are 18-decimal native coins.
  */
 
-import { type Chain, CRYPTO_ASSETS } from "../crypto-core";
+import { type Chain, CRYPTO_ASSETS, type TxType } from "../crypto-core";
 import type { MappedTransaction } from "../xrpl/xrpl-map-core";
+import { classifyEvmTxType } from "./evm-defi-core";
 
 // ---------------------------------------------------------------------------
 // Verified constants
@@ -363,6 +364,50 @@ export function mapErc20TransferLogs(
 }
 
 // ---------------------------------------------------------------------------
+// DeFi-aware typing (C7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Stamp a semantic `txType` onto every mapped leg of a transaction WITHOUT
+ * disturbing any other field. We only ever UPGRADE the neutral "transfer"
+ * legs — a leg that a lower layer already classified (e.g. a "fee" leg) is left
+ * untouched, so we never overwrite a more specific truth. Returns a NEW array;
+ * inputs are not mutated (pure).
+ */
+export function applyTxTypeToLegs(
+  legs: MappedTransaction[],
+  txType: TxType,
+): MappedTransaction[] {
+  return (legs ?? []).map((leg) =>
+    leg.txType === "transfer" ? { ...leg, txType } : { ...leg },
+  );
+}
+
+/**
+ * DeFi-aware version of `mapErc20TransferLogs`: it maps the ERC-20 Transfer
+ * legs exactly as before, then classifies the WHOLE transaction from its full
+ * log set (which may include pool Mint/Burn/Swap events that are NOT ERC-20
+ * Transfers) and stamps the resulting semantic type onto the transfer legs.
+ *
+ * `allLogs` is the COMPLETE set of logs emitted by the transaction (e.g. from a
+ * receipt / eth_getLogs). When only the ERC-20 Transfer logs are available,
+ * pass those same logs — classification then simply falls back to "transfer",
+ * which is the correct, guess-free default.
+ */
+export function mapErc20TransferLogsWithType(
+  chain: Chain,
+  account: string,
+  ctx: EvmTxContext,
+  transferLogs: EvmLog[],
+  allLogs: EvmLog[],
+): MappedTransaction[] {
+  const legs = mapErc20TransferLogs(chain, account, ctx, transferLogs);
+  const txType = classifyEvmTxType(allLogs);
+  if (txType === "transfer") return legs;
+  return applyTxTypeToLegs(legs, txType);
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (pure; run under tsx by run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -554,6 +599,33 @@ export function __runEvmMapCoreTests(): void {
   const withFee = multi.filter((m) => m.feeRaw != null);
   assert(withFee.length === 1, "fee attached exactly once across legs");
   assert(withFee[0].feeRaw === "21000", "fee value correct");
+
+  // --- applyTxTypeToLegs: upgrades transfer legs, leaves others untouched ---
+  const stamped = applyTxTypeToLegs(multi, "lp_add");
+  assert(stamped.length === 2, "stamped keeps leg count");
+  assert(stamped.every((l) => l.txType === "lp_add"), "transfer legs upgraded to lp_add");
+  assert(multi.every((l) => l.txType === "transfer"), "original legs not mutated (pure)");
+  const feeLeg: MappedTransaction = { ...multi[0], txType: "fee" };
+  const mixedStamp = applyTxTypeToLegs([feeLeg, multi[1]], "swap");
+  assert(mixedStamp[0].txType === "fee", "existing fee leg NOT overwritten");
+  assert(mixedStamp[1].txType === "swap", "transfer leg still upgraded");
+
+  // --- mapErc20TransferLogsWithType: LP-add event upgrades transfer legs ---
+  const V2_MINT =
+    "0x4c209b5fc8ad50758f13e2e1088ba56a560dff690a1c6fef26394f4c03821c4f";
+  const poolMintLog: EvmLog = {
+    address: "0xpool",
+    topics: [V2_MINT, addrTopic(A)],
+    data: u256("1"),
+    logIndex: 9,
+  };
+  const allLogs: EvmLog[] = [...multiLogs, poolMintLog];
+  const typed = mapErc20TransferLogsWithType("flare", A, ctx, multiLogs, allLogs);
+  assert(typed.length === 2, "typed maps both transfer legs");
+  assert(typed.every((l) => l.txType === "lp_add"), "LP mint upgrades legs to lp_add");
+  // Without the pool event, classification stays neutral.
+  const typedPlain = mapErc20TransferLogsWithType("flare", A, ctx, multiLogs, multiLogs);
+  assert(typedPlain.every((l) => l.txType === "transfer"), "no pool event → transfer");
 
   console.log("evm-map-core self-tests: all passed");
 }
