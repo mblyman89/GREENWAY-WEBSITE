@@ -60,6 +60,7 @@ import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/int
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
 import { __runCryptoCoreTests } from "../../src/lib/crypto/crypto-core";
 import { __runCryptoStoreCoreTests } from "../../src/lib/crypto/crypto-store-core";
+import { __runCryptoUiCoreTests } from "../../src/lib/crypto/crypto-ui-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -596,6 +597,7 @@ async function main() {
   console.log(__runTransportFieldsCoreTests());
   __runCryptoCoreTests();
   __runCryptoStoreCoreTests();
+  __runCryptoUiCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

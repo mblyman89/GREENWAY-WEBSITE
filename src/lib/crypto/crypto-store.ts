@@ -26,6 +26,7 @@ import "server-only";
  */
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { isValidAddressForChain, type Chain } from "./crypto-core";
 import {
   ASSET_COLS,
   WALLET_COLS,
@@ -228,5 +229,78 @@ export async function listCryptoPriceSnapshots(
     return (data as unknown as PriceSnapshotRow[]).map(toCryptoPriceSnapshotRecord);
   } catch {
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Writes (C3): connect a watch-only wallet. This is the ONLY write in the
+// crypto layer so far — a public address to WATCH. It stores nothing sensitive
+// (no keys) and is idempotent on (chain, lower(address)) so re-adding the same
+// wallet re-labels it instead of erroring or duplicating. Balances/tx history
+// are populated by the connector slices (C4+); this just registers the address.
+// ---------------------------------------------------------------------------
+
+export type AddWalletResult =
+  | { ok: true; created: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Insert (or re-label) a watch-only wallet. The caller passes an ALREADY
+ * validated + normalized chain/address (via parseAddWallet in crypto-ui-core),
+ * but we defensively re-validate the address shape here too — the DB is the last
+ * line of defense and must never store a malformed address.
+ *
+ * Idempotent: the `uq_crypto_wallets_chain_address` unique index means the same
+ * wallet upserts to one row. We return `created` so the UI can say "added" vs.
+ * "already watching (label updated)".
+ */
+export async function addWatchOnlyWallet(input: {
+  chain: Chain;
+  address: string;
+  label: string | null;
+}): Promise<AddWalletResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+
+  const address = (input.address ?? "").trim();
+  if (address === "" || !isValidAddressForChain(input.chain, address)) {
+    return { ok: false, error: "That address doesn't look valid for this blockchain." };
+  }
+
+  try {
+    const admin = createSupabaseAdminClient();
+
+    // The unique index is on (chain, lower(address)) — a FUNCTIONAL index, which
+    // PostgREST's on_conflict can't target by column list. So we do an explicit
+    // find-then-insert-or-update, matching case-insensitively on address the same
+    // way the index does. This keeps the operation idempotent without depending
+    // on a plain unique constraint.
+    const existing = await admin
+      .from("crypto_wallets")
+      .select("id")
+      .eq("chain", input.chain)
+      .ilike("address", address)
+      .maybeSingle();
+
+    if (!existing.error && existing.data) {
+      const id = (existing.data as { id: string }).id;
+      const { error: updErr } = await admin
+        .from("crypto_wallets")
+        .update({ label: input.label, active: true })
+        .eq("id", id);
+      if (updErr) return { ok: false, error: updErr.message };
+      return { ok: true, created: false };
+    }
+
+    const { error: insErr } = await admin.from("crypto_wallets").insert({
+      chain: input.chain,
+      address,
+      label: input.label,
+      active: true,
+    });
+    if (insErr) return { ok: false, error: insErr.message };
+    return { ok: true, created: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not save the wallet.";
+    return { ok: false, error: msg };
   }
 }

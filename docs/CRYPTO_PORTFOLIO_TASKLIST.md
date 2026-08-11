@@ -48,11 +48,14 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] Recorded Flare-is-primary-DeFi intel in Bible §2.5 + Roadmap C7/C12
 - [x] Battery · PR · merge · report
 
-## C3 — Banking-page Crypto section (shell)
-- [ ] `src/components/admin/crypto/CryptoPortfolioSection.tsx` (StatCards + empty state)
-- [ ] "Add wallet (watch-only)" action stub (address validation only)
-- [ ] Rendered on `src/app/admin/settings/banking/page.tsx`
-- [ ] Battery · PR · merge · report
+## C3 — Crypto Portfolio page (shell) ← **SLICE FOUR ✅ DONE (PR #TBD)**
+- [x] Dedicated page `src/app/admin/crypto/page.tsx` (3 tabs: Portfolio / Wallets / Health) — mirrors `/admin/plaid` precedent (its OWN page, NOT the banking vault)
+- [x] `src/lib/crypto/crypto-ui-core.ts` pure presentation brain: HONEST portfolio totals (only sums priced holdings; held-but-unpriced counted separately, NEVER guessed as $0), exact token-amount formatting (never floats), address masking, add-wallet validation, watch-only posture, sync-health, `__runCryptoUiCoreTests()`
+- [x] "Add wallet (watch-only)" server action `src/app/admin/crypto/actions.ts` (gate `settings.manage`, `parseAddWallet` validation, `addWatchOnlyWallet`, audit trail)
+- [x] `addWatchOnlyWallet()` write added to `crypto-store.ts` (find-then-insert-or-update; respects the functional `(chain, lower(address))` unique index)
+- [x] Nav entry "Crypto Portfolio" → `/admin/crypto` in `admin-nav-data.ts`
+- [x] Vitest mirror `tests/compliance/crypto-ui-core.test.ts` + wired into `run-pure-selftests.ts`
+- [x] Battery green (self-tests, tsc, eslint 0/0, vitest 272f/3545t, pytest 450, next build) · PR · merge · report
 
 ## C4 — XRPL client + mappers
 - [ ] `xrpl-client.ts` (account_info/lines/tx via xrplcluster.com, fair-use safe)
