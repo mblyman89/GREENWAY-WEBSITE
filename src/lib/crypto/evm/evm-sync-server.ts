@@ -48,15 +48,21 @@ import {
   fetchTxList,
   fetchTokenTx,
   fetchTipBlockNumber,
+  fetchTransactionReceipt,
 } from "./evm-client";
 import {
   mapNativeTransfer,
-  mapErc20TransferLogs,
+  mapErc20TransferLogsWithType,
   normAddr,
   type EvmNativeTransfer,
   type EvmTxContext,
   type EvmLog,
 } from "./evm-map-core";
+import {
+  receiptToEvmLogs,
+  uniqueTxHashes,
+  txHashesNeedingReceipts,
+} from "./evm-receipt-core";
 import {
   mapEvmNativeBalance,
   deriveTokenBalancesFromHistory,
@@ -265,7 +271,7 @@ async function syncEvmHistory(
       }
     }
 
-    // --- ERC-20 Transfer events (tokentx) → mapErc20TransferLogs ---
+    // --- ERC-20 Transfer events (tokentx) → mapErc20TransferLogsWithType ---
     // We group tokentx rows by tx hash so the mapper can attach the native fee
     // exactly once per transaction (to the first sender leg). We synthesize a
     // stable event index per row within its tx.
@@ -275,6 +281,50 @@ async function syncEvmHistory(
       if (list) list.push(row);
       else byHash.set(row.hash, [row]);
     }
+
+    // --- C7b: fetch transaction receipts for enriched DeFi classification ---
+    // The tokentx rows only contain ERC-20 Transfer events (decoded). To
+    // classify LP adds/removes and swaps, the classifier needs the FULL log
+    // set for each transaction (pool Mint/Burn/Swap/Sync events that are NOT
+    // ERC-20 Transfers). We fetch the receipt (eth_getTransactionReceipt) for
+    // each transaction that has token activity — a pure native transfer
+    // cannot be a DeFi operation, so we skip those to save API calls.
+    //
+    // GRACEFUL DEGRADATION: receipt fetching is best-effort. A failed receipt
+    // fetch for one transaction never fails the whole window — that tx just
+    // gets classified as the neutral "transfer" (the safe, guess-free default).
+    // We also respect the time budget: if the budget is exhausted mid-receipt,
+    // we stop fetching receipts but still map + persist the tokentx rows we
+    // already have (without enriched classification for the remaining txs).
+    const receiptLogsByHash = new Map<string, EvmLog[]>();
+    if (byHash.size > 0) {
+      const allHashes = uniqueTxHashes(
+        txRows.map((r) => r.hash).concat(tokenRows.map((r) => r.hash)),
+      );
+      const tokenHashes = uniqueTxHashes(tokenRows.map((r) => r.hash));
+      const hashesNeedingReceipts = txHashesNeedingReceipts(allHashes, tokenHashes);
+      for (const hash of hashesNeedingReceipts) {
+        if (timeBudgetExceeded(Date.now(), deadline)) {
+          stoppedForBudget = true;
+          break; // stop fetching receipts; map what we have so far
+        }
+        try {
+          const receiptRes = await fetchTransactionReceipt(chain, hash);
+          if (receiptRes.ok && receiptRes.result) {
+            const logs = receiptToEvmLogs(receiptRes.result);
+            if (logs.length > 0) {
+              receiptLogsByHash.set(hash, logs);
+            }
+          }
+          // ok=false or result=null (pending) → no enriched logs for this tx;
+          // it will fall back to transfer-only classification below.
+        } catch {
+          // A receipt fetch failure for one tx is never fatal. The tx is still
+          // mapped from its tokentx rows (classified as "transfer").
+        }
+      }
+    }
+
     for (const [hash, group] of byHash) {
       // Reconstruct the EvmLog shape for each row and build a shared context.
       const first = group[0];
@@ -288,8 +338,12 @@ async function syncEvmHistory(
         blockNumber: Number.isFinite(blockNumber) ? blockNumber : 0,
         blockTime,
       };
-      const logs: EvmLog[] = group.map((row, idx) => tokenTxRowToEvmLog(row, idx));
-      const legs = mapErc20TransferLogs(chain, account, ctx, logs);
+      const transferLogs: EvmLog[] = group.map((row, idx) => tokenTxRowToEvmLog(row, idx));
+      // C7b: if we fetched a receipt for this tx, use its FULL log set as
+      // allLogs so the classifier can see pool events. Otherwise fall back to
+      // just the transfer logs (classification stays "transfer" — safe).
+      const allLogs = receiptLogsByHash.get(hash) ?? transferLogs;
+      const legs = mapErc20TransferLogsWithType(chain, account, ctx, transferLogs, allLogs);
       // Persist each leg with its source row as the raw envelope.
       for (let i = 0; i < legs.length; i += 1) {
         const sourceRow = group[i] ?? first;
