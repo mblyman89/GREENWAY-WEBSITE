@@ -37,7 +37,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] Battery green · config restored identical
 - [x] PR (#877) · `compliance` green · squash-merged · main synced · reported to Michael
 
-## C2 — Crypto store (read-only) ← **SLICE THREE ✅ DONE**
+## C2 — Crypto store (read-only) ← **SLICE THREE ✅ DONE (PR #879, merged b6b8f3d2)**
 - [x] `src/lib/crypto/crypto-store.ts` readers w/ "not configured" resilience
       (server-only) + `crypto-store-core.ts` pure shape layer (types, row
       mappers, coercion helpers, self-test) so amounts stay EXACT strings
