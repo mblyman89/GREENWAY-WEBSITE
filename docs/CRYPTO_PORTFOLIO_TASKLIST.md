@@ -58,9 +58,17 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] Battery green (self-tests, tsc, eslint 0/0, vitest 272f/3545t, pytest 450, next build) · PR · merge · report
 
 ## C4 — XRPL client + mappers
-- [ ] `xrpl-client.ts` (account_info/lines/tx via xrplcluster.com, fair-use safe)
-- [ ] `xrpl-map-core.ts` pure mappers + `__runXrplMapCoreTests()`
-- [ ] Battery · PR · merge · report
+- [x] `xrpl-client-core.ts` pure fair-use policy (throttle 250ms spacing, retry/backoff 500ms→8s cap, retryable-status/error classification, request builders api_version 2) + `__runXrplClientCoreTests()`
+- [x] `xrpl-client.ts` server-only shell (single serialized queue, AbortController timeout, marker pagination merge for account_lines, one-page account_tx, endpoint from optional `XRPL_RPC_URL`, defaults to xrplcluster.com — no keys)
+- [x] `xrpl-map-core.ts` pure tax-truth mappers + `__runXrplMapCoreTests()`:
+  - [x] `rippleTimeToIso` (Ripple epoch = Unix + 946684800s)
+  - [x] `decodeCurrencyCode` (3-char as-is / 40-hex ASCII decode / hex passthrough) + `resolveXrplIssuedAssetId` (decoded symbol + exact issuer match, e.g. SOLO)
+  - [x] `parseXrplAmount`, `mapAccountInfoBalance`, `mapTrustLineBalance(s)` (drops native XRP + issued tokens, non-zero only)
+  - [x] `computeAccountDeltas` reads **AffectedNodes metadata** (AccountRoot XRP final−prev; RippleState low/high-perspective sign-flip; ignores other accounts) — this is the audit-grade source of truth, NOT the tx `Amount` field
+  - [x] exact integer/decimal math via BigInt scaling (no floats)
+  - [x] `classifyXrplTx` conservative tax taxonomy (sender-fee-only → `fee`; Payment multi-asset → `swap`, single → `transfer`; Offer* → `swap`; TrustSet/AccountSet → `fee`/`other`)
+  - [x] `mapAccountTx` v1+v2 API support, one leg per moved asset, fee attached once to sender XRP leg, **partial-payment proof** (uses metadata delivered delta, not `Amount`)
+- [x] Battery green (self-tests, tsc, eslint 0/0, vitest 273f/3558t, pytest 450, next build) · PR · merge · report
 
 ## C5 — XRPL balances + backfill
 - [ ] Balances → `crypto_balances`

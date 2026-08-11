@@ -104,13 +104,24 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 
 ## Phase 3 — XRPL connector (the fastest win; no infra to run)
 
-### C4 — XRPL client (read-only) against XRP Cluster
-- `src/lib/crypto/xrpl/xrpl-client.ts`: thin wrapper over `xrplcluster.com`
-  (HTTPS JSON-RPC), calling `account_info`, `account_lines`, `account_tx`.
-  Honors fair-use (throttle, retry/backoff, failover-friendly). No keys.
-- Pure mappers `xrpl-map-core.ts`: raw XRPL payloads → `CryptoTransaction` /
-  balance rows (XRP via drops/6-dec; SOLO + USDT-on-XRPL via trust lines).
-  `__runXrplMapCoreTests()` with fixture payloads.
+### C4 — XRPL client (read-only) against XRP Cluster ✅ DONE
+- `src/lib/crypto/xrpl/xrpl-client-core.ts`: PURE fair-use policy (250ms request
+  spacing, retry/backoff 500ms→8s cap, retryable HTTP-status/RPC-error tests,
+  request builders at api_version 2) with `__runXrplClientCoreTests()`.
+- `src/lib/crypto/xrpl/xrpl-client.ts`: server-only shell over `xrplcluster.com`
+  (HTTPS JSON-RPC) calling `account_info`, `account_lines`, `account_tx`. Single
+  serialized request queue + AbortController timeout; follows `marker` pagination
+  for `account_lines`. Endpoint overridable via optional `XRPL_RPC_URL`. No keys.
+- Pure mappers `xrpl-map-core.ts` (the tax-truth engine): raw XRPL payloads →
+  balance rows + `CryptoTransaction` legs. **Reads AffectedNodes metadata as the
+  source of truth** (AccountRoot XRP delta final−prev; RippleState low/high sign
+  handling), so partial payments record the *delivered* amount, not the requested
+  `Amount`. Exact BigInt integer/decimal math (no floats). Ripple-epoch time,
+  currency-code decode (3-char + 40-hex ASCII), issuer-exact asset resolution
+  (SOLO), conservative tax taxonomy, fee attributed once to the sender's XRP leg,
+  v1+v2 API shapes. `__runXrplMapCoreTests()` with real-shaped fixtures incl. a
+  partial-payment proof and a failed-TrustSet fee-only proof.
+- Vitest mirror `tests/compliance/xrpl-map-core.test.ts` (13 tests).
 
 ### C5 — XRPL balances + backfill wiring (read → store)
 - Fetch balances (`account_info` + `account_lines`) → `crypto_balances`.

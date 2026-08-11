@@ -373,5 +373,34 @@ auditable USD record**. Design principles:
   (watch-only)" server action (gate `settings.manage` → validate → store → audit)
   backed by `addWatchOnlyWallet()` in the store (respects the functional
   `(chain, lower(address))` unique index). Nav entry added. Full battery green.
+- **C4 — XRPL client + pure tax-truth mappers** — DONE. Read-only XRP Ledger
+  connector against `xrplcluster.com` (HTTPS JSON-RPC, api_version 2, no keys).
+  Three files under `src/lib/crypto/xrpl/`:
+  - `xrpl-client-core.ts` — PURE fair-use policy (250ms request spacing;
+    retry/backoff 500ms→8s cap; retryable HTTP-status + RPC-error classification;
+    request builders for `account_info`/`account_lines`/`account_tx`) with
+    `__runXrplClientCoreTests()`.
+  - `xrpl-client.ts` — server-only shell (single serialized request queue so we
+    never burst the public cluster; AbortController timeout; follows `marker`
+    pagination merging every trust line; one-page `account_tx`). Endpoint is
+    overridable via optional `XRPL_RPC_URL`, else defaults to the cluster.
+  - `xrpl-map-core.ts` — the **tax-truth engine**. Instead of trusting the tx
+    `Amount` field, it reads the ledger **AffectedNodes metadata** to compute the
+    exact balance change to the tracked account (AccountRoot XRP delta = final −
+    previous; RippleState token delta with correct low/high-account perspective
+    sign-flip; other accounts' nodes ignored). Consequences: **partial payments
+    record the delivered amount, not the requested amount**; the network fee is
+    already netted into the sender's XRP delta and is attributed exactly once.
+    All math is exact integer/BigInt-scaled decimal (never floats). Also: Ripple
+    epoch → ISO time (Unix + 946684800s), currency-code decode (3-char + 40-hex
+    ASCII), issuer-exact asset resolution (so SOLO only matches its real issuer),
+    a conservative tax taxonomy (sender-fee-only→`fee`; multi-asset Payment→`swap`,
+    single→`transfer`; Offer*→`swap`; TrustSet/AccountSet→`fee`/`other`), and both
+    v1 + v2 API response shapes. `__runXrplMapCoreTests()` runs real-shaped
+    fixtures incl. a partial-payment proof and a failed-TrustSet fee-only proof.
+  Vitest mirror `tests/compliance/xrpl-map-core.test.ts` (13 tests, incl. the
+  partial-payment and fee-attribution proofs). Both self-tests wired into
+  `run-pure-selftests.ts`. Full battery green (self-tests; tsc; eslint 0/0;
+  vitest 273 files / 3558 tests; pytest 450; next build).
 
-_Last updated: 2026-08-10 (C3 shipped)._
+_Last updated: 2026-08-11 (C4 shipped)._
