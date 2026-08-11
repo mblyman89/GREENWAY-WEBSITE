@@ -95,6 +95,53 @@ as an ERC-20, *not* via XRP Cluster.
 - **CoinGecko** gives USD prices (current + historical by date) — the piece that
   makes cost-basis and gain/loss possible.
 
+### 2.3 Cosmos chains — Coreum & Pulsara (added 2026-08-10, per Michael)
+
+Michael also holds assets on **Coreum** and **Pulsara**. These are a THIRD
+technology family (neither EVM nor XRPL):
+
+- **Coreum** — a Cosmos SDK Layer-1 (chain-id `coreum-mainnet-1`, verified via
+  Polkachu). Read with the standard **Cosmos REST/LCD + RPC** API — e.g. balances
+  via `/cosmos/bank/v1beta1/balances/{address}`, transactions via Tendermint
+  `tx_search`. Public free endpoints exist (Polkachu: `coreum-api.polkachu.com`,
+  `coreum-rpc.polkachu.com`; comparenodes lists more). NO Subsquid EVM archive
+  and NO XRP Cluster — a Cosmos connector is its own connector.
+- **Pulsara** — a decentralized DeFi ecosystem **built ON Coreum** (token
+  issuance, governance, **liquidity pools**, trading; governance token `SARA`).
+  Because it lives on Coreum, Pulsara activity (incl. LP add/remove/swap) is read
+  through the **same Coreum Cosmos endpoints** — it is not a separate chain. This
+  is a primary source of Michael's liquidity-pool transactions (ties to C12).
+- **Amounts (Cosmos model):** balances/amounts are integer strings in the token's
+  smallest unit (`amount` + `denom`), and the human decimals come from the chain's
+  `bank` denom **metadata** (`/cosmos/bank/v1beta1/denoms_metadata`, the `exponent`
+  of the display unit). **Coreum native (TX, formerly CORE): base denom `ucoreum`
+  (microcoreum), 1 Coreum = 1,000,000 ucoreum → 6 decimals — VERIFIED via BitGo
+  Coreum docs.** For issued tokens like SARA (Pulsara) we READ the exponent from
+  live denom-metadata during the connector slice and store `decimals` as DATA per
+  asset — we do NOT hardcode a guessed decimal count. Coreum address prefix =
+  `core1…` (bech32), also verified via BitGo. This is the same
+  integer-minor-unit + decimals model as EVM (`amountModel: "evm-minor"` fits),
+  so crypto-core already handles it; only the source/format of reads differs.
+
+### 2.4 ⚠️ LIVE EVENT: Coreum + Sologenic → "TX" merger/migration (verified 2026-08-10)
+
+Confirmed via TX Labs' official GlobeNewswire release (2026-02-17), CoinMarketCal,
+CoinCarp and multiple exchanges (Bitrue, Coins.ph):
+
+- Following an on-chain Coreum governance vote (**87.22% yes**), **Coreum
+  (COREUM/CORE) and Sologenic (SOLO) are BOTH migrating/converting into a single
+  new unified token "TX"**. TX platform go-live early **March 2026**; a TX Token
+  Generation Event is dated **06 March 2026**.
+- **Why this matters for TAXES (bulletproof concern):** a token merger/conversion
+  is a real event that affects **cost basis** and may be a taxable disposal. Our
+  ledger must be able to represent a migration/redenomination event (old SOLO and
+  old CORE lots → new TX lots) WITHOUT losing original cost basis or history.
+- **Impact on our registry:** the `solo` asset already in `crypto-core` is one leg
+  of this. We must NOT silently rewrite it; we track SOLO as-held, track CORE as-
+  held, and add TX + a migration/mapping concept so history stays intact and
+  auditable. Exact conversion ratio + mechanics = OPEN QUESTION for Michael /
+  to verify from tx.org FAQ before we encode any ratio (never guess a ratio).
+
 ---
 
 ## 3. Architecture (how it fits, read-only, mirroring Plaid)
