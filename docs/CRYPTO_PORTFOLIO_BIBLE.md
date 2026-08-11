@@ -353,4 +353,25 @@ auditable USD record**. Design principles:
 - CoinGecko API: https://www.coingecko.com/en/api
 - Flare dev hub: https://dev.flare.network
 
-_Last updated: 2026-08-10._
+---
+
+## 9. Build log (what has actually shipped)
+
+- **C0 — Docs + pure primitives** — DONE. `crypto-core.ts` (chains, assets,
+  address validation, exact amount formatting) + these docs.
+- **C1 — `crypto_*` schema foundation** — DONE (PR #877, merged ccb3061b).
+  Migration only; app ships working pre-migration (store guards added in C2).
+- **C2 — Crypto store (read-only) + "not configured" safety** — DONE
+  (PR #879, merged b6b8f3d2; docs PR #880 merged 6b689485). Typed readers over
+  every `crypto_*` table; return empty/null when tables are missing.
+- **C3 — Crypto Portfolio page (shell)** — DONE. Its OWN page `/admin/crypto`
+  (Portfolio / Wallets / Health tabs), mirroring the `/admin/plaid` precedent
+  rather than the Banking vault. Pure presentation brain `crypto-ui-core.ts`
+  delivers **HONEST portfolio totals** (only priced holdings sum; held-but-unpriced
+  are shown separately, never guessed as $0), **exact token amounts** (never
+  floats), watch-only assurance, and sync-health read-outs. "Add wallet
+  (watch-only)" server action (gate `settings.manage` → validate → store → audit)
+  backed by `addWatchOnlyWallet()` in the store (respects the functional
+  `(chain, lower(address))` unique index). Nav entry added. Full battery green.
+
+_Last updated: 2026-08-10 (C3 shipped)._

@@ -81,11 +81,24 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
   `getCryptoSyncState(walletId)` — all return `[]`/null when tables missing
   (mirrors Plaid store resilience). Pure-ish; DB only.
 
-### C3 — Banking-page "Crypto Portfolio" section (empty-state shell)
-- New section component under `src/components/admin/crypto/` rendered on the
-  Banking page next to Plaid: total-value StatCards, per-wallet rows, empty state.
-- "Add wallet (watch-only)" server action stub (validates address shape via
-  crypto-core; stores nothing sensitive). Reads live but show empty until sync.
+### C3 — "Crypto Portfolio" page (empty-state shell) ✅ DONE
+- **Delivered as its OWN dedicated page `src/app/admin/crypto/page.tsx`** (three
+  tabs: Portfolio / Wallets / Health), mirroring the `/admin/plaid` precedent
+  rather than living inside the Banking vault. Nav entry "Crypto Portfolio"
+  (`\u20bf`) added to `admin-nav-data.ts`, gated on `settings.manage`.
+- Pure presentation brain `src/lib/crypto/crypto-ui-core.ts` (imports crypto-core
+  only; NO server-only) is the tax-safety centerpiece: **HONEST portfolio totals**
+  (sums ONLY holdings with a real USD price; any held-but-unpriced holding is
+  counted separately and NEVER folded in as a guessed $0), **exact token amounts**
+  (formats from stored integer minor units / issued-token decimal strings, never
+  floats), address masking, add-wallet validation with plain-English errors,
+  watch-only posture (structurally always "we never move your funds"), and
+  sync-health read-outs. Backed by `__runCryptoUiCoreTests()` + a vitest mirror.
+- "Add wallet (watch-only)" server action `src/app/admin/crypto/actions.ts`
+  (gate `settings.manage` → `parseAddWallet` → `addWatchOnlyWallet` → audit).
+  `addWatchOnlyWallet()` write added to `crypto-store.ts` using an explicit
+  find-then-insert-or-update that respects the functional `(chain, lower(address))`
+  unique index. Reads live but show empty until later sync slices populate them.
 
 ---
 
