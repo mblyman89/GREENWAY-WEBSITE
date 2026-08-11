@@ -36,10 +36,24 @@
 // Chains
 // ---------------------------------------------------------------------------
 
-/** The chains Greenway holds assets on. */
-export type Chain = "ethereum" | "flare" | "songbird" | "xrpl";
+/**
+ * The chains Greenway holds assets on. Three technology families:
+ *   - EVM     : ethereum, flare, songbird (0x… addresses, integer minor units)
+ *   - XRPL    : xrpl                       (r… addresses)
+ *   - Cosmos  : coreum                     (core1… bech32 addresses; hosts
+ *                                           Coreum-native assets AND Pulsara,
+ *                                           which is a DeFi ecosystem built ON
+ *                                           Coreum — same chain/address)
+ */
+export type Chain = "ethereum" | "flare" | "songbird" | "xrpl" | "coreum";
 
-export const CHAINS: readonly Chain[] = ["ethereum", "flare", "songbird", "xrpl"] as const;
+export const CHAINS: readonly Chain[] = [
+  "ethereum",
+  "flare",
+  "songbird",
+  "xrpl",
+  "coreum",
+] as const;
 
 /** Human labels for the UI (plain English for Michael). */
 export const CHAIN_LABELS: Record<Chain, string> = {
@@ -47,12 +61,28 @@ export const CHAIN_LABELS: Record<Chain, string> = {
   flare: "Flare",
   songbird: "Songbird",
   xrpl: "XRP Ledger",
+  coreum: "Coreum",
 };
 
 /** EVM chains use 0x… addresses and integer-minor-unit amounts. */
 export function isEvmChain(chain: Chain): boolean {
   return chain === "ethereum" || chain === "flare" || chain === "songbird";
 }
+
+/** Cosmos SDK chains use bech32 (core1…) addresses and integer minor units. */
+export function isCosmosChain(chain: Chain): boolean {
+  return chain === "coreum";
+}
+
+/** The bech32 human-readable prefix for each Cosmos chain's account addresses. */
+export const COSMOS_ADDRESS_PREFIX: Record<"coreum", string> = {
+  coreum: "core",
+};
+
+/** Cosmos chain-ids (verified via Polkachu, 2026-08-10). */
+export const COSMOS_CHAIN_ID: Record<"coreum", string> = {
+  coreum: "coreum-mainnet-1",
+};
 
 /** EVM numeric chain IDs (verified via Subsquid EVM registry, 2026-08-10). */
 export const EVM_CHAIN_ID: Record<"ethereum" | "flare" | "songbird", number> = {
@@ -100,11 +130,25 @@ export interface CryptoAsset {
   amountModel: AmountModel;
   /**
    * For "evm-minor" assets: the fixed decimal count (18 for ETH/FLR/SGB, 6 for
-   * USDT, 6 for XRP drops). Undefined for "xrpl-issued" assets.
+   * USDT, 6 for XRP drops, 6 for Cosmos micro-denoms). Undefined for
+   * "xrpl-issued" assets. For Cosmos assets this is the KNOWN convention value
+   * but the connector slice re-confirms it from live denom-metadata before it is
+   * used in tax math (see `decimalsSource`).
    */
   decimals?: number;
   /**
-   * true for the chain's native gas coin (ETH, FLR, SGB, XRP); false for tokens.
+   * Provenance of `decimals` so tax math is auditable and never a silent guess:
+   *   - "verified"      : confirmed against a first-party source (Etherscan,
+   *                       XRPL protocol, chain registry).
+   *   - "denom-convention": Cosmos micro-denom (`u…` = 6) by SDK convention;
+   *                       MUST be re-confirmed from live `denoms_metadata` in the
+   *                       connector slice before use in valuation/cost-basis.
+   *   - "issued-precision": XRPL issued token (no fixed decimals; decimal-string).
+   */
+  decimalsSource: "verified" | "denom-convention" | "issued-precision";
+  /**
+   * true for the chain's native gas/stake coin (ETH, FLR, SGB, XRP, and Coreum's
+   * native coin); false for tokens.
    */
   native: boolean;
   /** ERC-20 contract address (lower-cased), for EVM tokens only. */
@@ -112,16 +156,39 @@ export interface CryptoAsset {
   /** XRPL issuer account (r…) and currency code, for XRPL issued tokens only. */
   issuer?: string;
   currencyCode?: string;
+  /** Cosmos base denom (e.g. "ucore"), for Cosmos assets only. */
+  denom?: string;
+  /**
+   * If this asset is being migrated/merged into another asset (e.g. CORE→TX,
+   * SOLO→TX), the id of the destination asset. We KEEP the original asset and
+   * its history and link it forward — cost basis is never erased. The exact
+   * conversion ratio is NOT encoded here (verified per-event at migration time).
+   */
+  migratesToAssetId?: string;
 }
 
 /**
- * The six assets Michael holds, plus their VERIFIED number formats.
- *   ETH        native, 18 dec
- *   USDT-ETH   ERC-20, 6 dec, contract 0xdac1…ec7   (confirmed on Etherscan)
- *   FLR        native, 18 dec
- *   SGB        native, 18 dec
- *   XRP        native "drops", 6 dec integer
+ * The assets Michael holds, plus their VERIFIED number formats.
+ *
+ * EVM (Ethereum family):
+ *   ETH        native, 18 dec (verified)
+ *   USDT-ETH   ERC-20, 6 dec, contract 0xdac1…ec7 (verified on Etherscan)
+ *   FLR        native, 18 dec (verified)
+ *   SGB        native, 18 dec (verified)
+ * XRP Ledger:
+ *   XRP        native "drops", 6 dec integer (verified)
  *   SOLO       XRPL issued token, 15-sig-digit decimal string, issuer rsoLo2…
+ *              → MIGRATING to TX (Michael must convert; keep-history, links to `tx`)
+ * Cosmos (Coreum; Pulsara is a DeFi ecosystem ON Coreum → same chain):
+ *   TX         Coreum native coin (formerly CORE — CORE auto-converted to TX in
+ *              Michael's wallet). Micro-denom → 6 dec by convention, re-confirmed
+ *              from live denom-metadata in the connector slice.
+ *   SARA       Pulsara governance token on Coreum (a Coreum-issued token). Decimals
+ *              read from live denom-metadata in the connector slice.
+ *
+ * NOTE: We keep SOLO as its own asset (Michael still holds it pre-conversion) and
+ * link it forward to TX via `migratesToAssetId`. We do NOT encode a conversion
+ * ratio here — that is verified per-event when the SOLO→TX conversion is recorded.
  */
 export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
   {
@@ -131,6 +198,7 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     chain: "ethereum",
     amountModel: "evm-minor",
     decimals: 18,
+    decimalsSource: "verified",
     native: true,
   },
   {
@@ -140,6 +208,7 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     chain: "ethereum",
     amountModel: "evm-minor",
     decimals: 6,
+    decimalsSource: "verified",
     native: false,
     contract: "0xdac17f958d2ee523a2206206994597c13d831ec7",
   },
@@ -150,6 +219,7 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     chain: "flare",
     amountModel: "evm-minor",
     decimals: 18,
+    decimalsSource: "verified",
     native: true,
   },
   {
@@ -159,6 +229,7 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     chain: "songbird",
     amountModel: "evm-minor",
     decimals: 18,
+    decimalsSource: "verified",
     native: true,
   },
   {
@@ -168,6 +239,7 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     chain: "xrpl",
     amountModel: "evm-minor", // drops: 6-dec integer minor units
     decimals: 6,
+    decimalsSource: "verified",
     native: true,
   },
   {
@@ -176,9 +248,34 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     name: "Sologenic",
     chain: "xrpl",
     amountModel: "xrpl-issued",
+    decimalsSource: "issued-precision",
     native: false,
     issuer: "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz",
     currencyCode: "SOLO",
+    migratesToAssetId: "tx", // SOLO → TX (pending conversion; keep-history)
+  },
+  {
+    id: "tx",
+    symbol: "TX",
+    name: "TX (Coreum)",
+    chain: "coreum",
+    amountModel: "evm-minor", // Cosmos integer minor units + decimals
+    // VERIFIED (BitGo Coreum docs): base unit `ucoreum`, 1 Coreum = 1,000,000 ucoreum → 6 dec.
+    decimals: 6,
+    decimalsSource: "verified",
+    native: true,
+    denom: "ucoreum", // Coreum base denom (microcoreum) — verified via BitGo docs
+  },
+  {
+    id: "sara",
+    symbol: "SARA",
+    name: "Pulsara",
+    chain: "coreum",
+    amountModel: "evm-minor",
+    decimals: 6, // placeholder by convention; read from live denom-metadata
+    decimalsSource: "denom-convention",
+    native: false,
+    // Coreum-issued token denom is read live in the connector slice (never guessed).
   },
 ] as const;
 
@@ -397,9 +494,30 @@ export function isXrplAddress(addr: string): boolean {
   );
 }
 
+/**
+ * Cosmos bech32 account address (e.g. Coreum `core1…`). We validate the shape:
+ * the human-readable prefix, the required `1` separator, and the bech32 data
+ * charset (which excludes `1`, `b`, `i`, `o`). We do not verify the checksum —
+ * enough to reject typos, EVM/XRPL addresses, and wrong-chain prefixes.
+ */
+export function isCosmosAddress(addr: string, prefix: string): boolean {
+  if (typeof addr !== "string" || typeof prefix !== "string" || prefix.length === 0) {
+    return false;
+  }
+  const s = addr.trim();
+  // prefix + "1" + 6..no bech32 data chars (Cosmos account bodies are 38 chars).
+  const re = new RegExp(`^${prefix}1[023456789acdefghjklmnpqrstuvwxyz]{38,58}$`);
+  return re.test(s);
+}
+
 /** Validate an address for a given chain. */
 export function isValidAddressForChain(chain: Chain, addr: string): boolean {
-  return isEvmChain(chain) ? isEvmAddress(addr) : isXrplAddress(addr);
+  if (isEvmChain(chain)) return isEvmAddress(addr);
+  if (isCosmosChain(chain)) {
+    // `chain` is narrowed to a Cosmos chain here.
+    return isCosmosAddress(addr, COSMOS_ADDRESS_PREFIX[chain as "coreum"]);
+  }
+  return isXrplAddress(addr);
 }
 
 // ---------------------------------------------------------------------------
@@ -427,17 +545,24 @@ export function __runCryptoCoreTests(): void {
   }
 
   // Chains
-  expect("4 chains", CHAINS.length === 4);
+  expect("5 chains", CHAINS.length === 5);
   expect("ethereum is evm", isEvmChain("ethereum"));
   expect("flare is evm", isEvmChain("flare"));
   expect("songbird is evm", isEvmChain("songbird"));
   expect("xrpl is NOT evm", !isEvmChain("xrpl"));
+  expect("coreum is NOT evm", !isEvmChain("coreum"));
+  expect("coreum is cosmos", isCosmosChain("coreum"));
+  expect("ethereum is NOT cosmos", !isCosmosChain("ethereum"));
+  expect("xrpl is NOT cosmos", !isCosmosChain("xrpl"));
   expect("eth chainId 1", EVM_CHAIN_ID.ethereum === 1);
   expect("flare chainId 14", EVM_CHAIN_ID.flare === 14);
+  expect("coreum chain-id", COSMOS_CHAIN_ID.coreum === "coreum-mainnet-1");
+  expect("coreum addr prefix", COSMOS_ADDRESS_PREFIX.coreum === "core");
 
   // Asset registry — verified decimals/issuers
-  expect("6 assets", CRYPTO_ASSETS.length === 6);
+  expect("8 assets", CRYPTO_ASSETS.length === 8);
   expect("ETH 18 dec", getAsset("eth")?.decimals === 18);
+  expect("ETH decimals verified", getAsset("eth")?.decimalsSource === "verified");
   expect("USDT 6 dec", getAsset("usdt-eth")?.decimals === 6);
   expect(
     "USDT contract lowercased",
@@ -450,6 +575,17 @@ export function __runCryptoCoreTests(): void {
   expect("SOLO is xrpl-issued model", getAsset("solo")?.amountModel === "xrpl-issued");
   expect("SOLO has NO fixed decimals", getAsset("solo")?.decimals === undefined);
   expect("SOLO issuer set", getAsset("solo")?.issuer === "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz");
+  expect("SOLO source issued-precision", getAsset("solo")?.decimalsSource === "issued-precision");
+  // Coreum / Pulsara (Cosmos) + the TX migration mapping
+  expect("TX on coreum", getAsset("tx")?.chain === "coreum");
+  expect("TX native", getAsset("tx")?.native === true);
+  expect("TX denom ucoreum", getAsset("tx")?.denom === "ucoreum");
+  expect("TX 6 dec (verified)", getAsset("tx")?.decimals === 6);
+  expect("TX decimals verified", getAsset("tx")?.decimalsSource === "verified");
+  expect("SARA on coreum", getAsset("sara")?.chain === "coreum");
+  expect("SARA is a token (not native)", getAsset("sara")?.native === false);
+  expect("SOLO migrates to TX", getAsset("solo")?.migratesToAssetId === "tx");
+  expect("ETH does not migrate", getAsset("eth")?.migratesToAssetId === undefined);
   expect("unknown asset undefined", getAsset("nope") === undefined);
 
   // Tx taxonomy
@@ -555,6 +691,26 @@ export function __runCryptoCoreTests(): void {
   expect(
     "isValidAddressForChain rejects mismatch",
     !isValidAddressForChain("ethereum", "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz"),
+  );
+
+  // Cosmos (Coreum) bech32 addresses. Fixture: BitGo's documented testnet-shaped
+  // body applied to the mainnet `core` prefix (38-char bech32 body).
+  const coreAddr = "core1tsev3vtllcvg49d06pxrj8ywsj0hzq576hdttd";
+  expect("valid Coreum addr", isCosmosAddress(coreAddr, "core"));
+  expect("Coreum addr wrong prefix rejected", !isCosmosAddress(coreAddr, "cosmos"));
+  expect("Cosmos rejects EVM addr", !isCosmosAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7", "core"));
+  expect("Cosmos rejects XRPL addr", !isCosmosAddress("rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz", "core"));
+  expect("Cosmos rejects empty prefix", !isCosmosAddress(coreAddr, ""));
+  expect("EVM rejects Coreum addr", !isEvmAddress(coreAddr));
+  expect("XRPL rejects Coreum addr", !isXrplAddress(coreAddr));
+  expect("isValidAddressForChain coreum", isValidAddressForChain("coreum", coreAddr));
+  expect(
+    "isValidAddressForChain coreum rejects EVM",
+    !isValidAddressForChain("coreum", "0xdAC17F958D2ee523a2206206994597C13D831ec7"),
+  );
+  expect(
+    "isValidAddressForChain ethereum rejects Coreum",
+    !isValidAddressForChain("ethereum", coreAddr),
   );
 
   if (failures > 0) throw new Error(`crypto-core self-tests: ${failures} failure(s)`);

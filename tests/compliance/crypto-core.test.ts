@@ -20,6 +20,7 @@ import {
   usdValueCents,
   isEvmAddress,
   isXrplAddress,
+  isCosmosAddress,
   isValidAddressForChain,
   isDisposalType,
 } from "@/lib/crypto/crypto-core";
@@ -31,17 +32,34 @@ describe("crypto-core self-test", () => {
 });
 
 describe("crypto-core verified facts", () => {
-  it("tracks exactly four chains, three of them EVM", () => {
-    expect(CHAINS.length).toBe(4);
+  it("tracks exactly five chains, three of them EVM, one Cosmos", () => {
+    expect(CHAINS.length).toBe(5);
     expect(CHAINS.filter(isEvmChain).length).toBe(3);
     expect(isEvmChain("xrpl")).toBe(false);
+    expect(CHAINS).toContain("coreum");
   });
 
-  it("registers exactly Michael's six assets", () => {
-    expect(CRYPTO_ASSETS.length).toBe(6);
+  it("registers exactly Michael's eight assets (incl. Coreum TX + Pulsara SARA)", () => {
+    expect(CRYPTO_ASSETS.length).toBe(8);
     expect(CRYPTO_ASSETS.map((a) => a.id).sort()).toEqual(
-      ["eth", "flr", "sgb", "solo", "usdt-eth", "xrp"].sort(),
+      ["eth", "flr", "sara", "sgb", "solo", "tx", "usdt-eth", "xrp"].sort(),
     );
+  });
+
+  it("models Coreum TX with the VERIFIED ucoreum base denom at 6 decimals", () => {
+    const tx = getAsset("tx");
+    expect(tx?.chain).toBe("coreum");
+    expect(tx?.native).toBe(true);
+    expect(tx?.denom).toBe("ucoreum");
+    expect(tx?.decimals).toBe(6);
+    expect(tx?.decimalsSource).toBe("verified");
+  });
+
+  it("keeps SOLO's history and links it forward to TX (keep-history migration)", () => {
+    const solo = getAsset("solo");
+    expect(solo?.migratesToAssetId).toBe("tx");
+    // TX is the destination and does not itself migrate.
+    expect(getAsset("tx")?.migratesToAssetId).toBeUndefined();
   });
 
   it("uses the VERIFIED USDT-on-Ethereum contract at 6 decimals", () => {
@@ -94,11 +112,16 @@ describe("crypto-core taxonomy & addresses", () => {
     expect(isDisposalType("transfer")).toBe(false);
   });
 
-  it("validates EVM and XRPL addresses without confusing them", () => {
+  it("validates EVM, XRPL and Cosmos addresses without confusing them", () => {
+    const coreAddr = "core1tsev3vtllcvg49d06pxrj8ywsj0hzq576hdttd";
     expect(isEvmAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7")).toBe(true);
     expect(isXrplAddress("rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz")).toBe(true);
+    expect(isCosmosAddress(coreAddr, "core")).toBe(true);
+    // No cross-family confusion.
     expect(isEvmAddress("rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz")).toBe(false);
+    expect(isCosmosAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7", "core")).toBe(false);
     expect(isValidAddressForChain("xrpl", "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz")).toBe(true);
-    expect(isValidAddressForChain("ethereum", "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz")).toBe(false);
+    expect(isValidAddressForChain("coreum", coreAddr)).toBe(true);
+    expect(isValidAddressForChain("ethereum", coreAddr)).toBe(false);
   });
 });

@@ -125,6 +125,34 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 
 ---
 
+## Phase 4b — Cosmos connector (Coreum + Pulsara)
+
+### C8b — Coreum/Cosmos client (read-only) + mappers
+- **Best free+powerful method:** Coreum is a Cosmos SDK L1. Read it directly via
+  the standard **Cosmos REST/LCD + Tendermint RPC** (free public endpoints:
+  Polkachu `coreum-api.polkachu.com` / `coreum-rpc.polkachu.com`, plus others on
+  comparenodes; self-host `cored` if we ever want our own node). No paid API.
+- `src/lib/crypto/cosmos/coreum-client.ts`: thin read-only wrapper —
+  `bank/v1beta1/balances/{address}` (TX + SARA + any held denoms),
+  `bank/v1beta1/denoms_metadata` (READ decimals live → confirm/​upgrade
+  `crypto_assets.decimals`; never guess), Tendermint `tx_search`
+  (`message.sender`/`transfer.recipient`) for full history backfill.
+- Pure mappers `coreum-map-core.ts`: raw Cosmos tx/events → `crypto_transactions`
+  rows. Classifies **Pulsara liquidity-pool** activity (LP add/remove/swap) and
+  staking rewards. `__runCoreumMapCoreTests()` with fixture payloads.
+- **Verified facts:** Coreum native = `ucoreum` (6 dec, BitGo-verified); address
+  prefix `core1…`; chain-id `coreum-mainnet-1`. Pulsara runs ON Coreum → same
+  `core1…` address, read through the SAME endpoints (not a separate chain).
+
+### C8c — TX migration handling (CORE→TX auto, SOLO→TX manual)
+- Use `crypto_asset_migrations` to link old CORE/SOLO cost basis forward to TX
+  without deleting history. CORE→TX already auto-converted in-wallet (record for
+  audit). SOLO→TX pending — when Michael converts, record the event with the
+  **official verified ratio** (pulled from tx.org FAQ, confirmed with Michael)
+  and a documented tax treatment (keep-history; not tax advice).
+
+---
+
 ## Phase 5 — Valuation
 
 ### C9 — CoinGecko USD valuation (current + historical)
