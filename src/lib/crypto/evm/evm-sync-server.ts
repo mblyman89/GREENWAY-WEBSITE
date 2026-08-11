@@ -42,6 +42,7 @@ import {
   upsertCryptoBalances,
   upsertCryptoTransactions,
   upsertCryptoSyncState,
+  countCryptoTransactions,
 } from "../crypto-store";
 import {
   fetchNativeBalance,
@@ -225,6 +226,11 @@ async function syncEvmHistory(
   let state = initEvmBackfill(savedCursor, tipBlock);
   const account = normAddr(address);
   let stoppedForBudget = false;
+  // Progress facts. `target` = chain-tip block (as text) → enables a TRUE % on
+  // the Health tab. `prevCursor` = the cursor BEFORE this run's first window, so
+  // the UI can detect "no progress" (stuck) if it never advances.
+  const target = tipBlock > 0 ? String(tipBlock) : null;
+  let prevCursor = savedCursor;
 
   while (shouldContinueEvmBackfill(state)) {
     // TIME BUDGET: each window is 2 explorer API calls (txlist + tokentx) plus
@@ -369,6 +375,7 @@ async function syncEvmHistory(
     });
 
     const cursorNow = currentCursorString(state);
+    const txnsTotal = await countCryptoTransactions(walletId);
     await upsertCryptoSyncState(
       buildSyncStateUpsert({
         walletId,
@@ -377,8 +384,13 @@ async function syncEvmHistory(
         syncedAt: NOW(),
         status: state.done ? "idle" : "backfilling",
         errorMessage: null,
+        target,
+        prevCursor,
+        transactionsTotal: txnsTotal,
       }),
     );
+    // The cursor we just wrote becomes "previous" for the next window's compare.
+    prevCursor = cursorNow;
   }
 
   return { counts, complete: state.done, stoppedForBudget };

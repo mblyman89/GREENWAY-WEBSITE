@@ -125,6 +125,12 @@ export type CryptoSyncStateRecord = {
   lastSyncedAt: string | null;
   status: "idle" | "backfilling" | "syncing" | "error";
   errorMessage: string | null;
+  /** Backfill TARGET (EVM chain-tip block as text; null for opaque-cursor chains). */
+  backfillTarget: string | null;
+  /** Resume cursor from the PRIOR run (for stuck-loop detection). */
+  prevBackfillCursor: string | null;
+  /** Running count of transaction rows captured for this wallet. */
+  transactionsTotal: number | null;
 };
 
 /**
@@ -241,9 +247,25 @@ export type SyncStateRow = {
   last_synced_at: string | null;
   status: string;
   error_message: string | null;
+  // Progress-visibility columns (migration 0161; all nullable, may be absent
+  // pre-migration — the mapper reads them defensively).
+  backfill_target?: string | null;
+  prev_backfill_cursor?: string | null;
+  transactions_total?: number | string | null;
 };
 
+/**
+ * Full column set INCLUDING the progress-visibility columns (migration 0161).
+ * `getCryptoSyncState` selects these first and falls back to the base set if the
+ * migration hasn't run yet, so the page keeps working PRE-migration.
+ */
 export const SYNC_STATE_COLS =
+  "id,wallet_id,backfill_cursor,backfill_complete,last_incremental_cursor," +
+  "last_synced_at,status,error_message,backfill_target,prev_backfill_cursor," +
+  "transactions_total";
+
+/** Pre-0161 column set (fallback when the progress columns don't exist yet). */
+export const SYNC_STATE_BASE_COLS =
   "id,wallet_id,backfill_cursor,backfill_complete,last_incremental_cursor," +
   "last_synced_at,status,error_message";
 
@@ -395,7 +417,18 @@ export function toCryptoSyncStateRecord(row: SyncStateRow): CryptoSyncStateRecor
     lastSyncedAt: row.last_synced_at,
     status: (row.status as CryptoSyncStateRecord["status"]) ?? "idle",
     errorMessage: row.error_message,
+    backfillTarget: row.backfill_target ?? null,
+    prevBackfillCursor: row.prev_backfill_cursor ?? null,
+    transactionsTotal: parseNullableCount(row.transactions_total),
   };
+}
+
+/** Coerce a bigint-as-string / number / null count into number | null (no NaN). */
+function parseNullableCount(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const n = Number.parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function toCryptoPriceSnapshotRecord(row: PriceSnapshotRow): CryptoPriceSnapshotRecord {

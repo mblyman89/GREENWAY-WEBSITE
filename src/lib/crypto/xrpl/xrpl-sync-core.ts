@@ -94,6 +94,11 @@ export type SyncStateUpsertRow = {
   last_synced_at: string | null;
   status: "idle" | "backfilling" | "syncing" | "error";
   error_message: string | null;
+  // Progress-visibility fields (migration 0161; optional so pre-migration
+  // writes omit them and the store's upsert stays valid).
+  backfill_target?: string | null;
+  prev_backfill_cursor?: string | null;
+  transactions_total?: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -364,8 +369,14 @@ export function buildSyncStateUpsert(input: {
   syncedAt: string;
   status: SyncStateUpsertRow["status"];
   errorMessage: string | null;
+  /** Backfill TARGET for progress % (EVM chain-tip block as text). Optional. */
+  target?: string | null;
+  /** The resume cursor from BEFORE this run, for stuck-loop detection. Optional. */
+  prevCursor?: string | null;
+  /** Running count of tx rows captured for the wallet. Optional. */
+  transactionsTotal?: number | null;
 }): SyncStateUpsertRow {
-  return {
+  const row: SyncStateUpsertRow = {
     wallet_id: input.walletId,
     backfill_cursor: input.cursor,
     backfill_complete: input.backfillComplete,
@@ -374,6 +385,14 @@ export function buildSyncStateUpsert(input: {
     status: input.status,
     error_message: input.errorMessage,
   };
+  // Only attach progress fields when provided, so callers that don't compute
+  // them (and pre-migration writes) emit exactly today's row shape.
+  if (input.target !== undefined) row.backfill_target = input.target;
+  if (input.prevCursor !== undefined) row.prev_backfill_cursor = input.prevCursor;
+  if (input.transactionsTotal !== undefined) {
+    row.transactions_total = input.transactionsTotal;
+  }
+  return row;
 }
 
 /** Serialise an opaque marker for text storage in backfill_cursor. */
