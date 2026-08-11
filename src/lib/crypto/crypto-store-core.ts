@@ -172,11 +172,17 @@ export type AssetRow = {
   denom: string | null;
   migrates_to_asset_id: string | null;
   active: boolean;
+  /** Optional: absent when the 0162 column hasn't been migrated yet. */
+  hidden?: boolean | null;
 };
 
-export const ASSET_COLS =
+/** Base columns present since 0160 (no `hidden`; used as a pre-0162 fallback). */
+export const ASSET_BASE_COLS =
   "id,symbol,name,chain,amount_model,decimals,decimals_source,native,contract," +
   "issuer,currency_code,denom,migrates_to_asset_id,active";
+
+/** Full columns including the 0162 `hidden` flag. */
+export const ASSET_COLS = ASSET_BASE_COLS + ",hidden";
 
 export type WalletRow = {
   id: string;
@@ -351,6 +357,7 @@ export function toCryptoAssetRecord(row: AssetRow): CryptoAssetRecord {
     denom: row.denom,
     migratesToAssetId: row.migrates_to_asset_id,
     active: !!row.active,
+    hidden: row.hidden === true,
   };
 }
 
@@ -504,6 +511,31 @@ export function __runCryptoStoreCoreTests(): void {
   check("asset contract passthrough", asset.contract === "0xdac17f958d2ee523a2206206994597c13d831ec7");
   check("asset native false", asset.native === false);
   check("asset migratesToAssetId null", asset.migratesToAssetId === null);
+  // 0162 `hidden`: absent in the row (pre-migration) maps to false, never crashes.
+  check("asset hidden absent -> false", asset.hidden === false);
+
+  // --- asset mapper: an explicitly hidden asset maps hidden=true.
+  const hiddenAsset = toCryptoAssetRecord({
+    id: "flare:scam",
+    symbol: "SCAM",
+    name: "Scam Coin",
+    chain: "flare",
+    amount_model: "evm-minor",
+    decimals: 18,
+    decimals_source: "verified",
+    native: false,
+    contract: "0x0000000000000000000000000000000000000abc",
+    issuer: null,
+    currency_code: null,
+    denom: null,
+    migrates_to_asset_id: null,
+    active: true,
+    hidden: true,
+  });
+  check("asset hidden true maps true", hiddenAsset.hidden === true);
+  // ASSET_COLS extends the base set with exactly the hidden column.
+  check("ASSET_COLS adds hidden", ASSET_COLS === ASSET_BASE_COLS + ",hidden");
+  check("ASSET_BASE_COLS has no hidden", !ASSET_BASE_COLS.split(",").includes("hidden"));
 
   // --- asset mapper (xrpl-issued SOLO → migrates to tx; decimals null).
   const solo = toCryptoAssetRecord({

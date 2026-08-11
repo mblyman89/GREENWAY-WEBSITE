@@ -29,6 +29,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isValidAddressForChain, type Chain } from "./crypto-core";
 import {
   ASSET_COLS,
+  ASSET_BASE_COLS,
   WALLET_COLS,
   BALANCE_COLS,
   TRANSACTION_COLS,
@@ -94,12 +95,24 @@ export async function listCryptoAssets(): Promise<CryptoAssetRecord[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
+    // Try the full column set (includes the 0162 `hidden` flag). If that
+    // migration hasn't run yet, Postgres errors on the unknown column — we then
+    // retry with the base columns so the portfolio keeps working pre-migration
+    // (assets missing here would break balance resolution, so this must NOT
+    // fall through to an empty list on a mere unknown-column error).
+    const full = await admin
       .from("crypto_assets")
       .select(ASSET_COLS)
       .order("id", { ascending: true });
-    if (error || !data) return [];
-    return (data as unknown as AssetRow[]).map(toCryptoAssetRecord);
+    if (!full.error && full.data) {
+      return (full.data as unknown as AssetRow[]).map(toCryptoAssetRecord);
+    }
+    const base = await admin
+      .from("crypto_assets")
+      .select(ASSET_BASE_COLS)
+      .order("id", { ascending: true });
+    if (base.error || !base.data) return [];
+    return (base.data as unknown as AssetRow[]).map(toCryptoAssetRecord);
   } catch {
     return [];
   }
@@ -431,6 +444,42 @@ export async function ensureCryptoAssets(
     return { ok: true, count: written };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Asset registration failed." };
+  }
+}
+
+/**
+ * AREA 4 — hide/unhide one asset from the Portfolio VIEW (scam/airdrop control).
+ * NOTHING is deleted: this only flips the `hidden` flag; the asset, its balances,
+ * and its transactions all stay in the database for provability, and unhiding is
+ * the same call with `hidden=false`. Idempotent. Graceful: a not-configured DB
+ * is a no-op success, and if the 0162 column isn't migrated yet the update
+ * errors are reported in plain English (the page keeps working — hiding just
+ * won't stick until the migration runs), never crashing.
+ */
+export async function setCryptoAssetHidden(
+  assetId: string,
+  hidden: boolean,
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  const id = cleanId(assetId);
+  if (id === "") return { ok: false, error: "Missing asset id." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("crypto_assets")
+      .update({ hidden })
+      .eq("id", id);
+    if (error) {
+      return {
+        ok: false,
+        error:
+          "Couldn't save the hide setting yet — the database may still need the " +
+          "0162 update applied. Your data is safe; nothing was changed.",
+      };
+    }
+    return { ok: true, count: 1 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Hide update failed." };
   }
 }
 

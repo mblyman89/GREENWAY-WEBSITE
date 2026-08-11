@@ -1,0 +1,31 @@
+-- =============================================================================
+-- 0162_crypto_asset_hidden.sql
+--
+-- HIDE scam / airdrop tokens from the Portfolio view (Michael's Area 4 request).
+--
+-- The alt-coin discovery (Area 3) keeps every ERC-20 an address holds, and the
+-- ERC-20 filter already keeps out NFT spam. A few copycat "coins" can still slip
+-- through. Michael asked to HIDE those from the portfolio view WITHOUT deleting
+-- them — the asset (and its balances and transactions) must stay in the database
+-- for provability, and he must be able to UNHIDE anything caught by mistake.
+--
+-- This adds ONE nullable, additive boolean column to crypto_assets:
+--
+--   * hidden — TRUE when the owner has hidden this asset from the portfolio VIEW.
+--              Defaults to FALSE. Hiding only removes the asset from the view
+--              (and, later, from the priced total); it NEVER deletes any row.
+--              Hiding is at the ASSET level (a scam contract is scam on that
+--              chain regardless of which wallet holds it), matching how mature
+--              trackers (rotki) implement "ignore / mark as spam".
+--
+-- STANDING RULES honored:
+--   * NOTHING DELETED — hidden is a view flag only; all history is retained.
+--   * Idempotent — `add column if not exists`, safe to re-run.
+--   * Ships working PRE-MIGRATION — the store reads a missing column as
+--     "not hidden" and writes degrade gracefully, so nothing breaks until this
+--     migration runs.
+--   * WATCH-ONLY / NO SECRETS — a display flag only; no keys, no fund movement.
+-- =============================================================================
+
+alter table if exists public.crypto_assets
+  add column if not exists hidden boolean not null default false;
