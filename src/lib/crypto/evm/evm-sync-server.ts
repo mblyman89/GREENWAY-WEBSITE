@@ -81,6 +81,12 @@ import {
   type EvmTokenTxRow,
 } from "./evm-sync-core";
 import { isEvmChain, type Chain } from "../crypto-core";
+import {
+  createBudgetDeadline,
+  timeBudgetExceeded,
+  partialContinueSuffix,
+  type BudgetDeadline,
+} from "./evm-sync-budget-core";
 
 /** Per-wallet sync outcome. Never throws — the error is here as a friendly string. */
 export type EvmWalletSyncResult = {
@@ -128,10 +134,12 @@ async function syncEvmBalances(
   walletId: string,
   chain: Chain,
   address: string,
-): Promise<{ written: number; untracked: number }> {
+  deadline: BudgetDeadline | null,
+): Promise<{ written: number; untracked: number; stoppedForBudget: boolean }> {
   const readAt = NOW();
   const rows: BalanceUpsertRow[] = [];
   let untracked = 0;
+  let stoppedForBudget = false;
 
   // --- Native coin balance (account/balance → wei decimal string) ---
   const native = await fetchNativeBalance(chain, address);
@@ -147,9 +155,21 @@ async function syncEvmBalances(
   // derivation needs the complete set, not a windowed subset. We cap at a
   // generous page size and follow Etherscan's page/offset pagination until an
   // empty/partial page is returned.
+  //
+  // TIME BUDGET: each page is a network round-trip (~220ms apart at the shared
+  // rate limit). On Vercel Hobby a serverless function is hard-capped at 60s,
+  // so we check the per-request deadline before fetching each new page and stop
+  // cleanly when it is exhausted. The balance derivation is best-effort across
+  // a single request — a partial page set still yields the balances seen so
+  // far, and the NEXT "Sync now" click re-derives from scratch (token balances
+  // are always computed fresh, not cursor-resumed, so a partial run is safe).
   let page = 1;
   const allTokenRows: EvmTokenTxRow[] = [];
   for (;;) {
+    if (timeBudgetExceeded(Date.now(), deadline)) {
+      stoppedForBudget = true;
+      break;
+    }
     const res = await fetchTokenTx(chain, address, {
       startBlock: 0,
       endBlock: 99999999, // widest range; pagination by page/offset
@@ -174,9 +194,9 @@ async function syncEvmBalances(
   if (rows.length > 0) {
     const res = await upsertCryptoBalances(rows);
     if (!res.ok) throw new Error(res.error);
-    return { written: res.count, untracked };
+    return { written: res.count, untracked, stoppedForBudget };
   }
-  return { written: 0, untracked };
+  return { written: 0, untracked, stoppedForBudget };
 }
 
 /**
@@ -193,12 +213,24 @@ async function syncEvmHistory(
   address: string,
   savedCursor: string | null,
   tipBlock: number,
-): Promise<{ counts: EvmSyncCounts; complete: boolean }> {
+  deadline: BudgetDeadline | null,
+): Promise<{ counts: EvmSyncCounts; complete: boolean; stoppedForBudget: boolean }> {
   let counts = emptyEvmSyncCounts();
   let state = initEvmBackfill(savedCursor, tipBlock);
   const account = normAddr(address);
+  let stoppedForBudget = false;
 
   while (shouldContinueEvmBackfill(state)) {
+    // TIME BUDGET: each window is 2 explorer API calls (txlist + tokentx) plus
+    // mapping + DB upserts. On Vercel Hobby (60s cap) we check the per-request
+    // deadline BEFORE starting a new window so the function always has time to
+    // finish the current window's DB writes and persist the resume cursor. We
+    // break cleanly — the cursor saved after the last completed window is the
+    // exact resume point for the next "Sync now" click.
+    if (timeBudgetExceeded(Date.now(), deadline)) {
+      stoppedForBudget = true;
+      break;
+    }
     const startBlock = state.cursor.nextStartBlock;
     const endBlock = currentWindowEnd(state);
     const offset = Math.min(EVM_DEFAULT_PAGE_SIZE, state.windowBlocks);
@@ -295,7 +327,7 @@ async function syncEvmHistory(
     );
   }
 
-  return { counts, complete: state.done };
+  return { counts, complete: state.done, stoppedForBudget };
 }
 
 /**
@@ -353,19 +385,39 @@ export async function syncEvmWallet(walletId: string): Promise<EvmWalletSyncResu
     }
     const tipBlock = tip.result;
 
-    const bal = await syncEvmBalances(walletId, chain, address);
-    const hist = await syncEvmHistory(walletId, chain, address, savedCursor, tipBlock);
+    // Per-request TIME BUDGET. On Vercel Hobby a serverless function is
+    // hard-capped at 60s (verified vercel.com/docs/limits). A full backfill can
+    // need hundreds of explorer calls, so one click can never finish a large
+    // wallet. We give this request a 45s wall-clock budget (comfortably under
+    // the 60s cap, leaving ~15s for the final window's DB writes). When the
+    // budget runs out the loops above stop cleanly and persist the resume
+    // cursor — the next "Sync now" click continues from exactly there. We
+    // append a friendly "click again to continue" suffix when the stop was due
+    // to the budget (not because we reached the tip).
+    const deadline = createBudgetDeadline(Date.now());
+    const bal = await syncEvmBalances(walletId, chain, address, deadline);
+    const hist = await syncEvmHistory(
+      walletId,
+      chain,
+      address,
+      savedCursor,
+      tipBlock,
+      deadline,
+    );
 
     const counts = addEvmWindowCounts(hist.counts, {
       balancesUpserted: bal.written,
       untrackedBalances: bal.untracked,
     });
 
+    const stoppedForBudget = bal.stoppedForBudget || hist.stoppedForBudget;
+    const suffix = partialContinueSuffix(hist.complete, stoppedForBudget);
+
     return {
       walletId,
       address,
       ok: true,
-      message: summarizeEvmSync(counts),
+      message: summarizeEvmSync(counts) + suffix,
       counts,
     };
   } catch (e) {

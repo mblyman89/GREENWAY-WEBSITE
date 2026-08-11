@@ -68,6 +68,7 @@ import { __runEvmMapCoreTests } from "../../src/lib/crypto/evm/evm-map-core";
 import { __runEvmDefiCoreTests } from "../../src/lib/crypto/evm/evm-defi-core";
 import { __runEvmClientCoreTests } from "../../src/lib/crypto/evm/evm-client-core";
 import { __runEvmSyncCoreTests } from "../../src/lib/crypto/evm/evm-sync-core";
+import { __runEvmSyncBudgetCoreTests } from "../../src/lib/crypto/evm/evm-sync-budget-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -612,6 +613,7 @@ async function main() {
   __runEvmDefiCoreTests();
   __runEvmClientCoreTests();
   __runEvmSyncCoreTests();
+  __runEvmSyncBudgetCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
