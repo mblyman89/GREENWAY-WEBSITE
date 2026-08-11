@@ -26,7 +26,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] PR opened (#875), `compliance` green, squash-merged, main synced
 - [x] Reported to Michael via `ask`
 
-## C1 — `crypto_*` schema foundation ← **SLICE TWO (in progress)**
+## C1 — `crypto_*` schema foundation ← **SLICE TWO ✅ DONE (PR #877, merged ccb3061b)**
 - [x] Update `crypto-core.ts`: add `coreum` (Cosmos) chain, `isCosmosChain`, `COSMOS_ADDRESS_PREFIX`, `COSMOS_CHAIN_ID`, Cosmos bech32 validator, `decimalsSource` + `migratesToAssetId` fields
 - [x] Add TX (Coreum, `ucoreum`, 6 dec VERIFIED via BitGo), SARA (Pulsara), link SOLO→TX (keep-history)
 - [x] Fix self-tests (5 chains, 8 assets, Cosmos addresses) + vitest mirror
@@ -35,7 +35,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] Ships working pre-migration (store guards added in C2)
 - [x] Update Bible + Roadmap (Coreum/TX facts §2.3/§2.4, Cosmos connector slices C8b/C8c)
 - [x] Battery green · config restored identical
-- [ ] PR · merge · sync · report
+- [x] PR (#877) · `compliance` green · squash-merged · main synced · reported to Michael
 
 ## C2 — Crypto store (read-only)
 - [ ] `src/lib/crypto/crypto-store.ts` readers w/ "not configured" resilience
