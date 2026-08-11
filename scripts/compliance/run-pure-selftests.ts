@@ -59,6 +59,7 @@ import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
 import { __runCryptoCoreTests } from "../../src/lib/crypto/crypto-core";
+import { __runCryptoStoreCoreTests } from "../../src/lib/crypto/crypto-store-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -594,6 +595,7 @@ async function main() {
   console.log(__runLlamaParseStatusCoreTests());
   console.log(__runTransportFieldsCoreTests());
   __runCryptoCoreTests();
+  __runCryptoStoreCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
