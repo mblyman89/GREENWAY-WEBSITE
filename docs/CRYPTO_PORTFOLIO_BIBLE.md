@@ -59,6 +59,18 @@ Concretely, the feature must:
 
 ## 2. The verified stack (never guess — all confirmed against first-party sources, 2026-08-10)
 
+> **⚠️ ARCHITECTURE UPDATE (2026-08-11, approved by Michael) — read this first.**
+> The EVM delivery mechanism below has changed. We are **NOT** running a standalone
+> Subsquid indexer + Postgres. Instead the EVM chains use an **in-app poller** that
+> reads a FREE explorer/RPC API, mirroring the XRPL (C4/C5) and Plaid banking
+> integrations (connect → full backfill → once-per-day refresh), all inside the one
+> Next.js app — because a separate Subsquid service does not fit Vercel Hobby and
+> would be infra Michael must run. **The chain FACTS in the tables below (chainIds,
+> decimals, RPC endpoints, contract addresses) remain fully valid and are exactly
+> what the in-app poller uses.** Only the "how we fetch/host" line changed: wherever
+> a row says "Subsquid", read it as "fetched by our in-app poller via the free
+> explorer/RPC for that chain". See ROADMAP Phase 4 (C6/C6b/C7/C8) for the plan.
+
 | Layer | Tool | Covers | Cost | Verified source |
 |---|---|---|---|---|
 | **EVM chains** | **Subsquid (SQD)** | Ethereum, Flare (ready datasets); Songbird (via EVM-RPC mode); USDT-on-ETH | **Free** (data free; self-host free; Cloud free playground) | docs.sqd.ai network registry + Quickstart + Pricing |
@@ -435,4 +447,32 @@ auditable USD record**. Design principles:
   Full battery green (self-tests; tsc; eslint 0/0; vitest 274 files / 3571 tests;
   pytest 450; next build).
 
-_Last updated: 2026-08-11 (C5 shipped)._
+- **C6 (EVM tax-truth mappers, pure) — shipped.**
+  `src/lib/crypto/evm/evm-map-core.ts` turns raw EVM chain data (native ETH/FLR/SGB
+  transfers + ERC-20 Transfer logs) into the SAME `MappedTransaction` shape the
+  XRPL mappers emit, so C5's `buildTransactionUpserts` + crypto-store writers
+  persist EVM legs with ZERO extra code. Everything is grounded in first-party
+  facts (EIP-20/EIP-721, Yellow Paper), never guessed:
+  - The ERC-20 Transfer topic0 is the verified constant
+    `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`. A
+    genuine ERC-20 Transfer log has **exactly 3 topics** (`[topic0, from, to]`)
+    with the `value` in `data`; an ERC-721 (NFT) transfer shares that same topic0
+    but has **4 topics** (the tokenId is indexed) — so 4-topic logs are REJECTED
+    and NFTs can never be mis-ingested as fungible token moves.
+  - On-chain amounts are unsigned uint256; we parse them with BigInt to an EXACT
+    decimal string (max-uint256 proven) — no floats ever — and emit a SIGNED
+    amount (negative = leaving the wallet) after deriving direction (from=out,
+    to=in, both=self).
+  - Contract resolution is chain-scoped and lower-cased, so USDT-on-Ethereum
+    (6 decimals, NOT 18) resolves on Ethereum only. An untracked token is KEPT
+    (assetId null, contract recorded as a currency/issuer note) — never dropped.
+  - The network fee (`gasUsed × effectiveGasPrice`, in the chain's native coin)
+    is charged to the transaction sender only and attributed exactly once across
+    all legs of a transaction.
+  Vitest mirror `tests/compliance/evm-map-core.test.ts` (18 tests). Self-test
+  wired into `run-pure-selftests.ts`. Full battery green (self-tests; tsc;
+  eslint 0/0; vitest 275 files / 3589 tests; pytest 450; next build).
+  **Architecture note:** the EVM fetch layer is an in-app poller over a free
+  explorer/RPC (NOT Subsquid) — see the §2 banner and ROADMAP Phase 4.
+
+_Last updated: 2026-08-11 (C6 EVM mappers shipped; EVM architecture switched to in-app poller)._

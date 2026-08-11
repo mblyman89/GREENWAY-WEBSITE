@@ -17,7 +17,7 @@ Phase 0  Foundations & safety rails        C0
 Phase 1  Data model (schema)               C1
 Phase 2  Read layer + Banking-page shell   C2, C3
 Phase 3  XRPL connector (fastest win)      C4, C5           ← XRP + Sologenic + USDT-on-XRPL
-Phase 4  EVM connector via Subsquid        C6, C7, C8       ← Ethereum + USDT-on-ETH, then Flare, then Songbird
+Phase 4  EVM connector via in-app poller   C6, C6b, C7, C8  ← mappers ✅, then fetch/store wiring; Ethereum + USDT, Flare, Songbird
 Phase 5  Valuation (USD)                   C9               ← CoinGecko current + historical
 Phase 6  Sync engine (backfill + daily)    C10, C11
 Phase 7  Advanced tx typing (LP etc.)      C12
@@ -144,21 +144,37 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 
 ---
 
-## Phase 4 — EVM connector via Subsquid
+## Phase 4 — EVM connector via in-app poller  (APPROVED — supersedes the old Subsquid plan)
 
-### C6 — Subsquid squid: Ethereum (+ USDT-on-ETH) indexer
-- Standalone squid project (in-repo folder, e.g. `crypto-indexer/`) built from the
-  EVM template: indexes native ETH transfers + ERC-20 transfers (incl. USDT
-  `0xdAC1…`) touching tracked addresses → Postgres. Decide self-host vs Cloud
-  (bible §2). Read model exposed to the app (GraphQL or shared DB read).
-- Pure mappers `evm-map-core.ts`: squid rows → `CryptoTransaction` (direction,
-  decimals, tx_type=transfer baseline). Self-tests.
+> **Architecture decision (approved by Michael):** the EVM chains use the SAME
+> in-app connect → full backfill → once-per-day-refresh pattern as the XRPL
+> (C4/C5) and Plaid banking integrations. An **in-app poller** reads a FREE
+> explorer/RPC API — there is NO standalone Subsquid indexer and NO extra
+> Postgres (that would not fit Vercel Hobby and would be infra Michael must run).
+> Everything stays watch-only, key-light, and inside the one Next.js app.
 
-### C7 — Add Flare to the squid (ready dataset `flare-mainnet`)  ⭐ HEAVIEST EVM SLICE
+### C6 — EVM tax-truth mappers (pure)  ✅ SHIPPED
+- `evm-map-core.ts` PURE mappers producing the SAME `MappedTransaction` shape the
+  XRPL mappers emit, so C5's persistence writes EVM legs for free. Grounded in
+  first-party-verified ERC-20/721 facts (topic0, 3-vs-4-topic NFT rejection,
+  exact uint256 BigInt math, chain-scoped contract resolution, signed direction,
+  native-fee-once). Self-tests + vitest mirror (18 tests). Battery green.
+
+### C6b — EVM fetch + store wiring (in-app poller)
+- Deep-research & document the exact FREE fetch API per chain (Etherscan-family
+  free tier for Ethereum; Flare via flarescan/routescan or Flare public RPC
+  `eth_getLogs`; Songbird via its public RPC `eth_getLogs`). Never guess an endpoint.
+- `evm-client-core.ts` (pure fair-use policy: throttle/backoff, request builders,
+  block-range cursor) + `evm-client.ts` (server-only shell, endpoints from env,
+  free tier, no keys) + `evm-sync-server.ts` (orchestrator mirroring
+  `xrpl-sync-server`: connect → backfill by block range → daily incremental;
+  resume cursor per page; never throws).
+
+### C7 — Flare  ⭐ HEAVIEST EVM SLICE
 - **Flare is Michael's PRIMARY DeFi venue** ("I almost exclusively use Flare for
   all things DeFi"). This is NOT a copy of C6 — it is the most complex and most
   tax-critical connector slice.
-- Extend the squid to Flare native + tokens; wire to store.
+- Point the C6b poller at Flare (FLR native + tracked tokens); wire to store.
 - Beyond plain transfers, capture the DeFi/contract-interaction surface: DEX
   router **swaps**, LP pair **mint/burn** (Uniswap-V2-style Mint/Burn/Swap logs),
   **reward/claim** events, and **WFLR** deposit/withdraw. Preserve raw decoded
@@ -167,9 +183,9 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
   history before hard-coding any protocol address.
 - Give this slice the "heavy, expert" treatment Michael explicitly requested.
 
-### C8 — Add Songbird via EVM-RPC mode
-- Index Songbird through `EvmRpcDataSourceBuilder` against
-  `songbird-api.flare.network` (no prebuilt dataset). Document the slower path.
+### C8 — Songbird
+- Point the C6b poller at Songbird (SGB native) via its public RPC (`eth_getLogs`
+  against `songbird-api.flare.network` or equivalent). Document the endpoint.
 
 ---
 
@@ -281,4 +297,4 @@ stuff that, if wrong, breaks tax math. Lowest risk, highest leverage.
 - Ships working pre-migration; nothing breaks if tables/data absent.
 - Reported to Michael in plain English via `ask`; docs updated in git.
 
-_Last updated: 2026-08-10._
+_Last updated: 2026-08-11 (C6 EVM mappers shipped; Phase 4 switched from Subsquid to in-app poller per Michael's approval)._

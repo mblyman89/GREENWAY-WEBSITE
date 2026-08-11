@@ -82,19 +82,50 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [x] wire `__runXrplSyncCoreTests` into run-pure-selftests + vitest mirror (13 tests incl signed→unsigned, idempotent-key, backfill pagination, raw-payload-retained, error-keeps-cursor proofs)
 - [x] Battery green (self-tests; tsc; eslint 0/0; vitest 274f/3571t; pytest 450; next build) · PR · merge · report
 
-## C6 — Subsquid squid: Ethereum (+ USDT)
-- [ ] Squid project scaffolded (`crypto-indexer/`)
-- [ ] Index native ETH + ERC-20 (USDT `0xdAC1…`) for tracked addresses
-- [ ] `evm-map-core.ts` pure mappers + self-tests
-- [ ] Self-host vs Cloud decision documented
+## ARCHITECTURE NOTE (approved by Michael — supersedes the old Subsquid plan)
+The EVM chains (Ethereum, Flare, Songbird) use the SAME in-app connect → backfill →
+once-per-day-refresh pattern as the XRPL (C4/C5) and Plaid banking integrations — an
+**in-app poller** that reads a free explorer/RPC API. There is NO standalone Subsquid
+indexer or extra Postgres (that would not fit Vercel Hobby, and would add infra Michael
+would have to run). This keeps everything watch-only, key-light, and inside the one app.
+
+## C6 — EVM tax-truth mappers (pure) ✅
+- [x] `evm-map-core.ts` PURE mappers + `__runEvmMapCoreTests()`, producing the SAME
+      `MappedTransaction` shape the XRPL mappers emit (so C5's `buildTransactionUpserts`
+      + crypto-store writers persist EVM legs for free):
+  - [x] Verified constant `ERC20_TRANSFER_TOPIC0` = keccak256("Transfer(address,address,uint256)")
+        `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`
+  - [x] `isErc20TransferLog` (topic0 match **AND exactly 3 topics**) vs `isErc721TransferLog`
+        (same topic0 but **4 topics** — NFTs REJECTED so they are never mis-ingested as fungible)
+  - [x] `topicToAddress` (32-byte left-padded indexed topic → last 20 bytes, lower-cased)
+  - [x] `hexToDecimalString` (uint256 hex/decimal → EXACT BigInt decimal string; max-uint256 proven)
+  - [x] `resolveEvmAssetByContract` chain-scoped, lower-cased (USDT-eth 6-dec resolves on
+        ethereum only, NOT 18-dec, NOT on flare); untracked tokens KEPT (assetId null +
+        contract recorded), never silently dropped
+  - [x] `directionForParties` (from=out / to=in / both=self); on-chain unsigned uint256 →
+        SIGNED emitted amount (negative = leaving the wallet)
+  - [x] `mapNativeTransfer` (ETH/FLR/SGB, 18-dec, fee = gasUsed×effectiveGasPrice in native,
+        attributed to the sender only) and `mapErc20TransferLog(s)` (fee attached at most ONCE
+        across all legs of a tx)
+- [x] Wired `__runEvmMapCoreTests` into run-pure-selftests + vitest mirror (18 tests)
+- [x] Battery green (self-tests; tsc; eslint 0/0; vitest 275f/3589t; pytest 450; next build) · PR · merge · report
+
+## C6b — EVM fetch + store wiring (in-app poller)
+- [ ] DEEP-RESEARCH & document the exact FREE fetch API per chain (Etherscan-family free tier
+      for Ethereum; Flare via flarescan/routescan or Flare public RPC `eth_getLogs`; Songbird
+      via its public RPC `eth_getLogs` — verify real endpoints, never guess)
+- [ ] `evm-client-core.ts` pure fair-use policy (throttle/backoff, request builders, cursor model)
+- [ ] `evm-client.ts` server-only shell (endpoints from env, no keys required; free tier)
+- [ ] `evm-sync-server.ts` orchestrator mirroring `xrpl-sync-server` (connect → backfill by
+      block range → daily incremental; resume cursor per page; never throws)
 - [ ] Battery · PR · merge · report
 
-## C7 — Add Flare
-- [ ] Extend squid to `flare-mainnet`; wire to store
+## C7 — Flare (heaviest DeFi slice: LPs, rewards)
+- [ ] Point the C6b poller at Flare; verify FLR native + tracked tokens; wire to store
 - [ ] Battery · PR · merge · report
 
-## C8 — Add Songbird (EVM-RPC mode)
-- [ ] Index via `EvmRpcDataSourceBuilder` → `songbird-api.flare.network`
+## C8 — Songbird
+- [ ] Point the C6b poller at Songbird (SGB native) via its public RPC; wire to store
 - [ ] Battery · PR · merge · report
 
 ## C9 — CoinGecko valuation
@@ -131,4 +162,4 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress
 - [ ] Sync-health badges, failure alerts, full export
 - [ ] Battery · PR · merge · report
 
-_Last updated: 2026-08-10._
+_Last updated: 2026-08-11 (C6 EVM mappers shipped; EVM architecture switched from Subsquid to in-app poller per Michael's approval)._
