@@ -286,6 +286,103 @@ export function receiptRequest(
   return { url: `${base}?${params.toString()}` };
 }
 
+// ---------------------------------------------------------------------------
+// Blockscout JSON-RPC transport (C8)
+//
+// Blockscout explorers (Flare, Songbird) do NOT support the `module=proxy`
+// REST endpoint that Etherscan V2 uses. Live testing confirmed:
+//   GET ?module=proxy&action=eth_blockNumber → "Unknown module"
+// Instead, Blockscout exposes a JSON-RPC 2.0 POST endpoint at {base}/eth-rpc.
+// The RESPONSE shape is identical to Etherscan's proxy module
+// ({jsonrpc, result, id}), so parseBlockNumberResult and parseReceiptResult
+// work unchanged — only the TRANSPORT differs (POST + JSON body vs GET + query).
+//
+// Source: https://docs.blockscout.com/devs/apis/rpc/eth-rpc
+//   "Per instance methods use POST requests to {instance_url}/api/eth-rpc
+//    with JSON-RPC 2.0 format. An API key is not required."
+//
+// Ethereum (Etherscan V2) keeps the existing GET proxy path — it works there.
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a chain's explorer is a Blockscout instance (Flare, Songbird).
+ * Blockscout uses a JSON-RPC POST endpoint for eth_blockNumber /
+ * eth_getTransactionReceipt, while Etherscan V2 (Ethereum) uses the GET proxy
+ * module. This determines which transport the client uses for RPC calls.
+ */
+export function isBlockscoutChain(chain: Chain): boolean {
+  return chain === "flare" || chain === "songbird";
+}
+
+/**
+ * The JSON-RPC POST endpoint URL for a Blockscout chain. The base is the
+ * explorer's REST base (e.g. "https://flare-explorer.flare.network/api") and
+ * the JSON-RPC path is "/eth-rpc" appended to it. Returns null for non-
+ * Blockscout chains (Ethereum uses the GET proxy module instead).
+ */
+export function blockscoutJsonRpcUrl(chain: Chain): string | null {
+  if (!isBlockscoutChain(chain)) return null;
+  const base = resolveEvmExplorerBase(chain);
+  return `${base}/eth-rpc`;
+}
+
+/** A built Blockscout JSON-RPC POST request (URL + JSON body string). */
+export type EvmJsonRpcRequest = {
+  url: string;
+  /** The JSON-RPC 2.0 request body as a serialised string. */
+  body: string;
+};
+
+/**
+ * Build a JSON-RPC eth_blockNumber POST request for a Blockscout chain.
+ * The response shape is the same as Etherscan's proxy module, so
+ * parseBlockNumberResult handles it unchanged.
+ */
+export function blockNumberJsonRpcRequest(chain: Chain): EvmJsonRpcRequest | null {
+  const url = blockscoutJsonRpcUrl(chain);
+  if (url === null) return null;
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    method: "eth_blockNumber",
+    params: [] as unknown[],
+    id: 1,
+  });
+  return { url, body };
+}
+
+/**
+ * Build a JSON-RPC eth_getTransactionReceipt POST request for a Blockscout
+ * chain. The response shape is the same as Etherscan's proxy module, so
+ * parseReceiptResult handles it unchanged.
+ */
+export function receiptJsonRpcRequest(
+  chain: Chain,
+  txHash: string,
+): EvmJsonRpcRequest | null {
+  const url = blockscoutJsonRpcUrl(chain);
+  if (url === null) return null;
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    method: "eth_getTransactionReceipt",
+    params: [txHash],
+    id: 1,
+  });
+  return { url, body };
+}
+
+/**
+ * Detect a Blockscout JSON-RPC error response. Blockscout returns errors as
+ * `{jsonrpc: "2.0", error: "...", id: N}` where `error` is a STRING (not the
+ * standard `{code, message}` object). Returns true when the body has this
+ * shape, so the caller can surface the error message instead of treating the
+ * response as a successful (but empty) result.
+ */
+export function isJsonRpcError(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const obj = body as { error?: unknown };
+  return "error" in obj && obj.error !== undefined && obj.error !== null;
+}
+
 /**
  * Parse a proxy eth_blockNumber response body. The result is a hex string like
  * "0x10c868" — we decode it to a decimal block number. Returns ok=false with
@@ -738,6 +835,50 @@ export function __runEvmClientCoreTests(): void {
   check("receipt flare has txhash", rcFlare.url.includes("txhash=0x"));
   const rcEthNoKey = receiptRequest("ethereum", "0x" + "c".repeat(64), null);
   check("receipt eth no key omits apikey", !rcEthNoKey.url.includes("apikey="));
+
+  // --- Blockscout JSON-RPC transport (C8) ---
+  check("blockscout: flare is blockscout", isBlockscoutChain("flare") === true);
+  check("blockscout: songbird is blockscout", isBlockscoutChain("songbird") === true);
+  check("blockscout: ethereum is NOT blockscout", isBlockscoutChain("ethereum") === false);
+  check("blockscout: xrpl is NOT blockscout", isBlockscoutChain("xrpl") === false);
+
+  const flareRpcUrl = blockscoutJsonRpcUrl("flare");
+  check("blockscout: flare rpc url", flareRpcUrl === "https://flare-explorer.flare.network/api/eth-rpc");
+  const songbirdRpcUrl = blockscoutJsonRpcUrl("songbird");
+  check("blockscout: songbird rpc url", songbirdRpcUrl === "https://songbird-explorer.flare.network/api/eth-rpc");
+  check("blockscout: ethereum rpc url null", blockscoutJsonRpcUrl("ethereum") === null);
+
+  const bnRpc = blockNumberJsonRpcRequest("flare");
+  check("blockscout: blockNumber request not null", bnRpc !== null);
+  if (bnRpc !== null) {
+    check("blockscout: blockNumber url", bnRpc.url === "https://flare-explorer.flare.network/api/eth-rpc");
+    const parsed = JSON.parse(bnRpc.body);
+    check("blockscout: blockNumber jsonrpc", parsed.jsonrpc === "2.0");
+    check("blockscout: blockNumber method", parsed.method === "eth_blockNumber");
+    check("blockscout: blockNumber params empty", Array.isArray(parsed.params) && parsed.params.length === 0);
+    check("blockscout: blockNumber id", parsed.id === 1);
+  }
+  check("blockscout: blockNumber ethereum null", blockNumberJsonRpcRequest("ethereum") === null);
+
+  const rcRpc = receiptJsonRpcRequest("songbird", "0x" + "d".repeat(64));
+  check("blockscout: receipt request not null", rcRpc !== null);
+  if (rcRpc !== null) {
+    check("blockscout: receipt url", rcRpc.url === "https://songbird-explorer.flare.network/api/eth-rpc");
+    const parsed = JSON.parse(rcRpc.body);
+    check("blockscout: receipt jsonrpc", parsed.jsonrpc === "2.0");
+    check("blockscout: receipt method", parsed.method === "eth_getTransactionReceipt");
+    check("blockscout: receipt params has hash", Array.isArray(parsed.params) && parsed.params.length === 1 && parsed.params[0] === "0x" + "d".repeat(64));
+    check("blockscout: receipt id", parsed.id === 1);
+  }
+  check("blockscout: receipt ethereum null", receiptJsonRpcRequest("ethereum", "0x" + "e".repeat(64)) === null);
+
+  // isJsonRpcError: Blockscout returns error as a string, not {code, message}
+  check("jsonrpc error: string error", isJsonRpcError({ jsonrpc: "2.0", error: "Action not found.", id: 1 }) === true);
+  check("jsonrpc error: object error", isJsonRpcError({ jsonrpc: "2.0", error: { code: -32601, message: "Method not found" }, id: 1 }) === true);
+  check("jsonrpc error: success no error", isJsonRpcError({ jsonrpc: "2.0", result: "0x123", id: 1 }) === false);
+  check("jsonrpc error: null result no error", isJsonRpcError({ jsonrpc: "2.0", result: null, id: 1 }) === false);
+  check("jsonrpc error: null body", isJsonRpcError(null) === false);
+  check("jsonrpc error: non-object", isJsonRpcError("string") === false);
 
   console.log("evm-client-core self-tests: all passed");
 }

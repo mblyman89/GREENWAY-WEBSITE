@@ -49,6 +49,10 @@ import {
   tokentxRequest,
   blockNumberRequest,
   receiptRequest,
+  isBlockscoutChain,
+  blockNumberJsonRpcRequest,
+  receiptJsonRpcRequest,
+  isJsonRpcError,
   interpretExplorerBody,
   parseBlockNumberResult,
   isRetryableHttpStatus,
@@ -130,6 +134,34 @@ async function getOnce(url: string): Promise<{ status: number; body: unknown }> 
 }
 
 /**
+ * Perform a single HTTPS POST with a timeout (for Blockscout JSON-RPC). Returns
+ * the parsed body or throws on network failure (the caller decides retry).
+ * Mirrors `getOnce` but sends a JSON body with Content-Type: application/json.
+ */
+async function postOnce(url: string, jsonBody: string): Promise<{ status: number; body: unknown }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EVM_REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: jsonBody,
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    return { status: res.status, body };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Run one request through the throttle + retry/backoff policy. All calls are
  * chained on a single queue so we never exceed the shared explorer's fair-use
  * spacing, even under concurrent callers.
@@ -144,6 +176,64 @@ async function call<T>(url: string, interpret: (body: unknown) => EvmExplorerRes
 
       try {
         const { status, body } = await getOnce(url);
+        if (status >= 200 && status < 300) {
+          const interpreted = interpret(body);
+          if (interpreted.ok) return interpreted;
+          if (shouldRetry(attempt, interpreted.retryable, EVM_MAX_RETRIES)) {
+            await sleep(backoffDelayMs(attempt, 500, 8000));
+            attempt += 1;
+            continue;
+          }
+          return interpreted;
+        }
+        if (shouldRetry(attempt, isRetryableHttpStatus(status), EVM_MAX_RETRIES)) {
+          await sleep(backoffDelayMs(attempt, 500, 8000));
+          attempt += 1;
+          continue;
+        }
+        return { ok: false, error: `HTTP ${status}`, retryable: false };
+      } catch (err) {
+        if (shouldRetry(attempt, true, EVM_MAX_RETRIES)) {
+          await sleep(backoffDelayMs(attempt, 500, 8000));
+          attempt += 1;
+          continue;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: `network: ${message}`, retryable: false };
+      }
+    }
+  };
+
+  const result = queue.then(run, run);
+  queue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result as Promise<EvmExplorerResult<T>>;
+}
+
+/**
+ * Run one JSON-RPC POST request through the SAME throttle + retry/backoff
+ * policy as `call`. Used for Blockscout's /api/eth-rpc endpoint (Flare +
+ * Songbird), which requires POST with a JSON-RPC body instead of the GET
+ * proxy module that Etherscan V2 uses. Shares the same queue + spacing so
+ * we never exceed the shared explorer's fair-use rate, even under concurrent
+ * callers mixing GET and POST requests.
+ */
+async function callPost<T>(
+  url: string,
+  jsonBody: string,
+  interpret: (body: unknown) => EvmExplorerResult<T>,
+): Promise<EvmExplorerResult<T>> {
+  const run = async (): Promise<EvmExplorerResult<T>> => {
+    let attempt = 0;
+    for (;;) {
+      const wait = nextRequestDelayMs(lastRequestAtMs, Date.now(), EVM_MIN_REQUEST_SPACING_MS);
+      if (wait > 0) await sleep(wait);
+      lastRequestAtMs = Date.now();
+
+      try {
+        const { status, body } = await postOnce(url, jsonBody);
         if (status >= 200 && status < 300) {
           const interpreted = interpret(body);
           if (interpreted.ok) return interpreted;
@@ -272,24 +362,58 @@ export async function fetchTokenTx(
 }
 
 /**
- * Fetch the current chain tip block number (via the proxy eth_blockNumber
- * action). Used to bound the backfill window so we walk only the real tip.
+ * Fetch the current chain tip block number. Used to bound the backfill window
+ * so we walk only the real tip.
+ *
+ * DUAL TRANSPORT (C8):
+ * - Blockscout chains (Flare, Songbird): POST JSON-RPC to {base}/eth-rpc.
+ *   Blockscout does NOT support the `module=proxy` GET endpoint that Etherscan
+ *   uses (it returns "Unknown module"). The JSON-RPC response shape
+ *   ({jsonrpc, result, id}) is identical, so parseBlockNumberResult works
+ *   unchanged for both transports.
+ * - Ethereum (Etherscan V2): GET ?module=proxy&action=eth_blockNumber (the
+ *   existing path, which works with an API key).
  */
 export async function fetchTipBlockNumber(chain: Chain): Promise<EvmExplorerResult<number>> {
   if (!isEvmChain(chain)) {
     return { ok: false, error: `Not an EVM chain: ${chain}`, retryable: false };
   }
+  // Blockscout chains: use JSON-RPC POST.
+  if (isBlockscoutChain(chain)) {
+    const req = blockNumberJsonRpcRequest(chain);
+    if (req === null) {
+      return { ok: false, error: `Could not build JSON-RPC request for ${chain}`, retryable: false };
+    }
+    return callPost<number>(req.url, req.body, (body) => {
+      // Blockscout JSON-RPC errors are {jsonrpc, error: "...", id}.
+      if (isJsonRpcError(body)) {
+        const obj = body as { error?: unknown };
+        const msg = typeof obj.error === "string" ? obj.error : "JSON-RPC error";
+        return { ok: false, error: msg, retryable: false };
+      }
+      return parseBlockNumberResult(body);
+    });
+  }
+  // Ethereum (Etherscan V2): use the existing GET proxy module.
   const req = blockNumberRequest(chain, apiKeyForChain(chain));
   return call<number>(req.url, (body) => parseBlockNumberResult(body));
 }
 
 /**
- * Fetch the full transaction receipt for a single transaction hash (via the
- * proxy eth_getTransactionReceipt action). The receipt's `logs[]` array
- * contains EVERY event emitted by EVERY contract in that transaction — ERC-20
- * Transfers, pool Mint/Burn/Swap/Sync, WFLR Deposit/Withdrawal, everything.
- * This is what lets the C7 DeFi classifier (evm-defi-core) see pool events and
- * stamp legs as lp_add / lp_remove / swap instead of the neutral "transfer".
+ * Fetch the full transaction receipt for a single transaction hash. The
+ * receipt's `logs[]` array contains EVERY event emitted by EVERY contract in
+ * that transaction — ERC-20 Transfers, pool Mint/Burn/Swap/Sync, WFLR
+ * Deposit/Withdrawal, everything. This is what lets the C7 DeFi classifier
+ * (evm-defi-core) see pool events and stamp legs as lp_add / lp_remove / swap
+ * instead of the neutral "transfer".
+ *
+ * DUAL TRANSPORT (C8):
+ * - Blockscout chains (Flare, Songbird): POST JSON-RPC to {base}/eth-rpc.
+ *   Blockscout does NOT support the `module=proxy` GET endpoint (returns
+ *   "Unknown module"). The JSON-RPC response shape is identical to Etherscan's
+ *   proxy module, so parseReceiptResult works unchanged for both transports.
+ * - Ethereum (Etherscan V2): GET ?module=proxy&action=eth_getTransactionReceipt
+ *   (the existing path, which works with an API key).
  *
  * Returns an `EvmReceiptResult`:
  *   - ok=true, result=EvmReceipt — the receipt with its full log array.
@@ -307,6 +431,23 @@ export async function fetchTransactionReceipt(
   if (!isEvmChain(chain)) {
     return { ok: false, error: `Not an EVM chain: ${chain}`, retryable: false };
   }
+  // Blockscout chains: use JSON-RPC POST.
+  if (isBlockscoutChain(chain)) {
+    const req = receiptJsonRpcRequest(chain, txHash);
+    if (req === null) {
+      return { ok: false, error: `Could not build JSON-RPC request for ${chain}`, retryable: false };
+    }
+    return callPost<EvmReceipt | null>(req.url, req.body, (body) => {
+      // Blockscout JSON-RPC errors are {jsonrpc, error: "...", id}.
+      if (isJsonRpcError(body)) {
+        const obj = body as { error?: unknown };
+        const msg = typeof obj.error === "string" ? obj.error : "JSON-RPC error";
+        return { ok: false, error: msg, retryable: false };
+      }
+      return parseReceiptResult(body);
+    });
+  }
+  // Ethereum (Etherscan V2): use the existing GET proxy module.
   const req = receiptRequest(chain, txHash, apiKeyForChain(chain));
   return call<EvmReceipt | null>(req.url, (body) => parseReceiptResult(body));
 }
