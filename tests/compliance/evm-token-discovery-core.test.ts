@@ -34,6 +34,7 @@ import {
   buildDiscoveredAssetUpserts,
   buildDiscoveredBalanceUpsert,
   buildDiscoveredBalanceUpserts,
+  supportsTokenListDiscovery,
   ERC20_DECIMALS_SELECTOR,
 } from "@/lib/crypto/evm/evm-token-discovery-core";
 
@@ -190,5 +191,14 @@ describe("evm-token-discovery-core", () => {
     expect(discoveredAssetId("flare", "0xABC0000000000000000000000000000000000001")).toBe("flare:0xabc0000000000000000000000000000000000001");
     expect(discoveredAssetId("songbird", "0xABC0000000000000000000000000000000000001")).toBe("songbird:0xabc0000000000000000000000000000000000001");
     expect(discoveredAssetId("flare", "0xabc0000000000000000000000000000000000001")).not.toBe(discoveredAssetId("songbird", "0xabc0000000000000000000000000000000000001"));
+  });
+
+  it("knows tokenlist discovery is Blockscout-only (the USDT fix routing)", () => {
+    // Flare/Songbird (Blockscout) expose account&action=tokenlist → true.
+    expect(supportsTokenListDiscovery("flare")).toBe(true);
+    expect(supportsTokenListDiscovery("songbird")).toBe(true);
+    // Ethereum (Etherscan) has NO tokenlist action → false, so the server must
+    // derive ERC-20 balances (e.g. USDT-on-ETH) from tokentx history instead.
+    expect(supportsTokenListDiscovery("ethereum")).toBe(false);
   });
 });

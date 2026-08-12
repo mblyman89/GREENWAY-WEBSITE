@@ -207,6 +207,31 @@ export function normalizeBalanceRaw(raw: string | undefined): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Which balance-discovery strategy a chain supports.
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a chain's explorer supports the `account&action=tokenlist` endpoint
+ * used for one-call token discovery.
+ *
+ * WHY THIS MATTERS (the USDT fix):
+ *   `tokenlist` is a Blockscout-only endpoint — it returns EVERY token an
+ *   address currently holds, with a live per-token balance. Flare and Songbird
+ *   (Blockscout) support it, so we discover all their alt-coins in one call.
+ *   Etherscan (Ethereum) has NO `tokenlist` action — it responds "NOTOK" — so
+ *   on Ethereum this discovery path finds nothing and ERC-20 balances (like
+ *   USDT-on-Ethereum) never get recorded. For those chains the server instead
+ *   DERIVES current token balances from the full `tokentx` transfer history
+ *   (sum in−out per contract via deriveTokenBalancesFromHistory), which is data
+ *   the Etherscan-compatible API DOES provide and the sync already collects.
+ *
+ * Pure: delegates to isBlockscoutChain (the only chains with `tokenlist`).
+ */
+export function supportsTokenListDiscovery(chain: Chain): boolean {
+  return isBlockscoutChain(chain);
+}
+
+// ---------------------------------------------------------------------------
 // Request builders (pure — the server wrapper fetches them).
 // ---------------------------------------------------------------------------
 
@@ -596,6 +621,11 @@ export function __runEvmTokenDiscoveryCoreTests(): void {
   check("ethcall req body has selector", (callReq?.body ?? "").includes(ERC20_DECIMALS_SELECTOR));
   check("ethcall req body has method", (callReq?.body ?? "").includes("eth_call"));
   check("ethcall req null for ethereum", decimalsEthCallRequest("ethereum", "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d") === null);
+
+  // --- supportsTokenListDiscovery (the USDT fix): Blockscout-only endpoint ---
+  check("tokenlist support: flare yes", supportsTokenListDiscovery("flare") === true);
+  check("tokenlist support: songbird yes", supportsTokenListDiscovery("songbird") === true);
+  check("tokenlist support: ethereum NO", supportsTokenListDiscovery("ethereum") === false);
 
   // --- payload parsing ---
   const listBody = {
