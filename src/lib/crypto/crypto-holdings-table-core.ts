@@ -27,7 +27,13 @@ import type {
   CryptoWalletRecord,
   CryptoBalanceRecord,
 } from "./crypto-store-core";
-import { formatHeldAmount, formatCentsUsd, maskAddress, chainLabel } from "./crypto-ui-core";
+import {
+  formatHeldAmount,
+  splitDisplayAmount,
+  formatCentsUsd,
+  maskAddress,
+  chainLabel,
+} from "./crypto-ui-core";
 
 // ---------------------------------------------------------------------------
 // Explorer token links (LIVE-verified Blockscout web pages, HTTP 200)
@@ -75,6 +81,12 @@ export type HoldingRow = {
   native: boolean;
   /** Exact quantity, display-formatted from stored minor units (never a float). */
   amountText: string;
+  /** Compact quantity for the cell (<= 4 decimals, TRUNCATED never rounded). */
+  amountShort: string;
+  /** Full exact quantity for the hover tooltip (same as amountText). */
+  amountFull: string;
+  /** True when amountShort dropped digits => UI shows the full-precision tooltip. */
+  amountTruncated: boolean;
   /** USD when priced (integer cents), else null => UI shows "value pending". */
   usdValueCents: number | null;
   valueText: string | null;
@@ -189,6 +201,7 @@ export function buildHoldingRow(
     amountDecimal: b.amountDecimal,
     decimals,
   });
+  const amountParts = splitDisplayAmount(amountText, 4);
   const usdValueCents = b.usdValueCents;
   return {
     balanceId: b.id,
@@ -198,6 +211,9 @@ export function buildHoldingRow(
     chain,
     native,
     amountText,
+    amountShort: amountParts.short,
+    amountFull: amountParts.full,
+    amountTruncated: amountParts.isTruncated,
     usdValueCents,
     valueText: usdValueCents !== null ? formatCentsUsd(usdValueCents) : null,
     // Percent-of-portfolio is filled in a second pass once the grand total is
@@ -407,6 +423,17 @@ export function __runCryptoHoldingsTableCoreTests(): void {
     makeAsset({ id: "FLR", symbol: "FLR", name: "Flare", native: true, contract: null }),
   );
   check("native amount exact", nativeRow.amountText === "2.5");
+  check("native amount short == full when brief", nativeRow.amountShort === "2.5");
+  check("native amount not truncated", nativeRow.amountTruncated === false);
+  check("native amount full carries exact", nativeRow.amountFull === "2.5");
+  // A high-precision native balance: cell shows 4 dp, tooltip keeps everything.
+  const preciseRow = buildHoldingRow(
+    makeBal({ assetId: "FLR", amountRaw: "1234567890123456789" }),
+    makeAsset({ id: "FLR", symbol: "FLR", name: "Flare", native: true, contract: null }),
+  );
+  check("precise amount full exact", preciseRow.amountText === "1.234567890123456789");
+  check("precise amount short 4 dp", preciseRow.amountShort === "1.2345");
+  check("precise amount truncated flag", preciseRow.amountTruncated === true);
   check("native no explorer", nativeRow.explorerUrl === null);
   check("native no contract short", nativeRow.contractShort === null);
   check("native verified", nativeRow.verified === true);

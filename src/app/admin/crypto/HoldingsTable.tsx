@@ -23,6 +23,7 @@
 import { useState } from "react";
 import { setCryptoAssetHiddenAction } from "./actions";
 import type { WalletHoldings, HoldingRow } from "@/lib/crypto/crypto-holdings-table-core";
+import { Tooltip } from "@/components/admin/ux";
 
 function chevron(open: boolean): string {
   return open ? "rotate-90" : "";
@@ -72,8 +73,18 @@ function TokenRow({ row }: { row: HoldingRow }) {
         <div className="text-xs text-white/40">{row.name}</div>
       </td>
 
-      {/* Amount */}
-      <td className="py-2 pr-3 text-right font-mono text-white/85">{row.amountText}</td>
+      {/* Amount — compact to 4 decimals; hover shows the full exact balance */}
+      <td className="py-2 pr-3 text-right font-mono text-white/85">
+        {row.amountTruncated ? (
+          <Tooltip label={<span className="font-mono">{row.amountFull}</span>} position="left">
+            <span className="cursor-help border-b border-dotted border-white/30">
+              {row.amountShort}
+            </span>
+          </Tooltip>
+        ) : (
+          row.amountShort
+        )}
+      </td>
 
       {/* Value (USD) — honest pending until priced */}
       <td className="py-2 pr-3 text-right">

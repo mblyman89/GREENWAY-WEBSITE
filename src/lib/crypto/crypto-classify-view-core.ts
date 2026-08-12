@@ -29,6 +29,7 @@ import {
   type TxPrimitive,
   type TagDefinition,
 } from "./crypto-classification-core";
+import { splitDisplayAmount } from "./crypto-ui-core";
 
 export type ClassifyDirection = "in" | "out" | "self" | null;
 
@@ -61,6 +62,12 @@ export interface ClassifyRow {
   primitive: TxPrimitive;
   primitiveLabel: string;
   amountDisplay: string;
+  /** Compact amount for the cell (<= 4 decimals, TRUNCATED never rounded). */
+  amountShort: string;
+  /** Full exact amount for the hover tooltip. */
+  amountFull: string;
+  /** True when amountShort dropped digits => UI shows the full-precision tooltip. */
+  amountTruncated: boolean;
   assetLabel: string;
   whenDisplay: string;
   txRef: string;
@@ -128,11 +135,15 @@ export function buildClassifyView(
     const isClassified = ownerValid;
     if (isClassified) classified += 1;
 
+    const amountParts = splitDisplayAmount(tx.amountDisplay, 4);
     rows.push({
       txId: tx.id,
       primitive,
       primitiveLabel: PRIMITIVE_LABEL[primitive],
       amountDisplay: tx.amountDisplay,
+      amountShort: amountParts.short,
+      amountFull: amountParts.full,
+      amountTruncated: amountParts.isTruncated,
       assetLabel: tx.assetLabel,
       whenDisplay: tx.whenDisplay,
       txRef: tx.txRef,
@@ -202,6 +213,17 @@ export function __runCryptoClassifyViewCoreTests(): void {
   eq(depKeys.includes("buy"), true, "deposit offers buy");
   eq(depKeys.includes("reward_ftso"), true, "deposit offers FTSO reward");
   eq(depKeys.includes("gift_sent"), false, "deposit does NOT offer gift sent");
+
+  // Amount split: long-decimal amounts get a 4-dp cell + full-precision tooltip.
+  const vAmt = buildClassifyView(
+    [makeTx({ id: "amt", amountDisplay: "123.123456789" })],
+    new Map(),
+  );
+  eq(vAmt.rows[0].amountShort, "123.1234", "classify amount short 4 dp");
+  eq(vAmt.rows[0].amountFull, "123.123456789", "classify amount full exact");
+  eq(vAmt.rows[0].amountTruncated, true, "classify amount truncated flag");
+  const vAmt2 = buildClassifyView([makeTx({ id: "amt2", amountDisplay: "1.5" })], new Map());
+  eq(vAmt2.rows[0].amountTruncated, false, "classify short amount not truncated");
 
   // Owner-classified row uses the owner's tag + its note + counts as classified.
   const v2 = buildClassifyView(

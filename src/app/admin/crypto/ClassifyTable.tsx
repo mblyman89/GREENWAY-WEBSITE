@@ -25,6 +25,7 @@
 import { useState } from "react";
 import { classifyTransactionAction } from "./actions";
 import type { ClassifyRow } from "@/lib/crypto/crypto-classify-view-core";
+import { Tooltip } from "@/components/admin/ux";
 
 function ClassifyRowItem({ row }: { row: ClassifyRow }) {
   const [selected, setSelected] = useState<string>(row.effectiveTagKey);
@@ -42,7 +43,16 @@ function ClassifyRowItem({ row }: { row: ClassifyRow }) {
               {row.primitiveLabel}
             </span>
             <span className="font-semibold text-white/90">
-              {row.amountDisplay || "\u2014"} {row.assetLabel}
+              {row.amountTruncated ? (
+                <Tooltip label={<span className="font-mono">{row.amountFull}</span>} position="top">
+                  <span className="cursor-help border-b border-dotted border-white/30">
+                    {row.amountShort}
+                  </span>
+                </Tooltip>
+              ) : (
+                row.amountShort || "\u2014"
+              )}{" "}
+              {row.assetLabel}
             </span>
             {row.isClassified ? (
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/[0.06] px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
