@@ -25,6 +25,13 @@ const GT_DELAY_MS = 8000;
 /** CoinGecko /simple/price takes many ids in ONE call; still cap payload size. */
 const CG_CHUNK = 100;
 const CG_DELAY_MS = 1500;
+/**
+ * The free /coins/{id}/history endpoint is ONE coin per call, so a batch of
+ * back-traced acquisitions makes many calls. Space them so the keyless tier
+ * (~10-30 req/min) doesn't start returning nulls (which we'd honestly treat as
+ * unpriced, but throttling avoids the false negatives).
+ */
+const CG_HISTORY_DELAY_MS = 2500;
 
 /** Per-request timeout so a hung feed can't stall a whole sync. */
 const FETCH_TIMEOUT_MS = 15000;
@@ -94,6 +101,64 @@ export async function fetchCoinGeckoUsdPrices(
       }
     }
     if (i + CG_CHUNK < unique.length) await sleep(CG_DELAY_MS);
+  }
+  return out;
+}
+
+/**
+ * R1-G3 — fetch a single coin's USD price ON A SPECIFIC HISTORICAL DATE.
+ *
+ * Uses CoinGecko's free GET /coins/{id}/history?date=DD-MM-YYYY endpoint, which
+ * returns that calendar day's market snapshot. We read
+ * market_data.current_price.usd. Returns the USD decimal string, or null when
+ * the coin/day has no data (=> the caller surfaces it as unpriced, never $0).
+ *
+ * The `date` argument MUST already be in CoinGecko's DD-MM-YYYY form (produced
+ * by toCoinGeckoDate() in crypto-historical-pricing-core.ts). NEVER throws.
+ */
+export async function fetchCoinGeckoHistoricalUsdPrice(
+  coinId: string,
+  dateDDMMYYYY: string,
+): Promise<string | null> {
+  const id = coinId.trim();
+  const date = dateDDMMYYYY.trim();
+  if (id === "" || !/^\d{2}-\d{2}-\d{4}$/.test(date)) return null;
+  // localization=false trims the (large) unused i18n payload.
+  const url = `${COINGECKO_BASE}/coins/${encodeURIComponent(id)}/history?date=${encodeURIComponent(date)}&localization=false`;
+  const json = await getJson(url);
+  const usd = (json as { market_data?: { current_price?: { usd?: unknown } } } | null)
+    ?.market_data?.current_price?.usd;
+  return cleanUsd(usd);
+}
+
+/**
+ * R1-G3 — fetch many (coinId, DD-MM-YYYY) historical prices, throttled. Returns
+ * a Map keyed by `${coinId}|${date}` (matching fetchKey() in the pure core) =>
+ * USD decimal string. Missing lookups are simply absent (=> unpriced). NEVER
+ * throws; each call is independent so one failure never poisons the batch.
+ */
+export async function fetchCoinGeckoHistoricalUsdPrices(
+  requests: Array<{ coinId: string; dateDDMMYYYY: string }>,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  // De-dupe defensively (the pure planner already does, but be safe).
+  const seen = new Set<string>();
+  const unique: Array<{ coinId: string; dateDDMMYYYY: string }> = [];
+  for (const r of requests) {
+    const coinId = r.coinId.trim();
+    const date = r.dateDDMMYYYY.trim();
+    if (coinId === "" || !/^\d{2}-\d{2}-\d{4}$/.test(date)) continue;
+    const key = `${coinId}|${date}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ coinId, dateDDMMYYYY: date });
+  }
+
+  for (let i = 0; i < unique.length; i += 1) {
+    const { coinId, dateDDMMYYYY } = unique[i];
+    const usd = await fetchCoinGeckoHistoricalUsdPrice(coinId, dateDDMMYYYY);
+    if (usd) out.set(`${coinId}|${dateDDMMYYYY}`, usd);
+    if (i + 1 < unique.length) await sleep(CG_HISTORY_DELAY_MS);
   }
   return out;
 }
