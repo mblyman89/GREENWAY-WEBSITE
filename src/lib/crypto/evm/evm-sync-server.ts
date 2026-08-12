@@ -56,6 +56,7 @@ import {
   fetchTokenDecimalsOnChain,
 } from "./evm-client";
 import {
+  supportsTokenListDiscovery,
   discoverFromTokenList,
   tokensNeedingDecimals,
   applyResolvedDecimals,
@@ -79,6 +80,7 @@ import {
 } from "./evm-receipt-core";
 import {
   mapEvmNativeBalance,
+  deriveTokenBalancesFromHistory,
   txListRowToNativeTransfer,
   tokenTxRowToEvmLog,
   emptyEvmSyncCounts,
@@ -95,6 +97,7 @@ import {
 } from "./evm-sync-core";
 import {
   EVM_HISTORY_PAGE_SIZE,
+  EVM_HISTORY_MAX_PAGES,
   parseEvmHistoryCursor,
   serializeEvmHistoryCursor,
   isEvmHistoryComplete,
@@ -180,7 +183,46 @@ async function syncEvmBalances(
   // become a balance. This replaces the old tokentx history-summation for the
   // balance snapshot (the live list balance is authoritative and one call).
   let discoveredAssets = 0;
-  if (!timeBudgetExceeded(Date.now(), deadline)) {
+  if (timeBudgetExceeded(Date.now(), deadline)) {
+    stoppedForBudget = true;
+  } else if (!supportsTokenListDiscovery(chain)) {
+    // --- ERC-20 balances on Etherscan-style chains (Ethereum) ---
+    // Etherscan has NO `tokenlist` action, so the discovery path above finds
+    // nothing here. Instead we DERIVE current balances from the full `tokentx`
+    // transfer history (sum in−out per contract). This restores balances for
+    // hand-listed assets (e.g. USDT-on-Ethereum → usdt-eth, 6 decimals verified)
+    // that the wallet holds. We only persist balances whose contract resolves to
+    // a KNOWN asset (buildBalanceUpserts skips assetId=null), so we never invent
+    // an asset or guess decimals on Ethereum. Same paging model as the history
+    // walk (full-range asc pages until a short/empty page), budget-aware.
+    const tokRows: EvmTokenTxRow[] = [];
+    let page = 1;
+    while (page <= EVM_HISTORY_MAX_PAGES) {
+      if (timeBudgetExceeded(Date.now(), deadline)) {
+        stoppedForBudget = true;
+        break;
+      }
+      const tokRes = await fetchTokenTx(chain, address, {
+        startBlock: 0,
+        endBlock: 99999999,
+        page,
+        offset: EVM_HISTORY_PAGE_SIZE,
+      });
+      if (!tokRes.ok) {
+        // Transient explorer hiccup — stop cleanly; next "Sync now" resumes.
+        stoppedForBudget = true;
+        break;
+      }
+      tokRows.push(...tokRes.result);
+      if (tokRes.result.length < EVM_HISTORY_PAGE_SIZE) break; // last page
+      page += 1;
+    }
+    // Derive net balances per contract; only KNOWN-asset rows survive persistence.
+    const derived = deriveTokenBalancesFromHistory(chain, address, tokRows);
+    // Surface any held-but-unmodelled token so it is never silently dropped.
+    untracked = derived.filter((b) => !b.assetId).length;
+    rows.push(...buildBalanceUpserts(walletId, derived, readAt));
+  } else {
     const listRes = await fetchTokenList(chain, address);
     if (listRes.ok && listRes.result.length > 0) {
       let tokens = discoverFromTokenList(chain, { result: listRes.result });
@@ -223,8 +265,6 @@ async function syncEvmBalances(
         rows.push(...buildDiscoveredBalanceUpserts(walletId, fungible, readAt));
       }
     }
-  } else {
-    stoppedForBudget = true;
   }
 
   if (rows.length > 0) {
