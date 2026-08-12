@@ -20,7 +20,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { encryptSecret, decryptSecret } from "@/lib/security/at-rest-crypto";
-import { isAccountRole, type AccountRole, type NormalizedTxn } from "./plaid-core";
+import { type NormalizedTxn } from "./plaid-core";
 
 // ---------------------------------------------------------------------------
 // Types (storage-facing; money in cents)
@@ -57,7 +57,8 @@ export type PlaidAccountRecord = {
   mask: string | null;
   type: string | null;
   subtype: string | null;
-  role: AccountRole | null;
+  /** Canonical role value OR a custom (typed) role key; null = unassigned. */
+  role: string | null;
   currentBalanceCents: number | null;
   availableBalanceCents: number | null;
   isoCurrencyCode: string | null;
@@ -235,7 +236,9 @@ const ACCOUNT_COLS =
   "id,account_id,item_id,name,official_name,custom_name,mask,type,subtype,role,current_balance_cents,available_balance_cents,iso_currency_code,balances_updated_at,active";
 
 function toAccountRecord(row: AccountRow): PlaidAccountRecord {
-  const role = typeof row.role === "string" && isAccountRole(row.role) ? (row.role as AccountRole) : null;
+  // Roles may be one of the 8 canonical values OR a custom (typed) key. Accept
+  // any non-blank stored string; only null/blank means "unassigned".
+  const role = typeof row.role === "string" && row.role.trim() !== "" ? row.role : null;
   return {
     id: row.id,
     accountId: row.account_id,
@@ -313,7 +316,7 @@ export async function listPlaidAccounts(): Promise<PlaidAccountRecord[]> {
 /** Assign (or clear) an account's owner-chosen role. role=null clears it. */
 export async function setPlaidAccountRole(
   accountId: string,
-  role: AccountRole | null,
+  role: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const admin = createSupabaseAdminClient();

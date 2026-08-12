@@ -147,7 +147,29 @@ describe("one account per role guard (never auto-confirm a conflict)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.toLowerCase()).toContain("already assigned");
   });
-  it("rejects an invalid role string", () => {
-    expect(roleAssignmentCheck("acc_new", "banana", existing).ok).toBe(false);
+  it("rejects a punctuation-only custom role string", () => {
+    expect(roleAssignmentCheck("acc_new", "###", existing).ok).toBe(false);
+  });
+});
+
+describe("custom (free-text) roles keep the one-account-per-role rule", () => {
+  const existing = [
+    { accountId: "acc_main", role: "main" },
+    { accountId: "acc_escrow", role: "escrow" },
+  ];
+  it("assigns a normalized custom role", () => {
+    expect(roleAssignmentCheck("acc_new", "Petty Cash", existing)).toEqual({ ok: true, role: "petty cash" });
+  });
+  it("blocks a custom role already held by another account (case-insensitive)", () => {
+    expect(roleAssignmentCheck("acc_new", "ESCROW", existing).ok).toBe(false);
+  });
+  it("lets the same account re-assert its own custom role", () => {
+    expect(roleAssignmentCheck("acc_escrow", "escrow", existing)).toEqual({ ok: true, role: "escrow" });
+  });
+  it("Title-Cases custom roles in roleLabel", () => {
+    expect(roleLabel("petty cash")).toBe("Petty Cash");
+    expect(roleLabel("escrow")).toBe("Escrow");
+    expect(roleLabel("main")).toBe("Main operating");
+    expect(roleLabel(null)).toBe("Unassigned");
   });
 });

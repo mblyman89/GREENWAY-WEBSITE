@@ -17,7 +17,7 @@
  * turn cents into a "$x.xx" string at the very edge, here.
  */
 
-import { ACCOUNT_ROLES, mapItemStatus, validateAccountRole, type AccountRole, type ItemStatusView } from "./plaid-core";
+import { ACCOUNT_ROLES, mapItemStatus, validateRoleAssignment, type AccountRole, type ItemStatusView } from "./plaid-core";
 
 // ---------------------------------------------------------------------------
 // 1) Tab resolver — the page has two tabs in P2. Unknown/empty → "connections".
@@ -89,8 +89,12 @@ export function maskLabel(mask: string | null | undefined): string {
   return m ? `•••• ${m}` : "—";
 }
 
-/** Human label for a role (or "Unassigned"). */
-export function roleLabel(role: AccountRole | null | undefined): string {
+/**
+ * Human label for a role (or "Unassigned"). Accepts the 8 canonical roles
+ * (fixed labels) OR a custom typed key, which is Title-Cased for display
+ * (e.g. "petty cash" -> "Petty Cash"). null/empty -> "Unassigned".
+ */
+export function roleLabel(role: string | null | undefined): string {
   switch (role) {
     case "main":
       return "Main operating";
@@ -109,8 +113,16 @@ export function roleLabel(role: AccountRole | null | undefined): string {
     case "personal":
       return "Personal";
     default:
-      return "Unassigned";
+      break;
   }
+  const key = (role ?? "").trim();
+  if (key === "") return "Unassigned";
+  // Custom role: Title-Case each word for a friendly display label.
+  return key
+    .split(" ")
+    .filter((w) => w.length > 0)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 /**
@@ -135,7 +147,8 @@ export type AccountSummaryInput = {
   mask: string | null;
   type: string | null;
   subtype: string | null;
-  role: AccountRole | null;
+  /** Canonical role value OR a custom (typed) role key; null = unassigned. */
+  role: string | null;
   currentBalanceCents: number | null;
   availableBalanceCents: number | null;
 };
@@ -148,7 +161,8 @@ export type AccountSummaryView = {
   maskText: string;
   typeText: string;
   roleText: string;
-  role: AccountRole | null;
+  /** Canonical role value OR a custom (typed) role key; null = unassigned. */
+  role: string | null;
   currentText: string;
   availableText: string;
 };
@@ -202,20 +216,30 @@ export function buildAccountSummary(a: AccountSummaryInput): AccountSummaryView 
 //    i.e. role=null, is always allowed.)
 // ---------------------------------------------------------------------------
 
-export type ExistingRoleAssignment = { accountId: string; role: AccountRole | null };
+// A role held by an account may be canonical OR a custom (typed) key, so this
+// is now a plain string (or null for unassigned).
+export type ExistingRoleAssignment = { accountId: string; role: string | null };
 
+/**
+ * Enforce "one account per role" for BOTH canonical and custom roles, BEFORE
+ * writing. Accepts a canonical role or a typed custom name (validated +
+ * normalized via validateRoleAssignment). Returns the role string to write
+ * (canonical value or normalized custom key), or a friendly error. NEVER
+ * throws. Clearing a role (role=null) is always allowed.
+ */
 export function roleAssignmentCheck(
   targetAccountId: string,
   requestedRole: string | null | undefined,
   existing: ExistingRoleAssignment[],
-): { ok: true; role: AccountRole | null } | { ok: false; error: string } {
-  const validated = validateAccountRole(requestedRole);
+): { ok: true; role: string | null } | { ok: false; error: string } {
+  const validated = validateRoleAssignment(requestedRole);
   if (!validated.ok) return validated;
 
   const role = validated.role;
   if (role === null) return { ok: true, role: null }; // clearing is always fine
 
-  // Is this role already held by a DIFFERENT account?
+  // Is this exact role key already held by a DIFFERENT account? Compare on the
+  // normalized key so "Petty Cash" and "petty cash" count as the same role.
   const holder = existing.find((e) => e.role === role && e.accountId !== targetAccountId);
   if (holder) {
     return {
@@ -411,12 +435,33 @@ export function __runPlaidUiCoreTests(): void {
   ok(!conflict.ok, "role already taken by another account → conflict");
   if (!conflict.ok) ok(conflict.error.toLowerCase().includes("already assigned"), "conflict message is friendly");
 
-  const invalid = roleAssignmentCheck("acc_new", "banana", existing);
-  ok(!invalid.ok, "invalid role rejected");
+  // Punctuation-only typed name is unusable and rejected.
+  const invalid = roleAssignmentCheck("acc_new", "###", existing);
+  ok(!invalid.ok, "punctuation-only custom role rejected");
 
   // A role held by null-account list shouldn't block (null never conflicts)
   const okAgainstNulls = roleAssignmentCheck("acc_new", "credit", [{ accountId: "a", role: null }]);
   ok(okAgainstNulls.ok, "null holders never conflict");
+
+  // --- Custom (free-text) roles ---
+  const customExisting: ExistingRoleAssignment[] = [
+    { accountId: "acc_main", role: "main" },
+    { accountId: "acc_escrow", role: "escrow" },
+  ];
+  const newCustom = roleAssignmentCheck("acc_new", "Petty Cash", customExisting);
+  ok(newCustom.ok && newCustom.role === "petty cash", "custom role normalized + assigned");
+  const customConflict = roleAssignmentCheck("acc_new", "ESCROW", customExisting);
+  ok(!customConflict.ok, "custom role already held by another account → conflict");
+  const customSameAcct = roleAssignmentCheck("acc_escrow", "escrow", customExisting);
+  ok(customSameAcct.ok && customSameAcct.role === "escrow", "same account re-asserting its custom role is fine");
+  const shadowReserved = roleAssignmentCheck("acc_new", "main", customExisting);
+  ok(!shadowReserved.ok, "reserved role already taken still conflicts");
+
+  // roleLabel on custom keys
+  ok(roleLabel("petty cash") === "Petty Cash", "custom role Title-Cased");
+  ok(roleLabel("escrow") === "Escrow", "single-word custom role Title-Cased");
+  ok(roleLabel("main") === "Main operating", "canonical label unchanged");
+  ok(roleLabel(null) === "Unassigned", "null → Unassigned");
 
   if (failures.length > 0) {
     throw new Error("plaid-ui-core self-tests FAILED:\n" + failures.map((f) => "  - " + f).join("\n"));

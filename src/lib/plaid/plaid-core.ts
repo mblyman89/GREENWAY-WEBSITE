@@ -105,6 +105,83 @@ export function validateAccountRole(
 }
 
 // ---------------------------------------------------------------------------
+// 2b) CUSTOM (free-text) roles
+//
+// Michael can also type his OWN role name (e.g. "escrow", "petty cash",
+// "landlord"). The 8 canonical roles above stay RESERVED because code depends
+// on their exact meaning (vendor-reconcile finds the operating account via
+// role==="main"). A custom name is therefore:
+//   • normalized to a stable KEY: trimmed, lowercased, internal whitespace
+//     collapsed to single spaces, restricted to letters/numbers/space/_/-,
+//     and capped at MAX_CUSTOM_ROLE_LEN characters;
+//   • REJECTED if it (after normalizing) equals one of the reserved canonical
+//     roles — those must be picked from the list, not typed, so we never
+//     accidentally shadow a load-bearing role;
+//   • REJECTED if it has no usable characters after cleaning.
+// The result is a plain string stored in plaid_accounts.role (the DB CHECK is
+// relaxed to a length/charset guard in migration 0169). Uniqueness ("one role
+// per account") is enforced the same way as canonical roles, by comparing
+// these normalized keys across accounts.
+// ---------------------------------------------------------------------------
+
+/** Max length of a custom (typed) role key. Keep in lock-step with migration 0169. */
+export const MAX_CUSTOM_ROLE_LEN = 32;
+
+/**
+ * Normalize a typed role into a stable storage key, or null if it is empty /
+ * unusable after cleaning. Does NOT reject reserved names here (that check is
+ * the assignment validator's job) — this is pure string hygiene so the same
+ * result is produced everywhere the key is compared.
+ */
+export function normalizeCustomRoleKey(input: string | null | undefined): string | null {
+  const cleaned = (input ?? "")
+    .trim()
+    .toLowerCase()
+    // drop anything that isn't a letter, number, space, underscore or hyphen
+    .replace(/[^a-z0-9 _-]/g, " ")
+    // collapse runs of whitespace to a single space
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned === "") return null;
+  return cleaned.slice(0, MAX_CUSTOM_ROLE_LEN).trim();
+}
+
+/**
+ * Validate a role assignment that may be EITHER a canonical role OR a typed
+ * custom name. Returns:
+ *   { ok:true, role:null }                 → unassigned (empty / none)
+ *   { ok:true, role:<canonical>, isCustom:false } → one of the 8 reserved roles
+ *   { ok:true, role:<key>, isCustom:true }        → a normalized custom role key
+ *   { ok:false, error }                    → unusable / collides with reserved
+ * Never throws.
+ */
+export function validateRoleAssignment(
+  input: string | null | undefined,
+): { ok: true; role: string | null; isCustom: boolean } | { ok: false; error: string } {
+  const raw = (input ?? "").trim();
+  const lower = raw.toLowerCase();
+  if (lower === "" || lower === "none" || lower === "null" || lower === "unassigned") {
+    return { ok: true, role: null, isCustom: false };
+  }
+  // Exact canonical match (case-insensitive) → reserved role, not custom.
+  if (isAccountRole(lower)) return { ok: true, role: lower, isCustom: false };
+
+  // Otherwise treat as a typed custom name.
+  const key = normalizeCustomRoleKey(raw);
+  if (key === null) {
+    return { ok: false, error: `Please type a role name using letters or numbers (you can also use spaces, - or _).` };
+  }
+  // A custom name must not collide with a reserved role after cleaning.
+  if (isAccountRole(key)) {
+    return {
+      ok: false,
+      error: `"${key}" is a built-in role — pick it from the list instead of typing it.`,
+    };
+  }
+  return { ok: true, role: key, isCustom: true };
+}
+
+// ---------------------------------------------------------------------------
 // 3) Item status mapper — error_code → status + plain English
 // ---------------------------------------------------------------------------
 
@@ -452,6 +529,28 @@ export function __runPlaidCoreTests(): void {
   expect("role: garbage → error", (() => { const r = validateAccountRole("banana"); return !r.ok; })());
   expect("ACCOUNT_ROLES has 8 entries", ACCOUNT_ROLES.length === 8);
   expect("ACCOUNT_ROLES includes main (reconciliation)", (ACCOUNT_ROLES as readonly string[]).includes("main"));
+
+  // --- normalizeCustomRoleKey ---
+  expect("custom: trims + lowercases", normalizeCustomRoleKey("  Escrow  ") === "escrow");
+  expect("custom: collapses inner whitespace", normalizeCustomRoleKey("petty   cash") === "petty cash");
+  expect("custom: strips punctuation to space", normalizeCustomRoleKey("land!!lord") === "land lord");
+  expect("custom: keeps hyphen + underscore", normalizeCustomRoleKey("tax-hold_2") === "tax-hold_2");
+  expect("custom: empty -> null", normalizeCustomRoleKey("") === null);
+  expect("custom: punctuation-only -> null", normalizeCustomRoleKey("!!!") === null);
+  expect("custom: null -> null", normalizeCustomRoleKey(null) === null);
+  expect("custom: caps at MAX len", (normalizeCustomRoleKey("a".repeat(50)) ?? "").length === MAX_CUSTOM_ROLE_LEN);
+
+  // --- validateRoleAssignment (canonical OR custom) ---
+  expect("assign: '' -> unassigned", (() => { const r = validateRoleAssignment(""); return r.ok && r.role === null; })());
+  expect("assign: 'none' -> unassigned", (() => { const r = validateRoleAssignment("none"); return r.ok && r.role === null; })());
+  expect("assign: 'main' -> canonical (not custom)", (() => { const r = validateRoleAssignment("MAIN"); return r.ok && r.role === "main" && r.isCustom === false; })());
+  expect("assign: 'escrow' -> custom", (() => { const r = validateRoleAssignment("Escrow"); return r.ok && r.role === "escrow" && r.isCustom === true; })());
+  expect("assign: custom normalized key", (() => { const r = validateRoleAssignment("Petty   Cash"); return r.ok && r.role === "petty cash" && r.isCustom === true; })());
+  expect("assign: typed exact reserved -> canonical", (() => { const r = validateRoleAssignment("  main  "); return r.ok && r.role === "main" && r.isCustom === false; })());
+  expect("assign: custom that cleans TO reserved is rejected", (() => { const r = validateRoleAssignment("m@in"); return r.ok && r.role !== null; })()); // "m in" -> custom, fine
+  expect("assign: 'a.t.m' cleans to 'a t m' (custom, not reserved)", (() => { const r = validateRoleAssignment("a.t.m"); return r.ok && r.role === "a t m" && r.isCustom === true; })());
+  expect("assign: typed 'personal' -> canonical", (() => { const r = validateRoleAssignment("personal"); return r.ok && !r.isCustom; })());
+  expect("assign: punctuation-only rejected", (() => { const r = validateRoleAssignment("###"); return !r.ok; })());
 
   // --- mapItemStatus ---
   expect("status: null → healthy", (() => { const s = mapItemStatus(null); return s.status === "healthy" && !s.needsUserAction; })());

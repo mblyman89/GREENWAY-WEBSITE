@@ -11,6 +11,9 @@ import { describe, expect, it } from "vitest";
 import {
   plaidDollarsToCents,
   validateAccountRole,
+  validateRoleAssignment,
+  normalizeCustomRoleKey,
+  MAX_CUSTOM_ROLE_LEN,
   mapItemStatus,
   normalizeTxn,
   planTransactionMerge,
@@ -65,6 +68,43 @@ describe("validateAccountRole", () => {
     const r = validateAccountRole("banana");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("banana");
+  });
+});
+
+describe("normalizeCustomRoleKey", () => {
+  it("trims, lowercases, and collapses whitespace", () => {
+    expect(normalizeCustomRoleKey("  Escrow  ")).toBe("escrow");
+    expect(normalizeCustomRoleKey("petty   cash")).toBe("petty cash");
+  });
+  it("keeps hyphen/underscore, strips other punctuation to space", () => {
+    expect(normalizeCustomRoleKey("tax-hold_2")).toBe("tax-hold_2");
+    expect(normalizeCustomRoleKey("land!!lord")).toBe("land lord");
+  });
+  it("returns null for empty/punctuation-only/null", () => {
+    expect(normalizeCustomRoleKey("")).toBeNull();
+    expect(normalizeCustomRoleKey("!!!")).toBeNull();
+    expect(normalizeCustomRoleKey(null)).toBeNull();
+  });
+  it("caps at MAX_CUSTOM_ROLE_LEN", () => {
+    expect(normalizeCustomRoleKey("a".repeat(50))?.length).toBe(MAX_CUSTOM_ROLE_LEN);
+  });
+});
+
+describe("validateRoleAssignment (canonical OR custom)", () => {
+  it("treats empty/none as unassigned", () => {
+    expect(validateRoleAssignment("")).toEqual({ ok: true, role: null, isCustom: false });
+    expect(validateRoleAssignment("none")).toEqual({ ok: true, role: null, isCustom: false });
+  });
+  it("maps built-in names (case-insensitive) to canonical, not custom", () => {
+    expect(validateRoleAssignment("MAIN")).toEqual({ ok: true, role: "main", isCustom: false });
+    expect(validateRoleAssignment("personal")).toEqual({ ok: true, role: "personal", isCustom: false });
+  });
+  it("accepts a typed custom name (normalized) as custom", () => {
+    expect(validateRoleAssignment("Escrow")).toEqual({ ok: true, role: "escrow", isCustom: true });
+    expect(validateRoleAssignment("Petty   Cash")).toEqual({ ok: true, role: "petty cash", isCustom: true });
+  });
+  it("rejects a name with no usable characters", () => {
+    expect(validateRoleAssignment("###").ok).toBe(false);
   });
 });
 
