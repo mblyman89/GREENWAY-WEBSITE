@@ -275,6 +275,118 @@ export function applyPricesToBalances(
 }
 
 // ---------------------------------------------------------------------------
+// 4) Pure fetch-planning + assembly (bridges resolvePriceSource -> the two HTTP
+//    fetchers -> ResolvedPrice[]). Kept PURE so the R3-B runtime mapping (which
+//    ids/contracts to fetch, and how to turn fetched USD back into scaled cents
+//    per asset) is fully unit-tested and never guesses.
+// ---------------------------------------------------------------------------
+
+/** The distinct network calls a set of assets needs, plus each asset's plan. */
+export type PriceFetchPlan = {
+  /** CoinGecko coin ids to request (deduped, lower-case). */
+  coinGeckoIds: string[];
+  /** GeckoTerminal Flare contracts to request (deduped, lower-case). */
+  geckoTerminalContracts: string[];
+  /** True if any asset needs the WFLR price (for rFLR derived-1:1). */
+  needsWflr: boolean;
+  /** True if any asset needs the tether price (for exUSDT assumed-1:1). */
+  needsTether: boolean;
+  /** Per-asset resolved plan, so assembly can map fetched prices back. */
+  perAsset: Array<{ assetId: string; plan: PriceSourcePlan }>;
+};
+
+/** CoinGecko coin id used to price rFLR (via WFLR) at the documented 1:1. */
+export const WFLR_COINGECKO_ID = "wrapped-flare";
+/** CoinGecko coin id used to price exUSDT (assumed 1:1 real USDT). */
+export const TETHER_COINGECKO_ID = "tether";
+
+/**
+ * Resolve every asset and collect the exact set of network calls needed. Hidden
+ * or inactive assets are skipped by the caller BEFORE this (we plan only what we
+ * were given). Pure + deterministic; deduping keeps fetch payloads minimal.
+ */
+export function planPriceFetches(assets: CryptoAssetRecord[]): PriceFetchPlan {
+  const coinGeckoIds = new Set<string>();
+  const geckoTerminalContracts = new Set<string>();
+  let needsWflr = false;
+  let needsTether = false;
+  const perAsset: Array<{ assetId: string; plan: PriceSourcePlan }> = [];
+
+  for (const asset of assets) {
+    const plan = resolvePriceSource(asset);
+    perAsset.push({ assetId: asset.id, plan });
+    if (plan.kind === "coingecko-id") {
+      coinGeckoIds.add(plan.coinId.toLowerCase());
+    } else if (plan.kind === "geckoterminal-flare") {
+      geckoTerminalContracts.add(plan.contract.toLowerCase());
+    } else if (plan.kind === "derived-wflr") {
+      needsWflr = true;
+      coinGeckoIds.add(WFLR_COINGECKO_ID);
+    } else if (plan.kind === "assumed-usdt") {
+      needsTether = true;
+      coinGeckoIds.add(TETHER_COINGECKO_ID);
+    }
+  }
+
+  return {
+    coinGeckoIds: Array.from(coinGeckoIds),
+    geckoTerminalContracts: Array.from(geckoTerminalContracts),
+    needsWflr,
+    needsTether,
+    perAsset,
+  };
+}
+
+/** The two fetched USD price maps (lower-cased keys) fed into assembly. */
+export type FetchedPrices = {
+  /** CoinGecko coin id (lower-case) => USD decimal string. */
+  coinGecko: Map<string, string>;
+  /** Flare contract (lower-case) => USD decimal string. */
+  geckoTerminalFlare: Map<string, string>;
+};
+
+/**
+ * Turn a fetch plan + the fetched USD maps into ResolvedPrice[] (one per asset
+ * that got a usable price). An asset whose source produced no USD (missing id,
+ * empty pool, rate-limited) is simply omitted => it stays unpriced ("no market
+ * price"). Every USD string is converted to integer scaled-cents via the shared
+ * toScaledCents(), so persistence + valuation use the identical float-free path.
+ *
+ *   - coingecko-id       -> coinGecko.get(coinId)
+ *   - geckoterminal-flare-> geckoTerminalFlare.get(contract)
+ *   - derived-wflr       -> coinGecko.get("wrapped-flare")  (rFLR = WFLR, 1:1)
+ *   - assumed-usdt       -> coinGecko.get("tether")         (exUSDT = USDT, 1:1)
+ *   - none               -> omitted
+ */
+export function assembleResolvedPrices(
+  plan: PriceFetchPlan,
+  fetched: FetchedPrices,
+  scale: number = PRICE_SCALE,
+): ResolvedPrice[] {
+  const out: ResolvedPrice[] = [];
+  for (const { assetId, plan: p } of plan.perAsset) {
+    let usd: string | undefined;
+    if (p.kind === "coingecko-id") {
+      usd = fetched.coinGecko.get(p.coinId.toLowerCase());
+    } else if (p.kind === "geckoterminal-flare") {
+      usd = fetched.geckoTerminalFlare.get(p.contract.toLowerCase());
+    } else if (p.kind === "derived-wflr") {
+      usd = fetched.coinGecko.get(WFLR_COINGECKO_ID);
+    } else if (p.kind === "assumed-usdt") {
+      usd = fetched.coinGecko.get(TETHER_COINGECKO_ID);
+    }
+    if (p.kind === "none" || usd === undefined) continue;
+    out.push({
+      assetId,
+      priceScaledCents: toScaledCents(usd, scale),
+      priceScale: scale,
+      source: p.sourceKey,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (bare-call style; throws on failure, prints pass line).
 // ---------------------------------------------------------------------------
 
@@ -404,6 +516,89 @@ export function __runCryptoPricingCoreTests(): void {
   eq(vals[1].usdValueCents, 227248, "exUSDT 2272.482527 * $1.00 = $2272.48");
   eq(vals[2].usdValueCents, 314922, "WSGB 3129943.15 * $0.00100616 = $3149.22");
   eq(vals[3].usdValueCents, null, "unpriced -> null");
+
+  // --- planPriceFetches ---
+  const planAssets: CryptoAssetRecord[] = [
+    makeAsset({ id: "a-flr", symbol: "FLR", chain: "flare", native: true }), // coingecko flare-networks
+    makeAsset({ id: "a-sfin", symbol: "SFIN", chain: "songbird" }), // coingecko songbird-finance
+    makeAsset({
+      id: "a-sflr",
+      symbol: "SFLR",
+      chain: "flare",
+      contract: "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+    }), // geckoterminal
+    makeAsset({
+      id: "a-rflr",
+      symbol: "RFLR",
+      chain: "flare",
+      contract: "0x26d460c3cf931fb2014fa436a49e3af08619810e",
+    }), // derived-wflr
+    makeAsset({
+      id: "a-exusdt",
+      symbol: "EXUSDT",
+      chain: "songbird",
+      contract: "0x1a7b46656b2b8b29b1694229e122d066020503d0",
+    }), // assumed-usdt
+    makeAsset({
+      id: "a-frog",
+      symbol: "FLRFROG",
+      chain: "flare",
+      contract: "0x19cf770bbb7b71977b860e7fd8d32fa2513a743c",
+    }), // none
+  ];
+  const fetchPlan = planPriceFetches(planAssets);
+  eq(fetchPlan.needsWflr, true, "plan needs WFLR (rFLR present)");
+  eq(fetchPlan.needsTether, true, "plan needs tether (exUSDT present)");
+  // CoinGecko ids: flare-networks, songbird-finance, wrapped-flare, tether (deduped).
+  eq(fetchPlan.coinGeckoIds.includes("flare-networks"), true, "cg ids has flare-networks");
+  eq(fetchPlan.coinGeckoIds.includes("songbird-finance"), true, "cg ids has songbird-finance");
+  eq(fetchPlan.coinGeckoIds.includes("wrapped-flare"), true, "cg ids has wrapped-flare (rFLR)");
+  eq(fetchPlan.coinGeckoIds.includes("tether"), true, "cg ids has tether (exUSDT)");
+  eq(fetchPlan.coinGeckoIds.length, 4, "cg ids deduped to 4");
+  eq(fetchPlan.geckoTerminalContracts.length, 1, "gt contracts = 1 (sFLR)");
+  eq(
+    fetchPlan.geckoTerminalContracts[0],
+    "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+    "gt contract is sFLR",
+  );
+  eq(fetchPlan.perAsset.length, 6, "perAsset covers all 6 assets");
+
+  // --- assembleResolvedPrices ---
+  const fetched: FetchedPrices = {
+    coinGecko: new Map<string, string>([
+      ["flare-networks", "0.0182"],
+      ["songbird-finance", "73.08"],
+      ["wrapped-flare", "0.0182"], // rFLR uses this
+      ["tether", "1"], // exUSDT uses this
+    ]),
+    geckoTerminalFlare: new Map<string, string>([
+      ["0x12e605bc104e93b45e1ad99f9e555f659051c2bb", "0.0195"], // sFLR
+    ]),
+  };
+  const resolvedAssembled = assembleResolvedPrices(fetchPlan, fetched);
+  // 5 priced (FLR, SFIN, sFLR, rFLR, exUSDT); FLRFROG omitted (none).
+  eq(resolvedAssembled.length, 5, "assembled 5 priced (FLRFROG omitted)");
+  const byId: Record<string, ResolvedPrice> = {};
+  for (const r of resolvedAssembled) byId[r.assetId] = r;
+  eq(byId["a-flr"].priceScaledCents, "1820000", "FLR $0.0182 -> scaled");
+  eq(byId["a-flr"].source, "coingecko:flare-networks", "FLR source");
+  eq(byId["a-sfin"].priceScaledCents, "7308000000", "SFIN $73.08 -> scaled");
+  eq(byId["a-sflr"].priceScaledCents, "1950000", "sFLR $0.0195 -> scaled");
+  eq(byId["a-sflr"].source, "geckoterminal:flare:0x12e605bc104e93b45e1ad99f9e555f659051c2bb", "sFLR source");
+  eq(byId["a-rflr"].priceScaledCents, "1820000", "rFLR = WFLR $0.0182 -> scaled");
+  eq(byId["a-rflr"].source, "derived:wflr-1to1", "rFLR source is derived:wflr-1to1");
+  eq(byId["a-exusdt"].priceScaledCents, "100000000", "exUSDT = USDT $1.00 -> scaled");
+  eq(byId["a-exusdt"].source, "assumed:usdt-1to1", "exUSDT source is assumed:usdt-1to1");
+  eq(byId["a-frog"], undefined, "FLRFROG not in resolved (no price)");
+
+  // Missing fetched price => asset omitted (unpriced), not guessed.
+  const partial: FetchedPrices = {
+    coinGecko: new Map<string, string>([["songbird-finance", "73.08"]]),
+    geckoTerminalFlare: new Map<string, string>(),
+  };
+  const resolvedPartial = assembleResolvedPrices(fetchPlan, partial);
+  eq(resolvedPartial.length, 1, "only SFIN priced when others missing");
+  eq(resolvedPartial[0].assetId, "a-sfin", "partial keeps SFIN only");
 
   console.log("crypto-pricing-core self-tests: all passed");
 }
