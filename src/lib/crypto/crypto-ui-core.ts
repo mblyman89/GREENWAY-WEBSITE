@@ -45,7 +45,7 @@ import {
 // ---------------------------------------------------------------------------
 
 /** The crypto page's tabs. Portfolio opens first (the at-a-glance value view). */
-export type CryptoTab = "portfolio" | "wallets" | "health";
+export type CryptoTab = "portfolio" | "wallets" | "classify" | "health";
 
 /**
  * Resolve the ?tab= query param. Unknown/missing → portfolio. A couple of
@@ -54,16 +54,23 @@ export type CryptoTab = "portfolio" | "wallets" | "health";
 export function resolveCryptoTab(param: string | null | undefined): CryptoTab {
   const p = (param ?? "").trim().toLowerCase();
   if (p === "wallets" || p === "addresses") return "wallets";
+  if (p === "classify" || p === "transactions" || p === "tax") return "classify";
   if (p === "health" || p === "status") return "health";
   return "portfolio";
 }
 
 /** Ordered tab list for rendering (kept here so the page never hard-codes it). */
-export const CRYPTO_TABS: readonly CryptoTab[] = ["portfolio", "wallets", "health"] as const;
+export const CRYPTO_TABS: readonly CryptoTab[] = [
+  "portfolio",
+  "wallets",
+  "classify",
+  "health",
+] as const;
 
 /** Plain-English label for a tab. */
 export function cryptoTabLabel(tab: CryptoTab): string {
   if (tab === "wallets") return "Wallets";
+  if (tab === "classify") return "Classify";
   if (tab === "health") return "Health";
   return "Portfolio";
 }
@@ -574,8 +581,13 @@ export function __runCryptoUiCoreTests(): void {
   check("tab wallets", resolveCryptoTab("wallets") === "wallets");
   check("tab addresses alias", resolveCryptoTab("addresses") === "wallets");
   check("tab health", resolveCryptoTab("HEALTH") === "health");
+  check("tab classify", resolveCryptoTab("classify") === "classify");
+  check("tab transactions alias", resolveCryptoTab("transactions") === "classify");
+  check("tab tax alias", resolveCryptoTab("tax") === "classify");
   check("tab unknown → portfolio", resolveCryptoTab("nonsense") === "portfolio");
   check("tab label", cryptoTabLabel("wallets") === "Wallets");
+  check("tab label classify", cryptoTabLabel("classify") === "Classify");
+  check("classify in tab list", CRYPTO_TABS.includes("classify"));
 
   // --- USD formatting (integer cents, never floats).
   check("usd zero", formatCentsUsd(0) === "$0.00");
