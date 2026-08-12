@@ -30,7 +30,6 @@
  */
 
 import { formatCentsUsd } from "./plaid-ui-core";
-import type { AccountRole } from "./plaid-core";
 
 // ---------------------------------------------------------------------------
 // Types — the transaction shape this module reasons over (a lean projection of
@@ -71,7 +70,8 @@ export type GroupableAccount = {
   currentText: string;
   /** Raw balance in cents for group subtotal math (null = unknown). */
   currentBalanceCents: number | null;
-  role: AccountRole | null;
+  /** Canonical role value OR a custom (typed) role key; null = unassigned. */
+  role: string | null;
 };
 
 export type AccountGroup = {

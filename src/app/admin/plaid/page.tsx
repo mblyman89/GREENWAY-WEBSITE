@@ -70,6 +70,7 @@ import {
   type MoneyView,
   type MoneyRangeKey,
 } from "@/lib/plaid/plaid-money-core";
+import { ACCOUNT_ROLES } from "@/lib/plaid/plaid-core";
 import { PlaidLinkButton } from "./PlaidLinkButton";
 import { assignPlaidAccountRoleAction, runPlaidSyncNowAction, setPlaidAccountNameAction } from "./actions";
 
@@ -764,31 +765,64 @@ export default async function PlaidPage({
                               {v.typeText} · {v.currentText}
                             </p>
                           </div>
-                          <form
-                            action={assignPlaidAccountRoleAction}
-                            className="flex items-center gap-2"
-                          >
-                            <input type="hidden" name="account_id" value={a.accountId} />
-                            <label className="sr-only" htmlFor={`role-${a.accountId}`}>
-                              Role for {v.displayName}
-                            </label>
-                            <select
-                              id={`role-${a.accountId}`}
-                              name="role"
-                              defaultValue={a.role ?? ""}
-                              className={selectCls}
+                          <div className="flex flex-col items-end gap-2">
+                            {/* Pick one of the built-in roles. */}
+                            <form
+                              action={assignPlaidAccountRoleAction}
+                              className="flex items-center gap-2"
                             >
-                              <option value="">Unassigned</option>
-                              {ACCOUNT_ROLE_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                            <button type="submit" className={btnGhost}>
-                              Save role
-                            </button>
-                          </form>
+                              <input type="hidden" name="account_id" value={a.accountId} />
+                              <label className="sr-only" htmlFor={`role-${a.accountId}`}>
+                                Role for {v.displayName}
+                              </label>
+                              <select
+                                id={`role-${a.accountId}`}
+                                name="role"
+                                defaultValue={
+                                  a.role && (ACCOUNT_ROLES as readonly string[]).includes(a.role)
+                                    ? a.role
+                                    : ""
+                                }
+                                className={selectCls}
+                              >
+                                <option value="">Unassigned</option>
+                                {ACCOUNT_ROLE_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button type="submit" className={btnGhost}>
+                                Save role
+                              </button>
+                            </form>
+                            {/* Or type your own role name (one account per role still applies). */}
+                            <form
+                              action={assignPlaidAccountRoleAction}
+                              className="flex items-center gap-2"
+                            >
+                              <input type="hidden" name="account_id" value={a.accountId} />
+                              <label className="sr-only" htmlFor={`customrole-${a.accountId}`}>
+                                Custom role for {v.displayName}
+                              </label>
+                              <input
+                                id={`customrole-${a.accountId}`}
+                                name="role"
+                                type="text"
+                                maxLength={32}
+                                placeholder="or type a role…"
+                                defaultValue={
+                                  a.role && !(ACCOUNT_ROLES as readonly string[]).includes(a.role)
+                                    ? a.role
+                                    : ""
+                                }
+                                className={selectCls}
+                              />
+                              <button type="submit" className={btnGhost}>
+                                Save name
+                              </button>
+                            </form>
+                          </div>
                         </div>
                         <form
                           action={setPlaidAccountNameAction}
