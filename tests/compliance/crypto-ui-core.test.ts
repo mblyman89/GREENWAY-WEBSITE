@@ -16,6 +16,7 @@ import {
   formatHeldAmount,
   maskAddress,
   parseAddWallet,
+  parseWalletLabel,
   computePortfolioSummary,
   cryptoPosture,
   buildSyncHealth,
@@ -160,5 +161,44 @@ describe("watch-only posture + display", () => {
     // Empty/blank input renders a neutral em-dash placeholder, not a stray ellipsis.
     expect(maskAddress("")).toBe("\u2014");
     expect(maskAddress(null)).toBe("\u2014");
+  });
+
+  it("renames a wallet: trims, caps, clears-on-empty, guards the id", () => {
+    const ok = parseWalletLabel({ walletId: "w-1", label: "  Main ETH  " });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.walletId).toBe("w-1");
+      expect(ok.label).toBe("Main ETH");
+    }
+    // Empty label clears the nickname (null), so the row falls back to chain name.
+    const cleared = parseWalletLabel({ walletId: "w-1", label: "   " });
+    expect(cleared.ok && cleared.label).toBeNull();
+    // Missing wallet id is rejected with a friendly error.
+    expect(parseWalletLabel({ walletId: "", label: "x" }).ok).toBe(false);
+    // Over-long labels are capped, never rejected.
+    const capped = parseWalletLabel({ walletId: "w-1", label: "z".repeat(500) });
+    expect(capped.ok && capped.label!.length).toBe(WALLET_LABEL_MAX);
+  });
+
+  it("surfaces the raw label on the wallet row (for the rename box)", () => {
+    const named = buildWalletRow({
+      id: "w-2",
+      chain: "flare",
+      address: "0x1234567890abcdef1234567890abcdef12345678",
+      label: "DeFi wallet",
+      active: true,
+    });
+    expect(named.label).toBe("DeFi wallet");
+    expect(named.displayName).toBe("DeFi wallet");
+    // No label → empty string in the box, chain name shown as displayName.
+    const unnamed = buildWalletRow({
+      id: "w-3",
+      chain: "flare",
+      address: "0x1234567890abcdef1234567890abcdef12345678",
+      label: null,
+      active: true,
+    });
+    expect(unnamed.label).toBe("");
+    expect(unnamed.displayName).toBe("Flare");
   });
 });

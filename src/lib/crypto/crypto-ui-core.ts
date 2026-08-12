@@ -236,6 +236,32 @@ export type AddWalletParse =
 /** Max characters we accept for a wallet label (keeps the UI + DB tidy). */
 export const WALLET_LABEL_MAX = 60;
 
+/** Result of validating a wallet rename. */
+export type RenameWalletParse =
+  | { ok: true; walletId: string; label: string | null }
+  | { ok: false; error: string };
+
+/**
+ * Validate + normalize a "rename this wallet" submission WITHOUT touching the
+ * DB. A wallet's label is a friendly nickname ("Main ETH", "Coreum/Pulsara").
+ * Rules:
+ *   - walletId must be a non-empty id (the row being renamed),
+ *   - label is trimmed; an empty label CLEARS the nickname (falls back to the
+ *     chain name in the UI) and is stored as null,
+ *   - a set label is capped at WALLET_LABEL_MAX characters.
+ * Never guesses: it only cleans up what Michael typed; it never invents a name.
+ */
+export function parseWalletLabel(input: {
+  walletId?: string | null | undefined;
+  label?: string | null | undefined;
+}): RenameWalletParse {
+  const walletId = (input.walletId ?? "").trim();
+  if (walletId === "") return { ok: false, error: "Which wallet? (missing wallet id)" };
+  const trimmed = (input.label ?? "").trim();
+  const label = trimmed === "" ? null : trimmed.slice(0, WALLET_LABEL_MAX);
+  return { ok: true, walletId, label };
+}
+
 /**
  * Validate + normalize an "Add wallet (watch-only)" submission WITHOUT touching
  * the DB. Enforces:
@@ -306,6 +332,8 @@ export type WalletRowView = {
   chainText: string;
   /** Label if set, else the chain name (so a row always reads clearly). */
   displayName: string;
+  /** The raw nickname exactly as stored (empty string if none) — for the rename box. */
+  label: string;
   addressShort: string;
   addressFull: string;
   active: boolean;
@@ -320,6 +348,7 @@ export function buildWalletRow(w: WalletRowInput): WalletRowView {
     chain: w.chain,
     chainText,
     displayName: label !== "" ? label : chainText,
+    label,
     addressShort: maskAddress(w.address),
     addressFull: w.address,
     active: w.active,
@@ -740,6 +769,17 @@ export function __runCryptoUiCoreTests(): void {
   const longLabel = "x".repeat(200);
   const cappedParse = parseAddWallet({ chain: "ethereum", address: "0x" + "a".repeat(40), label: longLabel });
   check("label capped at max", cappedParse.ok === true && (cappedParse.ok ? cappedParse.label!.length : 0) === WALLET_LABEL_MAX);
+
+  // --- parseWalletLabel (rename): trims, clears-on-empty, caps, guards id.
+  const renOk = parseWalletLabel({ walletId: "w-9", label: "  Main ETH  " });
+  check("rename ok id", renOk.ok === true && (renOk.ok ? renOk.walletId : "") === "w-9");
+  check("rename ok trims", renOk.ok === true && (renOk.ok ? renOk.label : "x") === "Main ETH");
+  const renClear = parseWalletLabel({ walletId: "w-9", label: "   " });
+  check("rename empty clears to null", renClear.ok === true && (renClear.ok ? renClear.label : "x") === null);
+  const renMissing = parseWalletLabel({ walletId: "", label: "x" });
+  check("rename missing id rejected", renMissing.ok === false);
+  const renCap = parseWalletLabel({ walletId: "w-9", label: "y".repeat(200) });
+  check("rename label capped", renCap.ok === true && (renCap.ok ? renCap.label!.length : 0) === WALLET_LABEL_MAX);
 
   // --- isKnownChain guard.
   check("known chain flare", isKnownChain("flare") === true);

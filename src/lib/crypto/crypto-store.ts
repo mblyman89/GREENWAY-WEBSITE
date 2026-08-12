@@ -367,6 +367,39 @@ export async function addWatchOnlyWallet(input: {
   }
 }
 
+export type RenameWalletResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Rename an existing watch-only wallet (update its friendly label only).
+ * The caller passes an ALREADY validated/normalized label (via parseWalletLabel
+ * in crypto-ui-core): a non-empty string, or null to clear the nickname. This
+ * NEVER touches the address, chain, balances, or history — it only writes the
+ * `label` column for the given wallet id. Returns a plain-English error.
+ */
+export async function updateCryptoWalletLabel(
+  walletId: string,
+  label: string | null,
+): Promise<RenameWalletResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const id = (walletId ?? "").trim();
+  if (id === "") return { ok: false, error: "Which wallet? (missing wallet id)" };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("crypto_wallets")
+      .update({ label })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "That wallet no longer exists." };
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not rename the wallet.";
+    return { ok: false, error: msg };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Writes (C5): connector persistence. These take ALREADY-BUILT snake_case
 // upsert rows from xrpl-sync-core (pure, unit-tested) and write them idempotently
