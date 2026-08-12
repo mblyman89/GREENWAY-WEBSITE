@@ -17,7 +17,7 @@
  * turn cents into a "$x.xx" string at the very edge, here.
  */
 
-import { mapItemStatus, validateAccountRole, type AccountRole, type ItemStatusView } from "./plaid-core";
+import { ACCOUNT_ROLES, mapItemStatus, validateAccountRole, type AccountRole, type ItemStatusView } from "./plaid-core";
 
 // ---------------------------------------------------------------------------
 // 1) Tab resolver — the page has two tabs in P2. Unknown/empty → "connections".
@@ -98,10 +98,29 @@ export function roleLabel(role: AccountRole | null | undefined): string {
       return "ATM deposits";
     case "credit":
       return "Credit card";
+    case "savings":
+      return "Savings";
+    case "reserve":
+      return "Tax / reserve";
+    case "mortgage":
+      return "Mortgage";
+    case "loan":
+      return "Loan";
+    case "personal":
+      return "Personal";
     default:
       return "Unassigned";
   }
 }
+
+/**
+ * The role dropdown options (value + human label), in the order they should
+ * appear in the picker. Derived from the canonical ACCOUNT_ROLES list so the UI
+ * can render the <option>s from data instead of a hand-kept list. The blank
+ * "Unassigned" choice is added by the UI itself.
+ */
+export const ACCOUNT_ROLE_OPTIONS: ReadonlyArray<{ value: AccountRole; label: string }> =
+  ACCOUNT_ROLES.map((r) => ({ value: r, label: roleLabel(r) }));
 
 // ---------------------------------------------------------------------------
 // 4) Account summary row (for the Health tab list + role picker).
@@ -257,7 +276,25 @@ export function __runPlaidUiCoreTests(): void {
   ok(roleLabel("main") === "Main operating", "main label");
   ok(roleLabel("atm") === "ATM deposits", "atm label");
   ok(roleLabel("credit") === "Credit card", "credit label");
+  ok(roleLabel("savings") === "Savings", "savings label");
+  ok(roleLabel("reserve") === "Tax / reserve", "reserve label");
+  ok(roleLabel("mortgage") === "Mortgage", "mortgage label");
+  ok(roleLabel("loan") === "Loan", "loan label");
+  ok(roleLabel("personal") === "Personal", "personal label");
   ok(roleLabel(null) === "Unassigned", "null role → Unassigned");
+
+  // ACCOUNT_ROLE_OPTIONS (drives the UI dropdown) ---------------------------
+  ok(ACCOUNT_ROLE_OPTIONS.length === ACCOUNT_ROLES.length, "one option per canonical role");
+  ok(ACCOUNT_ROLE_OPTIONS[0].value === "main" && ACCOUNT_ROLE_OPTIONS[0].label === "Main operating", "first option is main");
+  ok(
+    ACCOUNT_ROLE_OPTIONS.every((o) => o.label !== "Unassigned" && o.label.length > 0),
+    "every option has a real (non-Unassigned) label",
+  );
+  ok(
+    ACCOUNT_ROLE_OPTIONS.some((o) => o.value === "savings") &&
+      ACCOUNT_ROLE_OPTIONS.some((o) => o.value === "mortgage"),
+    "new roles appear in the dropdown options",
+  );
 
   // buildAccountSummary -----------------------------------------------------
   const view = buildAccountSummary({

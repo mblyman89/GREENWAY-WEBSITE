@@ -45,6 +45,7 @@ import {
   buildItemStatusView,
   buildAccountSummary,
   roleLabel,
+  ACCOUNT_ROLE_OPTIONS,
   type PlaidTab,
   type ChipTone,
 } from "@/lib/plaid/plaid-ui-core";
@@ -729,9 +730,11 @@ export default async function PlaidPage({
                               className={selectCls}
                             >
                               <option value="">Unassigned</option>
-                              <option value="main">Main operating</option>
-                              <option value="atm">ATM deposits</option>
-                              <option value="credit">Credit card</option>
+                              {ACCOUNT_ROLE_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
                             </select>
                             <button type="submit" className={btnGhost}>
                               Save role

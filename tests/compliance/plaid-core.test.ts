@@ -46,10 +46,15 @@ describe("plaidDollarsToCents (money boundary — integer cents, sign preserved)
 });
 
 describe("validateAccountRole", () => {
-  it("accepts the three canonical roles (case-insensitive)", () => {
+  it("accepts the canonical roles (case-insensitive)", () => {
     expect(validateAccountRole("main")).toEqual({ ok: true, role: "main" });
     expect(validateAccountRole("ATM")).toEqual({ ok: true, role: "atm" });
     expect(validateAccountRole("credit")).toEqual({ ok: true, role: "credit" });
+    expect(validateAccountRole("savings")).toEqual({ ok: true, role: "savings" });
+    expect(validateAccountRole("reserve")).toEqual({ ok: true, role: "reserve" });
+    expect(validateAccountRole("mortgage")).toEqual({ ok: true, role: "mortgage" });
+    expect(validateAccountRole("loan")).toEqual({ ok: true, role: "loan" });
+    expect(validateAccountRole("PERSONAL")).toEqual({ ok: true, role: "personal" });
   });
   it("treats empty/none/null as unassigned (role null)", () => {
     expect(validateAccountRole("")).toEqual({ ok: true, role: null });
@@ -57,9 +62,9 @@ describe("validateAccountRole", () => {
     expect(validateAccountRole(null)).toEqual({ ok: true, role: null });
   });
   it("rejects unknown roles with a friendly error", () => {
-    const r = validateAccountRole("savings");
+    const r = validateAccountRole("banana");
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("savings");
+    if (!r.ok) expect(r.error).toContain("banana");
   });
 });
 
