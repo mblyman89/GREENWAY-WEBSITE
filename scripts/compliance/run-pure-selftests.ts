@@ -81,6 +81,7 @@ import { __runCryptoReconciliationCoreTests } from "../../src/lib/crypto/crypto-
 import { __runCryptoClassifyViewCoreTests } from "../../src/lib/crypto/crypto-classify-view-core";
 import { __runCryptoTransferLedgerCoreTests } from "../../src/lib/crypto/crypto-transfer-ledger-core";
 import { __runCryptoTransferStoreCoreTests } from "../../src/lib/crypto/crypto-transfer-store-core";
+import { __runCryptoForm8949CoreTests } from "../../src/lib/crypto/crypto-form8949-core";
 import { __runCoreumClientCoreTests } from "../../src/lib/crypto/coreum/coreum-client-core";
 import { __runCoreumMapCoreTests } from "../../src/lib/crypto/coreum/coreum-map-core";
 import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-sync-core";
@@ -641,6 +642,7 @@ async function main() {
   __runCryptoClassifyViewCoreTests();
   __runCryptoTransferLedgerCoreTests();
   __runCryptoTransferStoreCoreTests();
+  __runCryptoForm8949CoreTests();
   __runCoreumClientCoreTests();
   __runCoreumMapCoreTests();
   __runCoreumSyncCoreTests();
