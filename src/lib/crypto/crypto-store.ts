@@ -509,6 +509,86 @@ export async function upsertCryptoTransactions(
   }
 }
 
+/**
+ * R3-B — snapshot upsert row for crypto_price_snapshots. One row per
+ * (asset_id, price_date, source); idempotent so re-running a day's pricing
+ * refreshes the price in place instead of duplicating.
+ */
+export type PriceSnapshotUpsertRow = {
+  asset_id: string;
+  price_date: string; // YYYY-MM-DD (UTC)
+  price_scaled_cents: string; // integer "cents * 10^price_scale" as a string
+  price_scale: number;
+  source: string;
+};
+
+/**
+ * Upsert today's USD price snapshots. Idempotent on (asset_id, price_date,
+ * source) — the plain-column unique index from migration 0160. Graceful: no DB
+ * => no-op success; any error is returned (never thrown) so pricing degrades
+ * without breaking a sync. Never deletes; only writes/refreshes the day's row.
+ */
+export async function upsertCryptoPriceSnapshots(
+  rows: PriceSnapshotUpsertRow[],
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  if (!rows || rows.length === 0) return { ok: true, count: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    let written = 0;
+    for (const part of chunk(rows, CRYPTO_UPSERT_CHUNK)) {
+      const { error } = await admin
+        .from("crypto_price_snapshots")
+        .upsert(part, { onConflict: "asset_id,price_date,source" });
+      if (error) return { ok: false, error: error.message };
+      written += part.length;
+    }
+    return { ok: true, count: written };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Price snapshot write failed." };
+  }
+}
+
+/**
+ * R3-B — write computed USD values onto existing balance rows. Each update
+ * targets one balance by (wallet_id, asset_id) — the same key balances are
+ * upserted under — and sets usd_value_cents (or null for "no market price") plus
+ * price_asof so the UI can show how fresh the value is. Graceful: no DB => no-op
+ * success; a per-row error is collected but never thrown; never deletes a
+ * balance. usd_value_cents is the ONLY column touched here (plus price_asof).
+ */
+export async function updateBalanceUsdValues(
+  updates: Array<{
+    walletId: string;
+    assetId: string;
+    usdValueCents: number | null;
+    priceAsof: string; // ISO timestamp
+  }>,
+): Promise<WriteResult> {
+  if (!isSupabaseServiceConfigured) return { ok: true, count: 0 };
+  if (!updates || updates.length === 0) return { ok: true, count: 0 };
+  try {
+    const admin = createSupabaseAdminClient();
+    let written = 0;
+    for (const u of updates) {
+      const wid = cleanId(u.walletId);
+      const aid = cleanId(u.assetId);
+      if (wid === "" || aid === "") continue;
+      const { error } = await admin
+        .from("crypto_balances")
+        .update({ usd_value_cents: u.usdValueCents, price_asof: u.priceAsof })
+        .eq("wallet_id", wid)
+        .eq("asset_id", aid);
+      // A missing price_asof column (pre-0160) or any per-row error must not
+      // break the whole run; skip that row and keep going.
+      if (!error) written += 1;
+    }
+    return { ok: true, count: written };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Balance USD update failed." };
+  }
+}
+
 /** Upsert the resumable sync cursor/status for a wallet (one row per wallet). */
 export async function upsertCryptoSyncState(
   row: SyncStateUpsertRow,

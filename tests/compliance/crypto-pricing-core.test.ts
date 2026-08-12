@@ -20,9 +20,14 @@ import {
   resolvePriceSource,
   buildPriceSnapshotRows,
   applyPricesToBalances,
+  planPriceFetches,
+  assembleResolvedPrices,
+  WFLR_COINGECKO_ID,
+  TETHER_COINGECKO_ID,
   PRICE_SCALE,
   type ResolvedPrice,
   type PriceableBalance,
+  type FetchedPrices,
 } from "@/lib/crypto/crypto-pricing-core";
 import type { CryptoAssetRecord } from "@/lib/crypto/crypto-store-core";
 
@@ -141,5 +146,76 @@ describe("crypto-pricing-core", () => {
     const rows = buildPriceSnapshotRows(resolved, "2026-08-12");
     expect(rows[0]).toMatchObject({ assetId: "a", priceDate: "2026-08-12", source: "assumed:usdt-1to1" });
     expect(() => buildPriceSnapshotRows(resolved, "bad")).toThrow();
+  });
+
+  it("planPriceFetches collects deduped calls incl. WFLR (rFLR) + tether (exUSDT)", () => {
+    const assets: CryptoAssetRecord[] = [
+      asset({ id: "a-flr", symbol: "FLR", chain: "flare", native: true }),
+      asset({ id: "a-sfin", symbol: "SFIN", chain: "songbird" }),
+      asset({ id: "a-sflr", symbol: "SFLR", chain: "flare", contract: "0x12e605bc104e93b45e1ad99f9e555f659051c2bb" }),
+      asset({ id: "a-rflr", symbol: "RFLR", chain: "flare", contract: "0x26d460c3cf931fb2014fa436a49e3af08619810e" }),
+      asset({ id: "a-exusdt", symbol: "EXUSDT", chain: "songbird", contract: "0x1a7b46656b2b8b29b1694229e122d066020503d0" }),
+      asset({ id: "a-frog", symbol: "FLRFROG", chain: "flare", contract: "0x19cf770bbb7b71977b860e7fd8d32fa2513a743c" }),
+    ];
+    const plan = planPriceFetches(assets);
+    expect(plan.needsWflr).toBe(true);
+    expect(plan.needsTether).toBe(true);
+    expect(plan.coinGeckoIds.sort()).toEqual(
+      ["flare-networks", "songbird-finance", TETHER_COINGECKO_ID, WFLR_COINGECKO_ID].sort(),
+    );
+    expect(plan.geckoTerminalContracts).toEqual(["0x12e605bc104e93b45e1ad99f9e555f659051c2bb"]);
+    expect(plan.perAsset).toHaveLength(6);
+  });
+
+  it("assembleResolvedPrices maps fetched USD back per source (rFLR<-WFLR, exUSDT<-tether)", () => {
+    const assets: CryptoAssetRecord[] = [
+      asset({ id: "a-flr", symbol: "FLR", chain: "flare", native: true }),
+      asset({ id: "a-sfin", symbol: "SFIN", chain: "songbird" }),
+      asset({ id: "a-sflr", symbol: "SFLR", chain: "flare", contract: "0x12e605bc104e93b45e1ad99f9e555f659051c2bb" }),
+      asset({ id: "a-rflr", symbol: "RFLR", chain: "flare", contract: "0x26d460c3cf931fb2014fa436a49e3af08619810e" }),
+      asset({ id: "a-exusdt", symbol: "EXUSDT", chain: "songbird", contract: "0x1a7b46656b2b8b29b1694229e122d066020503d0" }),
+      asset({ id: "a-frog", symbol: "FLRFROG", chain: "flare", contract: "0x19cf770bbb7b71977b860e7fd8d32fa2513a743c" }),
+    ];
+    const plan = planPriceFetches(assets);
+    const fetched: FetchedPrices = {
+      coinGecko: new Map<string, string>([
+        ["flare-networks", "0.0182"],
+        ["songbird-finance", "73.08"],
+        ["wrapped-flare", "0.0182"],
+        ["tether", "1"],
+      ]),
+      geckoTerminalFlare: new Map<string, string>([
+        ["0x12e605bc104e93b45e1ad99f9e555f659051c2bb", "0.0195"],
+      ]),
+    };
+    const resolved = assembleResolvedPrices(plan, fetched);
+    const byId: Record<string, ResolvedPrice> = {};
+    for (const r of resolved) byId[r.assetId] = r;
+
+    expect(resolved).toHaveLength(5); // FLRFROG omitted (none)
+    expect(byId["a-flr"]).toMatchObject({ priceScaledCents: "1820000", source: "coingecko:flare-networks" });
+    expect(byId["a-sfin"].priceScaledCents).toBe("7308000000");
+    expect(byId["a-sflr"]).toMatchObject({
+      priceScaledCents: "1950000",
+      source: "geckoterminal:flare:0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+    });
+    expect(byId["a-rflr"]).toMatchObject({ priceScaledCents: "1820000", source: "derived:wflr-1to1" });
+    expect(byId["a-exusdt"]).toMatchObject({ priceScaledCents: "100000000", source: "assumed:usdt-1to1" });
+    expect(byId["a-frog"]).toBeUndefined();
+  });
+
+  it("assembleResolvedPrices omits assets whose price was not fetched (never guesses)", () => {
+    const assets: CryptoAssetRecord[] = [
+      asset({ id: "a-sfin", symbol: "SFIN", chain: "songbird" }),
+      asset({ id: "a-flr", symbol: "FLR", chain: "flare", native: true }),
+    ];
+    const plan = planPriceFetches(assets);
+    const fetched: FetchedPrices = {
+      coinGecko: new Map<string, string>([["songbird-finance", "73.08"]]),
+      geckoTerminalFlare: new Map<string, string>(),
+    };
+    const resolved = assembleResolvedPrices(plan, fetched);
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].assetId).toBe("a-sfin");
   });
 });

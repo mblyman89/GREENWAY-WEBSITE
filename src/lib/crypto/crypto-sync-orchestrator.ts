@@ -211,6 +211,22 @@ export async function runAllCryptoSync(): Promise<AllCryptoSyncResult> {
     results.push(await syncOneWallet(wallet));
   }
 
+  // R3 \u2014 once all wallets are synced (so balances exist), price them in USD.
+  // Graceful: a pricing failure NEVER fails the sync; the portfolio simply
+  // shows unpriced holdings. Imported lazily to keep the pricing surface out of
+  // callers that only sync. USD value is written here (and only here) via the
+  // float-free BigInt scaled-cents path.
+  let pricingMessage = "";
+  try {
+    const { runCryptoPricing } = await import("./crypto-pricing-server");
+    const pricing = await runCryptoPricing();
+    if (pricing.pricedAssets > 0) {
+      pricingMessage = ` Priced ${pricing.pricedAssets} holding${pricing.pricedAssets === 1 ? "" : "s"} in USD.`;
+    }
+  } catch {
+    // Never let pricing break a sync.
+  }
+
   const okCount = results.filter((r) => r.ok).length;
   const failCount = results.length - okCount;
 
@@ -224,9 +240,9 @@ export async function runAllCryptoSync(): Promise<AllCryptoSyncResult> {
     if (totalBal > 0 || totalTxn > 0) {
       parts.push(`${totalBal} balance${totalBal === 1 ? "" : "s"}`, `${totalTxn} transaction${totalTxn === 1 ? "" : "s"}`);
     }
-    message = parts.join(", ") + ".";
+    message = parts.join(", ") + "." + pricingMessage;
   } else {
-    message = `Synced ${okCount} of ${results.length} wallets; ${failCount} need attention (see Health).`;
+    message = `Synced ${okCount} of ${results.length} wallets; ${failCount} need attention (see Health).` + pricingMessage;
   }
 
   return {

@@ -86,9 +86,12 @@ export default async function CryptoPage({
   const tab: CryptoTab = resolveCryptoTab(sp.tab);
 
   const dbReady = isSupabaseServiceConfigured;
-  // USD pricing (CoinGecko) arrives in a later slice (C9). Until then we never
-  // fabricate a dollar figure — holdings show "value pending".
-  const pricingConfigured = false;
+  // USD pricing (R3) runs on every sync using the free, keyless CoinGecko +
+  // GeckoTerminal feeds \u2014 no extra credentials to configure. So pricing is
+  // "ready" as soon as the database is connected (that's where synced balances
+  // and their computed usd_value_cents live). Unpriced coins still show "no
+  // market price" honestly \u2014 we never fabricate a dollar figure.
+  const pricingConfigured = dbReady;
 
   const [wallets, balances, assets] = await Promise.all([
     dbReady ? listCryptoWallets() : Promise.resolve([]),
