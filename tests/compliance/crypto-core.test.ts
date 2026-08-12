@@ -32,17 +32,19 @@ describe("crypto-core self-test", () => {
 });
 
 describe("crypto-core verified facts", () => {
-  it("tracks exactly five chains, three of them EVM, one Cosmos", () => {
-    expect(CHAINS.length).toBe(5);
+  it("tracks exactly six chains, three of them EVM, one Cosmos, one Stellar", () => {
+    expect(CHAINS.length).toBe(6);
     expect(CHAINS.filter(isEvmChain).length).toBe(3);
     expect(isEvmChain("xrpl")).toBe(false);
+    expect(isEvmChain("stellar")).toBe(false);
     expect(CHAINS).toContain("coreum");
+    expect(CHAINS).toContain("stellar");
   });
 
-  it("registers exactly Michael's eight assets (incl. Coreum TX + Pulsara SARA)", () => {
-    expect(CRYPTO_ASSETS.length).toBe(8);
+  it("registers exactly Michael's nine assets (incl. Coreum TX + Pulsara SARA + Stellar XLM)", () => {
+    expect(CRYPTO_ASSETS.length).toBe(9);
     expect(CRYPTO_ASSETS.map((a) => a.id).sort()).toEqual(
-      ["eth", "flr", "sara", "sgb", "solo", "tx", "usdt-eth", "xrp"].sort(),
+      ["eth", "flr", "sara", "sgb", "solo", "tx", "usdt-eth", "xlm", "xrp"].sort(),
     );
   });
 

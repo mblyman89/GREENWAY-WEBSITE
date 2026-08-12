@@ -97,6 +97,9 @@ import { __runCryptoReconstructionReportCoreTests } from "../../src/lib/crypto/c
 import { __runCoreumClientCoreTests } from "../../src/lib/crypto/coreum/coreum-client-core";
 import { __runCoreumMapCoreTests } from "../../src/lib/crypto/coreum/coreum-map-core";
 import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-sync-core";
+import { __runStellarClientCoreTests } from "../../src/lib/crypto/stellar/stellar-client-core";
+import { __runStellarMapCoreTests } from "../../src/lib/crypto/stellar/stellar-map-core";
+import { __runStellarSyncCoreTests } from "../../src/lib/crypto/stellar/stellar-sync-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -670,6 +673,9 @@ async function main() {
   __runCoreumClientCoreTests();
   __runCoreumMapCoreTests();
   __runCoreumSyncCoreTests();
+  __runStellarClientCoreTests();
+  __runStellarMapCoreTests();
+  __runStellarSyncCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

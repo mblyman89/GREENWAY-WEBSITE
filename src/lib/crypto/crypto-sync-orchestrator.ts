@@ -19,11 +19,12 @@ import "server-only";
  * this system. USD value is never written here (priced in a later slice C9).
  */
 
-import { isEvmChain, isCosmosChain, type Chain } from "./crypto-core";
+import { isEvmChain, isCosmosChain, isStellarChain, type Chain } from "./crypto-core";
 import { listCryptoWallets, type CryptoWalletRecord } from "./crypto-store";
 import { syncXrplWallet, type XrplWalletSyncResult } from "./xrpl/xrpl-sync-server";
 import { syncEvmWallet, type EvmWalletSyncResult } from "./evm/evm-sync-server";
 import { syncCoreumWallet, type CoreumWalletSyncResult } from "./coreum/coreum-sync-server";
+import { syncStellarWallet, type StellarWalletSyncResult } from "./stellar/stellar-sync-server";
 
 /** The result of syncing a single wallet. Chain-agnostic wrapper. */
 export type WalletSyncResult = {
@@ -58,6 +59,8 @@ function chainLabel(chain: Chain): string {
       return "XRPL";
     case "coreum":
       return "Coreum";
+    case "stellar":
+      return "Stellar";
     default:
       return String(chain);
   }
@@ -84,6 +87,31 @@ async function syncOneWallet(wallet: CryptoWalletRecord): Promise<WalletSyncResu
   if (isCosmosChain(wallet.chain)) {
     try {
       const res: CoreumWalletSyncResult = await syncCoreumWallet(wallet.id);
+      return {
+        ...base,
+        ok: res.ok,
+        message: res.message,
+        balancesUpserted: res.counts.balancesUpserted,
+        transactionsUpserted: res.counts.transactionsUpserted,
+        error: res.error ?? null,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        ...base,
+        ok: false,
+        message: `Unexpected error syncing ${chainLabel(wallet.chain)} wallet: ${msg}`,
+        balancesUpserted: 0,
+        transactionsUpserted: 0,
+        error: msg,
+      };
+    }
+  }
+
+  // ── Stellar (XLM) — Horizon driver ────────────────────────────────────────
+  if (isStellarChain(wallet.chain)) {
+    try {
+      const res: StellarWalletSyncResult = await syncStellarWallet(wallet.id);
       return {
         ...base,
         ok: res.ok,
