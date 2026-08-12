@@ -35,6 +35,12 @@ describe("crypto-progress-core backfill progress is honest per chain", () => {
   it("parses the EVM block cursor and the XRPL marker ledger", () => {
     expect(parseEvmReachedBlock("8240113:8240100")).toBe(8240113);
     expect(parseEvmReachedBlock(null)).toBeNull();
+    // New account-pagination cursor (JSON) has no block position → null, so the
+    // EVM progress view uses the honest "transactions captured" readout and can
+    // never fabricate or snap a percent (fixes the 100%→4% flip).
+    expect(
+      parseEvmReachedBlock('{"v":2,"tx":{"page":2,"done":false},"token":{"page":1,"done":true}}'),
+    ).toBeNull();
     // Verified-live XRPL marker shape { ledger, seq }.
     expect(parseXrplReachedLedger('{"ledger":106228618,"seq":0}')).toBe(106228618);
     expect(parseXrplReachedLedger("not-json")).toBeNull();

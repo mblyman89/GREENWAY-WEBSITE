@@ -81,23 +81,27 @@ import {
   mapEvmNativeBalance,
   txListRowToNativeTransfer,
   tokenTxRowToEvmLog,
-  initEvmBackfill,
-  reduceEvmBackfill,
-  shouldContinueEvmBackfill,
-  currentWindowEnd,
-  currentCursorString,
   emptyEvmSyncCounts,
   addEvmWindowCounts,
   summarizeEvmSync,
   buildBalanceUpserts,
   buildTransactionUpserts,
   buildSyncStateUpsert,
-  EVM_DEFAULT_PAGE_SIZE,
   type EvmSyncCounts,
   type BalanceUpsertRow,
   type TransactionUpsertRow,
+  type EvmTxListRow,
   type EvmTokenTxRow,
 } from "./evm-sync-core";
+import {
+  EVM_HISTORY_PAGE_SIZE,
+  parseEvmHistoryCursor,
+  serializeEvmHistoryCursor,
+  isEvmHistoryComplete,
+  nextEvmStream,
+  pageForStream,
+  advanceEvmStream,
+} from "./evm-history-pagination-core";
 import { isEvmChain, type Chain } from "../crypto-core";
 import {
   createBudgetDeadline,
@@ -232,12 +236,133 @@ async function syncEvmBalances(
 }
 
 /**
- * Walk txlist + tokentx by ascending block range, mapping + persisting each
- * window. `savedCursor` is the resumable "nextStartBlock:lastConsumedBlock"
- * string from a prior run (null = start from genesis block 0). `tipBlock` is
- * the current chain tip (from proxy eth_blockNumber). Persists the cursor after
- * each window so a crash resumes cleanly. Returns the running counts and
- * whether the walk completed (reached the tip or the safety guard).
+ * Map ONE page of native `txlist` rows into transaction upsert rows.
+ * Pulled out so both the (fast) account-pagination walk uses one code path.
+ */
+function mapNativeRows(
+  walletId: string,
+  chain: Chain,
+  account: string,
+  txRows: readonly EvmTxListRow[],
+): { rows: TransactionUpsertRow[]; untracked: number } {
+  const rows: TransactionUpsertRow[] = [];
+  let untracked = 0;
+  for (const row of txRows) {
+    const t: EvmNativeTransfer = txListRowToNativeTransfer(row);
+    const leg = mapNativeTransfer(chain, account, t);
+    if (leg == null) continue;
+    const built = buildTransactionUpserts(walletId, [leg], row);
+    for (const r of built) {
+      rows.push(r);
+      if (r.asset_id === null) untracked += 1;
+    }
+  }
+  return { rows, untracked };
+}
+
+/**
+ * Map ONE page of ERC-20 `tokentx` rows into transaction upsert rows, fetching
+ * receipts for enriched DeFi classification (best-effort, budget-aware). This
+ * is the exact same mapping the previous window walk used — only the driving
+ * loop changed (account pagination instead of block windows).
+ */
+async function mapTokenRows(
+  walletId: string,
+  chain: Chain,
+  account: string,
+  tokenRows: readonly EvmTokenTxRow[],
+  deadline: BudgetDeadline | null,
+): Promise<{ rows: TransactionUpsertRow[]; untracked: number; stoppedForBudget: boolean }> {
+  const rows: TransactionUpsertRow[] = [];
+  let untracked = 0;
+  let stoppedForBudget = false;
+
+  // Group tokentx rows by tx hash so the mapper can attach the native fee
+  // exactly once per transaction (to the first sender leg).
+  const byHash = new Map<string, EvmTokenTxRow[]>();
+  for (const row of tokenRows) {
+    const list = byHash.get(row.hash);
+    if (list) list.push(row);
+    else byHash.set(row.hash, [row]);
+  }
+
+  // Fetch receipts for enriched DeFi classification (LP add/remove, swaps). A
+  // failed receipt fetch for one tx is never fatal — it falls back to the
+  // neutral "transfer" classification. Budget-aware: stop fetching receipts
+  // (but still map what we have) if the per-request time budget runs out.
+  const receiptLogsByHash = new Map<string, EvmLog[]>();
+  if (byHash.size > 0) {
+    const tokenHashes = uniqueTxHashes(tokenRows.map((r) => r.hash));
+    const hashesNeedingReceipts = txHashesNeedingReceipts(tokenHashes, tokenHashes);
+    for (const hash of hashesNeedingReceipts) {
+      if (timeBudgetExceeded(Date.now(), deadline)) {
+        stoppedForBudget = true;
+        break;
+      }
+      try {
+        const receiptRes = await fetchTransactionReceipt(chain, hash);
+        if (receiptRes.ok && receiptRes.result) {
+          const logs = receiptToEvmLogs(receiptRes.result);
+          if (logs.length > 0) receiptLogsByHash.set(hash, logs);
+        }
+      } catch {
+        // Never fatal — the tx still maps to a neutral "transfer".
+      }
+    }
+  }
+
+  for (const [hash, group] of byHash) {
+    const first = group[0];
+    const blockNumber = Number.parseInt(first.blockNumber, 10);
+    const ts = Number.parseInt(first.timeStamp, 10);
+    const blockTime = Number.isFinite(ts)
+      ? new Date(ts * 1000).toISOString()
+      : new Date(0).toISOString();
+    const ctx: EvmTxContext = {
+      txHash: hash,
+      blockNumber: Number.isFinite(blockNumber) ? blockNumber : 0,
+      blockTime,
+    };
+    const transferLogs: EvmLog[] = group.map((row, idx) => tokenTxRowToEvmLog(row, idx));
+    const allLogs = receiptLogsByHash.get(hash) ?? transferLogs;
+    const legs = mapErc20TransferLogsWithType(chain, account, ctx, transferLogs, allLogs);
+    for (let i = 0; i < legs.length; i += 1) {
+      const sourceRow = group[i] ?? first;
+      const built = buildTransactionUpserts(walletId, [legs[i]], sourceRow);
+      for (const r of built) {
+        rows.push(r);
+        if (r.asset_id === null) untracked += 1;
+      }
+    }
+  }
+
+  return { rows, untracked, stoppedForBudget };
+}
+
+/**
+ * FAST EVM history walk — pages the ACCOUNT'S OWN transaction list, exactly like
+ * XRP (account_tx marker) and Coreum (next_key) do, instead of scanning the
+ * chain genesis→tip in block windows. Two ascending streams (native `txlist`
+ * and ERC-20 `tokentx`) are each requested over the FULL block range with a
+ * large page size (EVM_HISTORY_PAGE_SIZE), advancing page-by-page until a SHORT
+ * page proves the stream is exhausted (evm-history-pagination-core). A wallet
+ * with a few hundred lifetime transactions now finishes in one or two calls
+ * instead of thousands — which also means far fewer chances for a transient
+ * explorer hiccup to interrupt a sync.
+ *
+ * `savedCursor` resumes a prior run. A NULL cursor or a LEGACY block-window
+ * cursor ("12345:12300") both cleanly start a fresh page-1 account walk (the
+ * pagination core parses defensively and never crashes on an old cursor).
+ * `tipBlock` is passed only so the honest progress readout can show the tip; it
+ * no longer bounds the walk. The 45s time budget + resume cursor are preserved:
+ * we check the budget before each page and stop cleanly, persisting the exact
+ * resume point so the next "Sync now" click continues.
+ *
+ * TRANSIENT-FAILURE POLICY (self-healing): if a page fetch fails, we DO NOT hard
+ * fail the whole wallet. We persist the resume cursor and status "backfilling"
+ * and return `stoppedForBudget` so the caller reports a friendly "continue"
+ * message. The wallet stays healthy and simply resumes on the next sync — a
+ * single explorer blip can no longer flip a wallet to "needs attention".
  */
 async function syncEvmHistory(
   walletId: string,
@@ -248,177 +373,107 @@ async function syncEvmHistory(
   deadline: BudgetDeadline | null,
 ): Promise<{ counts: EvmSyncCounts; complete: boolean; stoppedForBudget: boolean }> {
   let counts = emptyEvmSyncCounts();
-  let state = initEvmBackfill(savedCursor, tipBlock);
   const account = normAddr(address);
+  let cursor = parseEvmHistoryCursor(savedCursor);
   let stoppedForBudget = false;
-  // Progress facts. `target` = chain-tip block (as text) → enables a TRUE % on
-  // the Health tab. `prevCursor` = the cursor BEFORE this run's first window, so
-  // the UI can detect "no progress" (stuck) if it never advances.
+  // The full block range — the explorer returns only THIS address's txs, so we
+  // never scan empty blocks. 0..MAX means "all history". (99999999 comfortably
+  // exceeds every supported chain's height for the foreseeable future.)
+  const START_BLOCK = 0;
+  const END_BLOCK = 99999999;
+  // Progress facts. `target` = chain-tip block (text) so the Health tab can show
+  // the tip; the honest EVM progress readout now counts transactions rather than
+  // faking a percent from a moving tip. `prevCursor` powers stuck detection.
   const target = tipBlock > 0 ? String(tipBlock) : null;
   let prevCursor = savedCursor;
 
-  while (shouldContinueEvmBackfill(state)) {
-    // TIME BUDGET: each window is 2 explorer API calls (txlist + tokentx) plus
-    // mapping + DB upserts. On Vercel Hobby (60s cap) we check the per-request
-    // deadline BEFORE starting a new window so the function always has time to
-    // finish the current window's DB writes and persist the resume cursor. We
-    // break cleanly — the cursor saved after the last completed window is the
-    // exact resume point for the next "Sync now" click.
+  while (!isEvmHistoryComplete(cursor)) {
+    // TIME BUDGET (unchanged): stop cleanly before Vercel's 60s Hobby cap so DB
+    // writes + the resume cursor always persist. Next click continues.
     if (timeBudgetExceeded(Date.now(), deadline)) {
       stoppedForBudget = true;
       break;
     }
-    const startBlock = state.cursor.nextStartBlock;
-    const endBlock = currentWindowEnd(state);
-    const offset = Math.min(EVM_DEFAULT_PAGE_SIZE, state.windowBlocks);
+    const stream = nextEvmStream(cursor);
+    if (stream === null) break;
+    const page = pageForStream(cursor, stream);
 
-    // Fetch native txlist + ERC-20 tokentx for the SAME block window.
-    const [txRes, tokRes] = await Promise.all([
-      fetchTxList(chain, address, { startBlock, endBlock, page: 1, offset }),
-      fetchTokenTx(chain, address, { startBlock, endBlock, page: 1, offset }),
-    ]);
+    // Fetch ONE page of ONE stream over the full range with a large offset.
+    let rowsReturned = 0;
+    let mapped: { rows: TransactionUpsertRow[]; untracked: number } = { rows: [], untracked: 0 };
 
-    if (!txRes.ok) {
-      throw new Error(`txlist fetch: ${txRes.error}`);
+    if (stream === "tx") {
+      const txRes = await fetchTxList(chain, address, {
+        startBlock: START_BLOCK,
+        endBlock: END_BLOCK,
+        page,
+        offset: EVM_HISTORY_PAGE_SIZE,
+      });
+      if (!txRes.ok) {
+        // SELF-HEALING: a transient failure stops this run gracefully and
+        // resumes next time — it never flips the wallet to "needs attention".
+        stoppedForBudget = true;
+        break;
+      }
+      rowsReturned = txRes.result.length;
+      mapped = mapNativeRows(walletId, chain, account, txRes.result);
+    } else {
+      const tokRes = await fetchTokenTx(chain, address, {
+        startBlock: START_BLOCK,
+        endBlock: END_BLOCK,
+        page,
+        offset: EVM_HISTORY_PAGE_SIZE,
+      });
+      if (!tokRes.ok) {
+        stoppedForBudget = true;
+        break;
+      }
+      rowsReturned = tokRes.result.length;
+      const tokMapped = await mapTokenRows(walletId, chain, account, tokRes.result, deadline);
+      mapped = { rows: tokMapped.rows, untracked: tokMapped.untracked };
+      if (tokMapped.stoppedForBudget) stoppedForBudget = true;
     }
-    if (!tokRes.ok) {
-      throw new Error(`tokentx fetch: ${tokRes.error}`);
-    }
 
-    const txRows = txRes.result;
-    const tokenRows = tokRes.result;
-    const rows: TransactionUpsertRow[] = [];
-    let untrackedTx = 0;
-
-    // --- Native transfers (txlist) → mapNativeTransfer ---
-    for (const row of txRows) {
-      const t: EvmNativeTransfer = txListRowToNativeTransfer(row);
-      const leg = mapNativeTransfer(chain, account, t);
-      if (leg == null) continue;
-      const built = buildTransactionUpserts(walletId, [leg], row);
-      for (const r of built) {
-        rows.push(r);
-        if (r.asset_id === null) untrackedTx += 1;
+    if (mapped.rows.length > 0) {
+      const res = await upsertCryptoTransactions(mapped.rows);
+      if (!res.ok) {
+        // A DB write failure is also treated as a soft stop: persist the
+        // current (un-advanced) cursor and resume next run. No hard error.
+        stoppedForBudget = true;
+        break;
       }
     }
 
-    // --- ERC-20 Transfer events (tokentx) → mapErc20TransferLogsWithType ---
-    // We group tokentx rows by tx hash so the mapper can attach the native fee
-    // exactly once per transaction (to the first sender leg). We synthesize a
-    // stable event index per row within its tx.
-    const byHash = new Map<string, EvmTokenTxRow[]>();
-    for (const row of tokenRows) {
-      const list = byHash.get(row.hash);
-      if (list) list.push(row);
-      else byHash.set(row.hash, [row]);
-    }
-
-    // --- C7b: fetch transaction receipts for enriched DeFi classification ---
-    // The tokentx rows only contain ERC-20 Transfer events (decoded). To
-    // classify LP adds/removes and swaps, the classifier needs the FULL log
-    // set for each transaction (pool Mint/Burn/Swap/Sync events that are NOT
-    // ERC-20 Transfers). We fetch the receipt (eth_getTransactionReceipt) for
-    // each transaction that has token activity — a pure native transfer
-    // cannot be a DeFi operation, so we skip those to save API calls.
-    //
-    // GRACEFUL DEGRADATION: receipt fetching is best-effort. A failed receipt
-    // fetch for one transaction never fails the whole window — that tx just
-    // gets classified as the neutral "transfer" (the safe, guess-free default).
-    // We also respect the time budget: if the budget is exhausted mid-receipt,
-    // we stop fetching receipts but still map + persist the tokentx rows we
-    // already have (without enriched classification for the remaining txs).
-    const receiptLogsByHash = new Map<string, EvmLog[]>();
-    if (byHash.size > 0) {
-      const allHashes = uniqueTxHashes(
-        txRows.map((r) => r.hash).concat(tokenRows.map((r) => r.hash)),
-      );
-      const tokenHashes = uniqueTxHashes(tokenRows.map((r) => r.hash));
-      const hashesNeedingReceipts = txHashesNeedingReceipts(allHashes, tokenHashes);
-      for (const hash of hashesNeedingReceipts) {
-        if (timeBudgetExceeded(Date.now(), deadline)) {
-          stoppedForBudget = true;
-          break; // stop fetching receipts; map what we have so far
-        }
-        try {
-          const receiptRes = await fetchTransactionReceipt(chain, hash);
-          if (receiptRes.ok && receiptRes.result) {
-            const logs = receiptToEvmLogs(receiptRes.result);
-            if (logs.length > 0) {
-              receiptLogsByHash.set(hash, logs);
-            }
-          }
-          // ok=false or result=null (pending) → no enriched logs for this tx;
-          // it will fall back to transfer-only classification below.
-        } catch {
-          // A receipt fetch failure for one tx is never fatal. The tx is still
-          // mapped from its tokentx rows (classified as "transfer").
-        }
-      }
-    }
-
-    for (const [hash, group] of byHash) {
-      // Reconstruct the EvmLog shape for each row and build a shared context.
-      const first = group[0];
-      const blockNumber = Number.parseInt(first.blockNumber, 10);
-      const ts = Number.parseInt(first.timeStamp, 10);
-      const blockTime = Number.isFinite(ts)
-        ? new Date(ts * 1000).toISOString()
-        : new Date(0).toISOString();
-      const ctx: EvmTxContext = {
-        txHash: hash,
-        blockNumber: Number.isFinite(blockNumber) ? blockNumber : 0,
-        blockTime,
-      };
-      const transferLogs: EvmLog[] = group.map((row, idx) => tokenTxRowToEvmLog(row, idx));
-      // C7b: if we fetched a receipt for this tx, use its FULL log set as
-      // allLogs so the classifier can see pool events. Otherwise fall back to
-      // just the transfer logs (classification stays "transfer" — safe).
-      const allLogs = receiptLogsByHash.get(hash) ?? transferLogs;
-      const legs = mapErc20TransferLogsWithType(chain, account, ctx, transferLogs, allLogs);
-      // Persist each leg with its source row as the raw envelope.
-      for (let i = 0; i < legs.length; i += 1) {
-        const sourceRow = group[i] ?? first;
-        const built = buildTransactionUpserts(walletId, [legs[i]], sourceRow);
-        for (const r of built) {
-          rows.push(r);
-          if (r.asset_id === null) untrackedTx += 1;
-        }
-      }
-    }
-
-    if (rows.length > 0) {
-      const res = await upsertCryptoTransactions(rows);
-      if (!res.ok) throw new Error(res.error);
-    }
-
-    // Advance the state machine, then persist the cursor as the resume point.
-    state = reduceEvmBackfill(state, txRows, tokenRows, offset);
+    // Advance THIS stream's page (short page → stream done), then persist.
+    cursor = advanceEvmStream(cursor, stream, rowsReturned, EVM_HISTORY_PAGE_SIZE);
     counts = addEvmWindowCounts(counts, {
       windows: 1,
-      transactionsUpserted: rows.length,
-      untrackedTransactions: untrackedTx,
+      transactionsUpserted: mapped.rows.length,
+      untrackedTransactions: mapped.untracked,
     });
 
-    const cursorNow = currentCursorString(state);
+    const cursorNow = serializeEvmHistoryCursor(cursor);
     const txnsTotal = await countCryptoTransactions(walletId);
     await upsertCryptoSyncState(
       buildSyncStateUpsert({
         walletId,
         cursor: cursorNow,
-        backfillComplete: state.done,
+        backfillComplete: isEvmHistoryComplete(cursor),
         syncedAt: NOW(),
-        status: state.done ? "idle" : "backfilling",
+        status: isEvmHistoryComplete(cursor) ? "idle" : "backfilling",
         errorMessage: null,
         target,
         prevCursor,
         transactionsTotal: txnsTotal,
       }),
     );
-    // The cursor we just wrote becomes "previous" for the next window's compare.
     prevCursor = cursorNow;
+
+    // If a mid-page receipt fetch exhausted the budget, stop after persisting.
+    if (stoppedForBudget) break;
   }
 
-  return { counts, complete: state.done, stoppedForBudget };
+  return { counts, complete: isEvmHistoryComplete(cursor), stoppedForBudget };
 }
 
 /**

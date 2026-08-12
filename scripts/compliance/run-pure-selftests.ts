@@ -70,6 +70,7 @@ import { __runEvmDefiCoreTests } from "../../src/lib/crypto/evm/evm-defi-core";
 import { __runEvmClientCoreTests } from "../../src/lib/crypto/evm/evm-client-core";
 import { __runEvmSyncCoreTests } from "../../src/lib/crypto/evm/evm-sync-core";
 import { __runEvmSyncBudgetCoreTests } from "../../src/lib/crypto/evm/evm-sync-budget-core";
+import { __runEvmHistoryPaginationCoreTests } from "../../src/lib/crypto/evm/evm-history-pagination-core";
 import { __runEvmReceiptCoreTests } from "../../src/lib/crypto/evm/evm-receipt-core";
 import { __runEvmTokenDiscoveryCoreTests } from "../../src/lib/crypto/evm/evm-token-discovery-core";
 import { __runCryptoHoldingsTableCoreTests } from "../../src/lib/crypto/crypto-holdings-table-core";
@@ -642,6 +643,7 @@ async function main() {
   __runEvmClientCoreTests();
   __runEvmSyncCoreTests();
   __runEvmSyncBudgetCoreTests();
+  __runEvmHistoryPaginationCoreTests();
   __runEvmReceiptCoreTests();
   __runEvmTokenDiscoveryCoreTests();
   __runCryptoHoldingsTableCoreTests();
