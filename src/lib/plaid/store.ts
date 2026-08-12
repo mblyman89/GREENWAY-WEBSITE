@@ -533,3 +533,140 @@ export async function markPlaidWebhookProcessed(bodySha256: string): Promise<voi
     // best-effort; the dedup row already exists so a missed timestamp is harmless
   }
 }
+
+// ---------------------------------------------------------------------------
+// Mortgages (Plaid Liabilities detail; migration 0168)
+// ---------------------------------------------------------------------------
+
+/** A stored mortgage-detail row (money in integer cents, rate in basis points). */
+export type PlaidMortgageRecord = {
+  accountId: string;
+  accountNumberMask: string | null;
+  interestRateBps: number | null;
+  interestRateType: string | null;
+  nextMonthlyPaymentCents: number | null;
+  nextPaymentDueDate: string | null;
+  lastPaymentAmountCents: number | null;
+  lastPaymentDate: string | null;
+  escrowBalanceCents: number | null;
+  currentLateFeeCents: number | null;
+  pastDueAmountCents: number | null;
+  originationPrincipalCents: number | null;
+  originationDate: string | null;
+  maturityDate: string | null;
+  loanTerm: string | null;
+  loanTypeDescription: string | null;
+  hasPmi: boolean | null;
+  hasPrepaymentPenalty: boolean | null;
+  ytdInterestPaidCents: number | null;
+  ytdPrincipalPaidCents: number | null;
+  propertyAddress: string | null;
+};
+
+type MortgageRow = {
+  account_id: string;
+  account_number_mask: string | null;
+  interest_rate_bps: number | null;
+  interest_rate_type: string | null;
+  next_monthly_payment_cents: number | null;
+  next_payment_due_date: string | null;
+  last_payment_amount_cents: number | null;
+  last_payment_date: string | null;
+  escrow_balance_cents: number | null;
+  current_late_fee_cents: number | null;
+  past_due_amount_cents: number | null;
+  origination_principal_cents: number | null;
+  origination_date: string | null;
+  maturity_date: string | null;
+  loan_term: string | null;
+  loan_type_description: string | null;
+  has_pmi: boolean | null;
+  has_prepayment_penalty: boolean | null;
+  ytd_interest_paid_cents: number | null;
+  ytd_principal_paid_cents: number | null;
+  property_address: string | null;
+};
+
+const MORTGAGE_COLS =
+  "account_id,account_number_mask,interest_rate_bps,interest_rate_type,next_monthly_payment_cents,next_payment_due_date,last_payment_amount_cents,last_payment_date,escrow_balance_cents,current_late_fee_cents,past_due_amount_cents,origination_principal_cents,origination_date,maturity_date,loan_term,loan_type_description,has_pmi,has_prepayment_penalty,ytd_interest_paid_cents,ytd_principal_paid_cents,property_address";
+
+function toMortgageRecord(row: MortgageRow): PlaidMortgageRecord {
+  return {
+    accountId: row.account_id,
+    accountNumberMask: row.account_number_mask,
+    interestRateBps: row.interest_rate_bps,
+    interestRateType: row.interest_rate_type,
+    nextMonthlyPaymentCents: row.next_monthly_payment_cents,
+    nextPaymentDueDate: row.next_payment_due_date,
+    lastPaymentAmountCents: row.last_payment_amount_cents,
+    lastPaymentDate: row.last_payment_date,
+    escrowBalanceCents: row.escrow_balance_cents,
+    currentLateFeeCents: row.current_late_fee_cents,
+    pastDueAmountCents: row.past_due_amount_cents,
+    originationPrincipalCents: row.origination_principal_cents,
+    originationDate: row.origination_date,
+    maturityDate: row.maturity_date,
+    loanTerm: row.loan_term,
+    loanTypeDescription: row.loan_type_description,
+    hasPmi: row.has_pmi,
+    hasPrepaymentPenalty: row.has_prepayment_penalty,
+    ytdInterestPaidCents: row.ytd_interest_paid_cents,
+    ytdPrincipalPaidCents: row.ytd_principal_paid_cents,
+    propertyAddress: row.property_address,
+  };
+}
+
+/**
+ * Upsert one mortgage-detail row (keyed on account_id). The caller passes a
+ * record already normalized to integer cents / basis points by the pure core
+ * (liabilities-core.mapMortgage). The mortgage account must already exist in
+ * plaid_accounts (FK), which it will after the /accounts refresh.
+ */
+export async function upsertPlaidMortgage(
+  rec: PlaidMortgageRecord,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("plaid_mortgages").upsert(
+    {
+      account_id: rec.accountId,
+      account_number_mask: rec.accountNumberMask,
+      interest_rate_bps: rec.interestRateBps,
+      interest_rate_type: rec.interestRateType,
+      next_monthly_payment_cents: rec.nextMonthlyPaymentCents,
+      next_payment_due_date: rec.nextPaymentDueDate,
+      last_payment_amount_cents: rec.lastPaymentAmountCents,
+      last_payment_date: rec.lastPaymentDate,
+      escrow_balance_cents: rec.escrowBalanceCents,
+      current_late_fee_cents: rec.currentLateFeeCents,
+      past_due_amount_cents: rec.pastDueAmountCents,
+      origination_principal_cents: rec.originationPrincipalCents,
+      origination_date: rec.originationDate,
+      maturity_date: rec.maturityDate,
+      loan_term: rec.loanTerm,
+      loan_type_description: rec.loanTypeDescription,
+      has_pmi: rec.hasPmi,
+      has_prepayment_penalty: rec.hasPrepaymentPenalty,
+      ytd_interest_paid_cents: rec.ytdInterestPaidCents,
+      ytd_principal_paid_cents: rec.ytdPrincipalPaidCents,
+      property_address: rec.propertyAddress,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "account_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** List every stored mortgage detail (best-effort; empty when not configured). */
+export async function listPlaidMortgages(): Promise<PlaidMortgageRecord[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.from("plaid_mortgages").select(MORTGAGE_COLS);
+    if (error || !data) return [];
+    return (data as MortgageRow[]).map(toMortgageRecord);
+  } catch {
+    return [];
+  }
+}

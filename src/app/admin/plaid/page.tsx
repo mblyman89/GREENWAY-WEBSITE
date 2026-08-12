@@ -39,7 +39,8 @@ import { isPlaidConfigured, plaidEnv, plaidCredentialSets } from "@/lib/plaid/en
 import { linkSetOptions, multipleSetsConfigured } from "@/lib/plaid/plaid-credentials-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
-import { listPlaidItems, listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
+import { listPlaidItems, listPlaidAccounts, listPlaidTransactions, listPlaidMortgages } from "@/lib/plaid/store";
+import { buildMortgageView, type MortgageView } from "@/lib/plaid/liabilities-core";
 import {
   resolvePlaidTab,
   buildItemStatusView,
@@ -127,6 +128,19 @@ export default async function PlaidPage({
 
   const items = dbReady ? await listPlaidItems() : [];
   const accounts = dbReady ? await listPlaidAccounts() : [];
+  const mortgages = dbReady ? await listPlaidMortgages() : [];
+
+  // Per-account mortgage detail view (Plaid Liabilities). The remaining
+  // principal is the account's current balance; the rest comes from the
+  // mortgage record. Keyed by account_id so the detail card can look it up.
+  const mortgageViewByAccount = new Map<string, MortgageView>();
+  for (const m of mortgages) {
+    const acct = accounts.find((a) => a.accountId === m.accountId);
+    mortgageViewByAccount.set(
+      m.accountId,
+      buildMortgageView({ ...m, principalCents: acct?.currentBalanceCents ?? null }),
+    );
+  }
 
   // Group accounts under their item for display.
   const accountsByItem = new Map<string, typeof accounts>();
@@ -504,6 +518,41 @@ export default async function PlaidPage({
                         ))}
                       </div>
                     </div>
+
+                    {/* Mortgage details (Plaid Liabilities) — only for a loan
+                        account we have mortgage detail for (e.g. Sound CU). */}
+                    {(() => {
+                      const mv = selectedAccountId ? mortgageViewByAccount.get(selectedAccountId) : undefined;
+                      if (!mv) return null;
+                      const rows: Array<[string, string]> = [
+                        ["Remaining principal", mv.balanceText],
+                        ["Interest rate", mv.rateText],
+                        ["Next payment", mv.nextPaymentText],
+                        ["Escrow balance", mv.escrowText],
+                        ["Original loan", mv.originationText],
+                        ["Term", mv.termText],
+                        ["Payoff date", mv.maturityText],
+                        ["Paid this year", mv.ytdText],
+                        ["Mortgage insurance (PMI)", mv.pmiText],
+                        ["Property", mv.addressText],
+                      ];
+                      return (
+                        <div className={cardCls}>
+                          <h3 className="mb-1 text-sm font-semibold text-white">Mortgage details</h3>
+                          <p className="mb-3 text-xs text-white/40">
+                            Pulled from your lender via Plaid. Refreshes about once a day; use “Sync now” to refresh.
+                          </p>
+                          <dl className="divide-y divide-white/5">
+                            {rows.map(([label, value]) => (
+                              <div key={label} className="flex items-baseline justify-between gap-3 py-2">
+                                <dt className="text-xs text-white/40">{label}</dt>
+                                <dd className="text-right text-sm text-white/90">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      );
+                    })()}
 
                     {/* Range picker — used by Money in & out + Where it goes */}
                     {moneyView === "flow" || moneyView === "categories" ? (
