@@ -42,6 +42,7 @@ import { chooseSetForLink } from "@/lib/plaid/plaid-credentials-core";
 import { plaidDollarsToCents, extractPlaidError, describeLinkTokenError } from "@/lib/plaid/plaid-core";
 import { roleAssignmentCheck, normalizeCustomName } from "@/lib/plaid/plaid-ui-core";
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
+import { syncItemLiabilities } from "@/lib/plaid/liabilities-server";
 import {
   upsertPlaidItem,
   upsertPlaidAccount,
@@ -105,6 +106,13 @@ export async function createPlaidLinkTokenAction(
       user: { client_user_id: session.profile.id },
       client_name: "Greenway Marijuana",
       products: [Products.Transactions],
+      // Consent (not bill) to Liabilities + Investments up front so we can pull
+      // mortgage detail (Sound CU) and, later, investment holdings (Fidelity)
+      // WITHOUT re-linking. Per Plaid's personal-finance guidance: keep only
+      // Transactions in `products` (max institution coverage), consent to the
+      // rest, then call /liabilities/get and /investments/holdings/get post-link
+      // — a call that doesn't apply to the Item simply fails and isn't billed.
+      additional_consented_products: [Products.Liabilities, Products.Investments],
       transactions: { days_requested: days },
       country_codes: [CountryCode.Us],
       language: "en",
@@ -203,6 +211,16 @@ export async function exchangePlaidPublicTokenAction(
       isoCurrencyCode: a.balances?.iso_currency_code ?? "USD",
     });
     if (res.ok) recorded += 1;
+  }
+
+  // Best-effort: pull mortgage detail (Plaid Liabilities) right after linking so
+  // Sound CU's home loan shows up immediately, not only on the next "Sync now".
+  // Accounts are recorded above first (the mortgage row FKs to an account).
+  // Never throws; items without a mortgage / Liabilities consent store nothing.
+  try {
+    await syncItemLiabilities({ accessToken, credentialSet: set.key });
+  } catch {
+    /* best-effort enrichment; a failure here must not fail the link */
   }
 
   await recordAudit({

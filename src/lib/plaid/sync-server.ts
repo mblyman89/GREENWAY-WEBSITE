@@ -26,6 +26,7 @@ import "server-only";
  */
 import { getPlaidClient } from "./client";
 import { isPlaidConfigured } from "./env";
+import { syncItemLiabilities } from "./liabilities-server";
 import { normalizeSetKey } from "./plaid-credentials-core";
 import { plaidDollarsToCents, planTransactionMerge, mapItemStatus, extractPlaidError, type PlaidTxnInput } from "./plaid-core";
 import {
@@ -187,6 +188,11 @@ export async function runItemSync(item: PlaidItemRecord): Promise<ItemSyncResult
 
     state = reduceSyncPage(state, { next_cursor: data.next_cursor, has_more: data.has_more });
   }
+
+  // Best-effort: refresh mortgage detail (Plaid Liabilities). Never throws and
+  // never affects the transactions sync result — items without a mortgage or
+  // without the Liabilities product simply store nothing.
+  await syncItemLiabilities(item);
 
   // Persist the final cursor (also marks healthy + last_successful_sync).
   if (state.cursor) {
