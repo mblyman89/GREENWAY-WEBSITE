@@ -19,6 +19,8 @@ import {
   explorerTokenUrl,
   explorerAddressUrl,
   isHeldBalance,
+  computePercentBasisPoints,
+  formatPercentBasisPoints,
 } from "@/lib/crypto/crypto-holdings-table-core";
 import type {
   CryptoAssetRecord,
@@ -180,5 +182,75 @@ describe("buildHoldingsTable — hidden split + native-first + empties excluded"
       assetById: new Map([["flare:empty", asset({ id: "flare:empty" })]]),
     });
     expect(empty.wallets).toHaveLength(0);
+  });
+});
+
+describe("R3-C — USD subtotals, grand total, %-of-portfolio (float-free)", () => {
+  it("computePercentBasisPoints uses integer half-up math and guards zero total", () => {
+    expect(computePercentBasisPoints(2500, 10000)).toBe(2500);
+    expect(computePercentBasisPoints(1, 3)).toBe(3333); // half-up
+    expect(computePercentBasisPoints(500, 500)).toBe(10000);
+    expect(computePercentBasisPoints(null, 10000)).toBeNull();
+    expect(computePercentBasisPoints(100, 0)).toBeNull();
+    expect(computePercentBasisPoints(-1, 10000)).toBeNull();
+  });
+
+  it("formatPercentBasisPoints renders two decimals honestly", () => {
+    expect(formatPercentBasisPoints(1234)).toBe("12.34%");
+    expect(formatPercentBasisPoints(500)).toBe("5.00%");
+    expect(formatPercentBasisPoints(10000)).toBe("100.00%");
+    expect(formatPercentBasisPoints(null)).toBeNull();
+  });
+
+  const priced = buildHoldingsTable({
+    wallets: [WALLET],
+    balances: [
+      bal({ id: "p-flr", assetId: "FLR", amountRaw: "1000000000000000000", usdValueCents: 7500 }),
+      bal({
+        id: "p-aaa",
+        assetId: "flare:0x0000000000000000000000000000000000000001",
+        amountRaw: "5",
+        usdValueCents: 2500,
+      }),
+      bal({ id: "p-none", assetId: "flare:none", amountRaw: "9", usdValueCents: null }),
+    ],
+    assetById: new Map([
+      ["FLR", asset({ id: "FLR", symbol: "FLR", name: "Flare", native: true, contract: null })],
+      [
+        "flare:0x0000000000000000000000000000000000000001",
+        asset({ id: "flare:0x0000000000000000000000000000000000000001", symbol: "AAA" }),
+      ],
+      ["flare:none", asset({ id: "flare:none", symbol: "NONE" })],
+    ]),
+  });
+
+  it("sums only priced holdings into wallet subtotal and grand total", () => {
+    expect(priced.totalValuedCents).toBe(10000);
+    expect(priced.totalValuedText).toBe("$100.00");
+    expect(priced.wallets[0].valuedCents).toBe(10000);
+    expect(priced.wallets[0].valuedText).toBe("$100.00");
+  });
+
+  it("stamps each priced row's share of the whole portfolio; unpriced => null", () => {
+    const rows = priced.wallets[0].visible;
+    const flr = rows.find((r) => r.symbol === "FLR")!;
+    const aaa = rows.find((r) => r.symbol === "AAA")!;
+    const none = rows.find((r) => r.symbol === "NONE")!;
+    expect(flr.percentText).toBe("75.00%");
+    expect(flr.percentBasisPoints).toBe(7500);
+    expect(aaa.percentText).toBe("25.00%");
+    expect(none.percentText).toBeNull();
+    expect(none.percentBasisPoints).toBeNull();
+  });
+
+  it("all-unpriced portfolio: total $0.00, no percents, no divide-by-zero", () => {
+    const unpriced = buildHoldingsTable({
+      wallets: [WALLET],
+      balances: [bal({ id: "u1", assetId: "FLR", amountRaw: "1000000000000000000", usdValueCents: null })],
+      assetById: new Map([["FLR", asset({ id: "FLR", symbol: "FLR", native: true, contract: null })]]),
+    });
+    expect(unpriced.totalValuedCents).toBe(0);
+    expect(unpriced.totalValuedText).toBe("$0.00");
+    expect(unpriced.wallets[0].visible[0].percentText).toBeNull();
   });
 });
