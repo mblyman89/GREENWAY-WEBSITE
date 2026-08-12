@@ -122,6 +122,51 @@ export function formatHeldAmount(input: {
   return "—";
 }
 
+/**
+ * A held amount split for compact table display: a SHORT form (at most
+ * `maxDecimals` places after the point) for the cell, the FULL exact string for
+ * a hover tooltip, and `isTruncated` = true only when the short form actually
+ * dropped digits (so the UI shows a tooltip only when there's more to see).
+ *
+ * We TRUNCATE, never round up: showing a balance larger than the owner actually
+ * holds would be dishonest. Purely string math on the already-formatted exact
+ * value — no JS number ever parses the amount, so precision can't be lost.
+ * Non-numeric inputs (e.g. "—") pass through unchanged with isTruncated=false.
+ */
+export interface DisplayAmountParts {
+  short: string;
+  full: string;
+  isTruncated: boolean;
+}
+
+export function splitDisplayAmount(full: string, maxDecimals: number = 4): DisplayAmountParts {
+  const s = (full ?? "").trim();
+  const cap = Number.isInteger(maxDecimals) && maxDecimals >= 0 ? maxDecimals : 4;
+
+  // Only touch plain decimal numbers ("-123.456789", "0.1", "42"). Anything
+  // else (placeholders, scientific notation, symbols) shows exactly as given.
+  if (!/^-?\d+(\.\d+)?$/.test(s)) {
+    return { short: s, full: s, isTruncated: false };
+  }
+
+  const dot = s.indexOf(".");
+  if (dot === -1) {
+    // Whole number — nothing after the point to trim.
+    return { short: s, full: s, isTruncated: false };
+  }
+
+  const intPart = s.slice(0, dot);
+  const fracPart = s.slice(dot + 1);
+  if (fracPart.length <= cap) {
+    // Already short enough.
+    return { short: s, full: s, isTruncated: false };
+  }
+
+  const keptFrac = fracPart.slice(0, cap); // TRUNCATE (no rounding)
+  const short = cap === 0 ? intPart : `${intPart}.${keptFrac}`;
+  return { short, full: s, isTruncated: true };
+}
+
 /** Trim a decimal string's insignificant trailing zeros (keeps value identical). */
 function trimDecimalString(s: string): string {
   const t = s.trim();
@@ -595,6 +640,28 @@ export function __runCryptoUiCoreTests(): void {
   check("tab label tax", cryptoTabLabel("tax") === "Tax Center");
   check("classify in tab list", CRYPTO_TABS.includes("classify"));
   check("tax in tab list", CRYPTO_TABS.includes("tax"));
+
+  // --- splitDisplayAmount: compact table display with full-precision tooltip.
+  const many = splitDisplayAmount("123.123456789012345678", 4);
+  check("split truncates to 4 dp", many.short === "123.1234");
+  check("split keeps full exact", many.full === "123.123456789012345678");
+  check("split flags truncation", many.isTruncated === true);
+  const trunc4 = splitDisplayAmount("0.00012345", 4);
+  check("split truncates leading-zero frac", trunc4.short === "0.0001");
+  check("split truncates never rounds up", splitDisplayAmount("0.99999", 4).short === "0.9999");
+  const short = splitDisplayAmount("1.5", 4);
+  check("split short frac untouched", short.short === "1.5" && short.isTruncated === false);
+  const exact4 = splitDisplayAmount("1.2345", 4);
+  check("split exactly 4 dp not truncated", exact4.short === "1.2345" && exact4.isTruncated === false);
+  const whole = splitDisplayAmount("42", 4);
+  check("split whole number", whole.short === "42" && whole.isTruncated === false);
+  const neg = splitDisplayAmount("-0.123456", 4);
+  check("split negative truncates", neg.short === "-0.1234" && neg.isTruncated === true);
+  const dash = splitDisplayAmount("\u2014", 4);
+  check("split placeholder passthrough", dash.short === "\u2014" && dash.isTruncated === false);
+  check("split empty passthrough", splitDisplayAmount("", 4).isTruncated === false);
+  const zeroDp = splitDisplayAmount("12.99", 0);
+  check("split zero decimals keeps int only", zeroDp.short === "12" && zeroDp.isTruncated === true);
 
   // --- USD formatting (integer cents, never floats).
   check("usd zero", formatCentsUsd(0) === "$0.00");
