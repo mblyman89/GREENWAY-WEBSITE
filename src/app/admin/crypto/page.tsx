@@ -70,7 +70,7 @@ import {
   type CryptoTab,
   type SummaryBalanceInput,
 } from "@/lib/crypto/crypto-ui-core";
-import { addCryptoWalletAction, runCryptoSyncNowAction } from "./actions";
+import { addCryptoWalletAction, renameWalletAction, runCryptoSyncNowAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -488,8 +488,29 @@ export default async function CryptoPage({
                           {w.chainText} · <span title={w.addressFull}>{w.addressShort}</span>
                         </span>
                       </span>
-                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-1 text-xs font-semibold text-emerald-300">
-                        ● Watching
+                      <span className="flex flex-wrap items-center gap-2">
+                        {/* Rename: change this wallet's friendly nickname. Leave blank to clear. */}
+                        <form action={renameWalletAction} className="flex items-center gap-2">
+                          <input type="hidden" name="walletId" value={w.id} />
+                          <input
+                            type="text"
+                            name="label"
+                            defaultValue={w.label}
+                            maxLength={60}
+                            placeholder="Add a name…"
+                            aria-label={`Rename ${w.displayName}`}
+                            className="w-40 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            className="rounded-[var(--admin-radius)] border border-white/15 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-white/80 hover:bg-white/[0.08]"
+                          >
+                            Rename
+                          </button>
+                        </form>
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/[0.06] px-3 py-1 text-xs font-semibold text-emerald-300">
+                          ● Watching
+                        </span>
                       </span>
                     </li>
                   ))}

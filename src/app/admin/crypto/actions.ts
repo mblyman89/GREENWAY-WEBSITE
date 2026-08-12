@@ -22,8 +22,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { parseAddWallet } from "@/lib/crypto/crypto-ui-core";
-import { addWatchOnlyWallet, setCryptoAssetHidden } from "@/lib/crypto/crypto-store";
+import { parseAddWallet, parseWalletLabel } from "@/lib/crypto/crypto-ui-core";
+import { addWatchOnlyWallet, updateCryptoWalletLabel, setCryptoAssetHidden } from "@/lib/crypto/crypto-store";
 import { runAllCryptoSync } from "@/lib/crypto/crypto-sync-orchestrator";
 import {
   TX_PRIMITIVES,
@@ -94,6 +94,42 @@ export async function addCryptoWalletAction(formData: FormData): Promise<void> {
     msg: result.created
       ? "Wallet added — now watching this address. Use \u201cSync now\u201d on the Health tab to pull its balances and history."
       : "Already watching this address — label updated. Use \u201cSync now\u201d on the Health tab to refresh.",
+  });
+}
+
+/**
+ * Rename a watch-only wallet (change its friendly nickname only). Validates via
+ * the pure parseWalletLabel (trim, cap, empty->clear), updates ONLY the `label`
+ * column via the store (address/chain/history untouched), audits with the public
+ * wallet id + new label (no secrets exist here), then returns to the Wallets tab
+ * with a friendly message. Same owner/admin gate as adding a wallet.
+ */
+export async function renameWalletAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const parsed = parseWalletLabel({
+    walletId: String(formData.get("walletId") ?? ""),
+    label: String(formData.get("label") ?? ""),
+  });
+  if (!parsed.ok) back({ tab: "wallets", error: parsed.error });
+
+  const result = await updateCryptoWalletLabel(parsed.walletId, parsed.label);
+  if (!result.ok) back({ tab: "wallets", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "crypto.wallet.renamed",
+    entityType: "crypto_wallet",
+    entityId: parsed.walletId,
+    after: { label: parsed.label },
+  });
+
+  back({
+    tab: "wallets",
+    msg: parsed.label
+      ? `Wallet renamed to \u201c${parsed.label}\u201d.`
+      : "Wallet name cleared \u2014 it now shows its blockchain name.",
   });
 }
 
