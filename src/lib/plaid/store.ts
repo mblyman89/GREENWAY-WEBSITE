@@ -20,7 +20,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { encryptSecret, decryptSecret } from "@/lib/security/at-rest-crypto";
-import type { AccountRole, NormalizedTxn } from "./plaid-core";
+import { isAccountRole, type AccountRole, type NormalizedTxn } from "./plaid-core";
 
 // ---------------------------------------------------------------------------
 // Types (storage-facing; money in cents)
@@ -235,7 +235,7 @@ const ACCOUNT_COLS =
   "id,account_id,item_id,name,official_name,custom_name,mask,type,subtype,role,current_balance_cents,available_balance_cents,iso_currency_code,balances_updated_at,active";
 
 function toAccountRecord(row: AccountRow): PlaidAccountRecord {
-  const role = row.role === "main" || row.role === "atm" || row.role === "credit" ? row.role : null;
+  const role = typeof row.role === "string" && isAccountRole(row.role) ? (row.role as AccountRole) : null;
   return {
     id: row.id,
     accountId: row.account_id,

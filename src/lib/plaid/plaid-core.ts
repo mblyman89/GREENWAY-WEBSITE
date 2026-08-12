@@ -9,8 +9,9 @@
  *   1. plaidDollarsToCents — Plaid returns amounts as floating-point DOLLARS;
  *      we store integer CENTS everywhere (standing rule). Math.round(a*100),
  *      SIGN PRESERVED.
- *   2. validateAccountRole — owner assigns each account a role: 'main' | 'atm'
- *      | 'credit' | null. Anything else is rejected.
+ *   2. validateAccountRole — owner assigns each account a role from the
+ *      canonical ACCOUNT_ROLES list (main | atm | credit | savings | reserve |
+ *      mortgage | loan | personal) or null (unassigned). Anything else rejected.
  *   3. mapItemStatus — turn a Plaid item error_code into our status enum plus a
  *      plain-English message a non-technical owner can act on.
  *   4. planTransactionMerge — turn a /transactions/sync delta (added / modified
@@ -58,7 +59,32 @@ export function plaidDollarsToCents(input: number | string | null | undefined): 
 // 2) Account role validation
 // ---------------------------------------------------------------------------
 
-export type AccountRole = "main" | "atm" | "credit";
+/**
+ * The canonical list of account roles Michael can assign on the Plaid page.
+ * This is the SINGLE SOURCE OF TRUTH — the AccountRole type, validation, the
+ * store read-back whitelist, the human labels, and the UI dropdown all derive
+ * from (or must stay in lock-step with) this list. Add a role here first.
+ *
+ * NOTE: "main" is load-bearing for reconciliation (vendor-reconcile uses
+ * role==="main" to find the operating account). Never rename or remove it.
+ */
+export const ACCOUNT_ROLES = [
+  "main",
+  "atm",
+  "credit",
+  "savings",
+  "reserve",
+  "mortgage",
+  "loan",
+  "personal",
+] as const;
+
+export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+
+/** Type guard: is this string one of our canonical roles? */
+export function isAccountRole(v: string): v is AccountRole {
+  return (ACCOUNT_ROLES as readonly string[]).includes(v);
+}
 
 /**
  * Validate/normalize an owner-assigned account role. Returns the canonical
@@ -71,8 +97,11 @@ export function validateAccountRole(
 ): { ok: true; role: AccountRole | null } | { ok: false; error: string } {
   const v = (input ?? "").trim().toLowerCase();
   if (v === "" || v === "none" || v === "null" || v === "unassigned") return { ok: true, role: null };
-  if (v === "main" || v === "atm" || v === "credit") return { ok: true, role: v };
-  return { ok: false, error: `Unknown account role "${input}". Use main, atm, credit, or leave unassigned.` };
+  if (isAccountRole(v)) return { ok: true, role: v };
+  return {
+    ok: false,
+    error: `Unknown account role "${input}". Use one of: ${ACCOUNT_ROLES.join(", ")}, or leave unassigned.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -411,10 +440,18 @@ export function __runPlaidCoreTests(): void {
   expect("role: main ok", (() => { const r = validateAccountRole("main"); return r.ok && r.role === "main"; })());
   expect("role: ATM (case) → atm", (() => { const r = validateAccountRole("ATM"); return r.ok && r.role === "atm"; })());
   expect("role: credit ok", (() => { const r = validateAccountRole("credit"); return r.ok && r.role === "credit"; })());
+  expect("role: savings ok (new)", (() => { const r = validateAccountRole("savings"); return r.ok && r.role === "savings"; })());
+  expect("role: reserve ok (new)", (() => { const r = validateAccountRole("reserve"); return r.ok && r.role === "reserve"; })());
+  expect("role: mortgage ok (new)", (() => { const r = validateAccountRole("mortgage"); return r.ok && r.role === "mortgage"; })());
+  expect("role: loan ok (new)", (() => { const r = validateAccountRole("loan"); return r.ok && r.role === "loan"; })());
+  expect("role: personal ok (new)", (() => { const r = validateAccountRole("personal"); return r.ok && r.role === "personal"; })());
+  expect("role: 'PERSONAL' (case) → personal", (() => { const r = validateAccountRole("PERSONAL"); return r.ok && r.role === "personal"; })());
   expect("role: '' → null (unassigned)", (() => { const r = validateAccountRole(""); return r.ok && r.role === null; })());
   expect("role: 'none' → null", (() => { const r = validateAccountRole("none"); return r.ok && r.role === null; })());
   expect("role: null → null", (() => { const r = validateAccountRole(null); return r.ok && r.role === null; })());
-  expect("role: garbage → error", (() => { const r = validateAccountRole("savings"); return !r.ok; })());
+  expect("role: garbage → error", (() => { const r = validateAccountRole("banana"); return !r.ok; })());
+  expect("ACCOUNT_ROLES has 8 entries", ACCOUNT_ROLES.length === 8);
+  expect("ACCOUNT_ROLES includes main (reconciliation)", (ACCOUNT_ROLES as readonly string[]).includes("main"));
 
   // --- mapItemStatus ---
   expect("status: null → healthy", (() => { const s = mapItemStatus(null); return s.status === "healthy" && !s.needsUserAction; })());
