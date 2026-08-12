@@ -14,8 +14,25 @@ import {
   listCryptoWallets,
   listCryptoTransactions,
   listCryptoAssets,
+  listCryptoPriceSnapshots,
 } from "./crypto-store";
 import { listCryptoClassifications } from "./crypto-classification-store";
+import { listCryptoOwnerWalletConfirmations } from "./crypto-owner-wallet-store";
+import { traceOrigins, type InboundReceipt } from "./crypto-origin-trace-core";
+import {
+  buildExchangeRegistry,
+  exchangeAddressList,
+} from "./crypto-exchange-registry-core";
+import {
+  isReconstructedSource,
+  toIsoPriceDate,
+  type ReconstructedBasisRow,
+  type UnpricedNeed,
+} from "./crypto-historical-pricing-core";
+import {
+  buildReconstructionReport,
+  buildReconstructionHtml,
+} from "./crypto-reconstruction-report-core";
 import { getAsset } from "./crypto-core";
 import { getTagDefinition } from "./crypto-classification-core";
 import {
@@ -238,6 +255,18 @@ async function assembleYears(): Promise<AssembledYear[]> {
   for (const y of unclassifiedByYear.keys()) allYears.add(y);
   for (const y of binderLotsByYear.keys()) allYears.add(y);
 
+  // R1-G5 — Cost-basis reconstruction workpaper per year. Runs the back-trace
+  // over every inbound receipt, matches each reconstructed lot to a PERSISTED
+  // reconstructed price snapshot (from R1-G3; no live fetch inside a binder
+  // render), and folds a plain-English workpaper + assumptions register into
+  // each year's binder. Anything still unpriced/unconfirmed is FLAGGED.
+  const reconstructionHtmlByYear = await buildReconstructionHtmlByYear(
+    wallets,
+    txLists,
+    assetById,
+  );
+  for (const y of reconstructionHtmlByYear.keys()) allYears.add(y);
+
   const assembled: AssembledYear[] = [];
   for (const yr of Array.from(allYears).sort((a, b) => a - b)) {
     const disposalInputs = disposalInputsByYear.get(yr) ?? [];
@@ -304,12 +333,177 @@ async function assembleYears(): Promise<AssembledYear[]> {
       priceSources: [],
       acknowledgments: [],
       issues: readiness.issues,
+      reconstructionHtml: reconstructionHtmlByYear.get(yr) ?? "",
     };
 
     assembled.push({ taxYearInput, binder });
   }
 
   return assembled;
+}
+
+type WalletList = Awaited<ReturnType<typeof listCryptoWallets>>;
+type TxList = Awaited<ReturnType<typeof listCryptoTransactions>>;
+type AssetRec = Awaited<ReturnType<typeof listCryptoAssets>>[number];
+
+/**
+ * R1-G5 — build the per-year reconstruction workpaper HTML.
+ *
+ * 1) Turn every INBOUND transaction into a trace receipt (sender = parent hop).
+ * 2) Run traceOrigins with the tracked + owner-confirmed wallets as owners and
+ *    the verified exchange registry.
+ * 3) Match each lineage that needs pricing to a PERSISTED reconstructed price
+ *    snapshot (source starts "reconstructed:") on the receive date. Unmatched =>
+ *    surfaced as unpriced (never $0).
+ * 4) Build the reconstruction report, split its rows by receive year, and render
+ *    a per-year workpaper + assumptions register.
+ *
+ * Fully graceful: no reconstructed receipts => empty map => binder shows nothing
+ * extra. No live network calls happen here (pricing is read from stored snaps).
+ */
+async function buildReconstructionHtmlByYear(
+  wallets: WalletList,
+  txLists: TxList[],
+  assetById: Map<string, AssetRec>,
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (!isSupabaseServiceConfigured) return out;
+
+  const ownerDecisions = await listCryptoOwnerWalletConfirmations();
+
+  // Trace receipts from every inbound transaction.
+  const receipts: InboundReceipt[] = [];
+  const symbolByReceiptId = new Map<string, string>();
+  const assetIdByReceiptId = new Map<string, string>();
+  const yearByReceiptId = new Map<string, number>();
+  for (const list of txLists) {
+    for (const t of list) {
+      if (t.direction !== "in") continue;
+      const asset = t.assetId ? assetById.get(t.assetId) ?? getAsset(t.assetId) : null;
+      symbolByReceiptId.set(t.id, asset?.symbol ?? "");
+      if (t.assetId) assetIdByReceiptId.set(t.id, t.assetId);
+      const ms = t.blockTime ? Date.parse(t.blockTime) : NaN;
+      if (Number.isFinite(ms)) yearByReceiptId.set(t.id, new Date(ms).getUTCFullYear());
+      receipts.push({
+        id: t.id,
+        txHash: t.txHash,
+        chain: t.chain,
+        toAddress: "",
+        fromAddress: t.counterparty ?? null,
+        receivedAtMs: Number.isFinite(ms) ? ms : null,
+        amountDecimal: t.amountDecimal,
+      });
+    }
+  }
+  if (receipts.length === 0) return out;
+
+  const ownerAddresses = [
+    ...wallets.map((w) => w.address),
+    ...ownerDecisions.filter((d) => d.status === "confirmed").map((d) => d.address),
+  ];
+  const registry = buildExchangeRegistry([]);
+  const exchangeAddresses = exchangeAddressList(registry);
+  const trace = traceOrigins({ receipts, ownerAddresses, exchangeAddresses });
+
+  // Load persisted RECONSTRUCTED price snapshots for the assets we need, keyed
+  // by `${assetId}|${priceDate}` so a lineage can find its FMV-at-date.
+  const neededAssetIds = new Set<string>();
+  for (const lin of trace.lineages) {
+    if (!lin.needsPricing) continue;
+    const assetId = assetIdByReceiptId.get(lin.receiptId);
+    if (assetId) neededAssetIds.add(assetId);
+  }
+  const reconstructedByKey = new Map<string, { priceScaledCents: string; source: string }>();
+  await Promise.all(
+    Array.from(neededAssetIds).map(async (assetId) => {
+      const snaps = await listCryptoPriceSnapshots(assetId);
+      for (const s of snaps) {
+        if (!isReconstructedSource(s.source)) continue;
+        reconstructedByKey.set(`${assetId}|${s.priceDate}`, {
+          priceScaledCents: s.priceScaledCents,
+          source: s.source,
+        });
+      }
+    }),
+  );
+
+  // Split into priced / unpriced for the report builder.
+  const priced: ReconstructedBasisRow[] = [];
+  const unpriced: UnpricedNeed[] = [];
+  for (const lin of trace.lineages) {
+    if (!lin.needsPricing) continue;
+    const assetId = assetIdByReceiptId.get(lin.receiptId) ?? "";
+    const priceDate =
+      lin.receivedAtMs !== null && Number.isFinite(lin.receivedAtMs)
+        ? toIsoPriceDate(lin.receivedAtMs)
+        : "";
+    const snap = assetId && priceDate ? reconstructedByKey.get(`${assetId}|${priceDate}`) : undefined;
+    if (snap) {
+      priced.push({
+        receiptId: lin.receiptId,
+        assetId,
+        coinId: "",
+        priceDate,
+        priceScaledCents: snap.priceScaledCents,
+        source: snap.source,
+        usd: "",
+      });
+    } else {
+      unpriced.push({
+        receiptId: lin.receiptId,
+        assetId,
+        coinId: "",
+        dateDDMMYYYY: "",
+        reason: "no reconstructed price on file yet for this coin on this date",
+      });
+    }
+  }
+
+  const confirmedAddrSet = new Set(
+    ownerDecisions.filter((d) => d.status === "confirmed").map((d) => d.address),
+  );
+  const unconfirmedWalletAddresses = trace.discoveredWallets
+    .filter((w) => !confirmedAddrSet.has(w.address.trim().toLowerCase()))
+    .map((w) => w.address);
+
+  const report = buildReconstructionReport({
+    lineages: trace.lineages,
+    symbolByReceiptId,
+    priced,
+    unpriced,
+    unconfirmedWalletAddresses,
+  });
+
+  // Split the report by receive year: each year gets only its own rows +
+  // the assumptions tied to those rows. We rebuild a per-year sub-report so the
+  // HTML lands in the right year's binder.
+  const receiptIdsByYear = new Map<number, Set<string>>();
+  for (const [receiptId, yr] of yearByReceiptId) {
+    const set = receiptIdsByYear.get(yr) ?? new Set<string>();
+    set.add(receiptId);
+    receiptIdsByYear.set(yr, set);
+  }
+
+  for (const [yr, ids] of receiptIdsByYear) {
+    const yearLineages = trace.lineages.filter((l) => ids.has(l.receiptId));
+    if (yearLineages.length === 0) continue;
+    const yearPriced = priced.filter((p) => ids.has(p.receiptId));
+    const yearUnpriced = unpriced.filter((u) => ids.has(u.receiptId));
+    const subReport = buildReconstructionReport({
+      lineages: yearLineages,
+      symbolByReceiptId,
+      priced: yearPriced,
+      unpriced: yearUnpriced,
+      // Unconfirmed wallets are cross-year; attach them all so the register is
+      // complete in every year that has reconstructed activity.
+      unconfirmedWalletAddresses,
+    });
+    const html = buildReconstructionHtml(subReport);
+    if (html !== "") out.set(yr, html);
+  }
+  void report; // full-report build kept for potential future all-years export.
+
+  return out;
 }
 
 /** The on-screen Tax Center view-model. */

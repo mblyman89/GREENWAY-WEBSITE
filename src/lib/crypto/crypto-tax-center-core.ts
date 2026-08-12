@@ -252,6 +252,13 @@ export interface BinderYear {
   priceSources: readonly BinderPriceSource[];
   acknowledgments: readonly BinderAcknowledgment[];
   issues: readonly ReadinessIssue[];
+  /**
+   * R1-G5 — pre-rendered "reconstruction workpaper + assumptions register" HTML
+   * for coins traced back to an origin (built by crypto-reconstruction-report-
+   * core). Empty string when nothing was reconstructed this year, so a clean
+   * year shows no clutter. Already escaped + self-contained sections.
+   */
+  reconstructionHtml?: string;
 }
 
 export interface AuditBinderInput {
@@ -357,6 +364,8 @@ function binderYearHtml(y: BinderYear): string {
       tableRows(y.acknowledgments.map((a) => [a.kind, a.detail, a.acknowledgedBy, a.acknowledgedAt])),
       "No acknowledgments recorded — nothing was assumed.",
     )}
+
+    ${y.reconstructionHtml ?? ""}
 
     ${issuesHtml}
   </div>`;
@@ -581,6 +590,7 @@ export function __runCryptoTaxCenterCoreTests(): void {
         priceSources: [{ assetSymbol: "FLR", source: "CoinGecko", asOf: "2024-03-01" }],
         acknowledgments: [],
         issues: [],
+        reconstructionHtml: "<section><h3>Cost-basis reconstruction workpaper</h3><p>traced XRP back to Coinbase</p></section>",
       },
       {
         taxYear: 2023,
@@ -613,6 +623,9 @@ export function __runCryptoTaxCenterCoreTests(): void {
   truthy(html.includes("box I (short-term) / box L (long-term)"), "binder cites correct 8949 boxes");
   // 2023 must be ordered before 2024 in the document.
   truthy(html.indexOf("Tax year 2023") < html.indexOf("Tax year 2024"), "binder years sorted ascending");
+  // R1-G5: the reconstruction workpaper HTML is folded into the year when present.
+  truthy(html.includes("Cost-basis reconstruction workpaper"), "binder folds in reconstruction workpaper");
+  truthy(html.includes("traced XRP back to Coinbase"), "binder includes reconstruction body");
 
   // --- escaping actually applies to asset/source strings ---
   const injected = buildAuditBinderHtml({

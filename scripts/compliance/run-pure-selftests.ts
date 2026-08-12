@@ -92,6 +92,7 @@ import { __runCryptoExchangeRegistryCoreTests } from "../../src/lib/crypto/crypt
 import { __runCryptoHistoricalPricingCoreTests } from "../../src/lib/crypto/crypto-historical-pricing-core";
 import { __runCryptoOwnerWalletCoreTests } from "../../src/lib/crypto/crypto-owner-wallet-core";
 import { __runCryptoTraceViewCoreTests } from "../../src/lib/crypto/crypto-trace-view-core";
+import { __runCryptoReconstructionReportCoreTests } from "../../src/lib/crypto/crypto-reconstruction-report-core";
 import { __runCoreumClientCoreTests } from "../../src/lib/crypto/coreum/coreum-client-core";
 import { __runCoreumMapCoreTests } from "../../src/lib/crypto/coreum/coreum-map-core";
 import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-sync-core";
@@ -663,6 +664,7 @@ async function main() {
   __runCryptoHistoricalPricingCoreTests();
   __runCryptoOwnerWalletCoreTests();
   __runCryptoTraceViewCoreTests();
+  __runCryptoReconstructionReportCoreTests();
   __runCoreumClientCoreTests();
   __runCoreumMapCoreTests();
   __runCoreumSyncCoreTests();
