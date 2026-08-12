@@ -33,6 +33,7 @@ import {
   type TxPrimitive,
 } from "@/lib/crypto/crypto-classification-core";
 import { upsertCryptoClassification } from "@/lib/crypto/crypto-classification-store";
+import { upsertCryptoTransferMatch } from "@/lib/crypto/crypto-transfer-store";
 
 const ROOT = "/admin/crypto";
 
@@ -233,4 +234,68 @@ export async function classifyTransactionAction(formData: FormData): Promise<voi
     tab: "classify",
     msg: `Saved \u2014 marked as \u201c${label}.\u201d ${def ? def.plainNote : ""}`.trim(),
   });
+}
+
+/**
+ * Confirm (or reject) an own-wallet transfer \u2014 the "these two legs are the same
+ * move between my wallets" decision (R1-F2). This is what turns a loose OUT + IN
+ * pair (e.g. hot wallet \u2192 Ledger Stax) into a durable, non-taxable relocation
+ * the cost-basis engine can carry basis + date across.
+ *
+ * Gate settings.manage \u2192 validate in the pure builder (distinct wallets, valid
+ * exact-decimal amount) \u2192 upsert via the server-only store \u2192 audit (public ids
+ * only) \u2192 back to the Reconcile tab with a plain-English confirmation. Graceful:
+ * if the transfers table isn't migrated yet the store reports it and we surface
+ * that message rather than crashing.
+ */
+export async function confirmTransferAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const outTxId = String(formData.get("outTxId") ?? "").trim();
+  const inTxId = String(formData.get("inTxId") ?? "").trim();
+  const sourceWalletId = String(formData.get("sourceWalletId") ?? "").trim();
+  const destWalletId = String(formData.get("destWalletId") ?? "").trim();
+  const assetId = String(formData.get("assetId") ?? "").trim();
+  const movedAmount = String(formData.get("movedAmount") ?? "").trim();
+  const gasAmount = String(formData.get("gasAmount") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const statusRaw = String(formData.get("status") ?? "confirmed").trim();
+  const status = statusRaw === "rejected" ? "rejected" : "confirmed";
+  const confidenceRaw = String(formData.get("confidence") ?? "").trim();
+  const confidence = confidenceRaw === "" ? 0 : Number(confidenceRaw);
+  const sourceRaw = String(formData.get("source") ?? "suggested").trim();
+  const matchSource = sourceRaw === "manual" ? "manual" : "suggested";
+
+  if (outTxId === "") back({ tab: "reconcile", error: "Missing the outgoing transaction." });
+
+  const result = await upsertCryptoTransferMatch({
+    outTxId,
+    inTxId: inTxId === "" ? null : inTxId,
+    sourceWalletId,
+    destWalletId,
+    assetId: assetId === "" ? null : assetId,
+    movedAmount,
+    gasAmount: gasAmount === "" ? null : gasAmount,
+    status,
+    confidence: Number.isFinite(confidence) ? confidence : 0,
+    source: matchSource,
+    note: note === "" ? null : note,
+    confirmedBy: session.profile.id,
+  });
+  if (!result.ok) back({ tab: "reconcile", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: status === "rejected" ? "crypto.transfer.rejected" : "crypto.transfer.confirmed",
+    entityType: "crypto_transaction",
+    entityId: outTxId, // public tx id \u2014 safe to record
+    after: { out_tx_id: outTxId, in_tx_id: inTxId || null, status, moved_amount: movedAmount },
+  });
+
+  const msg =
+    status === "rejected"
+      ? "Noted \u2014 these two won\u2019t be treated as a transfer between your wallets."
+      : "Confirmed \u2014 booked as a non-taxable move between your wallets. Your original cost and purchase date carry over to the new wallet.";
+  back({ tab: "reconcile", msg });
 }
