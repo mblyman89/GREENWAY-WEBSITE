@@ -90,13 +90,21 @@ export type BackfillProgressView = {
 // ---------------------------------------------------------------------------
 
 /**
- * Parse the EVM cursor `"<nextStartBlock>:<lastConsumedBlock>"` and return the
- * block the backfill has reached (nextStartBlock). Returns null if the cursor is
- * absent or malformed (we then fall back to a non-percent view).
+ * Parse the LEGACY EVM block-window cursor `"<nextStartBlock>:<lastConsumedBlock>"`
+ * and return the block the backfill has reached (nextStartBlock). Returns null
+ * if the cursor is absent, malformed, OR is the NEW account-pagination cursor
+ * (a JSON object starting with "{"). EVM history now walks the account's own tx
+ * list by page (evm-history-pagination-core) rather than block windows, so there
+ * is no meaningful "reached block" percent to show — we deliberately return null
+ * here so the progress view falls to the honest XRP/Coreum-style readout
+ * (transactions captured, still paging) that can never fake or snap a percent.
  */
 export function parseEvmReachedBlock(cursor: string | null): number | null {
   if (!cursor) return null;
-  const parts = cursor.trim().split(":");
+  const raw = cursor.trim();
+  // New account-pagination cursor is JSON ({"v":2,...}) — no block position.
+  if (raw.startsWith("{")) return null;
+  const parts = raw.split(":");
   if (parts.length < 1) return null;
   const n = Number.parseInt(parts[0], 10);
   if (!Number.isFinite(n) || n < 0) return null;
@@ -382,6 +390,12 @@ export function __runCryptoProgressCoreTests(): void {
   check("evm reached null", parseEvmReachedBlock(null) === null);
   check("evm reached garbage", parseEvmReachedBlock("abc") === null);
   check("evm reached single field", parseEvmReachedBlock("500") === 500);
+  // New account-pagination cursor (JSON) → null (no block position → honest,
+  // no-percent readout; never fabricates or snaps a percent).
+  check(
+    "evm reached ignores json pagination cursor",
+    parseEvmReachedBlock('{"v":2,"tx":{"page":3,"done":false},"token":{"page":1,"done":true}}') === null,
+  );
 
   // --- parseEvmTargetBlock
   check("evm target parses", parseEvmTargetBlock("10000000") === 10000000);
