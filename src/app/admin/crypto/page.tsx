@@ -32,11 +32,19 @@ import {
   listCryptoWallets,
   listCryptoBalances,
   listCryptoAssets,
+  listCryptoTransactions,
   getCryptoSyncState,
 } from "@/lib/crypto/crypto-store";
+import { listCryptoClassifications } from "@/lib/crypto/crypto-classification-store";
 import { getAsset } from "@/lib/crypto/crypto-core";
 import { buildHoldingsTable } from "@/lib/crypto/crypto-holdings-table-core";
+import {
+  buildClassifyView,
+  type ClassifyTxInput,
+  type ClassifyDirection,
+} from "@/lib/crypto/crypto-classify-view-core";
 import { HoldingsTable } from "./HoldingsTable";
+import { ClassifyTable } from "./ClassifyTable";
 import {
   resolveCryptoTab,
   cryptoTabLabel,
@@ -47,6 +55,7 @@ import {
   cryptoPosture,
   buildSyncHealth,
   buildWalletProgress,
+  formatHeldAmount,
   type CryptoTab,
   type SummaryBalanceInput,
 } from "@/lib/crypto/crypto-ui-core";
@@ -133,6 +142,47 @@ export default async function CryptoPage({
   // alt coins, hidden scam tokens split out). Built by the pure core.
   const holdingsTable = buildHoldingsTable({ wallets, balances, assetById });
 
+  // R1-E CLASSIFY tab. Only load the (potentially large) transaction history +
+  // its saved classifications when Michael is actually on this tab. We read every
+  // wallet's transactions, pair each with its owner classification (if any), turn
+  // the raw amounts into clean display strings, and hand the whole thing to the
+  // pure view-model. The page itself carries NO tax logic.
+  const classifyView =
+    tab === "classify" && dbReady
+      ? await (async () => {
+          const [txLists, classifications] = await Promise.all([
+            Promise.all(wallets.map((w) => listCryptoTransactions(w.id))),
+            listCryptoClassifications(),
+          ]);
+          const classifiedByTxId = new Map<string, string>();
+          for (const c of classifications) {
+            classifiedByTxId.set(c.transactionId, c.tagKey);
+          }
+          const txInputs: ClassifyTxInput[] = [];
+          for (const list of txLists) {
+            for (const t of list) {
+              const asset = t.assetId ? assetById.get(t.assetId) ?? getAsset(t.assetId) : null;
+              const decimals = t.decimalsAtEvent ?? asset?.decimals ?? null;
+              txInputs.push({
+                id: t.id,
+                assetId: t.assetId,
+                direction: (t.direction ?? null) as ClassifyDirection,
+                isSwap: t.txType === "swap",
+                amountDisplay: formatHeldAmount({
+                  amountRaw: t.amountRaw,
+                  amountDecimal: t.amountDecimal,
+                  decimals,
+                }),
+                assetLabel: asset?.symbol ?? "",
+                whenDisplay: t.blockTime ? t.blockTime.slice(0, 10) : "",
+                txRef: t.txHash,
+              });
+            }
+          }
+          return buildClassifyView(txInputs, classifiedByTxId);
+        })()
+      : null;
+
   return (
     <div>
       <AdminPageHeader
@@ -207,6 +257,9 @@ export default async function CryptoPage({
             <Link key={t} href={`/admin/crypto?tab=${t}`} className={tabCls(tab === t)}>
               {cryptoTabLabel(t)}
               {t === "wallets" ? ` (${wallets.length})` : ""}
+              {t === "classify" && classifyView && classifyView.unclassifiedCount > 0
+                ? ` (${classifyView.unclassifiedCount})`
+                : ""}
             </Link>
           ))}
         </div>
@@ -378,6 +431,50 @@ export default async function CryptoPage({
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {/* -------------------------------------------------------- CLASSIFY */}
+        {tab === "classify" ? (
+          <div className="space-y-6">
+            <div className={cardCls}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="mb-1 text-sm font-semibold text-white">
+                    Classify your transactions
+                  </h2>
+                  <p className="text-sm text-white/60">
+                    Tell the app what each transaction really was &mdash; a purchase, a reward, a
+                    gift, a sale. This is what turns your history into an accurate, defensible tax
+                    report. Every row starts on a safe default and is flagged{" "}
+                    <span className="font-semibold text-amber-300">needs review</span> until you
+                    confirm it &mdash; we never guess income for you.
+                  </p>
+                </div>
+                {classifyView ? (
+                  <span
+                    className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${
+                      classifyView.unclassifiedCount > 0
+                        ? "border-amber-500/40 bg-amber-500/[0.08] text-amber-300"
+                        : "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300"
+                    }`}
+                  >
+                    {classifyView.progressText}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={cardCls}>
+              {!dbReady ? (
+                <p className="text-sm text-white/50">
+                  Connect the database first, then sync a wallet &mdash; your transactions will appear
+                  here to classify.
+                </p>
+              ) : (
+                <ClassifyTable rows={classifyView ? classifyView.rows : []} />
               )}
             </div>
           </div>

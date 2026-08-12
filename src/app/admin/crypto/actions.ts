@@ -25,6 +25,14 @@ import { recordAudit } from "@/lib/auth/audit";
 import { parseAddWallet } from "@/lib/crypto/crypto-ui-core";
 import { addWatchOnlyWallet, setCryptoAssetHidden } from "@/lib/crypto/crypto-store";
 import { runAllCryptoSync } from "@/lib/crypto/crypto-sync-orchestrator";
+import {
+  TX_PRIMITIVES,
+  isKnownTag,
+  isTagValidOnPrimitive,
+  getTagDefinition,
+  type TxPrimitive,
+} from "@/lib/crypto/crypto-classification-core";
+import { upsertCryptoClassification } from "@/lib/crypto/crypto-classification-store";
 
 const ROOT = "/admin/crypto";
 
@@ -161,5 +169,68 @@ export async function setCryptoAssetHiddenAction(formData: FormData): Promise<vo
     msg: hidden
       ? "Token hidden from your portfolio. It's still saved in your records \u2014 you can unhide it anytime."
       : "Token is back in your portfolio.",
+  });
+}
+
+/**
+ * R1-E \u2014 classify one transaction. Michael picks a tag from the row's dropdown
+ * (the dropdown only ever offers tags that are valid for that row's primitive,
+ * enforced in the pure view-model). This action re-validates everything server
+ * side before writing:
+ *
+ *   1. the primitive must be one of the four canonical primitives,
+ *   2. the tag must be a known tag in the R1-A vocabulary,
+ *   3. the tag must be valid ON that primitive (no nonsense pairings).
+ *
+ * If all three hold, it upserts the single classification row for that
+ * transaction (source = "owner", so Michael's choice always wins over any
+ * auto-suggestion), records an audit entry with the public tx id + tag (no
+ * secrets), and returns to the Classify tab with a plain-English confirmation
+ * that includes what the tag means for taxes. Graceful: if the classification
+ * table isn't migrated yet the store no-ops and we still report success.
+ */
+export async function classifyTransactionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const txId = String(formData.get("txId") ?? "").trim();
+  const primitiveRaw = String(formData.get("primitive") ?? "").trim();
+  const tagKey = String(formData.get("tagKey") ?? "").trim();
+
+  if (txId === "") back({ tab: "classify", error: "Missing transaction id." });
+  if (!(TX_PRIMITIVES as readonly string[]).includes(primitiveRaw)) {
+    back({ tab: "classify", error: "That transaction type isn't recognized." });
+  }
+  const primitive = primitiveRaw as TxPrimitive;
+
+  if (!isKnownTag(tagKey)) {
+    back({ tab: "classify", error: "That category isn't recognized." });
+  }
+  if (!isTagValidOnPrimitive(tagKey, primitive)) {
+    back({ tab: "classify", error: "That category can't be used for this kind of transaction." });
+  }
+
+  const result = await upsertCryptoClassification({
+    transactionId: txId,
+    primitive,
+    tagKey,
+    source: "owner",
+    classifiedBy: session.profile.id,
+  });
+  if (!result.ok) back({ tab: "classify", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "crypto.tx.classified",
+    entityType: "crypto_transaction",
+    entityId: txId, // public tx id \u2014 safe to record
+    after: { transaction_id: txId, primitive, tag_key: tagKey },
+  });
+
+  const def = getTagDefinition(tagKey);
+  const label = def ? def.label : tagKey;
+  back({
+    tab: "classify",
+    msg: `Saved \u2014 marked as \u201c${label}.\u201d ${def ? def.plainNote : ""}`.trim(),
   });
 }
