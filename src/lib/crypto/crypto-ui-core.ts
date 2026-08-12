@@ -45,7 +45,7 @@ import {
 // ---------------------------------------------------------------------------
 
 /** The crypto page's tabs. Portfolio opens first (the at-a-glance value view). */
-export type CryptoTab = "portfolio" | "wallets" | "classify" | "tax" | "health";
+export type CryptoTab = "portfolio" | "wallets" | "classify" | "trace" | "tax" | "health";
 
 /**
  * Resolve the ?tab= query param. Unknown/missing → portfolio. A couple of
@@ -55,6 +55,7 @@ export function resolveCryptoTab(param: string | null | undefined): CryptoTab {
   const p = (param ?? "").trim().toLowerCase();
   if (p === "wallets" || p === "addresses") return "wallets";
   if (p === "classify" || p === "transactions") return "classify";
+  if (p === "trace" || p === "origin" || p === "backtrace") return "trace";
   if (p === "tax" || p === "taxes" || p === "reports") return "tax";
   if (p === "health" || p === "status") return "health";
   return "portfolio";
@@ -65,6 +66,7 @@ export const CRYPTO_TABS: readonly CryptoTab[] = [
   "portfolio",
   "wallets",
   "classify",
+  "trace",
   "tax",
   "health",
 ] as const;
@@ -73,6 +75,7 @@ export const CRYPTO_TABS: readonly CryptoTab[] = [
 export function cryptoTabLabel(tab: CryptoTab): string {
   if (tab === "wallets") return "Wallets";
   if (tab === "classify") return "Classify";
+  if (tab === "trace") return "Origin Trace";
   if (tab === "tax") return "Tax Center";
   if (tab === "health") return "Health";
   return "Portfolio";
@@ -631,6 +634,10 @@ export function __runCryptoUiCoreTests(): void {
   check("tab health", resolveCryptoTab("HEALTH") === "health");
   check("tab classify", resolveCryptoTab("classify") === "classify");
   check("tab transactions alias", resolveCryptoTab("transactions") === "classify");
+  check("tab trace", resolveCryptoTab("trace") === "trace");
+  check("tab origin alias", resolveCryptoTab("origin") === "trace");
+  check("tab trace in list", CRYPTO_TABS.includes("trace"));
+  check("tab trace label", cryptoTabLabel("trace") === "Origin Trace");
   check("tab tax", resolveCryptoTab("tax") === "tax");
   check("tab taxes alias", resolveCryptoTab("taxes") === "tax");
   check("tab reports alias", resolveCryptoTab("reports") === "tax");

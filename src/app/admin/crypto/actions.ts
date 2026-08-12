@@ -34,6 +34,8 @@ import {
 } from "@/lib/crypto/crypto-classification-core";
 import { upsertCryptoClassification } from "@/lib/crypto/crypto-classification-store";
 import { upsertCryptoTransferMatch } from "@/lib/crypto/crypto-transfer-store";
+import { upsertCryptoOwnerWalletConfirmation } from "@/lib/crypto/crypto-owner-wallet-store";
+import type { Chain } from "@/lib/crypto/crypto-core";
 
 const ROOT = "/admin/crypto";
 
@@ -298,4 +300,56 @@ export async function confirmTransferAction(formData: FormData): Promise<void> {
       ? "Noted \u2014 these two won\u2019t be treated as a transfer between your wallets."
       : "Confirmed \u2014 booked as a non-taxable move between your wallets. Your original cost and purchase date carry over to the new wallet.";
   back({ tab: "reconcile", msg });
+}
+
+/**
+ * R1-G4 — record Michael's ownership decision on a wallet DISCOVERED during the
+ * Origin Trace back-trace.
+ *
+ * 'confirmed' => "that upstream wallet is mine": on the next trace run a hop from
+ * it is treated as a non-taxable self-transfer (basis carries over), and we can
+ * pull its history + trace one hop further back. 'rejected' => "not mine": the
+ * decision is remembered so we stop re-suggesting it. Audited either way. Gate
+ * is settings.manage, identical to every other crypto write.
+ */
+export async function confirmOwnerWalletAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const address = String(formData.get("address") ?? "").trim();
+  const chainRaw = String(formData.get("chain") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const statusRaw = String(formData.get("status") ?? "confirmed").trim();
+  const status = statusRaw === "rejected" ? "rejected" : "confirmed";
+  const refRaw = String(formData.get("referenceCount") ?? "").trim();
+  const referenceCount = refRaw === "" ? 0 : Number(refRaw);
+
+  if (address === "") back({ tab: "trace", error: "Missing the wallet address." });
+
+  const result = await upsertCryptoOwnerWalletConfirmation({
+    address,
+    chain: chainRaw as Chain,
+    status,
+    referenceCount: Number.isFinite(referenceCount) ? referenceCount : 0,
+    note: note === "" ? null : note,
+    decidedBy: session.profile.id,
+  });
+  if (!result.ok) back({ tab: "trace", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action:
+      status === "rejected"
+        ? "crypto.owner_wallet.rejected"
+        : "crypto.owner_wallet.confirmed",
+    entityType: "crypto_wallet",
+    entityId: address,
+    after: { address, chain: chainRaw, status },
+  });
+
+  const msg =
+    status === "rejected"
+      ? "Noted \u2014 we won\u2019t treat that wallet as yours."
+      : "Confirmed \u2014 that wallet is yours. On the next trace we\u2019ll carry your cost basis through it and look one hop further back.";
+  back({ tab: "trace", msg });
 }
