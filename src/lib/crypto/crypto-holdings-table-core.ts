@@ -78,6 +78,14 @@ export type HoldingRow = {
   /** USD when priced (integer cents), else null => UI shows "value pending". */
   usdValueCents: number | null;
   valueText: string | null;
+  /**
+   * This holding's share of the WHOLE priced portfolio, in integer basis points
+   * (1% = 100 bp), or null when this row is unpriced or the portfolio total is
+   * zero. Integer math only \u2014 never a float percentage.
+   */
+  percentBasisPoints: number | null;
+  /** Display string for percentBasisPoints (e.g. "12.34%"), or null. */
+  percentText: string | null;
   /** Token contract (null for a native coin). */
   contract: string | null;
   contractShort: string | null;
@@ -103,12 +111,20 @@ export type WalletHoldings = {
   hidden: HoldingRow[];
   visibleCount: number;
   hiddenCount: number;
+  /** Sum of this wallet's VISIBLE priced holdings, integer cents (0 if none). */
+  valuedCents: number;
+  /** Display string for valuedCents (e.g. "$1,234.56"). */
+  valuedText: string;
 };
 
 export type HoldingsTable = {
   wallets: WalletHoldings[];
   /** Total number of hidden tokens across all wallets (for the reviewer badge). */
   hiddenTotal: number;
+  /** Grand total of ALL visible priced holdings, integer cents (0 if none). */
+  totalValuedCents: number;
+  /** Display string for totalValuedCents (e.g. "$12,345.67"). */
+  totalValuedText: string;
 };
 
 export type BuildHoldingsInput = {
@@ -128,6 +144,35 @@ export function isHeldBalance(b: CryptoBalanceRecord): boolean {
   const hasDec =
     b.amountDecimal !== null && b.amountDecimal !== "" && Number(b.amountDecimal) !== 0;
   return hasRaw || hasDec;
+}
+
+/**
+ * Compute a part's share of a total as integer BASIS POINTS (1% = 100 bp),
+ * rounded HALF-UP, using integer arithmetic only (no floats). Returns null when
+ * the total is <= 0 or the part is null (=> "no share to show"). Cents are
+ * safe-integer sized, so part*10000 stays within Number's exact-integer range
+ * for any realistic portfolio.
+ *
+ *   computePercentBasisPoints(2500, 10000) -> 2500  (= 25.00%)
+ *   computePercentBasisPoints(1, 3)         -> 3333  (= 33.33%, half-up)
+ */
+export function computePercentBasisPoints(
+  partCents: number | null,
+  totalCents: number,
+): number | null {
+  if (partCents === null) return null;
+  if (!Number.isFinite(partCents) || !Number.isFinite(totalCents)) return null;
+  if (totalCents <= 0 || partCents < 0) return null;
+  // basis points = round(part / total * 10000) = round(part*10000 / total).
+  return Math.round((partCents * 10000) / totalCents);
+}
+
+/** Format integer basis points as a percent string, e.g. 1234 -> "12.34%". */
+export function formatPercentBasisPoints(bp: number | null): string | null {
+  if (bp === null || !Number.isFinite(bp) || bp < 0) return null;
+  const whole = Math.floor(bp / 100);
+  const frac = bp % 100;
+  return `${whole}.${frac.toString().padStart(2, "0")}%`;
 }
 
 /** Build one display row from a balance + its asset (asset may be missing). */
@@ -155,6 +200,11 @@ export function buildHoldingRow(
     amountText,
     usdValueCents,
     valueText: usdValueCents !== null ? formatCentsUsd(usdValueCents) : null,
+    // Percent-of-portfolio is filled in a second pass once the grand total is
+    // known (a single row can't compute its own share). Default null = honest
+    // "no share shown" until the table builder stamps it.
+    percentBasisPoints: null,
+    percentText: null,
     contract,
     contractShort: contract ? maskAddress(contract, 6, 4) : null,
     explorerUrl: native ? null : explorerTokenUrl(chain, contract),
@@ -198,6 +248,7 @@ export function buildHoldingsTable(input: BuildHoldingsInput): HoldingsTable {
 
   const out: WalletHoldings[] = [];
   let hiddenTotal = 0;
+  let totalValuedCents = 0;
 
   for (const w of wallets) {
     const held = byWallet.get(w.id) ?? [];
@@ -216,6 +267,14 @@ export function buildHoldingsTable(input: BuildHoldingsInput): HoldingsTable {
     hidden.sort(compareRows);
     hiddenTotal += hidden.length;
 
+    // Per-wallet subtotal = sum of this wallet's VISIBLE priced holdings only.
+    // Unpriced rows contribute nothing (never a guessed $0 into the total).
+    let valuedCents = 0;
+    for (const row of visible) {
+      if (row.usdValueCents !== null) valuedCents += row.usdValueCents;
+    }
+    totalValuedCents += valuedCents;
+
     const label = (w.label ?? "").trim();
     const chainText = chainLabel(w.chain);
     out.push({
@@ -230,10 +289,28 @@ export function buildHoldingsTable(input: BuildHoldingsInput): HoldingsTable {
       hidden,
       visibleCount: visible.length,
       hiddenCount: hidden.length,
+      valuedCents,
+      valuedText: formatCentsUsd(valuedCents),
     });
   }
 
-  return { wallets: out, hiddenTotal };
+  // Second pass: now the grand total is known, stamp each visible row's share
+  // of the WHOLE priced portfolio (Koinly-style % of portfolio). Hidden rows
+  // are excluded from the total, so they never carry a portfolio percent.
+  for (const wallet of out) {
+    for (const row of wallet.visible) {
+      const bp = computePercentBasisPoints(row.usdValueCents, totalValuedCents);
+      row.percentBasisPoints = bp;
+      row.percentText = formatPercentBasisPoints(bp);
+    }
+  }
+
+  return {
+    wallets: out,
+    hiddenTotal,
+    totalValuedCents,
+    totalValuedText: formatCentsUsd(totalValuedCents),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +467,67 @@ export function __runCryptoHoldingsTableCoreTests(): void {
   check("wallet address short", wh.addressShort === "0xB57F…72e4");
   check("wallet display name label", wh.displayName === "Main");
   check("wallet address explorer", wh.addressExplorerUrl === "https://flare-explorer.flare.network/address/0xb57fb1217cc868d401426012157d6cfd311272e4");
+
+  // --- computePercentBasisPoints / formatPercentBasisPoints (float-free) ---
+  check("bp 25%", computePercentBasisPoints(2500, 10000) === 2500);
+  check("bp half-up 33.33%", computePercentBasisPoints(1, 3) === 3333);
+  check("bp full 100%", computePercentBasisPoints(500, 500) === 10000);
+  check("bp null part", computePercentBasisPoints(null, 10000) === null);
+  check("bp zero total null", computePercentBasisPoints(100, 0) === null);
+  check("fmt 12.34%", formatPercentBasisPoints(1234) === "12.34%");
+  check("fmt 5.00%", formatPercentBasisPoints(500) === "5.00%");
+  check("fmt 100.00%", formatPercentBasisPoints(10000) === "100.00%");
+  check("fmt null", formatPercentBasisPoints(null) === null);
+
+  // --- buildHoldingsTable: USD subtotals, grand total, %-of-portfolio ---
+  const priced = buildHoldingsTable({
+    wallets: [WALLET],
+    balances: [
+      // native FLR valued $75.00 (7500c)
+      makeBal({ id: "p-flr", assetId: "FLR", amountRaw: "1000000000000000000", usdValueCents: 7500 }),
+      // AAA valued $25.00 (2500c)
+      makeBal({
+        id: "p-aaa",
+        assetId: "flare:0x0000000000000000000000000000000000000001",
+        amountRaw: "5",
+        usdValueCents: 2500,
+      }),
+      // unpriced coin => contributes nothing to totals / has no percent
+      makeBal({ id: "p-none", assetId: "flare:none", amountRaw: "9", usdValueCents: null }),
+    ],
+    assetById: new Map([
+      ["FLR", makeAsset({ id: "FLR", symbol: "FLR", name: "Flare", native: true, contract: null })],
+      [
+        "flare:0x0000000000000000000000000000000000000001",
+        makeAsset({ id: "flare:0x0000000000000000000000000000000000000001", symbol: "AAA" }),
+      ],
+      ["flare:none", makeAsset({ id: "flare:none", symbol: "NONE" })],
+    ]),
+  });
+  check("priced grand total cents", priced.totalValuedCents === 10000);
+  check("priced grand total text", priced.totalValuedText === "$100.00");
+  const pw = priced.wallets[0];
+  check("wallet subtotal cents", pw.valuedCents === 10000);
+  check("wallet subtotal text", pw.valuedText === "$100.00");
+  // native FLR pinned first => 75% of portfolio
+  check("FLR percent 75.00%", pw.visible[0].percentText === "75.00%");
+  check("FLR percent bp", pw.visible[0].percentBasisPoints === 7500);
+  // AAA => 25%
+  const aaaRow = pw.visible.find((r) => r.symbol === "AAA");
+  check("AAA percent 25.00%", aaaRow !== undefined && aaaRow.percentText === "25.00%");
+  // unpriced row => null percent (never a fabricated share)
+  const noneRow = pw.visible.find((r) => r.symbol === "NONE");
+  check("unpriced no percent", noneRow !== undefined && noneRow.percentText === null && noneRow.percentBasisPoints === null);
+
+  // --- all-unpriced portfolio: total 0, no percents, no divide-by-zero ---
+  const unpricedTable = buildHoldingsTable({
+    wallets: [WALLET],
+    balances: [makeBal({ id: "u1", assetId: "FLR", amountRaw: "1000000000000000000", usdValueCents: null })],
+    assetById: new Map([["FLR", makeAsset({ id: "FLR", symbol: "FLR", native: true, contract: null })]]),
+  });
+  check("unpriced total 0", unpricedTable.totalValuedCents === 0);
+  check("unpriced total text $0.00", unpricedTable.totalValuedText === "$0.00");
+  check("unpriced row percent null", unpricedTable.wallets[0].visible[0].percentText === null);
 
   // --- empty wallets excluded ---
   const emptyTable = buildHoldingsTable({

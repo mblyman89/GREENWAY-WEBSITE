@@ -84,6 +84,15 @@ function TokenRow({ row }: { row: HoldingRow }) {
         )}
       </td>
 
+      {/* % of portfolio — only when priced (never a fabricated share) */}
+      <td className="py-2 pr-3 text-right">
+        {row.percentText !== null ? (
+          <span className="text-white/60">{row.percentText}</span>
+        ) : (
+          <span className="text-white/25">—</span>
+        )}
+      </td>
+
       {/* Contract */}
       <td className="py-2 pr-3 font-mono text-xs text-white/50">
         {row.contractShort ?? <span className="text-white/30">native coin</span>}
@@ -146,6 +155,7 @@ function WalletCard({ wallet }: { wallet: WalletHoldings }) {
           <p className="mt-0.5 text-xs text-white/40">
             {wallet.visibleCount} coin{wallet.visibleCount === 1 ? "" : "s"}
             {wallet.hiddenCount > 0 ? ` · ${wallet.hiddenCount} hidden` : ""}
+            {wallet.valuedCents > 0 ? ` · ${wallet.valuedText}` : ""}
           </p>
         </div>
         <span className={`shrink-0 text-white/40 transition-transform ${chevron(open)}`} aria-hidden="true">
@@ -166,6 +176,7 @@ function WalletCard({ wallet }: { wallet: WalletHoldings }) {
                     <th className="pb-2 pr-3 font-semibold">Asset</th>
                     <th className="pb-2 pr-3 text-right font-semibold">Amount</th>
                     <th className="pb-2 pr-3 text-right font-semibold">Value (USD)</th>
+                    <th className="pb-2 pr-3 text-right font-semibold">% Portfolio</th>
                     <th className="pb-2 pr-3 font-semibold">Contract</th>
                     <th className="pb-2 pr-3 font-semibold">Explorer</th>
                     <th className="pb-2 pr-3 text-right font-semibold">Decimals</th>
@@ -177,6 +188,22 @@ function WalletCard({ wallet }: { wallet: WalletHoldings }) {
                     <TokenRow key={row.balanceId} row={row} />
                   ))}
                 </tbody>
+                {wallet.valuedCents > 0 ? (
+                  <tfoot>
+                    <tr className="border-t border-white/10 text-[13px]">
+                      <td className="pt-2 pr-3 font-semibold text-white/70">Wallet total</td>
+                      <td className="pt-2 pr-3" />
+                      <td className="pt-2 pr-3 text-right font-semibold text-emerald-300">
+                        {wallet.valuedText}
+                      </td>
+                      <td className="pt-2 pr-3" />
+                      <td className="pt-2 pr-3" />
+                      <td className="pt-2 pr-3" />
+                      <td className="pt-2 pr-3" />
+                      <td className="pt-2" />
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
           )}
@@ -205,6 +232,7 @@ function WalletCard({ wallet }: { wallet: WalletHoldings }) {
                         <th className="pb-2 pr-3 font-semibold">Asset</th>
                         <th className="pb-2 pr-3 text-right font-semibold">Amount</th>
                         <th className="pb-2 pr-3 text-right font-semibold">Value (USD)</th>
+                        <th className="pb-2 pr-3 text-right font-semibold">% Portfolio</th>
                         <th className="pb-2 pr-3 font-semibold">Contract</th>
                         <th className="pb-2 pr-3 font-semibold">Explorer</th>
                         <th className="pb-2 pr-3 text-right font-semibold">Decimals</th>
