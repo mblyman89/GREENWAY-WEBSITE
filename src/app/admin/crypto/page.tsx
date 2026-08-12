@@ -45,9 +45,17 @@ import {
 } from "@/lib/crypto/crypto-classify-view-core";
 import { getTaxCenterView } from "@/lib/crypto/crypto-tax-center-data";
 import { type TaxCenterView } from "@/lib/crypto/crypto-tax-center-core";
+import { traceOrigins, type InboundReceipt } from "@/lib/crypto/crypto-origin-trace-core";
+import {
+  buildExchangeRegistry,
+  exchangeAddressList,
+} from "@/lib/crypto/crypto-exchange-registry-core";
+import { listCryptoOwnerWalletConfirmations } from "@/lib/crypto/crypto-owner-wallet-store";
+import { buildTraceView, type TraceView } from "@/lib/crypto/crypto-trace-view-core";
 import { HoldingsTable } from "./HoldingsTable";
 import { ClassifyTable } from "./ClassifyTable";
 import { TaxCenter } from "./TaxCenter";
+import { OriginTrace } from "./OriginTrace";
 import {
   resolveCryptoTab,
   cryptoTabLabel,
@@ -191,6 +199,52 @@ export default async function CryptoPage({
   // logic-free. We only call it when Michael is actually on the Tax tab.
   const taxView: TaxCenterView | null =
     tab === "tax" && dbReady ? await getTaxCenterView() : null;
+
+  // R1-G ORIGIN TRACE tab. Walk each INBOUND transaction backwards toward where
+  // the coin started, and surface any UPSTREAM wallet we can't yet place so
+  // Michael can confirm/reject it (his answers are stored + folded back in). All
+  // trace logic lives in the pure cores; the page only assembles the inputs.
+  const traceView: TraceView | null =
+    tab === "trace" && dbReady
+      ? await (async () => {
+          const [txLists, ownerDecisions] = await Promise.all([
+            Promise.all(wallets.map((w) => listCryptoTransactions(w.id))),
+            listCryptoOwnerWalletConfirmations(),
+          ]);
+
+          // Receipts = every INBOUND transaction, with its sender (counterparty)
+          // as the parent hop to trace back from.
+          const receipts: InboundReceipt[] = [];
+          for (const list of txLists) {
+            for (const t of list) {
+              if (t.direction !== "in") continue;
+              receipts.push({
+                id: t.id,
+                txHash: t.txHash,
+                chain: t.chain,
+                toAddress: "", // the receiving wallet address isn't needed to classify origin
+                fromAddress: t.counterparty ?? null,
+                receivedAtMs: t.blockTime ? Date.parse(t.blockTime) : null,
+                amountDecimal: t.amountDecimal,
+              });
+            }
+          }
+
+          // Owner addresses = every tracked wallet + every wallet Michael has
+          // already CONFIRMED is his (so a hop from them is a self-transfer).
+          const ownerAddresses = [
+            ...wallets.map((w) => w.address),
+            ...ownerDecisions.filter((d) => d.status === "confirmed").map((d) => d.address),
+          ];
+
+          // Exchange addresses = the verified registry (labeling comes in G2).
+          const registry = buildExchangeRegistry([]);
+          const exchangeAddresses = exchangeAddressList(registry);
+
+          const trace = traceOrigins({ receipts, ownerAddresses, exchangeAddresses });
+          return buildTraceView(trace.discoveredWallets, ownerDecisions);
+        })()
+      : null;
 
   return (
     <div>
@@ -484,6 +538,35 @@ export default async function CryptoPage({
                 </p>
               ) : (
                 <ClassifyTable rows={classifyView ? classifyView.rows : []} />
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {/* ---------------------------------------------------- ORIGIN TRACE */}
+        {tab === "trace" ? (
+          <div className="space-y-6">
+            <div className={cardCls}>
+              <h2 className="mb-1 text-sm font-semibold text-white">Origin Trace</h2>
+              <p className="text-sm text-white/60">
+                For coins that arrived with no purchase receipt, we follow them{" "}
+                <span className="font-semibold text-white">backwards</span> through your wallets
+                toward where they started &mdash; an exchange, or another wallet of yours. When the
+                trail reaches a wallet we can&rsquo;t place yet, we ask you one simple question:{" "}
+                <span className="font-semibold text-emerald-300">is this wallet yours?</span> Your
+                answer is remembered, and confirming one lets us carry your original cost basis
+                through it and look one hop further back. We never guess.
+              </p>
+            </div>
+
+            <div className={cardCls}>
+              {!dbReady ? (
+                <p className="text-sm text-white/50">
+                  Connect the database first, then sync a wallet &mdash; anything we trace back to an
+                  unknown wallet will appear here for you to confirm.
+                </p>
+              ) : (
+                <OriginTrace view={traceView ?? { pending: [], confirmedCount: 0, rejectedCount: 0, pendingCount: 0, summaryText: "No wallets to review" }} />
               )}
             </div>
           </div>
