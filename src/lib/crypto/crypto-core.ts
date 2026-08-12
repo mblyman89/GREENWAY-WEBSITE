@@ -37,15 +37,20 @@
 // ---------------------------------------------------------------------------
 
 /**
- * The chains Greenway holds assets on. Three technology families:
+ * The chains Greenway holds assets on. Four technology families:
  *   - EVM     : ethereum, flare, songbird (0x… addresses, integer minor units)
  *   - XRPL    : xrpl                       (r… addresses)
  *   - Cosmos  : coreum                     (core1… bech32 addresses; hosts
  *                                           Coreum-native assets AND Pulsara,
  *                                           which is a DeFi ecosystem built ON
  *                                           Coreum — same chain/address)
+ *   - Stellar : stellar                    (G… addresses; account-based ledger,
+ *                                           a close cousin of XRPL — same fast
+ *                                           account-scoped history walk. Native
+ *                                           coin XLM uses 7-decimal integer minor
+ *                                           units called "stroops", 1 XLM = 10^7)
  */
-export type Chain = "ethereum" | "flare" | "songbird" | "xrpl" | "coreum";
+export type Chain = "ethereum" | "flare" | "songbird" | "xrpl" | "coreum" | "stellar";
 
 export const CHAINS: readonly Chain[] = [
   "ethereum",
@@ -53,6 +58,7 @@ export const CHAINS: readonly Chain[] = [
   "songbird",
   "xrpl",
   "coreum",
+  "stellar",
 ] as const;
 
 /** Human labels for the UI (plain English for Michael). */
@@ -62,6 +68,7 @@ export const CHAIN_LABELS: Record<Chain, string> = {
   songbird: "Songbird",
   xrpl: "XRP Ledger",
   coreum: "Coreum",
+  stellar: "Stellar",
 };
 
 /** EVM chains use 0x… addresses and integer-minor-unit amounts. */
@@ -72,6 +79,14 @@ export function isEvmChain(chain: Chain): boolean {
 /** Cosmos SDK chains use bech32 (core1…) addresses and integer minor units. */
 export function isCosmosChain(chain: Chain): boolean {
   return chain === "coreum";
+}
+
+/**
+ * Stellar uses G… (strkey) addresses and an account-based ledger like XRPL.
+ * Native XLM amounts are 7-decimal integer minor units ("stroops"): 1 XLM = 10^7.
+ */
+export function isStellarChain(chain: Chain): boolean {
+  return chain === "stellar";
 }
 
 /** The bech32 human-readable prefix for each Cosmos chain's account addresses. */
@@ -281,6 +296,20 @@ export const CRYPTO_ASSETS: readonly CryptoAsset[] = [
     // match by the FULL base denom string (never symbol alone).
     denom:
       "usara-core1r9gc0rnxnzpq33u82f44aufgdwvyxv4wyepyck98m9v2pxua6naqr8h03z",
+  },
+  {
+    id: "xlm",
+    symbol: "XLM",
+    name: "Stellar Lumens",
+    chain: "stellar",
+    amountModel: "evm-minor", // stroops: 7-dec integer minor units (1 XLM = 10^7)
+    // VERIFIED against official Stellar docs (developers.stellar.org, "Amount
+    // precision"): every amount is a signed int64 scaled by 10,000,000, i.e. 7
+    // decimals; the smallest unit is a "stroop" = 0.0000001 XLM. Cross-checked
+    // live against Michael's account GA5G6NOV… (balance "279.6501307").
+    decimals: 7,
+    decimalsSource: "verified",
+    native: true,
   },
 ] as const;
 
@@ -555,6 +584,18 @@ export function isCosmosAddress(addr: string, prefix: string): boolean {
   return re.test(s);
 }
 
+/**
+ * Stellar account address (strkey public key): starts with 'G', exactly 56
+ * characters, base32 (RFC 4648 alphabet A–Z, 2–7 — no 0, 1, 8, 9). We validate
+ * SHAPE only (not the trailing CRC16 checksum) — enough to reject typos and
+ * other chains' addresses. Contract addresses ('C…') and muxed addresses ('M…')
+ * are intentionally NOT accepted here: a watch-only holding is a G-account.
+ * Verified against Michael's live account GA5G6NOV… (56 chars, starts 'G').
+ */
+export function isStellarAddress(addr: string): boolean {
+  return typeof addr === "string" && /^G[A-Z2-7]{55}$/.test(addr.trim());
+}
+
 /** Validate an address for a given chain. */
 export function isValidAddressForChain(chain: Chain, addr: string): boolean {
   if (isEvmChain(chain)) return isEvmAddress(addr);
@@ -562,6 +603,7 @@ export function isValidAddressForChain(chain: Chain, addr: string): boolean {
     // `chain` is narrowed to a Cosmos chain here.
     return isCosmosAddress(addr, COSMOS_ADDRESS_PREFIX[chain as "coreum"]);
   }
+  if (isStellarChain(chain)) return isStellarAddress(addr);
   return isXrplAddress(addr);
 }
 
@@ -590,7 +632,7 @@ export function __runCryptoCoreTests(): void {
   }
 
   // Chains
-  expect("5 chains", CHAINS.length === 5);
+  expect("6 chains", CHAINS.length === 6);
   expect("ethereum is evm", isEvmChain("ethereum"));
   expect("flare is evm", isEvmChain("flare"));
   expect("songbird is evm", isEvmChain("songbird"));
@@ -599,13 +641,25 @@ export function __runCryptoCoreTests(): void {
   expect("coreum is cosmos", isCosmosChain("coreum"));
   expect("ethereum is NOT cosmos", !isCosmosChain("ethereum"));
   expect("xrpl is NOT cosmos", !isCosmosChain("xrpl"));
+  expect("stellar is stellar", isStellarChain("stellar"));
+  expect("stellar is NOT evm", !isEvmChain("stellar"));
+  expect("stellar is NOT cosmos", !isCosmosChain("stellar"));
+  expect("stellar is NOT xrpl-shaped chain", isStellarChain("stellar") && !isCosmosChain("stellar"));
+  expect("ethereum is NOT stellar", !isStellarChain("ethereum"));
+  expect("coreum is NOT stellar", !isStellarChain("coreum"));
+  expect("stellar label", CHAIN_LABELS.stellar === "Stellar");
   expect("eth chainId 1", EVM_CHAIN_ID.ethereum === 1);
   expect("flare chainId 14", EVM_CHAIN_ID.flare === 14);
   expect("coreum chain-id", COSMOS_CHAIN_ID.coreum === "coreum-mainnet-1");
   expect("coreum addr prefix", COSMOS_ADDRESS_PREFIX.coreum === "core");
 
   // Asset registry — verified decimals/issuers
-  expect("8 assets", CRYPTO_ASSETS.length === 8);
+  expect("9 assets", CRYPTO_ASSETS.length === 9);
+  expect("XLM 7 dec stroops", getAsset("xlm")?.decimals === 7);
+  expect("XLM is evm-minor model", getAsset("xlm")?.amountModel === "evm-minor");
+  expect("XLM decimals verified", getAsset("xlm")?.decimalsSource === "verified");
+  expect("XLM is native", getAsset("xlm")?.native === true);
+  expect("XLM on stellar", getAsset("xlm")?.chain === "stellar");
   expect("ETH 18 dec", getAsset("eth")?.decimals === 18);
   expect("ETH decimals verified", getAsset("eth")?.decimalsSource === "verified");
   expect("USDT 6 dec", getAsset("usdt-eth")?.decimals === 6);
@@ -788,6 +842,25 @@ export function __runCryptoCoreTests(): void {
     "isValidAddressForChain ethereum rejects Coreum",
     !isValidAddressForChain("ethereum", coreAddr),
   );
+
+  // Stellar (strkey G-account) addresses. Fixture: Michael's LIVE account.
+  const xlmAddr = "GA5G6NOV57S267XTVZFZYAED2JKPYEBL7X73XZ62B2KIMU237NBGHPMT";
+  expect("valid Stellar addr (live account)", isStellarAddress(xlmAddr));
+  expect("Stellar addr is 56 chars", xlmAddr.length === 56);
+  expect("Stellar rejects too short", !isStellarAddress("GA5G6NOV"));
+  expect("Stellar rejects lowercase", !isStellarAddress(xlmAddr.toLowerCase()));
+  expect("Stellar rejects contract C-addr", !isStellarAddress("C" + xlmAddr.slice(1)));
+  expect("Stellar rejects base32-invalid chars (0,1,8,9)", !isStellarAddress("G0000000000000000000000000000000000000000000000000000001"));
+  expect("Stellar rejects EVM addr", !isStellarAddress("0xdAC17F958D2ee523a2206206994597C13D831ec7"));
+  expect("Stellar rejects XRPL addr", !isStellarAddress("rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz"));
+  expect("EVM rejects Stellar addr", !isEvmAddress(xlmAddr));
+  expect("XRPL rejects Stellar addr", !isXrplAddress(xlmAddr));
+  expect("Cosmos rejects Stellar addr", !isCosmosAddress(xlmAddr, "core"));
+  expect("isValidAddressForChain stellar", isValidAddressForChain("stellar", xlmAddr));
+  expect("isValidAddressForChain stellar rejects EVM", !isValidAddressForChain("stellar", "0xdAC17F958D2ee523a2206206994597C13D831ec7"));
+  expect("isValidAddressForChain stellar rejects XRPL", !isValidAddressForChain("stellar", "rsoLo2S1kiGeCcn6hCUXVrCpGMWLrRrLZz"));
+  expect("isValidAddressForChain ethereum rejects Stellar", !isValidAddressForChain("ethereum", xlmAddr));
+  expect("isValidAddressForChain xrpl rejects Stellar", !isValidAddressForChain("xrpl", xlmAddr));
 
   if (failures > 0) throw new Error(`crypto-core self-tests: ${failures} failure(s)`);
   console.log("crypto-core self-tests: all passed");
