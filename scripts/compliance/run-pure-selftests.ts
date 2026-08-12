@@ -73,6 +73,7 @@ import { __runEvmSyncBudgetCoreTests } from "../../src/lib/crypto/evm/evm-sync-b
 import { __runEvmReceiptCoreTests } from "../../src/lib/crypto/evm/evm-receipt-core";
 import { __runEvmTokenDiscoveryCoreTests } from "../../src/lib/crypto/evm/evm-token-discovery-core";
 import { __runCryptoHoldingsTableCoreTests } from "../../src/lib/crypto/crypto-holdings-table-core";
+import { __runCryptoPricingCoreTests } from "../../src/lib/crypto/crypto-pricing-core";
 import { __runCoreumClientCoreTests } from "../../src/lib/crypto/coreum/coreum-client-core";
 import { __runCoreumMapCoreTests } from "../../src/lib/crypto/coreum/coreum-map-core";
 import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-sync-core";
@@ -625,6 +626,7 @@ async function main() {
   __runEvmReceiptCoreTests();
   __runEvmTokenDiscoveryCoreTests();
   __runCryptoHoldingsTableCoreTests();
+  __runCryptoPricingCoreTests();
   __runCoreumClientCoreTests();
   __runCoreumMapCoreTests();
   __runCoreumSyncCoreTests();
