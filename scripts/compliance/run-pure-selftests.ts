@@ -85,6 +85,8 @@ import { __runCryptoForm8949CoreTests } from "../../src/lib/crypto/crypto-form89
 import { __runCryptoIncomeReportCoreTests } from "../../src/lib/crypto/crypto-income-report-core";
 import { __runCryptoMethodSandboxCoreTests } from "../../src/lib/crypto/crypto-method-sandbox-core";
 import { __runCryptoFileReadinessCoreTests } from "../../src/lib/crypto/crypto-file-readiness-core";
+import { __runCryptoTaxCenterCoreTests } from "../../src/lib/crypto/crypto-tax-center-core";
+import { __runCryptoTaxLedgerBuilderCoreTests } from "../../src/lib/crypto/crypto-tax-ledger-builder-core";
 import { __runCoreumClientCoreTests } from "../../src/lib/crypto/coreum/coreum-client-core";
 import { __runCoreumMapCoreTests } from "../../src/lib/crypto/coreum/coreum-map-core";
 import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-sync-core";
@@ -649,6 +651,8 @@ async function main() {
   __runCryptoIncomeReportCoreTests();
   __runCryptoMethodSandboxCoreTests();
   __runCryptoFileReadinessCoreTests();
+  __runCryptoTaxCenterCoreTests();
+  __runCryptoTaxLedgerBuilderCoreTests();
   __runCoreumClientCoreTests();
   __runCoreumMapCoreTests();
   __runCoreumSyncCoreTests();

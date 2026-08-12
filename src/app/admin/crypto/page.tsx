@@ -43,8 +43,11 @@ import {
   type ClassifyTxInput,
   type ClassifyDirection,
 } from "@/lib/crypto/crypto-classify-view-core";
+import { getTaxCenterView } from "@/lib/crypto/crypto-tax-center-data";
+import { type TaxCenterView } from "@/lib/crypto/crypto-tax-center-core";
 import { HoldingsTable } from "./HoldingsTable";
 import { ClassifyTable } from "./ClassifyTable";
+import { TaxCenter } from "./TaxCenter";
 import {
   resolveCryptoTab,
   cryptoTabLabel,
@@ -182,6 +185,12 @@ export default async function CryptoPage({
           return buildClassifyView(txInputs, classifiedByTxId);
         })()
       : null;
+
+  // R1-F TAX CENTER tab. The heavy lifting (DB reads -> pure tax engines ->
+  // per-year view-model) lives in the server-only assembler so this page stays
+  // logic-free. We only call it when Michael is actually on the Tax tab.
+  const taxView: TaxCenterView | null =
+    tab === "tax" && dbReady ? await getTaxCenterView() : null;
 
   return (
     <div>
@@ -477,6 +486,41 @@ export default async function CryptoPage({
                 <ClassifyTable rows={classifyView ? classifyView.rows : []} />
               )}
             </div>
+          </div>
+        ) : null}
+
+        {/* ------------------------------------------------------ TAX CENTER */}
+        {tab === "tax" ? (
+          <div className="space-y-6">
+            <div className={cardCls}>
+              <h2 className="mb-1 text-sm font-semibold text-white">Tax Center</h2>
+              <p className="text-sm text-white/60">
+                Your crypto turned into IRS-ready numbers. For each tax year you get the Form 8949
+                capital-gain figures, ordinary-income totals, a plain-English list of anything that
+                still needs fixing, and a one-click Audit Binder you can print or save as a PDF for
+                your accountant. Nothing here is a guess &mdash; a year only shows{" "}
+                <span className="font-semibold text-emerald-300">file-ready</span> once every open
+                item is cleared.
+              </p>
+            </div>
+
+            {!dbReady ? (
+              <div className={cardCls}>
+                <p className="text-sm text-white/50">
+                  Connect the database first, then sync and classify a wallet &mdash; your tax
+                  reports will build automatically here.
+                </p>
+              </div>
+            ) : taxView && taxView.years.length > 0 ? (
+              <TaxCenter view={taxView} />
+            ) : (
+              <div className={cardCls}>
+                <p className="text-sm text-white/50">
+                  No taxable crypto activity yet. Once you sync a wallet and classify its
+                  transactions on the Classify tab, your year-by-year tax reports will appear here.
+                </p>
+              </div>
+            )}
           </div>
         ) : null}
 
