@@ -76,6 +76,7 @@ import { __runCryptoHoldingsTableCoreTests } from "../../src/lib/crypto/crypto-h
 import { __runCryptoPricingCoreTests } from "../../src/lib/crypto/crypto-pricing-core";
 import { __runCryptoClassificationCoreTests } from "../../src/lib/crypto/crypto-classification-core";
 import { __runCryptoClassificationStoreCoreTests } from "../../src/lib/crypto/crypto-classification-store-core";
+import { __runCryptoCostBasisCoreTests } from "../../src/lib/crypto/crypto-cost-basis-core";
 import { __runCoreumClientCoreTests } from "../../src/lib/crypto/coreum/coreum-client-core";
 import { __runCoreumMapCoreTests } from "../../src/lib/crypto/coreum/coreum-map-core";
 import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-sync-core";
@@ -631,6 +632,7 @@ async function main() {
   __runCryptoPricingCoreTests();
   __runCryptoClassificationCoreTests();
   __runCryptoClassificationStoreCoreTests();
+  __runCryptoCostBasisCoreTests();
   __runCoreumClientCoreTests();
   __runCoreumMapCoreTests();
   __runCoreumSyncCoreTests();
