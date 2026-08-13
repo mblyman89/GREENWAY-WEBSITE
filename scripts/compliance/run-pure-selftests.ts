@@ -101,6 +101,7 @@ import { __runStellarClientCoreTests } from "../../src/lib/crypto/stellar/stella
 import { __runStellarMapCoreTests } from "../../src/lib/crypto/stellar/stellar-map-core";
 import { __runStellarSyncCoreTests } from "../../src/lib/crypto/stellar/stellar-sync-core";
 import { __runLedgerCoreTests } from "../../src/lib/accounting/ledger-core";
+import { __runCoaCoreTests } from "../../src/lib/accounting/coa-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -684,6 +685,7 @@ async function main() {
   __runStellarMapCoreTests();
   __runStellarSyncCoreTests();
   __runLedgerCoreTests();
+  __runCoaCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
