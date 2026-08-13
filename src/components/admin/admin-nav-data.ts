@@ -135,6 +135,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" }, // 🔌 integrations
   { label: "Banking", href: "/admin/settings/banking", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Admin" }, // bank / ACH origination
   { label: "Bank Feeds", href: "/admin/plaid", permission: "settings.manage", icon: "\ud83d\udd17", group: "Admin" }, // 🔗 Plaid: read-only bank/credit feeds for automatic bookkeeping (P2)
+  { label: "Loans", href: "/admin/loans", permission: "settings.manage", icon: "🏠", group: "Admin" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
   { label: "Crypto Portfolio", href: "/admin/crypto", permission: "settings.manage", icon: "\u20bf", group: "Admin" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
   { label: "ATM", href: "/admin/atm", permission: "settings.manage", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udda8\ufe0f", group: "Admin" }, // 🖨️ hardware
