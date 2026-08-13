@@ -27,6 +27,7 @@ import "server-only";
 import { getPlaidClient } from "./client";
 import { isPlaidConfigured } from "./env";
 import { syncItemLiabilities } from "./liabilities-server";
+import { syncItemInvestments } from "./investments-server";
 import { normalizeSetKey } from "./plaid-credentials-core";
 import { plaidDollarsToCents, planTransactionMerge, mapItemStatus, extractPlaidError, type PlaidTxnInput } from "./plaid-core";
 import {
@@ -193,6 +194,11 @@ export async function runItemSync(item: PlaidItemRecord): Promise<ItemSyncResult
   // never affects the transactions sync result — items without a mortgage or
   // without the Liabilities product simply store nothing.
   await syncItemLiabilities(item);
+
+  // Best-effort: refresh investment holdings (Plaid Investments). Same rules —
+  // never throws; items without a brokerage / without the Investments product
+  // simply store nothing.
+  await syncItemInvestments(item);
 
   // Persist the final cursor (also marks healthy + last_successful_sync).
   if (state.cursor) {
