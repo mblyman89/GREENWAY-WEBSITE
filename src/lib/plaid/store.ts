@@ -673,3 +673,108 @@ export async function listPlaidMortgages(): Promise<PlaidMortgageRecord[]> {
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Plaid investment holdings (migration 0170). One row per position
+// (account_id + security_id). Money in integer cents; quantity in integer
+// micro-units. Refreshed by investments-server on link + every "Sync now".
+// ---------------------------------------------------------------------------
+
+export type PlaidHoldingStoreRecord = {
+  accountId: string;
+  securityId: string;
+  securityName: string | null;
+  tickerSymbol: string | null;
+  securityType: string | null;
+  quantityMicros: number | null;
+  institutionPriceCents: number | null;
+  institutionValueCents: number | null;
+  costBasisCents: number | null;
+  isoCurrencyCode: string | null;
+};
+
+type HoldingRow = {
+  account_id: string;
+  security_id: string;
+  security_name: string | null;
+  ticker_symbol: string | null;
+  security_type: string | null;
+  quantity_micros: number | null;
+  institution_price_cents: number | null;
+  institution_value_cents: number | null;
+  cost_basis_cents: number | null;
+  iso_currency_code: string | null;
+};
+
+const HOLDING_COLS =
+  "account_id,security_id,security_name,ticker_symbol,security_type,quantity_micros,institution_price_cents,institution_value_cents,cost_basis_cents,iso_currency_code";
+
+function toHoldingRecord(row: HoldingRow): PlaidHoldingStoreRecord {
+  return {
+    accountId: row.account_id,
+    securityId: row.security_id,
+    securityName: row.security_name,
+    tickerSymbol: row.ticker_symbol,
+    securityType: row.security_type,
+    quantityMicros: row.quantity_micros,
+    institutionPriceCents: row.institution_price_cents,
+    institutionValueCents: row.institution_value_cents,
+    costBasisCents: row.cost_basis_cents,
+    isoCurrencyCode: row.iso_currency_code,
+  };
+}
+
+/**
+ * Replace the stored holdings for a set of investment accounts (delete then
+ * insert), so a sold-off position no longer lingers. Only the given account ids
+ * are cleared; every other account's holdings are untouched. Returns how many
+ * rows were inserted. Best-effort: a DB error returns 0 rather than throwing.
+ */
+export async function replacePlaidHoldingsForAccounts(
+  accountIds: readonly string[],
+  records: readonly PlaidHoldingStoreRecord[],
+): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  const admin = createSupabaseAdminClient();
+  try {
+    if (accountIds.length > 0) {
+      const { error: delErr } = await admin
+        .from("plaid_holdings")
+        .delete()
+        .in("account_id", accountIds as string[]);
+      if (delErr) return 0;
+    }
+    if (records.length === 0) return 0;
+    const rows = records.map((rec) => ({
+      account_id: rec.accountId,
+      security_id: rec.securityId,
+      security_name: rec.securityName,
+      ticker_symbol: rec.tickerSymbol,
+      security_type: rec.securityType,
+      quantity_micros: rec.quantityMicros,
+      institution_price_cents: rec.institutionPriceCents,
+      institution_value_cents: rec.institutionValueCents,
+      cost_basis_cents: rec.costBasisCents,
+      iso_currency_code: rec.isoCurrencyCode,
+      updated_at: new Date().toISOString(),
+    }));
+    const { error: insErr } = await admin.from("plaid_holdings").insert(rows);
+    if (insErr) return 0;
+    return rows.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** List every stored holding (best-effort; empty when not configured). */
+export async function listPlaidHoldings(): Promise<PlaidHoldingStoreRecord[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.from("plaid_holdings").select(HOLDING_COLS);
+    if (error || !data) return [];
+    return (data as HoldingRow[]).map(toHoldingRecord);
+  } catch {
+    return [];
+  }
+}

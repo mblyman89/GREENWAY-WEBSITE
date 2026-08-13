@@ -340,6 +340,7 @@ import { __runPlaidWebhookCoreTests } from "../../src/lib/plaid/plaid-webhook-co
 import { __runPlaidMoneyCoreTests } from "../../src/lib/plaid/plaid-money-core";
 import { __runPlaidCredentialsCoreTests } from "../../src/lib/plaid/plaid-credentials-core";
 import { __runPlaidLiabilitiesCoreTests } from "../../src/lib/plaid/liabilities-core";
+import { __runPlaidInvestmentsCoreTests } from "../../src/lib/plaid/investments-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -627,6 +628,7 @@ async function main() {
   __runPlaidMoneyCoreTests();
   __runPlaidCredentialsCoreTests();
   __runPlaidLiabilitiesCoreTests();
+  __runPlaidInvestmentsCoreTests();
   assertNoFailures("canva-core", __runCanvaCoreTests());
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());

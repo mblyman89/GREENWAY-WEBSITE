@@ -43,6 +43,7 @@ import { plaidDollarsToCents, extractPlaidError, describeLinkTokenError } from "
 import { roleAssignmentCheck, normalizeCustomName } from "@/lib/plaid/plaid-ui-core";
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
 import { syncItemLiabilities } from "@/lib/plaid/liabilities-server";
+import { syncItemInvestments } from "@/lib/plaid/investments-server";
 import {
   upsertPlaidItem,
   upsertPlaidAccount,
@@ -219,6 +220,15 @@ export async function exchangePlaidPublicTokenAction(
   // Never throws; items without a mortgage / Liabilities consent store nothing.
   try {
     await syncItemLiabilities({ accessToken, credentialSet: set.key });
+  } catch {
+    /* best-effort enrichment; a failure here must not fail the link */
+  }
+
+  // Best-effort: pull investment holdings (Plaid Investments) right after
+  // linking so a brokerage (Fidelity) shows its positions immediately, not
+  // only on the next "Sync now". Never throws; non-brokerage items store nothing.
+  try {
+    await syncItemInvestments({ accessToken, credentialSet: set.key });
   } catch {
     /* best-effort enrichment; a failure here must not fail the link */
   }

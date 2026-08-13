@@ -39,8 +39,9 @@ import { isPlaidConfigured, plaidEnv, plaidCredentialSets } from "@/lib/plaid/en
 import { linkSetOptions, multipleSetsConfigured } from "@/lib/plaid/plaid-credentials-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
-import { listPlaidItems, listPlaidAccounts, listPlaidTransactions, listPlaidMortgages } from "@/lib/plaid/store";
+import { listPlaidItems, listPlaidAccounts, listPlaidTransactions, listPlaidMortgages, listPlaidHoldings } from "@/lib/plaid/store";
 import { buildMortgageView, type MortgageView } from "@/lib/plaid/liabilities-core";
+import { buildHoldingsAccountView, type HoldingRecord, type HoldingsAccountView } from "@/lib/plaid/investments-core";
 import {
   resolvePlaidTab,
   buildItemStatusView,
@@ -141,6 +142,32 @@ export default async function PlaidPage({
       m.accountId,
       buildMortgageView({ ...m, principalCents: acct?.currentBalanceCents ?? null }),
     );
+  }
+
+  // Per-account investment holdings view (Plaid Investments). Group the stored
+  // positions by account_id, then build the value-sorted view for each. Keyed
+  // by account_id so the detail card can look it up (e.g. Fidelity).
+  const holdings = dbReady ? await listPlaidHoldings() : [];
+  const holdingsByAccount = new Map<string, HoldingRecord[]>();
+  for (const h of holdings) {
+    const list = holdingsByAccount.get(h.accountId) ?? [];
+    list.push({
+      accountId: h.accountId,
+      securityId: h.securityId,
+      securityName: h.securityName,
+      tickerSymbol: h.tickerSymbol,
+      securityType: h.securityType,
+      quantityMicros: h.quantityMicros,
+      institutionPriceCents: h.institutionPriceCents,
+      institutionValueCents: h.institutionValueCents,
+      costBasisCents: h.costBasisCents,
+      isoCurrencyCode: h.isoCurrencyCode,
+    });
+    holdingsByAccount.set(h.accountId, list);
+  }
+  const holdingsViewByAccount = new Map<string, HoldingsAccountView>();
+  for (const [accountId, recs] of holdingsByAccount) {
+    holdingsViewByAccount.set(accountId, buildHoldingsAccountView(recs));
   }
 
   // Group accounts under their item for display.
@@ -551,6 +578,49 @@ export default async function PlaidPage({
                               </div>
                             ))}
                           </dl>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Investment holdings (Plaid Investments) — only for a
+                        brokerage account we have positions for (e.g. Fidelity). */}
+                    {(() => {
+                      const hv = selectedAccountId ? holdingsViewByAccount.get(selectedAccountId) : undefined;
+                      if (!hv || hv.positionCount === 0) return null;
+                      return (
+                        <div className={cardCls}>
+                          <div className="mb-1 flex items-baseline justify-between gap-3">
+                            <h3 className="text-sm font-semibold text-white">Holdings</h3>
+                            <span className="text-sm font-semibold text-white/90">{hv.totalValueText}</span>
+                          </div>
+                          <p className="mb-3 text-xs text-white/40">
+                            {hv.positionCount} position{hv.positionCount === 1 ? "" : "s"}, pulled from your brokerage via
+                            Plaid. Refreshes about once a day; use &ldquo;Sync now&rdquo; to refresh.
+                          </p>
+                          <ul className="divide-y divide-white/5">
+                            {hv.rows.map((r) => (
+                              <li key={r.securityId} className="flex items-baseline justify-between gap-3 py-2">
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm text-white/90">{r.displayName}</span>
+                                  <span className="block truncate text-xs text-white/40">
+                                    {r.quantityText} {r.tickerText !== "—" ? `· ${r.tickerText}` : ""} · cost {r.costBasisText}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-right">
+                                  <span className="block text-sm text-white/90">{r.valueText}</span>
+                                  <span
+                                    className={
+                                      r.gainLossCents !== null && r.gainLossCents >= 0
+                                        ? "block text-xs text-emerald-300"
+                                        : "block text-xs text-amber-300"
+                                    }
+                                  >
+                                    {r.gainLossText}
+                                  </span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       );
                     })()}
