@@ -44,6 +44,7 @@ import { roleAssignmentCheck, normalizeCustomName } from "@/lib/plaid/plaid-ui-c
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
 import { syncItemLiabilities } from "@/lib/plaid/liabilities-server";
 import { syncItemInvestments } from "@/lib/plaid/investments-server";
+import { removePlaidItem } from "@/lib/plaid/remove-server";
 import {
   upsertPlaidItem,
   upsertPlaidAccount,
@@ -363,4 +364,37 @@ export async function runPlaidSyncNowAction(): Promise<void> {
 
   if (result.ok) back({ tab: "health", msg: result.message });
   back({ tab: "health", error: result.message });
+}
+
+/**
+ * Remove (disconnect) a whole Plaid connection by its item_id. Revokes the
+ * token at Plaid (best-effort), then deletes the local item — which CASCADES to
+ * its accounts, transactions, mortgage detail, and holdings. Used to clean up a
+ * duplicate re-link. Gated to owner/admin. Redirects back to the Connections
+ * tab. Audit: plaid.item.removed.
+ */
+export async function removePlaidItemAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const itemId = String(formData.get("item_id") ?? "").trim();
+  if (!itemId) back({ tab: "connections", error: "Missing connection. Please try again." });
+
+  const result = await removePlaidItem(itemId);
+  if (!result.ok) back({ tab: "connections", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "plaid.item.removed",
+    entityType: "plaid_item",
+    entityId: itemId,
+    after: { item_id: itemId, revoked_at_plaid: result.revoked },
+  });
+
+  back({
+    tab: "connections",
+    msg: result.revoked
+      ? "Connection removed and disconnected from Plaid."
+      : "Connection removed. (Couldn't reach Plaid to revoke, but all local data was deleted.)",
+  });
 }
