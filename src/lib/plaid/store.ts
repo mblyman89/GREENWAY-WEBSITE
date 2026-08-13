@@ -175,6 +175,24 @@ export async function getPlaidItem(itemId: string): Promise<PlaidItemRecord | nu
   }
 }
 
+/**
+ * Delete a Plaid item and everything under it. The FK cascades (0157/0168/0170)
+ * mean this one delete removes the item's accounts → their transactions,
+ * mortgage detail, and investment holdings too. Used to remove a connection
+ * (e.g. a duplicate re-link). Returns ok even if the row was already gone.
+ */
+export async function deletePlaidItem(
+  itemId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const id = (itemId ?? "").trim();
+  if (id === "") return { ok: false, error: "Missing connection id." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("plaid_items").delete().eq("item_id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** Persist the (encrypted) sync cursor + mark a successful sync. */
 export async function savePlaidCursor(
   itemId: string,

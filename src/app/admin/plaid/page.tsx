@@ -73,6 +73,7 @@ import {
 } from "@/lib/plaid/plaid-money-core";
 import { ACCOUNT_ROLES } from "@/lib/plaid/plaid-core";
 import { PlaidLinkButton } from "./PlaidLinkButton";
+import { RemoveConnectionButton } from "./RemoveConnectionButton";
 import { assignPlaidAccountRoleAction, runPlaidSyncNowAction, setPlaidAccountNameAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -451,9 +452,15 @@ export default async function PlaidPage({
                               {item.lastSuccessfulSync ? ` · last sync ${new Date(item.lastSuccessfulSync).toLocaleString()}` : " · not synced yet"}
                             </p>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${chipCls(chip.tone)}`}>
-                            ● {chip.label}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${chipCls(chip.tone)}`}>
+                              ● {chip.label}
+                            </span>
+                            <RemoveConnectionButton
+                              itemId={item.itemId}
+                              institutionName={item.institutionName ?? "Bank connection"}
+                            />
+                          </div>
                         </div>
                         {itemAccounts.length > 0 ? (
                           <ul className="mt-3 space-y-1">
