@@ -17,6 +17,29 @@
 
 create extension if not exists pgcrypto;
 
+-- --- role stand-ins ----------------------------------------------------------
+-- Supabase creates these roles for us; plain PostgreSQL does not. Without them
+-- every `grant ... to authenticated` fails with 'role "authenticated" does not
+-- exist' — which is exactly how a real access-control defect in 0175 stayed
+-- hidden for a while, because the verify script was swallowing the error.
+-- They are NOLOGIN: nothing here can be connected to, they exist only so that
+-- grants resolve and so that `set role authenticated` can be used to prove
+-- that a budtender genuinely cannot read the books.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin bypassrls;
+  end if;
+end $$;
+
+grant usage on schema public to authenticated, anon, service_role;
+
 -- --- auth schema stand-in ----------------------------------------------------
 create schema if not exists auth;
 
