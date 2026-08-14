@@ -1,0 +1,472 @@
+/**
+ * src/lib/accounting/books-view-core.ts   (slice F5-K)
+ *
+ * PURE presentation logic for the books screens. No I/O, no React, no
+ * Supabase — every function is a computation, so all of it is testable.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE GATE LOGIC LIVES HERE
+ * ---------------------------------------------------------------------------
+ * There is a trap in this repo that this file exists to close.
+ *
+ * The database says the books are admin-only:
+ *     is_admin()  =>  role in ('owner','admin')            [0001]
+ *
+ * The application's reporting permission says something DIFFERENT:
+ *     "reports.view" => owner, admin, MANAGER, READONLY    [roles.ts]
+ *
+ * If a books page were gated on `reports.view` — the obvious choice, since it
+ * is a report — a manager would pass the page gate, the page would call the
+ * RPC, and Postgres would refuse with `TB_FORBIDDEN`. The manager would land
+ * on a screen that exists, looks real, and is full of error text. Worse, a
+ * future developer seeing that error might "fix" it by loosening the database
+ * check, which would hand the entire general ledger to four roles.
+ *
+ * So the page gate MUST be the same set as the database gate, and
+ * `canReadBooks()` below is the single place that decides it. The tests assert
+ * the two agree for EVERY role — not just the ones we happened to think of.
+ */
+
+import { ALL_ROLES, can, rolesForPermission } from "@/lib/auth/roles";
+import type { StaffRole } from "@/lib/supabase/types";
+
+/**
+ * Every role in the system.
+ *
+ * This is NOT a hand-typed array, deliberately. It is the keys of a
+ * `Record<StaffRole, true>`, which means TypeScript REFUSES TO COMPILE if
+ * someone adds a new role to the `StaffRole` union and forgets to list it
+ * here. A plain `StaffRole[]` would have accepted a short list silently, and
+ * the "every role is covered" test below would then have quietly stopped
+ * covering every role -- a test that passes while testing less. The compiler
+ * is a better guard than a test here, so we use it.
+ */
+const ROLE_PRESENCE: Record<StaffRole, true> = {
+  owner: true,
+  admin: true,
+  manager: true,
+  content_editor: true,
+  staff: true,
+  readonly: true,
+};
+
+export const ALL_STAFF_ROLES: readonly StaffRole[] = Object.keys(
+  ROLE_PRESENCE,
+) as StaffRole[];
+
+/**
+ * WHO MAY READ THE BOOKS. This must mirror `is_admin()` in migration 0001
+ * exactly: `role in ('owner','admin')`.
+ */
+export function canReadBooks(role: StaffRole | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/**
+ * The roles the DATABASE would accept, written out independently of
+ * `canReadBooks` so a test can compare the two without one being defined in
+ * terms of the other. Comparing a function to itself proves nothing.
+ */
+export const DB_IS_ADMIN_ROLES: readonly StaffRole[] = ["owner", "admin"] as const;
+
+// ---------------------------------------------------------------------------
+// MONEY
+// ---------------------------------------------------------------------------
+
+/**
+ * Format integer cents as accounting-style money.
+ *
+ * Rule 7: money is integer cents everywhere. This function is the ONLY place
+ * the books convert to a decimal, and it never does arithmetic on the result.
+ */
+export function formatCents(cents: number): string {
+  if (!Number.isFinite(cents)) return "—";
+  const neg = cents < 0;
+  const abs = Math.abs(Math.trunc(cents));
+  const dollars = Math.floor(abs / 100);
+  const rem = abs % 100;
+  const s = `${dollars.toLocaleString("en-US")}.${rem.toString().padStart(2, "0")}`;
+  return neg ? `(${s})` : s;
+}
+
+/**
+ * Accounting convention: a debit balance and a credit balance go in different
+ * COLUMNS, and neither is ever shown as a negative number. Showing "-1,500.00"
+ * in a debit column is the kind of thing that makes a reader distrust the whole
+ * report.
+ */
+export function splitDebitCredit(balanceCents: number): {
+  debit: number;
+  credit: number;
+} {
+  if (balanceCents > 0) return { debit: balanceCents, credit: 0 };
+  if (balanceCents < 0) return { debit: 0, credit: -balanceCents };
+  return { debit: 0, credit: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// THE VERDICT BANNER
+// ---------------------------------------------------------------------------
+
+export type BooksVerdictTone = "good" | "warning" | "bad";
+
+export type BooksVerdict = {
+  tone: BooksVerdictTone;
+  headline: string;
+  detail: string;
+};
+
+/**
+ * Turn the trial balance figures into the sentence at the top of the screen.
+ *
+ * THE RULE THAT MATTERS: "it balances" is NOT the same as "it is right", and
+ * this function must never imply otherwise. An empty set of books balances
+ * perfectly. So does a set of books missing half its entries, because every
+ * journal individually sums to zero. The wording below is deliberate.
+ */
+export function describeBooks(input: {
+  balanced: boolean;
+  certified: boolean;
+  lineCount: number;
+  accountCount: number;
+  differenceCents: number;
+  abnormalCount: number;
+}): BooksVerdict {
+  const { balanced, lineCount, accountCount, differenceCents, abnormalCount } = input;
+
+  if (lineCount === 0) {
+    return {
+      tone: "warning",
+      headline: "There is nothing here yet.",
+      detail:
+        "No entries fall in this period, so there is nothing to check. An empty set of books balances perfectly — which is exactly why an empty report should never be mistaken for a clean one.",
+    };
+  }
+
+  if (!balanced) {
+    return {
+      tone: "bad",
+      headline: `Out of balance by $${formatCents(Math.abs(differenceCents))}.`,
+      detail:
+        "Debits and credits do not agree. Something is wrong and it must be found before these figures are used for anything.",
+    };
+  }
+
+  const abnormalNote =
+    abnormalCount > 0
+      ? ` ${abnormalCount} account${abnormalCount === 1 ? " has" : "s have"} a balance on the unusual side — worth a look, though not necessarily wrong.`
+      : "";
+
+  return {
+    tone: abnormalCount > 0 ? "warning" : "good",
+    headline: "Debits equal credits.",
+    detail:
+      `${lineCount.toLocaleString("en-US")} entries across ${accountCount.toLocaleString("en-US")} accounts. ` +
+      "This proves the arithmetic holds — it does not prove the figures are right, because a set of books can balance and still be missing entries entirely." +
+      abnormalNote,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// GROUPING THE CHART OF ACCOUNTS
+// ---------------------------------------------------------------------------
+
+export const ACCOUNT_TYPE_ORDER = [
+  "asset",
+  "liability",
+  "equity",
+  "revenue",
+  "expense",
+] as const;
+
+export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  asset: "Assets — what the business owns",
+  liability: "Liabilities — what it owes",
+  equity: "Equity — the owner's stake",
+  revenue: "Revenue — money coming in",
+  expense: "Expenses — money going out",
+};
+
+export type GroupedAccounts<T> = { type: string; label: string; accounts: T[] }[];
+
+/**
+ * Group accounts by type in BALANCE SHEET ORDER, not alphabetically.
+ *
+ * Alphabetical order would put Expenses before Liabilities and Revenue last,
+ * which is not how any accountant reads a chart. Unknown types are kept and
+ * appended rather than dropped — silently discarding an account because its
+ * type was not on a hard-coded list is how an account goes missing.
+ */
+export function groupAccountsByType<T extends { account_type: string }>(
+  accounts: readonly T[],
+): GroupedAccounts<T> {
+  const buckets = new Map<string, T[]>();
+  for (const a of accounts) {
+    const key = a.account_type;
+    const list = buckets.get(key);
+    if (list) list.push(a);
+    else buckets.set(key, [a]);
+  }
+
+  const out: GroupedAccounts<T> = [];
+  for (const t of ACCOUNT_TYPE_ORDER) {
+    const list = buckets.get(t);
+    if (list && list.length > 0) {
+      out.push({ type: t, label: ACCOUNT_TYPE_LABELS[t] ?? t, accounts: list });
+      buckets.delete(t);
+    }
+  }
+  // Anything with an unexpected type still gets shown.
+  for (const [t, list] of [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    out.push({ type: t, label: ACCOUNT_TYPE_LABELS[t] ?? t, accounts: list });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// DATES
+// ---------------------------------------------------------------------------
+
+/** The date the books begin. Nothing before this belongs in them (rule 10). */
+export const LINE_IN_THE_SAND = "2026-01-01";
+
+export function isValidYmd(value: string): boolean {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+  );
+}
+
+/**
+ * Validate a requested range BEFORE calling the database, so the common
+ * mistakes get a good message without a round trip. The database checks again
+ * — this is the courtesy, that is the guarantee.
+ */
+export function validateRange(
+  from: string,
+  to: string,
+): { ok: true } | { ok: false; problem: string } {
+  if (!isValidYmd(from)) return { ok: false, problem: `"${from}" is not a valid date.` };
+  if (!isValidYmd(to)) return { ok: false, problem: `"${to}" is not a valid date.` };
+  if (from > to) {
+    return {
+      ok: false,
+      problem:
+        "The start date is after the end date. That would return nothing at all, which looks exactly like a quiet month.",
+    };
+  }
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// SELF-TESTS
+//
+// Run with:
+//   npx tsx -e "require('./src/lib/accounting/books-view-core').__runBooksViewCoreTests()"
+// ---------------------------------------------------------------------------
+export function __runBooksViewCoreTests(): void {
+  let passed = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (!cond) throw new Error(`ASSERTION FAILED: ${msg}`);
+    passed++;
+  };
+  const eq = (a: unknown, b: unknown, msg: string) =>
+    ok(
+      JSON.stringify(a) === JSON.stringify(b),
+      `${msg} (expected ${JSON.stringify(b)}, got ${JSON.stringify(a)})`,
+    );
+
+  // --- THE GATE. The most important assertions in this file. -----------
+  // The app gate and the database gate must agree for EVERY role. If they
+  // ever diverge, someone reaches a page they cannot use, or — far worse —
+  // reaches data they should not see.
+  for (const role of ALL_STAFF_ROLES) {
+    const app = canReadBooks(role);
+    const db = DB_IS_ADMIN_ROLES.includes(role);
+    ok(
+      app === db,
+      `the page gate and the database gate agree for role "${role}" (page=${app}, db=${db})`,
+    );
+  }
+  ok(canReadBooks("owner"), "owner can read the books");
+  ok(canReadBooks("admin"), "admin can read the books");
+  // NEGATIVE CONTROLS (rule 15b). These are the roles that pass "reports.view"
+  // but must NOT reach the ledger.
+  ok(!canReadBooks("manager"), "a MANAGER cannot read the books (passes reports.view!)");
+  ok(!canReadBooks("readonly"), "READONLY cannot read the books (passes reports.view!)");
+  ok(!canReadBooks("staff"), "staff cannot read the books");
+  ok(!canReadBooks("content_editor"), "a content editor cannot read the books");
+  ok(!canReadBooks(null), "a signed-out user cannot read the books");
+  ok(!canReadBooks(undefined), "an unknown role cannot read the books");
+  // Coverage: if a new role is added to the system and not to this list, this
+  // fails rather than silently defaulting.
+  eq(ALL_STAFF_ROLES.length, 6, "all six roles are covered by the gate test");
+
+  // DRIFT CHECK. `ALL_STAFF_ROLES` is derived from a Record keyed by the
+  // StaffRole union, so the COMPILER already stops us from forgetting a role.
+  // But the app keeps its own registry in roles.ts, and if that one grew a
+  // role the union did not, the gate test above would still pass while
+  // covering less than the real system. So compare the two registries
+  // directly. Sorted, because neither promises an order.
+  const mine = [...ALL_STAFF_ROLES].sort();
+  const theirs = [...ALL_ROLES].sort();
+  eq(mine, theirs, "our role list matches the app's own ALL_ROLES registry");
+
+  // And every role the app knows about must get an explicit gate answer --
+  // never `undefined`, which would be neither allowed nor denied.
+  for (const role of ALL_ROLES) {
+    eq(
+      typeof canReadBooks(role),
+      "boolean",
+      `the gate returns a real true/false for role "${role}"`,
+    );
+  }
+
+  // --- IS THE GATE ACTUALLY WIRED? (rule 16) ---------------------------
+  // The page gate is `canReadBooks`. The NAV gate is the "books.view"
+  // permission in the roles matrix. Two separate mechanisms, and a user only
+  // has a good experience if they agree: if the nav is more generous than the
+  // page, someone clicks a link and gets bounced; if the page is more generous
+  // than the nav, a legitimate user cannot find their own books. Assert they
+  // agree for EVERY role rather than trusting that we edited both.
+  for (const role of ALL_ROLES) {
+    const pageGate = canReadBooks(role);
+    const navGate = can(role, "books.view");
+    ok(
+      pageGate === navGate,
+      `the nav permission and the page gate agree for role "${role}" (page=${pageGate}, nav=${navGate})`,
+    );
+  }
+
+  // And the permission must NOT have been hung off reports.view, which also
+  // grants manager and readonly. This is the specific mistake F5-K exists to
+  // prevent, so it gets its own named assertion.
+  const booksRoles = [...rolesForPermission("books.view")].sort();
+  eq(booksRoles, ["admin", "owner"], "books.view is owner+admin ONLY");
+  ok(
+    !can("manager", "books.view"),
+    "a manager does NOT get books.view (they DO get reports.view)",
+  );
+  ok(
+    !can("readonly", "books.view"),
+    "readonly does NOT get books.view (they DO get reports.view)",
+  );
+  // Negative control (rule 15b): prove those two roles really do hold
+  // reports.view, otherwise the two assertions above would be trivially true
+  // and would still pass if the whole matrix were empty.
+  ok(can("manager", "reports.view"), "NEGATIVE CONTROL: manager does hold reports.view");
+  ok(can("readonly", "reports.view"), "NEGATIVE CONTROL: readonly does hold reports.view");
+
+  // --- formatCents ------------------------------------------------------
+  eq(formatCents(0), "0.00", "zero");
+  eq(formatCents(1), "0.01", "one cent");
+  eq(formatCents(100), "1.00", "one dollar");
+  eq(formatCents(123456), "1,234.56", "thousands separator");
+  eq(formatCents(100000000), "1,000,000.00", "millions");
+  eq(formatCents(-2500), "(25.00)", "negatives use accounting parentheses");
+  eq(formatCents(5), "0.05", "five cents pads correctly");
+  eq(formatCents(50), "0.50", "fifty cents pads correctly");
+  // NEGATIVE CONTROL: a naive `cents/100` implementation produces "0.5" here.
+  ok(formatCents(50).endsWith(".50"), "half a dollar is .50 not .5");
+  eq(formatCents(Number.NaN), "—", "NaN does not render as money");
+  eq(formatCents(Number.POSITIVE_INFINITY), "—", "Infinity does not render as money");
+
+  // --- splitDebitCredit -------------------------------------------------
+  eq(splitDebitCredit(1000), { debit: 1000, credit: 0 }, "positive is a debit");
+  eq(splitDebitCredit(-1000), { debit: 0, credit: 1000 }, "negative is a credit, unsigned");
+  eq(splitDebitCredit(0), { debit: 0, credit: 0 }, "zero is neither");
+  ok(splitDebitCredit(-5).credit > 0, "a credit is never shown negative");
+
+  // --- describeBooks ----------------------------------------------------
+  const empty = describeBooks({
+    balanced: true, certified: false, lineCount: 0,
+    accountCount: 0, differenceCents: 0, abnormalCount: 0,
+  });
+  eq(empty.tone, "warning", "an EMPTY set of books is a warning, not 'good'");
+  ok(
+    /empty/i.test(empty.detail),
+    "the empty case explicitly warns that empty books balance perfectly",
+  );
+
+  const bad = describeBooks({
+    balanced: false, certified: false, lineCount: 10,
+    accountCount: 4, differenceCents: -12345, abnormalCount: 0,
+  });
+  eq(bad.tone, "bad", "out of balance is bad");
+  ok(bad.headline.includes("123.45"), "the out-of-balance headline states the amount");
+
+  const good = describeBooks({
+    balanced: true, certified: true, lineCount: 100,
+    accountCount: 20, differenceCents: 0, abnormalCount: 0,
+  });
+  eq(good.tone, "good", "balanced with entries is good");
+  // THE ASSERTION THAT PROTECTS AGAINST FALSE CONFIDENCE.
+  ok(
+    /does not prove/i.test(good.detail),
+    "a balanced verdict must NEVER claim the figures are correct",
+  );
+
+  const abnormal = describeBooks({
+    balanced: true, certified: true, lineCount: 100,
+    accountCount: 20, differenceCents: 0, abnormalCount: 3,
+  });
+  eq(abnormal.tone, "warning", "abnormal balances downgrade the tone");
+  ok(abnormal.detail.includes("3 accounts"), "abnormal count is reported");
+
+  // --- groupAccountsByType ---------------------------------------------
+  const accts = [
+    { account_type: "expense", code: "e" },
+    { account_type: "asset", code: "a" },
+    { account_type: "revenue", code: "r" },
+    { account_type: "liability", code: "l" },
+    { account_type: "equity", code: "q" },
+  ];
+  const grouped = groupAccountsByType(accts);
+  eq(
+    grouped.map((g) => g.type),
+    ["asset", "liability", "equity", "revenue", "expense"],
+    "balance-sheet order, not alphabetical",
+  );
+  // NEGATIVE CONTROL: an unknown type must be KEPT, not silently dropped.
+  const withWeird = groupAccountsByType([...accts, { account_type: "mystery", code: "m" }]);
+  eq(withWeird.length, 6, "an unknown account type is kept, never dropped");
+  ok(
+    withWeird[withWeird.length - 1].type === "mystery",
+    "unknown types are appended at the end",
+  );
+  eq(groupAccountsByType([]).length, 0, "empty in, empty out");
+  // Nothing is lost overall.
+  eq(
+    withWeird.reduce((n, g) => n + g.accounts.length, 0),
+    6,
+    "every account survives grouping",
+  );
+
+  // --- dates ------------------------------------------------------------
+  ok(isValidYmd("2026-01-01"), "valid date");
+  ok(!isValidYmd("2026-13-01"), "month 13 is invalid");
+  ok(!isValidYmd("2026-02-30"), "30 February is invalid");
+  ok(!isValidYmd("2026-1-1"), "unpadded is invalid");
+  ok(!isValidYmd(""), "empty is invalid");
+  ok(isValidYmd("2024-02-29"), "a real leap day is valid");
+  ok(!isValidYmd("2025-02-29"), "a fake leap day is invalid");
+
+  eq(validateRange("2026-01-01", "2026-12-31").ok, true, "a sane range is accepted");
+  const backwards = validateRange("2026-12-31", "2026-01-01");
+  eq(backwards.ok, false, "a backwards range is rejected");
+  ok(
+    backwards.ok === false && /quiet month/i.test(backwards.problem),
+    "the backwards-range message explains WHY it matters",
+  );
+  eq(validateRange("nonsense", "2026-01-01").ok, false, "an invalid start is rejected");
+  eq(validateRange("2026-01-01", "nonsense").ok, false, "an invalid end is rejected");
+  // NEGATIVE CONTROL: equal dates are a single valid day, not backwards.
+  eq(validateRange("2026-05-05", "2026-05-05").ok, true, "a one-day range is valid");
+
+  eq(LINE_IN_THE_SAND, "2026-01-01", "the books begin 1 January 2026");
+
+  console.log(`books-view-core: PASSED ${passed} assertions`);
+}

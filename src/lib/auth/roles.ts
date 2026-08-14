@@ -57,6 +57,7 @@ export type Permission =
   | "customers.manage"
   | "inventory.manage"
   | "reports.view"
+  | "books.view"
   | "users.manage"
   | "settings.manage"
   | "staffing.manage"
@@ -89,6 +90,15 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "customers.manage": ["owner", "admin", "manager", "staff"],
   "inventory.manage": ["owner", "admin", "manager"],
   "reports.view": ["owner", "admin", "manager", "readonly"],
+  // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
+  // permission from "reports.view", which also grants manager and readonly.
+  // The database gates every accounting RPC on is_admin() = owner|admin
+  // (migration 0001). If the books nav were hung off reports.view, a manager
+  // would see the link, click it, and hit a raw database refusal -- and the
+  // "fix" someone would reach for is loosening the DATABASE, which would hand
+  // over the entire ledger. This list MUST stay equal to owner+admin; the
+  // test in books-view-core.ts asserts it against the page gate.
+  "books.view": ["owner", "admin"],
   "users.manage": ["owner", "admin"],
   "settings.manage": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
@@ -126,6 +136,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "customers.manage": "Manage customer & patient records",
   "inventory.manage": "Manage inventory lots, COAs & manifests",
   "reports.view": "View reports & exports",
+  "books.view": "View the accounting books (general ledger)",
   "users.manage": "Manage staff & roles",
   "settings.manage": "Change settings",
   "staffing.manage": "Manage employees, shifts & time clock",
@@ -154,6 +165,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "blog.manage",
   "media.manage",
   "reports.view",
+  "books.view",
   "staffing.manage",
   "timeclock.use",
   "sales_limit.override",
