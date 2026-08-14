@@ -104,6 +104,7 @@ import { __runLedgerCoreTests } from "../../src/lib/accounting/ledger-core";
 import { __runCoaCoreTests } from "../../src/lib/accounting/coa-core";
 import { __runPostingCoreTests } from "../../src/lib/accounting/posting-core";
 import { __runTrialBalanceCoreTests } from "../../src/lib/accounting/trial-balance-core";
+import { __runFixedAssetsCoreTests } from "../../src/lib/accounting/fixed-assets-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -690,6 +691,7 @@ async function main() {
   __runCoaCoreTests();
   __runPostingCoreTests();
   __runTrialBalanceCoreTests();
+  __runFixedAssetsCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
