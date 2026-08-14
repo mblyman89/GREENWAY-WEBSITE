@@ -1,237 +1,585 @@
-# Command Center Enhancements — Slices 65–80 (build 6 at a time)
+# Greenway — Bookkeeping Groundwork Phase (research BEFORE building)
 
-Full verbatim list, owner decisions, deep-research log, and finalized roadmap:
-see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
+## STANDING RULES (AMENDED per Michael, Aug 2026 — READ FIRST, EVERY SESSION)
+1. NEVER GUESS. Verify everything from authoritative sources or the actual data.
+2. **DRIFT = CATASTROPHIC.** Any drift between our books and reality (Sage,
+   bank, POS, statements) is the most severe class of failure possible.
+   Books that drift are worse than no books.
+3. **STOP IMMEDIATELY AND TALK TO MICHAEL** (via `ask`) if ANYTHING feels even
+   slightly off, uncertain, or wrong — BEFORE proceeding. No exceptions.
+4. One feature per PR. Money in INTEGER CENTS (bigint). Rates in milli-percent.
+5. Grep-verify every edit. FULL BATTERY before merge. Report in plain English.
+6. Build slowly, meticulously, validate everything before moving on.
+7. Entity facts (CORRECTED Aug 2026 — VERIFIED against IRS K-1 transcripts
+   2022/2023/2024, file 07): Greenway LLC taxed as an S-CORP with THREE
+   shareholders — Michael 85% (K-1 confirms), mom 10% (allocated, NOT paid
+   distributions; Michael covers her tax), grandfather Nicholas Mullan 5%
+   (paid). CASH-ONLY operations; books on the ACCRUAL basis. Two additional
+   Schedule C activities on Michael's personal 1040: the ATM operation
+   (NAICS 522200) and the landholding/Geiger rental (NAICS 531100, $48k/yr =
+   2 tenants x $2k/mo). Business carries NO third-party debt; all loans are
+   personal. FOUR ledger entities: greenway, atm, landholding, personal.
+8. Tax posture: assume NO 280E relief this year (adult-use still Schedule I),
+   but design so conversion to normal taxation is a switch, not a rebuild.
+9. Michael's grandfather (Nicholas Mullan, his accountant) audits the final
+   work — build to survive a professional audit.
+10. **THE LINE IN THE SAND = 2026-01-01.** Enforced in the SCHEMA, not by
+    convention: no journal may bear a date before it except the single
+    opening-balance journal. Cut-over = Option C (retroactive 1/1/2026).
+11. Opening balances come from EVIDENCE (bank statements, counts, lender
+    statements, filed returns, grandfather's workpapers) — NEVER from the
+    drifted Sage GL. Nothing posts until evidence-linked AND blessed.
+12. Every assumption or educated guess gets LOGGED in the drift register with
+    a memo and a sign-off. Silent plugs are forbidden — they are how books
+    drift and how audits are lost.
+13. **REAL-WORLD BATTLE TESTING IS MANDATORY BEFORE SHIPPING** (Michael's
+    directive, Aug 2026, after F1). Never ship code that has only been READ.
+    Every slice must be EXECUTED against a real engine and then ATTACKED.
+    Minimum bar for anything touching the books:
+    a. RUN IT FOR REAL. Migrations execute against a live throwaway PostgreSQL
+       (scripts/accounting/verify-gl-schema.sh) BEFORE Michael is asked to paste
+       anything into Supabase. Apply TWICE to prove idempotency.
+    b. ADVERSARIAL SUITE. Write tests whose job is to BREAK the thing, not to
+       confirm it works. Replay Michael's actual historical failures (the
+       $4.62M LAZY INVENTORY ENTRY plug, negative inventory, backwards card
+       signs, negative ATM cash) and prove the system refuses them.
+    c. ASSERT ON THE SPECIFIC ERROR, never merely "it threw." A test that
+       passes because something unrelated broke is worse than no test.
+    d. PROPERTY / SWEEP TESTS for money: never one happy example. Sweep ranges,
+       prove totals are always preserved, prove no cent is lost or invented.
+    e. FLOAT IS FORBIDDEN in money paths. Parse digits as text; divide with
+       BigInt. (Both F1 money bugs were invisible to code review and only
+       surfaced by execution.)
+    f. BOUNDARY + HOSTILE INPUT: zero, negative, max-safe-integer, empty,
+       duplicate, out-of-order, wrong entity, wrong sign, unicode, absurd
+       magnitudes, dates on period edges and leap days.
+    g. PROVE THE BASELINE. When a pre-existing failure appears, stash the slice
+       and re-run to prove it was already there. Never assume authorship.
+    h. CONCURRENCY where money is serialized (gapless numbers, sequences).
+    i. RE-VERIFY ON MERGED MAIN, not just on the branch.
+    j. RECORD THE EVIDENCE in the slice's research file — actual output, never
+       "it should work."
+14. GATE EVERYTHING, LOCK EVERYTHING, BLOCK EVERYTHING (Michael: "no asking,
+    hard no!"). When a rule could be a warning or a refusal, choose REFUSAL.
+    Make the wrong thing IMPOSSIBLE, not merely discouraged. Michael's safety
+    is the number one rule; a blocked legitimate action costs him a minute, a
+    permitted illegitimate one costs him an audit.
 
-## BATCH 1 — foundation & high-value UI (existing tables; no external accounts)
+--- ADDED AFTER F2 (Aug 2026), at Michael's invitation to codify what worked ---
 
-### Slice 65 — Nav → top tabs w/ dropdowns [item 16]
-- [x] Ground: AdminSidebar + admin-nav-data + layout + permission gating + current mobile hamburger
-- [x] Core: pure grouping/active-tab logic + tests (admin-nav-core, 16 assertions)
-- [x] Build: AdminTopNav top tab bar w/ grouped dropdowns + mobile accordion; layout switched to column; deleted dead AdminSidebar
-- [x] Verify: tsc 0, eslint 0, next build ok (all /admin routes present)
-- [x] Commit → push → PR → merge → sync main
+15. **EVERY TEST MUST BE PROVEN CAPABLE OF FAILING (negative control).**
+    A green check is worthless until it has been shown it can go red. F2 shipped
+    a mirror check that passed for all 21 categories AND for all 10,000 possible
+    slots, because it derived every value it compared from the same input and
+    compared them against themselves. It was structurally incapable of failing.
+    Therefore, for every meaningful assertion:
+    a. Write the NEGATIVE case alongside the positive one. Never assert only
+       that the right thing is accepted; assert the wrong thing is refused.
+    b. For any predicate, ask "can this EVER return false?" and prove it by
+       sweeping the input domain. If nothing in the whole range fails, the
+       predicate is a tautology, not a test.
+    c. MUTATION-CHECK the guard: deliberately break the thing under test, watch
+       the suite go red with the EXPECTED message, then restore. A suite that
+       stays green while the code is broken is a liar.
+    d. Delete scaffolding used for these probes before shipping; never leave a
+       temporary file in the tree (it will break `tsc` at the worst moment).
 
-### Slice 66 — Site Content page: all pages [item 9] ✅ PR #171
-- [x] Ground: /admin/content hub lists pages derived from content-block `page` values; legal/info pages had no editable blocks
-- [x] Build: new `page:"legal"` group w/ editable hero titles for Privacy Policy, Terms of Use, Consumer Health Data (legal bodies untouched); wired via `<SiteText>`; per-block "View on site" links; label + subtitle updated
-- [x] Verify (tsc 0, eslint 0, build OK) + Commit → push → PR #171 → merge --squash --admin → sync main
+16. **PROVE THE GATE IS WIRED, NOT MERELY REGISTERED.** Registering a self-test
+    in a runner is not the same as that runner failing when the test fails.
+    Before claiming any gate protects Michael, inject a deliberate failure and
+    confirm a NON-ZERO exit, then restore and confirm zero. An unwired gate is
+    worse than no gate: it produces confidence without protection.
 
-### Slice 67 — Loyalty customizer [item 2] ✅ PR #172
-- [x] Ground: loyalty_config/tiers/promotions tables (mig 0039) + read-only /admin/loyalty
-- [x] Build: pure core (validation + conversions + preview, tsx-tested), store write helpers, audited server actions, full editor UI (earn rate, point value, min redeem, signup bonus, code expiry, tiers, promotions) + live earn preview; read-only fallback for non-managers
-- [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #172 → merge → sync main
+17. **VERIFY BEFORE ESCALATING A BLOCKER — never escalate on a reading.**
+    Rule 3 says stop and talk; it does NOT license raising alarms from an
+    assumption. The F2 "cut-over conflict" was escalated as blocking based on
+    reading a constraint as a fixed date when it was actually a floor (`>=`).
+    Executing three real posts settled it in minutes and cost Michael nothing.
+    So: when something LOOKS like a conflict, first (a) re-read the actual
+    constraint/code as executed, not as remembered, and (b) run the real case
+    against a real engine. Escalate only what survives that. Michael's attention
+    is the scarcest resource in this project — spend it on real problems.
+    Corollary: when a previous conclusion is disproved, say so plainly and
+    correct the research file. Being wrong is cheap; a stale wrong note is not.
 
-### Slice 68 — Cycle counts barcode + hardening [item 3] ✅ PR #173
-- [x] Ground: cycle_counts/lines (mig 0041) + inventory_lots (lot_code, pos_product_key; no UPC col) + detail page
-- [x] Build: pure scan core (normalize + match exact/fuzzy/ambiguous/none, tallies; tsx-tested), store getCycleCountScanLines + bumpLineCount (open-session + not-applied guards), scanBumpLineAction (JSON, audited), scanner UI (USB wedge + phone camera BarcodeDetector, live log, progress, ambiguity warnings) on open sessions
-- [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #173 → merge → sync main
+18. **PROVE AUTHORSHIP OF EVERY FAILURE (never assume, never inherit blame).**
+    Before reporting or fixing any lint/build/test failure, `git stash` the whole
+    slice and re-run. If clean main produces the identical failure, it is
+    pre-existing: say so with the diff as evidence, and do NOT fold unrelated
+    fixes into a one-feature PR. If it disappears, it is ours and it blocks.
 
-### Slice 69 — Schedule builder [item 4] ✅ PR #174
-- [x] Ground: shifts table (mig 0037, status scheduled/open/closed) + staffing page + pacificWallTimeToUtcISO
-- [x] Build: pure schedule core (week math, time parse, duration, coverage; tsx-tested), store week list + create/update/delete/copy-week (UTC-correct), audited actions, week-grid UI (employees×days, inline add/edit, coverage totals, week nav, copy-to-next) at /admin/staffing/schedule, linked from Time Clock
-- [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #174 → merge → sync main
+19. **THE OWNER'S HISTORICAL FAILURES ARE THE PERMANENT TEST CORPUS.** Every
+    slice touching the books must attempt Michael's real, documented disasters
+    against the new code, not invented examples: the $4,624,697.31 LAZY
+    INVENTORY ENTRY plug, negative inventory balances, backwards card signs,
+    negative ATM cash, the `GRWNY`/`GRNWY` entity typo that hid 18 live accounts
+    including all payroll, debit-A/P-credit-revenue, and pre-2026 backdating.
+    A new feature is not "done" until it REFUSES all of them. And when a defence
+    is added, verify it covers EVERY instance of the pattern, not the one that
+    was easiest to think of — F2's control-account guard protected the single
+    parent inventory account while all 21 children stayed wide open. Splitting
+    one pluggable bucket into 21 pluggable buckets fixes nothing.
 
-### Slice 70 — Phone clock-in + hour adjustments [item 8]
-- [x] Ground: employees/time_punches + staffing actions (source col free text → no migration for "phone")
-- [x] Build: mobile PIN clock-in page /admin/staffing/clock (source "phone") + owner/manager Adjust Hours UI /admin/staffing/hours (edit/add punch w/ REQUIRED reason, Pacific wall-time → UTC, minutes recompute, audited)
-- [x] Verify (core tests OK, tsc 0, eslint 0, build OK — both new routes present) + Commit → push → PR #TBD → merge → sync main
-- [x] BATCH 1 COMPLETE (Slices 65–70)
+## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
+- [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
+- [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
+      research/bookkeeping/01-ACCOUNTING-SURFACE-INVENTORY.md
+- [x] R-3: Inventory Michael's Sage 50 exports (in file 01; drift red flags
+      catalogued: negative inventory, $4.62M lazy entry, ATM negatives, etc.)
+- [x] R-4: GAAP/FASB BIBLE → research/bookkeeping/02-GAAP-FASB-BIBLE.md
+      (ASC structure, CON 8, 606/330/360/842/470/450/250/230/850/740,
+      close discipline, COSO controls — 16-source register)
+- [x] R-5: Firms research → research/bookkeeping/03-FIRMS-AND-PRACTICES.md
+      (Big 4 + top 10, mid-tier, bookkeeping services, cannabis specialists —
+      17-source register)
+- [x] R-6: Cannabis tax bible → research/bookkeeping/04-CANNABIS-TAX-BIBLE.md
+      (280E + case canon, 471(c) anti-abuse, rescheduling conversion plan,
+      WA 37%/sales/B&O/medical exemptions, S-corp AAA/basis/1120-S —
+      12-source register)
+- [x] R-7: Roadmap proposal drafted → research/bookkeeping/05-ROADMAP-PROPOSAL.md
+- [x] R-8: Cut-over / "line in the sand" strategy (Michael's beginning-balances request) → research/bookkeeping/06-CUTOVER-STRATEGY.md — Opening Balance Equity doctrine, evidence-based opening balances, 3 date options (A: 1/1/2027, B: next month-end, C: retroactive 1/1/2026), Sage exit mechanics (export BEFORE cancelling, WAC 314-55-087 5-yr retention), validation gates G1–G5. RESOLVED: Michael chose OPTION C (retroactive 1/1/2026); grandfather workpapers confirmed available.
+- [x] R-9: IRS transcript review 2022–2024 (12 PDFs Michael uploaded) → research/bookkeeping/07-IRS-TRANSCRIPT-REVIEW.md — CORRECTED ownership (Michael 85% / mom 10% / grandfather 5%, K-1s verified); two Schedule C activities mapped (ATM op NAICS 522200, landholding NAICS 531100 w/ $48k rent = 2×$2k×12); $0 balances all years (compliance verified); substance flags: disproportionate distributions/one-class-of-stock, reasonable comp ($55k W-2 vs $630k K-1), CHAMP-structure substantiation needs (written leases, sq-ft study, duty studies), 2023 $1,100 Sch C tie-out question, 2022 EIN 7076 W-2 question. AWAITING: 2025 1120-S (Sch L/M-2/1125-A), written leases, distribution history, answers to open questions → then B1 spec.
+- [x] R-10: Foundations roadmap (build-now vs wait-for-docs split) → research/bookkeeping/08-FOUNDATIONS-ROADMAP.md — Michael confirmed: grandfather = Nicholas Mullan; 2025 return files ~Sep 15 (docs later); no written leases/COGS studies exist (we draft templates); grandfather's strategy assumed reasonable; goal = platform takes over all filings after yearly validation + grandfather blessing. AWAITING Michael's approval of the F1–F10 plan.
 
-## BATCH 2 — AI enrichment, compliance, marketing, seeds, mobile
-- [x] Slice 71 — Sample compliance WAC 314-55-096 (hard blocks) [item 6] — migration 0054 (trade_sample_settings + trade_sample_events, idempotent); PURE core (quarter keys, per-unit size caps, cap eval) tsx-tested; store w/ hard-block enforcement; /admin/compliance/samples (recorder + per-processor/per-employee insight bars, ledger, owner settings, no-customer notice); nav entry; verify OK; PR #TBD merged
-- [x] Slice 72 — Midjourney prompt builder + media overhaul [items 7+17] — PURE core (correct MJ syntax: subject-first comma groups, params at end w/ one space, punctuation stripped, clamped stylize/chaos/weird, niji, --sref/--sw/--oref/--no/--tile/--seed) + 5 cannabis-retail presets + compliance note, tsx-tested; grounded AI assist (real store+vendor context, drafts-only, no-op safe); /admin/marketing/midjourney (preset picker, brief fields, param sliders, media-library reference picker, live prompt + copy); media page already had AI alt/caption + tags/search/dropzone → added cross-link both ways; nav; verify OK; PR #TBD merged
-- [x] Slice 73 — Sage 50 KB enrichment + Chart of Accounts upload [items 1+13] — VERIFIED Sage 50 CoA import fields from official help (Account ID ≤15, Description ≤30, Account Type code 0..24, Inactive; default CHART.CSV). Enriched SAGE50_KNOWLEDGE (KB doc + prompt) with CoA import facts. PURE core: SAGE_ACCOUNT_TYPES map, parseChartOfAccounts (header-aware + positional fallback, dedupe, inactive), validateGlMappingAgainstCoa (missing/inactive) — 44 assertions tsx-tested. Store: glMappingsFromSettings + validateChartOfAccounts (downloads CoA upload, cross-checks real AccountingSettings). New "Sage Chart of Accounts (CHART.CSV)" report kind; validateChartOfAccountsAction (audited sage.coa_validated); ChartOfAccountsValidator client component on the uploads list. Verify: tsc 0, eslint 0, next build OK. PR #TBD merged.
-- [x] Slice 74 — Manifest pipeline pending/in-transit/awaiting-intake [item 10] (PR #180). RESEARCH-GROUNDED: CCRS has NO inbound feed (origin-uploaded CSV + email confirmations); receiving-side visibility = peer WCIA JSON hand-off + manual entry. Enhanced EXISTING lifecycle → Inbound pipeline dashboard: manifest-pipeline-core.ts (39 tsx assertions), full StageCounts, priority queues (awaiting-intake→in-transit→pending→accepted→rejected), ETA + overdue surfacing, factual "no CCRS feed" help note, ETA field on detail. No new migration (0032 cols reused).
-- [x] Slice 75 — KB seed coverage + owner uploads [item 14] (PR #181). Added kb_notes (migration 0056, MANUAL): owner drops free-form reference material (title/body/tags/source), retrieval injects applicable notes into buildGroundedFacts (general vs tag-targeted, targeted-first, kb:note:<id> provenance). kb-notes-core.ts 21 tsx assertions. Admin add/edit/hide UI + notes stat card.
-- [~] Slice 76 — Mobile-friendly pass [item 15] — **DEFERRED / BACK BURNER** (owner: not critical; wants a strategy session first to scope only the most useful phone features rather than porting ~70% of desktop. Revisit after strategy chat.)
+## BUILD PHASE F — FOUNDATIONS (pending Michael's go-ahead; one feature per PR)
+- [x] F1: Ledger schema migration 0172 (entities, accounts, periods, journals, lines, locks, allocation configs, shareholder registry; bigint cents; balanced-entry + immutability + pre-2026 refusal enforced in schema) — MERGED PR #931 (971c47a5).
+      9 tables + gl_post_journal/gl_reverse_journal/gl_close_period/gl_reopen_period
+      + 5 guard triggers; pure core src/lib/accounting/ledger-core.ts (96 self-tests);
+      vitest mirror tests/compliance/ledger-core.test.ts; registered in run-pure-selftests.
+      VERIFIED AGAINST REAL POSTGRES 15 (not just read): applied twice = idempotent,
+      seed = 4 entities / 3 shareholders / 48 periods / 0 accounts / 0 journals,
+      45/45 adversarial tests pass incl. replaying the $4.6M LAZY INVENTORY ENTRY
+      plug and confirming refusal. Rerun anytime: scripts/accounting/verify-gl-schema.sh.
+      TWO MONEY BUGS CAUGHT + FIXED: dollarsToCents lost a penny via Math.round(x*100)
+      (1.005 -> 100 not 101); allocateByOwnership used float division -> now exact BigInt,
+      tied to the real 2024 K-1 ($630,215 -> 535,682.75/63,021.50/31,510.75).
+      Battery: tsc 0, eslint unchanged from main (5 pre-existing, 0 in new files,
+      proven by stash+rerun), vitest 308/3954, pytest 450, next build ok DIFF_IDENTICAL.
+      >>> OWNER ACTION OUTSTANDING: Michael must run 0172 in the Supabase SQL editor. <<<
+- [ ] F2: Chart of accounts seed (modernized from Michael's Sage COA; Michael approves mapping old→new before merge) + COA admin page
+      - [x] F2-R1: Deep research → research/bookkeeping/10-COA-RESEARCH.md
+            (Deloitte thin-vs-thick GL + derivable-segment rule; AICPA/Tax Adviser
+            280E-vs-COGS, CCA 201504011, Regs. 1.471-3(b) reseller rule; RCW
+            69.50.535(4) excise HELD IN TRUST + WA DOR excluded-from-selling-price;
+            Plaid PFC taxonomy 16/103; CCRS Table 2 already in-repo)
+      - [x] F2-R2: MEASURED Michael's actual exports (never guessed):
+            * 8 of 11 inventory accounts carry IMPOSSIBLE credit balances
+            * negative hole = -4,388,348.06; plug = 4,624,697.31 = 105.4% of it
+            * 511/595 purchase lines (86%, $479,303.51) post to LAZY INVENTORY
+            * 164/492 vendors default to the plug; 145 have NO default account
+            * 115 of 287 accounts are zero-balance/never used
+            * 18 accounts mis-tagged "GRWNY" (typo of GRNWY) incl. all payroll expense
+      - [x] F2-R3: Design spec → research/bookkeeping/11-F2-COA-SPEC.md
+            (blocks 1-7 KEPT; 8→other income/expense, 9→statistical, because entity
+            is now a column not a digit; 21 house inventory categories mirrored into
+            revenue+COGS on matching last-3 digits; excise as trust-fund control
+            liability; auto-classifier with INTEGER milli-percent confidence, drafts
+            only; old→new mapping w/ MERGE/SPLIT/RENAME/RETIRE/QUARANTINE)
+      - [x] F2-R4: Verified F1 enforcement backs the design (gl_post_journal check 6
+            raises GL_CONTROL_ACCOUNT ⇒ the $4.62M plug is structurally impossible)
+      - [ ] F2-R5: **REPORT TO MICHAEL AND GET APPROVAL** (his explicit instruction:
+            report BEFORE committing anything to GitHub) — incl. 6 open questions
+      - [x] F2-B1: Build migration 0173 (accounts + rules + suggestions + proposals)
+            183 accounts; applies TWICE cleanly against real PG15; prints nothing
+            on success (183 `select`s → `perform`, so a real error can't be buried
+            when Michael pastes it by hand).
+      - [x] F2-B2: Pure core module + self-tests (scoring must be integer, no floats)
+            src/lib/accounting/coa-core.ts + tests/compliance/coa-core.test.ts
+            (28 tests). Registered in run-pure-selftests.ts, and the registration
+            was PROVEN to bite by injecting a deliberate failure (exit 1) and
+            restoring (exit 0).
+      - [x] F2-B3: Battle-test per Rule 13 (11-point attack plan in file 11 §10)
+            15 attacks / 76 assertions, ALL ATTACKS REPELLED + 15 seed checks.
+            F1 regression clean: GL SCHEMA TESTS: ALL 45 PASSED.
+            SEVEN real defects found that code review had passed — see file 11
+            §10.2. The two worst:
+              * all 21 inventory category accounts accepted a hand-typed plug,
+                i.e. the $4.62M lazy entry 21 times over → GL_INVENTORY_MANUAL;
+              * categoryCodesAreMirrored() was a TAUTOLOGY — it derived all three
+                codes from one slot, so a sweep of all 10,000 legal slots
+                returned zero failures. A test that cannot fail (Rule 13c).
+            RESOLVED, NOT BLOCKING: the Oct 31 2026 cut-over. F1's line in the
+            sand is a FLOOR (`>= 2026-01-01`), not a fixed date; 48 periods
+            already cover all of 2026. ATTACK 11 proves 2026-10-31 and
+            2026-11-01 post fine while a 2019 backdate is refused. No schema
+            change needed. (file 11 §12.2 corrected)
+      - [x] F2-B4: FULL BATTERY → branch → PR → squash-merge → re-verify on main
+            Battery GREEN: tsc 0 · vitest 309 files / 3982 tests all pass ·
+            next build exit 0 (compiled in 45s, no warnings) · eslint on F2
+            files 0. `npm run lint` exits 1 repo-wide, but PROVEN pre-existing
+            per Rule 13g: stash-and-rerun on clean main gives the IDENTICAL
+            9 problems, none in F2 files.
+            Reported to Michael BEFORE pushing (his explicit F2 instruction);
+            he approved. PR #932 squash-merged to main as d905b7e3.
+            RE-VERIFIED ON MERGED MAIN (Rule 13i), all from a clean DB:
+              tsc 0 · pure self-tests pass · vitest 309/3982 pass ·
+              COA 76 assertions ALL ATTACKS REPELLED · F1 ALL 45 PASSED.
 
-## BATCH 2b — NEW owner tasks (added verbatim; replace mobile pass for now)
-> Owner (verbatim):
-> - "I want to pivot from mid journey to using flux 2 max. I will setup an account and fund it. On the same page as the mid journey ai prompt builder, please include a complete api pipeline implementation for using for our website and other marketing strategies. It should also have the same prompt builder as the mid journey ai. So it should be a seamless transition from using mid journey to this more powerful, fully integratabtle image generator baked directly into our workflow for easy content generation."
-> - "I want to revisit the ach payments to my employees. Now that you have more info from me about my bank account with timberland. I want to process ach for my employees through my timberland account. I will run payroll in sage 50, i pay for the payroll service so it's super easy. I'll run payroll, export the data and upload it to the back office for ach processing. Please enhance the sage 50 reporting section to allow all of the available import export functions. I now have the ability to upload export sample data to help you help me with configuring the link between the two apps. That way the ai can assist me with filling out the fields properly and correctly."
+    **F2 IS DONE AND MERGED.** Owner action still outstanding: apply 0172 THEN
+    0173 in the Supabase SQL editor. Both idempotent; 0173 is silent on success.
+- [ ] F3: Posting engine core — THE ONE DOOR into the ledger (spec + evidence:
+      research/bookkeeping/12-F3-POSTING-SERVICE-SPEC.md)
+      - [x] F3-R1: Deep research + spec, incl. PUSHBACK on two of Michael's asks:
+            (a) "anything not tax related can auto-post" → corrected to EVIDENCE
+                vs JUDGMENT, because in a 280E business every expense dollar
+                carries a tax character (that is why F2 tagged cost_class on
+                every P&L account);
+            (b) "loosen up after it learns our patterns" → REFUSED as specified.
+                A system that widens its own tolerances on its own track record
+                is grading its own homework; every wrongly auto-posted entry
+                becomes evidence to auto-post more. Built instead: the platform
+                MEASURES and REPORTS readiness, a human widens the number on a
+                dated row with a written reason, versioned and reversible.
+      - [x] F3-B1: src/lib/accounting/posting-core.ts (pure; 16 source kinds,
+            4-member auto-post allowlist, idempotency key, line fingerprint,
+            BigInt tolerance math, post/draft/refuse, SoD). Registered in
+            run-pure-selftests.ts and PROVEN WIRED (rule 16): injected failure
+            → exit 1, restored → exit 0, grep confirmed no residue.
+      - [x] F3-B2: supabase/migrations/0174_gl_posting_service.sql — the door in
+            the DATABASE (cannot be bypassed by a future page that forgets to
+            call the service): idempotency_key + line_fingerprint + partial
+            unique index, gl_posting_templates (only the 4 automatable kinds,
+            never active without approval, never effective before the line in
+            the sand), append-only gl_template_changes, gl_submit_journal,
+            gl_submit_intercompany_pair, gl_template_readiness view, RLS.
+            ALSO REPAIRS 0172: gl_audit_events' event-kind CHECK did not permit
+            'journal_autoposted', so the FIRST auto-post would have aborted
+            AFTER the journal was written. Caught by READING 0172, not guessing.
+      - [x] F3-B3: src/lib/accounting/posting-service.ts — application door;
+            pre-flight refusals never touch the network; p_auto_post is true
+            only if the caller explicitly passed true; 26 error codes
+            translated into plain English.
+      - [x] F3-B4: Battle-tested per rules 13/15/16/18/19.
+            82 SQL assertions across 13 attacks → ALL ATTACKS REPELLED;
+            82 vitest tests (62 core + 20 service); migration applied 3× on a
+            real PostgreSQL (idempotent under repetition, not just twice);
+            13 deliberate mutations (7 core + 6 service) ALL KILLED, files
+            restored byte-identical via cmp; the SQL suite itself sabotaged and
+            proven able to go RED. Rule 19 replays all refused: the $4,624,697.31
+            plug, a POS sale duplicated ×10, backwards card sign, half an
+            intercompany pair, excise on the wrong template, pre-2026 backdating.
+            Battery: tsc 0 · next build exit 0 (44s compile, TS 4.9min, no
+            warnings) · vitest 311 files / 4,064 tests pass · eslint on all 5
+            F3-touched files 0 · npm run lint 9 problems = IDENTICAL to clean
+            main proven by stash+rerun (rule 18). F1 re-verified ALL 45 PASSED,
+            F2 re-verified ALL ATTACKS REPELLED — no regression.
+            One defect caught in F3's own tests (a never-reassigned `let`) was
+            mine, fixed at source, re-verified. Authorship gets proven either way.
+            NOTE: an earlier `next build` SIGKILL was diagnosed from `dmesg`
+            ("Out of memory: Killed process (node)") as the kernel OOM killer on
+            a 3.9GB box during the TypeScript phase — environmental, not a
+            defect. Proven, not assumed (rule 17).
+      - [x] F3-B5: **REPORTED TO MICHAEL BEFORE COMMITTING** (his standing
+            instruction). He APPROVED both pushbacks and chose the industry
+            standard / true CPA GAAP model. His words: "make this door tight,
+            add a bouncer at the door, a vestibule at the door… lock it down so
+            we don't validate bad behavior and then coast on a downward cycle
+            that causes all the drift."
+      - [x] F3-B6: THE BOUNCER + THE VESTIBULE (added on that instruction).
+            Auditing the slice against "make it tight" found a hole in MY OWN
+            WORK: requiresSecondApprover()/canSelfApprove() existed in
+            posting-core.ts and NOTHING CALLED THEM. The automatic path was
+            guarded to exhaustion; the MANUAL path had no approval concept at
+            all — any draft, any size, posted by its own author, unobserved.
+            A rule that lives only in TypeScript nobody invokes is a comment,
+            not a control.
+            BUILT: gl_approval_policy (one row per entity, seeded $5,000.00),
+            gl_journals.approved_by/approved_at/approval_note, gl_approve_journal,
+            and trg_gl_guard_journal_approval — a BEFORE UPDATE trigger, so the
+            rule binds no matter WHICH function posts, including code written
+            years from now. Proven by writing approved_by DIRECTLY into the row,
+            bypassing the function entirely, and watching the post still refuse.
+            THREE DELIBERATE EXEMPTIONS, each of which would otherwise turn a
+            control into a hazard: automatic kinds (the approved template IS the
+            advance approval); REVERSALS (a large wrong entry makes a large
+            reversal — demanding a second approver to UNDO an error would make
+            the error PERMANENT; attack 17 proves reversal always works); and a
+            missing policy row FAILS CLOSED, never open.
+            THE VESTIBULE: gl_submit_journal now returns needs_second_approver
+            on every draft, so a screen warns at creation time instead of
+            ambushing someone at posting time.
+            The self-approval escape hatch exists for a genuinely sole operator
+            but CANNOT be switched on silently — it needs a written reason of
+            20+ characters, enforced by constraint.
+      - [x] F3-B7: **SECOND DEFECT FOUND — IN ALREADY-MERGED F1, AND IT INVENTED
+            MONEY.** 0172 declared gl_journals.reversed_by_journal_id and
+            gl_reverse_journal READ it to refuse a double reversal, but NOTHING
+            EVER WROTE IT, so that guard could never fire. Executed rather than
+            argued (rule 17): a $10.00 sale was posted, reversed, and reversed
+            AGAIN — accepted. Cash finished at -1,000 cents and revenue at
+            +1,000 cents no customer ever paid. That is the exact shape of the
+            negative inventory and negative ATM cash already in the Sage data,
+            and reversing twice is what a CAREFUL person does when unsure the
+            first correction went through.
+            FIXED in 0174 §8c (trg_gl_mark_reversed): when a reversal posts, the
+            original is linked and flipped to 'reversed'. 0172's immutability
+            guard already permitted exactly this write ("the reversal-linkage
+            bookkeeping and the posted->reversed flip") — the wiring was simply
+            never finished. After the fix: revenue 0, second reversal refused.
+            Attack 18 asserts on the ACCOUNT BALANCE, not the sum of all lines,
+            because a double reversal doubles BOTH sides and nets to zero — a
+            weaker assertion would have passed while the books were wrong.
+      - [x] F3-B8: FULL BATTERY (re-run after the bouncer + reversal fix).
+            SQL 112 assertions (was 82) ALL ATTACKS REPELLED; vitest 96 F3 tests
+            (was 82); 7 MORE mutations killed (4 SQL: guard fails open, self-
+            approval always allowed, original never flips to reversed, identity
+            check removed; 3 TS: needsSecondApprover defaults true, RPC param
+            mis-named, refusal swallowed) — all files restored byte-identical
+            via cmp, zero residue. tsc 0 · eslint 0 on F3 files · pure self-tests
+            pass · F1 ALL 45 PASSED · F2 ALL ATTACKS REPELLED (no regression).
+            NOTE: tsc caught 3 new tests omitting `sourceRef` even though ALL 96
+            vitest tests passed. SubmitJournalInput makes sourceRef
+            required-but-nullable ON PURPOSE so a caller must consciously say
+            "no external reference". Fixed the TESTS to honour the contract;
+            did NOT weaken the contract to accommodate the tests.
+      - [x] F3-B9: PR #933 squash-merged to main as 641ef59a.
+            RE-VERIFIED ON MERGED MAIN (rule 13i), clean tree, fresh databases:
+              tsc 0 · pure self-tests pass · vitest 311 files / 4,078 tests ·
+              F3 112 assertions ALL ATTACKS REPELLED · F1 ALL 45 PASSED ·
+              F2 ALL ATTACKS REPELLED · next build exit 0 · lint 9 = baseline.
 
-- [x] Slice A (NEW) — FLUX 2 MAX image generation pipeline [new item 19] — VERIFIED BFL API (POST {base}/v1/{endpoint} x-key → {id,polling_url}; poll until Ready → result.sample signed URL; download+re-serve). Migration 0055 adds flux_api_key/flux_endpoint(default flux-2-max)/flux_base_url to integration_credentials (idempotent, RLS inherited from 0053). PURE flux-core (aspect→dims mult of 32, natural-language prompt from SAME CreativeBrief w/ MJ flags stripped + exclude→"Avoid:", submit/poll parsers, submit-url + filename; 34 assertions tsx-tested). Server flux-client (submit→poll 2min budget→download→uploadMedia as DRAFT; no-op-safe; 429/402/moderation/timeout handled). generateFluxAction (content.edit, audited flux.image_generated). "Generate with FLUX 2 Max" panel baked into MidjourneyBuilder on the SAME page (same brief; format PNG/JPEG; inline preview + Open in Media). Credential core+store extended (mask/merge/fold + getFluxOverrides; 42 assertions). FluxCredentialsForm added to Settings→Integrations. Verify: tsc 0, eslint 0, next build OK (both routes present). PR #TBD merged.
-- [x] Slice B (REVISED per owner clarification) — Employee payroll ACH via Timberland [new item 20; supersedes former OUT-OF-SCOPE item 12] (PR #182). MANUAL-ENTRY (no Sage auto-import): /admin/payroll index (create run + one-time ACH company block) → /admin/payroll/[id] editor (PayrollEntryTable: per-employee net required + gross/taxes/deductions optional with per-row reconcile "Off by $X / ✓", running totals, banking prefilled from employee record & reused) → Generate ACH → /admin/payroll/[id]/download (.ach, CRLF). nacha-core.ts (30 tsx assertions, reusable for vendor ACH 77/78) builds standard NACHA PPD credit file (fixed-width, entry hash, block padding, ABA check-digit validation); payroll-core.ts (22 assertions). Migration 0057 (MANUAL): employee banking cols + ach_company_settings singleton + payroll_runs + payroll_run_lines (RLS). Nav link (Operations, settings.manage). tsc/eslint/build all clean.
-> Owner clarification (verbatim): "I will take the time card info and manually input the totals into my sage software. It will produce a paystub for me to give to the employee and one for me. I will then manually input into the back office the amounts owed to the employee. So I will need input fields for all the totals and the routing and accounting info plus whatever other manual input field I will need for this. I don't need to make it full auto, but enhancing the process so it's more efficient and quicker."
-  → NOT auto-import from Sage. MANUAL-ENTRY payroll run: owner enters, per employee, net pay + gross/earnings/tax/deduction totals + bank routing/account/account-type; store employee banking (entered once, reused). Generate a NACHA PPD .ach batch for Timberland (Jack Henry) using the SAME NACHA engine as vendor ACH. Efficiency helpers (prefill last banking, running totals, validation). Light Sage 50 import/export section enhancements where quick.
+    **F3 IS DONE AND MERGED.** Owner action outstanding: apply 0174 in the
+    Supabase SQL editor AFTER 0172 and 0173. Idempotent; safe to re-run.
+    NOTE: 0174 also repairs TWO defects in already-applied 0172 — the
+    gl_audit_events CHECK missing 'journal_autoposted', and the reversal loop
+    that let an entry be reversed twice and invent money.
+      >>> OWNER ACTION WILL BE OUTSTANDING: apply 0174 in the Supabase SQL
+          editor AFTER 0172 and 0173. Idempotent; safe to re-run. <<<
+- [~] F4: Trial balance + GL detail reports (by entity/period, CSV/PDF export)
+      Spec + full evidence: research/bookkeeping/15-F4-TRIAL-BALANCE-SPEC.md
+      - [x] F4-A: THE CENTRAL DISCOVERY, proven by execution against real
+            PostgreSQL BEFORE any code was written. 0174's trg_gl_mark_reversed
+            flips the ORIGINAL to 'reversed' and leaves the REVERSAL 'posted'.
+            So a TB filtered on status='posted' DROPS what was reversed and
+            KEEPS the reversal. Measured on a real ledger:
+              status='posted'                 -> cash -150000, rev +150000, FOOTS TO ZERO
+              status IN ('posted','reversed') -> cash  100000, rev -100000, FOOTS TO ZERO
+            The naive filter invents -1,500.00 of cash that does not exist and
+            still prints BALANCED. LESSON, now written into the core header,
+            the migration header, and locked at BOTH layers by a headline test
+            AND a negative control: "it balances" is NOT evidence of anything.
+      - [x] F4-B: PURE core src/lib/accounting/trial-balance-core.ts
+            (~900 lines, __runTrialBalanceCoreTests). One definition of the
+            status filter; assertTrialBalanceStatusFilter REFUSES ['posted']
+            BY NAME with a plain-English explanation. Empty TB is NOT a clean
+            bill of health (exportable:false). Out-of-balance is a FINDING,
+            not a crash, and the core is tested to NEVER name the balancing
+            figure (naming it is the first step to typing it in).
+      - [x] F4-C: Migration 0175_gl_trial_balance.sql — gl_reportable_lines
+            (THE single definition), gl_trial_balance, gl_account_activity,
+            gl_trial_balance_check(), gl_general_ledger(), gl_open_fiscal_year().
+      - [x] F4-D: THREE REAL DEFECTS FOUND BY EXECUTION (not by reading):
+            (1) SECURITY HOLE IN MY OWN MIGRATION, caught before shipping.
+                0175 said "views inherit RLS from their base tables". FALSE.
+                Proved it: table with RLS + no policy, view over it, granted to
+                `authenticated` -> the supposedly-hidden row WAS RETURNED. A
+                view runs with its OWNER's rights unless security_invoker is
+                set. Every budtender holds an `authenticated` session, so those
+                3 grants would have handed every budtender the entire general
+                ledger — every sale, margin and owner distribution. WORSE: both
+                functions were SECURITY DEFINER with NO auth check at all, which
+                security_invoker does NOT protect. Fixed with TWO independent
+                layers: security_invoker on all 3 views + explicit is_admin()
+                gate as the FIRST statement in both functions + revoke from
+                public. NOTE: 0130 already fixed this exact trap once for
+                kb_noncannabis_catalog — documented, and I walked back into it
+                anyway. Exactly why the rule is PROVE IT, not REMEMBER IT.
+            (2) THE 2027 CLIFF (pre-existing, from F1). 0172 seeds gl_periods
+                for FY2026 ONLY and nothing ever opens another year. At 12:00am
+                on 2027-01-01 EVERY posting starts failing — first sale of the
+                year, on a holiday, with an error that reads like corruption.
+                Found because a 2028-02-29 test could not post. Fixed with
+                gl_open_fiscal_year() (idempotent, admin-gated) + opened
+                2026-2030. Deliberately FINITE, not to 2100: an open period is
+                a place a typo can land, and a sale fat-fingered to 2071 must
+                still be REFUSED (proven it still is). Closing stays manual.
+            (3) MY OWN VERIFY SCRIPT COULD PRINT "ERROR" AND STILL EXIT 0.
+                `cmd && echo ok` disables set -e for cmd (verified directly).
+                0175 failed THREE times with 'role "authenticated" does not
+                exist', the script ignored all three and ran the suite against
+                a HALF-APPLIED schema — which then "passed". A verification
+                tool that manufactures false confidence is worse than none.
+                Fixed with a step() helper that fails on non-zero exit AND
+                greps for ERROR: even on exit 0.
+      - [x] F4-E: Adversarial SQL suite, 14 attacks / 79 assertions, exit 0.
+            Incl. #2 THE HEADLINE (money proof + negative control asserting the
+            naive filter is STILL wrong "AND IT STILL FOOTS TO ZERO"), #6 the
+            $4,624,697.31 lazy-inventory plug, #10 activity that nets to zero
+            must NOT report as empty (my own first-draft bug), #13 ACCESS
+            CONTROL, #14 THE 2027 CLIFF.
+      - [x] F4-F: 41-test vitest mirror tests/compliance/trial-balance-core.test.ts.
+      - [x] F4-G: FOUR TEST DEFECTS found and fixed — in every case the PRODUCT
+            GUARD WAS RIGHT and was left alone; my test was wrong. A4 hit
+            GL_CONTROL_ACCOUNT (10200); A7 called 12100 "Inventory" when it is
+            Employee Advances Receivable (-> 20010/60010 as pos_sale, since
+            GL_INVENTORY_MANUAL correctly blocks manual); A10 hit F3's 5,000.00
+            GL_APPROVAL_REQUIRED; A11 hit GL_ACCOUNT_NOT_ALLOWED_FOR_ENTITY
+            (greenway-only accounts under `atm`). Every account code now
+            verified against 0173 with a comment saying WHY that account.
+            A13 also used SET LOCAL ROLE, which in psql autocommit does NOTHING
+            — it stayed superuser (who bypasses RLS) and reported 314 visible
+            rows. Fixed to SET ROLE + a guard that RAISES if still superuser.
+      - [x] F4-H: 5 MUTATIONS KILLED (rule 15), each restored byte-identical
+            (cmp-verified): remove security_invoker -> budtender sees all 314
+            lines; is_admin gate -> `if false`; fiscal years -> [2026] only;
+            isAbnormalBalance -> always false; empty TB -> exportable:true.
+            Plus 4 earlier TS mutations during core development.
+      - [x] F4-I: Scaffolding DELETED (rule 15d): probe-tb-status.sql,
+            run-tb-tmp.ts, rls-probe.sql. Findings live permanently in file 15.
+      - [x] F4-J: FULL BATTERY — verify script exit 0 (79 assertions, 0175
+            applied 3x for idempotency) · tsc 0 · vitest 4,119 tests / 312
+            files ALL PASS (F1/F2/F3 unaffected) · lint 9 = baseline, proven by
+            git stash (rule 18) that I introduced ZERO. `next build` OOMs
+            (SIGKILL) in this sandbox — PROVEN pre-existing by stashing all F4
+            work and reproducing the identical OOM on clean main; tsc --noEmit
+            passes independently, which is the same typecheck the build runs.
+      - [x] F4-L: PR #934 squash-merged to main as 2321eb68. RE-VERIFIED ON
+            MERGED MAIN (rule 13i), clean tree, fresh databases: tsc 0 · pure
+            self-tests pass · vitest 312 files / 4,119 tests ALL PASS · F4 79
+            assertions / 14 attacks ALL REPELLED · F1 ALL 45 PASSED · F2 ALL
+            ATTACKS REPELLED (78 assertions) · F3 ALL ATTACKS REPELLED (113
+            assertions) · lint 9 = baseline. `next build` OOM reproduced again
+            on clean merged main (compiles in 44s, then the TypeScript worker
+            is SIGKILLed) — sandbox has only 3.9 GB RAM total; tsc --noEmit
+            passes independently in 7s.
+      - [x] F4-M: RULE 13i EARNED ITS KEEP — the re-verification found TWO
+            defects that building F4 did not. Both fixed in PR #935, squash-
+            merged as f4f58b13.
+            (1) __runTrialBalanceCoreTests was registered in vitest but NEVER
+                invoked by scripts/compliance/run-pure-selftests.ts, unlike
+                F1/F2/F3. PROVED by injecting a deliberate throw (rule 16):
+                the runner exited 0 and printed "ALL PURE SELF-TESTS PASSED"
+                while vitest correctly failed 1/41. CI was not actually blind
+                (test:compliance globs tests/compliance/**), but the redundant
+                gate was reporting green for a module it never called. Fixed
+                and re-proved BOTH directions: exit 1 under mutation, exit 0
+                restored. trial-balance-core.ts restored byte-identical (cmp).
+            (2) scripts/accounting/verify-coa-schema.sh was committed 100644
+                while its three siblings are 100755 → invoking it directly
+                failed exit 126 (Permission denied). Pre-existing from F2;
+                surfaced only on the first back-to-back four-suite run from a
+                clean checkout. Fixed via git update-index --chmod=+x.
+      - [ ] F4-K: Service layer + admin UI (plain-English refusals; incl. the
+            account browsing deferred from F2). NOT started. (Michael: do
+            AFTER the is_admin() audit.)
+- [x] AUDIT: is_admin() — Big Four style, NO CODE EDITS, roadmap only. COMPLETE (PR #936, #937)
+      Michael: "audit it with a fine tooth comb... report everything, anchor
+      everything, validate logic, trace all relevant logic... never guessed.
+      Never assumed."
+      - [x] A1: Establish the population — every definition of is_admin()
+            across ALL migrations, in order; identify which definition WINS.
+      - [x] A2: Trace the decision inputs — what data decides admin? Where
+            does that data live? Who can write it?
+      - [x] A3: Complete usage census — every RLS policy, function, trigger,
+            view, and TypeScript call site that depends on it.
+      - [x] A4: Attack-path analysis, each proven by EXECUTION on a throwaway
+            DB where testable: self-escalation, JWT spoofing (user_metadata vs
+            app_metadata), null/anon behavior, search_path, definer rights,
+            grants, parallel admin concepts that could disagree.
+      - [x] A5: Written audit report with severity ratings, evidence anchors
+            (file:line), execution proofs, and a recommendations ROADMAP.
+      - [x] A6: Battle plan (file 14) committed to the repo in a findable
+            place (via PR per repo law — docs only, no code).
+      - [x] A7: Plain-English summary to Michael.
+      >>> OWNER ACTION: apply 0174 AND THEN 0175 in the Supabase SQL editor.
+          Both idempotent; 0175 applied 3x in a row to prove it. <<<
+      KNOWN SOFT SPOTS (file 15 §8): nothing has touched Michael's real data
+      yet; and is_admin() is TRUSTED but not audited by this slice — it is now
+      the most load-bearing function in the accounting stack and needs its own
+      audit.
+      RESULT: is_admin() is SOUND — 11 attacks, 30 assertions, 30/30 pass, 6
+      mutations proving the suite can fail. Report: docs/security/
+      IS-ADMIN-AUDIT-REPORT.md. Suite committed + runnable from a clone.
+      Rule 13i caught a defect post-merge (runner hardcoded a sandbox path)
+      -> fixed in PR #937 and re-proven from a foreign cwd.
+      >>> TOP FINDING (CRITICAL, proven by execution): 20 RLS policies in
+          0156/0157/0160/0168/0170/0171 use `for all using (is_staff())` on
+          banking, mortgage, holdings, loans, crypto and ATM tables. ANY
+          active employee can READ AND WRITE Michael's personal + business
+          financial data. Remediation = roadmap R1. <<<
+      Correction logged (Appendix D): assertion count is 30, not the 31 I had
+      carried in working notes; the old figure counted the closing banner.
 
-## BATCH 2c — NEW owner tasks (added verbatim)
-> Owner (verbatim):
-> - "Update all of the websites page editor pages so that all of the image uploads for all of the various editable images, to add a helper to let us know the aspect ratio, or size, or pixel count/ ratio, etc. I want it to be super easy to create content to fill those spaces by being able to first create the proper size and dimensions for use in canva. We use canva for a lot of our marketing strategy so having useful helpers and such will be a really handy thing to have."
-> - "Add biometrics so we can login via facial recognition or touch."
+- [ ] R1 (from the audit): re-gate the 20 financial policies to is_admin(),
+      splitting read/write; inventory sync-job callers FIRST so Plaid/crypto
+      sync doesn't silently break; extend the attack suite per table.
+      OWNER DECISION NEEDED: which tables (if any) managers legitimately need.
+- [ ] F5: Opening-balance staging worksheet (evidence-linked rows; posts NOTHING until blessed; generates OBE journal + OBE→RE close)
+- [ ] F6: Sage read-only archive (import uploaded CSVs; searchable; WAC 314-55-087 retention)
+- [ ] F7: Drift register (6 Sage red flags + 2 transcript puzzles as trackable records)
+- [ ] F8: Document vault + drafted templates (2 leases, sq-ft study, duty studies) for grandfather review
+- [ ] F9: Financial statements (BS/IS per entity + combined w/ eliminations + 280E cost_class view)
+- [ ] F10: Close checklist + reconciliation gates (every BS account needs artifact before period lock; gate engine reused for cut-over G1–G5)
 
-- [x] Slice C (NEW) — Image-upload size/aspect helpers across all page-editor image uploads [new item 21] (PR #183). image-spec-core.ts (pure, 17/17): grounded registry mapping each real image block_key → Canva size + aspect (loyalty 3200×563 / 1200×400 3:1, locations 16:9, category/brand wide bands, footer transparent PNG) with category fallbacks + SECTION_BANNER_SPEC/CAROUSEL_SLIDE_SPEC + cheat-sheet. ImageSpecHelper (Canva size, aspect, to-scale preview, copy-size, tip). Wired ContentBlockEditor (by block_key), SectionCard, CarouselSlideCard; Media Library cheat-sheet. No migration. — a reusable helper that shows the recommended aspect ratio / dimensions / pixel size (and a Canva-ready spec) next to every editable-image upload, so content is created at the right size the first time. Ground in the actual image slots the editors use.
-- [x] Slice D (NEW) — Biometric login (Face ID / Touch ID) [new item 22] (PR #184). RESEARCH-GROUNDED (SimpleWebAuthn v13 docs + web.dev RP-ID + Supabase admin generateLink→verifyOtp session minting). WebAuthn passkeys on top of existing email/password (not weakened). Migration 0058 (MANUAL): webauthn_credentials (bound to auth.users, COSE key, counter, transports, label) + short-lived webauthn_challenges (service-role only), owner-scoped RLS. webauthn-core.ts (pure, 21/21). webauthn-store.ts (service-role CRUD, bytea hex, single-use challenge). 4 API routes (register options/verify authed; authenticate options resolves user by email/verify mints session token). LoginForm "Sign in with Face ID / Touch ID" (verifyOtp token_hash). Settings → Security + PasskeyManager (add/rename/remove own passkeys) + hub card. CBOR_NATIVE_ACCELERATION_DISABLED for Vercel. tsc/eslint/build clean. — WebAuthn/passkey platform-authenticator login on top of the existing Supabase email/password auth (register a passkey while signed in; sign in with biometrics thereafter). Ground in the real auth flow; do not weaken existing security.
+## BUILD PHASE G — GAP-FILL (blocked on documents)
+- [ ] G-A: Opening balances from grandfather's 12/31/2025 Sch L + workpapers (gate G1)
+- [ ] G-B: 2026 replay from platform data + Sage journal exports (incl. Timberland↔loan matching posting rule)
+- [ ] G-C: Return-validation harness (ledger-computed vs filed returns; yearly grandfather blessing workflow)
+- [ ] G-D: Equity cleanup (distribution reconstruction, per-shareholder basis, mom's-10% decision)
+- [ ] G-E: Personal/business separation (personal entity live; commingling tagged at source)
+      → presented to Michael via ask; AWAITING his decisions before building
 
-## BATCH 3 — intake compliance, printing, vendor JSON email, customer AI (owner-directed order)
-- [x] Slice 81 — Intake: CCRS-compliant partial-accept / reject-at-dock [Batch 2d #1 + #4] ✅ (PR pending)
-> Owner clarification (verbatim): "Currently when ever a vendor brings in product, we can choose to reject it, in other words we don't or have not ever had to process a return manifest. We just tell the vendor to take it back with them. So we need the ability to tell the system that we are only accepting a part of the manifest and the rest was rejected. There are several instances where the vendor forgot to send an item, or it broke in transit, etc. but again, we have never had to re manifest the products back."
-> RESEARCH-GROUNDED (docs/ccrs-rejection-and-returns.md): refuse-at-dock = product stays on the truck, never enters our Inventory.csv, so WE FILE NOTHING with CCRS and NEVER auto-destroy. The manifest belongs to the ORIGIN (vendor); the vendor corrects their own record via CCRS `Update`/`Delete` (Feb 26 2026 CIB140 Manifest Guide). Per-lot disposition accepted|rejected_at_dock (reason required); derived manifest status accepted|rejected|partially_accepted + badge.
-> BUILT: migration 0059 (lot disposition + reason + manifest lot counts), intake-disposition-core.ts (21/21 tests: reasons, derived status, badge, reason validation), setLotDisposition/finalizeManifestDispositions/reworked rejectManifest in intake-store.ts (NO auto-destroy — refused lots become 'rejected', never received), per-line ManifestLotDisposition.tsx control w/ reason dropdown, whole-manifest reject-with-reason, Finalize intake button, "Partially Accepted" gold badge on list+detail (manifest-pipeline-core partially_accepted stage, 39/39 tests), CCRS guard-rail HelpPanel. tsc/eslint/build all green.
-- [x] Slice 81b — Guard-rail warning on late/accept-then-reject flow [Batch 2e #1] (PR #188)
-> Owner (verbatim): "yes the reject flow matches reality. We have never accepted everything first and rejected later. It's fine to have both options I suppose for what ever reason, but it should come with a warning or something to let the intaker know they should not be accepting lots and then returning/ rejecting later."
-> BUILT: inline orange warning in ManifestLotDisposition when an already-accepted line is switched to reject; new guard-rail HelpPanel step "decide BEFORE accepting". tsc/eslint/build green.
-- [x] Slice 82 — Intake: Excel export with every field [Batch 2d #3] (PR pending)
-> BUILT: GET /admin/inventory/intake/export?format=csv|xlsx — two sheets (Manifests: every field incl. full transport/chain-of-custody + lifecycle timestamps + accepted/refused counts; Lots: every lot line across all manifests incl. disposition/reject reason/unit cost/lab link). New store fn listAllManifestLotsForExport (joins manifest #/vendor). Uses shared reports workbook helper (styled xlsx / clean csv, cents→dollars). Download links (CSV + Excel) on intake list. tsc/eslint/build green.
-- [x] Slice 83 — Rollo Wi-Fi 4x6 thermal label reprint (barcode) [Batch 2d #5] (PR pending)
-> RESEARCH-GROUNDED (docs/rollo-label-printing.md): Rollo Wireless X1040 = AirPrint/Wi-Fi driverless, 203 DPI, 4×6. NO cloud print API/SDK (unlike Star CloudPRNT receipt printer). Correct pro approach = render a pixel-accurate 4×6 (size:4in 6in, margin:0) label page + print from browser dialog to the Rollo (shows as normal printer). Reprint-only; touches nothing in CCRS/inventory.
-> BUILT: code128-core.ts (pure, dependency-free Code128 B/C encoder → SVG bars, 17/17 tests incl. checksum + 107-pattern width table); /admin/inventory/lots/[id]/label 4×6 print page (barcode of lot_code/pos_key/id + product/strain/qty/on-hand/expiry/vendor, store name header, print CSS hides admin chrome); LabelPrintControls client (window.print + back links); "🏷 Print 4×6 label" link on each intake lot row. tsc/eslint/build green.
-- [x] Slice 84 — Advance manifest staging: CCRS manifest.csv import [Batch 2d #2]
-      Owner-advised & approved: reframed from "email intake" to advance-manifest staging (real Cultivera parity), since CCRS has NO inbound feed — the vendor hands you a structured file. The WCIA-JSON + URL + manual-entry pipeline (ETA/overdue, pending→in_transit→received→accept/reject dock) ALREADY existed (Slice 74), so the only genuine gap was the state's own CCRS manifest.csv. Built pure `ccrs-manifest-csv-core.ts` (quote-aware CSV splitter; `parseCcrsManifestCsv` for the hybrid header-block + item-table layout; `ccrsToParsedManifest` mapper incl. transport/ETA; `ccrsDateToIso`; 53/53 unit tests incl. the real LCB template). Wired `importManifestCsvAction` → same `stageManifest` path + seeds transport/ETA. Added a "paste CCRS manifest.csv" card + error flashes. Honest limitation surfaced: CCRS manifest has no product name/price/COA → sparse draft lines each flagged to enrich. Grounded in the official LCB spec (docs/fixtures/ccrs-manifest-template.csv) + docs/ccrs-manifest-csv-import.md. No migration needed. Verified: tsx 53/53, tsc 0, eslint 0, next build OK. DEFERRED (owner agreed): auto-email-inbox (vendor_intake@) as a later optional add-on.
-- [x] Slice 85 — Medical/DOH authorization intake efficiency + Canon PIXMA TS3522 + Scotch Thermal Laminator [Batch 2e #2] — RESEARCH DOH requirements FIRST
-      Built: new `/admin/medical/intake` page (search patient → attach Canon scan → DOH 608-048 checklist → issue → print + laminate), grounded in the fact that the MCR has NO retailer API (consultant validates by hand) and the Canon has no scan API (scan-to-file then upload). Migration `0060_medical_form_scans.sql` (private `medical-forms` bucket + staff RLS; scan/print columns on `patient_authorizations`). Store: `listRecentAuthorizations`, `attachFormScan`, `signedFormScanUrl`, `markCardPrinted`. Actions: `intakeAuthorizationAction` (issue + optional scan in one step), `attachScanAction`, `markCardPrintedAction`. Components `AuthorizationIntakeForm` + `CustomerPicker`. Nav item "Authorization Intake" + header link from `/admin/medical`. Doc `docs/medical-authorization-intake.md`. MIGRATIONS_TO_RUN updated (0060). Verified: tsc 0, eslint 0, next build OK.
-- [x] Slice 86 — Devices/equipment management page: register ALL owner-purchased hardware [Batch 2e #3]
-      Used the EXISTING `/admin/equipment` registry (did NOT build a new page). Migration `0061_seed_owner_hardware.sql` idempotently seeds four assets (Star Micronics TSP143IV receipt printer PRN-RECEIPT-01; Rollo Wireless X1040 label printer PRN-LABEL-01; Canon PIXMA TS3522 scanner SCAN-MEDICAL-01; Scotch Thermal Laminator LAMINATOR-01), each grounded in the model actually integrated. Added a "Your integrated hardware" card on the equipment page linking each device to its config/usage page (works even before the seed runs). MIGRATIONS_TO_RUN updated (0061, optional). Verified: tsc 0, eslint 0, next build OK.
-- [ ] Slice 79 — Customer-facing AI concierge [item 18]
-> Owner clarification (verbatim): "For the customer facing website ai concierge it should mostly if not predominantly be focused on helping the customer find products based on requests the standard search bar can’t accommodate. Like “I want something that will help me sleep, but I don’t like to smoke, what kind of options are well suited for me?”, or “I’m a medical customer, what doh products do you carry?”, etc. if it needs seeding, help me seed it however it needs. I want this feature to be great. It’ll be something nobody else in the entire industry will have or be offering. So it should be great, helpful, insightful, incredibly respectful and courteous and nice and genuinely wants to help you."
-- [ ] Slice 80 — Customer AI knowledge seeding [item 18 cont.]
-> DEFERRED within Batch 3: Slices 77/78 (Vendor ACH) pushed after the fresher Batch 2d intake/printing/email work per owner "work on batch 3 now" + newest clarifications. Will pick up next run. SendGrid+Resend how-to guide (Batch 2d #7) folded in as a docs deliverable.
+# PRIOR: Loan Management Foundation (manual loans + amortization + Timberland audit trail)
 
-## BATCH 2d — NEW owner tasks (added verbatim, this session)
-> Owner (verbatim):
-- [ ] "We need a reject button/ feature for the product intake page. In case we need to reject lots or whole manifests. Please research ccrs for the proper rejection process and build that in with guard rails baked in to remain in compliance"
-- [ ] "I maybe wrong with regard to cultivera’s ability to show me inbound transfers. But if they do, please strategize with me about how they do it so we can recreate it. Maybe require all vendors email us their json links at least 24 hours before transporting, to a new email address I will set up (vendor_intake@greenwaymarijuana.com) so the back office can connect to it and ping it regularly looking for json’s. Since we built in a really great purchase order feature, we should be able to use it as a way of tracking which json’s the ai should be looking for and then reading the emails to extract the json automatically. We would keep the manual import methods as fall backs in case a vendor does not send the json to the right email or something like that."
-- [ ] "Add export functions to the intake page if not already. I want an excel report that has every bit of data included with it."
-- [ ] "We should probably add a partially accepted flag/ badge to the intake page in case there are any rejected items from a manifest. This will require more research from the ccrs so you are grounded in fact for how to do this the compliant way."
-- [ ] "Sometimes product labels will get damaged or will be wrinkled or something else like that, so I want to be able to print out new labels with the barcode and such so I can replace them if needed. i have purchased this printer from amazon to do the printing. Please research how to connect to it so I can print labels if needed. Rollo Wireless Shipping Label Printer - Wi-Fi Thermal Label Printer 4x6 for Shipping Packages - AirPrint from iPhone, iPad, Mac - Supports Windows, Chromebook, Android, Linux"
-- [x] "Please add to the payroll ach feature the ability pre fill fields that have had a history of being used before. An index file or whatever to store the credentials/ info needed to complete the payment push for all my employees." — ALREADY BAKED IN as part of Slice B (PR #182): `saveEmployeeBanking()` persists each employee's routing/account/type on save, and the run editor prefills banking from the employee record (or prior line snapshot) on every future run. Skipping as a duplicate per owner's "skip if already baked in" instruction. (Will confirm/enhance with an explicit beneficiary index if useful.)
-- [ ] "I need a how to guide for using sendgrid in combo with resend for the newsletter/ email promotions stats we built."
-> Owner: "If any of these requests are already baked in because you intuitively thought to do so then please skip the duplicate feature requests."
+## Context (VERIFIED from Michael + PDF, never guessed)
+- Mortgage (Sound/Cenlar-serviced): principal $475,588.75, rate 2.375%, 15yr conventional fixed,
+  first pmt Jun 2022, matures May 2037, escrow bal $9,930.62. Full payment history PDF on hand.
+- Jared: 18-mo interest-free. Original $21,881.91 on 6/11/26. Balance $20,980.91. First pmt 7/17/26. Next due 8/18/26.
+- Wells Fargo: details LATER (Michael can't find them yet) — build so it slots in.
+- Payments confirmed from connected TIMBERLAND account → audit trail.
+- Existing plaid_mortgages is Plaid-account-bound; THIS is a NEW independent manual-loans slice.
 
-- NOTE: former OUT-OF-SCOPE item 12 (employee ACH payroll) is now IN SCOPE as Slice B per owner's new instruction.
+## PR A — Manual loans foundation + amortization engine — DONE (PR #929, 7cfebfb7)
+- [x] loan-core.ts (PURE): money-in-cents + milli-percent; amortization generator
+      (fixed-rate + interest-free flat); payoff/summary math; self-tests
+- [x] migration 0171: manual_loans + manual_loan_payments (+ RLS + staff policies)
+- [x] loan-store.ts: CRUD (list/get/upsert/delete loan; add/list/delete payments)
+- [x] wired self-tests into run-pure-selftests.ts + vitest mirror
+- [x] FULL BATTERY → PR #929 → merged → synced (verified vs real statement to the penny)
 
-## BATCH 2e — NEW owner tasks (added verbatim, this session)
-> Owner (verbatim, Q1): "yes the reject flow matches reality. We have never accepted everything first and rejected later. It's fine to have both options I suppose for what ever reason, but it should come with a warning or something to let the intaker know they should not be accepting lots and then returning/ rejecting later."
-> Owner (verbatim, Q2 / new feature): "I want to add a feature to the medical patients part of the back office. I have purchased The Canon PIXMA TS3522 Printer and The Scotch Thermal Laminator. I want a more efficient way to intake new authorizations to the doh website. Please research doh requirements so all your decisions are grounded in fact. Please use your best judgement and do the professional expert thing. I trust you. Do it the right way even if it is harder. Thank you!"
-> Owner (verbatim, equipment): "Please also add all of the printers and other equipment I have asked you to integrate into the back office to the devices management page or whatever it's called, I forget. Please look through the chat history so you can find my posts about equipment usage built into the back office. So I remember what equipment I had you build for specifically. Would be very helpful. Please proceed."
+## PR B — Loans admin UI — DONE (PR #930, 367a7613)
+- [x] /admin/loans page: list loans, add/edit loan, summary + paid-off bar,
+      record/list/delete payments (with Timberland match id), full amortization schedule
+- [x] actions.ts (gated settings.manage + audited) + "Loans" nav entry
+- [x] FULL BATTERY → PR #930 → merged → synced
+- [ ] Seed the mortgage + Jared from verified numbers (owner can do in-app now, or PR C)
 
-## Remaining 6 slices to complete this run (owner-directed): 73, 74, 75, B, C, D
-- [x] Slice A — FLUX 2 pipeline (PR #178) ✅
+## PR C — Timberland payment matching (audit trail) — DEFERRED (see strategy below)
+- [ ] Match Timberland plaid_transactions to loan payments; confirmation column
+      NOTE: deliberately deferred until the GL exists, so matching posts a real
+      journal entry instead of a standalone link we'd rebuild later.
 
-## BATCH CCRS-REMEDIATION — full-scope CCRS compliance audit fixes (Slices 87–92)
-> Owner (verbatim): "Thank you for the findings. We need to fix them all. Please put together a very comprehensive task list and roadmap to working them all out. Make sure to add to the standing rules to always check and satisfy CCRS compliance. Then please proceed through each one, tackling 6 slices for this round. Be methodical, go slow and make certain CCRS is respected and adhered to strictly with all the necessary guard rails set up to protect me. I trust your judgement so please do the profession and expert thing. Keep me safe. Please proceed."
-> Audit: docs/CCRS_COMPLIANCE_AUDIT.md (11 actionable findings, 4 CRITICAL). Roadmap: docs/CCRS_REMEDIATION_ROADMAP.md. New binding standing rule added to AGENTS.md (🔴 CCRS COMPLIANCE — ALWAYS CHECK AND SATISFY).
-- [x] Slice 0 (planning) — standing rule + audit doc + roadmap + todo (this PR)
-- [x] Slice 87 — Sale.csv conformance: RetailSalesTax/CannabisExciseTax + 3-row header + \r\n via shared assembleCcrsFile; deleted divergent local COLUMNS/buildFile (A1/A2/A3/A6). Verified tsx, tsc 0, eslint 0, build OK.
-- [x] Slice 88 — InventoryAdjustment.csv: added missing ExternalIdentifier (12th col, ADJ-<id>) + 3-row header + \r\n via shared assembler; matched ccrs-batch-core column set; fixed self-test (A4/A5). tsx 48/48, tsc 0, eslint 0, build OK.
-- [x] Slice 89 — Pacific-time CCRS dates: ccrsDate now derives the America/Los_Angeles calendar day (pacificDayKey); Sale/Adjustment mmddyyyy delegate to it; SubmittedDate too. Late-evening sales no longer slip a day/week (B3). tsx OK, tsc 0, eslint 0, build OK.
-- [x] Slice 90 — SaleType RecreationalMedical: PURE saleTypeForOrder helper (validated enum); medical orders detected via the medical_exempt_sales table (WAC 314-55-090(2)) — NOT a nonexistent orders.medical column (verified schema); draft warning added (B1). tsx OK, tsc 0, eslint 0, build OK.
-- [x] Slice 91 — StrainType enum guardrail: PURE normalizeStrainType → Indica/Sativa/Hybrid (synonyms/ratios/dominant handled); unknown → Hybrid + flagged; buildStrainFile no longer emits NotApplicable and warns on defaulted strains (B2). tsx OK, tsc 0, eslint 0, build OK.
-- [x] Slice 92 — Product InventoryCategory/Type enum + text-length guardrails (C1/C2) — HIGH/MED
-      (grounded on 2026-02 CCRS Upload User Guide Table 2; validateProductClassification + clampText)
-- [x] ALL 11 CCRS AUDIT FINDINGS RESOLVED (Slices 87–92, PRs #195–#200)
+## STRATEGY — Bookkeeping branch (decided with Michael, Aug 2026)
+Recommendation: BUILD THE BOOKS FIRST, then tie Timberland to loans as a
+posting rule into the ledger. Reasons: (1) matching is a POSTING problem — a
+mortgage payment splits into interest expense / principal / escrow, which needs
+accounts to post to; (2) the loans are already accurate standalone; (3) avoids
+building the matcher twice.
 
-## BATCH CCRS-HARDENING-II + VENDOR (Slices 93–98)
-> Owner (verbatim): "Yes please proceed with the next 6 slices. Start with whatever you think is most logical. I trust you to use your best judgement to keep me safe."
-> Best-judgment focus: make the CCRS batch trustworthy END-TO-END (honest error severity, self-verifying dry-run, do-not-upload gate) + safe vendor drafts. Roadmap: docs/CCRS_HARDENING_II_ROADMAP.md
-> Gap found while planning: Slice-92 "ERROR —" product warnings were surfaced as mere "warning" severity — a batch-blocking mis-mapping looked harmless. Slice 93 fixes this.
-> NOTE (not lost): BATCH 2e owner items remain pending — DOH medical authorization intake (Canon PIXMA TS3522 + Scotch laminator) and the devices/equipment management page. Will surface these as the recommended NEXT batch after this round.
-- [x] Slice 93 — Honest sync-issue severity (classifyWarning; ERROR ⇒ error; no hidden blockers) — CRITICAL
-- [x] Slice 94 — E2E batch dry-run harness verifyCcrsBatch (pure, byte-correct assertions) — HIGH
-- [x] Slice 95 — "Do not upload" gate + error-first summary in README/sync report — HIGH
-- [x] Slice 96 — Sale numeric-column safety (non-negative qty/price, cents-consistent tax) — HIGH
-- [x] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
-- [x] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED
-- [x] ROUND COMPLETE — Slices 93–98 merged (PRs #201–#206). CCRS batch now trustworthy end-to-end + safe vendor drafts.
+### Verified tax context (researched Aug 2026, not guessed)
+- Apr 22-23 2026: Acting AG order rescheduled FDA-approved + STATE-LICENSED
+  MEDICAL marijuana to Schedule III. 280E no longer applies to those licensees.
+- RECREATIONAL/adult-use remains SCHEDULE I -> 280E STILL APPLIES to WA I-502
+  adult-use sales. Greenway is primarily adult-use => 280E still governs.
+- DEA hearing on broader (recreational) rescheduling ran Jun 29-Jul 15 2026;
+  post-hearing briefs due Aug 17 2026; ALJ recommendation expected LATE 2026;
+  then DEA Administrator decides. NOT yet law.
+- Treasury/IRS guidance pending; transition rule = relief applies to the full
+  taxable year containing the effective date (calendar-year => Jan 1 2026).
+- Greenway ALREADY tracks medical (WAC 314-55-090 excise-exempt) separately —
+  a real asset if dual-status apportionment guidance lands.
+=> DESIGN IMPLICATION: the GL must tag every expense line as COGS vs operating
+   AND medical vs adult-use, so 280E add-back is a REPORT, not a rebuild.
 
-## BATCH KB-CANNABINOIDS (Slice C) — one branch feat/kb-cannabinoids-and-potency, all sub-slices until done
-> Owner (verbatim): "Before we merge the last or, Will you add the kb cannabis cannabinoid compounds. Will you also walk the file tree to make sure the kb is fully connected to everything and all validated information is flowing into it. Please provide a comprehensive report for yourself to patch all the gaps you find, if any. No code edits yet. Please proceed, follow the standing rules and never guess."
-> Owner answers (verbatim): "I think it's fine to pre seed the kb. Will you pre seed it with full descriptions and explanations of what each compound is and what it does... I would like the pre seeded version with research backed factual info from reputable sources. For number two, I think we should do it now. For number three, let's do it all in one pr branch, tackling all slices until it's done. For number four, please merge the open pr and begin working on this new branch."
-> DECISIONS: (1) pre-seed 8 cannabinoids w/ FULL factual descriptions + cited sources (NO medical claims, compliance-gated); (2) YES add kb_strains.cannabinoids[]; (3) ALL in one branch/PR; (4) PR #254 merged (DONE — commit 1ea485b).
-> Compliance constraint: cannabinoid descriptions = FACTUAL pharmacology/chemistry only (intoxicating vs non-intoxicating, acidic precursor→decarboxylation). NEVER treats/helps/relieves. Routed through checkCompliance gate.
-> Authoritative 8-compound vocabulary (verified convention-core.ts + leafly/types.ts): thc, thca, cbd, cbda, cbg, cbn, cbdv, cbc. (THCV appears NOWHERE — NOT seeded.)
+### Bookkeeping build order (proposed)
+- [ ] B1: Chart of accounts + double-entry journal foundation (debits=credits
+      enforced; assets=liabilities+equity), period close/lock, audit trail
+- [ ] B2: Posting rules engine (POS sales, COGS, excise, ATM, bank txns, loans)
+- [ ] B3: Financial statements (trial balance, P&L, balance sheet, cash flow)
+- [ ] B4: Sage 50 Quantum import (rebuild his existing books) + reconciliation
+- [ ] B5: 280E/medical-vs-adult-use tagging + tax-basis reporting
+- [ ] B6: Personal vs business entity separation (owner draws, personal loans)
+- [ ] Then: payroll branch, then taxes
 
-- [x] Audit doc docs/KB_CONNECTIVITY_AUDIT.md (analysis only; 7 GAPS)
-- [x] Merge PR #254 (Slice B CCRS→KB enrichment) — main 1ea485b
-- [x] Research: cited factual facts for all 8 compounds → docs/CANNABINOID_SEED_SOURCES.md
-- [x] Migration 0083 kb_cannabinoids + kb_products.cannabinoids[] + kb_strains.cannabinoids[] (idempotent)
-- [x] Migration 0084 kb_products potency (verified lab_results.potency_json shape first)
-- [x] Code: SEED_CANNABINOIDS + SeedCannabinoid in seed.ts (8 compounds, factual desc + sources)
-- [x] Code: store.ts CRUD + seedKnowledgeBase writes kb_cannabinoids + getKbCounts/KbCounts include cannabinoids
-- [x] Code: retrieval.ts loadCannabinoids + fallback + grounding block + kb:cannabinoid tags + measured potency FACT line
-- [x] Code: health.ts cannabinoid coverage
-- [x] Code: admin /admin/knowledge-base/cannabinoids page (read-only factual cards: name/full_name/intoxication badge/chemistry acidic→decarbs_to/notes/description/sources + non-medical footer); KB landing nav card added after Terpenes; seed action reused (seedKbAction→seedKnowledgeBase already writes kb_cannabinoids via r6 + reports count)
-- [x] Code: potency inflow (GAP 5) writeback.ts gap-fills kb_products potency from linked lab_results (VERIFIED chain inventory_lots.pos_product_key→lab_result_id→lab_results total_thc_pct/total_cbd_pct/potency_json; drafts-only, never clobber, potency_source='lab_results:<id>', potency_confidence=0.99; defensive per-column presence checks so pre-0084 upsert never fails); review page shows Potency (COA) with source (listKbProducts FULL→BASE column fallback)
-- [x] Verify tsc 0 → eslint 0 → next build OK (all admin routes incl. /admin/knowledge-base/cannabinoids present) → rm -rf .next; update audit checkboxes
-- [x] Commit f39bbb3 → push feat/kb-cannabinoids-and-potency → PR #255 opened HELD for owner review (manual migrations 0083 + 0084 must be applied first; owner then runs Seed + merges); reminded owner to ROTATE service_role key
-
-## GAP 6 (Slice 6) — kb_strains drafts/provenance parity — same branch feat/kb-cannabinoids-and-potency
-> Owner (verbatim): "Yes please complete slice 6, then I'll inspect. Is there anything else that should be in the kb that you can think of? You are the professional and expert, I rely and appreciate your opinion and input. Complete slice 6 then let's talk about any remaining gaps. Please proceed follow the standing rules and never guess."
-> VERIFIED before build: kb_strains (0019) has `active` but NO `status`; writeback.ts (~248) union-merges sensory arrays onto an EXISTING curated strain in place (never creates/flips), downstream of a human publish/accept gate; retrieval loadStrains() reads WHERE active=true. Precedent = migration 0082 which brought kb_brands to the SAME parity (status default 'published' so curated rows stay authoritative; machine writers set 'draft'; source/confidence/sources provenance; backfill source='manual').
-> DESIGN (mirror 0082 exactly, non-destructive): (1) Migration 0085 adds kb_strains status default 'published' + status check + source/confidence/sources + indexes + backfill source='manual'; (2) writeback tags every strain union with provenance (source='enrichment', confidence, sources) — auditable machine touch; (3) retrieval loadStrains filters status<>'archived' AND active; strain reads/writes stay gap-fill only (never clobber curated).
-
-- [x] Migration 0085 kb_strains status+provenance parity (idempotent, mirrors 0082 exactly; status default 'published' + status check + source scalar; backfill source='manual'; idx_kb_strains_status)
-- [x] Code: writeback strain union stamps provenance (source only when empty → never overwrite curated 'manual'/'seed'; sources[] UNION; status NEVER touched — only enriches existing published rows); defensive tableUsable('kb_strains','source') gate
-- [x] Code: retrieval loadStrains filters .neq('status','archived') with defensive fallback to no-filter when column unknown (pre-0085)
-- [x] Code: store.ts KbStrainFull + listKbStrainsFull FULL→BASE fallback add status/source; StrainEditor Status column shows Draft/Archived pill + provenance source (no-op pre-0085); health.ts strainDrafts count. (No standalone review queue built: writeback only enriches EXISTING published rows — it never creates strain drafts today — so a promote-queue would be speculative; parity + auditability + a Draft signal cover GAP 6.)
-- [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next; audit GAP 6 updated
-- [x] Commit → push (same branch, folds into PR #255); migration 0085 is MANUAL
-
-## KB HARDENING v2 (post-#255) — branch feat/kb-hardening-v2
-> Owner (verbatim, msg): "please change the labels, 'intoxicating' and 'non intoxicating' to be 'Psychoactive' and 'non psychoactive'. then you can merge the open pr. then open a new branch so we can continue hardening the kb. i want to add all of your recommendations to the kb. start with the effects/ experience. please do quality research on this, i want it to be factual, but i also want it to be read by a cannabis user, which means it should sound and flow like how we would expect it to. it needs to have personality and vibe with our culture. then move on to number 2, i want you to go back to the internet and deep research washington state products specifically so you can add quality and relevant consumption methods and product format facts. then move on to number 3. i want to add all the compliance related stuff to the kb and have it use it in a useful helpful way to keep use safe. for number 4, i like this. i am not exactly sure what this means, but i like the sound of it. lets make it its own slice after the other 4 slices are finished. finally do the 5th item on the list. the terpenes and cross map enrichment. please proceed, follow all the standing rules, and never guess. please do what ever a professional an expert would do. do not cut corners, i want it done the right way, even if it is harder."
-> Owner (verbatim, follow-up): "label cbd as non psychoactive please. its how we all in the industry label it and describe it when selling cbd type products. the other one that is mildly psychoactive, please leave as is, i think that is fine. please continue."
-
-- [x] TASK A — Relabel intoxicating/non-intoxicating -> psychoactive/non-psychoactive (CBN stays mildly-psychoactive). Values only; column name 'intoxication' unchanged (no destructive migration). WA-mandated warning text + sourced mechanism prose preserved. Labeling note added. Commit b0f69de pushed. tsc/eslint/build clean.
-- [x] TASK B — Merge PR #255 (squash, --admin, delete branch). Merged ac43c5c; main synced. (Migrations 0083/0084/0085 remain MANUAL for owner.)
-- [ ] TASK C — Open branch feat/kb-hardening-v2; build 5 recommendations IN ORDER:
-
-### Slice 1 — Effects/experience vocabulary (culture voice, compliance-gated)  [SHIPPED]
-> Owner voice brief (verbatim): "we are a professional group of experienced cannabis users who cater to all ages over 21. So the language and tone should reflect that of a sophisticated pot head. So yes, relaxed and knowledgeable, friendly, with some fun creative terms and such. I want it to be enjoyable and funny in a way, but professional still ... I want it to be fun and professional." + "right high quality curated set ... quality over quantity."
-> KEY FINDING (verified, not guessed): effects[] free-text arrays ALREADY exist on kb_products/kb_strains/kb_product_categories (migration 0071) and surface as a bare list. The code ALSO has an authoritative ALLOWED_EFFECTS allow-list + checkEffects gate (src/lib/ai/compliance.ts). So Slice 1 = a CONTROLLED VOCABULARY (kb_effects) those arrays resolve to; every seeded slug is a verbatim ALLOWED_EFFECTS member so vocab + gate can never disagree.
-- [x] Research: Leafly effect taxonomy + Amsterdam Genetics body/head-high article; grounded, non-medical (docs/KB_EFFECTS_SEED_SOURCES.md). Verified all 16 slugs ∈ ALLOWED_EFFECTS.
-- [x] Migration 0086_kb_effects.sql: kb_effects (slug/name/category/definition/house_note/aliases/sources/confidence) + drafts/provenance parity (status default 'published' + status check; source; backfill source='manual'); indexes; RLS is_staff; updated_at trigger. Idempotent, MANUAL apply.
-- [x] Seed: SeedEffect type + SEED_EFFECTS (16 curated effects across 4 families calming/uplifting/energizing/character). Factual non-medical definition + fun-but-professional house_note + neutral aliases. All ∈ ALLOWED_EFFECTS.
-- [x] Wire store.ts: effectRows in seedKnowledgeBase (r7, degrades pre-0086) + KbCounts.effects + inserted.effects + KbEffectRow/listKbEffectsFull/getKbEffectBySlug/UpsertKbEffectInput/upsertKbEffect/setEffectActive.
-- [x] Wire retrieval.ts: loadEffects() (published-only, FULL→no-status fallback→seed) + buildEffectIndex (slug/name/alias→canonical) + groundEffects() emits "Effect \"X\" (experience only, not medical): <definition> House voice: <house_note>" with kb:effect:<slug> source tag; called on product effects[].
-- [x] Wire health.ts: effectCoverage {present,expected} from counts.effects vs SEED_EFFECTS.length.
-- [x] Admin: read-only /admin/knowledge-base/effects card page (CategoryBadge + definition + house voice + aliases + sources + status/source provenance + non-medical footer); KB-landing nav card added after Cannabinoids.
-- [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next.
-- [x] Commit → push feat/kb-hardening-v2. Migration 0086 is MANUAL (owner applies then re-runs Seed to load the 16 effects).
-
-### Slice 2 — Consumption methods / product formats (DEEP WA-specific research)  [SHIPPED]
-> KEY FINDING (verified, not guessed): kb_category_terms + kb_product_categories existed but carried NO WA-market facts (how it's consumed, potency band). Slice 2 = new controlled vocabulary kb_product_formats (14 forms: inhaled/ingested/topical) with factual definition + consumption + WA-VERIFIED potency band + house voice. WA facts from WSLCB "Types of Products" (flower 15-25%+, kief/hash 30-60%, shatter/wax/dabs 60-90%), WAC 314-55-095 edible cap (10mg/serving, 100mg/pkg), RCW possession limits. All 14 formats pass checkCompliance with 0 blocking / 0 warnings (copy tightened: cured->well-aged, dropped "hard candy", "10mg per serving"->spelled in words, "great for"/"best"/"top-shelf" rephrased).
-- [x] Deep WA-specific research: WSLCB product taxonomy + potency ranges + edible cap + limits (VERIFIED, sourced in docs/KB_PRODUCT_FORMATS_SEED_SOURCES.md)
-- [x] Migration 0087_kb_product_formats.sql (idempotent, MANUAL, drafts/provenance parity, RLS is_staff, trigger, indexes)
-- [x] seed.ts SeedProductFormat + SEED_PRODUCT_FORMATS (14)
-- [x] store.ts counts + seed upsert (r8, degrades pre-0087) + CRUD (list/get/upsert/setActive)
-- [x] retrieval.ts loadProductFormats + buildFormatIndex + format grounding (kb:format:<slug>)
-- [x] health.ts productFormatCoverage
-- [x] admin read-only page /admin/knowledge-base/formats + KB landing nav card
-- [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit 2cfd113, pushed to feat/kb-hardening-v2.
-
-### Slice 3 — Compliance rules reference in KB (used helpfully to keep customers safe)  [SHIPPED]
-> KEY FINDING (verified, not guessed): the repo ALREADY enforces WA single-transaction limits operationally (src/lib/compliance/sales-limits-core.ts RECREATIONAL_LIMITS/MEDICAL_LIMITS, checked at checkout; /admin/compliance/sales-limits). So Slice 3 is NOT a second enforcement path — it's a curated REFERENCE/education layer (kb_compliance_rules, 8 rules). The purchase/possession limit NUMBERS are DERIVED from RECREATIONAL_LIMITS at seed time so KB can never drift from enforcement. WA facts from WSLCB Using-and-Having, WAC 314-55-095, RCW 69.50.360/.4013/.445. All 8 rules pass checkCompliance 0 blocking/0 warn (copy tightened: "everybody safe"->"above board", child-resistant/children->resealable/anyone underage, "treat it like"->"store it like", mg spelled in words).
-- [x] Verified WA safety/purchase/use facts, sourced in docs/KB_COMPLIANCE_RULES_SEED_SOURCES.md
-- [x] Migration 0088_kb_compliance_rules.sql (idempotent, MANUAL, severity+status checks, RLS is_staff, trigger, indexes)
-- [x] seed.ts SeedComplianceRule + SEED_COMPLIANCE_RULES (8), limits derived from RECREATIONAL_LIMITS
-- [x] store.ts counts + seed upsert (r9) + CRUD (list/get/upsert/setActive)
-- [x] retrieval.ts loadComplianceRules + surface edibles-safety rule for ingested formats (kb:compliance:<slug>)
-- [x] health.ts complianceRuleCoverage
-- [x] admin read-only page /admin/knowledge-base/rules + KB landing nav card
-- [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit cc7f7d2, pushed.
-
-### Slice 5 — Terpene -> aroma cross-map enrichment  [SHIPPED]
-> KEY FINDING (verified, not guessed): kb_terpenes (migration 0019) already had aroma_notes[]/flavor_notes[]/also_found_in for 22 terpenes, but retrieval only fired terpene grounding for terpenes the STRAIN listed, emitted bare words, and had NO reverse map (aroma word -> terpene). Slice 5 enriches this SENSORY-ONLY (no effects/entourage/medical — the rule since 0019 is preserved).
-- [x] Migration 0089_kb_terpene_aroma_crossmap.sql — idempotent, NON-DESTRUCTIVE single column add `aroma_families text[] not null default '{}'` + comment (MANUAL apply)
-- [x] seed.ts: `aroma_families?: string[]` on SeedTerpene; all 22 SEED_TERPENES enriched with normalized families (citrus/pine/earthy/floral/spicy/minty/herbal/woody/sweet/hoppy) derived from each terpene's own notes
-- [x] store.ts: terpeneRows upserts aroma_families; DEGRADE-SAFE retry (strips aroma_families + warns) if column absent (pre-0089)
-- [x] retrieval.ts: enriched loadTerpenes() with base-select fallback; WIDENED trigger to include kbProduct.row.terpenes; forward lines add aroma family + botanical hook ("same terpene you'd meet in lemon rind"); REVERSE aroma->terpene cross-map from strain/product aroma/flavor words (capped 3/family, prefers un-surfaced terpenes; every line labelled "describes smell, makes no effect claim")
-- [x] docs/KB_TERPENE_AROMA_CROSSMAP_SOURCES.md (cross-map table + rationale + sources)
-- [x] Verify: tsc 0 · eslint 0 (0 warnings) · next build OK · .next removed (disk 90%, held). Commit f073400, pushed to feat/kb-hardening-v2.
-- [x] Roadmap + todo marked SHIPPED; 0089 added to owner MANUAL steps.
-
-> ✅ STOP POINT CLEARED: owner briefed on Slice 4 and gave direction (facts + FAQ + owner-editable). Slice 4 built below.
-
-### Slice 4 — Store/brand voice & FAQ pack (LAST, own slice)  [SHIPPED]
-> OWNER-CONFIRMED FACTS (verbatim, do NOT guess): Hours 8am–11pm every day. Address: 4851 Geiger Rd SE, Port Orchard, WA 98367. Phone: 360-443-6988. Payment: CASH ONLY; on-site ATM $2.50 fee. Delivery: NONE (illegal in WA). Price-match → mirrored from PriceMatchContent.tsx. Loyalty earn rate → LIVE from loyalty_config via getConfig() (NOT hardcoded). Returns → from src/content/faq.ts (WAC 314-55-079, 15 days). Owner can ADD facts/FAQs manually. Voice preserved.
-- [x] RESEARCH (never guessed): loyalty earn rate = loyalty_config (getConfig, owner-editable, live-composed); price-match terms = PriceMatchContent.tsx (8 terms, Port Orchard); returns + all Q&A = src/content/faq.ts; hours/address/phone owner-confirmed. FLAGGED site typo: static FAQ price-match answer says "Uncle Ike's"/"Seattle" (copy-paste from another shop) — seed uses correct Greenway/Port Orchard, owner should fix site copy.
-- [x] Migration 0090_kb_store_voice_faq.sql: kb_store_facts (upsert on key) + kb_faqs (upsert on slug). Idempotent, non-destructive, RLS is_staff, trigger, status checks, indexes. MANUAL apply.
-- [x] seed.ts: SeedStoreFact + SeedFaq types + SEED_STORE_FACTS (6) + SEED_FAQS (17). Compliance 0 blocking (5 non-blocking price/loyalty "heads-up" warns inherent to topic — documented).
-- [x] store.ts: counts (storeFacts, faqs) + seed upserts (r10/r11, degrade pre-0090) + full CRUD both (listFull/listActive/get/upsert/setActive).
-- [x] retrieval.ts: NEW store-wide buildStoreContext() (distinct from per-SKU buildGroundedFacts) — loads facts+FAQs (DB→seed), stitches LIVE loyalty rate onto loyalty FAQ, kb:fact:<key>/kb:faq:<slug> provenance. For future concierge (Slice 79).
-- [x] health.ts: storeFactCoverage + faqCoverage.
-- [x] admin: /admin/knowledge-base/about (facts add/edit/hide) + /admin/knowledge-base/faqs (add/edit/hide) + 2 KB landing nav cards. actions.ts: 4 audited server actions.
-- [x] docs/KB_STORE_VOICE_FAQ_SOURCES.md (sources + flagged site typo).
-- [x] Verify: tsc 0 · eslint 0 · next build OK (both routes present) · .next removed · compliance 0 blocking.
-- [x] MERGE whole feat/kb-hardening-v2 branch (PR → squash) so owner can move on — DONE via PR #256, squash-merged to main (merge commit 721c956), branch deleted.
+## Owner outstanding
+- Provide Wells Fargo loan details when found.
