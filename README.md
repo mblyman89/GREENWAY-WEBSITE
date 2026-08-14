@@ -42,6 +42,7 @@ The current development preview uses a smaller sampled POS menu dataset so the s
 | Document | What it is |
 |---|---|
 | [**`SAGE_50_WHAT_TO_SEND_ME.md`**](./SAGE_50_WHAT_TO_SEND_ME.md) | **Owner checklist — the 7 files to export out of Sage 50, with the exact menu path for each.** No rush; gathered while the app is battle-tested. |
+| [**`IRS_MISSING_RECORDS_AND_SAGE_SEPARATION.md`**](./IRS_MISSING_RECORDS_AND_SAGE_SEPARATION.md) | **How the IRS treats missing records (Cohan, and the *Alterman* dispensary case), plus the plan to split the four books out of one Sage chart.** Read before the cut-over. |
 | [`BATTLE_PLAN.md`](./BATTLE_PLAN.md) | The full-system battle plan — how every branch gets tested to destruction, in six phases. |
 | [`BATTLE_PLAN_STAGING_SETUP.md`](./BATTLE_PLAN_STAGING_SETUP.md) | How to build the staging site the battle plan runs against. Read before the battle plan. |
 | [`docs/security/IS-ADMIN-AUDIT-REPORT.md`](./docs/security/IS-ADMIN-AUDIT-REPORT.md) | Security audit of the admin access-control model, with findings and a remediation roadmap. |
