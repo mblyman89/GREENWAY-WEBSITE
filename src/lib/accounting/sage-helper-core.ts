@@ -356,13 +356,88 @@ export function validateGlMappingAgainstCoa(
 // analyzers never assume a layout they can't see.
 // ---------------------------------------------------------------------------
 
+/**
+ * Parse a money cell to INTEGER CENTS from its DIGITS, never through a float.
+ *
+ * Standing rule 13e: "FLOAT IS FORBIDDEN in money paths. Parse digits as text;
+ * divide with BigInt." The trial-balance tie-out decides whether Michael's
+ * beginning balances are trustworthy, so it is a money path in the strictest
+ * sense and gets the strictest treatment.
+ *
+ * Handles: $ and thousands separators, accounting negatives "(1.00)", a
+ * leading +/- sign, bare ".50", and any number of decimal places (extra places
+ * are truncated toward zero, never rounded through a double).
+ *
+ * Returns null when the cell is not a number, so a caller can tell "absent"
+ * from "zero" — the same contract parseNumericCell already offered.
+ */
+export function parseCentsCell(v: string): bigint | null {
+  let t = v.trim().replace(/[$,\s]/g, "");
+  if (t === "") return null;
+
+  // Accounting negatives: (1.00)
+  let neg = false;
+  if (/^\(.*\)$/.test(t)) {
+    neg = true;
+    t = t.slice(1, -1);
+  }
+  // Explicit sign
+  if (t.startsWith("-")) {
+    neg = !neg;
+    t = t.slice(1);
+  } else if (t.startsWith("+")) {
+    t = t.slice(1);
+  }
+
+  // Digits only, with at most one decimal point. Reject anything else so a
+  // stray word can never be silently read as 0.
+  if (!/^\d*\.?\d*$/.test(t) || t === "" || t === ".") return null;
+
+  const dot = t.indexOf(".");
+  const whole = dot < 0 ? t : t.slice(0, dot);
+  const frac = dot < 0 ? "" : t.slice(dot + 1);
+
+  // Pad/truncate to exactly 2 decimal places WITHOUT arithmetic.
+  const cents2 = (frac + "00").slice(0, 2);
+  const digits = (whole === "" ? "0" : whole) + cents2;
+
+  // Defence in depth: the regex above should already guarantee `digits` is all
+  // digits, but BigInt() THROWS on bad input rather than returning NaN. A
+  // malformed cell in an uploaded Sage export must never crash the upload, so
+  // this returns null (= "not a number") instead of propagating.
+  let magnitude: bigint;
+  try {
+    magnitude = BigInt(digits);
+  } catch {
+    return null;
+  }
+  return neg ? -magnitude : magnitude;
+}
+
+/** Render integer cents as a decimal dollar string, without float division. */
+export function centsToDollarString(cents: bigint): string {
+  const neg = cents < BigInt("0");
+  const abs = neg ? -cents : cents;
+  const s = abs.toString().padStart(3, "0");
+  const whole = s.slice(0, -2);
+  const frac = s.slice(-2);
+  // Thousands separators, applied to the digit string.
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${neg ? "-" : ""}${grouped}.${frac}`;
+}
+
 export type TrialBalanceParse = {
   ok: boolean;
   accountCount: number;
-  totalDebits: number;
-  totalCredits: number;
-  /** debits − credits, rounded to cents. 0 means the TB ties out. */
-  difference: number;
+  /**
+   * Totals in INTEGER CENTS (rule 13e). These are the authoritative values the
+   * tie-out verdict is computed from. `bigint` so a large trial balance can
+   * never lose a cent to floating-point accumulation.
+   */
+  totalDebitsCents: bigint;
+  totalCreditsCents: bigint;
+  /** debits − credits in CENTS. Exactly BigInt("0") means the TB ties out. */
+  differenceCents: bigint;
   balanced: boolean;
   warnings: string[];
 };
@@ -376,7 +451,8 @@ export type TrialBalanceParse = {
 export function parseTrialBalance(text: string, maxRows = 100_000): TrialBalanceParse {
   const warnings: string[] = [];
   const fail = (w: string): TrialBalanceParse => ({
-    ok: false, accountCount: 0, totalDebits: 0, totalCredits: 0, difference: 0, balanced: false, warnings: [...warnings, w],
+    ok: false, accountCount: 0, totalDebitsCents: BigInt("0"), totalCreditsCents: BigInt("0"),
+    differenceCents: BigInt("0"), balanced: false, warnings: [...warnings, w],
   });
   const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return fail("Empty file.");
@@ -401,25 +477,33 @@ export function parseTrialBalance(text: string, maxRows = 100_000): TrialBalance
   }
 
   let accountCount = 0;
-  let totalDebits = 0;
-  let totalCredits = 0;
+  // Rule 13e: accumulate in INTEGER CENTS. A float sum over a large trial
+  // balance can drift far enough to report "balanced" when it is not; this
+  // cannot, at any size, because BigInt addition is exact.
+  let totalDebitsCents = BigInt("0");
+  let totalCreditsCents = BigInt("0");
   for (const line of lines.slice(headerIdx + 1, headerIdx + 1 + maxRows)) {
     const cells = splitCsvLine(line);
     const id = (cells[iId] ?? "").trim();
     if (!id) continue; // Total / blank / footer rows carry no Account ID.
-    const d = parseNumericCell(cells[iDebit] ?? "") ?? 0;
-    const c = parseNumericCell(cells[iCredit] ?? "") ?? 0;
+    const d = parseCentsCell(cells[iDebit] ?? "") ?? BigInt("0");
+    const c = parseCentsCell(cells[iCredit] ?? "") ?? BigInt("0");
     accountCount += 1;
-    totalDebits += d;
-    totalCredits += c;
+    totalDebitsCents += d;
+    totalCreditsCents += c;
   }
   if (accountCount === 0) return fail("Header found but no account rows with an Account ID.");
 
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-  totalDebits = round2(totalDebits);
-  totalCredits = round2(totalCredits);
-  const difference = round2(totalDebits - totalCredits);
-  return { ok: true, accountCount, totalDebits, totalCredits, difference, balanced: difference === 0, warnings };
+  const differenceCents = totalDebitsCents - totalCreditsCents;
+  return {
+    ok: true,
+    accountCount,
+    totalDebitsCents,
+    totalCreditsCents,
+    differenceCents,
+    balanced: differenceCents === BigInt("0"),
+    warnings,
+  };
 }
 
 export type AgedPayablesParse = {
@@ -501,12 +585,13 @@ export function analyzeUploadByKind(kind: string, text: string): string[] | null
   if (kind === "trial_balance") {
     const tb = parseTrialBalance(text);
     if (!tb.ok) return [`Trial balance: ${tb.warnings.join(" ")}`];
-    const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Rule 13e: render from integer cents; never round-trip money through a float.
+    const money = centsToDollarString;
     const lines = [
-      `Trial balance: ${tb.accountCount} accounts · debits ${money(tb.totalDebits)} · credits ${money(tb.totalCredits)}.`,
+      `Trial balance: ${tb.accountCount} accounts · debits ${money(tb.totalDebitsCents)} · credits ${money(tb.totalCreditsCents)}.`,
       tb.balanced
         ? "Tie-out PASSED — total debits equal total credits. Ready to key beginning balances (Phase 4)."
-        : `Tie-out FAILED — debits minus credits = ${money(tb.difference)}. Resolve this in the old company BEFORE keying beginning balances, or Sage will park the difference in Beginning Balance Equity.`,
+        : `Tie-out FAILED — debits minus credits = ${money(tb.differenceCents)}. Resolve this in the old company BEFORE keying beginning balances, or Sage will park the difference in Beginning Balance Equity.`,
       ...tb.warnings,
     ];
     return lines;
@@ -648,8 +733,12 @@ export function __runSageHelperCoreTests(): void {
     if (!cond) throw new Error("FAIL: " + msg);
     pass += 1;
   };
-  const eq = (a: unknown, b: unknown, msg: string) =>
-    ok(JSON.stringify(a) === JSON.stringify(b), `${msg} (got ${JSON.stringify(a)})`);
+  // BigInt-aware serializer: money totals are bigint (rule 13e) and
+  // JSON.stringify throws on them. Tagged with a suffix so BigInt("1") never compares
+  // equal to the string "1" — the fix must not loosen the comparison.
+  const show = (v: unknown): string =>
+    JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? `${val}n#bigint` : val)) ?? String(v);
+  const eq = (a: unknown, b: unknown, msg: string) => ok(show(a) === show(b), `${msg} (got ${show(a)})`);
 
   // extension guards
   eq(fileExtension("Report.CSV"), ".csv", "ext lowercased");
@@ -755,12 +844,111 @@ export function __runSageHelperCoreTests(): void {
   const tb = parseTrialBalance(tbCsv);
   ok(tb.ok, "tb parsed");
   eq(tb.accountCount, 3, "tb 3 accounts (Total row skipped)");
-  eq(tb.totalDebits, 1500, "tb debits 1500");
-  eq(tb.totalCredits, 1500, "tb credits 1500");
-  ok(tb.balanced && tb.difference === 0, "tb balanced");
+  eq(tb.totalDebitsCents, BigInt("150000"), "tb debits 1500.00 = 150000 cents");
+  eq(tb.totalCreditsCents, BigInt("150000"), "tb credits 1500.00 = 150000 cents");
+  ok(tb.balanced && tb.differenceCents === BigInt("0"), "tb balanced");
   const tbBad = parseTrialBalance(tbCsv.replace("500.00\n,Total", "400.00\n,Total"));
-  ok(tbBad.ok && !tbBad.balanced && tbBad.difference === 100, "tb imbalance detected (+100)");
+  ok(tbBad.ok && !tbBad.balanced && tbBad.differenceCents === BigInt("10000"), "tb imbalance detected (+100.00)");
   ok(!parseTrialBalance("Nope,Nada\n1,2\n").ok, "tb rejects non-TB csv");
+
+  // -------------------------------------------------------------------------
+  // RULE 13e — money is parsed from DIGITS into integer cents, never a float.
+  // Rule 15a: every positive case gets its negative twin.
+  // -------------------------------------------------------------------------
+  eq(parseCentsCell("1500.00"), BigInt("150000"), "cents: plain");
+  eq(parseCentsCell("$1,234.56"), BigInt("123456"), "cents: currency + separators");
+  eq(parseCentsCell("(50.00)"), -BigInt("5000"), "cents: accounting negative");
+  eq(parseCentsCell("-50.00"), -BigInt("5000"), "cents: explicit minus");
+  eq(parseCentsCell("(-50.00)"), BigInt("5000"), "cents: double negative is positive");
+  eq(parseCentsCell("+7.25"), BigInt("725"), "cents: explicit plus");
+  eq(parseCentsCell(".50"), BigInt("50"), "cents: bare decimal");
+  eq(parseCentsCell("7"), BigInt("700"), "cents: whole dollars");
+  eq(parseCentsCell("7.5"), BigInt("750"), "cents: one decimal place pads");
+  eq(parseCentsCell("0.00"), BigInt("0"), "cents: zero is zero, not null");
+  eq(parseCentsCell("1.999"), BigInt("199"), "cents: extra places TRUNCATE, never round via float");
+  // Rule 15a negative controls — a bad cell must be null, never silently 0.
+  eq(parseCentsCell(""), null, "cents: empty is null");
+  eq(parseCentsCell("   "), null, "cents: whitespace is null");
+  eq(parseCentsCell("abc"), null, "cents: text is null");
+  eq(parseCentsCell("."), null, "cents: lone dot is null");
+  eq(parseCentsCell("1.2.3"), null, "cents: two dots rejected");
+  eq(parseCentsCell("12x.00"), null, "cents: embedded letter rejected");
+  eq(parseCentsCell("1e5"), null, "cents: exponent notation rejected, not read as 100000");
+  // BigInt() accepts JS numeric-literal prefixes. Without the shape regex these
+  // become INVENTED MONEY: "0x10" -> $40.96, "0b101" -> $0.20, "0o17" -> $9.60,
+  // "--5" -> $5.00, "+-3" -> -$3.00. Found by sweeping a hostile corpus and
+  // diffing with/without the regex — not by imagination. Rule 3: never let a
+  // machine silently invent a value.
+  eq(parseCentsCell("0x10"), null, "cents: hex literal rejected (would be $40.96)");
+  eq(parseCentsCell("0b101"), null, "cents: binary literal rejected (would be $0.20)");
+  eq(parseCentsCell("0o17"), null, "cents: octal literal rejected (would be $9.60)");
+  eq(parseCentsCell("--5"), null, "cents: double minus rejected (would be $5.00)");
+  eq(parseCentsCell("+-3"), null, "cents: mixed signs rejected (would be -$3.00)");
+  // These specifically pin the SHAPE regex. The try/catch around BigInt() is a
+  // safety net, not the guard — without the regex a junk cell reaches BigInt
+  // and (before the net existed) crashed the whole upload. Asserting the
+  // TOTALS, not just the null, proves junk is excluded rather than read as 0.
+  {
+    const junk =
+      "Account ID,Account Description,Debit Amt,Credit Amt\n" +
+      "10000,GOOD,100.00,\n" +
+      "10001,JUNK,abc,\n" +          // must NOT become 0 silently *or* crash
+      "10002,JUNK2,12x.00,\n" +
+      "10003,JUNK3,1.2.3,\n" +
+      "30000,CREDIT,,100.00\n";
+    const j = parseTrialBalance(junk);
+    ok(j.ok, "junk tb still parses (never throws)");
+    eq(j.totalDebitsCents, BigInt("10000"), "junk cells contribute NOTHING to the debit total");
+    eq(j.totalCreditsCents, BigInt("10000"), "credits unaffected by junk debits");
+    ok(j.balanced, "junk tb ties out on the real rows only");
+  }
+
+  // Renderer round-trips exactly, including the sign and the grouping.
+  eq(centsToDollarString(BigInt("150000")), "1,500.00", "render: grouped");
+  eq(centsToDollarString(BigInt("0")), "0.00", "render: zero");
+  eq(centsToDollarString(BigInt("5")), "0.05", "render: nickel pads");
+  eq(centsToDollarString(-BigInt("5000")), "-50.00", "render: negative");
+  eq(centsToDollarString(BigInt("462469731")), "4,624,697.31", "render: the real $4.62M plug");
+
+  // THE DEFECT THIS REPLACED (rule 19 — the owner's real failures are the corpus).
+  // A trial balance whose float sum drifts far enough that round2() could no
+  // longer hide it used to report "balanced" when it was off. Integer cents
+  // cannot: an off-by-one-cent TB is caught at ANY magnitude.
+  {
+    const hdr = "Account ID,Account Description,Debit Amt,Credit Amt\n";
+    // 800 accounts near 2^53 CENTS — magnitudes proven (by execution) to make
+    // float accumulation drift by 2-3 cents, which is what used to hide an
+    // imbalance. Integer cents must still find a ONE-CENT gap here.
+    let rows = "";
+    let sum = BigInt("0");
+    for (let i = 0; i < 800; i += 1) {
+      const cents = BigInt("9007199254740") - BigInt(i) * BigInt("3");
+      sum += cents;
+      rows += `${10000 + i},ACCT ${i},"${centsToDollarString(cents)}",\n`;
+    }
+    // credit side deliberately ONE CENT short.
+    const short = `90000,PLUG,,"${centsToDollarString(sum - BigInt("1"))}"\n`;
+    const huge = parseTrialBalance(hdr + rows + short);
+    ok(huge.ok, "huge tb parsed");
+    eq(huge.accountCount, 801, "huge tb counted every account row");
+    eq(huge.differenceCents, BigInt("1"), "huge tb: the missing CENT is found at $8e11 scale");
+    ok(!huge.balanced, "huge tb correctly refuses to tie out");
+  }
+  // Same shape, but genuinely balanced -> must PASS. (Rule 15b: prove the check
+  // can say yes, so the assertion above is not just a tautology.)
+  {
+    const hdr = "Account ID,Account Description,Debit Amt,Credit Amt\n";
+    let rows = "";
+    let sum = BigInt("0");
+    for (let i = 0; i < 800; i += 1) {
+      const cents = BigInt("9007199254740") - BigInt(i) * BigInt("3");
+      sum += cents;
+      rows += `${10000 + i},ACCT ${i},"${centsToDollarString(cents)}",\n`;
+    }
+    const exact = `90000,PLUG,,"${centsToDollarString(sum)}"\n`;
+    const good = parseTrialBalance(hdr + rows + exact);
+    ok(good.ok && good.balanced && good.differenceCents === BigInt("0"), "huge tb ties out when it truly balances");
+  }
 
   // aged payables parsing
   const apCsv =
