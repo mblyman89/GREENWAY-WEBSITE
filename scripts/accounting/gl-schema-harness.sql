@@ -60,13 +60,26 @@ $$;
 
 -- --- role helper stand-ins ---------------------------------------------------
 -- In production these read the staff table / JWT claims. Locally they read a
--- session setting, defaulting to TRUE so the migration's own seeding works.
+-- session setting.
+--
+-- THE DEFAULT IS **FALSE**, AND THAT MATTERS. It used to default to TRUE "so the
+-- migration's own seeding works", and that one convenience hid a real defect:
+-- 0175 called its own admin-guarded gl_open_fiscal_year() from a DO block, which
+-- passed here (harness said admin=true) and then FAILED in Michael's Supabase SQL
+-- editor with GL_FORBIDDEN, because a hand-applied migration has no logged-in
+-- user and auth.uid() is null.
+--
+-- FALSE is the honest default: it is what the SQL editor actually looks like. A
+-- migration that needs to be admin to apply is a migration that will fail when
+-- it is applied. Tests that need admin must ask for it explicitly via
+-- set_config('harness.is_admin','true',...) -- which is exactly what the real
+-- app does by having a logged-in owner.
 create or replace function public.is_admin()
 returns boolean
 language sql
 stable
 as $$
-  select coalesce(nullif(current_setting('harness.is_admin', true), '')::boolean, true);
+  select coalesce(nullif(current_setting('harness.is_admin', true), '')::boolean, false);
 $$;
 
 create or replace function public.is_staff()

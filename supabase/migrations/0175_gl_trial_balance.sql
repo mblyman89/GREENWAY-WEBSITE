@@ -553,10 +553,24 @@ grant execute on function public.gl_open_fiscal_year(integer) to authenticated;
 -- is exactly what GL_NO_PERIOD does well. Five years is enough runway that
 -- nobody is surprised on a holiday, and short enough that a wrong year is
 -- still caught. Extending it is one call: select gl_open_fiscal_year(2031);
-do $$
-declare y integer;
-begin
-  foreach y in array array[2026, 2027, 2028, 2029, 2030] loop
-    perform public.gl_open_fiscal_year(y);
-  end loop;
-end $$;
+--
+-- WHY THIS IS A PLAIN INSERT AND NOT `perform gl_open_fiscal_year(y)`:
+-- migrations are applied BY HAND in the Supabase SQL editor, where there is no
+-- logged-in end user. auth.uid() is null there, so is_admin() is false, and the
+-- function's own guard would (correctly) refuse with GL_FORBIDDEN. The guard is
+-- not the bug -- calling a user-facing, permission-checked function from
+-- migration context was. Seeding data is what a migration is for, so the seed
+-- is done directly here and the runtime guard stays exactly as strict for every
+-- real caller.
+--
+-- Still idempotent: ON CONFLICT DO NOTHING, same as the function it mirrors.
+insert into public.gl_periods (entity_id, fiscal_year, period_no, start_date, end_date)
+select e.id,
+       y.n,
+       m.n,
+       make_date(y.n, m.n, 1),
+       (make_date(y.n, m.n, 1) + interval '1 month - 1 day')::date
+from public.gl_entities e
+cross join unnest(array[2026, 2027, 2028, 2029, 2030]) as y(n)
+cross join generate_series(1, 12) as m(n)
+on conflict (entity_id, fiscal_year, period_no) do nothing;

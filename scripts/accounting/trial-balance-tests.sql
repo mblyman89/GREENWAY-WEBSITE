@@ -18,6 +18,14 @@ set search_path = public;
 
 select set_config('harness.user_id', (select id::text from auth.users limit 1), false);
 
+-- Act as an ADMIN by default. This used to be implicit -- the harness defaulted
+-- is_admin() to true -- and that silence hid the 0175 GL_FORBIDDEN defect, which
+-- only surfaced when Michael pasted the migration into the real SQL editor. The
+-- harness now defaults to FALSE (an honest picture of the SQL editor), so any
+-- suite that needs admin has to SAY SO. The tests below that check refusals flip
+-- this to 'false' deliberately and flip it back.
+select set_config('harness.is_admin', 'true', false);
+
 create or replace function pg_temp.ok(p_cond boolean, p_label text)
 returns void language plpgsql as $$
 begin

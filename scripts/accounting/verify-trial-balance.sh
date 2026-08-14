@@ -28,6 +28,7 @@ POST_MIGRATION="$REPO_ROOT/supabase/migrations/0174_gl_posting_service.sql"
 MIGRATION="$REPO_ROOT/supabase/migrations/0175_gl_trial_balance.sql"
 HARNESS="$REPO_ROOT/scripts/accounting/gl-schema-harness.sql"
 TESTS="${TESTS_OVERRIDE:-$REPO_ROOT/scripts/accounting/trial-balance-tests.sql}"
+EDITOR_TESTS="$REPO_ROOT/scripts/accounting/sql-editor-context-tests.sql"
 
 PGBIN="${PGBIN:-/usr/lib/postgresql/15/bin}"
 PGPORT="${PGPORT:-5437}"
@@ -43,7 +44,7 @@ trap cleanup EXIT
 echo "=== Greenway trial-balance verification (slice F4) ==="
 echo "migration: $MIGRATION"
 
-for f in "$GL_MIGRATION" "$COA_MIGRATION" "$POST_MIGRATION" "$MIGRATION" "$HARNESS" "$TESTS"; do
+for f in "$GL_MIGRATION" "$COA_MIGRATION" "$POST_MIGRATION" "$MIGRATION" "$HARNESS" "$TESTS" "$EDITOR_TESTS"; do
   [ -f "$f" ] || { echo "MISSING: $f" >&2; exit 1; }
 done
 
@@ -107,6 +108,20 @@ step "applying 0175 a THIRD time (idempotency)"   "$PSQL -q -f $MIGRATION"
 
 echo "--- running the adversarial suite ---"
 as_pg "$PSQL -f $TESTS"
+
+# ---------------------------------------------------------------------------
+# THE SQL-EDITOR CONTEXT PHASE.
+#
+# Everything above ran with the harness acting as an admin, because the tests
+# ask for it explicitly. But Michael applies migrations BY HAND, where there is
+# no logged-in user at all. That gap is exactly how 0175 shipped with a DO block
+# calling its own admin-guarded function: it passed here three times and then
+# failed in his SQL editor with GL_FORBIDDEN.
+#
+# This phase re-checks the finished database as NOBODY. It is run through step()
+# so an ERROR that psql reports while still exiting 0 cannot slip past.
+# ---------------------------------------------------------------------------
+step "SQL-editor context (no admin, no user)" "$PSQL -f $EDITOR_TESTS"
 
 echo ""
 echo "=== TRIAL BALANCE VERIFICATION PASSED ==="
