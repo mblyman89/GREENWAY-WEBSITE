@@ -138,6 +138,13 @@ export const adminNav: AdminNavItem[] = [
   { label: "Loans", href: "/admin/loans", permission: "settings.manage", icon: "🏠", group: "Admin" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
   { label: "Crypto Portfolio", href: "/admin/crypto", permission: "settings.manage", icon: "\u20bf", group: "Admin" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
   { label: "ATM", href: "/admin/atm", permission: "settings.manage", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
+  // F5-K: THE BOOKS. Gated on "books.view" (owner+admin ONLY), which mirrors
+  // the database's is_admin() check on every accounting RPC. Do NOT change
+  // these to "reports.view" -- that permission also grants manager and
+  // readonly, who would see the links and then hit a raw database refusal.
+  { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Admin" }, // scales: debits = credits
+  { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Admin" }, // ledger book
+  { label: "Chart of Accounts", href: "/admin/books/accounts", permission: "books.view", icon: "\ud83d\uddc3\ufe0f", group: "Admin" }, // card file index
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udda8\ufe0f", group: "Admin" }, // 🖨️ hardware
   { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal limits
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "\ud83e\udde0", group: "Admin" }, // 🧠 AI
