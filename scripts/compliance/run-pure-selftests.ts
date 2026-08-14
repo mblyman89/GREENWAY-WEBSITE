@@ -103,6 +103,7 @@ import { __runStellarSyncCoreTests } from "../../src/lib/crypto/stellar/stellar-
 import { __runLedgerCoreTests } from "../../src/lib/accounting/ledger-core";
 import { __runCoaCoreTests } from "../../src/lib/accounting/coa-core";
 import { __runPostingCoreTests } from "../../src/lib/accounting/posting-core";
+import { __runTrialBalanceCoreTests } from "../../src/lib/accounting/trial-balance-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -688,6 +689,7 @@ async function main() {
   __runLedgerCoreTests();
   __runCoaCoreTests();
   __runPostingCoreTests();
+  __runTrialBalanceCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
