@@ -557,3 +557,64 @@ And at the end, one consolidated document: **"What this system does, what it
 refuses to do, and where it is still soft."** That last section will exist. Any
 report claiming a system this large has no soft spots is a report that was not
 written honestly.
+
+---
+
+## 15. BLOCKING GATES BEFORE GO-LIVE (2026-11-01)
+
+These are not suggestions and they are not "nice to have". Each one is a
+**hard gate**: the system does not go live with any of them open. They are
+recorded here rather than in a working file because a promise kept only in
+conversation is a promise that gets lost.
+
+### R1 — re-gate the 20 financial policies to `is_admin()`  **[OPEN]**
+
+Twenty tables carrying financial data are still readable/writable under
+policies broader than they should be. The fix splits read from write and gates
+write on `is_admin()`.
+
+**Sequencing matters and getting it backwards breaks the business:** inventory
+the sync-job callers FIRST. Plaid and the crypto sync run as service callers,
+and if their access is tightened before they are inventoried, bank and wallet
+sync fail silently — which is worse than the original problem, because the
+books then look settled while going stale.
+
+**Owner decision still needed:** which of these tables (if any) managers
+legitimately need to read day to day. Michael has said he intends to be the
+only person performing administrative work, which likely makes this "none" —
+but that is his call to state explicitly, not mine to assume.
+
+**Done when:** every one of the 20 tables has its own attack in the suite
+proving a non-admin is refused, plus a negative control proving an admin is
+allowed. Structural assertions on `pg_policy` are required, because the test
+harness runs as a superuser and therefore BYPASSES RLS — a behavioural test
+alone would pass against a table with no protection whatsoever.
+
+### R3 — remove the bootstrap backdoor  **[OPEN]**
+
+The bootstrap path that allows the first admin to be created must be closed
+once Michael's own admin account exists. It is a legitimate chicken-and-egg
+solution during construction and an unlocked door in production.
+
+**Done when:** the path is removed or hard-gated, AND the suite contains an
+attack proving it can no longer be used to mint an admin.
+
+### Why these are deferred rather than done now
+
+Both change WHO can do things, and both are best applied when the set of real
+accounts is final. Doing them early means re-doing them. Doing them late means
+forgetting them — hence this section.
+
+---
+
+## 16. KNOWN ENVIRONMENTAL LIMIT (not a code defect)
+
+`next build` compiles successfully and is then `SIGKILL`ed while running the
+TypeScript worker. This is the build sandbox running out of memory (3.9 GB;
+the kernel log shows `Out of memory: Killed process (node)`), not a fault in
+the code. `tsc --noEmit` performs the same type-check and passes with zero
+errors, and is the gate relied upon in its place.
+
+Stated here plainly rather than quietly omitted, per §14: an untested area
+silently left out is how false confidence gets built. If this ever needs to be
+closed properly, it needs a build machine with more memory — not a code change.
