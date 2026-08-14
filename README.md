@@ -36,3 +36,13 @@ Import this repository into Vercel as a Next.js project. Use the default Vercel 
 - Output directory: leave blank/default
 
 The current development preview uses a smaller sampled POS menu dataset so the site can deploy and be inspected reliably while preserving the full POS preview data in the repository for later integration work.
+
+## Key documents (start here)
+
+| Document | What it is |
+|---|---|
+| [`BATTLE_PLAN.md`](./BATTLE_PLAN.md) | The full-system battle plan — how every branch gets tested to destruction, in six phases. |
+| [`BATTLE_PLAN_STAGING_SETUP.md`](./BATTLE_PLAN_STAGING_SETUP.md) | How to build the staging site the battle plan runs against. Read before the battle plan. |
+| [`docs/security/IS-ADMIN-AUDIT-REPORT.md`](./docs/security/IS-ADMIN-AUDIT-REPORT.md) | Security audit of the admin access-control model, with findings and a remediation roadmap. |
+| [`AGENTS.md`](./AGENTS.md) | Engineering rules of the road for this repository. |
+| [`todo.md`](./todo.md) | Live build plan and standing rules. |
