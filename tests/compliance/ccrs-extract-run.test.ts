@@ -32,7 +32,9 @@ import {
   MANIFEST_HEADER_HEADER,
   TRANSPORTED_ITEMS_HEADER,
   GREENWAY_ROW,
+  LAB_RESULT_HEADER,
   licenseeRow,
+  labResultRow,
   manifestHeaderRow,
   transportedItemRow,
 } from "./fixtures/ccrs-zip-fixture";
@@ -164,6 +166,10 @@ describe("runCcrsExtract (S14)", () => {
     // manifests precede inventory (the lot→vendor map must exist when
     // inventory rows join their ExternalIdentifier), and manifest headers
     // precede transported items (origin lookup).
+    // Potency: labresult follows product AND inventory, because the potency
+    // join is LabResult.InventoryId -> Inventory.ProductId ->
+    // Product.InventoryType. Read any earlier and the per-type breakout would
+    // find nothing to join to.
     expect(TABLE_ORDER).toEqual([
       "licensee",
       "strains",
@@ -171,12 +177,13 @@ describe("runCcrsExtract (S14)", () => {
       "transporteditems",
       "product",
       "inventory",
+      "labresult",
       "saleheader",
       "salesdetail",
     ]);
   });
 
-  it("skips non-table zips (SKIPPED_TABLES + labresult) without failing", async () => {
+  it("skips SKIPPED_TABLES and non-zip entries, but now READS labresult (potency)", async () => {
     const junkCsv = utf16le(`A\tB${CRLF}1\t2${CRLF}`);
     const zip = buildDelivery([
       { name: `${PREFIX}Areas_0.zip`, data: buildZip([{ name: "Areas_0.csv", data: junkCsv, method: 8 }]), method: 8 },
@@ -184,7 +191,9 @@ describe("runCcrsExtract (S14)", () => {
       { name: `${PREFIX}readme.txt`, data: new TextEncoder().encode("not a zip"), method: 0 },
     ]);
     const { filesTotal } = await runCcrsExtract(bytesAsBlob(zip), OPTS);
-    expect(filesTotal).toBe(6); // the six real tables only
+    // Six real tables + LabResult, which potency capture now consumes.
+    // "Areas" stays skipped and readme.txt is not a zip.
+    expect(filesTotal).toBe(7);
   });
 
   it("throws the not-a-delivery-zip error verbatim (never force-fits)", async () => {
@@ -283,5 +292,53 @@ describe("runCcrsExtract (S14)", () => {
     expect(tm?.productName).toBe("Evergreen | Blue Dream 3.5g");
     expect(tm?.vendorLicense).toBe("610001");
     expect(tm?.vendorName).toBe("Evergreen Farms");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Potency end to end: LabResult rides in its own nested zip, joins through
+// Inventory -> Product, and reaches the result in mg/g.
+// ---------------------------------------------------------------------------
+
+describe("runCcrsExtract — potency (LabResult)", () => {
+  it("crunches real LabResult rows through the nested zip into mg/g benchmarks", async () => {
+    // TestNames and TestValues verbatim from the real December 2025 delivery.
+    const labResult = tableZip("LabResult_0.csv", [
+      LAB_RESULT_HEADER,
+      labResultRow({ labResultId: "8742892", inventoryId: "8001", testName: "Potency - Total THC (mg/g)", testValue: "1.2" }),
+      labResultRow({ labResultId: "8742999", inventoryId: "8001", testName: "Potency - Total THC (mg/g)", testValue: "3.4" }),
+      // Censored non-detect: must be counted, never averaged as zero.
+      labResultRow({ labResultId: "8743003", inventoryId: "8001", testName: "Potency - Total THC (mg/g)", testValue: "<0.5" }),
+      labResultRow({ labResultId: "8743001", inventoryId: "8001", testName: "Potency - Total CBD (mg/g)", testValue: "0.71" }),
+      // Component cannabinoids: already inside the totals, must not double count.
+      labResultRow({ labResultId: "8742903", inventoryId: "8001", testName: "Potency - CBD (mg/g)", testValue: "0.71" }),
+      labResultRow({ labResultId: "8742909", inventoryId: "8001", testName: "Potency - delta-9-THCA (mg/g)", testValue: "<0.061" }),
+      // Non-potency families in the same table: ignored entirely.
+      labResultRow({ labResultId: "8742893", inventoryId: "8001", testName: "Pesticide - Fludioxonil (ug/g)", testValue: "<0.08", labTestStatus: "Pass" }),
+      labResultRow({ labResultId: "8742896", inventoryId: "8001", testName: "Mycotoxin - Total Aflatoxins (ug/kg)", testValue: "<5", labTestStatus: "Pass" }),
+    ]);
+    const zip = buildDelivery([
+      { name: `${PREFIX}LabResult_0.zip`, data: labResult, method: 8 },
+    ]);
+
+    const { result } = await runCcrsExtract(bytesAsBlob(zip), OPTS);
+
+    expect(result.totals.labResultRows).toBe(8);
+    expect(result.totals.potencyRows).toBe(3); // THC 1.2 + 3.4, CBD 0.71
+    expect(result.totals.potencyCensoredRows).toBe(1); // only Total THC "<0.5"
+
+    const thc = (result.potency ?? []).find((p) => p.analyte === "total_thc" && p.scope === "overall");
+    expect(thc?.sampleSize).toBe(2);
+    expect(thc?.censoredCount).toBe(1);
+    expect(thc?.avgMgPerG).toBe(2.3); // (1.2 + 3.4) / 2 — the non-detect excluded
+
+    const cbd = (result.potency ?? []).find((p) => p.analyte === "total_cbd" && p.scope === "overall");
+    expect(cbd?.sampleSize).toBe(1);
+    expect(cbd?.avgMgPerG).toBe(0.71);
+
+    // The type breakout resolved through Inventory 8001 -> Product 5001.
+    const byType = (result.potency ?? []).find((p) => p.scope === "type" && p.analyte === "total_thc");
+    expect(byType?.scopeKey).toBe("Usable Marijuana");
+    expect(byType?.avgMgPerG).toBe(2.3);
   });
 });

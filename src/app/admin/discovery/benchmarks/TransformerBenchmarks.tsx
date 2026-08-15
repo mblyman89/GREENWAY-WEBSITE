@@ -48,6 +48,59 @@ function pick(rows: DiscoveryBenchmark[], scope: string, metric: BenchmarkMetric
 }
 
 /** Price-distribution table (p25 / median / p75 / avg / n), top rows by median. */
+/**
+ * Lab potency, shown in BOTH units.
+ *
+ * CCRS publishes potency as mg/g ("Potency - Total THC (mg/g)"), and that is
+ * what `value_num` stores. Percent is the number people actually talk about,
+ * and the conversion is exact: 1 mg/g = 0.1%, so 200 mg/g = 20%. Both are shown
+ * so the figure can be checked against a certificate of analysis without
+ * anyone having to remember the factor.
+ */
+function PotencyTable({ title, subtitle, rows, limit = 15 }: { title: string; subtitle: string; rows: DiscoveryBenchmark[]; limit?: number }) {
+  const sorted = [...rows]
+    .filter((r) => r.value_num != null)
+    .sort((a, b) => (b.sample_size ?? 0) - (a.sample_size ?? 0))
+    .slice(0, limit);
+  return (
+    <Card padding="md">
+      <CardHeader title={title} subtitle={subtitle} />
+      {sorted.length === 0 ? (
+        <p className="mt-3 text-sm text-[var(--admin-text-muted)]">No lab results for this breakdown in this drop.</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-muted)]">
+                <th className="py-2 pr-3">Name</th>
+                <th className="px-3 py-2 text-right">Average</th>
+                <th className="px-3 py-2 text-right">mg/g</th>
+                <th className="py-2 pl-3 text-right">Tests</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r) => (
+                <tr key={r.id} className="border-b border-[var(--admin-border)]/50">
+                  <td className="max-w-[18rem] truncate py-2 pr-3 font-medium text-[var(--admin-text)]" title={r.scope_key}>
+                    {r.scope_key === "all" ? "All products" : r.scope_key}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold text-[var(--admin-text)]">
+                    {r.value_num != null ? `${(r.value_num / 10).toFixed(2)}%` : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right text-[var(--admin-text-muted)]">
+                    {r.value_num != null ? r.value_num.toFixed(2) : "—"}
+                  </td>
+                  <td className="py-2 pl-3 text-right text-[var(--admin-text-muted)]">{num(r.sample_size)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function PriceTable({ title, subtitle, rows, limit = 15 }: { title: string; subtitle: string; rows: DiscoveryBenchmark[]; limit?: number }) {
   const sorted = [...rows]
     .filter((r) => r.median_minor != null)
@@ -322,6 +375,25 @@ export async function TransformerBenchmarks({ dataset }: { dataset: DiscoveryDat
         <div className="grid gap-4 lg:grid-cols-2">
           <PriceTable title="$/gram by type (retail)" subtitle="Normalized retail price" rows={pick(rows, "type", "retail_price_per_gram")} />
           <PriceTable title="$/gram by type (wholesale)" subtitle="Normalized buying price" rows={pick(rows, "type", "wholesale_price_per_gram")} />
+        </div>
+      </Section>
+
+      {/* Potency */}
+      <Section
+        title="Lab potency"
+        description="Average lab-tested THC and CBD from the state's own lab results. Non-detects are excluded from the averages rather than counted as zero."
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <PotencyTable
+            title="Total THC by type"
+            subtitle="Statewide lab average"
+            rows={pick(rows, "type", "total_thc_mg_per_g")}
+          />
+          <PotencyTable
+            title="Total CBD by type"
+            subtitle="Statewide lab average"
+            rows={pick(rows, "type", "total_cbd_mg_per_g")}
+          />
         </div>
       </Section>
 

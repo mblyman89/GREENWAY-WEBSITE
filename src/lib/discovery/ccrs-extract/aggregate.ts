@@ -45,6 +45,7 @@
  */
 
 import { extractBrand, normalizeBrandKey } from "../brand-core";
+import { classifyPotencyTest } from "./parse";
 import type {
   LicenseeRow,
   SaleHeaderRow,
@@ -54,6 +55,8 @@ import type {
   StrainRow,
   ManifestHeaderRow,
   TransportedItemRow,
+  LabResultRow,
+  PotencyAnalyte,
 } from "./parse";
 
 // ---------------------------------------------------------------------------
@@ -221,6 +224,81 @@ export type PriceSummary = {
   avgMinor: number;
 };
 
+/**
+ * Potency is capped at 1000 mg/g — one gram of analyte per gram of product is
+ * 100%, a physical ceiling. Values above it are impossible readings and are
+ * rejected rather than allowed to skew a statewide average.
+ */
+export const POTENCY_MAX_MG_PER_G = 1000;
+/** Histogram resolution: 0.1 mg/g. Bounds the bucket count at 10,001. */
+const POTENCY_SCALE = 10;
+
+/**
+ * Bounded-memory accumulator for one potency series (mg/g).
+ *
+ * Buckets at 0.1 mg/g so the map can never exceed ~10k entries no matter how
+ * many million lab rows stream through, while min/max/mean stay exact enough
+ * to trust. Censored non-detects are COUNTED but never averaged — see
+ * PotencyBenchmark.
+ */
+class PotencyAccumulator {
+  private buckets = new Map<number, number>();
+  private _count = 0;
+  private _censored = 0;
+  private _sum = 0;
+  private _min: number | null = null;
+  private _max: number | null = null;
+
+  /** Record a reported value in mg/g. Out-of-range readings are ignored. */
+  add(mgPerG: number): void {
+    if (!Number.isFinite(mgPerG) || mgPerG < 0 || mgPerG > POTENCY_MAX_MG_PER_G) return;
+    this._count += 1;
+    this._sum += mgPerG;
+    if (this._min == null || mgPerG < this._min) this._min = mgPerG;
+    if (this._max == null || mgPerG > this._max) this._max = mgPerG;
+    const k = Math.round(mgPerG * POTENCY_SCALE);
+    this.buckets.set(k, (this.buckets.get(k) ?? 0) + 1);
+  }
+
+  /** Record a non-detect. Counted only; it carries no usable number. */
+  addCensored(): void {
+    this._censored += 1;
+  }
+
+  get count(): number {
+    return this._count;
+  }
+  get censored(): number {
+    return this._censored;
+  }
+
+  private median(): number | null {
+    if (this._count === 0) return null;
+    const target = Math.ceil(this._count / 2);
+    const keys = [...this.buckets.keys()].sort((a, b) => a - b);
+    let seen = 0;
+    for (const k of keys) {
+      seen += this.buckets.get(k) ?? 0;
+      if (seen >= target) return k / POTENCY_SCALE;
+    }
+    return null;
+  }
+
+  summarize(analyte: PotencyAnalyte, scope: "overall" | "type", scopeKey: string): PotencyBenchmark {
+    return {
+      analyte,
+      scope,
+      scopeKey,
+      avgMgPerG: this._count === 0 ? null : round2(this._sum / this._count),
+      medianMgPerG: this.median(),
+      minMgPerG: this._min,
+      maxMgPerG: this._max,
+      sampleSize: this._count,
+      censoredCount: this._censored,
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Output shapes (what the server layer persists)
 // ---------------------------------------------------------------------------
@@ -244,6 +322,34 @@ export type StatewideBenchmark = {
   pricePerGram: PriceSummary | null;
   units: number;
   revenueMinor: number;
+};
+
+/**
+ * Statewide lab potency, rolled up from the LabResult table.
+ *
+ * UNITS ARE mg/g — the unit WSLCB actually publishes, carried through
+ * unconverted. 1.2 mg/g is 0.12%, so a consumer that wants percent divides by
+ * 10. Storing mg/g keeps the number identical to the certificate of analysis
+ * and avoids a lossy round-trip.
+ *
+ * `censoredCount` is reported alongside the average because non-detects
+ * ("<0.061") carry NO usable number — they are excluded from the mean rather
+ * than being counted as zero, and the count says how much was set aside.
+ */
+export type PotencyBenchmark = {
+  analyte: PotencyAnalyte;
+  /** "overall" (statewide) or "type" (per Product.InventoryType). */
+  scope: "overall" | "type";
+  scopeKey: string;
+  /** Mean of the reported values, mg/g. Null when nothing was measurable. */
+  avgMgPerG: number | null;
+  medianMgPerG: number | null;
+  minMgPerG: number | null;
+  maxMgPerG: number | null;
+  /** Lab results that carried a usable number (the mean's denominator). */
+  sampleSize: number;
+  /** Non-detects seen. Deliberately EXCLUDED from every statistic above. */
+  censoredCount: number;
 };
 
 export type CompetitorProductStat = {
@@ -375,6 +481,24 @@ export type AggregationResult = {
      * the medical split still parse.
      */
     medicalLines?: number;
+    /**
+     * LabResult rows read. Optional so payloads persisted before potency
+     * capture still parse.
+     */
+    labResultRows?: number;
+    /** Potency results that carried a usable number. */
+    potencyRows?: number;
+    /**
+     * Potency results reported as non-detects ("<0.061"). Counted, never
+     * averaged as zero.
+     */
+    potencyCensoredRows?: number;
+    /**
+     * Potency results whose InventoryId did not resolve to a product in this
+     * delivery. Reported honestly rather than guessed — the monthly file only
+     * carries lots touched that month.
+     */
+    potencyUnjoinedRows?: number;
     /** How many times the statewide-mover map hit its cap and was pruned. */
     moverMapPrunes: number;
     /** Task I (I4): manifest rows read (vendor attribution inputs). Optional
@@ -387,6 +511,11 @@ export type AggregationResult = {
   signals: MarketSignal[];
   /** S10: statewide wholesale supplier benchmarks (top by revenue). */
   suppliers: StatewideSupplierStat[];
+  /**
+   * Statewide lab potency in mg/g. Optional so payloads persisted before
+   * potency capture still parse (absent = never measured, NOT "no potency").
+   */
+  potency?: PotencyBenchmark[];
 };
 
 // ---------------------------------------------------------------------------
@@ -527,6 +656,14 @@ const BUYER_FACTOR = 512; // 2 · 256
 const SUPPLIER_FACTOR = 131072; // 2 · 256 · 256
 const MAX_PACKED_SUPPLIER_ID = 2 ** 36;
 
+/**
+ * Safety bound on the per-type potency map. The real December Product table
+ * carries 13 distinct InventoryType values, so this is never reached in
+ * practice — it exists only so a malformed file cannot grow the map without
+ * limit.
+ */
+const POTENCY_TYPE_CAP = 200;
+
 export class CcrsAggregator {
   private trackedLicenses: Set<string>;
   private selfLicense: string;
@@ -545,6 +682,11 @@ export class CcrsAggregator {
    * delivery), so this stays far smaller than invMap.
    */
   private invVendor = new U53Map(1);
+
+  /** Statewide potency per analyte (mg/g). */
+  private potencyAll = new Map<PotencyAnalyte, PotencyAccumulator>();
+  /** Potency per `analyte \u0001 inventoryType` (mg/g). */
+  private potencyTypes = new Map<string, PotencyAccumulator>();
 
   // Bounded reference lookups (numeric keys keep these compact).
   private productById = new Map<number, ProductInfo>();
@@ -618,6 +760,10 @@ export class CcrsAggregator {
     wholesaleLines: 0,
     attributedRetailLines: 0,
     medicalLines: 0,
+    labResultRows: 0,
+    potencyRows: 0,
+    potencyCensoredRows: 0,
+    potencyUnjoinedRows: 0,
     moverMapPrunes: 0,
     // Task I (I4): manifest tables (vendor attribution inputs).
     manifestRows: 0,
@@ -775,6 +921,76 @@ export class CcrsAggregator {
     const idNum = Number(row.strainId);
     if (!Number.isFinite(idNum) || !row.name) return;
     this.strainNameById.set(idNum, row.name);
+  }
+
+  /**
+   * Potency capture. LabResult is a LONG/EAV table — ONE ROW PER TEST carrying
+   * TestName + TestValue — so a single lot contributes many rows and only a
+   * few of them are potency.
+   *
+   * MUST be fed AFTER inventory and product: the join is
+   * LabResult.InventoryId → Inventory.ProductId → Product.InventoryType, and
+   * the type scope depends on that chain already being loaded.
+   *
+   * Honesty rules:
+   *   * Non-detects ("<0.061") are counted, never averaged as zero.
+   *   * Only the TOTAL rollups are used; component cannabinoids (CBD, CBDA,
+   *     delta-9-THCA) are skipped so the same compound isn't counted twice.
+   *   * Units stay mg/g exactly as WSLCB publishes them — no silent rescale.
+   *   * Lots that don't resolve to a product are counted as unjoined and
+   *     contribute to the statewide figure only, never to a guessed type.
+   */
+  addLabResult(row: LabResultRow): void {
+    this.totals.labResultRows += 1;
+    const analyte = classifyPotencyTest(row.testName);
+    if (analyte === null) return;
+
+    if (!row.censored && row.testValue == null) return;
+
+    // Resolve the product type ONCE, so a censored row and a reported row are
+    // filed against exactly the same scopes. (If censored rows were counted
+    // only statewide, a per-type row would understate how much was set aside.)
+    const invId = row.inventoryId ? Number(row.inventoryId) : NaN;
+    const productId = Number.isFinite(invId) ? this.invMap.get(invId, 0) : undefined;
+    const product = productId ? this.productById.get(productId) : undefined;
+    const invType = product?.inventoryType ?? null;
+    if (!invType) this.totals.potencyUnjoinedRows += 1;
+
+    if (row.censored) {
+      this.totals.potencyCensoredRows += 1;
+      this.potencyOverall(analyte).addCensored();
+      if (invType) this.potencyByType(analyte, invType).addCensored();
+      return;
+    }
+    // Non-null by the guard above.
+    const value = row.testValue as number;
+    this.totals.potencyRows += 1;
+    this.potencyOverall(analyte).add(value);
+    if (invType) this.potencyByType(analyte, invType).add(value);
+  }
+
+  private potencyOverall(analyte: PotencyAnalyte): PotencyAccumulator {
+    let acc = this.potencyAll.get(analyte);
+    if (!acc) {
+      acc = new PotencyAccumulator();
+      this.potencyAll.set(analyte, acc);
+    }
+    return acc;
+  }
+
+  private potencyByType(analyte: PotencyAnalyte, invType: string): PotencyAccumulator {
+    const key = `${analyte}\u0001${invType}`;
+    let acc = this.potencyTypes.get(key);
+    if (!acc) {
+      // Bound the per-type map. The real December Product table carries 13
+      // distinct InventoryType values, so this cap is never reached in
+      // practice; it exists so a malformed file can't grow the map without
+      // limit.
+      if (this.potencyTypes.size >= POTENCY_TYPE_CAP) return new PotencyAccumulator();
+      acc = new PotencyAccumulator();
+      this.potencyTypes.set(key, acc);
+    }
+    return acc;
   }
 
   addSaleHeader(row: SaleHeaderRow): void {
@@ -1092,6 +1308,31 @@ export class CcrsAggregator {
     this.statewideMovers = new Map(keep);
   }
 
+  /**
+   * Statewide + per-type potency rows, deterministically ordered. A series
+   * with neither a reading nor a non-detect is omitted entirely rather than
+   * emitting an empty row that would read as "0 mg/g".
+   */
+  private potencyResult(): PotencyBenchmark[] {
+    const out: PotencyBenchmark[] = [];
+    for (const [analyte, acc] of this.potencyAll.entries()) {
+      if (acc.count === 0 && acc.censored === 0) continue;
+      out.push(acc.summarize(analyte, "overall", "all"));
+    }
+    for (const [key, acc] of this.potencyTypes.entries()) {
+      if (acc.count === 0 && acc.censored === 0) continue;
+      const [analyte, invType] = key.split("\u0001") as [PotencyAnalyte, string];
+      out.push(acc.summarize(analyte, "type", invType));
+    }
+    out.sort(
+      (a, b) =>
+        a.analyte.localeCompare(b.analyte) ||
+        a.scope.localeCompare(b.scope) ||
+        a.scopeKey.localeCompare(b.scopeKey),
+    );
+    return out;
+  }
+
   private bench(
     saleClass: BenchmarkSaleClass,
     scope: StatewideBenchmark["scope"],
@@ -1333,6 +1574,7 @@ export class CcrsAggregator {
       observedMinDate: this.minDate,
       observedMaxDate: this.maxDate,
       totals: { ...this.totals },
+      potency: this.potencyResult(),
       statewide,
       competitors,
       signals,
