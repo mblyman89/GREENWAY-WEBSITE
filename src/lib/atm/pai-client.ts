@@ -30,6 +30,7 @@ import { getAtmConnectionSecrets } from "./store";
 import {
   resolveAllPaiReportPlans,
   computePaiHistoryRange,
+  computePaiRecentRange,
   joinUrl,
   buildPaiGuidDownloadBody,
   buildPaiGuidDownloadUrl,
@@ -152,9 +153,15 @@ export async function pullAllPaiReports(options?: {
   // SDK default until captured, which is flagged on the plan and reported
   // honestly. The normal daily pull passes NO range → byte-for-byte identical to
   // today's proven-working path.
+  // DAILY sync (history NOT set): request a rolling recent window
+  // (computePaiRecentRange, default last 45 days) instead of NO range. Sending
+  // no range made PAI silently return only its narrow default window, which is
+  // exactly why "Sync" looked broken while "Backfill" worked. The recent window
+  // uses the SAME confirmed date-field names the backfill uses, and the ingest
+  // is an idempotent upsert, so the overlap is safe and keeps the data current.
   const dateRange = options?.history
     ? computePaiHistoryRange(new Date(), secrets.reportConfig)
-    : null;
+    : computePaiRecentRange(new Date());
 
   // Honor Michael's SAVED report choice per kind: pin its GUID onto the URLs so
   // PAI serves EXACTLY that report (critical when two reports share a name, e.g.

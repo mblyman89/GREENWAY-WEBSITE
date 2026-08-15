@@ -79,6 +79,14 @@ export type CustomerReturnDraft = {
   reason: string;
   /** Refund given, MINOR UNITS (cents). */
   refundMinor: number;
+  /**
+   * OPTIONAL ceiling on the refund, MINOR UNITS (cents). When present, any
+   * refund above this is REFUSED. The server derives this from the original
+   * sale line (what the customer actually paid for the returned quantity, minus
+   * what was already refunded on the line) so a form can never pay out more
+   * than was taken in. When omitted (legacy callers), no ceiling is applied.
+   */
+  maxRefundMinor?: number;
 };
 
 export type CustomerReturnValidation =
@@ -118,6 +126,17 @@ export function validateCustomerReturn(d: CustomerReturnDraft): CustomerReturnVa
   }
   if (!Number.isInteger(d.refundMinor) || d.refundMinor < 0) {
     return { ok: false, error: "Refund must be a non-negative whole number of cents." };
+  }
+  // F-1: never refund more than the customer actually paid for the returned
+  // quantity (less any refund already given on this line). The server supplies
+  // the ceiling; a tampered/typo'd form cannot push the payout above it.
+  if (d.maxRefundMinor !== undefined && d.refundMinor > d.maxRefundMinor) {
+    return {
+      ok: false,
+      error:
+        `Refund exceeds what the customer paid for the returned quantity ` +
+        `(max ${(d.maxRefundMinor / 100).toFixed(2)}). Reduce the refund.`,
+    };
   }
   if (d.disposition !== "restock" && d.disposition !== "destroy") {
     return { ok: false, error: "Disposition must be restock or destroy." };
@@ -382,6 +401,34 @@ export function __runDispositionCoreTests(): { passed: number; failed: number } 
   ok(!validateCustomerReturn({ ...base, refundMinor: 10.5 }).ok, "fractional cents blocked");
   ok(!validateCustomerReturn({ ...base, refundMinor: -1 }).ok, "negative refund blocked");
   ok(!validateCustomerReturn({ ...base, reason: "nope" }).ok, "unknown reason blocked");
+
+  // F-1 refund ceiling (maxRefundMinor): overpay blocked, exact + partial allowed.
+  // base.refundMinor = 1500.
+  ok(
+    !validateCustomerReturn({ ...base, maxRefundMinor: 1499 }).ok,
+    "refund 1\u00a2 over the ceiling is blocked",
+  );
+  ok(
+    validateCustomerReturn({ ...base, maxRefundMinor: 1500 }).ok,
+    "refund exactly at the ceiling is allowed",
+  );
+  ok(
+    validateCustomerReturn({ ...base, refundMinor: 400, maxRefundMinor: 1500 }).ok,
+    "partial refund under the ceiling is allowed",
+  );
+  ok(
+    validateCustomerReturn({ ...base, refundMinor: 0, maxRefundMinor: 0 }).ok,
+    "zero refund with a zero ceiling (fully refunded line) is allowed",
+  );
+  ok(
+    !validateCustomerReturn({ ...base, refundMinor: 1, maxRefundMinor: 0 }).ok,
+    "any refund on a fully-refunded line is blocked",
+  );
+  // Legacy callers that omit the ceiling keep the old behavior (no cap).
+  ok(
+    validateCustomerReturn({ ...base, refundMinor: 999999 }).ok,
+    "omitted ceiling \u21d2 no cap (legacy)",
+  );
 
   const note = buildCustomerReturnAdjustmentNote({
     quantity: 1,

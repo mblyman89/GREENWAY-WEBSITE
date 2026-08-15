@@ -78,9 +78,12 @@ export default async function LoansPage({
     });
   }
 
+  // Dark-theme admin tokens (match every other back-office page). The old
+  // light classes (border-neutral-300 / white bg) rendered white-on-white on
+  // the dark admin shell \u2014 this is the fix.
   const inputCls =
-    "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none";
-  const labelCls = "block text-xs font-medium text-neutral-600 mb-1";
+    "w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none";
+  const labelCls = "block text-xs font-medium text-[var(--admin-text-muted)] mb-1";
 
   return (
     <div className="space-y-6">
@@ -103,18 +106,18 @@ export default async function LoansPage({
       />
 
       {sp.msg ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-text)]">
           {sp.msg}
         </div>
       ) : null}
       {sp.error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
           {sp.error}
         </div>
       ) : null}
 
       {!dbReady ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
           The database isn&apos;t connected yet, so loans can&apos;t be saved. Once Supabase is wired
           up, this page will store and load your loans.
         </div>
@@ -123,26 +126,26 @@ export default async function LoansPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* LEFT: loan list */}
         <div className="lg:col-span-1 space-y-3">
-          <div className="rounded-lg border border-neutral-200 bg-white">
-            <div className="border-b border-neutral-200 px-4 py-3 text-sm font-semibold text-neutral-800">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
+            <div className="border-b border-[var(--admin-border)] px-4 py-3 text-sm font-semibold text-[var(--admin-text)]">
               Your loans
             </div>
             {loans.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-neutral-500">No loans yet. Add one below.</div>
+              <div className="px-4 py-4 text-sm text-[var(--admin-text-muted)]">No loans yet. Add one below.</div>
             ) : (
-              <ul className="divide-y divide-neutral-100">
+              <ul className="divide-y divide-[var(--admin-border)]">
                 {loans.map((l) => {
                   const isSel = l.id === selectedId;
                   return (
                     <li key={l.id}>
                       <a
                         href={`/admin/loans?id=${encodeURIComponent(l.id)}`}
-                        className={`flex items-center justify-between px-4 py-3 text-sm hover:bg-neutral-50 ${
-                          isSel ? "bg-emerald-50" : ""
+                        className={`flex items-center justify-between px-4 py-3 text-sm transition hover:bg-[var(--admin-surface-hover)] ${
+                          isSel ? "bg-[var(--admin-accent-soft)]" : ""
                         }`}
                       >
-                        <span className="font-medium text-neutral-800">{l.name}</span>
-                        <span className="text-neutral-500">{formatLoanCents(l.currentBalanceCents)}</span>
+                        <span className="font-medium text-[var(--admin-text)]">{l.name}</span>
+                        <span className="text-[var(--admin-text-muted)]">{formatLoanCents(l.currentBalanceCents)}</span>
                       </a>
                     </li>
                   );
@@ -152,8 +155,8 @@ export default async function LoansPage({
           </div>
 
           {/* Add a new loan */}
-          <details className="rounded-lg border border-neutral-200 bg-white">
-            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-neutral-800">
+          <details className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-[var(--admin-text)]">
               + Add a new loan
             </summary>
             <form action={saveLoanAction} className="space-y-3 px-4 pb-4">
@@ -220,7 +223,7 @@ export default async function LoansPage({
               </div>
               <button
                 type="submit"
-                className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                className="w-full rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110"
               >
                 Save loan
               </button>
@@ -231,24 +234,24 @@ export default async function LoansPage({
         {/* RIGHT: selected loan detail */}
         <div className="lg:col-span-2 space-y-6">
           {!selected ? (
-            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-8 text-center text-sm text-neutral-500">
+            <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-8 text-center text-sm text-[var(--admin-text-muted)]">
               Select a loan on the left, or add one to get started.
             </div>
           ) : (
             <>
               {/* Summary card */}
               {summary ? (
-                <div className="rounded-lg border border-neutral-200 bg-white p-4">
+                <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h2 className="text-lg font-semibold text-neutral-900">{summary.name}</h2>
-                      <p className="text-sm text-neutral-500">{summary.kindText}</p>
+                      <h2 className="text-lg font-semibold text-[var(--admin-text)]">{summary.name}</h2>
+                      <p className="text-sm text-[var(--admin-text-muted)]">{summary.kindText}</p>
                     </div>
                     <form action={deleteLoanAction}>
                       <input type="hidden" name="id" value={selected.id} />
                       <button
                         type="submit"
-                        className="rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                        className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 px-3 py-1 text-xs font-medium text-[var(--admin-danger)] transition hover:bg-[var(--admin-danger)]/10"
                       >
                         Delete loan
                       </button>
@@ -270,13 +273,13 @@ export default async function LoansPage({
 
                   {summary.paidOffPercent !== null ? (
                     <div className="mt-4">
-                      <div className="mb-1 flex justify-between text-xs text-neutral-500">
+                      <div className="mb-1 flex justify-between text-xs text-[var(--admin-text-muted)]">
                         <span>Paid off</span>
                         <span>{summary.paidOffPercent}%</span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--admin-surface-2)]">
                         <div
-                          className="h-full rounded-full bg-emerald-500"
+                          className="h-full rounded-full bg-[var(--admin-accent)]"
                           style={{ width: `${summary.paidOffPercent}%` }}
                         />
                       </div>
@@ -286,8 +289,8 @@ export default async function LoansPage({
               ) : null}
 
               {/* Record a payment */}
-              <div className="rounded-lg border border-neutral-200 bg-white p-4">
-                <h3 className="text-sm font-semibold text-neutral-800">Record a payment</h3>
+              <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+                <h3 className="text-sm font-semibold text-[var(--admin-text)]">Record a payment</h3>
                 <form action={addLoanPaymentAction} className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <input type="hidden" name="loan_id" value={selected.id} />
                   <div>
@@ -321,7 +324,7 @@ export default async function LoansPage({
                   <div className="col-span-2 flex items-end">
                     <button
                       type="submit"
-                      className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                      className="w-full rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-black transition hover:brightness-110"
                     >
                       Record payment
                     </button>
@@ -331,7 +334,7 @@ export default async function LoansPage({
                 {payments.length > 0 ? (
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                      <thead className="text-xs uppercase text-neutral-400">
+                      <thead className="text-xs uppercase text-[var(--admin-text-faint)]">
                         <tr>
                           <th className="py-2">Date</th>
                           <th className="py-2">Amount</th>
@@ -339,12 +342,12 @@ export default async function LoansPage({
                           <th className="py-2"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-100">
+                      <tbody className="divide-y divide-[var(--admin-border)]">
                         {payments.map((p) => (
                           <tr key={p.id}>
                             <td className="py-2">{p.paidDate}</td>
                             <td className="py-2">{formatLoanCents(p.amountCents)}</td>
-                            <td className="py-2 text-xs text-neutral-500">
+                            <td className="py-2 text-xs text-[var(--admin-text-muted)]">
                               {p.matchedTransactionId ? "✓ linked" : "—"}
                             </td>
                             <td className="py-2 text-right">
@@ -353,7 +356,7 @@ export default async function LoansPage({
                                 <input type="hidden" name="loan_id" value={selected.id} />
                                 <button
                                   type="submit"
-                                  className="text-xs text-red-600 hover:underline"
+                                  className="text-xs text-[var(--admin-danger)] hover:underline"
                                 >
                                   delete
                                 </button>
@@ -369,13 +372,13 @@ export default async function LoansPage({
 
               {/* Amortization schedule */}
               {schedule ? (
-                <div className="rounded-lg border border-neutral-200 bg-white p-4">
-                  <h3 className="text-sm font-semibold text-neutral-800">
+                <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+                  <h3 className="text-sm font-semibold text-[var(--admin-text)]">
                     Amortization schedule ({schedule.rows.length} payments)
                   </h3>
                   <div className="mt-3 max-h-[28rem] overflow-auto">
                     <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-white text-xs uppercase text-neutral-400">
+                      <thead className="sticky top-0 bg-[var(--admin-surface)] text-xs uppercase text-[var(--admin-text-faint)]">
                         <tr>
                           <th className="py-2 pr-3">#</th>
                           <th className="py-2 pr-3">Date</th>
@@ -385,10 +388,10 @@ export default async function LoansPage({
                           <th className="py-2">Balance</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-100">
+                      <tbody className="divide-y divide-[var(--admin-border)]">
                         {schedule.rows.map((r) => (
                           <tr key={r.number}>
-                            <td className="py-1.5 pr-3 text-neutral-400">{r.number}</td>
+                            <td className="py-1.5 pr-3 text-[var(--admin-text-faint)]">{r.number}</td>
                             <td className="py-1.5 pr-3">{r.date}</td>
                             <td className="py-1.5 pr-3">{formatLoanCents(r.paymentCents)}</td>
                             <td className="py-1.5 pr-3">{formatLoanCents(r.principalCents)}</td>
@@ -399,7 +402,7 @@ export default async function LoansPage({
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-3 text-xs text-neutral-500">
+                  <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
                     Total paid over the life of the loan: {formatLoanCents(schedule.totalPaidCents)} ·
                     Total interest: {formatLoanCents(schedule.totalInterestCents)} · Rate{" "}
                     {formatRateMilliPct(selected.rateMilliPct)}.
@@ -417,8 +420,8 @@ export default async function LoansPage({
 function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
   return (
     <div>
-      <dt className="text-xs text-neutral-500">{label}</dt>
-      <dd className="text-sm font-medium text-neutral-900">{value}</dd>
+      <dt className="text-xs text-[var(--admin-text-muted)]">{label}</dt>
+      <dd className="text-sm font-medium text-[var(--admin-text)]">{value}</dd>
     </div>
   );
 }

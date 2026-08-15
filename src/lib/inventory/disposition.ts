@@ -520,20 +520,30 @@ export async function createCustomerReturn(
   // product_id (single-lot cards resolve the identical key either way).
   const lineLotKey = lotKeyForSaleLine({ productId: l.product_id, variantId: l.variant_id });
 
-  // Quantity already returned on this line (double-return guard).
+  // Quantity already returned on this line (double-return guard) AND dollars
+  // already refunded on this line (F-1 refund-ceiling guard).
   let alreadyReturned = 0;
+  let alreadyRefundedMinor = 0;
   try {
     const { data: prior } = await admin
       .from("customer_returns")
-      .select("quantity")
+      .select("quantity, refund_minor_units")
       .eq("order_line_id", l.id);
-    for (const r of (prior as { quantity: number }[] | null) ?? []) {
+    for (const r of (prior as { quantity: number; refund_minor_units: number | null }[] | null) ?? []) {
       alreadyReturned += Number(r.quantity) || 0;
+      alreadyRefundedMinor += Number(r.refund_minor_units) || 0;
     }
   } catch {
     // pre-0115: table missing — creation below will fail with a clear message.
   }
   const remainingReturnable = (Number(l.quantity) || 0) - alreadyReturned;
+
+  // F-1 refund ceiling. price_minor_units is the tax-INCLUSIVE out-the-door
+  // unit price (what actually left the customer's wallet per unit). The most
+  // this return may pay out is that unit price \u00d7 the quantity being returned,
+  // minus whatever was already refunded on the line \u2014 never below zero.
+  const outTheDoorUnit = Number(l.price_minor_units) || 0;
+  const maxRefundMinor = Math.max(0, outTheDoorUnit * input.quantity - alreadyRefundedMinor);
 
   // ── Pure validation (WAC 314-55-079(12) + quantities + money) ─────────────
   const verdict = validateCustomerReturn({
@@ -544,6 +554,7 @@ export async function createCustomerReturn(
     disposition: input.disposition,
     reason: input.reason,
     refundMinor: input.refundMinor,
+    maxRefundMinor,
   });
   if (!verdict.ok) return verdict;
   // Correction operation is decided against the FULL original line: only a

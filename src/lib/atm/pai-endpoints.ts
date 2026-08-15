@@ -387,6 +387,34 @@ export function computePaiHistoryRange(
 }
 
 /**
+ * The default number of days the DAILY sync looks back. Settlements land T+1
+ * (and later across weekends/holidays), and the ingest is an idempotent upsert,
+ * so a generous overlapping window is both safe and cheap \u2014 re-pulled days just
+ * overwrite identical rows. 45 days comfortably covers any settlement lag while
+ * staying far smaller than the full-history backfill.
+ */
+export const PAI_SYNC_LOOKBACK_DAYS = 45;
+
+/**
+ * Compute the DAILY-sync window: a rolling `daysBack`-day window ending `today`.
+ * This is the fix for "Sync is broken but Backfill works" \u2014 the daily sync used
+ * to send NO date range, so PAI silently returned only its narrow default window
+ * and the data looked stale. Now the daily sync pulls a real recent window using
+ * the same confirmed date-field names the backfill uses. `today` is injectable
+ * for testing. Returns ISO dates; never emits a backwards range.
+ */
+export function computePaiRecentRange(
+  today: Date,
+  daysBack: number = PAI_SYNC_LOOKBACK_DAYS,
+): PaiDateRange {
+  const toIso = today.toISOString().slice(0, 10);
+  const back = Number.isFinite(daysBack) && daysBack > 0 ? Math.floor(daysBack) : 0;
+  const fromMs = today.getTime() - back * 24 * 60 * 60 * 1000;
+  const fromIso = new Date(fromMs).toISOString().slice(0, 10);
+  return { from: fromIso <= toIso ? fromIso : toIso, to: toIso };
+}
+
+/**
  * Read the earliest history date (ISO yyyy-mm-dd) from report_config.historyStart.
  * Falls back to PAI_DEFAULT_HISTORY_START. Validates the shape so a typo can't
  * inject a malformed value into the request.
@@ -604,6 +632,30 @@ export function __runPaiEndpointsTests(): void {
   const range = computePaiHistoryRange(new Date("2026-08-11T00:00:00Z"), null);
   assert(range.to === "2026-08-11", "history range ends today");
   assert(range.from === "2024-02-29", "history range starts at confirmed 2/29/2024");
+
+  // computePaiRecentRange: rolling window ending today (the daily-sync fix).
+  const recent = computePaiRecentRange(new Date("2026-08-15T00:00:00Z"), 45);
+  assert(recent.to === "2026-08-15", "recent range ends today");
+  assert(recent.from === "2026-07-01", "recent range starts 45 days back");
+  assert(recent.from <= recent.to, "recent range never backwards");
+  // Default lookback is the documented constant.
+  const recentDefault = computePaiRecentRange(new Date("2026-08-15T00:00:00Z"));
+  assert(
+    recentDefault.from === computePaiRecentRange(new Date("2026-08-15T00:00:00Z"), PAI_SYNC_LOOKBACK_DAYS).from,
+    "recent range default = PAI_SYNC_LOOKBACK_DAYS",
+  );
+  // A 0/negative/garbage lookback collapses to a single-day window (never backwards).
+  assert(
+    computePaiRecentRange(new Date("2026-08-15T00:00:00Z"), 0).from === "2026-08-15",
+    "zero lookback \u21d2 single-day window",
+  );
+  assert(
+    computePaiRecentRange(new Date("2026-08-15T00:00:00Z"), -7).from === "2026-08-15",
+    "negative lookback \u21d2 single-day window",
+  );
+  // Month boundary: 45 days back from mid-March crosses into late January correctly.
+  const mar = computePaiRecentRange(new Date("2026-03-15T00:00:00Z"), 45);
+  assert(mar.from === "2026-01-29" && mar.to === "2026-03-15", "recent range crosses month boundary");
 
   // resolvePaiHistoryStart: config override + fallback + validation.
   assert(resolvePaiHistoryStart(null) === PAI_DEFAULT_HISTORY_START, "history start default 2024-02-29");
