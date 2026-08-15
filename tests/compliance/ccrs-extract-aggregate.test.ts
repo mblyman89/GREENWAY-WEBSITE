@@ -1213,3 +1213,119 @@ describe("CcrsAggregator — manifest vendor attribution (Task I I4)", () => {
     expect(sw?.vendorLicense).toBeNull();
   });
 });
+
+/**
+ * Medical vs non-medical split.
+ *
+ * Grounded in the REAL December 2025 extract: SaleHeader carries `SaleType`
+ * (verified enum RecreationalRetail | RecreationalMedical | Wholesale) and
+ * Inventory separately carries `IsMedical`. These mean DIFFERENT things — the
+ * SALE being a medical sale vs the PRODUCT being DOH-compliant — so the class
+ * split keys on SaleType and never conflates the two.
+ *
+ * Design under test: "medical" is a SUBSET of "retail". Medical lines are ALSO
+ * counted as retail so historical retail figures keep their meaning and months
+ * stay comparable; non-medical retail = retail − medical.
+ */
+describe("medical sale-class split", () => {
+  function build() {
+    const agg = new CcrsAggregator({
+      selfLicenseNumber: "413541",
+      trackedLicenseNumbers: ["413541"],
+    });
+    agg.addLicensee({
+      licenseeId: "1",
+      licenseNumber: "413541",
+      name: "LYMAN'S MARIJUANA, INC.",
+      dba: "GREENWAY MARIJUANA",
+      status: "Active",
+      city: "Port Orchard",
+      county: "KITSAP",
+    });
+    agg.addProduct(product("700", "Usable Marijuana", "Blue Dream 3.5g", 3.5));
+    agg.addInventory({
+      inventoryId: "5000",
+      licenseeId: "1",
+      productId: "700",
+      strainId: null,
+      externalIdentifier: null,
+    });
+    agg.addSaleHeader({ saleHeaderId: "1", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleHeader({ saleHeaderId: "2", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "medical", saleDate: "2025-12-05" });
+    agg.addSaleHeader({ saleHeaderId: "3", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "wholesale", saleDate: "2025-12-05" });
+    for (let i = 0; i < 3; i += 1) {
+      agg.addSaleDetail({ saleHeaderId: "1", inventoryId: "5000", quantity: 1, unitPriceMinor: 3000, discountMinor: 0, isDeleted: false });
+    }
+    for (let i = 0; i < 2; i += 1) {
+      agg.addSaleDetail({ saleHeaderId: "2", inventoryId: "5000", quantity: 1, unitPriceMinor: 2500, discountMinor: 0, isDeleted: false });
+    }
+    agg.addSaleDetail({ saleHeaderId: "3", inventoryId: "5000", quantity: 1, unitPriceMinor: 1000, discountMinor: 0, isDeleted: false });
+    return agg.result();
+  }
+
+  const overall = (r: ReturnType<typeof build>, cls: string) =>
+    r.statewide.find((b) => b.scope === "overall" && b.saleClass === cls);
+
+  it("counts medical lines as retail (subset, not sibling)", () => {
+    const r = build();
+    expect(r.totals.retailLines).toBe(5);
+    expect(r.totals.medicalLines).toBe(2);
+    expect(r.totals.wholesaleLines).toBe(1);
+  });
+
+  it("emits a separate medical benchmark row", () => {
+    const med = overall(build(), "medical");
+    expect(med).toBeDefined();
+    expect(med?.units).toBe(2);
+    expect(med?.revenueMinor).toBe(5000);
+    expect(med?.unitPrice?.medianMinor).toBe(2500);
+  });
+
+  it("keeps retail totals inclusive of medical so months stay comparable", () => {
+    const ret = overall(build(), "retail");
+    expect(ret?.units).toBe(5);
+    expect(ret?.revenueMinor).toBe(14000); // 3x$30 + 2x$25
+  });
+
+  it("lets non-medical retail be derived as retail − medical", () => {
+    const r = build();
+    const ret = overall(r, "retail");
+    const med = overall(r, "medical");
+    expect((ret?.revenueMinor ?? 0) - (med?.revenueMinor ?? 0)).toBe(9000); // 3x$30
+    expect((ret?.units ?? 0) - (med?.units ?? 0)).toBe(3);
+  });
+
+  it("never marks wholesale as medical", () => {
+    const r = build();
+    expect(overall(r, "wholesale")?.revenueMinor).toBe(1000);
+    expect(r.statewide.some((b) => b.saleClass === "medical" && b.scopeKey !== "all" && b.scope === "overall")).toBe(false);
+  });
+
+  it("emits no medical rows at all when the month has no medical sales", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: "413541", trackedLicenseNumbers: ["413541"] });
+    agg.addLicensee({ licenseeId: "1", licenseNumber: "413541", name: "N", dba: null, status: "Active", city: "C", county: "KITSAP" });
+    agg.addProduct(product("700", "Usable Marijuana", "P", 1));
+    agg.addInventory({ inventoryId: "5000", licenseeId: "1", productId: "700", strainId: null, externalIdentifier: null });
+    agg.addSaleHeader({ saleHeaderId: "1", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "1", inventoryId: "5000", quantity: 1, unitPriceMinor: 3000, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.medicalLines).toBe(0);
+    expect(r.statewide.filter((b) => b.saleClass === "medical")).toHaveLength(0);
+  });
+
+  it("preserves the lane-0 packing bound at the maximum supplier id", () => {
+    const MAXID = 2 ** 36 - 1;
+    const tracked = Array.from({ length: 255 }, (_, i) => String(400000 + i));
+    const agg = new CcrsAggregator({ selfLicenseNumber: tracked[0], trackedLicenseNumbers: tracked });
+    tracked.forEach((ln, i) =>
+      agg.addLicensee({ licenseeId: String(i + 1), licenseNumber: ln, name: `N${i}`, dba: null, status: "Active", city: "C", county: "K" }),
+    );
+    agg.addProduct(product("700", "Usable Marijuana", "P", 1));
+    agg.addInventory({ inventoryId: "5000", licenseeId: "1", productId: "700", strainId: null, externalIdentifier: null });
+    agg.addSaleHeader({ saleHeaderId: "9", sellerLicenseeId: String(MAXID - 1), buyerLicenseeId: "255", saleType: "wholesale", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "9", inventoryId: "5000", quantity: 1, unitPriceMinor: 1000, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.wholesaleLines).toBe(1);
+    expect(r.totals.medicalLines).toBe(0);
+  });
+});

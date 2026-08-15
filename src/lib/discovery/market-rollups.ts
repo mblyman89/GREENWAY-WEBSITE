@@ -62,6 +62,14 @@ const MAX_KEY_LEN = 300;
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
+/**
+ * Like num(), but keeps "the field wasn't there" distinct from "the value was
+ * zero". Used for optional counters where 0 would be a factual claim rather
+ * than an absence (never guess).
+ */
+function numOrUndefined(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
 function intOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
 }
@@ -116,7 +124,7 @@ export function sanitizeAggregationResult(
     const scopeKey = strOrNull(b.scopeKey);
     if (
       (scope !== "type" && scope !== "brand" && scope !== "strain" && scope !== "overall") ||
-      (saleClass !== "retail" && saleClass !== "wholesale") ||
+      (saleClass !== "retail" && saleClass !== "wholesale" && saleClass !== "medical") ||
       !scopeKey
     ) {
       return { ok: false, error: "Malformed statewide benchmark row." };
@@ -273,6 +281,14 @@ export function sanitizeAggregationResult(
         retailLines: num(totalsIn.retailLines),
         wholesaleLines: num(totalsIn.wholesaleLines),
         attributedRetailLines: num(totalsIn.attributedRetailLines),
+        // Medical split: retail lines whose SaleHeader was RecreationalMedical.
+        // A SUBSET of retailLines, never added to it.
+        //
+        // numOrUndefined (NOT num) on purpose: a payload produced before the
+        // medical split carries no such field, and coercing that to 0 would
+        // state as fact that the month had no medical sales. It stays absent,
+        // and absent persists as NULL — "never measured", not "none".
+        medicalLines: numOrUndefined(totalsIn.medicalLines),
         moverMapPrunes: num(totalsIn.moverMapPrunes),
         // Task I (I4): manifest inputs (optional — pre-I4 payloads have none).
         manifestRows: num(totalsIn.manifestRows),
@@ -316,8 +332,15 @@ function benchmarkRows(
     period_end: periodEnd,
   };
   const rows: Record<string, unknown>[] = [];
+  // Explicit per-class metric names. NOT a retail/else ternary: "medical" is a
+  // third class and an else-branch would silently file medical rows under
+  // wholesale.
   const priceMetric: BenchmarkMetric =
-    b.saleClass === "retail" ? "retail_unit_price" : "wholesale_unit_price";
+    b.saleClass === "medical"
+      ? "medical_unit_price"
+      : b.saleClass === "retail"
+        ? "retail_unit_price"
+        : "wholesale_unit_price";
   if (b.unitPrice) {
     rows.push({
       ...base,
@@ -333,7 +356,11 @@ function benchmarkRows(
     });
   }
   const ppgMetric: BenchmarkMetric =
-    b.saleClass === "retail" ? "retail_price_per_gram" : "wholesale_price_per_gram";
+    b.saleClass === "medical"
+      ? "medical_price_per_gram"
+      : b.saleClass === "retail"
+        ? "retail_price_per_gram"
+        : "wholesale_price_per_gram";
   if (b.pricePerGram) {
     rows.push({
       ...base,
@@ -348,7 +375,12 @@ function benchmarkRows(
       value_num: null,
     });
   }
-  const unitsMetric: BenchmarkMetric = b.saleClass === "retail" ? "retail_units" : "wholesale_units";
+  const unitsMetric: BenchmarkMetric =
+    b.saleClass === "medical"
+      ? "medical_units"
+      : b.saleClass === "retail"
+        ? "retail_units"
+        : "wholesale_units";
   rows.push({
     ...base,
     metric: unitsMetric,
@@ -361,7 +393,12 @@ function benchmarkRows(
     avg_minor: null,
     value_num: b.units,
   });
-  const revMetric: BenchmarkMetric = b.saleClass === "retail" ? "retail_revenue" : "wholesale_revenue";
+  const revMetric: BenchmarkMetric =
+    b.saleClass === "medical"
+      ? "medical_revenue"
+      : b.saleClass === "retail"
+        ? "retail_revenue"
+        : "wholesale_revenue";
   rows.push({
     ...base,
     metric: revMetric,
@@ -505,6 +542,12 @@ export async function persistAggregationResult(
         retail_lines: Math.round(result.totals.retailLines),
         wholesale_lines: Math.round(result.totals.wholesaleLines),
         attributed_retail_lines: Math.round(result.totals.attributedRetailLines),
+        // Medical split (migration 0180). A SUBSET of retail_lines, so
+        // non-medical retail = retail_lines - medical_lines. Writes NULL (not
+        // 0) when the payload never measured it — an unmeasured month must not
+        // claim it had zero medical sales.
+        medical_lines:
+          result.totals.medicalLines == null ? null : Math.round(result.totals.medicalLines),
         ingest_kind: "monthly_zip",
         benchmarks_computed_at: new Date().toISOString(),
       })

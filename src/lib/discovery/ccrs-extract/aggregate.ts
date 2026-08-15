@@ -225,10 +225,21 @@ export type PriceSummary = {
 // Output shapes (what the server layer persists)
 // ---------------------------------------------------------------------------
 
+/**
+ * Sale classes emitted by the aggregator.
+ *
+ * "medical" is a SUBSET of "retail", not a sibling: a RecreationalMedical sale
+ * is still a retail sale and is still counted in every "retail" row. The extra
+ * "medical" rows let the medical slice be read on its own WITHOUT changing what
+ * "retail" has always meant, so existing months stay comparable to new ones.
+ * Consumers that want non-medical retail compute retail − medical.
+ */
+export type BenchmarkSaleClass = "retail" | "wholesale" | "medical";
+
 export type StatewideBenchmark = {
   scope: "type" | "brand" | "strain" | "overall";
   scopeKey: string;
-  saleClass: "retail" | "wholesale";
+  saleClass: BenchmarkSaleClass;
   unitPrice: PriceSummary | null;
   pricePerGram: PriceSummary | null;
   units: number;
@@ -358,6 +369,12 @@ export type AggregationResult = {
     wholesaleLines: number;
     /** Retail lines whose InventoryId resolved through to a Product. */
     attributedRetailLines: number;
+    /**
+     * Retail lines from RecreationalMedical sale headers. A SUBSET of
+     * retailLines (never added to it). Optional so payloads persisted before
+     * the medical split still parse.
+     */
+    medicalLines?: number;
     /** How many times the statewide-mover map hit its cap and was pruned. */
     moverMapPrunes: number;
     /** Task I (I4): manifest rows read (vendor attribution inputs). Optional
@@ -475,7 +492,7 @@ type LicenseeIdentity = {
 };
 
 /**
- * Packed sale-header value (single Float64 lane, exact-integer safe):
+ * Packed sale-header value (lane 0 of headerMap, exact-integer safe):
  *   bit 0        — saleClass code (0 retail, 1 wholesale)
  *   bits 1..8    — tracked SELLER slot (0 = untracked; 1-based, ≤ SLOT_LIMIT)
  *   bits 9..16   — tracked BUYER slot  (0 = untracked; wholesale sourcing, S7)
@@ -484,9 +501,27 @@ type LicenseeIdentity = {
  * Max packed value = 1 + 2·255 + 512·255 + 131072·(2^36 − 1) = 2^53 − 1,
  * which a Float64 represents exactly. Ids ≥ 2^36 are NOT packed (the line is
  * still counted; its supplier folds into "unattributed" — never guessed).
+ *
+ * MEDICAL FLAG (lane 1). Lane 0 above saturates 2^53 − 1 EXACTLY — there is no
+ * spare bit — so the medical marker rides in a SECOND lane rather than being
+ * squeezed in (which would silently overflow and corrupt supplier ids).
+ * Lane 1 is 1 when SaleHeader.SaleType is RecreationalMedical, else 0.
+ *
+ * WHY SaleType and not Inventory.IsMedical: both exist in the real extract and
+ * they mean DIFFERENT things.
+ *   - SaleHeader.SaleType = 'RecreationalMedical' → the SALE was a medical sale
+ *     (medically-endorsed store, qualifying patient, excise-exempt).
+ *   - Inventory.IsMedical = True → the PRODUCT is DOH-compliant medical-grade,
+ *     which says nothing about who bought it or how it was taxed.
+ * Michael asked to break out medical vs non-medical SALES, so the class split
+ * keys on SaleType. IsMedical is a product attribute and is NOT conflated here.
+ * (Verified against the real December 2025 extract: SaleHeader carries
+ * SaleType; Inventory carries IsMedical at column 9.)
  */
 const CLASS_RETAIL = 0;
 const CLASS_WHOLESALE = 1;
+/** Lane-1 marker: this header was a RecreationalMedical sale. */
+const MEDICAL_YES = 1;
 const SLOT_LIMIT = 255;
 const BUYER_FACTOR = 512; // 2 · 256
 const SUPPLIER_FACTOR = 131072; // 2 · 256 · 256
@@ -500,7 +535,9 @@ export class CcrsAggregator {
   /** inventoryId → [productId, strainId] (0 = absent). */
   private invMap = new U53Map(2);
   /** saleHeaderId → packed(class + sellerSlot + buyerSlot + supplierId). */
-  private headerMap = new U53Map(1);
+  // Lane 0 = packed class/slots/supplier (see doc above CLASS_RETAIL).
+  // Lane 1 = medical marker (1 = RecreationalMedical sale, 0 = not).
+  private headerMap = new U53Map(2);
   /**
    * Task I (I4): inventoryId → manifest ORIGIN license number (the shipping
    * vendor). Sparse — only lots whose ExternalIdentifier matched a live
@@ -580,6 +617,7 @@ export class CcrsAggregator {
     retailLines: 0,
     wholesaleLines: 0,
     attributedRetailLines: 0,
+    medicalLines: 0,
     moverMapPrunes: 0,
     // Task I (I4): manifest tables (vendor attribution inputs).
     manifestRows: 0,
@@ -796,9 +834,16 @@ export class CcrsAggregator {
         }
       }
     }
+    // Lane 1 carries the medical marker. normalizeSaleType already maps
+    // "RecreationalMedical" → "medical" (verified enum: RecreationalRetail,
+    // RecreationalMedical, Wholesale). Medical sales ARE retail sales, so
+    // classCode stays CLASS_RETAIL and the marker rides alongside it — that
+    // keeps every existing retail rollup whole while letting the medical
+    // subset be reported separately.
     this.headerMap.set(
       idNum,
       classCode + sellerSlot * 2 + buyerSlot * BUYER_FACTOR + supplierId * SUPPLIER_FACTOR,
+      row.saleType === "medical" ? MEDICAL_YES : 0,
     );
   }
 
@@ -808,8 +853,10 @@ export class CcrsAggregator {
     this.totals.saleDetailRows += 1;
     if (row.isDeleted === true) return;
     if (!row.saleHeaderId || row.unitPriceMinor == null || row.unitPriceMinor < 0) return;
-    const packed = this.headerMap.get(Number(row.saleHeaderId));
+    const headerKey = Number(row.saleHeaderId);
+    const packed = this.headerMap.get(headerKey, 0);
     if (packed === undefined) return;
+    const isMedicalSale = this.headerMap.get(headerKey, 1) === MEDICAL_YES;
     // Unpack (see the packing doc above CLASS_RETAIL). All ops are exact:
     // packed < 2^53.
     const classCode = packed % 2;
@@ -848,6 +895,17 @@ export class CcrsAggregator {
     this.bench(saleClass, "type", invType, unitMinor, ppgMinor, qty, lineMinor);
     if (brand) this.bench(saleClass, "brand", brand, unitMinor, ppgMinor, qty, lineMinor);
     if (strainName) this.bench(saleClass, "strain", strainName, unitMinor, ppgMinor, qty, lineMinor);
+
+    // -- medical breakout (ADDITIVE: these lines are ALSO counted above as
+    //    retail, so "retail" keeps its historical meaning and stays comparable
+    //    across months; non-medical retail = retail − medical) --
+    if (isMedicalSale && saleClass === "retail") {
+      this.totals.medicalLines += 1;
+      this.bench("medical", "overall", "all", unitMinor, ppgMinor, qty, lineMinor);
+      this.bench("medical", "type", invType, unitMinor, ppgMinor, qty, lineMinor);
+      if (brand) this.bench("medical", "brand", brand, unitMinor, ppgMinor, qty, lineMinor);
+      if (strainName) this.bench("medical", "strain", strainName, unitMinor, ppgMinor, qty, lineMinor);
+    }
 
     // -- statewide movers (retail only; that's the sell-through signal) --
     if (saleClass === "retail" && product?.name) {
@@ -1035,7 +1093,7 @@ export class CcrsAggregator {
   }
 
   private bench(
-    saleClass: "retail" | "wholesale",
+    saleClass: BenchmarkSaleClass,
     scope: StatewideBenchmark["scope"],
     key: string,
     unitMinor: number,
@@ -1066,7 +1124,7 @@ export class CcrsAggregator {
     let statewide: StatewideBenchmark[] = [];
     for (const [k, acc] of this.statewide.entries()) {
       const [saleClass, scope, scopeKey] = k.split("\u0001") as [
-        "retail" | "wholesale",
+        BenchmarkSaleClass,
         StatewideBenchmark["scope"],
         string,
       ];
