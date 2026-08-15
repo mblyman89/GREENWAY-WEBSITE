@@ -19,6 +19,7 @@ import { deflateRawSync } from "node:zlib";
 import {
   decodeCcrsBytes,
   sniffDelimiter,
+  splitDelimited,
   LineSplitter,
   detectExtractTable,
   tableNameFromZipEntry,
@@ -600,5 +601,111 @@ describe("zip reader", () => {
     await expect(readZipEntries(bytesAsBlob(new TextEncoder().encode("this is not a zip file at all, definitely more than 22 bytes")))).rejects.toThrow(
       /end-of-central-directory/,
     );
+  });
+});
+
+/**
+ * Quoted-CSV coverage — REGRESSION GUARD for a real defect found against the
+ * REAL December 2025 extract.
+ *
+ * The Licensee table ships COMMA-delimited AND QUOTED while every other table
+ * is tab-delimited and unquoted. 50 of 150 sampled licensee rows (33%) carry
+ * quoted commas. The previous naive `line.split(",")` shifted every later cell
+ * left by one, so Name/DBA/City/County were read from the WRONG columns:
+ * `"GAFCO, LLC"` yielded name '"GAFCO', dba 'LLC"', city null, county
+ * '982235399' (a ZIP code). All fixtures below are VERBATIM real rows.
+ */
+describe("splitDelimited (RFC-4180 quotes)", () => {
+  it("keeps a quoted delimiter inside the field", () => {
+    expect(splitDelimited('a,"b,c",d', ",")).toEqual(["a", "b,c", "d"]);
+  });
+
+  it("unwraps quotes without keeping them", () => {
+    expect(splitDelimited('"GAFCO, LLC",PUFFIN FARM', ",")).toEqual(["GAFCO, LLC", "PUFFIN FARM"]);
+  });
+
+  it("treats a doubled quote as one literal quote", () => {
+    expect(splitDelimited('"say ""hi""",x', ",")).toEqual(['say "hi"', "x"]);
+  });
+
+  it("preserves empty fields exactly", () => {
+    expect(splitDelimited("a,,b", ",")).toEqual(["a", "", "b"]);
+    expect(splitDelimited('a,"",b', ",")).toEqual(["a", "", "b"]);
+  });
+
+  it("keeps a mid-field quote verbatim (never 'repairs' it)", () => {
+    expect(splitDelimited('5" pipe,x', ",")).toEqual(['5" pipe', "x"]);
+  });
+
+  it("is byte-identical to split() on unquoted tab lines (hot path)", () => {
+    const line = "8330042\t7680101\t1299906\t\t1.00\t.00\t.00";
+    expect(splitDelimited(line, "\t")).toEqual(line.split("\t"));
+  });
+
+  it("handles tab-delimited lines that do contain a quote character", () => {
+    expect(splitDelimited('a\t"b\tc"\td', "\t")).toEqual(["a", "b\tc", "d"]);
+  });
+});
+
+describe("licensee parsing — REAL December 2025 rows with quoted commas", () => {
+  const HEADER =
+    "LicenseStatus,LicenseeId,UBI,LicenseNumber,Name,DBA,LicenseIssueDate,LicenseExpirationDate,ExternalIdentifier,IsDeleted,Address1,Address2,City,State,ZipCode,County,EmailAddress,PhoneNumber,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate";
+
+  // Verbatim rows from Michael's real December 2025 extract sample.
+  const ROW_QUOTED_NAME =
+    'Active,8,6033508340010001,413021    ,"GAFCO, LLC",PUFFIN FARM,2024-12-05,2025-11-30,NULL,0,23930 OSO LOOP RD STE X,,ARLINGTON,WA,982235399,SNOHOMISH,cyrenas@gmail.com,NULL,LoadLicenseeETL,2021-12-02 08:32:50.137,proc_UpdateExistingLicenses,2025-11-20 04:50:39.643';
+  const ROW_QUOTED_ADDR2 =
+    'Active,9,6047608990010001,416626    ,VANCOUVER GARDENS LLC,VANCOUVER GARDENS LLC,2025-09-11,2026-06-30,NULL,0,931 GOERIG RD STE C,"D, E",WOODLAND,WA,986749376,COWLITZ,royalkind.co@gmail.com,NULL,LoadLicenseeETL,2021-12-02 08:32:50.137,proc_UpdateExistingLicenses,2025-09-11 04:45:37.730';
+  const ROW_PLAIN =
+    'Active,22,6035601210010004,079720    ,FILLABONG INC,FILLABONG,2025-11-13,2026-11-30,NULL,0,3249 PERRY AVE STE B,,BREMERTON,WA,98310    ,KITSAP,snaytammy@yahoo.com,NULL,LoadLicenseeETL,2021-12-06 09:09:34.420,proc_UpdateExistingLicenses,2025-11-13 04:50:45.510';
+
+  async function parseLicensees(rows: string[]) {
+    const text = [HEADER, ...rows].join("\r\n") + "\r\n";
+    async function* chunks() {
+      yield text;
+    }
+    const out: ReturnType<typeof mapLicensee>[] = [];
+    const res = await streamTable(chunks(), (kind, cells, idx) => {
+      if (kind === "licensee") out.push(mapLicensee(cells, idx));
+    });
+    return { out, res };
+  }
+
+  it("detects the comma-delimited licensee table", async () => {
+    const { res } = await parseLicensees([ROW_PLAIN]);
+    expect(res.kind).toBe("licensee");
+    expect(res.rowCount).toBe(1);
+  });
+
+  it("reads a quoted company name without splitting it", async () => {
+    const { out } = await parseLicensees([ROW_QUOTED_NAME]);
+    expect(out[0]).toEqual({
+      licenseeId: "8",
+      licenseNumber: "413021",
+      name: "GAFCO, LLC",
+      dba: "PUFFIN FARM",
+      status: "Active",
+      city: "ARLINGTON",
+      county: "SNOHOMISH",
+    });
+  });
+
+  it("does not let a quoted Address2 shift City/County (county must not be a ZIP)", async () => {
+    const { out } = await parseLicensees([ROW_QUOTED_ADDR2]);
+    expect(out[0]?.city).toBe("WOODLAND");
+    expect(out[0]?.county).toBe("COWLITZ");
+    expect(out[0]?.county).not.toMatch(/^\d+$/);
+  });
+
+  it("still parses unquoted rows correctly", async () => {
+    const { out } = await parseLicensees([ROW_PLAIN]);
+    expect(out[0]?.name).toBe("FILLABONG INC");
+    expect(out[0]?.city).toBe("BREMERTON");
+    expect(out[0]?.county).toBe("KITSAP");
+  });
+
+  it("trims the space-padded LicenseNumber", async () => {
+    const { out } = await parseLicensees([ROW_QUOTED_NAME, ROW_PLAIN]);
+    expect(out.map((r) => r?.licenseNumber)).toEqual(["413021", "079720"]);
   });
 });

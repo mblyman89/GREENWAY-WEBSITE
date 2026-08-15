@@ -56,15 +56,76 @@ export function sniffDelimiter(firstLine: string): "\t" | "," {
   return commas > tabs ? "," : "\t";
 }
 
+/**
+ * Split ONE delimited line into cells, honoring RFC-4180 double quotes.
+ *
+ * VERIFIED NECESSARY against the real December 2025 extract: the Licensee table
+ * ships COMMA-delimited and QUOTED while every other table is tab-delimited and
+ * unquoted. 50 of 150 sampled licensee rows (33%) carry quoted commas, e.g.
+ *   Active,8,...,413021    ,"GAFCO, LLC",PUFFIN FARM,...,ARLINGTON,...,SNOHOMISH
+ * A naive `line.split(",")` shifts every later cell left by one, so Name, DBA,
+ * City and County are read from the WRONG columns (observed: name '"GAFCO',
+ * dba 'LLC"', city null, county '982235399' — a ZIP code). Address2 values like
+ * "D, E" corrupt rows the same way.
+ *
+ * Rules (RFC 4180): a field may be wrapped in double quotes; inside a quoted
+ * field the delimiter is literal and `""` denotes one literal quote. A quote
+ * appearing mid-field in an UNQUOTED field is kept verbatim (never repaired).
+ *
+ * Tab-delimited lines with no quote character take a fast path and are split
+ * exactly as before, so the hot tables (SalesDetail/SaleHeader ~10M rows) are
+ * unaffected.
+ */
+export function splitDelimited(line: string, delim: "\t" | ","): string[] {
+  // Fast path: nothing quoted on this line → identical to the previous behavior.
+  if (line.indexOf('"') < 0) return line.split(delim);
+
+  const cells: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"'; // escaped quote
+          i += 1;
+        } else {
+          inQuotes = false; // closing quote
+        }
+      } else {
+        cur += ch;
+      }
+      continue;
+    }
+    if (ch === '"' && cur.length === 0) {
+      inQuotes = true; // opening quote (only at field start)
+      continue;
+    }
+    if (ch === delim) {
+      cells.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  cells.push(cur);
+  return cells;
+}
+
 // ---------------------------------------------------------------------------
 // Streaming line splitter (UTF-16 text arrives in arbitrary chunks)
 // ---------------------------------------------------------------------------
 
 /**
  * Incremental CRLF/LF line splitter. Feed decoded text chunks; it emits
- * complete lines and buffers the trailing partial. Quotes are NOT interpreted:
- * verified extract fields never contain embedded newlines (tab-delimited,
- * unquoted). flush() returns the final unterminated line, if any.
+ * complete lines and buffers the trailing partial. flush() returns the final
+ * unterminated line, if any.
+ *
+ * Quotes are deliberately NOT interpreted AT THIS LAYER: verified extract
+ * fields never contain embedded newlines, so line boundaries are unambiguous.
+ * Quoting IS honored one layer up, when a line is split into cells — see
+ * `splitDelimited` (required by the comma-delimited, quoted Licensee table).
  */
 export class LineSplitter {
   private buf = "";
@@ -470,7 +531,7 @@ export async function streamTable(
     if (line.length === 0) return;
     if (idx == null) {
       delim = sniffDelimiter(line);
-      const header = line.split(delim);
+      const header = splitDelimited(line, delim);
       kind = detectExtractTable(header);
       idx = headerIndexMap(header);
       headerLen = header.length;
@@ -480,7 +541,7 @@ export async function streamTable(
       rowCount++;
       return;
     }
-    const cells = line.split(delim as string);
+    const cells = splitDelimited(line, delim as "\t" | ",");
     // Defensive: tolerate ±2 columns (trailing tabs happen); skip anything worse.
     if (cells.length + 2 < headerLen) return;
     rowCount++;
