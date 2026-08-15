@@ -121,5 +121,14 @@ on conflict (license_number) do update
       city      = excluded.city,
       county    = excluded.county,
       area      = excluded.area,
-      is_self   = excluded.is_self,
-      is_active = true;
+      is_self   = excluded.is_self;
+-- NOTE: `is_active` is deliberately NOT reset here.
+--
+-- This clause originally ended with `is_active = true`, which meant re-running
+-- this migration RESURRECTED every competitor the owner had deactivated.
+-- Reproduced on a real PostgreSQL 15.18 instance: deactivating 414550 and
+-- re-applying this file flipped is_active back to true.
+--
+-- The roster is now owner-managed from the back office
+-- (/admin/discovery/competitors), so a deactivation is a deliberate human
+-- decision. A seed file must never silently overturn it.

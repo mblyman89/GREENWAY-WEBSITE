@@ -78,16 +78,25 @@ describe("trxTimeToIso (PAI Trx Time → ISO dedup key)", () => {
   it("date-only anchors at noon UTC", () => {
     expect(trxTimeToIso("6/1/25")).toBe("2025-06-01T12:00:00Z");
   });
-  it("converts 12h AM/PM to 24h", () => {
-    expect(trxTimeToIso("6/1/25 9:30:00 AM")).toBe("2025-06-01T09:30:00Z");
-    expect(trxTimeToIso("6/1/25 1:05:00 PM")).toBe("2025-06-01T13:05:00Z");
+  // PAI reports EASTERN wall-clock time; trxTimeToIso converts it to a true UTC
+  // instant (see the comment in atm-sync-core.ts). June 1 is EDT = UTC-4, so
+  // 9:30 AM Eastern is 13:30Z. These expectations were stale after the
+  // Eastern->UTC fix landed and asserted the OLD, wrong behaviour of pasting
+  // Eastern digits under a "Z" suffix.
+  it("converts 12h AM/PM to 24h and Eastern to UTC (EDT = UTC-4)", () => {
+    expect(trxTimeToIso("6/1/25 9:30:00 AM")).toBe("2025-06-01T13:30:00Z");
+    expect(trxTimeToIso("6/1/25 1:05:00 PM")).toBe("2025-06-01T17:05:00Z");
   });
   it("handles 12 AM (midnight) and 12 PM (noon)", () => {
-    expect(trxTimeToIso("6/1/25 12:00:00 AM")).toBe("2025-06-01T00:00:00Z");
-    expect(trxTimeToIso("6/1/25 12:00:00 PM")).toBe("2025-06-01T12:00:00Z");
+    expect(trxTimeToIso("6/1/25 12:00:00 AM")).toBe("2025-06-01T04:00:00Z");
+    expect(trxTimeToIso("6/1/25 12:00:00 PM")).toBe("2025-06-01T16:00:00Z");
   });
   it("defaults seconds to 00 when absent", () => {
-    expect(trxTimeToIso("6/1/25 3:15 PM")).toBe("2025-06-01T15:15:00Z");
+    expect(trxTimeToIso("6/1/25 3:15 PM")).toBe("2025-06-01T19:15:00Z");
+  });
+  it("uses EST (UTC-5) in winter, not EDT", () => {
+    // January is outside daylight time; the offset must change with the date.
+    expect(trxTimeToIso("1/15/25 9:30:00 AM")).toBe("2025-01-15T14:30:00Z");
   });
 });
 
@@ -99,7 +108,7 @@ describe("planCashLoadUpserts (idempotent on terminal_id + loaded_at)", () => {
     expect(plan.upserts).toHaveLength(1);
     const u = plan.upserts[0];
     expect(u.terminal_id).toBe("TERM1");
-    expect(u.loaded_at).toBe("2025-06-01T09:30:00Z");
+    expect(u.loaded_at).toBe("2025-06-01T13:30:00Z"); // 9:30 AM Eastern -> UTC
     expect(u.load_date).toBe("2025-06-01");
     expect(u.cash_load_cents).toBe(100000);
     expect(u.balance_after_cents).toBe(500000);

@@ -134,9 +134,14 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
           />
         }
         action={
-          <Link href="/admin/discovery/benchmarks">
-            <Button variant="neutral" size="sm">View benchmarks →</Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/discovery/competitors">
+              <Button variant="neutral" size="sm">Competitor roster</Button>
+            </Link>
+            <Link href="/admin/discovery/benchmarks">
+              <Button variant="neutral" size="sm">View benchmarks →</Button>
+            </Link>
+          </div>
         }
         help={
           <HelpPanel
@@ -289,6 +294,17 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
               trackedLicenseNumbers={trackedLicenseNumbers}
             />
             <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
+              Tracking{" "}
+              <Link
+                href="/admin/discovery/competitors"
+                className="font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                {trackedLicenseNumbers.length} licensees
+              </Link>{" "}
+              this run. Add or remove them yourself on the competitor roster — no code changes
+              needed.
+            </p>
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
               The raw file is crunched locally in your browser and never uploads — only the compact
               market rollups are saved. Feeds the{" "}
               <Link href="/admin/discovery/benchmarks" className="font-semibold text-[var(--admin-accent)] hover:underline">

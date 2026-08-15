@@ -117,6 +117,13 @@ export type DiscoveryCompetitor = {
   city: string | null;
   county: string | null;
   area: DiscoveryCompetitorArea;
+  /**
+   * What the licensee IS, declared by a human (migration 0179). CCRS carries no
+   * license-type column, so this can never be derived - see
+   * src/lib/discovery/competitor-roster-core.ts. Optional here because rows
+   * read before the migration is applied won't have it.
+   */
+  kind?: "retailer" | "producer_processor" | "unknown" | null;
   is_self: boolean;
   is_active: boolean;
   note: string | null;
