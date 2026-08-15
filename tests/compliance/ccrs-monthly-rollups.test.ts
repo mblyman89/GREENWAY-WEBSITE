@@ -655,3 +655,99 @@ describe("migration 0110 — discovery_market_signals vendor columns", () => {
     expect(/check\s*\(/i.test(ddl)).toBe(false);
   });
 });
+
+/**
+ * Medical class must survive the validator and reach the database.
+ *
+ * The validator previously accepted ONLY retail|wholesale, so a medical row
+ * would have been rejected outright (whole payload refused). The benchmark-row
+ * builder also chose metric names with a retail/else ternary, which would have
+ * silently filed medical rows under the WHOLESALE metrics. Both are covered
+ * here because either failure loses the medical breakout without erroring in a
+ * way the owner would notice.
+ */
+describe("medical sale class — validator + metric mapping", () => {
+  const medRow = {
+    scope: "overall" as const,
+    scopeKey: "all",
+    saleClass: "medical",
+    unitPrice: {
+      sampleSize: 2,
+      minMinor: 2500,
+      p25Minor: 2500,
+      medianMinor: 2500,
+      p75Minor: 2500,
+      maxMinor: 2500,
+      avgMinor: 2500,
+    },
+    pricePerGram: null,
+    units: 2,
+    revenueMinor: 5000,
+  };
+
+  it("accepts a medical statewide row", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.statewide as unknown[]).push(medRow);
+    const out = sanitizeAggregationResult(base);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.result.statewide.some((b) => b.saleClass === "medical")).toBe(true);
+  });
+
+  it("preserves the medical row's figures exactly", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.statewide as unknown[]).push(medRow);
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error("expected ok");
+    const med = out.result.statewide.find((b) => b.saleClass === "medical");
+    expect(med?.units).toBe(2);
+    expect(med?.revenueMinor).toBe(5000);
+    expect(med?.unitPrice?.medianMinor).toBe(2500);
+  });
+
+  it("still rejects a genuinely unknown sale class", () => {
+    const out = sanitizeAggregationResult({
+      totals: {},
+      statewide: [{ scope: "type", scopeKey: "x", saleClass: "sideways", units: 1, revenueMinor: 1 }],
+      competitors: [],
+      signals: [],
+    });
+    expect(out.ok).toBe(false);
+  });
+
+  it("carries medicalLines through totals", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.totals as Record<string, unknown>).medicalLines = 3;
+    const out = sanitizeAggregationResult(base);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.result.totals.medicalLines).toBe(3);
+  });
+
+  it("keeps an explicit zero as zero (a measured month with no medical sales)", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.totals as Record<string, unknown>).medicalLines = 0;
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.totals.medicalLines).toBe(0);
+  });
+
+  it("leaves medicalLines UNDEFINED for a pre-split payload (never measured is not zero)", () => {
+    // A payload produced before the medical split has no medicalLines field.
+    // Coercing that to 0 would assert the month had no medical sales, which is
+    // a guess. It must stay absent so it persists as NULL.
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    delete (base.totals as Record<string, unknown>).medicalLines;
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.totals.medicalLines).toBeUndefined();
+  });
+
+  it("ignores a non-numeric medicalLines rather than trusting it", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.totals as Record<string, unknown>).medicalLines = "12";
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.totals.medicalLines).toBeUndefined();
+  });
+});

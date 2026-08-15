@@ -198,6 +198,13 @@ export type DiscoveryDataset = {
   retail_lines?: number | null;
   wholesale_lines?: number | null;
   attributed_retail_lines?: number | null;
+  /**
+   * Medical split (migration 0180): retail lines from RecreationalMedical sale
+   * headers. A SUBSET of retail_lines, so non-medical retail is
+   * `retail_lines - medical_lines`. NULL means the dataset was ingested before
+   * the medical split existed and was never measured — NOT that it was zero.
+   */
+  medical_lines?: number | null;
   ingest_kind?: string | null; // 'csv' | 'monthly_zip'
 };
 
@@ -334,7 +341,15 @@ export type BenchmarkMetric =
   | "retail_units"
   | "wholesale_units"
   | "retail_revenue"
-  | "wholesale_revenue";
+  | "wholesale_revenue"
+  // Medical breakout. A RecreationalMedical sale is a SUBSET of retail: these
+  // lines are ALSO counted in the retail_* metrics, so retail keeps its
+  // historical meaning and months stay comparable. Non-medical retail is
+  // retail_* − medical_*.
+  | "medical_unit_price"
+  | "medical_price_per_gram"
+  | "medical_units"
+  | "medical_revenue";
 
 export type DiscoveryBenchmark = {
   id: number;

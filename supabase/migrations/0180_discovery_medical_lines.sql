@@ -1,0 +1,78 @@
+-- =============================================================================
+-- 0180_discovery_medical_lines.sql
+-- Product Discovery: record how many retail lines were MEDICAL sales.
+--
+-- OWNER REQUEST (verbatim, standing rule 1):
+--   "break out medical vs non-medical as its own class"
+--
+-- WHAT THIS STORES
+-- ----------------
+-- `medical_lines` is the count of SalesDetail lines whose SaleHeader carried
+-- SaleType = 'RecreationalMedical'. It is a SUBSET of `retail_lines`, never an
+-- addition to it. Non-medical retail is therefore an exact subtraction:
+--
+--   non-medical retail lines = retail_lines - medical_lines
+--
+-- WHY SaleType AND NOT Inventory.IsMedical
+-- ----------------------------------------
+-- The real CCRS monthly extract carries TWO different medical signals, and
+-- they answer two different questions. Verified against the owner's real
+-- December 2025 delivery (656.1 MB, 17 tables):
+--
+--   * SaleHeader.SaleType = 'RecreationalMedical'
+--       -> the SALE was made to a medical patient. This is a SALES fact.
+--   * Inventory.IsMedical = True / False   (Inventory column [9])
+--       -> the PRODUCT is DOH-compliant. This is a PRODUCT fact.
+--
+-- A DOH-compliant product sold to a recreational customer is NOT a medical
+-- sale, and a plain product sold to a card-holding patient IS one. The owner
+-- asked to break out medical SALES, so the split keys on SaleType. IsMedical
+-- is deliberately NOT conflated with it and is NOT what this column counts.
+--
+-- WHY THE COLUMN IS NULLABLE
+-- --------------------------
+-- Every dataset ingested BEFORE the medical split was computed has no honest
+-- medical count. NULL means "this delivery was never measured for medical",
+-- which is the truth. It does NOT mean zero. Defaulting to 0 would state, as
+-- fact, that those months had no medical sales - a guess, and a wrong one.
+-- (Standing rule 2: never guess, never assume.)
+--
+-- NO CHANGE IS NEEDED FOR THE MEDICAL BENCHMARKS THEMSELVES
+-- ---------------------------------------------------------
+-- The medical price/units/revenue benchmarks land in public.discovery_benchmarks
+-- as four new metric strings (medical_unit_price, medical_price_per_gram,
+-- medical_units, medical_revenue). Verified in 0106: `metric` is a free-form
+-- `text` column with NO check constraint and NO enum, and the unique key is
+-- (dataset_id, scope, scope_key, metric) - so the new metrics get their own
+-- rows and cannot collide with the retail ones. Nothing to alter there.
+--
+-- Likewise the `discovery_ccrs_sale_type` enum ALREADY contains 'medical'
+-- (0079, line 38), so no enum change is required either.
+--
+-- STANDING RULES honored:
+--   * Idempotent: `add column if not exists`. Safe to re-run.
+--   * Owner applies this MANUALLY in the Supabase SQL editor (rule 6).
+--   * Money untouched here; counts are plain line counts.
+--   * Depends on: 0106_discovery_market_rollups.sql (which added retail_lines).
+-- Next migration after this is 0181.
+-- =============================================================================
+
+alter table public.discovery_datasets
+  add column if not exists medical_lines bigint;
+
+comment on column public.discovery_datasets.medical_lines is
+  'Retail sale lines whose SaleHeader.SaleType was RecreationalMedical. A SUBSET of retail_lines. NULL = this dataset predates the medical split and was never measured (NOT zero).';
+
+-- ---------------------------------------------------------------------------
+-- Verification (run manually after applying):
+--
+--   select label, retail_lines, medical_lines,
+--          retail_lines - medical_lines as non_medical_retail_lines
+--     from public.discovery_datasets
+--    where ingest_kind = 'monthly_zip'
+--    order by period_end desc;
+--
+-- Expect medical_lines to be NULL for every month uploaded before this change,
+-- and populated for every month uploaded after it. medical_lines must never
+-- exceed retail_lines.
+-- ---------------------------------------------------------------------------
