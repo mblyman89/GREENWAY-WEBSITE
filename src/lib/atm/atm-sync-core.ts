@@ -48,6 +48,69 @@ export type CashLoadPlan = {
  * collide. Returns null when no date can be parsed (caller skips + records it).
  * We do NOT guess a timezone — the raw string is preserved verbatim in `raw`.
  */
+/**
+ * PAI's reporting timezone.
+ *
+ * Michael, 2026-08-15: "PAI is a company in New York, a different time zone.
+ * I've noticed in the past that deposits don't match up always because of the
+ * time difference. If my ATM is used at 10pm, to PAI it's the next day."
+ *
+ * That is a real and important observation. What we can state as FACT:
+ *   • The store is Pacific; PAI reports Eastern (UTC−5 / UTC−4 DST).
+ *   • A swipe at 22:00 Pacific is 01:00 the NEXT DAY Eastern.
+ *
+ * What we must NOT do is silently shift dates. PAI's own settlement date is what
+ * PAI pays against, so the settlement date is authoritative for reconciliation —
+ * re-dating it would make our books disagree with the payer's records. What was
+ * genuinely WRONG is that we stamped PAI's local wall-clock time with a literal
+ * "Z" (UTC) suffix, asserting an instant that is off by the Eastern offset.
+ *
+ * So we record the true instant, and keep PAI's calendar date untouched.
+ */
+export const PAI_TIMEZONE = "America/New_York" as const;
+export const STORE_TIMEZONE = "America/Los_Angeles" as const;
+
+/**
+ * Eastern Time UTC offset in hours for a given date (5 standard, 4 daylight).
+ * US DST: second Sunday in March .. first Sunday in November.
+ * Pure and dependency-free — no Intl/tzdata reliance in a money path.
+ */
+export function easternOffsetHours(isoDate: string): number {
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return 5;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+
+  const dowOf = (yy: number, mm: number, dd: number) =>
+    new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay();
+
+  // Second Sunday in March.
+  let march = 1;
+  let sundays = 0;
+  for (let day = 1; day <= 31; day++) {
+    if (dowOf(y, 3, day) === 0) {
+      sundays++;
+      if (sundays === 2) {
+        march = day;
+        break;
+      }
+    }
+  }
+  // First Sunday in November.
+  let nov = 1;
+  for (let day = 1; day <= 30; day++) {
+    if (dowOf(y, 11, day) === 0) {
+      nov = day;
+      break;
+    }
+  }
+
+  const afterStart = mo > 3 || (mo === 3 && d >= march);
+  const beforeEnd = mo < 11 || (mo === 11 && d < nov);
+  return afterStart && beforeEnd ? 4 : 5;
+}
+
 export function trxTimeToIso(raw: string | null | undefined): string | null {
   const s = (raw ?? "").trim();
   if (s === "") return null;
@@ -67,8 +130,15 @@ export function trxTimeToIso(raw: string | null | undefined): string | null {
   if (hh < 0 || hh > 23 || mm < 0 || mm > 59 || ss < 0 || ss > 59) {
     return `${isoDate}T12:00:00Z`;
   }
-  const p2 = (n: number) => String(n).padStart(2, "0");
-  return `${isoDate}T${p2(hh)}:${p2(mm)}:${p2(ss)}Z`;
+
+  // PAI reports EASTERN wall-clock time. Previously we pasted those digits under
+  // a "Z" suffix, which claims they are UTC — an instant wrong by 4–5 hours and,
+  // for anything after 7pm Eastern, wrong by a whole CALENDAR DAY once read back
+  // in any other zone. Convert properly so the stored instant is the truth.
+  const offset = easternOffsetHours(isoDate);
+  const [yy, mo, dd] = isoDate.split("-").map(Number);
+  const utcMs = Date.UTC(yy, mo - 1, dd, hh + offset, mm, ss);
+  return new Date(utcMs).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 /** Build the upsert plan for cash loads. Idempotent on (terminal_id, loaded_at). */
@@ -290,11 +360,58 @@ export function __runAtmSyncCoreTests(): void {
   };
 
   // trxTimeToIso ------------------------------------------------------------
-  expect("trxTime PM converts to 24h UTC", trxTimeToIso("8/8/26 8:49:11 PM") === "2026-08-08T20:49:11Z");
-  expect("trxTime AM keeps hour", trxTimeToIso("8/8/26 8:45:09 AM") === "2026-08-08T08:45:09Z");
-  expect("trxTime 12 AM → 00", trxTimeToIso("8/1/26 12:06:24 AM") === "2026-08-01T00:06:24Z");
-  expect("trxTime 12 PM → 12", trxTimeToIso("8/1/26 12:02:39 PM") === "2026-08-01T12:02:39Z");
+  // NOTE (2026-08-15, rule 17): the four assertions below were REWRITTEN. They
+  // previously required trxTimeToIso to copy PAI's wall-clock digits verbatim and
+  // append "Z" — i.e. to claim Eastern local time was UTC. That is exactly what
+  // Michael spotted from the outside ("PAI is in New York... if my ATM is used at
+  // 10pm, to PAI it's the next day"). The 12-hour AM/PM parsing these tests were
+  // really guarding is still fully covered; only the asserted INSTANT has been
+  // corrected by the Eastern offset (August = DST = UTC−4).
+  expect("trxTime PM converts to 24h then to UTC", trxTimeToIso("8/8/26 8:49:11 PM") === "2026-08-09T00:49:11Z");
+  expect("trxTime AM keeps hour (shifted to UTC)", trxTimeToIso("8/8/26 8:45:09 AM") === "2026-08-08T12:45:09Z");
+  expect("trxTime 12 AM → 00", trxTimeToIso("8/1/26 12:06:24 AM") === "2026-08-01T04:06:24Z");
+  expect("trxTime 12 PM → 12", trxTimeToIso("8/1/26 12:02:39 PM") === "2026-08-01T16:02:39Z");
   expect("trxTime date only → noon UTC", trxTimeToIso("8/1/26") === "2026-08-01T12:00:00Z");
+  // --- PAI EASTERN TIMEZONE (owner report, 2026-08-15) ---------------------
+  // "PAI is a company in New York... if my ATM is used at 10pm, to PAI it's the
+  // next day." Before this fix we stamped PAI's Eastern wall clock with a "Z",
+  // asserting a UTC instant that was 4-5 hours wrong.
+  expect(
+    "eastern offset: July is DST (4)",
+    easternOffsetHours("2026-07-09") === 4,
+  );
+  expect(
+    "eastern offset: January is standard (5)",
+    easternOffsetHours("2026-01-09") === 5,
+  );
+  // 2026: DST starts Sun Mar 8, ends Sun Nov 1.
+  expect("eastern offset: Mar 7 2026 still standard", easternOffsetHours("2026-03-07") === 5);
+  expect("eastern offset: Mar 8 2026 is DST", easternOffsetHours("2026-03-08") === 4);
+  expect("eastern offset: Oct 31 2026 still DST", easternOffsetHours("2026-10-31") === 4);
+  expect("eastern offset: Nov 1 2026 back to standard", easternOffsetHours("2026-11-01") === 5);
+  expect("eastern offset: unparseable date falls back to 5", easternOffsetHours("nope") === 5);
+
+  // A 10:15 PM EASTERN swipe on 7/9 is 02:15 UTC on 7/10.
+  expect(
+    "PAI 10:15 PM Eastern converts to the correct UTC instant",
+    trxTimeToIso("7/9/26 10:15:00 PM") === "2026-07-10T02:15:00Z",
+  );
+  // Winter: 10:15 PM Eastern (UTC-5) on 1/9 is 03:15 UTC on 1/10.
+  expect(
+    "PAI winter evening converts with the standard-time offset",
+    trxTimeToIso("1/9/26 10:15:00 PM") === "2026-01-10T03:15:00Z",
+  );
+  // Morning times stay on the same calendar day.
+  expect(
+    "PAI 9:00 AM Eastern stays on the same UTC day",
+    trxTimeToIso("7/9/26 9:00:00 AM") === "2026-07-09T13:00:00Z",
+  );
+  // The stored instant must never be the raw digits under a fake Z.
+  expect(
+    "the old naive 'paste digits + Z' output is gone",
+    trxTimeToIso("7/9/26 10:15:00 PM") !== "2026-07-09T22:15:00Z",
+  );
+
   expect("trxTime blank → null", trxTimeToIso("") === null);
   expect("trxTime junk → null", trxTimeToIso("not a time") === null);
 
@@ -304,7 +421,7 @@ export function __runAtmSyncCoreTests(): void {
     { terminalId: "HG26499", loadedAtRaw: "8/8/26 3:45:06 PM", loadDate: "2026-08-08", cashLoadCents: 284000, balanceAfterCents: 286000, raw: {} },
   ]);
   expect("cash plan: 2 upserts", clPlan.upserts.length === 2);
-  expect("cash plan: loaded_at iso", clPlan.upserts[0].loaded_at === "2026-08-08T20:49:11Z");
+  expect("cash plan: loaded_at iso", clPlan.upserts[0].loaded_at === "2026-08-09T00:49:11Z");
   expect("cash plan: cents", clPlan.upserts[0].cash_load_cents === 236000);
   expect("cash plan: source pai", clPlan.upserts[0].source === "pai");
   expect("cash plan: keeps raw trx time", clPlan.upserts[0].raw.loaded_at_raw === "8/8/26 8:49:11 PM");

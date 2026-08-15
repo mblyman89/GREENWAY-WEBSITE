@@ -14,7 +14,7 @@ import Link from "next/link";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { listAccounts, ENTITY_LABELS, ENTITY_CODES, isEntityCode } from "@/lib/accounting/ledger-store";
-import { groupAccountsByType } from "@/lib/accounting/books-view-core";
+import { groupAccountsByType, costClassBadgeLabel } from "@/lib/accounting/books-view-core";
 import { RefusalNotice } from "@/components/admin/books/RefusalNotice";
 
 export const dynamic = "force-dynamic";
@@ -106,9 +106,9 @@ export default async function AccountsPage({
                             retired
                           </span>
                         ) : null}
-                        {a.cost_class && a.cost_class !== "none" ? (
+                        {costClassBadgeLabel(a.cost_class, entity) ? (
                           <span className="ml-2 rounded bg-[var(--admin-gold)]/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--admin-gold)]">
-                            {a.cost_class}
+                            {costClassBadgeLabel(a.cost_class, entity)}
                           </span>
                         ) : null}
                       </td>
