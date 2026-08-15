@@ -751,3 +751,89 @@ describe("medical sale class — validator + metric mapping", () => {
     expect(out.result.totals.medicalLines).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Potency payload validation
+// ---------------------------------------------------------------------------
+
+describe("potency — payload validation", () => {
+  const potRow = {
+    analyte: "total_thc",
+    scope: "overall",
+    scopeKey: "all",
+    avgMgPerG: 2.2,
+    medianMgPerG: 2,
+    minMgPerG: 1.2,
+    maxMgPerG: 3.4,
+    sampleSize: 3,
+    censoredCount: 1,
+  };
+  const withPotency = (rows: unknown[]) => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.potency = rows;
+    return sanitizeAggregationResult(base);
+  };
+
+  it("accepts a real potency row and preserves its figures exactly", () => {
+    const out = withPotency([potRow]);
+    if (!out.ok) throw new Error("expected ok");
+    const p = out.result.potency?.[0];
+    expect(p?.analyte).toBe("total_thc");
+    expect(p?.avgMgPerG).toBe(2.2);
+    expect(p?.sampleSize).toBe(3);
+    expect(p?.censoredCount).toBe(1);
+  });
+
+  it("leaves potency UNDEFINED for a pre-potency payload (never measured is not empty)", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    delete base.potency;
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.potency).toBeUndefined();
+  });
+
+  it("drops an unknown analyte rather than trusting it", () => {
+    const out = withPotency([{ ...potRow, analyte: "total_cbn" }]);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.potency).toHaveLength(0);
+  });
+
+  it("rejects an impossible potency above 1000 mg/g", () => {
+    const out = withPotency([{ ...potRow, avgMgPerG: 5000 }]);
+    if (!out.ok) throw new Error("expected ok");
+    // Row is kept (it has samples) but the impossible average is refused.
+    expect(out.result.potency?.[0]?.avgMgPerG).toBeNull();
+  });
+
+  it("keeps a non-detect-only row with a NULL average, never zero", () => {
+    const out = withPotency([
+      { ...potRow, sampleSize: 0, censoredCount: 4, avgMgPerG: null, medianMgPerG: null, minMgPerG: null, maxMgPerG: null },
+    ]);
+    if (!out.ok) throw new Error("expected ok");
+    const p = out.result.potency?.[0];
+    expect(p?.censoredCount).toBe(4);
+    expect(p?.avgMgPerG).toBeNull();
+  });
+
+  it("drops a row that measured nothing at all", () => {
+    const out = withPotency([{ ...potRow, sampleSize: 0, censoredCount: 0 }]);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.potency).toHaveLength(0);
+  });
+
+  it("carries the potency counters through totals", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    Object.assign(base.totals as Record<string, unknown>, {
+      labResultRows: 120,
+      potencyRows: 40,
+      potencyCensoredRows: 7,
+      potencyUnjoinedRows: 3,
+    });
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error("expected ok");
+    expect(out.result.totals.labResultRows).toBe(120);
+    expect(out.result.totals.potencyRows).toBe(40);
+    expect(out.result.totals.potencyCensoredRows).toBe(7);
+    expect(out.result.totals.potencyUnjoinedRows).toBe(3);
+  });
+});

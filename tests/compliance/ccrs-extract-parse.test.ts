@@ -36,6 +36,8 @@ import {
   mapInventory,
   mapStrain,
   mapLabResult,
+  classifyPotencyTest,
+  parseTestValue,
   mapManifestHeader,
   mapTransportedItem,
   streamTable,
@@ -377,7 +379,12 @@ describe("row mappers", () => {
         "1\t900\t42\tPassed\t50066319\tPotency - THC\t2026-05-01\t23.4\t\tFalse\t\t\t\t".split("\t"),
         lIdx,
       ),
-    ).toEqual({ inventoryId: "50066319", testName: "Potency - THC", testValue: 23.4 });
+    ).toEqual({
+      inventoryId: "50066319",
+      testName: "Potency - THC",
+      testValue: 23.4,
+      censored: false,
+    });
   });
 
   it("mapManifestHeader parses the real row shape and requires the manifest id (Task I I4)", () => {
@@ -707,5 +714,126 @@ describe("licensee parsing — REAL December 2025 rows with quoted commas", () =
   it("trims the space-padded LicenseNumber", async () => {
     const { out } = await parseLicensees([ROW_QUOTED_NAME, ROW_PLAIN]);
     expect(out.map((r) => r?.licenseNumber)).toEqual(["413021", "079720"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Potency (LabResult is a LONG/EAV table: one row per test)
+//
+// Every TestName and TestValue below is VERBATIM from Michael's real
+// December 2025 CCRS delivery (LabResult_0.csv, 66.3 MB inner CSV).
+// ---------------------------------------------------------------------------
+
+describe("potency: classifyPotencyTest (real December TestNames)", () => {
+  it("recognizes the two TOTAL potency rollups", () => {
+    expect(classifyPotencyTest("Potency - Total THC (mg/g)")).toBe("total_thc");
+    expect(classifyPotencyTest("Potency - Total CBD (mg/g)")).toBe("total_cbd");
+  });
+
+  it("EXCLUDES component cannabinoids that would double count the totals", () => {
+    // These are real December rows. "Total THC" already folds THCA in, and
+    // "Total CBD" already folds CBDA in — counting the components too would
+    // inflate the same cannabinoid twice.
+    expect(classifyPotencyTest("Potency - CBD (mg/g)")).toBeNull();
+    expect(classifyPotencyTest("Potency - CBDA (mg/g)")).toBeNull();
+    expect(classifyPotencyTest("Potency - delta-9-THCA (mg/g)")).toBeNull();
+  });
+
+  it("EXCLUDES every non-potency test family in the same table", () => {
+    expect(classifyPotencyTest("Pesticide - Fludioxonil (ug/g)")).toBeNull();
+    expect(classifyPotencyTest("Pesticide - Total Pyrethrins (ug/g)")).toBeNull();
+    expect(classifyPotencyTest("Residual Solvent - Cyclohexane (ug/g)")).toBeNull();
+    expect(classifyPotencyTest("Residual Solvent - Ethanol (ug/g)")).toBeNull();
+    expect(classifyPotencyTest("Heavy Metal - Cadmium (ug/g)")).toBeNull();
+    expect(classifyPotencyTest("Heavy Metal - Mercury (ug/g)")).toBeNull();
+    expect(classifyPotencyTest("Mycotoxin - Total Aflatoxins (ug/kg)")).toBeNull();
+    expect(classifyPotencyTest("Mycotoxin - Ochratoxin A (ug/kg)")).toBeNull();
+  });
+
+  it("REQUIRES the verified mg/g unit rather than rescaling an unknown one", () => {
+    // 1.2 mg/g is 0.12%, not 1.2%. If WSLCB ever emits a percent-based name we
+    // skip it instead of silently misreading it by a factor of ten.
+    expect(classifyPotencyTest("Potency - Total THC (%)")).toBeNull();
+    expect(classifyPotencyTest("Potency - Total THC")).toBeNull();
+  });
+
+  it("is not fooled by a non-potency test that merely mentions THC", () => {
+    expect(classifyPotencyTest("Pesticide - Total THC lookalike (ug/g)")).toBeNull();
+  });
+
+  it("handles null/empty without throwing", () => {
+    expect(classifyPotencyTest(null)).toBeNull();
+    expect(classifyPotencyTest("")).toBeNull();
+  });
+});
+
+describe("potency: parseTestValue (real December TestValues)", () => {
+  it("reads plain decimal values verbatim", () => {
+    expect(parseTestValue("1.2")).toEqual({ kind: "value", value: 1.2 });
+    expect(parseTestValue("0.71")).toEqual({ kind: "value", value: 0.71 });
+    expect(parseTestValue("2.2")).toEqual({ kind: "value", value: 2.2 });
+    expect(parseTestValue("2")).toEqual({ kind: "value", value: 2 });
+  });
+
+  it("recognizes CENSORED non-detects instead of producing NaN", () => {
+    // Number("<0.061") is NaN. Left unhandled these rows either vanish or, if
+    // coerced to 0, drag every average down. They are reported as censored
+    // WITHOUT a value: we know only "below the reporting limit".
+    expect(parseTestValue("<0.061")).toEqual({ kind: "censored" });
+    expect(parseTestValue("<0.5")).toEqual({ kind: "censored" });
+    expect(parseTestValue("<50")).toEqual({ kind: "censored" });
+  });
+
+  it("does NOT invent zero for a censored value", () => {
+    const p = parseTestValue("<0.061");
+    expect(p).not.toEqual({ kind: "value", value: 0 });
+  });
+
+  it("treats blank / missing / unreadable as none", () => {
+    expect(parseTestValue("")).toEqual({ kind: "none" });
+    expect(parseTestValue("   ")).toEqual({ kind: "none" });
+    expect(parseTestValue(null)).toEqual({ kind: "none" });
+    expect(parseTestValue("N/A")).toEqual({ kind: "none" });
+    expect(parseTestValue("<")).toEqual({ kind: "none" });
+    expect(parseTestValue("<abc")).toEqual({ kind: "none" });
+  });
+});
+
+describe("potency: mapLabResult carries the censored flag (real rows)", () => {
+  const lIdx = headerIndexMap(LAB_HEADER.split("\t"));
+  const row = (s: string) => mapLabResult(s.split("\t"), lIdx);
+
+  it("maps a real Total THC row", () => {
+    // Verbatim December row 8742892.
+    const r = row(
+      "8742892\t10\t1642\tRequired\t49617646\tPotency - Total THC (mg/g)\t2025-12-07\t1.2\t0a532b72-89ce-43b8-9b40-99f8a540d89d\tFalse\tBobby Hines\t2025-12-07 00:00:00\t\t",
+    );
+    expect(r).toEqual({
+      inventoryId: "49617646",
+      testName: "Potency - Total THC (mg/g)",
+      testValue: 1.2,
+      censored: false,
+    });
+    expect(classifyPotencyTest(r.testName)).toBe("total_thc");
+  });
+
+  it("maps a real CENSORED potency row with a null value, not zero", () => {
+    // Verbatim December row 8742909.
+    const r = row(
+      "8742909\t10\t1642\tRequired\t49617646\tPotency - delta-9-THCA (mg/g)\t2025-12-07\t<0.061\t53581670-b182-404b-b04e-c7b3285d3e35\tFalse\tBobby Hines\t2025-12-07 00:00:00\t\t",
+    );
+    expect(r.testValue).toBeNull();
+    expect(r.censored).toBe(true);
+  });
+
+  it("maps a real CBD row", () => {
+    // Verbatim December row 8742903.
+    const r = row(
+      "8742903\t10\t1642\tRequired\t49617646\tPotency - CBD (mg/g)\t2025-12-07\t0.71\t3fcd364d-1369-41d0-b3d2-ece4ffb763cc\tFalse\tBobby Hines\t2025-12-07 00:00:00\t\t",
+    );
+    expect(r.testValue).toBe(0.71);
+    expect(r.censored).toBe(false);
+    // Component, not a total — deliberately not benchmarked.
+    expect(classifyPotencyTest(r.testName)).toBeNull();
   });
 });

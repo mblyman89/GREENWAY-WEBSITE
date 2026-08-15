@@ -394,7 +394,91 @@ export type LabResultRow = {
   inventoryId: string | null;
   testName: string | null;
   testValue: number | null;
+  /**
+   * True when the lab reported a NON-DETECT ("<0.061"), i.e. the analyte was
+   * below the method's reporting limit. testValue is null in that case: the
+   * true amount is unknown, only bounded. Treating it as 0 would be a guess.
+   */
+  censored: boolean;
 };
+
+/**
+ * The two potency rollups we benchmark. Only the TOTAL figures are used:
+ * "Total THC" already folds THCA in via the decarboxylation formula, so also
+ * counting "delta-9-THCA" (a separate row in this EAV table) would double
+ * count the same cannabinoid.
+ */
+export type PotencyAnalyte = "total_thc" | "total_cbd";
+
+/**
+ * Classify a LabResult TestName as a potency rollup we can benchmark.
+ *
+ * LabResult is a LONG/EAV table: one ROW PER TEST, carrying TestName +
+ * TestValue. Verified against Michael's real December 2025 extract, the
+ * potency TestNames present are:
+ *
+ *   Potency - Total THC (mg/g)      <- used (total_thc)
+ *   Potency - Total CBD (mg/g)      <- used (total_cbd)
+ *   Potency - CBD (mg/g)            <- NOT used (component of Total CBD)
+ *   Potency - CBDA (mg/g)           <- NOT used (component of Total CBD)
+ *   Potency - delta-9-THCA (mg/g)   <- NOT used (component of Total THC)
+ *
+ * Non-potency families in the same table (all deliberately excluded) are
+ * "Pesticide - ", "Residual Solvent - ", "Heavy Metal - ", "Mycotoxin - " and
+ * "Microbiological - ".
+ *
+ * UNITS ARE VERIFIED, NEVER ASSUMED. The unit is part of the TestName and this
+ * function REQUIRES a literal "(mg/g)". A potency row in any other unit
+ * returns null rather than being silently rescaled — if WSLCB ever emits a
+ * percent-based name, it is skipped and reported, not misread by a factor
+ * of ten (1.2 mg/g is 0.12%, not 1.2%).
+ */
+export function classifyPotencyTest(testName: string | null): PotencyAnalyte | null {
+  if (!testName) return null;
+  const n = testName.toLowerCase();
+  if (!n.startsWith("potency")) return null;
+  // Unit gate: only the verified mg/g form is understood.
+  if (!n.includes("(mg/g)")) return null;
+  if (n.includes("total thc")) return "total_thc";
+  if (n.includes("total cbd")) return "total_cbd";
+  return null;
+}
+
+/** Outcome of reading a LabResult TestValue cell. */
+export type ParsedTestValue =
+  | { kind: "value"; value: number }
+  | { kind: "censored" }
+  | { kind: "none" };
+
+/**
+ * Parse a LabResult TestValue.
+ *
+ * Real values in the December extract are plain decimals ("1.2", "0.71", "2.2",
+ * "2") AND censored non-detects ("<0.061", "<0.5"). A naive Number("<0.061")
+ * is NaN, so censored rows must be recognized explicitly or they silently
+ * vanish (or worse, get coerced to 0 and drag every average down).
+ *
+ * A censored row is reported as censored WITHOUT a value: all we honestly know
+ * is "below the reporting limit", not the amount. Callers count these
+ * separately and exclude them from averages rather than inventing a number.
+ */
+export function parseTestValue(raw: string | null): ParsedTestValue {
+  if (raw == null) return { kind: "none" };
+  const s = raw.trim();
+  if (s === "") return { kind: "none" };
+  if (s.startsWith("<")) {
+    // Only treat it as a non-detect when what follows is actually a number;
+    // anything else is unreadable, not censored. The emptiness check is
+    // required: Number("") is 0, which is finite, so a bare "<" would
+    // otherwise masquerade as a valid reporting limit.
+    const rest = s.slice(1).trim();
+    if (rest === "") return { kind: "none" };
+    const n = Number(rest);
+    return Number.isFinite(n) ? { kind: "censored" } : { kind: "none" };
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? { kind: "value", value: n } : { kind: "none" };
+}
 
 export function normalizeSaleType(raw: string | null): SaleHeaderRow["saleType"] {
   const n = normalizeHeaderCell(raw ?? "");
@@ -492,10 +576,15 @@ export function mapStrain(row: string[], idx: Map<string, number>): StrainRow | 
 }
 
 export function mapLabResult(row: string[], idx: Map<string, number>): LabResultRow {
+  // TestValue is parsed through parseTestValue (NOT toNum) so a censored
+  // non-detect like "<0.061" is recognized as such instead of becoming NaN →
+  // null and being indistinguishable from a blank cell.
+  const parsed = parseTestValue(cell(row, idx, "testvalue"));
   return {
     inventoryId: cell(row, idx, "inventoryid"),
     testName: cell(row, idx, "testname"),
-    testValue: toNum(cell(row, idx, "testvalue")),
+    testValue: parsed.kind === "value" ? parsed.value : null,
+    censored: parsed.kind === "censored",
   };
 }
 

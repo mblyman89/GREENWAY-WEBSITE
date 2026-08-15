@@ -29,6 +29,7 @@ import {
   mapStrain,
   mapSaleHeader,
   mapSaleDetail,
+  mapLabResult,
   mapManifestHeader,
   mapTransportedItem,
 } from "./parse";
@@ -71,6 +72,10 @@ export const TABLE_ORDER = [
   "transporteditems",
   "product",
   "inventory",
+  // Potency: LabResult joins InventoryId -> Inventory.ProductId ->
+  // Product.InventoryType, so it MUST come after both product and inventory or
+  // the per-type breakout would find nothing to join to.
+  "labresult",
   "saleheader",
   "salesdetail",
 ];
@@ -102,7 +107,7 @@ export async function runCcrsExtract(file: BlobLike, opts: ExtractRunOptions): P
     .filter((e) => e.name.toLowerCase().endsWith(".zip"))
     .filter((e) => {
       const t = tableNameFromZipEntry(e.name);
-      return !SKIPPED_TABLES.has(t) && !t.startsWith("labresult");
+      return !SKIPPED_TABLES.has(t);
     })
     .sort((a, b) => orderRank(a.name) - orderRank(b.name) || a.name.localeCompare(b.name));
   if (innerZips.length === 0) {
@@ -157,6 +162,8 @@ export async function runCcrsExtract(file: BlobLike, opts: ExtractRunOptions): P
         } else if (kind === "sale_detail") {
           const r = mapSaleDetail(cells, idx);
           if (r) agg.addSaleDetail(r);
+        } else if (kind === "lab_result") {
+          agg.addLabResult(mapLabResult(cells, idx));
         } else if (kind === "manifest_header") {
           const r = mapManifestHeader(cells, idx);
           if (r) agg.addManifestHeader(r);

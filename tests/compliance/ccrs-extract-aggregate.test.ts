@@ -1329,3 +1329,141 @@ describe("medical sale-class split", () => {
     expect(r.totals.medicalLines).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Potency capture (LabResult -> Inventory -> Product)
+//
+// LabResult is a LONG/EAV table: one ROW PER TEST. Every TestName and
+// TestValue below is VERBATIM from Michael's real December 2025 delivery.
+// ---------------------------------------------------------------------------
+
+describe("potency capture", () => {
+  /** Aggregator pre-loaded with one Flower Lot product on inventory 49617646. */
+  function potencyAgg() {
+    const agg = new CcrsAggregator({ selfLicenseNumber: "413021", trackedLicenseNumbers: [] });
+    agg.addProduct(product("700", "Flower Lot", "Blue Dream 3.5g", 3.5));
+    agg.addInventory(inventory("49617646", "700"));
+    return agg;
+  }
+  const lab = (testName: string, testValue: number | null, censored = false, inventoryId = "49617646") => ({
+    inventoryId,
+    testName,
+    testValue,
+    censored,
+  });
+  const overall = (r: AggregationResult, analyte: string) =>
+    (r.potency ?? []).find((p) => p.analyte === analyte && p.scope === "overall") ?? null;
+
+  it("averages Total THC from real readings, in mg/g (NOT rescaled to percent)", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 1.2));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 3.4));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 2.0));
+    const thc = overall(agg.result(), "total_thc");
+    expect(thc?.sampleSize).toBe(3);
+    expect(thc?.avgMgPerG).toBe(2.2); // (1.2 + 3.4 + 2.0) / 3
+    // 1.2 mg/g is 0.12%. The stored figure must remain 1.2, not 12 or 0.12.
+    expect(thc?.minMgPerG).toBe(1.2);
+    expect(thc?.maxMgPerG).toBe(3.4);
+  });
+
+  it("EXCLUDES censored non-detects from the average and counts them instead", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 2.0));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", null, true)); // "<0.5"
+    const thc = overall(agg.result(), "total_thc");
+    // Averaging the non-detect as 0 would give 1.0 — a fabricated halving.
+    expect(thc?.avgMgPerG).toBe(2);
+    expect(thc?.sampleSize).toBe(1);
+    expect(thc?.censoredCount).toBe(1);
+  });
+
+  it("reports a series that was ONLY non-detects with a null average, never 0", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Potency - Total CBD (mg/g)", null, true));
+    const cbd = overall(agg.result(), "total_cbd");
+    expect(cbd?.censoredCount).toBe(1);
+    expect(cbd?.sampleSize).toBe(0);
+    expect(cbd?.avgMgPerG).toBeNull();
+  });
+
+  it("does NOT double count component cannabinoids into the totals", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 1.2));
+    // Components of the totals — real December rows, deliberately ignored.
+    agg.addLabResult(lab("Potency - delta-9-THCA (mg/g)", 5.0));
+    agg.addLabResult(lab("Potency - CBD (mg/g)", 0.71));
+    agg.addLabResult(lab("Potency - CBDA (mg/g)", 2.2));
+    const r = agg.result();
+    expect(overall(r, "total_thc")?.sampleSize).toBe(1);
+    expect(overall(r, "total_thc")?.avgMgPerG).toBe(1.2);
+    expect(overall(r, "total_cbd")).toBeNull();
+  });
+
+  it("ignores every non-potency test family in the same table", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Pesticide - Fludioxonil (ug/g)", null, true));
+    agg.addLabResult(lab("Residual Solvent - Cyclohexane (ug/g)", null, true));
+    agg.addLabResult(lab("Heavy Metal - Cadmium (ug/g)", null, true));
+    agg.addLabResult(lab("Mycotoxin - Total Aflatoxins (ug/kg)", null, true));
+    const r = agg.result();
+    expect(r.potency ?? []).toHaveLength(0);
+    expect(r.totals.labResultRows).toBe(4);
+    expect(r.totals.potencyRows).toBe(0);
+    expect(r.totals.potencyCensoredRows).toBe(0);
+  });
+
+  it("breaks potency out per product type via the inventory join", () => {
+    const agg = potencyAgg();
+    agg.addProduct(product("800", "Solid Edible", "Gummy", 10));
+    agg.addInventory(inventory("49999999", "800"));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 4.0));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 1.0, false, "49999999"));
+    const byType = (r: AggregationResult, key: string) =>
+      (r.potency ?? []).find((p) => p.scope === "type" && p.scopeKey === key) ?? null;
+    const r = agg.result();
+    expect(byType(r, "Flower Lot")?.avgMgPerG).toBe(4);
+    expect(byType(r, "Solid Edible")?.avgMgPerG).toBe(1);
+    // Statewide still sees both.
+    expect(overall(r, "total_thc")?.sampleSize).toBe(2);
+    expect(overall(r, "total_thc")?.avgMgPerG).toBe(2.5);
+  });
+
+  it("counts an unjoinable lot honestly and keeps it out of any type bucket", () => {
+    const agg = potencyAgg();
+    // Inventory 55555555 was never in this delivery.
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 9.0, false, "55555555"));
+    const r = agg.result();
+    expect(r.totals.potencyUnjoinedRows).toBe(1);
+    // Still counted statewide — the reading is real, only its type is unknown.
+    expect(overall(r, "total_thc")?.sampleSize).toBe(1);
+    expect((r.potency ?? []).filter((p) => p.scope === "type")).toHaveLength(0);
+  });
+
+  it("files a censored row against the SAME scopes as a reported one", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 2.0));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", null, true));
+    const byType = (agg.result().potency ?? []).find((p) => p.scope === "type");
+    // If censored rows only landed statewide, the per-type row would understate
+    // how much data was set aside.
+    expect(byType?.censoredCount).toBe(1);
+    expect(byType?.sampleSize).toBe(1);
+  });
+
+  it("rejects an impossible reading above 100% of mass (1000 mg/g)", () => {
+    const agg = potencyAgg();
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 5000));
+    agg.addLabResult(lab("Potency - Total THC (mg/g)", 2.0));
+    const thc = overall(agg.result(), "total_thc");
+    expect(thc?.sampleSize).toBe(1);
+    expect(thc?.avgMgPerG).toBe(2);
+  });
+
+  it("emits no potency at all when the delivery had no lab results", () => {
+    const agg = potencyAgg();
+    const r = agg.result();
+    expect(r.potency ?? []).toHaveLength(0);
+    expect(r.totals.labResultRows).toBe(0);
+  });
+});

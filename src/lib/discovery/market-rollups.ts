@@ -30,6 +30,7 @@ import type {
   AggregationResult,
   StatewideBenchmark,
   PriceSummary,
+  PotencyBenchmark,
 } from "./ccrs-extract/aggregate";
 import type {
   BenchmarkMetric,
@@ -97,6 +98,55 @@ function sanitizeSummary(v: unknown): PriceSummary | null {
 }
 
 /**
+ * Potency is bounded by physics: 1000 mg/g is 100% of the product's mass.
+ * Anything above that is an impossible reading and is rejected rather than
+ * averaged into a statewide benchmark.
+ */
+const MAX_POTENCY_MG_PER_G = 1000;
+/** 2 analytes x (1 overall + per-type) rows; generous slack over the real 13 types. */
+const MAX_POTENCY = 500;
+
+/**
+ * Validate one posted potency row. Returns null when the row is unusable, so a
+ * malformed entry is dropped rather than poisoning the benchmark.
+ */
+function sanitizePotency(v: unknown): PotencyBenchmark | null {
+  if (v == null || typeof v !== "object") return null;
+  const p = v as Record<string, unknown>;
+  const analyte = p.analyte;
+  if (analyte !== "total_thc" && analyte !== "total_cbd") return null;
+  const scope = p.scope;
+  if (scope !== "overall" && scope !== "type") return null;
+  const scopeKey = strOrNull(p.scopeKey);
+  if (!scopeKey) return null;
+
+  const sampleSize = intOrNull(p.sampleSize) ?? 0;
+  const censoredCount = intOrNull(p.censoredCount) ?? 0;
+  if (sampleSize < 0 || censoredCount < 0) return null;
+  // A row that measured nothing at all carries no information.
+  if (sampleSize === 0 && censoredCount === 0) return null;
+
+  const mg = (x: unknown): number | null => {
+    if (typeof x !== "number" || !Number.isFinite(x)) return null;
+    if (x < 0 || x > MAX_POTENCY_MG_PER_G) return null;
+    return Math.round(x * 100) / 100;
+  };
+  // With no reported values there is no average to state — null, never 0.
+  const avgMgPerG = sampleSize > 0 ? mg(p.avgMgPerG) : null;
+  return {
+    analyte,
+    scope,
+    scopeKey,
+    avgMgPerG,
+    medianMgPerG: sampleSize > 0 ? mg(p.medianMgPerG) : null,
+    minMgPerG: sampleSize > 0 ? mg(p.minMgPerG) : null,
+    maxMgPerG: sampleSize > 0 ? mg(p.maxMgPerG) : null,
+    sampleSize,
+    censoredCount,
+  };
+}
+
+/**
  * Structural validation of a posted AggregationResult. Returns the sanitized
  * result or an error string — never a partially-trusted object.
  */
@@ -115,6 +165,16 @@ export function sanitizeAggregationResult(
   if (statewideIn.length > MAX_STATEWIDE) return { ok: false, error: "Too many statewide benchmark rows." };
   if (competitorsIn.length > MAX_COMPETITORS) return { ok: false, error: "Too many competitor rows." };
   if (signalsIn.length > MAX_SIGNALS) return { ok: false, error: "Too many signal rows." };
+  // Potency is OPTIONAL: a payload produced before potency capture has no such
+  // array, which sanitizes to undefined ("never measured"), not to an empty
+  // array ("measured and found nothing").
+  const potencyIn = Array.isArray(r.potency) ? r.potency : null;
+  if (potencyIn && potencyIn.length > MAX_POTENCY) {
+    return { ok: false, error: "Too many potency rows." };
+  }
+  const potency = potencyIn
+    ? potencyIn.map(sanitizePotency).filter((p): p is PotencyBenchmark => p !== null)
+    : undefined;
 
   const statewide: AggregationResult["statewide"] = [];
   for (const b0 of statewideIn) {
@@ -289,6 +349,11 @@ export function sanitizeAggregationResult(
         // state as fact that the month had no medical sales. It stays absent,
         // and absent persists as NULL — "never measured", not "none".
         medicalLines: numOrUndefined(totalsIn.medicalLines),
+        // Potency counters — optional for the same reason as medicalLines.
+        labResultRows: numOrUndefined(totalsIn.labResultRows),
+        potencyRows: numOrUndefined(totalsIn.potencyRows),
+        potencyCensoredRows: numOrUndefined(totalsIn.potencyCensoredRows),
+        potencyUnjoinedRows: numOrUndefined(totalsIn.potencyUnjoinedRows),
         moverMapPrunes: num(totalsIn.moverMapPrunes),
         // Task I (I4): manifest inputs (optional — pre-I4 payloads have none).
         manifestRows: num(totalsIn.manifestRows),
@@ -298,6 +363,7 @@ export function sanitizeAggregationResult(
       competitors,
       signals,
       suppliers,
+      potency,
     },
   };
 }
@@ -459,6 +525,27 @@ export async function persistAggregationResult(
   const benchRows: Record<string, unknown>[] = [];
   for (const b of result.statewide) {
     benchRows.push(...benchmarkRows(datasetId, b, result.periodStart, result.periodEnd));
+  }
+  // Potency rides in the same benchmarks table under its own metric names.
+  // value_num carries mg/g (the published unit) — NOT a percentage.
+  for (const p of result.potency ?? []) {
+    if (p.avgMgPerG == null) continue; // nothing but non-detects: no average to state
+    benchRows.push({
+      dataset_id: datasetId,
+      scope: p.scope,
+      scope_key: p.scopeKey,
+      period_start: result.periodStart,
+      period_end: result.periodEnd,
+      metric: p.analyte === "total_thc" ? "total_thc_mg_per_g" : "total_cbd_mg_per_g",
+      sample_size: p.sampleSize,
+      min_minor: null,
+      p25_minor: null,
+      median_minor: null,
+      p75_minor: null,
+      max_minor: null,
+      avg_minor: null,
+      value_num: p.avgMgPerG,
+    });
   }
   await insertInBatches("discovery_benchmarks", benchRows);
 

@@ -334,6 +334,13 @@ export type BenchmarkMetric =
   | "revenue"
   | "thc_pct"
   | "cbd_pct"
+  // Monthly-extract potency, in the unit WSLCB actually publishes: mg/g.
+  // DELIBERATELY NOT thc_pct/cbd_pct — the CCRS LabResult TestNames are
+  // "Potency - Total THC (mg/g)", and 1.2 mg/g is 0.12%, not 1.2%. Reusing the
+  // percent metric would misstate potency by a factor of ten. Divide by 10 to
+  // display a percentage.
+  | "total_thc_mg_per_g"
+  | "total_cbd_mg_per_g"
   // Task H monthly-extract transformer metrics (class-scoped so retail and
   // wholesale rollups never collide on the same scope/scope_key):
   | "retail_price_per_gram"

@@ -44,6 +44,42 @@ export const INVENTORY_HEADER =
 export const STRAIN_HEADER =
   "StrainId\tLicenseeId\tName\tStrainType\tExternalIdentifier\tIsDeleted\tCreatedBy\tCreatedDate\tUpdatedBy\tUpdatedDate";
 
+/**
+ * Verified LabResult header — exact column order, read VERBATIM from the real
+ * December 2025 delivery (LabResult_0.csv, 66.3 MB inner CSV).
+ *
+ * LabResult is a LONG/EAV table: ONE ROW PER TEST, carrying TestName +
+ * TestValue, joined to a lot by InventoryId.
+ */
+export const LAB_RESULT_HEADER =
+  "LabResultId\tLabLicenseeId\tLicenseeId\tLabTestStatus\tInventoryId\tTestName\tTestDate\tTestValue\tExternalIdentifier\tIsDeleted\tCreatedBy\tCreatedDate\tUpdatedBy\tUpdatedDate";
+
+/** Build a LabResult row in the real December column order. */
+export function labResultRow(o: {
+  labResultId: string;
+  inventoryId: string;
+  testName: string;
+  testValue: string;
+  labTestStatus?: string;
+}): string {
+  return [
+    o.labResultId,
+    "10",
+    "1642",
+    o.labTestStatus ?? "Required",
+    o.inventoryId,
+    o.testName,
+    "2025-12-07",
+    o.testValue,
+    `ext-${o.labResultId}`,
+    "False",
+    "Bobby Hines",
+    "2025-12-07 00:00:00",
+    "",
+    "",
+  ].join("\t");
+}
+
 /** Task I (I4): verified May-2026 ManifestHeader header (exact column order, read from the real zip). */
 export const MANIFEST_HEADER_HEADER =
   "CCRSManifestHeaderId\tSubmittedBy\tSubmittedDate\tNumberRecords\tExternalManifestIdentifier\tHeaderOperation\tTransportationType\tOriginLicenseNumber\tOriginLicenseName\tOriginLicenseeAddress\tOriginLicenseePhone\tOriginLicenseeEmailAddress\tOriginAssociateID\tTransportationLicenseNumber\tTransportationAssociateID\tDepartureDateTime\tArrivalDateTime\tDestinationLicenseNumber\tDestinationLicenseName\tDestinationLicenseAddress\tDestinationLicenseePhone\tDestinationLicenseeEmailAddress\tDestinationAssociateId\tIsDeleted\tRecordCreatedBy\tRecordCreatedDate\tRecordUpdatedBy\tRecordUpdatedDate\tOrderCancelled\tManifestGeneratedDate\tErrorMessage\tTransportationLicenseAddress\tTransportationLicenseName\tTransportationLicenseEmailAddress\tTransportationLicensePhone\tIsManifestGenerated";
