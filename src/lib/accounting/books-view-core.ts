@@ -197,6 +197,35 @@ export type GroupedAccounts<T> = { type: string; label: string; accounts: T[] }[
  * appended rather than dropped — silently discarding an account because its
  * type was not on a hard-coded list is how an account goes missing.
  */
+/**
+ * Does this account belong in the chart for `entityCode`?
+ *
+ * `allowed_entity_codes` is NULL when an account is shared by all four sets of
+ * books (cash, retained earnings, and so on), and a list when it is restricted
+ * -- and a list genuinely can hold more than one, e.g. account 10300 (Bank --
+ * ATM Vault) is allowed for both `atm` and `greenway`.
+ *
+ * The rule is written here, in the pure file, rather than inline in the query
+ * layer, because "which accounts show up on which set of books" is an
+ * accounting decision and it is testable. A wrong answer in the permissive
+ * direction shows Michael accounts that belong to another entity; a wrong
+ * answer in the restrictive direction makes accounts silently vanish from the
+ * chart, and an account nobody can see is an account nobody reconciles.
+ */
+export function accountBelongsToEntity(
+  account: { allowed_entity_codes: string[] | null },
+  entityCode: string,
+): boolean {
+  const allowed = account.allowed_entity_codes;
+  // Shared by everyone.
+  if (allowed === null || allowed === undefined) return true;
+  // An EMPTY list is not the same as NULL. NULL says "no restriction"; an empty
+  // list says "restricted to nothing", which no entity can satisfy. Treating
+  // the two alike would quietly publish an account that was deliberately
+  // fenced off, so they are kept distinct.
+  return allowed.includes(entityCode);
+}
+
 export function groupAccountsByType<T extends { account_type: string }>(
   accounts: readonly T[],
 ): GroupedAccounts<T> {
@@ -467,6 +496,62 @@ export function __runBooksViewCoreTests(): void {
   eq(validateRange("2026-05-05", "2026-05-05").ok, true, "a one-day range is valid");
 
   eq(LINE_IN_THE_SAND, "2026-01-01", "the books begin 1 January 2026");
+
+  // --- accountBelongsToEntity -------------------------------------------
+  //
+  // THESE TESTS EXIST BECAUSE OF A REAL OUTAGE. The chart of accounts page
+  // was dead in production: the query asked for a column named `entity_id`,
+  // which does not exist on `gl_accounts`. The real column is
+  // `allowed_entity_codes`, and it is a LIST, because an account can be
+  // shared by several sets of books. The old code modelled it as one uuid,
+  // so account 10300 (Bank -- ATM Vault, allowed for BOTH `atm` and
+  // `greenway`) could not have been represented correctly even if the name
+  // had been right. Rule 19: the failure becomes permanent test corpus.
+  ok(
+    accountBelongsToEntity({ allowed_entity_codes: null }, "greenway"),
+    "a NULL list means the account is shared by every set of books",
+  );
+  ok(
+    accountBelongsToEntity({ allowed_entity_codes: null }, "personal"),
+    "shared accounts appear on the personal books too",
+  );
+  ok(
+    accountBelongsToEntity({ allowed_entity_codes: ["greenway"] }, "greenway"),
+    "an account restricted to greenway appears on greenway",
+  );
+  ok(
+    !accountBelongsToEntity({ allowed_entity_codes: ["greenway"] }, "atm"),
+    "an account restricted to greenway does NOT appear on the ATM books",
+  );
+  // The real 10300 row, verbatim from the seeded chart.
+  ok(
+    accountBelongsToEntity({ allowed_entity_codes: ["atm", "greenway"] }, "atm"),
+    "10300 is allowed for the ATM books",
+  );
+  ok(
+    accountBelongsToEntity({ allowed_entity_codes: ["atm", "greenway"] }, "greenway"),
+    "10300 is ALSO allowed for greenway -- a single entity_id could never say this",
+  );
+  ok(
+    !accountBelongsToEntity({ allowed_entity_codes: ["atm", "greenway"] }, "landholding"),
+    "10300 stays off the landholding books",
+  );
+  // NEGATIVE CONTROL: an empty list is a restriction to nothing, and must NOT
+  // be confused with NULL's "no restriction". If these two ever collapse
+  // together, a deliberately fenced-off account starts appearing everywhere.
+  ok(
+    !accountBelongsToEntity({ allowed_entity_codes: [] }, "greenway"),
+    "an EMPTY list restricts to nothing and is not the same as NULL",
+  );
+  // Exact matching only: no prefix or case games.
+  ok(
+    !accountBelongsToEntity({ allowed_entity_codes: ["greenway"] }, "green"),
+    "matching is exact, not by prefix",
+  );
+  ok(
+    !accountBelongsToEntity({ allowed_entity_codes: ["greenway"] }, "GREENWAY"),
+    "matching is case-sensitive, matching the database's own comparison",
+  );
 
   console.log(`books-view-core: PASSED ${passed} assertions`);
 }

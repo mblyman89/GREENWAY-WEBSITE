@@ -35,8 +35,9 @@
 
 import "server-only";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createBooksClient } from "@/lib/supabase/books-client";
 import { explainGlRefusal, type GlRefusal } from "./gl-refusal-core";
+import { accountBelongsToEntity } from "./books-view-core";
 
 export type LedgerResult<T> =
   | { ok: true; data: T }
@@ -91,7 +92,7 @@ export async function getTrialBalanceCheck(
   fromDate?: string | null,
   toDate?: string | null,
 ): Promise<LedgerResult<TrialBalanceCheck>> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createBooksClient();
   const { data, error } = await admin.rpc("gl_trial_balance_check", {
     p_entity_code: entityCode,
     p_from: fromDate ?? null,
@@ -132,7 +133,7 @@ export async function getGeneralLedger(
   fromDate?: string | null,
   toDate?: string | null,
 ): Promise<LedgerResult<LedgerRow[]>> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createBooksClient();
   const { data, error } = await admin.rpc("gl_general_ledger", {
     p_entity_code: entityCode,
     p_account_code: accountCode ?? null,
@@ -154,7 +155,17 @@ export type AccountRow = {
   normal_balance: string;
   cost_class: string | null;
   active: boolean;
-  entity_code: string | null;
+  /**
+   * The entities this account may be used by, or null when it is shared by all
+   * four sets of books.
+   *
+   * THIS IS A LIST, NOT A SINGLE VALUE, and that is not a detail. Account 10300
+   * (Bank -- ATM Vault) is allowed for BOTH `atm` and `greenway`; the earlier
+   * version of this type had a single `entity_code`, which cannot represent
+   * that account at all. Measured in the real chart: 96 accounts are shared by
+   * every entity and 97 are restricted to specific ones.
+   */
+  allowed_entity_codes: string[] | null;
 };
 
 /**
@@ -168,10 +179,24 @@ export async function listAccounts(
   entityCode?: string | null,
   includeInactive = false,
 ): Promise<LedgerResult<AccountRow[]>> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createBooksClient();
+
+  // THE COLUMN NAMES HERE WERE WRONG AND THE PAGE WAS DEAD BECAUSE OF IT.
+  // Three of the seven names asked for did not exist on `gl_accounts`:
+  //
+  //     account_type  ->  type
+  //     cost_class    ->  default_cost_class
+  //     entity_id     ->  allowed_entity_codes   (a text[], not a uuid)
+  //
+  // Michael only ever saw the first one, because PostgREST reports the first
+  // missing column and stops. Correcting `account_type` alone would have
+  // produced an identical error about `cost_class`, then another about
+  // `entity_id` -- three outages wearing the same coat. Every column in this
+  // list was therefore checked individually against the live schema
+  // (prove-books-lockout-part2.sh) instead of fixing the one that shouted.
   let q = admin
     .from("gl_accounts")
-    .select("code, name, account_type, normal_balance, cost_class, active, entity_id")
+    .select("code, name, type, normal_balance, default_cost_class, active, allowed_entity_codes")
     .order("code", { ascending: true });
 
   if (!includeInactive) q = q.eq("active", true);
@@ -179,33 +204,33 @@ export async function listAccounts(
   const { data, error } = await q;
   if (error) return refused<AccountRow[]>(error);
 
-  const rows = (data ?? []) as unknown as (Omit<AccountRow, "entity_code"> & {
-    entity_id: string | null;
-  })[];
+  const rows = (data ?? []) as unknown as {
+    code: string;
+    name: string;
+    type: string;
+    normal_balance: string;
+    default_cost_class: string | null;
+    active: boolean;
+    allowed_entity_codes: string[] | null;
+  }[];
 
-  // Resolve entity_id -> code so the UI never has to know about uuids.
-  const { data: ents, error: entErr } = await admin
-    .from("gl_entities")
-    .select("id, code");
-  if (entErr) return refused<AccountRow[]>(entErr);
-
-  const byId = new Map<string, string>();
-  for (const e of (ents ?? []) as { id: string; code: string }[]) byId.set(e.id, e.code);
-
+  // The database's column is `type`; the rest of the books call it
+  // `account_type` (the trial balance view exposes it under that name). The
+  // translation happens HERE, once, so no page has to know both words.
   let mapped: AccountRow[] = rows.map((r) => ({
     code: r.code,
     name: r.name,
-    account_type: r.account_type,
+    account_type: r.type,
     normal_balance: r.normal_balance,
-    cost_class: r.cost_class,
+    cost_class: r.default_cost_class,
     active: r.active,
-    entity_code: r.entity_id ? (byId.get(r.entity_id) ?? null) : null,
+    allowed_entity_codes: r.allowed_entity_codes,
   }));
 
   if (entityCode) {
-    // Accounts with a NULL entity are shared across all books, so they belong
-    // in every entity's list. Filtering them out would hide most of the chart.
-    mapped = mapped.filter((a) => a.entity_code === entityCode || a.entity_code === null);
+    // A NULL list means "every set of books", so those accounts belong in
+    // every entity's chart. Filtering them out would hide roughly half of it.
+    mapped = mapped.filter((a) => accountBelongsToEntity(a, entityCode));
   }
 
   return { ok: true, data: mapped };
@@ -230,7 +255,7 @@ export type OpeningBalanceSummary = {
 export async function getOpeningBalanceSummary(
   entityCode: string,
 ): Promise<LedgerResult<OpeningBalanceSummary>> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createBooksClient();
   const { data, error } = await admin.rpc("gl_opening_balance_summary", {
     p_entity_code: entityCode,
   });
@@ -269,7 +294,7 @@ export async function getOverrideReport(
   fromDate?: string | null,
   toDate?: string | null,
 ): Promise<LedgerResult<OverrideReport>> {
-  const admin = createSupabaseAdminClient();
+  const admin = await createBooksClient();
   const { data, error } = await admin.rpc("gl_override_report", {
     p_entity_code: entityCode,
     p_from: fromDate ?? null,
