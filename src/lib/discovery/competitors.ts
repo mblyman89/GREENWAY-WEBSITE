@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isDiscoveryEnabled } from "./store";
 import { percentile, summarizeMinor } from "./benchmarks-core";
+import type { RosterUpsert } from "./competitor-roster-core";
 import type {
   DiscoveryCompetitor,
   DiscoveryCompetitorArea,
@@ -62,6 +63,105 @@ export async function listCompetitors(opts?: { area?: DiscoveryCompetitorArea })
   if (opts?.area) q = q.eq("area", opts.area);
   const { data } = await q.order("tradename", { ascending: true });
   return (data as DiscoveryCompetitor[] | null) ?? [];
+}
+
+/**
+ * The FULL roster including deactivated rows - for the management screen only.
+ *
+ * Everything else must keep using `listCompetitors()` (active only), so a store
+ * the owner turned off never reappears in a benchmark.
+ */
+export async function listAllCompetitors(): Promise<DiscoveryCompetitor[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("discovery_competitors")
+    .select("*")
+    .order("is_active", { ascending: false })
+    .order("tradename", { ascending: true });
+  return (data as DiscoveryCompetitor[] | null) ?? [];
+}
+
+export async function getCompetitor(licenseNumber: string): Promise<DiscoveryCompetitor | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("discovery_competitors")
+    .select("*")
+    .eq("license_number", licenseNumber)
+    .maybeSingle();
+  return (data as DiscoveryCompetitor | null) ?? null;
+}
+
+/**
+ * Insert or update one roster row. The caller MUST have run the value through
+ * `validateRosterUpsert` first - this function does no guessing and no repair.
+ *
+ * Returns a precise error message rather than throwing, so the screen can show
+ * the human exactly what the database refused and why.
+ */
+export async function upsertCompetitor(
+  value: RosterUpsert,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "The database isn't configured, so the roster can't be saved." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("discovery_competitors")
+    .upsert(
+      {
+        license_number: value.license_number,
+        tradename: value.tradename,
+        city: value.city,
+        county: value.county,
+        area: value.area,
+        kind: value.kind,
+        is_self: value.is_self,
+        is_active: value.is_active,
+        note: value.note,
+      },
+      { onConflict: "license_number" },
+    );
+  if (error) {
+    // The partial unique index (0179) is the last line of defense against a
+    // second "self" row. Translate it instead of leaking Postgres jargon.
+    if (error.code === "23505" && error.message.includes("single_self")) {
+      return {
+        ok: false,
+        error: "Another entry is already marked as our own store. Only one can be Greenway.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/**
+ * Turn a roster entry on or off.
+ *
+ * We deactivate rather than delete: the historical benchmark rows already
+ * persisted against that license stay meaningful, and the owner can always
+ * bring a store back if it reopens.
+ */
+export async function setCompetitorActive(
+  licenseNumber: string,
+  isActive: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "The database isn't configured, so the roster can't be saved." };
+  }
+  const existing = await getCompetitor(licenseNumber);
+  if (!existing) return { ok: false, error: `License ${licenseNumber} isn't on the roster.` };
+  if (existing.is_self && !isActive) {
+    return { ok: false, error: "Our own store can't be deactivated." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("discovery_competitors")
+    .update({ is_active: isActive })
+    .eq("license_number", licenseNumber);
+  return error ? { ok: false, error: error.message } : { ok: true };
 }
 
 export async function getSelfCompetitor(): Promise<DiscoveryCompetitor | null> {
