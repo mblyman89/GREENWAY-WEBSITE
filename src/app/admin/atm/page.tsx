@@ -812,7 +812,19 @@ function ReconcileTab({
     );
   }
 
-  const result = reconcileSettlements(inputs.settlements, inputs.deposits, { todayIso: todayIsoUtc() });
+  // SCOPE TO THE CURRENT YEAR (owner defect, 2026-08-15).
+  // Michael: "the system thinks the full history is the picture we should be
+  // looking at, when we really only care about the current year." The ATM data
+  // reaches back to 2024 but the bank feed does not, so evaluating all history
+  // produced a large phantom shortage out of settlements that simply have no
+  // bank records to match. The engine also now reports pre-feed legs as
+  // `no_bank_data` and keeps them out of the totals, so this is belt AND braces.
+  const today = todayIsoUtc();
+  const currentYearStart = `${today.slice(0, 4)}-01-01`;
+  const result = reconcileSettlements(inputs.settlements, inputs.deposits, {
+    todayIso: today,
+    fromDateIso: currentYearStart,
+  });
   const { legs, summary, unexplainedDeposits } = result;
   const headline = atmReconcileHeadline({
     allClear: summary.allClear,
@@ -820,6 +832,9 @@ function ReconcileTab({
     mismatch: summary.mismatch,
     unmatched: summary.unmatched,
     awaiting: summary.awaiting,
+    late: summary.late,
+    bundled: summary.bundled,
+    noBankData: summary.noBankData,
   });
 
   return (

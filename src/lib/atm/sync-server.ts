@@ -167,10 +167,24 @@ export async function runAtmLiveSync(options?: {
   // never clobbered, and we only ever save CONFIDENT picks (ambiguous reports
   // are left alone and reported by the pull's per-report diagnostics, never
   // guessed). Best-effort: a discovery hiccup never blocks the pull itself.
-  let selfHealNote = "";
-  if (options?.history) {
-    selfHealNote = await selfHealDateFields();
-  }
+  // WHY THIS NO LONGER CHECKS options.history (owner defect, 2026-08-15):
+  // Michael: "We need to fix the sync function on the ATM page in the back
+  // office, it doesn't work properly. The backfill button works to fill in all
+  // data properly, but I'd rather use the sync button going forward."
+  //
+  // Root cause, found by reading the two paths side by side: the ONLY difference
+  // between Sync and Backfill was this self-heal plus the date range. PAI only
+  // honours a date filter when we send each report's EXACT date-column name;
+  // without a confirmed name the request is silently unfiltered and PAI returns
+  // just its small default window. Backfill self-healed those names, so it
+  // worked. Sync skipped the heal, so on any report whose date column was never
+  // confirmed it kept pulling the same narrow slice — which looks exactly like
+  // "sync is broken" from the outside.
+  //
+  // The heal is read-only, deep-merges, and only ever saves CONFIDENT picks, so
+  // there is no reason to withhold it from the daily path. It is also cheap
+  // after the first success: every report already confirmed short-circuits.
+  const selfHealNote = await selfHealDateFields();
 
   const pull = await pullAllPaiReports(options?.history ? { history: true } : undefined);
 

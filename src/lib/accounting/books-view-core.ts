@@ -226,6 +226,70 @@ export function accountBelongsToEntity(
   return allowed.includes(entityCode);
 }
 
+/**
+ * Should the 280E cost-class badge be shown for this account on THIS set of books?
+ *
+ * THE DEFECT (Michael, 2026-08-15): "All the businesses and even my personal COA
+ * have the 280E non-deductible label on them. It should only be on the greenway
+ * business and not the other three."
+ *
+ * He is right, and the fault was purely in the DISPLAY layer — the accounting
+ * logic was already correct. `defaultCostClass()` in coa-core.ts has always
+ * returned `separate_business` for atm/landholding and `personal` for personal;
+ * only `greenway` ever yields `nondeductible_280e`.
+ *
+ * The problem: `gl_accounts.default_cost_class` is a property of the ACCOUNT, and
+ * shared accounts have no entity. Account 70010 "Rent" carries
+ * `default_cost_class = 'nondeductible_280e'` with `allowed_entity_codes = null`,
+ * because it is deliberately ONE rent account serving all four books (its own
+ * comment says so). The page rendered that stored value verbatim, so rent on the
+ * ATM books wore a 280E badge it could never actually earn.
+ *
+ * Why this matters beyond cosmetics: 280E is the single most expensive rule in
+ * this industry. A label claiming the ATM's rent is non-deductible invites the
+ * owner to NOT claim a deduction he is fully entitled to — CHAMP v. Commissioner
+ * (128 T.C. 173) is the authority for treating a genuinely separate trade or
+ * business as outside 280E. A cosmetic bug that suppresses a real deduction is
+ * not cosmetic.
+ */
+export function shouldShowCostClassBadge(
+  costClass: string | null | undefined,
+  entityCode: string,
+): boolean {
+  if (!costClass || costClass === "none") return false;
+  // 280E is a cannabis-trafficking rule. It can only ever apply to the cannabis
+  // business, no matter what the shared account row happens to store.
+  if (costClass === "nondeductible_280e" || costClass === "cogs_direct" || costClass === "cogs_allocable") {
+    return entityCode === "greenway";
+  }
+  return true;
+}
+
+/**
+ * The badge text to show, or null for no badge. Separated from the predicate so
+ * the wording lives in one place and can be tested without a browser.
+ */
+export function costClassBadgeLabel(
+  costClass: string | null | undefined,
+  entityCode: string,
+): string | null {
+  if (!shouldShowCostClassBadge(costClass, entityCode)) return null;
+  switch (costClass) {
+    case "nondeductible_280e":
+      return "280E — not deductible";
+    case "cogs_direct":
+      return "COGS — deductible";
+    case "cogs_allocable":
+      return "COGS — allocable";
+    case "separate_business":
+      return "Separate business";
+    case "personal":
+      return "Personal";
+    default:
+      return costClass ?? null;
+  }
+}
+
 export function groupAccountsByType<T extends { account_type: string }>(
   accounts: readonly T[],
 ): GroupedAccounts<T> {
@@ -552,6 +616,87 @@ export function __runBooksViewCoreTests(): void {
     !accountBelongsToEntity({ allowed_entity_codes: ["greenway"] }, "GREENWAY"),
     "matching is case-sensitive, matching the database's own comparison",
   );
+
+  // ---------------------------------------------------------------------------
+  // 280E BADGE SCOPING (owner defect, 2026-08-15).
+  // "All the businesses and even my personal COA have the 280E non-deductible
+  // label on them. It should only be on the greenway business."
+  // ---------------------------------------------------------------------------
+  ok(
+    shouldShowCostClassBadge("nondeductible_280e", "greenway"),
+    "280E badge SHOWS on the cannabis books",
+  );
+  ok(
+    !shouldShowCostClassBadge("nondeductible_280e", "atm"),
+    "280E badge HIDDEN on the ATM books",
+  );
+  ok(
+    !shouldShowCostClassBadge("nondeductible_280e", "landholding"),
+    "280E badge HIDDEN on the landholding books",
+  );
+  ok(
+    !shouldShowCostClassBadge("nondeductible_280e", "personal"),
+    "280E badge HIDDEN on the personal books",
+  );
+  // COGS classes are equally 280E-flavoured and must be scoped the same way.
+  ok(
+    shouldShowCostClassBadge("cogs_direct", "greenway"),
+    "COGS badge shows on greenway",
+  );
+  ok(
+    !shouldShowCostClassBadge("cogs_direct", "atm"),
+    "COGS badge hidden on the ATM books",
+  );
+  ok(
+    !shouldShowCostClassBadge("cogs_allocable", "landholding"),
+    "allocable-COGS badge hidden on landholding",
+  );
+  // Non-280E classes are still informative everywhere.
+  ok(
+    shouldShowCostClassBadge("separate_business", "atm"),
+    "separate_business badge still shows on the ATM books",
+  );
+  ok(
+    shouldShowCostClassBadge("personal", "personal"),
+    "personal badge still shows on the personal books",
+  );
+  // Empty states.
+  ok(!shouldShowCostClassBadge("none", "greenway"), "'none' never badges");
+  ok(!shouldShowCostClassBadge(null, "greenway"), "null never badges");
+  ok(!shouldShowCostClassBadge(undefined, "greenway"), "undefined never badges");
+  ok(!shouldShowCostClassBadge("", "greenway"), "empty string never badges");
+
+  // Labels.
+  ok(
+    costClassBadgeLabel("nondeductible_280e", "greenway") === "280E — not deductible",
+    "280E label is plain English on greenway",
+  );
+  ok(
+    costClassBadgeLabel("nondeductible_280e", "atm") === null,
+    "no 280E label at all on the ATM books",
+  );
+  ok(
+    costClassBadgeLabel("separate_business", "landholding") === "Separate business",
+    "separate business label reads plainly",
+  );
+  ok(
+    costClassBadgeLabel("mystery_class", "atm") === "mystery_class",
+    "an unknown class falls back to its raw name rather than vanishing",
+  );
+
+  // THE EXACT SHARED-ACCOUNT CASE THAT CAUSED THE BUG: 70010 Rent is one account
+  // for all four books, stored as nondeductible_280e, with no entity restriction.
+  {
+    const rent = { code: "70010", cost_class: "nondeductible_280e", allowed_entity_codes: null };
+    ok(
+      accountBelongsToEntity(rent, "atm") && !shouldShowCostClassBadge(rent.cost_class, "atm"),
+      "shared rent account is USABLE on the ATM books but carries NO 280E badge there",
+    );
+    ok(
+      accountBelongsToEntity(rent, "greenway") && shouldShowCostClassBadge(rent.cost_class, "greenway"),
+      "the same shared rent account DOES carry the badge on greenway",
+    );
+  }
 
   console.log(`books-view-core: PASSED ${passed} assertions`);
 }

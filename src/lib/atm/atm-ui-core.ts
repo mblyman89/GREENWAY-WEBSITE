@@ -48,7 +48,14 @@ export function resolveAtmTab(param: string | null | undefined): AtmTab {
 // glance. Kept here (pure) so the page just maps status → view.
 // ---------------------------------------------------------------------------
 
-export type AtmReconcileStatus = "matched" | "mismatch" | "awaiting" | "unmatched";
+export type AtmReconcileStatus =
+  | "matched"
+  | "mismatch"
+  | "late"
+  | "bundled"
+  | "awaiting"
+  | "unmatched"
+  | "no_bank_data";
 
 export type AtmReconcileChip = {
   label: string;
@@ -57,14 +64,30 @@ export type AtmReconcileChip = {
   needsAttention: boolean;
 };
 
+/**
+ * The chip a row shows.
+ *
+ * WHY "late", "bundled" and "no_bank_data" are NOT orange: all three previously
+ * rendered as "Not deposited", which told Michael his money was gone when it was
+ * either (a) sitting in his account a few days later, (b) sitting in his account
+ * combined with another day, or (c) simply older than his bank feed. A warning
+ * that fires when nothing is wrong trains the owner to ignore warnings — which
+ * is worse than showing none, because the real one then goes unread too.
+ */
 export function atmReconcileChip(status: AtmReconcileStatus): AtmReconcileChip {
   switch (status) {
     case "matched":
       return { label: "Matched", tone: "green", needsAttention: false };
     case "mismatch":
       return { label: "Amount off", tone: "orange", needsAttention: true };
+    case "late":
+      return { label: "Matched (late)", tone: "green", needsAttention: false };
+    case "bundled":
+      return { label: "Matched (combined)", tone: "green", needsAttention: false };
     case "awaiting":
       return { label: "Awaiting deposit", tone: "neutral", needsAttention: false };
+    case "no_bank_data":
+      return { label: "No bank records", tone: "neutral", needsAttention: false };
     case "unmatched":
     default:
       return { label: "Not deposited", tone: "orange", needsAttention: true };
@@ -81,6 +104,12 @@ export function atmReconcileHeadline(input: {
   mismatch: number;
   unmatched: number;
   awaiting: number;
+  /** Deposits that arrived after the window. Money located — reassurance only. */
+  late?: number;
+  /** Legs paid inside a combined deposit. Money located — reassurance only. */
+  bundled?: number;
+  /** Legs older than the bank feed. Unjudgeable — explicitly NOT a shortage. */
+  noBankData?: number;
 }): { tone: "green" | "orange" | "neutral"; title: string; detail: string } {
   if (input.legCount === 0) {
     return {
@@ -90,11 +119,29 @@ export function atmReconcileHeadline(input: {
     };
   }
   if (input.allClear) {
-    const waiting = input.awaiting > 0 ? ` ${input.awaiting} deposit${input.awaiting === 1 ? "" : "s"} still on the way — that's normal.` : "";
+    // Every clause below exists to STOP a false alarm. Michael was shown
+    // "Not deposited" for money that had already landed; the cure is not to go
+    // quiet, it is to say plainly what happened to each dollar.
+    const bits: string[] = [];
+    if (input.awaiting > 0) {
+      bits.push(`${input.awaiting} deposit${input.awaiting === 1 ? "" : "s"} still on the way — that's normal`);
+    }
+    if ((input.late ?? 0) > 0) {
+      bits.push(`${input.late} arrived later than usual but ${input.late === 1 ? "was" : "were"} found`);
+    }
+    if ((input.bundled ?? 0) > 0) {
+      bits.push(`${input.bundled} ${input.bundled === 1 ? "was" : "were"} paid inside a combined deposit`);
+    }
+    if ((input.noBankData ?? 0) > 0) {
+      bits.push(
+        `${input.noBankData} ${input.noBankData === 1 ? "is" : "are"} older than your bank feed, so ${input.noBankData === 1 ? "it" : "they"} can't be checked — that is missing bank history, not missing money`,
+      );
+    }
+    const extra = bits.length > 0 ? ` ${bits.join(". ")}.` : "";
     return {
       tone: "green",
       title: "Everything ties out ✓",
-      detail: `Every expected ATM deposit has arrived and matches.${waiting}`,
+      detail: `Every ATM deposit we can check has been accounted for.${extra}`,
     };
   }
   const parts: string[] = [];
