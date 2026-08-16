@@ -80,6 +80,9 @@ import {
   serializeFavorites,
   toggleFavorite,
 } from "@/lib/pos/favorites-core";
+// Phase 1.1 — favorites go through the storage seam like every other register
+// value, so the packaged iPad app persists them durably with no call-site change.
+import { posStorageGet, posStorageSet } from "@/lib/pos/pos-storage";
 import { manualAddBlocked } from "@/lib/pos/scan-required-core";
 import { buildProductInfo } from "@/lib/pos/product-info-core";
 import { STOCK_FLAG_REASONS, canFlagOutOfStock, type StockFlagReason } from "@/lib/pos/stock-flag-core";
@@ -2012,7 +2015,7 @@ function CartScreen({
   // read it, and reading window in the useState initializer would cause a
   // hydration mismatch. Same one-time burst RegisterShell uses at boot.
   /* eslint-disable-next-line react-hooks/set-state-in-effect */
-  useEffect(() => setFavorites(parseFavorites(window.localStorage.getItem(FAVORITES_KEY))), []);
+  useEffect(() => setFavorites(parseFavorites(posStorageGet(FAVORITES_KEY))), []);
   const togglePin = (variantId: string) => {
     // GW-008 (same family as GW-003/GW-001) — compute the next value BEFORE
     // setState so the updater stays PURE (React may re-invoke updaters), and
@@ -2020,7 +2023,7 @@ function CartScreen({
     // didn't stick past a restart", never crash the cart screen mid-sale.
     const next = toggleFavorite(favorites, variantId);
     try {
-      window.localStorage.setItem(FAVORITES_KEY, serializeFavorites(next));
+      posStorageSet(FAVORITES_KEY, serializeFavorites(next));
     } catch {
       // Best-effort — the pin still works for this session from state.
     }
