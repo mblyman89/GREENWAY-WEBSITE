@@ -2208,7 +2208,11 @@ function HomeScreen({
       {medicalTestModeBanner ? (
         <div
           role="status"
-          className="flex items-center justify-center gap-2 bg-[var(--pos-warn)] px-4 py-2 text-center text-sm font-extrabold uppercase tracking-wide text-[var(--pos-warn-ink,#3a2a00)]"
+          className="flex items-center justify-center gap-2 px-4 py-2 text-center text-sm font-extrabold uppercase tracking-wide"
+          // Deliberately fixed colors, NOT theme tokens: this banner means a
+          // simulated medical endorsement is active, and it must look identical
+          // and stay readable in both the dark and light register themes.
+          // White on #b45309 is 5.02:1 — passes WCAG AA.
           style={{ backgroundColor: "#b45309", color: "#fff" }}
         >
           🧪 Medical TEST MODE — endorsement is SIMULATED on this device. Turn it OFF (More ▸) before real sales.

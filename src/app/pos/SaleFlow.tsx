@@ -4223,7 +4223,7 @@ function CustomerBand({
                   title={`Recognition card ${medicalCard.upid}${badge.expired ? " — EXPIRED, no exemptions" : ""}`}
                   className={
                     badge.expired
-                      ? "rounded-full bg-[var(--pos-error-solid,#b91c1c)] px-2.5 py-0.5 text-xs font-bold text-white"
+                      ? "rounded-full bg-[var(--pos-danger-solid)] px-2.5 py-0.5 text-xs font-bold text-white"
                       : "rounded-full bg-[var(--pos-info-solid)] px-2.5 py-0.5 text-xs font-bold text-white"
                   }
                 >
