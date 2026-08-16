@@ -61,6 +61,7 @@ import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 // in the browser PWA (relative, same-origin) and in the packaged iPad app
 // (absolute, pointed at the real server). See lib/pos/api-base-core.
 import { configurePosApiBase, posFetch } from "@/lib/pos/pos-fetch";
+import { shouldRegisterServiceWorker } from "@/lib/pos/register-host-core";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
@@ -279,7 +280,14 @@ export function RegisterShell({
     // install-time skipWaiting so an update can never land mid-sale). The
     // home screen offers it as an "Update available" banner; accepting posts
     // SKIP_WAITING and the controllerchange listener below reloads once.
-    if ("serviceWorker" in navigator) {
+    // CAPACITOR PHASE 0.3 — the packaged iPad app must NOT do any of this.
+    // /pos-sw.js is a Next.js route, so inside the app bundle it does not
+    // exist and 404s on every launch; and on Android's https://localhost a
+    // worker WOULD install and could serve a cached shell in front of an
+    // App-Store-installed update. The register would then be running code the
+    // owner believes was replaced. shouldRegisterServiceWorker() is false only
+    // for the two Capacitor origins, so the browser PWA is untouched.
+    if ("serviceWorker" in navigator && shouldRegisterServiceWorker(window.location)) {
       navigator.serviceWorker
         .register("/pos-sw.js", { scope: "/pos" })
         .then((reg) => {

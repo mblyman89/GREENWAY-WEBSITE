@@ -63,3 +63,7 @@ __pycache__/
 /scripts/gmail-link-harvest/token.json
 /scripts/gmail-link-harvest/transfer-links.txt
 /scripts/gmail-link-harvest/transfer-links.csv
+
+# packaged register app (Capacitor) — build output only; source IS committed
+/register-app/dist/
+/register-app/node_modules/

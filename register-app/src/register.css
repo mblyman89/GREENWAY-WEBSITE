@@ -1,0 +1,107 @@
+/* ---------------------------------------------------------------------------
+ * register.css — the packaged register's ONLY stylesheet.
+ *
+ * The browser PWA gets its look from src/app/globals.css, which is a big file
+ * covering the public website, the shop and the back office as well as the
+ * register. An iPad app that only ever shows the register should not ship any
+ * of that, so this file assembles the register's styling from the same parts
+ * globals.css uses, and nothing else.
+ *
+ * Three pieces, in this order:
+ *   1. Tailwind itself, plus an explicit @source pointing at ../src so the
+ *      utility classes used by RegisterShell.tsx and SaleFlow.tsx are actually
+ *      generated. Tailwind v4 scans the files it can see from the CSS file's
+ *      own folder; the register's source lives one level up, so without this
+ *      line every utility class silently disappears and the register renders
+ *      as unstyled HTML.
+ *   2. The shared --pos-* design tokens. This is the SAME file globals.css
+ *      imports — one source of truth, so the app and the browser register can
+ *      never drift apart visually.
+ *   3. The handful of baseline rules the register inherits from globals.css
+ *      when it runs on the website. Those are reproduced here verbatim rather
+ *      than by importing globals.css, because importing it would drag in the
+ *      entire public site's styling.
+ * ------------------------------------------------------------------------- */
+
+@import "tailwindcss";
+
+/* Generate utilities for the register source, which lives outside this folder.
+   Scoped to the two directories the register actually uses so Tailwind is not
+   scanning the whole repository on every build. */
+@source "../../src/app/pos";
+@source "../../src/lib";
+
+/* The single source of truth for every --pos-* token and .pos-* rule. */
+@import "../../src/app/pos-tokens.css";
+
+/* ---------------------------------------------------------------------------
+ * Baseline the register inherits from globals.css on the website.
+ * Copied verbatim from src/app/globals.css so the packaged app starts from an
+ * identical box model and page background.
+ * ------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  /* .pos-shell paints the real canvas once React mounts. Painting the SAME
+     token here means the very first frame already matches, so there is no
+     flash of a different colour while the bundle boots — on a counter iPad
+     that flash reads as a crash. --pos-canvas resolves to the dark value by
+     default and to the light value under html[data-pos-theme="light"], which
+     RegisterShell sets from the device's saved preference (the register's
+     DEFAULT_THEME is "light" — see src/lib/pos/theme-core.ts). */
+  background: var(--pos-canvas);
+  color: var(--pos-text);
+  color-scheme: dark;
+}
+
+/* Keep native controls in step with the light canvas. */
+html[data-pos-theme="light"] body {
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+ * Native-app ergonomics. These apply ONLY to the packaged build — the browser
+ * PWA is untouched because it never loads this file.
+ * ------------------------------------------------------------------------- */
+
+/* A point-of-sale is tapped, never browsed. Rubber-band scrolling on the whole
+   page makes a fixed till screen feel broken, and long-press text selection
+   fires constantly when staff rest a thumb on the screen mid-sale. Inputs keep
+   normal selection so device setup and search still behave. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  /* iOS otherwise flashes a grey box on every tap. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOS zooms the page when a font smaller than 16px receives focus, which on a
+   till leaves the cashier looking at a magnified fragment of the screen mid
+   sale. The viewport meta also disables zoom; this makes it certain. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* Fill the iPad screen, including under the home indicator, without letting
+   content hide behind the status bar. */
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}

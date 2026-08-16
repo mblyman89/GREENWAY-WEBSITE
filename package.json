@@ -12,7 +12,10 @@
     "test": "vitest run",
     "test:compliance": "vitest run tests/compliance",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "register:build": "vite build --config register-app/vite.config.ts",
+    "register:dev": "vite --config register-app/vite.config.ts",
+    "register:preview": "vite preview --config register-app/vite.config.ts"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
@@ -34,14 +37,17 @@
   "devDependencies": {
     "@playwright/test": "^1.49.1",
     "@tailwindcss/postcss": "^4",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5",
+    "vite": "^8.2.1",
     "vitest": "^4.1.10",
     "xlsx": "^0.18.5"
   }
