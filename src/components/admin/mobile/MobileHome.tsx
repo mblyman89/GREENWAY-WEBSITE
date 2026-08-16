@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   formatMoneyMinor,
-  formatMoneyCompact,
   deltaLabel,
   type AttentionFlag,
 } from "@/lib/admin/cockpit-core";

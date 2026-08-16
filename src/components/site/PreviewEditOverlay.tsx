@@ -47,12 +47,7 @@ const HOTSPOTS_ENABLED = false;
 
 export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
-  const [inFrame, setInFrame] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
-
-  useEffect(() => {
-    setInFrame(window.self !== window.top);
-  }, []);
 
   // Measure all editable blocks and (re)compute hotspot positions.
   useEffect(() => {
@@ -86,6 +81,11 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
 
   function edit(blockKey: string) {
     const target = `${ADMIN_EDIT_BASE}?block=${encodeURIComponent(blockKey)}`;
+    // Read the frame relationship at CLICK time rather than mirroring it into
+    // state from an effect. It is only ever needed inside this handler (never
+    // rendered), so state + an effect would be pure overhead -- and setting
+    // state from an effect is what react-hooks/set-state-in-effect flags.
+    const inFrame = window.self !== window.top;
     if (inFrame && window.parent) {
       // Ask the admin shell (PreviewFrame parent) to open the editor.
       window.parent.postMessage(
@@ -93,7 +93,10 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
         window.location.origin,
       );
     } else {
-      window.location.href = target;
+      // .assign() is a method call, not a property mutation, so it does not
+      // trip react-hooks/immutability. Behavior is identical to setting
+      // location.href (same-document navigation, adds a history entry).
+      window.location.assign(target);
     }
   }
 

@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
-import { getEnrichmentsForKeys } from "@/lib/enrichment/store";
 import { ensureEnrichment, updateEnrichment } from "@/lib/enrichment/store";
 import {
   generateProductDescription,

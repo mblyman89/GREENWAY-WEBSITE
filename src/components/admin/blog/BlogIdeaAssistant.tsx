@@ -68,7 +68,10 @@ export function BlogIdeaAssistant({ aiEnabled }: { aiEnabled: boolean }) {
     });
   };
 
-  const useIdea = (idea: BlogIdea, index: number) => {
+  // NOTE: deliberately NOT named `useIdea` -- a `use*` name makes React's
+  // rules-of-hooks linter treat this plain callback as a Hook (it is called
+  // from an onClick handler, which would be an illegal conditional Hook call).
+  const applyIdea = (idea: BlogIdea, index: number) => {
     setInputValue("title", idea.headline);
     setInputValue("category", idea.category);
     const seed = [idea.angle, idea.keywords.length ? `Keywords: ${idea.keywords.join(", ")}` : ""]
@@ -177,7 +180,7 @@ export function BlogIdeaAssistant({ aiEnabled }: { aiEnabled: boolean }) {
                 </div>
               )}
               <div className="mt-3 flex items-center gap-3">
-                <Button type="button" variant="primary" size="sm" onClick={() => useIdea(idea, i)}>
+                <Button type="button" variant="primary" size="sm" onClick={() => applyIdea(idea, i)}>
                   Use this idea
                 </Button>
                 {used === i && (

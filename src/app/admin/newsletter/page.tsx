@@ -21,6 +21,19 @@ import { CanvaButton } from "@/components/admin/marketing/CanvaButton";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Trailing-90-day engagement window (repo pattern: Date.now() inside a helper,
+ * so the render body itself stays pure). Both ends are derived from ONE clock
+ * read, so the window can never straddle a millisecond boundary.
+ */
+function engagementWindow(): { fromISO: string; toISO: string } {
+  const nowMs = Date.now();
+  return {
+    fromISO: new Date(nowMs - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    toISO: new Date(nowMs).toISOString(),
+  };
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -56,8 +69,7 @@ export default async function NewsletterSendPage({
   const cfg = newsletterSendConfig();
   // Engagement window: trailing 90 days. Reuses the same stats engine that
   // powers Reports → Customers → Newsletter Statistics (no new tracking).
-  const engagementFromISO = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-  const engagementToISO = new Date().toISOString();
+  const { fromISO: engagementFromISO, toISO: engagementToISO } = engagementWindow();
   const [newsletters, recipients, history, engagement] = await Promise.all([
     listSendableNewsletters(),
     getRecipientStats(),
