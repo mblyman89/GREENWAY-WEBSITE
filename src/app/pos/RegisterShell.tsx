@@ -57,6 +57,10 @@ import {
   medicalTestModeBannerActive,
 } from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
+// AB-1: every register request goes through posFetch so the SAME code works
+// in the browser PWA (relative, same-origin) and in the packaged iPad app
+// (absolute, pointed at the real server). See lib/pos/api-base-core.
+import { configurePosApiBase, posFetch } from "@/lib/pos/pos-fetch";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
@@ -134,7 +138,29 @@ function loadCreds(): DeviceCreds | null {
   }
 }
 
-export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
+export function RegisterShell({
+  buildVersion,
+  apiBase,
+}: {
+  buildVersion?: string;
+  /**
+   * AB-1 — where register requests are sent.
+   *
+   * EMPTY/absent (the browser PWA, and the default) means "same origin",
+   * which is byte-for-byte the behavior this shell has always had. The
+   * packaged iPad app passes an absolute https origin, because inside the app
+   * a relative "/api/pos/..." would resolve to the app bundle instead of the
+   * server. Validated by api-base-core; an invalid value safely falls back to
+   * same-origin rather than leaving the register unable to talk at all.
+   */
+  apiBase?: string;
+}) {
+  // Configure BEFORE the first render finishes so no request can ever be built
+  // with the wrong base. This is idempotent and cheap (a URL parse), and it is
+  // deliberately NOT in an effect: effects run after paint, and the boot
+  // sequence fires requests immediately.
+  const apiBaseResult = useMemo(() => configurePosApiBase(apiBase), [apiBase]);
+
   const [screen, setScreen] = useState<Screen | "loading">("loading");
   const [creds, setCreds] = useState<DeviceCreds | null>(null);
   const [employee, setEmployee] = useState<UnlockedEmployee | null>(null);
@@ -360,7 +386,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           .then((reg) => reg?.update().catch(() => {}))
           .catch(() => {});
       }
-      fetch("/api/pos/version", { cache: "no-store" })
+      posFetch("/api/pos/version", { cache: "no-store" })
         .then((res) => (res.ok ? res.json() : null))
         .then((body: { version?: unknown } | null) => {
           if (!cancelled && body && typeof body.version === "string") {
@@ -490,7 +516,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
       // restored from storage on boot) — otherwise skip as before.
       const rejectedReport = buildRejectedReport(rejectedRef.current);
       if (toSend.length === 0 && rejectedReport.count === (lastReportedRejectedRef.current ?? 0)) return;
-      const res = await fetch("/api/pos/sync", {
+      const res = await posFetch("/api/pos/sync", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -580,7 +606,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     if (!creds || menuLoading) return;
     setMenuLoading(true);
     try {
-      const res = await fetch("/api/pos/menu", {
+      const res = await posFetch("/api/pos/menu", {
         headers: {
           "x-pos-device-id": creds.deviceId,
           "x-pos-device-key": creds.deviceKey,
@@ -620,7 +646,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch("/api/pos/email-receipt", {
+        const res = await posFetch("/api/pos/email-receipt", {
           headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
         });
         const body = (await res.json().catch(() => null)) as { configured?: boolean } | null;
@@ -644,7 +670,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     let cancelled = false;
     const poll = async () => {
       try {
-        const res = await fetch("/api/pos/pickup", {
+        const res = await posFetch("/api/pos/pickup", {
           headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
         });
         const body = (await res.json().catch(() => null)) as { queue?: unknown[] } | null;
@@ -776,7 +802,14 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // FAILURE (data at risk NOW) beats the depth early-warning, which beats the
   // routine banner. Alerts are computed, not stored in `banner`, so a sync
   // message can never dismiss them; they clear only when the condition does.
-  const persistentAlert = storageAlert ?? queueDepthWarning(pendingCount);
+  // AB-1 — a misconfigured server address outranks every other alert: the
+  // register fell back to same-origin, which works in the browser but means a
+  // packaged app is pointed at the wrong place. Staff must see it, and it must
+  // not be dismissible by a routine sync message.
+  const persistentAlert =
+    (apiBaseResult.ok ? null : apiBaseResult.error) ??
+    storageAlert ??
+    queueDepthWarning(pendingCount);
   const shownBanner = persistentAlert ?? banner;
 
   // Slice 5 — the bundle SaleFlow/rebuilds price against. When medical test
@@ -993,7 +1026,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             return { ok: false as const, error: "Offline — manager approval needs a connection to verify the PIN." };
           }
           try {
-            const res = await fetch("/api/pos/approve", {
+            const res = await posFetch("/api/pos/approve", {
               method: "POST",
               headers: {
                 "content-type": "application/json",
@@ -1022,7 +1055,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             return { ok: false as const, error: "Offline — employee PINs need a connection to verify." };
           }
           try {
-            const res = await fetch("/api/pos/witness", {
+            const res = await posFetch("/api/pos/witness", {
               method: "POST",
               headers: {
                 "content-type": "application/json",
@@ -1052,7 +1085,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             return { ok: false as const, error: "Offline — flagging stock needs a connection (it changes the shared menu)." };
           }
           try {
-            const res = await fetch("/api/pos/stock-flag", {
+            const res = await posFetch("/api/pos/stock-flag", {
               method: "POST",
               headers: {
                 "content-type": "application/json",
@@ -1087,7 +1120,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             return { ok: false as const, error: "Offline — loyalty redemption needs a connection. Ring the sale without it, or reconnect." };
           }
           try {
-            const res = await fetch("/api/pos/loyalty", {
+            const res = await posFetch("/api/pos/loyalty", {
               method: "POST",
               headers: {
                 "content-type": "application/json",
@@ -1135,7 +1168,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           // offline/failed = no photo, the card still shows every cached fact.
           if (!navigator.onLine) return null;
           try {
-            const res = await fetch(`/api/pos/product-image?productId=${encodeURIComponent(productId)}`, {
+            const res = await posFetch(`/api/pos/product-image?productId=${encodeURIComponent(productId)}`, {
               headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
             });
             const body = (await res.json().catch(() => null)) as
@@ -1153,7 +1186,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             return { ok: false as const, error: "Offline — ring the sale without the member, or reconnect first." };
           }
           try {
-            const res = await fetch(`/api/pos/member?q=${encodeURIComponent(q)}`, {
+            const res = await posFetch(`/api/pos/member?q=${encodeURIComponent(q)}`, {
               headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
             });
             const body = (await res.json().catch(() => null)) as
@@ -1174,7 +1207,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           // Best-effort + ONLINE-ONLY: any failure = no attach, nothing else.
           if (!navigator.onLine) return null;
           try {
-            const res = await fetch("/api/pos/member-match", {
+            const res = await posFetch("/api/pos/member-match", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -1200,7 +1233,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
                   return { ok: false as const, error: "Offline — print the paper receipt instead." };
                 }
                 try {
-                  const res = await fetch("/api/pos/email-receipt", {
+                  const res = await posFetch("/api/pos/email-receipt", {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -1229,7 +1262,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             return { ok: false as const, error: "Offline — history needs a connection." };
           }
           try {
-            const res = await fetch(`/api/pos/member-history?customerId=${encodeURIComponent(customerId)}`, {
+            const res = await posFetch(`/api/pos/member-history?customerId=${encodeURIComponent(customerId)}`, {
               headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
             });
             const body = (await res.json().catch(() => null)) as
@@ -1584,7 +1617,7 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
       return;
     }
     try {
-      const res = await fetch("/api/pos/sync", {
+      const res = await posFetch("/api/pos/sync", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1710,7 +1743,7 @@ function LockScreen({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/pos/unlock", {
+      const res = await posFetch("/api/pos/unlock", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -2480,7 +2513,7 @@ function NoSaleModal({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/pos/approve", {
+      const res = await posFetch("/api/pos/approve", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -2617,7 +2650,7 @@ function VoidSaleModal({
   const reasonOk = reason.length >= 3 && reason.length <= 500;
 
   const call = async (body: Record<string, unknown>) => {
-    const res = await fetch("/api/pos/void", {
+    const res = await posFetch("/api/pos/void", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -2875,7 +2908,7 @@ function ReturnsModal({
     originalPackaging && lotIdLegible && pin.length >= 4;
 
   const call = async (body: Record<string, unknown>) => {
-    const res = await fetch("/api/pos/returns", {
+    const res = await posFetch("/api/pos/returns", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -3258,7 +3291,7 @@ function PickupQueueModal({
   const loadQueue = useCallback(async () => {
     setErrors([]);
     try {
-      const res = await fetch("/api/pos/pickup", { headers });
+      const res = await posFetch("/api/pos/pickup", { headers });
       const body = (await res.json().catch(() => null)) as { queue?: PickupQueueEntry[]; error?: string } | null;
       if (!res.ok || !Array.isArray(body?.queue)) {
         setErrors([body?.error ?? "Could not load the pickup queue."]);
@@ -3284,7 +3317,7 @@ function PickupQueueModal({
     setBusy(true);
     setErrors([]);
     try {
-      const res = await fetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) });
+      const res = await posFetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) });
       const body = (await res.json().catch(() => null)) as { order?: PickupDetail; error?: string } | null;
       if (!res.ok || !body?.order) {
         setErrors([body?.error ?? "Could not load the order."]);
@@ -3313,7 +3346,7 @@ function PickupQueueModal({
     setBusy(true);
     setErrors([]);
     try {
-      const res = await fetch("/api/pos/pickup", {
+      const res = await posFetch("/api/pos/pickup", {
         method: "POST",
         headers,
         body: JSON.stringify({ orderId: detail.orderId, load: { employeeName: employee.fullName } }),
@@ -3348,7 +3381,7 @@ function PickupQueueModal({
     setBusy(true);
     setErrors([]);
     try {
-      const res = await fetch("/api/pos/pickup", {
+      const res = await posFetch("/api/pos/pickup", {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -3601,7 +3634,7 @@ function DayReportModal({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/pos/day-report", {
+      const res = await posFetch("/api/pos/day-report", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -3715,7 +3748,7 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/pos/leaderboard", {
+        const res = await posFetch("/api/pos/leaderboard", {
           headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
         });
         const body = (await res.json().catch(() => null)) as
@@ -3909,7 +3942,7 @@ function TillModal({
                 ...(tips.trim() && tipsMinor !== null ? { tipsMinor } : {}),
               }
             : { action: mode, pin, denoms };
-      const res = await fetch("/api/pos/till", {
+      const res = await posFetch("/api/pos/till", {
         method: "POST",
         headers: {
           "content-type": "application/json",
