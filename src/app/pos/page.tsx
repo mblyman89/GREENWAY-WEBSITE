@@ -50,5 +50,12 @@ export default function PosPage() {
   // AN-0 — the deploy's short commit SHA ("dev" locally), shown in the status
   // footer so a stale installed app is visible at a glance. Same resolver the
   // service-worker route uses, so footer version and worker version agree.
-  return <RegisterShell buildVersion={resolveBuildVersion(process.env)} />;
+  //
+  // AB-1 — apiBase is intentionally EMPTY for this browser-served page: a
+  // relative "/api/pos/..." already resolves to this same origin, which is
+  // both correct and cheaper than a cross-origin hop. Only the packaged iPad
+  // app (which serves these files from capacitor://localhost) supplies an
+  // absolute base, because there a relative path would point at the app
+  // bundle instead of the server.
+  return <RegisterShell buildVersion={resolveBuildVersion(process.env)} apiBase="" />;
 }
