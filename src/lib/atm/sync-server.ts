@@ -46,11 +46,18 @@ import {
 import {
   upsertAtmSettlements,
   upsertAtmCashLoads,
+  upsertAtmTerminalStatus,
   setAtmSyncResult,
   getAtmConnectionSecrets,
   mergeAtmReportConfig,
 } from "./store";
-import { pullAllPaiReports, discoverReportFilterFields, verifyDateFieldsByProbe } from "./pai-client";
+import {
+  pullAllPaiReports,
+  discoverReportFilterFields,
+  verifyDateFieldsByProbe,
+  fetchTerminalStatusCsv,
+} from "./pai-client";
+import { mapTerminalStatusCsv } from "./terminal-status-core";
 import { reportKindsMissingDateField, type PaiReportKind } from "./pai-endpoints";
 import { mergeDateFieldOverride } from "./pai-discovery";
 
@@ -268,8 +275,85 @@ export async function runAtmLiveSync(options?: {
   const healPrefix = selfHealNote ? `${selfHealNote} ` : "";
   const message = `${healPrefix}${ingest.message}${skipped} — ${diagLine}`;
 
-  if (!ingest.ok) return { ok: false, error: message, summary: ingest.summary, diagnostics };
-  return { ok: true, message, summary: ingest.summary, diagnostics };
+  // Capture the machine's LIVE state (PAI Realtime → Terminal Status) so the
+  // ATM page can show the ACTUAL cash in the machine instead of the derived
+  // "balance at last load minus cash settled since" estimate. Best-effort by
+  // design: this is an enhancement on top of the historical ingest, so a
+  // failure here must never turn a good sync into a failed one — it just adds a
+  // note. Any error is already plain-English from the capture helper.
+  const statusNote = await captureTerminalStatus();
+  const withStatus = statusNote ? `${message} — ${statusNote}` : message;
+
+  if (!ingest.ok) return { ok: false, error: withStatus, summary: ingest.summary, diagnostics };
+  return { ok: true, message: withStatus, summary: ingest.summary, diagnostics };
+}
+
+/**
+ * Pull PAI's Terminal Status report and store the snapshot. Returns a short,
+ * plain-English note for the sync message (or "" when there is nothing worth
+ * saying). NEVER throws and NEVER fails the sync — the historical ingest is the
+ * contract; this is additive.
+ */
+async function captureTerminalStatus(): Promise<string> {
+  try {
+    const res = await fetchTerminalStatusCsv();
+    if (!res.ok) return `couldn’t read live machine status (${res.error})`;
+
+    const mapped = mapTerminalStatusCsv(res.csv);
+    if (mapped.rows.length === 0) {
+      const why = mapped.problems[0]?.message ?? "no terminal rows returned";
+      return `live machine status unavailable (${why})`;
+    }
+
+    // One capture instant for every row in this pull, so a multi-machine
+    // account reads as a single coherent snapshot.
+    const capturedAt = new Date().toISOString();
+    const write = await upsertAtmTerminalStatus(
+      mapped.rows.map((r) => ({
+        terminal_id: r.terminalId,
+        captured_at: capturedAt,
+        status: r.status,
+        location: r.location,
+        group_name: r.groupName,
+        days_until_cash_out: r.daysUntilCashOut,
+        trxs_since_settlement: r.trxsSinceSettlement,
+        last_trx_raw: r.lastTrxRaw,
+        last_wd_trx_raw: r.lastWithdrawalTrxRaw,
+        last_rev_trx_raw: r.lastReversalTrxRaw,
+        balance_prev_eod_cents: r.balancePrevEodCents,
+        balance_cents: r.balanceCents,
+        raw: r.raw,
+      })),
+    );
+    if (!write.ok) {
+      // The most likely cause on first run is that migration 0183 hasn't been
+      // applied yet. Say so instead of leaving a bare Postgres string.
+      return `couldn’t save live machine status (${write.error}) — if this mentions a missing table, apply migration 0183`;
+    }
+
+    // Lead with the number the owner actually wants to see.
+    const primary = mapped.rows[0];
+    const bits: string[] = [];
+    if (primary.balanceCents !== null) {
+      bits.push(`live cash in machine ${centsToUsdPlain(primary.balanceCents)}`);
+    }
+    if (primary.trxsSinceSettlement !== null) {
+      bits.push(`${primary.trxsSinceSettlement} transactions since last settlement`);
+    }
+    if (primary.status !== null) bits.push(`status ${primary.status}`);
+    return bits.length > 0 ? bits.join(", ") : "live machine status captured";
+  } catch {
+    return "couldn’t read live machine status (unexpected error)";
+  }
+}
+
+/** Minimal cents → "$1,800.00" for the sync note (no UI dependency here). */
+function centsToUsdPlain(cents: number): string {
+  const neg = cents < 0;
+  const abs = Math.abs(Math.trunc(cents));
+  const dollars = Math.floor(abs / 100).toLocaleString("en-US");
+  const rem = String(abs % 100).padStart(2, "0");
+  return `${neg ? "-" : ""}$${dollars}.${rem}`;
 }
 
 /**

@@ -20,7 +20,14 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
-import { getAtmConnection, listAtmSettlements, listAtmCashLoads, getAtmReconcileInputs } from "@/lib/atm/store";
+import {
+  getAtmConnection,
+  listAtmSettlements,
+  listAtmCashLoads,
+  getAtmReconcileInputs,
+  getLatestAtmTerminalStatus,
+} from "@/lib/atm/store";
+import { buildTerminalStatusView } from "@/lib/atm/terminal-status-core";
 import {
   resolveAtmTab,
   atmConnectionStatusLine,
@@ -93,6 +100,10 @@ export default async function AtmPage({
   const settlements =
     tab === "transactions" || tab === "loads" ? await listAtmSettlements() : [];
   const cashLoads = tab === "loads" ? await listAtmCashLoads() : [];
+  // PAI's Realtime "Terminal Status" snapshot — the machine's OWN reading of how
+  // much cash it is holding right now. When present it supersedes the derived
+  // estimate; when absent the estimate still shows (clearly labelled).
+  const liveStatus = tab === "loads" ? await getLatestAtmTerminalStatus(conn.terminalId) : null;
   const reconcileInputs = tab === "reconcile" ? await getAtmReconcileInputs() : null;
   const encryptionOn = isAtRestEncryptionConfigured();
   const posture = atmSecurityPosture({ encryptionOn });
@@ -207,6 +218,7 @@ export default async function AtmPage({
           <CashLoadsTab
             cashLoads={cashLoads}
             settlements={settlements}
+            liveStatus={liveStatus}
             terminalId={conn.terminalId}
           />
         ) : (
@@ -666,17 +678,42 @@ function SettlementsTab({
 function CashLoadsTab({
   cashLoads,
   settlements,
+  liveStatus,
   terminalId,
 }: {
   cashLoads: Awaited<ReturnType<typeof listAtmCashLoads>>;
   settlements: Awaited<ReturnType<typeof listAtmSettlements>>;
+  liveStatus: Awaited<ReturnType<typeof getLatestAtmTerminalStatus>>;
   terminalId: string;
 }) {
   const view = buildCashLoadsView(cashLoads, settlements);
 
+  // PAI's live snapshot beats our derived estimate whenever we have one. The
+  // estimate is a conservative upper bound (settlements land as whole days);
+  // the live reading is the machine's own count, so it needs no caveat.
+  const status = buildTerminalStatusView(
+    liveStatus
+      ? {
+          terminalId: liveStatus.terminalId,
+          location: liveStatus.location,
+          groupName: liveStatus.groupName,
+          status: liveStatus.status,
+          daysUntilCashOut: liveStatus.daysUntilCashOut,
+          lastTrxRaw: liveStatus.lastTrxRaw,
+          lastWithdrawalTrxRaw: liveStatus.lastWdTrxRaw,
+          lastReversalTrxRaw: liveStatus.lastRevTrxRaw,
+          trxsSinceSettlement: liveStatus.trxsSinceSettlement,
+          balancePrevEodCents: liveStatus.balancePrevEodCents,
+          balanceCents: liveStatus.balanceCents,
+          raw: {},
+        }
+      : null,
+    { capturedAt: liveStatus?.capturedAt ?? null, estimateCents: view.currentInMachineCents },
+  );
+
   // Plain-English hint for the headline number. It must never imply more
-  // precision than the settled data supports.
-  const currentHint =
+  // precision than the underlying data supports.
+  const estimateHint =
     view.currentInMachineCents !== null
       ? `Balance at the ${view.lastLoadDate ?? "last"} load, minus ${view.dispensedSinceLoadUsd} dispensed through ${view.dispensedThroughDate}${
           view.sameDayLoadCaveat ? ". Load-day withdrawals aren't split out, so treat this as a high estimate" : ""
@@ -685,14 +722,63 @@ function CashLoadsTab({
         ? "PAI hasn't reported a balance yet"
         : "No settled withdrawals since the last load yet — sync to update";
 
+  const currentHint =
+    status.currentCashSource === "live"
+      ? `Read live from the machine${status.capturedAt ? ` on ${fmtLocalDateTime(status.capturedAt)}` : ""} — the exact cash on hand, not an estimate`
+      : estimateHint;
+
   return (
     <div className="space-y-6">
+      {/* Live machine status — only shown when PAI actually gave us one. */}
+      {status.hasSnapshot ? (
+        <div className={cardCls}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-white">
+              Live machine status{status.terminalId ? ` — ${status.terminalId}` : ""}
+            </h2>
+            <div className="flex items-center gap-2">
+              {status.status ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    status.statusTone === "green"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : status.statusTone === "orange"
+                        ? "bg-amber-500/15 text-amber-300"
+                        : "bg-white/10 text-white/60"
+                  }`}
+                >
+                  {status.status}
+                </span>
+              ) : null}
+              {status.capturedAt ? (
+                <span className="text-xs text-white/40">as of {fmtLocalDateTime(status.capturedAt)}</span>
+              ) : null}
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-4">
+            <MiniStat
+              label="Withdrawals since settlement"
+              value={status.trxsSinceSettlement === null ? "—" : String(status.trxsSinceSettlement)}
+            />
+            <MiniStat
+              label="Days until cash out"
+              value={status.daysUntilCashOut === null ? "—" : String(status.daysUntilCashOut)}
+            />
+            <MiniStat label="Last withdrawal" value={status.lastWithdrawalTrxRaw ?? "—"} />
+            <MiniStat
+              label="Balance at previous end of day"
+              value={centsToUsd(status.balancePrevEodCents)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           label="Current cash in machine"
           value={
-            view.currentInMachineCents !== null
-              ? view.currentInMachineUsd
+            status.currentCashCents !== null
+              ? centsToUsd(status.currentCashCents)
               : view.expectedInMachineUsd
           }
           hint={currentHint}
@@ -798,9 +884,11 @@ function CashLoadsTab({
         <p className="mt-3 text-xs text-white/40">
           You load the machine with physical cash (not from the ATM bank account), so loads do not expect a
           matching bank debit. &ldquo;Balance at last load&rdquo; is PAI&rsquo;s own reported figure at that
-          moment; &ldquo;Current cash in machine&rdquo; subtracts the cash settled since. Withdrawals settle
-          as whole days, so anything dispensed after the last settlement date isn&rsquo;t counted yet — the
-          current figure is a high estimate, never a low one.
+          moment. &ldquo;Current cash in machine&rdquo; prefers PAI&rsquo;s live Terminal Status reading &mdash;
+          the machine&rsquo;s own count of what it is holding right now. If that live reading isn&rsquo;t
+          available it falls back to the last load balance minus the cash settled since; because
+          withdrawals settle as whole days, that fallback is a high estimate, never a low one. The card
+          always tells you which of the two you are looking at.
         </p>
       </div>
     </div>
@@ -1056,6 +1144,35 @@ function StatCard({
       {hint ? <p className="mt-1 text-xs text-white/40">{hint}</p> : null}
     </div>
   );
+}
+
+/** A compact readout inside the live-status card (smaller than StatCard). */
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/40">{label}</p>
+      <p className="mt-1 text-sm font-semibold tabular-nums text-white">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * Render a stored ISO timestamp in the store's Pacific business clock, so "as
+ * of" always reads in the owner's own time rather than UTC.
+ */
+function fmtLocalDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      timeZone: "America/Los_Angeles",
+      month: "numeric",
+      day: "numeric",
+      year: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function EmptyState({ title, lines }: { title: string; lines: string[] }) {

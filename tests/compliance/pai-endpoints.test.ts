@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   PAI_REPORT_EVENT,
   PAI_REPORT_EVENT_UNIVERSAL,
+  PAI_TERMINAL_STATUS_EVENT,
   PAI_DEFAULT_CUSTOM_CMD,
   PAI_DEFAULT_BASE,
   joinUrl,
@@ -166,6 +167,30 @@ describe("reportGuid pinning (serve EXACTLY the saved report — fixes same-name
     expect(p.combinedUrl).toContain("ReportCmd=Filter&ReportCmd=CustomCommand");
     expect(p.combinedUrl).toContain("F_SettlementDate=");
     expect(p.combinedUrl).toContain("&ReportGUID=G-xyz");
+  });
+});
+
+describe("PAI_TERMINAL_STATUS_EVENT (Realtime → Terminal Status)", () => {
+  it("pins the path CONFIRMED from the owner's address bar", () => {
+    // https://www.paireports.com/myreports/GetNewTerminalStatus.event?ReportCmd=Filter
+    expect(PAI_TERMINAL_STATUS_EVENT).toBe("GetNewTerminalStatus.event");
+  });
+
+  it("builds a CSV download URL with no GUID and no date filter", () => {
+    // Terminal Status is a realtime snapshot: "now" is its only window, so a
+    // date filter would be meaningless, and no GUID is needed because the
+    // per-report .event path already identifies it.
+    const url = buildPaiGuidDownloadUrl(PAI_DEFAULT_BASE, PAI_TERMINAL_STATUS_EVENT, "");
+    expect(url).toBe(
+      "https://www.paireports.com/myreports/GetNewTerminalStatus.event" +
+        "?ReportCmd=Filter&ReportCmd=CustomCommand&CustomCmdList=DownloadCSV",
+    );
+    expect(url).not.toContain("ReportGUID");
+    expect(url).not.toContain("F_");
+  });
+
+  it("is NOT part of the historical report kinds (keeps the working sync untouched)", () => {
+    expect(Object.values(PAI_REPORT_EVENT)).not.toContain(PAI_TERMINAL_STATUS_EVENT);
   });
 });
 
