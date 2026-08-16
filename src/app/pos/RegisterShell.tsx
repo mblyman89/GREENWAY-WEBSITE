@@ -61,6 +61,17 @@ import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 // in the browser PWA (relative, same-origin) and in the packaged iPad app
 // (absolute, pointed at the real server). See lib/pos/api-base-core.
 import { configurePosApiBase, posFetch } from "@/lib/pos/pos-fetch";
+// Phase 1.1 — every register read/write goes through the storage seam instead
+// of window.localStorage, so the SAME code runs on the browser PWA (localStorage
+// backend, byte-identical behavior) and in the packaged iPad app (durable
+// encrypted native storage). Rules live in lib/pos/pos-storage-core.
+import {
+  hydratePosStorage,
+  posStorageGet,
+  posStorageReadiness,
+  posStorageRemove,
+  posStorageSet,
+} from "@/lib/pos/pos-storage";
 import { shouldRegisterServiceWorker } from "@/lib/pos/register-host-core";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
@@ -129,7 +140,7 @@ type Screen = "setup" | "locked" | "home";
 
 function loadCreds(): DeviceCreds | null {
   try {
-    const raw = window.localStorage.getItem(LS_DEVICE);
+    const raw = posStorageGet(LS_DEVICE);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DeviceCreds;
     if (!parsed?.deviceId || !parsed?.deviceKey) return null;
@@ -260,12 +271,21 @@ export function RegisterShell({
   const loadedOrderIdRef = useRef<string | null>(null);
 
   // ── boot: restore creds + queue ──
-  // Mount-time hydration from localStorage (an external store). The one-time
-  // setState burst here is intentional: SSR cannot read localStorage, the
-  // component renders a "loading" screen until this runs, and reading window
-  // in a useState initializer would cause a hydration mismatch instead.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Mount-time hydration from the storage seam (an external store). The
+  // one-time setState burst here is intentional: SSR cannot read device
+  // storage, the component renders a "loading" screen until this runs, and
+  // reading it in a useState initializer would cause a hydration mismatch.
+  //
+  // PHASE 1.1 — these setState calls now happen inside the hydrate callback
+  // rather than synchronously in the effect body, so the
+  // react-hooks/set-state-in-effect rule no longer applies and its
+  // suppression has been removed (eslint flagged the directive as unused,
+  // which is exactly the signal that the async boot landed correctly).
   useEffect(() => {
+    // Guards the async hydration below: if the register unmounts while the
+    // durable store is still being read, the late resolve must not setState
+    // on a dead tree.
+    let cancelled = false;
     // POS B11 — register the tiny shell service worker so the Home-Screen
     // app boots offline. Scoped to "/pos" so it never collides with the
     // admin push worker (push-sw.js at scope "/"): a controlled /pos page
@@ -315,9 +335,25 @@ export function RegisterShell({
         window.location.reload();
       });
     }
+    // PHASE 1.1 — fill the storage mirror BEFORE reading a single value.
+    //
+    // The reads below are synchronous (they always were), but the durable
+    // backend underneath the seam is asynchronous on the packaged iPad app.
+    // Reading before hydration finishes would look exactly like "nothing
+    // saved" — and for the queue that means "no pending sales", which would
+    // start a fresh queue and orphan real money. So the whole boot body waits
+    // for the mirror. On the browser PWA the localStorage backend resolves in
+    // the same tick, so this is a no-op there and the register behaves exactly
+    // as it always has.
+    void hydratePosStorage().then((verdict) => {
+      if (cancelled) return;
+      bootFromStorage(verdict);
+    });
+    /** Everything that reads storage. Runs once the mirror is filled. */
+    function bootFromStorage(verdict: ReturnType<typeof posStorageReadiness>) {
     const c = loadCreds();
-    const parsed = parseQueue(window.localStorage.getItem(LS_QUEUE));
-    const seqStored = Number(window.localStorage.getItem(LS_SEQ) ?? "0");
+    const parsed = parseQueue(posStorageGet(LS_QUEUE));
+    const seqStored = Number(posStorageGet(LS_SEQ) ?? "0");
     seqRef.current = highestSequence(parsed.queue, Number.isFinite(seqStored) ? seqStored : 0);
     setQueue(parsed.queue.filter((r) => !r.rejectedReason));
     setRejected(parsed.queue.filter((r) => !!r.rejectedReason));
@@ -329,16 +365,16 @@ export function RegisterShell({
     setOnline(navigator.onLine);
     // B17 — last receipt + held sale survive restarts; validators return
     // null on any corruption so a bad blob can never garbage-print.
-    setLastReceipt(parseLastReceipt(window.localStorage.getItem(LAST_RECEIPT_KEY)));
-    setHeldSale(parseHeldSale(window.localStorage.getItem(HELD_SALE_KEY)));
+    setLastReceipt(parseLastReceipt(posStorageGet(LAST_RECEIPT_KEY)));
+    setHeldSale(parseHeldSale(posStorageGet(HELD_SALE_KEY)));
     // B44 — per-device display mode (parseTheme degrades corruption to dark).
-    setTheme(parseTheme(window.localStorage.getItem(THEME_KEY)));
+    setTheme(parseTheme(posStorageGet(THEME_KEY)));
     // Slice 5 — per-device medical test mode (parseMedicalTestMode fails safe
     // to OFF on any corruption, so a bad blob can never silently drop real tax).
-    setMedicalTestMode(parseMedicalTestMode(window.localStorage.getItem(MEDICAL_TESTMODE_KEY)));
+    setMedicalTestMode(parseMedicalTestMode(posStorageGet(MEDICAL_TESTMODE_KEY)));
     // Cached menu bundle (offline sales use the last download until refresh).
     try {
-      const rawMenu = window.localStorage.getItem(LS_MENU);
+      const rawMenu = posStorageGet(LS_MENU);
       if (rawMenu) {
         const cached = JSON.parse(rawMenu) as PosMenuBundle;
         if (cached && Array.isArray(cached.products)) setMenuBundle(cached);
@@ -346,8 +382,17 @@ export function RegisterShell({
     } catch {
       // Corrupted cache — the online refresh replaces it.
     }
+    // PHASE 1.1 — if a value the register cannot do without was unreadable,
+    // say so in plain English. readinessVerdict decides whether that is
+    // merely informational (a preference) or a stop-selling condition (the
+    // queue or the pairing); the banner is the same one the shell already
+    // uses for dropped queue rows.
+    if (verdict.message) setBanner(verdict.message);
+    }
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── B44: apply + persist the display mode ──
   // The attribute lives on <html> so the ONE globals.css override block
@@ -355,24 +400,37 @@ export function RegisterShell({
   // Removed on unmount so navigating away never leaves the attribute behind.
   useEffect(() => {
     document.documentElement.setAttribute("data-pos-theme", theme);
+    // PHASE 1.1 — do NOT persist while the register is still loading. The
+    // durable store is read asynchronously now, so this effect fires once with
+    // the DEFAULT theme before the saved one has arrived. Writing here would
+    // overwrite the budtender's saved choice with "dark" and then read that
+    // back — the setting would silently reset on every launch. The same guard
+    // the queue effect below already uses. (The attribute above is still
+    // applied immediately so the screen never flashes the wrong palette.)
+    if (screen === "loading") return;
     try {
-      window.localStorage.setItem(THEME_KEY, theme);
+      posStorageSet(THEME_KEY, theme);
     } catch {
       // Best-effort — a full disk just means the choice doesn't survive restart.
     }
     return () => {
       document.documentElement.removeAttribute("data-pos-theme");
     };
-  }, [theme]);
+  }, [theme, screen]);
 
   // ── Slice 5: persist the per-device medical test-mode flag ──
   useEffect(() => {
+    // PHASE 1.1 — same guard as the theme effect above. Persisting the default
+    // OFF before the saved value has been read would silently clear medical
+    // test mode on every launch, which is worse than a cosmetic reset: a
+    // register the owner believes is in test mode would be ringing REAL sales.
+    if (screen === "loading") return;
     try {
-      window.localStorage.setItem(MEDICAL_TESTMODE_KEY, serializeMedicalTestMode(medicalTestMode));
+      posStorageSet(MEDICAL_TESTMODE_KEY, serializeMedicalTestMode(medicalTestMode));
     } catch {
       // Best-effort — a full disk just means the choice doesn't survive restart.
     }
-  }, [medicalTestMode]);
+  }, [medicalTestMode, screen]);
 
   // ── AN-1: lock-screen update pump ──
   // The owner's real pain: an installed iPad register NEVER picked up a new
@@ -461,8 +519,8 @@ export function RegisterShell({
     rejectedRef.current = rejected;
     if (screen === "loading") return;
     try {
-      window.localStorage.setItem(LS_QUEUE, serializeQueue([...queue, ...rejected]));
-      window.localStorage.setItem(LS_SEQ, String(seqRef.current));
+      posStorageSet(LS_QUEUE, serializeQueue([...queue, ...rejected]));
+      posStorageSet(LS_SEQ, String(seqRef.current));
       // Synchronizing FROM an external system (localStorage write outcome)
       // INTO React state — the allowed direction; the functional form makes
       // the success path a no-op render unless an alert is actually cleared.
@@ -480,7 +538,7 @@ export function RegisterShell({
   // a restart.
   const persistCreds = useCallback((c: DeviceCreds) => {
     try {
-      window.localStorage.setItem(LS_DEVICE, JSON.stringify(c));
+      posStorageSet(LS_DEVICE, JSON.stringify(c));
       setStorageAlert((prev) => (prev === storageFailureAlert("device") ? null : prev));
     } catch {
       setStorageAlert(storageFailureAlert("device"));
@@ -624,7 +682,7 @@ export function RegisterShell({
       const bundle = (await res.json()) as PosMenuBundle;
       setMenuBundle(bundle);
       try {
-        window.localStorage.setItem(LS_MENU, JSON.stringify(bundle));
+        posStorageSet(LS_MENU, JSON.stringify(bundle));
       } catch {
         // Cache write failure is non-fatal — the in-memory bundle still works.
       }
@@ -731,10 +789,10 @@ export function RegisterShell({
           })
         : null;
       if (snap) {
-        window.localStorage.setItem(ACTIVE_SALE_KEY, serializeActiveSale(snap));
+        posStorageSet(ACTIVE_SALE_KEY, serializeActiveSale(snap));
         return true;
       }
-      window.localStorage.removeItem(ACTIVE_SALE_KEY);
+      posStorageRemove(ACTIVE_SALE_KEY);
       return false;
     } catch {
       // Storage full / unavailable — the sale simply won't resume; the ID gate
@@ -887,7 +945,7 @@ export function RegisterShell({
           // gate (the safe default). The cart itself is re-priced against the
           // CURRENT bundle by SaleFlow's initialCart path (rebuildHeldCart).
           try {
-            const parked = parseActiveSale(window.localStorage.getItem(ACTIVE_SALE_KEY));
+            const parked = parseActiveSale(posStorageGet(ACTIVE_SALE_KEY));
             const decision = evaluateResume(parked, pacificDayKey(new Date()), Date.now());
             if (decision.resume) {
               setResumeSnapshot(decision.snapshot);
@@ -899,7 +957,7 @@ export function RegisterShell({
               setLoadedOrderId(decision.snapshot.sourceOrderId);
               setSaleActive(true);
             } else {
-              window.localStorage.removeItem(ACTIVE_SALE_KEY);
+              posStorageRemove(ACTIVE_SALE_KEY);
               setResumeSnapshot(null);
               if (parked) {
                 setBanner(decision.reason);
@@ -958,7 +1016,7 @@ export function RegisterShell({
                 // the conflict moment. Local hold only — inventory was never
                 // reserved (holds store variant ids + counts, nothing more).
                 try {
-                  window.localStorage.removeItem(HELD_SALE_KEY);
+                  posStorageRemove(HELD_SALE_KEY);
                 } catch {
                   // Best-effort.
                 }
@@ -981,7 +1039,7 @@ export function RegisterShell({
                 const hold = holdFromCart(cartLines, employee.fullName, new Date().toISOString());
                 if (hold.lines.length === 0) return;
                 try {
-                  window.localStorage.setItem(HELD_SALE_KEY, serializeHeldSale(hold));
+                  posStorageSet(HELD_SALE_KEY, serializeHeldSale(hold));
                 } catch {
                   // Storage full — the in-memory hold still works this session.
                 }
@@ -991,7 +1049,7 @@ export function RegisterShell({
                 // parked sales fighting.
                 activeSaleRef.current = null;
                 try {
-                  window.localStorage.removeItem(ACTIVE_SALE_KEY);
+                  posStorageRemove(ACTIVE_SALE_KEY);
                 } catch {
                   // Best-effort.
                 }
@@ -1010,7 +1068,7 @@ export function RegisterShell({
           // B17 — persist the frozen snapshot so "reprint last receipt"
           // survives the post-sale auto-lock (and app restarts).
           try {
-            window.localStorage.setItem(LAST_RECEIPT_KEY, serializeLastReceipt(frozen));
+            posStorageSet(LAST_RECEIPT_KEY, serializeLastReceipt(frozen));
           } catch {
             // Storage full — reprint just won't survive a restart.
           }
@@ -1018,7 +1076,7 @@ export function RegisterShell({
           // A completed sale consumes the hold it was resumed from.
           if (resumeCart) {
             try {
-              window.localStorage.removeItem(HELD_SALE_KEY);
+              posStorageRemove(HELD_SALE_KEY);
             } catch {
               // Best-effort.
             }
@@ -1110,7 +1168,7 @@ export function RegisterShell({
               if (!prev) return prev;
               const next = applyLocalStockFlag(prev, productId);
               try {
-                window.localStorage.setItem(LS_MENU, JSON.stringify(next));
+                posStorageSet(LS_MENU, JSON.stringify(next));
               } catch {
                 // Cache write failure is non-fatal — the in-memory bundle still works.
               }
@@ -1297,7 +1355,7 @@ export function RegisterShell({
           // clear the live ref + stored snapshot first.
           activeSaleRef.current = null;
           try {
-            window.localStorage.removeItem(ACTIVE_SALE_KEY);
+            posStorageRemove(ACTIVE_SALE_KEY);
           } catch {
             // Best-effort.
           }
@@ -1318,7 +1376,7 @@ export function RegisterShell({
           // snapshot so an explicit cancel is never silently resumed.
           activeSaleRef.current = null;
           try {
-            window.localStorage.removeItem(ACTIVE_SALE_KEY);
+            posStorageRemove(ACTIVE_SALE_KEY);
           } catch {
             // Best-effort.
           }
@@ -1354,7 +1412,7 @@ export function RegisterShell({
           // the ID gate runs for the new customer.
           activeSaleRef.current = null;
           try {
-            window.localStorage.removeItem(ACTIVE_SALE_KEY);
+            posStorageRemove(ACTIVE_SALE_KEY);
           } catch {
             // Best-effort.
           }
@@ -1372,7 +1430,7 @@ export function RegisterShell({
                 const rebuilt = rebuildHeldCart(heldSale, effectiveBundle.products);
                 if (rebuilt.cart.length === 0) {
                   try {
-                    window.localStorage.removeItem(HELD_SALE_KEY);
+                    posStorageRemove(HELD_SALE_KEY);
                   } catch {
                     // Best-effort.
                   }
@@ -1388,7 +1446,7 @@ export function RegisterShell({
                 // snapshot so it can't leak the previous customer's verdict.
                 activeSaleRef.current = null;
                 try {
-                  window.localStorage.removeItem(ACTIVE_SALE_KEY);
+                  posStorageRemove(ACTIVE_SALE_KEY);
                 } catch {
                   // Best-effort.
                 }
@@ -1402,7 +1460,7 @@ export function RegisterShell({
           heldSale
             ? () => {
                 try {
-                  window.localStorage.removeItem(HELD_SALE_KEY);
+                  posStorageRemove(HELD_SALE_KEY);
                 } catch {
                   // Best-effort.
                 }
@@ -1561,7 +1619,7 @@ export function RegisterShell({
             // different customer.
             activeSaleRef.current = null;
             try {
-              window.localStorage.removeItem(ACTIVE_SALE_KEY);
+              posStorageRemove(ACTIVE_SALE_KEY);
             } catch {
               // Best-effort.
             }
