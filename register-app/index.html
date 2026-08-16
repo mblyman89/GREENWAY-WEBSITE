@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+
+    <!--
+      Viewport mirrors the Next.js /pos route's viewport export exactly
+      (src/app/pos/page.tsx). maximum-scale + user-scalable=no matter more here
+      than on the web: a pinch-zoom on a till leaves the cashier staring at a
+      magnified fragment of the screen mid-sale, and viewport-fit=cover lets
+      the register paint under the rounded corners and home indicator so the
+      app fills the iPad instead of sitting in a letterbox.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+
+    <title>Greenway Point of Transaction</title>
+
+    <!-- Matches the /pos themeColor. -->
+    <meta name="theme-color" content="#f4f6f9" />
+
+    <!-- Standalone/full-screen behaviour, same as the PWA at /pos. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Register" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!--
+      A till screen must never be indexed or previewed anywhere. The app is not
+      on the open web, but this costs nothing and keeps the two builds honest.
+    -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!-- Stops iOS turning order numbers and totals into tappable phone links. -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="apple-touch-icon" href="./pos/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="./pos/icon-192.png" />
+</head>
+  <body>
+    <!-- RegisterShell renders here; see src/main.tsx. -->
+    <div id="root"></div>
+
+    <noscript>
+      <p style="font-family: system-ui, sans-serif; padding: 2rem; color: #e8eae9">
+        The register needs JavaScript enabled to run.
+      </p>
+    </noscript>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

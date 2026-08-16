@@ -1,0 +1,24 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // The register app is a plain browser bundle — no Next.js plugin, and no
+    // "next" / "next/image-types/global" ambient types (those are pulled in by
+    // the root next-env.d.ts and would collide with Vite's own *.png module
+    // declarations if both were ever loaded into one program).
+    "plugins": [],
+    "types": [],
+    // Paths are relative to THIS folder, so "@/..." still means the shared
+    // src/ tree one level up — the same files the Next build compiles.
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../src/*"]
+    },
+    // vite.config.ts is Node code (node:fs, node:url) executed by Vite, not
+    // browser code, so it needs the Node globals available.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "vite.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}
