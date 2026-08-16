@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Register (POS) design tokens and .pos-* rules live in their own file so the
+   packaged iPad app can import the exact same styling without pulling in the
+   website. Single source of truth — see the header in pos-tokens.css. */
+@import "./pos-tokens.css";
+
 :root {
   --background: #000000;
   --foreground: #ffffff;
@@ -72,168 +77,6 @@
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --admin-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.7);
   --admin-shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
-
-  /* ---------------------------------------------------------------------------
-   * POS DESIGN TOKENS (register only \u2014 POS Slice B35)
-   * The counter iPads get the same brand language as the website and the back
-   * office: Greenway green, gold, orange accents over deliberate charcoal
-   * surfaces. Values intentionally mirror the admin scale above so a manager
-   * moving between the back office and the register sees ONE product.
-   * Register screens read these via arbitrary-value Tailwind classes
-   * (bg-[var(--pos-surface)] etc.) \u2014 change a value here, the whole POS moves.
-   * ------------------------------------------------------------------------- */
-
-  /* Surfaces \u2014 darkest canvas \u2192 cards \u2192 raised/pressed. */
-  --pos-canvas: #060807;
-  --pos-surface: #0c0e0d;
-  --pos-surface-2: #121514;
-  --pos-surface-hover: #171b19;
-  /* Task AO \u2014 navy chrome (top bar / primary-dark buttons). In dark mode the
-     chrome sits on the same dark family so it never glows. */
-  --pos-chrome: #0c0e0d;
-  --pos-chrome-ink: #ffffff;
-  --pos-chrome-muted: rgba(255, 255, 255, 0.55);
-
-  /* Hairlines & borders. */
-  --pos-border: rgba(255, 255, 255, 0.08);
-  --pos-border-strong: rgba(255, 255, 255, 0.16);
-
-  /* Text. */
-  --pos-text: #f5f7f5;
-  --pos-text-muted: rgba(255, 255, 255, 0.62);
-  --pos-text-faint: rgba(255, 255, 255, 0.4);
-
-  /* Brand accents (mirror the public palette). --pos-accent-ink is the dark
-     green text that sits ON a solid greenway fill (the Start-sale tile, the
-     keypad GO button) \u2014 same ink as the public site's ::selection. */
-  --pos-accent: var(--greenway);
-  --pos-accent-ink: #08130b;
-  --pos-accent-soft: rgba(126, 217, 87, 0.14);
-  --pos-accent-border: rgba(126, 217, 87, 0.4);
-  --pos-gold: var(--gold);
-  --pos-gold-soft: rgba(255, 215, 0, 0.12);
-  --pos-gold-border: rgba(255, 215, 0, 0.35);
-  --pos-orange: var(--orange);
-  --pos-orange-soft: rgba(255, 127, 0, 0.12);
-  --pos-orange-border: rgba(255, 127, 0, 0.35);
-  --pos-danger: #ff5a5a;
-  --pos-danger-soft: rgba(255, 90, 90, 0.14);
-
-  /* Semantic status tokens (POS B44). The register used hard-coded Tailwind
-     amber/red/sky/emerald utilities for warnings, errors, info and ok states
-     — all tuned for a dark canvas. B44's light mode needs BOTH palettes, so
-     the last hard-coded status colors moved onto these tokens (finishing the
-     B38 sweep). Ink on gold fills is also a token: near-black on bright gold
-     (dark), white on deep gold (light). */
-  --pos-gold-ink: #08130b;
-  --pos-warn: #fcd34d;
-  --pos-warn-muted: rgba(252, 211, 77, 0.72);
-  --pos-warn-soft: rgba(217, 119, 6, 0.15);
-  --pos-warn-dot: #fbbf24;
-  --pos-warn-solid: #d97706;
-  --pos-warn-border: rgba(217, 119, 6, 0.45);
-  --pos-danger-border: rgba(255, 90, 90, 0.35);
-  --pos-danger-solid: #b91c1c;
-  --pos-info: #7dd3fc;
-  --pos-info-soft: rgba(2, 132, 199, 0.16);
-  --pos-info-border: rgba(2, 132, 199, 0.4);
-  --pos-info-solid: #0284c7;
-  --pos-ok: #6ee7b7;
-  --pos-ok-border: rgba(16, 185, 129, 0.45);
-
-  /* Category accent tokens (Task AO-5). The B36 category chip/dot palette's
-     last five entries were hard-coded Tailwind -300/-400 shades tuned for the
-     dark canvas — illegible on the light default. AO-5 moves them onto tokens
-     (same pattern as B44's semantic status tokens): dark keeps the original
-     shades, the light block below re-tints to readable -600/-700 shades. */
-  --pos-cat-fuchsia: #f0abfc;
-  --pos-cat-fuchsia-border: rgba(217, 70, 239, 0.5);
-  --pos-cat-fuchsia-dot: #e879f9;
-  --pos-cat-rose: #fda4af;
-  --pos-cat-rose-border: rgba(244, 63, 94, 0.5);
-  --pos-cat-rose-dot: #fb7185;
-  --pos-cat-teal: #5eead4;
-  --pos-cat-teal-border: rgba(20, 184, 166, 0.5);
-  --pos-cat-teal-dot: #2dd4bf;
-  --pos-cat-indigo: #a5b4fc;
-  --pos-cat-indigo-border: rgba(99, 102, 241, 0.5);
-  --pos-cat-indigo-dot: #818cf8;
-  --pos-cat-orange: #fdba74;
-  --pos-cat-orange-border: rgba(249, 115, 22, 0.5);
-  --pos-cat-orange-dot: #fb923c;
-}
-
-/* ---------------------------------------------------------------------------
- * POS LIGHT MODE (POS Slice B44)
- * Toast-style per-device display mode: RegisterShell sets data-pos-theme on
- * <html> from a localStorage choice (gw-pos-theme), and this ONE block
- * re-tints every --pos-* token for a bright-room register. Scoped to the
- * attribute so the website, the back office, and dark registers never move.
- * Brand accents shift to their readable-on-white equivalents (the bright
- * #7ed957 green and #ffd700 gold fail contrast as TEXT on white).
- * ------------------------------------------------------------------------- */
-html[data-pos-theme="light"] {
-  /* Task AO — owner-approved Dutchie-style palette: cool white canvas, white
-     cards, navy chrome, and a confident retail green for primary actions. */
-  --pos-canvas: #f4f6f9;
-  --pos-surface: #ffffff;
-  --pos-surface-2: #fbfcfd;
-  --pos-surface-hover: #eef1f5;
-  --pos-border: #e4e9ef;
-  --pos-border-strong: #c4cfdb;
-  --pos-text: #1e2b3a;
-  --pos-text-muted: #5c6b7d;
-  --pos-text-faint: rgba(92, 107, 125, 0.65);
-  --pos-accent: #178a5c;
-  --pos-accent-ink: #ffffff;
-  --pos-accent-soft: rgba(31, 169, 113, 0.12);
-  --pos-accent-border: rgba(31, 169, 113, 0.45);
-  /* Navy chrome tokens (top bar / primary-dark buttons) — light theme only;
-     dark theme maps them onto its existing surfaces below. */
-  --pos-chrome: #12233d;
-  --pos-chrome-ink: #ffffff;
-  --pos-chrome-muted: #8fa2ba;
-  --pos-gold: #8a6a00;
-  --pos-gold-ink: #ffffff;
-  --pos-gold-soft: rgba(179, 138, 0, 0.14);
-  --pos-gold-border: rgba(138, 106, 0, 0.4);
-  --pos-orange: #c2410c;
-  --pos-orange-soft: rgba(194, 65, 12, 0.1);
-  --pos-orange-border: rgba(194, 65, 12, 0.4);
-  --pos-danger: #b91c1c;
-  --pos-danger-soft: rgba(220, 38, 38, 0.1);
-  --pos-danger-border: rgba(220, 38, 38, 0.35);
-  --pos-danger-solid: #dc2626;
-  --pos-warn: #92400e;
-  --pos-warn-muted: rgba(146, 64, 14, 0.75);
-  --pos-warn-soft: rgba(217, 119, 6, 0.12);
-  --pos-warn-dot: #d97706;
-  --pos-warn-solid: #d97706;
-  --pos-warn-border: rgba(217, 119, 6, 0.45);
-  --pos-info: #075985;
-  --pos-info-soft: rgba(2, 132, 199, 0.1);
-  --pos-info-border: rgba(2, 132, 199, 0.35);
-  --pos-info-solid: #0284c7;
-  --pos-ok: #047857;
-  --pos-ok-border: rgba(5, 150, 105, 0.45);
-
-  /* Category accents (AO-5) — deep -700 text / -600 dots read cleanly on the
-     white cards; borders stay the mid-hue at reduced alpha. */
-  --pos-cat-fuchsia: #a21caf;
-  --pos-cat-fuchsia-border: rgba(192, 38, 211, 0.4);
-  --pos-cat-fuchsia-dot: #c026d3;
-  --pos-cat-rose: #be123c;
-  --pos-cat-rose-border: rgba(225, 29, 72, 0.4);
-  --pos-cat-rose-dot: #e11d48;
-  --pos-cat-teal: #0f766e;
-  --pos-cat-teal-border: rgba(13, 148, 136, 0.4);
-  --pos-cat-teal-dot: #0d9488;
-  --pos-cat-indigo: #4338ca;
-  --pos-cat-indigo-border: rgba(79, 70, 229, 0.4);
-  --pos-cat-indigo-dot: #4f46e5;
-  --pos-cat-orange: #c2410c;
-  --pos-cat-orange-border: rgba(234, 88, 12, 0.4);
-  --pos-cat-orange-dot: #ea580c;
 }
 
 * {
@@ -278,16 +121,6 @@ optgroup {
 .admin-shell optgroup {
   background-color: var(--admin-surface-2);
   color: var(--admin-text);
-}
-.pos-shell option,
-.pos-shell optgroup {
-  background-color: var(--pos-surface-2);
-  color: var(--pos-text);
-}
-html[data-pos-theme="light"] .pos-shell option,
-html[data-pos-theme="light"] .pos-shell optgroup {
-  background-color: #ffffff;
-  color: var(--pos-text);
 }
 
 /* Headings use the staff-chosen heading font site-wide. Falls back to the body
@@ -410,43 +243,6 @@ h1, h2, h3, h4, h5, h6 {
 .admin-shell .bg-\[\#0f0f0f\],
 .admin-shell .bg-\[\#0f1a10\] {
   background-color: var(--admin-surface) !important;
-}
-
-/* ---------------------------------------------------------------------------
- * POS SHELL CANVAS (POS Slice B35)
- * The register gets the same quiet, app-like brand backdrop as the back
- * office: a subtle top-of-screen green/orange glow over near-black instead of
- * flat neutral-950. Scoped to .pos-shell so nothing else is touched.
- * ------------------------------------------------------------------------- */
-.pos-shell {
-  background:
-    radial-gradient(120% 60% at 50% -10%, rgba(126, 217, 87, 0.08), transparent 60%),
-    radial-gradient(90% 50% at 100% -10%, rgba(255, 127, 0, 0.06), transparent 55%),
-    var(--pos-canvas);
-  color: var(--pos-text);
-  /* Native controls (inputs on setup, selects in modals) render dark. */
-  color-scheme: dark;
-}
-
-/* Light mode (B44, re-tuned in Task AO): the owner-approved Dutchie-style
-   canvas is a clean cool grey-white with NO brand glow \u2014 white cards read
-   crisply against it. Native controls flip to light so selects/inputs match. */
-html[data-pos-theme="light"] .pos-shell {
-  background: var(--pos-canvas);
-  color-scheme: light;
-}
-
-/* Register action tiles: instant, tactile press feedback for finger-first
-   use \u2014 the whole POS is tapped, never hovered, so :active is what matters. */
-.pos-tile {
-  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-}
-.pos-tile:not(:disabled):hover {
-  border-color: var(--pos-border-strong);
-  box-shadow: var(--admin-shadow);
-}
-.pos-tile:not(:disabled):active {
-  transform: scale(0.98);
 }
 
 /* Reusable focus ring so every interactive admin control matches. */
