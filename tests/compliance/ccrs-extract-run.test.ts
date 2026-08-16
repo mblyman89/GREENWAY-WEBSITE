@@ -402,3 +402,157 @@ describe("runCcrsExtract — potency (LabResult)", () => {
     expect(result.dohSellers ?? []).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Slice 7 end to end: producer/processor intelligence through a real nested
+// zip. Proves BOTH signals survive the whole pipeline (parse -> aggregate ->
+// result) and that they stay measured independently of one another.
+// ---------------------------------------------------------------------------
+
+describe("runCcrsExtract — Slice 7 producer/processor intelligence", () => {
+  it("carries wholesale sell-in mix and retail sell-through end to end, kept separate", async () => {
+    const manifestHeader = tableZip("ManifestHeader_0.csv", [
+      MANIFEST_HEADER_HEADER,
+      manifestHeaderRow({
+        externalManifestIdentifier: "RM-100",
+        originLicenseNumber: "610001",
+        originLicenseName: "EVERGREEN FARMS LLC",
+      }),
+    ]);
+    const transportedItems = tableZip("TransportedItems_0.csv", [
+      TRANSPORTED_ITEMS_HEADER,
+      transportedItemRow({
+        externalManifestIdentifier: "RM-100",
+        inventoryExternalIdentifier: "LOT-BD-1",
+        description: "Evergreen | Blue Dream 3.5g",
+      }),
+      transportedItemRow({
+        externalManifestIdentifier: "RM-100",
+        inventoryExternalIdentifier: "LOT-LR-1",
+        description: "Evergreen | Live Resin 1g",
+      }),
+    ]);
+    // Two lots from the same producer. Column [9] is IsMedical, [10] is the
+    // lot ExternalIdentifier (verified against the real December extract).
+    const inventory = tableZip("Inventory_0.csv", [
+      INVENTORY_HEADER,
+      "901\t8001\t77\t\t5001\tINV-1\t100\t50\t\tTrue\tLOT-BD-1\tFalse\t\t\t\t",
+      "901\t8002\t77\t\t5002\tINV-2\t100\t50\t\tFalse\tLOT-LR-1\tFalse\t\t\t\t",
+    ]);
+    const licensee = tableZip("Licensee_0.csv", [
+      LICENSEE_HEADER,
+      GREENWAY_ROW,
+      licenseeRow({ licenseeId: "901", licenseNumber: "420001", name: "HIGH POINT OP LLC", dba: "HPO CANNABIS" }),
+      licenseeRow({ licenseeId: "950", licenseNumber: "610001", name: "EVERGREEN FARMS LLC", dba: "Evergreen Farms" }),
+    ]);
+    const strains = tableZip("Strains_0.csv", [STRAIN_HEADER, "77\t950\tBlue Dream\tHybrid\t\tFalse\t\t\t\t"]);
+    const product = tableZip("Product_0.csv", [
+      PRODUCT_HEADER,
+      "5001\t950\tUsable Marijuana\tEvergreen | Blue Dream 3.5g\t\t3.5\t\tFalse\t\t\t\t",
+      "5002\t950\tConcentrate\tEvergreen | Live Resin 1g\t\t1\t\tFalse\t\t\t\t",
+    ]);
+    // 3001 = retail sale by store 901. 3002 = WHOLESALE, seller 950 -> buyer 901.
+    const saleHeader = tableZip("SaleHeader_0.csv", [
+      SALE_HEADER_HEADER,
+      "3001\t901\t\tRecreationalRetail\t2026-05-03 00:00:00\t\tFalse\t\t\t\t",
+      "3002\t950\t901\tWholesale\t2026-05-02 00:00:00\t\tFalse\t\t\t\t",
+    ]);
+    const saleDetail = tableZip("SalesDetail_0.csv", [
+      SALE_DETAIL_HEADER,
+      // Retail: 2 x $30.00 flower = 6,000 minor.
+      "9001\t3001\t8001\t\t2.00\t30.00\t.00\t.00\t.00\t\tFalse\t\t\t\t",
+      // Retail: 1 x $50.00 concentrate = 5,000 minor.
+      "9002\t3001\t8002\t\t1.00\t50.00\t.00\t.00\t.00\t\tFalse\t\t\t\t",
+      // Wholesale: 10 x $8.00 flower = 8,000 minor.
+      "9003\t3002\t8001\t\t10.00\t8.00\t.00\t.00\t.00\t\tFalse\t\t\t\t",
+    ]);
+
+    const zip = buildZip([
+      { name: `${PREFIX}SalesDetail_0.zip`, data: saleDetail, method: 8 },
+      { name: `${PREFIX}Inventory_0.zip`, data: inventory, method: 8 },
+      { name: `${PREFIX}TransportedItems_0.zip`, data: transportedItems, method: 8 },
+      { name: `${PREFIX}Licensee_0.zip`, data: licensee, method: 8 },
+      { name: `${PREFIX}SaleHeader_0.zip`, data: saleHeader, method: 8 },
+      { name: `${PREFIX}ManifestHeader_0.zip`, data: manifestHeader, method: 8 },
+      { name: `${PREFIX}Strains_0.zip`, data: strains, method: 8 },
+      { name: `${PREFIX}Product_0.zip`, data: product, method: 8 },
+    ]);
+
+    const { result } = await runCcrsExtract(bytesAsBlob(zip), OPTS);
+
+    // --- Signal A: SELL-IN. What licensee 950 shipped. ---
+    const sup = result.suppliers.find((s) => s.licenseeId === "950");
+    expect(sup?.dba).toBe("Evergreen Farms");
+    expect(sup?.revenueMinor).toBe(8_000);
+    expect(sup?.byType).toEqual([
+      {
+        inventoryType: "Usable Marijuana",
+        units: 10,
+        revenueMinor: 8_000,
+        lineCount: 1,
+        medianUnitPriceMinor: 800,
+      },
+    ]);
+    expect(sup?.topProducts?.[0]?.productName).toBe("Evergreen | Blue Dream 3.5g");
+    expect(sup?.topProducts?.[0]?.medianUnitPriceMinor).toBe(800); // wholesale cost
+    expect(sup?.unattributedLines).toBe(0);
+
+    // --- Signal B: SELL-THROUGH. What consumers actually bought. ---
+    const pp = (result.producers ?? []).find((p) => p.licenseNumber === "610001");
+    expect(pp).toBeDefined();
+    expect(pp?.dba).toBe("Evergreen Farms");
+    expect(pp?.revenueMinor).toBe(11_000); // 6,000 + 5,000 retail
+    expect(pp?.lineCount).toBe(2);
+    expect(pp?.units).toBe(3);
+    expect(pp?.distinctRetailers).toBe(1);
+    // Concentrate leads this vendor's retail mix on revenue.
+    expect(pp?.byType.map((t) => t.inventoryType)).toEqual(["Usable Marijuana", "Concentrate"]);
+    // One of the two retail lines sold a DOH-compliant lot (IsMedical=True).
+    expect(pp?.dohLineCount).toBe(1);
+
+    // --- The two signals are measured independently and never merged. ---
+    expect(result.totals.supplierMixLines).toBe(1);
+    expect(result.totals.vendorAttributedRetailLines).toBe(2);
+    // The retail markup is visible: $8.00 wholesale vs $30.00 on the shelf.
+    const retailFlower = pp?.byType.find((t) => t.inventoryType === "Usable Marijuana");
+    expect(retailFlower?.medianUnitPriceMinor).toBe(3_000);
+  });
+
+  it("never invents a producer when the delivery carries no manifests", async () => {
+    const inventory = tableZip("Inventory_0.csv", [
+      INVENTORY_HEADER,
+      "901\t8001\t77\t\t5001\tINV-1\t100\t50\t\t\tLOT-BD-1\tFalse\t\t\t\t",
+    ]);
+    const licensee = tableZip("Licensee_0.csv", [
+      LICENSEE_HEADER,
+      GREENWAY_ROW,
+      licenseeRow({ licenseeId: "901", licenseNumber: "420001", name: "HIGH POINT OP LLC", dba: "HPO CANNABIS" }),
+    ]);
+    const product = tableZip("Product_0.csv", [
+      PRODUCT_HEADER,
+      "5001\t950\tUsable Marijuana\tEvergreen | Blue Dream 3.5g\t\t3.5\t\tFalse\t\t\t\t",
+    ]);
+    const saleHeader = tableZip("SaleHeader_0.csv", [
+      SALE_HEADER_HEADER,
+      "3001\t901\t\tRecreationalRetail\t2026-05-03 00:00:00\t\tFalse\t\t\t\t",
+    ]);
+    const saleDetail = tableZip("SalesDetail_0.csv", [
+      SALE_DETAIL_HEADER,
+      "9001\t3001\t8001\t\t2.00\t30.00\t.00\t.00\t.00\t\tFalse\t\t\t\t",
+    ]);
+    const zip = buildZip([
+      { name: `${PREFIX}Licensee_0.zip`, data: licensee, method: 8 },
+      { name: `${PREFIX}Product_0.zip`, data: product, method: 8 },
+      { name: `${PREFIX}Inventory_0.zip`, data: inventory, method: 8 },
+      { name: `${PREFIX}SaleHeader_0.zip`, data: saleHeader, method: 8 },
+      { name: `${PREFIX}SalesDetail_0.zip`, data: saleDetail, method: 8 },
+    ]);
+
+    const { result } = await runCcrsExtract(bytesAsBlob(zip), OPTS);
+    // The sale is counted; the producer simply cannot be known. Measured and
+    // empty — never a guessed attribution.
+    expect(result.totals.retailLines).toBe(1);
+    expect(result.producers).toEqual([]);
+    expect(result.totals.vendorAttributedRetailLines).toBe(0);
+  });
+});

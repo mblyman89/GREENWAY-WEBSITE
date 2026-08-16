@@ -413,6 +413,82 @@ export type StatewideSupplierStat = {
   distinctBuyers: number;
   /** How many of those buyers are tracked roster competitors. */
   trackedBuyers: number;
+  /**
+   * Slice 7 (SELL-IN mix): what this supplier actually SHIPPED, by inventory
+   * type, ranked by wholesale revenue. Optional so payloads persisted before
+   * Slice 7 still parse (absent = never measured, NOT "sold nothing").
+   */
+  byType?: SupplierTypeStat[];
+  /** Slice 7 (SELL-IN mix): this supplier's top products by wholesale revenue. */
+  topProducts?: SupplierProductStat[];
+  /**
+   * Wholesale lines from this supplier whose lot never resolved to a product
+   * row (the monthly file only carries products TOUCHED that month). The
+   * honest denominator for the mix above — never folded into a type.
+   */
+  unattributedLines?: number;
+};
+
+/** Slice 7: one inventory type within a supplier's or producer's mix. */
+export type SupplierTypeStat = {
+  inventoryType: string;
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  /** Unit-price distribution for THIS type from THIS licensee (minor units). */
+  medianUnitPriceMinor: number | null;
+};
+
+/** Slice 7: one product within a supplier's or producer's mix. */
+export type SupplierProductStat = {
+  productName: string;
+  inventoryType: string | null;
+  brand: string | null;
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  medianUnitPriceMinor: number | null;
+};
+
+/**
+ * Slice 7 (SELL-THROUGH): a producer/processor seen through RETAIL sales —
+ * what consumers actually bought that this vendor made, at retail prices.
+ *
+ * DIFFERENT SOURCE, DIFFERENT COVERAGE from StatewideSupplierStat, and the two
+ * must never be added together:
+ *  - StatewideSupplierStat = wholesale SELL-IN (what shipped). Near-complete:
+ *    the seller LicenseeId is packed on every wholesale header.
+ *  - ProducerSellThroughStat = retail SELL-THROUGH (what sold). Derived from
+ *    the manifest ORIGIN join (Inventory.ExternalIdentifier →
+ *    TransportedItems), which matched ~2% of inventory rows in the real
+ *    May-2026 delivery. It is a SAMPLE, not a census.
+ *
+ * Keyed by the vendor's LICENSE NUMBER (manifests carry license numbers, not
+ * LicenseeIds), so it joins across months.
+ */
+export type ProducerSellThroughStat = {
+  /** Manifest origin license number (the join key; always present). */
+  licenseNumber: string;
+  /** Identity from the monthly licensee table; null when unresolvable. */
+  name: string | null;
+  dba: string | null;
+  /** Retail units sold statewide from lots this vendor shipped. */
+  units: number;
+  /** Retail revenue for those lines (qty × unit − discount), cents. */
+  revenueMinor: number;
+  lineCount: number;
+  /** RETAIL unit-price distribution (what consumers paid), minor units. */
+  unitPrice: PriceSummary | null;
+  /** Distinct retail stores observed selling this vendor's product. */
+  distinctRetailers: number;
+  /** How many of those stores are tracked roster competitors. */
+  trackedRetailers: number;
+  /** Retail lines of this vendor's product that were DOH-compliant lots. */
+  dohLineCount: number;
+  /** What consumers bought from this vendor, by inventory type. */
+  byType: SupplierTypeStat[];
+  /** This vendor's best-selling products at retail. */
+  topProducts: SupplierProductStat[];
 };
 
 export type CompetitorStat = {
@@ -557,6 +633,20 @@ export type AggregationResult = {
     potencyUnjoinedRows?: number;
     /** How many times the statewide-mover map hit its cap and was pruned. */
     moverMapPrunes: number;
+    /**
+     * Slice 7: RETAIL lines whose lot resolved to a manifest ORIGIN vendor.
+     * This is the NUMERATOR of the sell-through sample. Optional so payloads
+     * persisted before Slice 7 still parse.
+     */
+    vendorAttributedRetailLines?: number;
+    /**
+     * Slice 7: WHOLESALE lines credited to a supplier's product mix (lot
+     * resolved to a product row). Lines that did not resolve are counted per
+     * supplier in `unattributedLines` — never folded into a type.
+     */
+    supplierMixLines?: number;
+    /** How many times the supplier/producer product mix map was pruned. */
+    mixMapPrunes?: number;
     /** Task I (I4): manifest rows read (vendor attribution inputs). Optional
      * so older persisted payloads (pre-I4) still parse. */
     manifestRows?: number;
@@ -578,6 +668,13 @@ export type AggregationResult = {
    * (absent = never measured, NOT "nobody sold DOH product").
    */
   dohSellers?: DohSellerStat[];
+  /**
+   * Slice 7: producer/processors ranked by what consumers actually BOUGHT
+   * (retail sell-through via the manifest origin join). Optional so payloads
+   * persisted before Slice 7 still parse (absent = never measured).
+   * SAMPLE-BASED — see ProducerSellThroughStat for the coverage caveat.
+   */
+  producers?: ProducerSellThroughStat[];
 };
 
 // ---------------------------------------------------------------------------
@@ -615,6 +712,47 @@ export const TOP_SUPPLIERS_STATEWIDE = 100;
 export const TOP_SIGNALS_DOH = 100;
 /** Licensees ranked as DOH sellers ("who is selling DOH product"). */
 export const TOP_DOH_SELLERS = 150;
+/**
+ * Slice 7: products persisted per supplier/producer mix (top by revenue).
+ * 15 is enough to build a purchase order from without inflating the ~1MB
+ * rollup payload: 100 suppliers × 15 + 150 producers × 15 = 3,750 product
+ * rows worst case, each a small flat object.
+ */
+export const TOP_PRODUCTS_PER_SUPPLIER = 15;
+/**
+ * Slice 7: producer/processors persisted per month (top by retail revenue).
+ * Bounded by the licensee table (~1.7k/month) upstream; this is the payload cut.
+ */
+export const TOP_PRODUCERS = 150;
+/**
+ * Slice 7: global cap on per-supplier/producer product accumulators. Sits
+ * inside the already-proven MOVER_MAP_CAP (150k) envelope.
+ *
+ * When exceeded we keep each OWNER's own top products rather than cutting
+ * globally by revenue — a global cut would starve small producer/processors,
+ * which are exactly the ones worth discovering.
+ *
+ * PROGRESS GUARANTEE (measured, not assumed): a fixed keep-per-owner does NOT
+ * work here. Owners are bounded by the monthly licensee table (~1.7k), and
+ * both signals key off licensees, so up to ~3.4k owners can be live at once.
+ * At a fixed 60-per-owner that is 204,000 survivors — MORE than the cap, so
+ * the prune would free nothing and every subsequent insert would re-run an
+ * O(n log n) prune over 120k entries. On the real 26M-row delivery that is a
+ * hang, not a slowdown.
+ *
+ * So the keep is ADAPTIVE: aim to retain about half the cap, spread evenly
+ * across the live owners, but never drop below TOP_PRODUCTS_PER_SUPPLIER —
+ * below that we would be discarding rows we are contractually required to
+ * emit. The post-prune threshold is then raised to guarantee a minimum number
+ * of inserts before the next prune, which amortizes prune cost to O(1) per
+ * insert (the same argument that makes a growable array cheap).
+ */
+const SUPPLIER_PRODUCT_MAP_CAP = 120_000;
+const SUPPLIER_PRODUCT_KEEP_PER_OWNER = TOP_PRODUCTS_PER_SUPPLIER * 4;
+/** Target survivors after a prune: half the cap leaves room to refill. */
+const SUPPLIER_PRODUCT_PRUNE_TARGET = SUPPLIER_PRODUCT_MAP_CAP / 2;
+/** Minimum inserts guaranteed between prunes (amortization headroom). */
+const SUPPLIER_PRODUCT_PRUNE_HEADROOM = SUPPLIER_PRODUCT_MAP_CAP / 4;
 /** Persisted brand/strain benchmark rows per sale class (top by revenue). */
 const TOP_BENCH_PER_SCOPE = 500;
 /**
@@ -677,6 +815,30 @@ type CompetitorAcc = TrackedInfo & {
   wsSpendMinor: number;
   /** supplier LicenseeId(number) → accumulated lines + spend. */
   suppliers: Map<number, { lineCount: number; spendMinor: number }>;
+};
+
+/**
+ * Slice 7: a product line item inside one licensee's mix. Keyed
+ * `${ownerKey}\u0001${productName}` in a single flat map so one global cap
+ * governs total memory (nested per-owner maps make that impossible to bound).
+ */
+type MixProductAcc = {
+  ownerKey: string;
+  productName: string;
+  inventoryType: string | null;
+  brand: string | null;
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  price: PriceHistogram;
+};
+
+/** Slice 7: one inventory type inside one licensee's mix. */
+type MixTypeAcc = {
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  price: PriceHistogram;
 };
 
 /** Compact identity kept for EVERY licensee (supplier naming; ~1.7k/month). */
@@ -884,6 +1046,47 @@ export class CcrsAggregator {
   >();
   /** DOH product movers: product name → volume/price. Bounded like the mover map. */
   private dohProducts = new Map<string, MoverAcc>();
+  /**
+   * Slice 7 (SELL-IN): what each wholesale supplier actually shipped.
+   * `supplierLicenseeId\u0001inventoryType` → mix. Bounded by
+   * (licensee table ~1.7k) × (13 real InventoryType values) ≈ 22k worst case.
+   */
+  private supplierTypes = new Map<string, MixTypeAcc>();
+  /** Wholesale lines per supplier whose lot never resolved to a product row. */
+  private supplierUnattributed = new Map<number, number>();
+  /**
+   * Slice 7 (SELL-THROUGH): producer/processors seen through RETAIL sales via
+   * the manifest origin join. Keyed by vendor LICENSE NUMBER. Sparse (~2% of
+   * inventory rows carry the join) — a sample, never presented as a census.
+   */
+  private producerStats = new Map<
+    string,
+    {
+      units: number;
+      revenueMinor: number;
+      lineCount: number;
+      dohLineCount: number;
+      price: PriceHistogram;
+    }
+  >();
+  /** Vendor license number → distinct retail store LicenseeIds observed. */
+  private producerRetailers = new Map<string, Set<number>>();
+  /** `vendorLicense\u0001inventoryType` → retail mix. */
+  private producerTypes = new Map<string, MixTypeAcc>();
+  /**
+   * Slice 7: FLAT product mixes for both signals, so a single global cap
+   * bounds them. Keys are `${ownerKey}\u0001${productName}` where ownerKey is
+   * `s:<supplierLicenseeId>` (sell-in) or `p:<vendorLicenseNumber>`
+   * (sell-through). One map keeps the prune fair and the accounting simple.
+   */
+  private mixProducts = new Map<string, MixProductAcc>();
+  /**
+   * Size at which the next mix prune fires. Starts at the nominal cap and is
+   * raised by pruneMixProducts() when a large live-owner count makes further
+   * shrinking impossible — that keeps prune cost amortized instead of running
+   * on every single insert.
+   */
+  private mixThreshold = SUPPLIER_PRODUCT_MAP_CAP;
   private minDate: string | null = null;
   private maxDate: string | null = null;
   /**
@@ -917,6 +1120,10 @@ export class CcrsAggregator {
     // Task I (I4): manifest tables (vendor attribution inputs).
     manifestRows: 0,
     transportedItemRows: 0,
+    // Slice 7: producer/processor coverage counters.
+    vendorAttributedRetailLines: 0,
+    supplierMixLines: 0,
+    mixMapPrunes: 0,
   };
 
   constructor(opts: { selfLicenseNumber: string; trackedLicenseNumbers: string[] }) {
@@ -1420,6 +1627,60 @@ export class CcrsAggregator {
       }
     }
 
+    // -- Slice 7 (SELL-THROUGH): producer/processor demand signal --
+    //
+    // The wholesale block above says what a vendor SHIPPED. This says what
+    // consumers actually BOUGHT of it, at retail prices — the half that tells
+    // the PO engine whether a SKU moves or merely sat on a shelf.
+    //
+    // COVERAGE CAVEAT (never hidden): this rides the manifest ORIGIN join
+    // (Inventory.ExternalIdentifier → TransportedItems), which matched ~2% of
+    // inventory rows in the real May-2026 delivery. It is a SAMPLE. It is kept
+    // in its own list and its own counter (vendorAttributedRetailLines) and is
+    // never added to the near-complete wholesale numbers.
+    if (saleClass === "retail" && Number.isFinite(invNum)) {
+      const vendorLicNum = this.invVendor.get(invNum);
+      if (vendorLicNum !== undefined && vendorLicNum > 0) {
+        const vendorLic = String(vendorLicNum);
+        this.totals.vendorAttributedRetailLines =
+          (this.totals.vendorAttributedRetailLines ?? 0) + 1;
+        let pp = this.producerStats.get(vendorLic);
+        if (!pp) {
+          pp = {
+            units: 0,
+            revenueMinor: 0,
+            lineCount: 0,
+            dohLineCount: 0,
+            price: new PriceHistogram(),
+          };
+          this.producerStats.set(vendorLic, pp);
+        }
+        pp.units += qty;
+        pp.revenueMinor += lineMinor;
+        pp.lineCount += 1;
+        pp.price.add(unitMinor);
+        // DOH-compliant lots from this vendor (chapter 246-70 WAC). Only a
+        // definite `true` counts — unknown stays out of the numerator.
+        if (isDohProduct === true) pp.dohLineCount += 1;
+        // Retail reach: which STORES sold this vendor's product. On a retail
+        // header the seller-store LicenseeId rides in the supplier bits.
+        if (supplierLicenseeId > 0) {
+          let set = this.producerRetailers.get(vendorLic);
+          if (!set) {
+            set = new Set();
+            this.producerRetailers.set(vendorLic, set);
+          }
+          set.add(supplierLicenseeId);
+        }
+        // Retail mix — only attributed lines, same honesty rule as sell-in.
+        if (attributed && product?.name) {
+          const ownerKey = `p:${vendorLic}`;
+          this.addMixType(this.producerTypes, ownerKey, invType, qty, unitMinor, lineMinor);
+          this.addMixProduct(ownerKey, product.name, invType, brand, qty, unitMinor, lineMinor);
+        }
+      }
+    }
+
     // -- statewide supplier benchmarks (S10: every wholesale line with a
     //    packable seller id feeds the seller's supplier stats) --
     if (saleClass === "wholesale" && supplierLicenseeId > 0) {
@@ -1431,6 +1692,25 @@ export class CcrsAggregator {
       sup.lineCount += 1;
       sup.revenueMinor += lineMinor;
       sup.price.add(unitMinor);
+
+      // Slice 7 (SELL-IN): WHAT this supplier shipped, not just how much it
+      // billed. Answers "what are producer/processors selling the most of" and
+      // gives the PO engine a real wholesale price sheet per vendor.
+      //
+      // Only ATTRIBUTED lines join the mix. An unresolved lot (the monthly
+      // file carries only products touched that month) is counted separately
+      // so a partial mix is never presented as a complete one.
+      if (attributed && product?.name) {
+        this.totals.supplierMixLines = (this.totals.supplierMixLines ?? 0) + 1;
+        const ownerKey = `s:${supplierLicenseeId}`;
+        this.addMixType(this.supplierTypes, ownerKey, invType, qty, unitMinor, lineMinor);
+        this.addMixProduct(ownerKey, product.name, invType, brand, qty, unitMinor, lineMinor);
+      } else {
+        this.supplierUnattributed.set(
+          supplierLicenseeId,
+          (this.supplierUnattributed.get(supplierLicenseeId) ?? 0) + 1,
+        );
+      }
     }
 
     // -- competitor sourcing (S7: wholesale lines BOUGHT by a tracked license) --
@@ -1564,6 +1844,164 @@ export class CcrsAggregator {
     const id = this.licenseeByLicenseNumber.get(license);
     const name = id?.dba ?? id?.name ?? this.vendorNameByLicense.get(license) ?? null;
     return { vendorName: name, vendorLicense: license };
+  }
+
+  /**
+   * Slice 7: accumulate one line into a licensee's TYPE mix.
+   * `ownerKey` is `s:<supplierLicenseeId>` or `p:<vendorLicenseNumber>`.
+   */
+  private addMixType(
+    map: Map<string, MixTypeAcc>,
+    ownerKey: string,
+    inventoryType: string,
+    qty: number,
+    unitMinor: number,
+    lineMinor: number,
+  ): void {
+    const key = `${ownerKey}\u0001${inventoryType}`;
+    let t = map.get(key);
+    if (!t) {
+      t = { units: 0, revenueMinor: 0, lineCount: 0, price: new PriceHistogram() };
+      map.set(key, t);
+    }
+    t.units += qty;
+    t.revenueMinor += lineMinor;
+    t.lineCount += 1;
+    t.price.add(unitMinor);
+  }
+
+  /** Slice 7: accumulate one line into a licensee's PRODUCT mix (flat map). */
+  private addMixProduct(
+    ownerKey: string,
+    productName: string,
+    inventoryType: string | null,
+    brand: string | null,
+    qty: number,
+    unitMinor: number,
+    lineMinor: number,
+  ): void {
+    const key = `${ownerKey}\u0001${productName}`;
+    let p = this.mixProducts.get(key);
+    if (!p) {
+      if (this.mixProducts.size >= this.mixThreshold) this.pruneMixProducts();
+      p = {
+        ownerKey,
+        productName,
+        inventoryType,
+        brand,
+        units: 0,
+        revenueMinor: 0,
+        lineCount: 0,
+        price: new PriceHistogram(),
+      };
+      this.mixProducts.set(key, p);
+    }
+    p.units += qty;
+    p.revenueMinor += lineMinor;
+    p.lineCount += 1;
+    p.price.add(unitMinor);
+  }
+
+  /**
+   * Slice 7: bounded heavy-hitters prune for the product mix map. Keeps each
+   * OWNER's own top products rather than cutting globally by revenue — a
+   * global cut would evict every small producer/processor entirely, which is
+   * exactly the discovery this slice exists to provide. Counted in totals.
+   *
+   * The keep-per-owner is ADAPTIVE (see SUPPLIER_PRODUCT_MAP_CAP): with many
+   * live owners a fixed keep would retain more than the cap and free nothing,
+   * turning every later insert into a full re-prune. Scaling the keep to the
+   * live owner count guarantees the map actually shrinks, and `mixThreshold`
+   * guarantees a minimum number of inserts before the next prune.
+   */
+  private pruneMixProducts(): void {
+    this.totals.mixMapPrunes = (this.totals.mixMapPrunes ?? 0) + 1;
+    const byOwner = new Map<string, MixProductAcc[]>();
+    for (const acc of this.mixProducts.values()) {
+      const list = byOwner.get(acc.ownerKey);
+      if (list) list.push(acc);
+      else byOwner.set(acc.ownerKey, [acc]);
+    }
+    // Never below TOP_PRODUCTS_PER_SUPPLIER: those rows are the contract.
+    const keepPerOwner = Math.max(
+      TOP_PRODUCTS_PER_SUPPLIER,
+      Math.min(
+        SUPPLIER_PRODUCT_KEEP_PER_OWNER,
+        Math.floor(SUPPLIER_PRODUCT_PRUNE_TARGET / Math.max(1, byOwner.size)),
+      ),
+    );
+    const kept = new Map<string, MixProductAcc>();
+    for (const list of byOwner.values()) {
+      list.sort(
+        (a, b) => b.revenueMinor - a.revenueMinor || a.productName.localeCompare(b.productName),
+      );
+      for (const acc of list.slice(0, keepPerOwner)) {
+        kept.set(`${acc.ownerKey}\u0001${acc.productName}`, acc);
+      }
+    }
+    this.mixProducts = kept;
+    // If the owner count is so high that even the floor keep exceeds the cap,
+    // shrinking is impossible without violating the contract above. Raise the
+    // threshold instead of thrashing: the map is allowed to exceed the nominal
+    // cap, and the prune still runs periodically rather than on every insert.
+    this.mixThreshold = Math.max(
+      SUPPLIER_PRODUCT_MAP_CAP,
+      kept.size + SUPPLIER_PRODUCT_PRUNE_HEADROOM,
+    );
+  }
+
+  /**
+   * Slice 7: assemble `byType` + `topProducts` for one owner from the flat
+   * mixes. Returns empty arrays when the owner contributed nothing measurable.
+   */
+  private mixFor(
+    typeMap: Map<string, MixTypeAcc>,
+    ownerKey: string,
+    productsByOwner: Map<string, MixProductAcc[]>,
+  ): { byType: SupplierTypeStat[]; topProducts: SupplierProductStat[] } {
+    const prefix = `${ownerKey}\u0001`;
+    const byType: SupplierTypeStat[] = [];
+    for (const [key, t] of typeMap) {
+      if (!key.startsWith(prefix)) continue;
+      byType.push({
+        inventoryType: key.slice(prefix.length),
+        units: round2(t.units),
+        revenueMinor: t.revenueMinor,
+        lineCount: t.lineCount,
+        medianUnitPriceMinor: t.price.percentile(0.5),
+      });
+    }
+    byType.sort(
+      (a, b) => b.revenueMinor - a.revenueMinor || a.inventoryType.localeCompare(b.inventoryType),
+    );
+    const topProducts = (productsByOwner.get(ownerKey) ?? [])
+      .slice(0, TOP_PRODUCTS_PER_SUPPLIER)
+      .map((p) => ({
+        productName: p.productName,
+        inventoryType: p.inventoryType,
+        brand: p.brand,
+        units: round2(p.units),
+        revenueMinor: p.revenueMinor,
+        lineCount: p.lineCount,
+        medianUnitPriceMinor: p.price.percentile(0.5),
+      }));
+    return { byType, topProducts };
+  }
+
+  /** Slice 7: group the flat product mix by owner once, pre-sorted by revenue. */
+  private groupMixProducts(): Map<string, MixProductAcc[]> {
+    const byOwner = new Map<string, MixProductAcc[]>();
+    for (const acc of this.mixProducts.values()) {
+      const list = byOwner.get(acc.ownerKey);
+      if (list) list.push(acc);
+      else byOwner.set(acc.ownerKey, [acc]);
+    }
+    for (const list of byOwner.values()) {
+      list.sort(
+        (a, b) => b.revenueMinor - a.revenueMinor || a.productName.localeCompare(b.productName),
+      );
+    }
+    return byOwner;
   }
 
   private pruneMovers(): void {
@@ -1802,6 +2240,9 @@ export class CcrsAggregator {
     }
 
     // S10: statewide wholesale supplier benchmarks — top by observed revenue.
+    // Slice 7: group the flat product mix once and reuse for both signals.
+    const mixByOwner = this.groupMixProducts();
+
     const suppliers: StatewideSupplierStat[] = [...this.supplierStats.entries()]
       .sort(
         (a, b) =>
@@ -1819,6 +2260,8 @@ export class CcrsAggregator {
             if (this.trackedSlotByLicenseeId.has(b)) trackedBuyers += 1;
           }
         }
+        // Slice 7: what this supplier actually shipped (sell-in mix).
+        const mix = this.mixFor(this.supplierTypes, `s:${supplierId}`, mixByOwner);
         return {
           licenseeId: String(supplierId),
           licenseNumber: id?.licenseNumber ?? null,
@@ -1829,6 +2272,47 @@ export class CcrsAggregator {
           unitPrice: s.price.summary(),
           distinctBuyers: buyers?.size ?? 0,
           trackedBuyers,
+          byType: mix.byType,
+          topProducts: mix.topProducts,
+          unattributedLines: this.supplierUnattributed.get(supplierId) ?? 0,
+        };
+      });
+
+    // Slice 7 (SELL-THROUGH): producer/processors ranked by what consumers
+    // actually bought. Separate list, separate coverage — see the type doc.
+    const producers: ProducerSellThroughStat[] = [...this.producerStats.entries()]
+      .sort(
+        (a, b) =>
+          b[1].revenueMinor - a[1].revenueMinor ||
+          b[1].lineCount - a[1].lineCount ||
+          a[0].localeCompare(b[0]),
+      )
+      .slice(0, TOP_PRODUCERS)
+      .map(([vendorLic, p]) => {
+        // Identity by LICENSE NUMBER (manifests carry license numbers), with
+        // the manifest origin name as a last resort. Never guessed.
+        const id = this.licenseeByLicenseNumber.get(vendorLic);
+        const retailers = this.producerRetailers.get(vendorLic);
+        let trackedRetailers = 0;
+        if (retailers) {
+          for (const r of retailers) {
+            if (this.trackedSlotByLicenseeId.has(r)) trackedRetailers += 1;
+          }
+        }
+        const mix = this.mixFor(this.producerTypes, `p:${vendorLic}`, mixByOwner);
+        return {
+          licenseNumber: vendorLic,
+          name: id?.name ?? this.vendorNameByLicense.get(vendorLic) ?? null,
+          dba: id?.dba ?? null,
+          units: round2(p.units),
+          revenueMinor: p.revenueMinor,
+          lineCount: p.lineCount,
+          unitPrice: p.price.summary(),
+          distinctRetailers: retailers?.size ?? 0,
+          trackedRetailers,
+          dohLineCount: p.dohLineCount,
+          byType: mix.byType,
+          topProducts: mix.topProducts,
         };
       });
 
@@ -1895,6 +2379,7 @@ export class CcrsAggregator {
       signals,
       suppliers,
       dohSellers,
+      producers,
     };
   }
 }

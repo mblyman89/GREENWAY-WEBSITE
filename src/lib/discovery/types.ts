@@ -225,6 +225,13 @@ export type DiscoveryDataset = {
   doh_unknown_lines?: number | null;
   /** Inventory lots flagged IsMedical = True (how much DOH product EXISTS). */
   doh_inventory_rows?: number | null;
+  /**
+   * Slice 7 (migration 0182): retail lines whose lot resolved to a manifest
+   * ORIGIN vendor. This is the SAMPLE SIZE behind discovery_producer_stats —
+   * the sell-through numbers describe these lines only, not the whole market.
+   * NULL = never measured.
+   */
+  vendor_attributed_retail_lines?: number | null;
   ingest_kind?: string | null; // 'csv' | 'monthly_zip'
 };
 
@@ -343,6 +350,79 @@ export type DiscoverySupplierStatRow = {
   price_avg_minor: number | null;
   distinct_buyers: number;
   tracked_buyers: number;
+  /**
+   * Slice 7 (migration 0182): what this supplier actually SHIPPED, by
+   * inventory type and by product, ranked by wholesale revenue.
+   * NULL = never measured (row written before Slice 7, or the month's zip has
+   * not been re-uploaded) — that is NOT the same as "shipped nothing".
+   */
+  by_type: DiscoveryMixTypeRow[] | null;
+  top_products: DiscoveryMixProductRow[] | null;
+  /**
+   * Wholesale lines from this supplier whose lot never resolved to a product
+   * row, so they could not be placed in the mix above. The honest denominator.
+   */
+  unattributed_lines: number | null;
+  created_at: string;
+};
+
+/** Slice 7: one inventory type inside a supplier's/producer's mix (jsonb). */
+export type DiscoveryMixTypeRow = {
+  inventoryType: string;
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  medianUnitPriceMinor: number | null;
+};
+
+/** Slice 7: one product inside a supplier's/producer's mix (jsonb). */
+export type DiscoveryMixProductRow = {
+  productName: string;
+  inventoryType: string | null;
+  brand: string | null;
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  medianUnitPriceMinor: number | null;
+};
+
+/**
+ * Row of discovery_producer_stats (migration 0182, Slice 7): a
+ * producer/processor measured through RETAIL sell-through — what consumers
+ * actually bought that this vendor made.
+ *
+ * COVERAGE (never hidden): derived from the manifest ORIGIN join, which
+ * matched ~2% of inventory rows in the real May-2026 delivery. A SAMPLE, not a
+ * census. Never add these figures to discovery_supplier_stats (wholesale
+ * sell-in, near-complete) — they measure different things at different scales.
+ *
+ * Money in MINOR UNITS.
+ */
+export type DiscoveryProducerStatRow = {
+  id: number;
+  dataset_id: string;
+  /** Manifest origin license number — the join key across months. */
+  license_number: string;
+  name: string | null;
+  dba: string | null;
+  units: number;
+  revenue_minor: number;
+  line_count: number;
+  price_sample_size: number;
+  price_min_minor: number | null;
+  price_p25_minor: number | null;
+  price_median_minor: number | null;
+  price_p75_minor: number | null;
+  price_max_minor: number | null;
+  price_avg_minor: number | null;
+  /** Distinct retail stores observed selling this vendor's product. */
+  distinct_retailers: number;
+  /** How many of those are tracked roster competitors. */
+  tracked_retailers: number;
+  /** Retail lines of this vendor's product that were DOH-compliant lots. */
+  doh_line_count: number;
+  by_type: DiscoveryMixTypeRow[];
+  top_products: DiscoveryMixProductRow[];
   created_at: string;
 };
 

@@ -23,6 +23,8 @@ import {
   BRAND_BRIDGE_MIN_MANIFESTS,
   BRAND_BRIDGE_MIN_SHARE,
   TOP_DOH_SELLERS,
+  TOP_PRODUCTS_PER_SUPPLIER,
+  TOP_PRODUCERS,
   packInvLane0,
   unpackInvProductId,
   unpackInvMedical,
@@ -1806,4 +1808,360 @@ describe("statewide benchmark headroom (4 sale classes)", () => {
     expect(r.signals.length).toBeLessThan(4_000); // MAX_SIGNALS
     expect((r.dohSellers ?? []).length).toBeLessThanOrEqual(TOP_DOH_SELLERS);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Slice 7 — producer/processor intelligence.
+//
+// Two SEPARATE signals that must never be conflated:
+//   A. SELL-IN      — what a wholesale supplier SHIPPED (near-complete).
+//   B. SELL-THROUGH — what consumers actually BOUGHT of that vendor's product
+//                     at retail, via the manifest origin join (~2% sample).
+// ---------------------------------------------------------------------------
+
+describe("CcrsAggregator — Slice 7 supplier sell-in mix", () => {
+  /** A supplier (licensee 950) shipping wholesale to the tracked competitor. */
+  function sellInAgg(): CcrsAggregator {
+    const agg = vendorAgg();
+    agg.addLicensee(licensee("950", "610001", "EVERGREEN FARMS LLC", "Evergreen Farms"));
+    return agg;
+  }
+
+  it("reports WHAT a supplier shipped by type and by product, not just the dollar total", () => {
+    const agg = sellInAgg();
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g", 3.5));
+    agg.addProduct(product("5002", "Concentrate", "Live Resin 1g", 1));
+    agg.addInventory(inventory("9001", "5001"));
+    agg.addInventory(inventory("9002", "5002"));
+    // Wholesale: seller 950 -> buyer 900 (the tracked competitor).
+    agg.addSaleHeader(header("200", "950", "wholesale", "2026-05-05", "900"));
+    agg.addSaleDetail(detail("200", "9001", 10, 800)); // 8,000 flower
+    agg.addSaleDetail(detail("200", "9002", 4, 2_000)); // 8,000 concentrate
+    agg.addSaleDetail(detail("200", "9002", 1, 2_000)); // 2,000 more concentrate
+    const sup = agg.result().suppliers.find((s) => s.licenseeId === "950");
+    expect(sup).toBeDefined();
+    expect(sup?.revenueMinor).toBe(18_000);
+
+    // Concentrate leads on revenue (10,000 vs 8,000) so it sorts first.
+    expect(sup?.byType?.map((t) => t.inventoryType)).toEqual(["Concentrate", "Usable Marijuana"]);
+    const conc = sup?.byType?.find((t) => t.inventoryType === "Concentrate");
+    expect(conc?.revenueMinor).toBe(10_000);
+    expect(conc?.units).toBe(5);
+    expect(conc?.lineCount).toBe(2);
+    expect(conc?.medianUnitPriceMinor).toBe(2_000);
+
+    // Products carry the wholesale price a purchase order would be written at.
+    const resin = sup?.topProducts?.find((p) => p.productName === "Live Resin 1g");
+    expect(resin?.revenueMinor).toBe(10_000);
+    expect(resin?.inventoryType).toBe("Concentrate");
+    expect(resin?.medianUnitPriceMinor).toBe(2_000);
+
+    // The mix is complete here, so the honest denominator is zero.
+    expect(sup?.unattributedLines).toBe(0);
+  });
+
+  it("counts unresolvable wholesale lines separately instead of inventing a category", () => {
+    const agg = sellInAgg();
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g", 3.5));
+    agg.addInventory(inventory("9001", "5001"));
+    agg.addSaleHeader(header("200", "950", "wholesale", "2026-05-05", "900"));
+    agg.addSaleDetail(detail("200", "9001", 10, 800));
+    // Lot 9999 was never in this month's Inventory table — cannot be attributed.
+    agg.addSaleDetail(detail("200", "9999", 5, 1_000));
+    const r = agg.result();
+    const sup = r.suppliers.find((s) => s.licenseeId === "950");
+    // Revenue counts BOTH lines (the money is real either way)...
+    expect(sup?.revenueMinor).toBe(13_000);
+    // ...but the mix only claims the line it could actually place.
+    expect(sup?.byType).toHaveLength(1);
+    expect(sup?.byType?.[0]?.revenueMinor).toBe(8_000);
+    expect(sup?.unattributedLines).toBe(1);
+    expect(r.totals.supplierMixLines).toBe(1);
+  });
+
+  it("keeps retail lines out of the wholesale sell-in mix", () => {
+    const agg = sellInAgg();
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g", 3.5));
+    agg.addInventory(inventory("9001", "5001"));
+    // A RETAIL header from the same licensee: this is a counter sale, not a
+    // shipment, and must not appear in the supplier's sell-in mix.
+    agg.addSaleHeader(header("300", "950", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("300", "9001", 1, 3_000));
+    const r = agg.result();
+    expect(r.suppliers.find((s) => s.licenseeId === "950")).toBeUndefined();
+    expect(r.totals.supplierMixLines).toBe(0);
+  });
+});
+
+describe("CcrsAggregator — Slice 7 producer sell-through", () => {
+  /**
+   * A producer (610001) whose lots reached retail via a manifest, sold by the
+   * tracked competitor (licensee 900) and by an untracked store (licensee 901).
+   */
+  function sellThroughAgg(): CcrsAggregator {
+    const agg = vendorAgg();
+    agg.addLicensee(licensee("950", "610001", "EVERGREEN FARMS LLC", "Evergreen Farms"));
+    agg.addLicensee(licensee("901", "999999", "OTHER STORE LLC", "Other Store"));
+    agg.addManifestHeader(mh("RM-1", "610001", "EVERGREEN FARMS LLC"));
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g"));
+    agg.addTransportedItem(ti("RM-1", "LOT-B", "Live Resin 1g"));
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g", 3.5));
+    agg.addProduct(product("5002", "Concentrate", "Live Resin 1g", 1));
+    return agg;
+  }
+
+  it("reports what CONSUMERS bought from a producer, at retail prices, with store reach", () => {
+    const agg = sellThroughAgg();
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addInventory(inventory("9002", "5002", null, "LOT-B"));
+    // Tracked competitor sells both products.
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 2, 1_500)); // 3,000
+    agg.addSaleDetail(detail("100", "9002", 1, 5_000)); // 5,000
+    // An untracked store also sells the flower.
+    agg.addSaleHeader(header("101", "901", "retail", "2026-05-06"));
+    agg.addSaleDetail(detail("101", "9001", 1, 1_500)); // 1,500
+
+    const r = agg.result();
+    const pp = (r.producers ?? []).find((p) => p.licenseNumber === "610001");
+    expect(pp).toBeDefined();
+    expect(pp?.dba).toBe("Evergreen Farms"); // licensee DBA wins over manifest name
+    expect(pp?.revenueMinor).toBe(9_500);
+    expect(pp?.lineCount).toBe(3);
+    expect(pp?.units).toBe(4);
+    // Reach: two distinct stores, one of them a tracked roster competitor.
+    expect(pp?.distinctRetailers).toBe(2);
+    expect(pp?.trackedRetailers).toBe(1);
+    // RETAIL price distribution — what shoppers paid, not the wholesale cost.
+    expect(pp?.unitPrice?.sampleSize).toBe(3);
+    expect(pp?.unitPrice?.maxMinor).toBe(5_000);
+    // Mix: concentrate leads on revenue.
+    expect(pp?.byType.map((t) => t.inventoryType)).toEqual(["Concentrate", "Usable Marijuana"]);
+    expect(pp?.byType.find((t) => t.inventoryType === "Usable Marijuana")?.revenueMinor).toBe(4_500);
+    expect(pp?.topProducts[0]?.productName).toBe("Live Resin 1g");
+    // The sample size behind all of the above is stated, never implied.
+    expect(r.totals.vendorAttributedRetailLines).toBe(3);
+  });
+
+  it("keeps sell-through SEPARATE from sell-in — the two are never merged", () => {
+    const agg = sellThroughAgg();
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    // Same licensee ships wholesale AND has product sold at retail.
+    agg.addSaleHeader(header("200", "950", "wholesale", "2026-05-05", "900"));
+    agg.addSaleDetail(detail("200", "9001", 10, 800)); // 8,000 wholesale
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-06"));
+    agg.addSaleDetail(detail("100", "9001", 1, 1_500)); // 1,500 retail
+
+    const r = agg.result();
+    const sup = r.suppliers.find((s) => s.licenseeId === "950");
+    const pp = (r.producers ?? []).find((p) => p.licenseNumber === "610001");
+    // Wholesale sell-in sees only the shipment.
+    expect(sup?.revenueMinor).toBe(8_000);
+    expect(sup?.lineCount).toBe(1);
+    // Retail sell-through sees only the counter sale.
+    expect(pp?.revenueMinor).toBe(1_500);
+    expect(pp?.lineCount).toBe(1);
+    // Different coverage counters — proof they are measured independently.
+    expect(r.totals.supplierMixLines).toBe(1);
+    expect(r.totals.vendorAttributedRetailLines).toBe(1);
+  });
+
+  it("counts DOH-compliant sell-through per producer, and never counts unknown as DOH", () => {
+    const agg = sellThroughAgg();
+    agg.addTransportedItem(ti("RM-1", "LOT-C", "Blue Dream 3.5g"));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A", true)); // DOH lot
+    agg.addInventory(inventory("9002", "5002", null, "LOT-B", false)); // explicitly not
+    agg.addInventory(inventory("9003", "5001", null, "LOT-C", null)); // never stated
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 1_500));
+    agg.addSaleDetail(detail("100", "9002", 1, 5_000));
+    agg.addSaleDetail(detail("100", "9003", 1, 1_500));
+
+    const pp = (agg.result().producers ?? []).find((p) => p.licenseNumber === "610001");
+    expect(pp?.lineCount).toBe(3);
+    // Only the definite True counts. The blank lot is NOT counted as DOH.
+    expect(pp?.dohLineCount).toBe(1);
+  });
+
+  it("never invents a producer when no manifest joined the lot", () => {
+    const agg = vendorAgg();
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-UNKNOWN"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 1_500));
+    const r = agg.result();
+    // Measured, and the answer is genuinely none — an empty list, not a guess.
+    expect(r.producers).toEqual([]);
+    expect(r.totals.vendorAttributedRetailLines).toBe(0);
+  });
+
+  it("does not attribute WHOLESALE lines to retail sell-through", () => {
+    const agg = sellThroughAgg();
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addSaleHeader(header("200", "950", "wholesale", "2026-05-05", "900"));
+    agg.addSaleDetail(detail("200", "9001", 10, 800));
+    const r = agg.result();
+    expect(r.producers).toEqual([]);
+    expect(r.totals.vendorAttributedRetailLines).toBe(0);
+  });
+});
+
+describe("Slice 7 — payload headroom is measured, not assumed", () => {
+  /**
+   * The transformer crunches the monthly zip in the browser and submits only
+   * the rollup through saveMonthlyRollupsAction (a Server Action). The binding
+   * size limit is therefore next.config.ts `bodySizeLimit`, VERIFIED as 50 MB.
+   *
+   * This test builds the Slice 7 addition at EVERY documented cap, using the
+   * 13 real InventoryType values from the December 2025 extract and
+   * realistically long real-world product names, and pins the result. If a
+   * future change raises a cap far enough to threaten the limit, this fails.
+   */
+  it("keeps the worst-case Slice 7 payload addition well inside the 50 MB Server Action limit", () => {
+    const TYPES = [
+      "Usable Marijuana",
+      "Concentrate",
+      "Solid Edible",
+      "Liquid Edible",
+      "Topical",
+      "Infused Mix",
+      "Non-Infused Mix",
+      "Marijuana Mix",
+      "Capsule",
+      "Tincture",
+      "Suppository",
+      "Transdermal Patch",
+      "Sample Jar",
+    ];
+    const LONG_NAME =
+      "Phat Panda | Grape Ape Premium Indoor Smalls 3.5g Usable Marijuana Flower";
+    const price = {
+      sampleSize: 123_456,
+      minMinor: 100,
+      p25Minor: 1_500,
+      medianMinor: 3_299,
+      p75Minor: 5_000,
+      maxMinor: 999_999,
+      avgMinor: 3_411,
+    };
+    const byType = TYPES.map((inventoryType) => ({
+      inventoryType,
+      units: 12_345.67,
+      revenueMinor: 987_654_321,
+      lineCount: 123_456,
+      medianUnitPriceMinor: 3_299,
+    }));
+    const topProducts = Array.from({ length: TOP_PRODUCTS_PER_SUPPLIER }, (_, i) => ({
+      productName: `${LONG_NAME} #${i}`,
+      inventoryType: TYPES[i % TYPES.length],
+      brand: "Phat Panda Premium Cannabis Company",
+      units: 12_345.67,
+      revenueMinor: 987_654_321,
+      lineCount: 123_456,
+      medianUnitPriceMinor: 3_299,
+    }));
+    // Only the NEW fields on suppliers (the rest already shipped pre-Slice 7).
+    const supplierMixAddition = Array.from({ length: TOP_SUPPLIERS_STATEWIDE }, () => ({
+      byType,
+      topProducts,
+      unattributedLines: 4_321,
+    }));
+    const producers = Array.from({ length: TOP_PRODUCERS }, (_, i) => ({
+      licenseNumber: String(620_000 + i),
+      name: "EVERGREEN FARMS PRODUCTION AND PROCESSING LLC",
+      dba: "Evergreen Farms Premium Cannabis",
+      units: 123_456.78,
+      revenueMinor: 987_654_321,
+      lineCount: 123_456,
+      unitPrice: price,
+      distinctRetailers: 321,
+      trackedRetailers: 12,
+      dohLineCount: 4_321,
+      byType,
+      topProducts,
+    }));
+
+    const bytes =
+      JSON.stringify(supplierMixAddition).length + JSON.stringify(producers).length;
+    const mb = bytes / 1_048_576;
+
+    // Measured at 1.375 MB on the caps as shipped. The assertion is a ceiling,
+    // not the exact figure, so harmless refactors don't churn the test.
+    expect(mb).toBeLessThan(2);
+    // And a floor, so a cap silently collapsing to ~0 gets noticed too.
+    expect(mb).toBeGreaterThan(0.5);
+    // Sanity: the caps this test depends on are the ones actually shipped.
+    expect(TOP_PRODUCTS_PER_SUPPLIER).toBe(15);
+    expect(TOP_PRODUCERS).toBe(150);
+    expect(TOP_SUPPLIERS_STATEWIDE).toBe(100);
+  });
+});
+
+describe("Slice 7 — the mix prune actually makes progress (no O(n^2) trap)", () => {
+  /**
+   * REGRESSION GUARD. A fixed keep-per-owner looks correct but is not: owners
+   * are bounded by the monthly licensee table (~1.7k) and BOTH signals key off
+   * licensees, so thousands of owners can be live at once. Keeping a fixed 60
+   * each would retain MORE than the cap, free nothing, and make every later
+   * insert re-run a full prune — a hang on the real 26M-row delivery.
+   *
+   * This drives many owners x many products through the real aggregator and
+   * asserts the run completes and stays bounded.
+   */
+  it("stays bounded and fast with thousands of distinct suppliers each selling many products", () => {
+    const agg = new CcrsAggregator({
+      selfLicenseNumber: SELF,
+      trackedLicenseNumbers: [COMP],
+    });
+    const OWNERS = 2_500;
+    const PRODUCTS_PER_OWNER = 60;
+
+    // One product row per (owner, product) pair, plus a lot for each.
+    let pid = 1;
+    let iid = 1;
+    for (let o = 0; o < OWNERS; o += 1) {
+      for (let p = 0; p < PRODUCTS_PER_OWNER; p += 1) {
+        agg.addProduct(product(String(pid), "Usable Marijuana", `Owner ${o} Product ${p}`, 3.5));
+        agg.addInventory(inventory(String(iid), String(pid)));
+        pid += 1;
+        iid += 1;
+      }
+    }
+    // Each owner ships one wholesale header carrying all of its products.
+    let hid = 1;
+    let invId = 1;
+    const started = Date.now();
+    for (let o = 0; o < OWNERS; o += 1) {
+      const sellerId = String(100_000 + o);
+      agg.addSaleHeader(header(String(hid), sellerId, "wholesale", "2026-05-05", "900"));
+      for (let p = 0; p < PRODUCTS_PER_OWNER; p += 1) {
+        agg.addSaleDetail(detail(String(hid), String(invId), 1, 1_000 + p));
+        invId += 1;
+      }
+      hid += 1;
+    }
+    const r = agg.result();
+    const elapsed = Date.now() - started;
+
+    // Every line was accounted for.
+    expect(r.totals.supplierMixLines).toBe(OWNERS * PRODUCTS_PER_OWNER);
+    // The prune ran (the map genuinely exceeded its cap)...
+    expect(r.totals.mixMapPrunes ?? 0).toBeGreaterThan(0);
+    // ...but did not thrash: a prune-per-insert would mean tens of thousands
+    // of prunes over 150k inserts. A handful is the amortized signature.
+    expect(r.totals.mixMapPrunes ?? 0).toBeLessThan(50);
+    // And the whole run stays quick. Generous bound: the failure mode this
+    // guards against takes minutes, not milliseconds.
+    expect(elapsed).toBeLessThan(60_000);
+
+    // The payload contract still holds: capped suppliers, capped products.
+    expect(r.suppliers.length).toBeLessThanOrEqual(TOP_SUPPLIERS_STATEWIDE);
+    for (const s of r.suppliers) {
+      expect((s.topProducts ?? []).length).toBeLessThanOrEqual(TOP_PRODUCTS_PER_SUPPLIER);
+      // Each surviving supplier still has a real, non-empty mix — the prune
+      // must never strip a top supplier down to nothing.
+      expect((s.topProducts ?? []).length).toBeGreaterThan(0);
+      expect((s.byType ?? []).length).toBeGreaterThan(0);
+    }
+  }, 120_000);
 });

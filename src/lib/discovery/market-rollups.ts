@@ -33,6 +33,9 @@ import type {
   PriceSummary,
   PotencyBenchmark,
   DohSellerStat,
+  SupplierTypeStat,
+  SupplierProductStat,
+  ProducerSellThroughStat,
 } from "./ccrs-extract/aggregate";
 import type {
   BenchmarkMetric,
@@ -42,6 +45,7 @@ import type {
   DiscoveryMarketSignalRow,
   DiscoverySupplierStatRow,
   DiscoveryDohSellerRow,
+  DiscoveryProducerStatRow,
 } from "./types";
 
 const BATCH = 500;
@@ -63,6 +67,18 @@ const MAX_SIGNALS = 4_000;
 const MAX_SUPPLIERS = 200;
 /** Payload guard for the DOH seller list (aggregator caps at TOP_DOH_SELLERS). */
 const MAX_DOH_SELLERS = 200;
+/**
+ * Slice 7: payload guard for the producer sell-through list (the aggregator
+ * caps at TOP_PRODUCERS = 150); allow the same slack the other lists get.
+ */
+const MAX_PRODUCERS = 250;
+/**
+ * Slice 7: payload guard for one licensee's product/type mix. The aggregator
+ * emits <= TOP_PRODUCTS_PER_SUPPLIER (15) products and <= the number of real
+ * InventoryType values (13 in the real December delivery); 60 is generous
+ * slack that still blocks a hostile payload.
+ */
+const MAX_MIX_ROWS = 60;
 const MAX_KEY_LEN = 300;
 
 function num(v: unknown): number {
@@ -84,6 +100,50 @@ function strOrNull(v: unknown, max = MAX_KEY_LEN): string | null {
 }
 function isoDateOrNull(v: unknown): string | null {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+/**
+ * Slice 7: sanitize a licensee's inventory-type mix ("what they sell most of").
+ * Returns undefined when the key is absent entirely — an older payload never
+ * measured the mix, which is NOT the same claim as "this vendor sells nothing".
+ */
+function sanitizeTypeMix(v: unknown): SupplierTypeStat[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: SupplierTypeStat[] = [];
+  for (const raw of v.slice(0, MAX_MIX_ROWS)) {
+    const t = (raw ?? {}) as Record<string, unknown>;
+    const inventoryType = strOrNull(t.inventoryType);
+    if (!inventoryType) continue; // an unnamed type is not a fact we can state
+    out.push({
+      inventoryType,
+      units: num(t.units),
+      revenueMinor: Math.round(num(t.revenueMinor)),
+      lineCount: intOrNull(t.lineCount) ?? 0,
+      medianUnitPriceMinor: intOrNull(t.medianUnitPriceMinor),
+    });
+  }
+  return out;
+}
+
+/** Slice 7: sanitize a licensee's top-products mix. Same absent-vs-empty rule. */
+function sanitizeProductMix(v: unknown): SupplierProductStat[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: SupplierProductStat[] = [];
+  for (const raw of v.slice(0, MAX_MIX_ROWS)) {
+    const p = (raw ?? {}) as Record<string, unknown>;
+    const productName = strOrNull(p.productName);
+    if (!productName) continue;
+    out.push({
+      productName,
+      inventoryType: strOrNull(p.inventoryType),
+      brand: strOrNull(p.brand),
+      units: num(p.units),
+      revenueMinor: Math.round(num(p.revenueMinor)),
+      lineCount: intOrNull(p.lineCount) ?? 0,
+      medianUnitPriceMinor: intOrNull(p.medianUnitPriceMinor),
+    });
+  }
+  return out;
 }
 
 function sanitizeSummary(v: unknown): PriceSummary | null {
@@ -302,7 +362,45 @@ export function sanitizeAggregationResult(
       unitPrice: sanitizeSummary(s.unitPrice),
       distinctBuyers: intOrNull(s.distinctBuyers) ?? 0,
       trackedBuyers: intOrNull(s.trackedBuyers) ?? 0,
+      // Slice 7 (sell-in mix). Absent on pre-Slice-7 payloads → undefined,
+      // which reads as "never measured", not "shipped nothing".
+      byType: sanitizeTypeMix(s.byType),
+      topProducts: sanitizeProductMix(s.topProducts),
+      unattributedLines: numOrUndefined(s.unattributedLines),
     });
+  }
+
+  // Slice 7: producer/processor SELL-THROUGH. Separate list from `suppliers`
+  // on purpose — different source, ~2% sample coverage. Absent key =>
+  // undefined ("never measured"), empty array => "measured, none found".
+  const producersIn = Array.isArray(r.producers) ? r.producers : null;
+  if (producersIn && producersIn.length > MAX_PRODUCERS) {
+    return { ok: false, error: "Too many producer rows." };
+  }
+  let producers: ProducerSellThroughStat[] | undefined;
+  if (producersIn) {
+    producers = [];
+    for (const p0 of producersIn) {
+      const p = (p0 ?? {}) as Record<string, unknown>;
+      // License number is the join key across months — a row without one
+      // cannot be attributed to anybody, so it is dropped rather than guessed.
+      const licenseNumber = strOrNull(p.licenseNumber, 32);
+      if (!licenseNumber) return { ok: false, error: "Malformed producer row." };
+      producers.push({
+        licenseNumber,
+        name: strOrNull(p.name),
+        dba: strOrNull(p.dba),
+        units: num(p.units),
+        revenueMinor: Math.round(num(p.revenueMinor)),
+        lineCount: intOrNull(p.lineCount) ?? 0,
+        unitPrice: sanitizeSummary(p.unitPrice),
+        distinctRetailers: intOrNull(p.distinctRetailers) ?? 0,
+        trackedRetailers: intOrNull(p.trackedRetailers) ?? 0,
+        dohLineCount: intOrNull(p.dohLineCount) ?? 0,
+        byType: sanitizeTypeMix(p.byType) ?? [],
+        topProducts: sanitizeProductMix(p.topProducts) ?? [],
+      });
+    }
   }
 
   // DOH sellers ("who sold DOH-compliant product"). BACKWARD COMPATIBLE: a
@@ -408,6 +506,12 @@ export function sanitizeAggregationResult(
         // Task I (I4): manifest inputs (optional — pre-I4 payloads have none).
         manifestRows: num(totalsIn.manifestRows),
         transportedItemRows: num(totalsIn.transportedItemRows),
+        // Slice 7 coverage counters — optional for the same reason as the
+        // others. vendorAttributedRetailLines is the sell-through SAMPLE size;
+        // without it the producer list could be mistaken for a census.
+        vendorAttributedRetailLines: numOrUndefined(totalsIn.vendorAttributedRetailLines),
+        supplierMixLines: numOrUndefined(totalsIn.supplierMixLines),
+        mixMapPrunes: numOrUndefined(totalsIn.mixMapPrunes),
       },
       statewide,
       competitors,
@@ -415,6 +519,7 @@ export function sanitizeAggregationResult(
       suppliers,
       potency,
       dohSellers,
+      producers,
     },
   };
 }
@@ -593,6 +698,15 @@ export async function persistAggregationResult(
       .eq("dataset_id", datasetId);
     if (error) throw new Error(`discovery_doh_sellers clear failed: ${error.message}`);
   }
+  {
+    // Slice 7 (migration 0182). Unconditional clear keeps re-uploads
+    // idempotent even when the new payload carries no producer block.
+    const { error } = await admin
+      .from("discovery_producer_stats")
+      .delete()
+      .eq("dataset_id", datasetId);
+    if (error) throw new Error(`discovery_producer_stats clear failed: ${error.message}`);
+  }
 
   const benchRows: Record<string, unknown>[] = [];
   for (const b of result.statewide) {
@@ -683,8 +797,42 @@ export async function persistAggregationResult(
     price_avg_minor: s.unitPrice?.avgMinor ?? null,
     distinct_buyers: s.distinctBuyers,
     tracked_buyers: s.trackedBuyers,
+    // Slice 7 (migration 0182): WHAT this supplier shipped. `undefined` means
+    // the payload never measured a mix — persist NULL, not an empty array,
+    // so a pre-Slice-7 upload never reads as "this vendor sells nothing".
+    by_type: s.byType ?? null,
+    top_products: s.topProducts ?? null,
+    unattributed_lines: s.unattributedLines ?? null,
   }));
   await insertInBatches("discovery_supplier_stats", supplierRows);
+
+  // Slice 7 (migration 0182): producer/processor SELL-THROUGH. `undefined`
+  // means the payload predates Slice 7 — leave the absence alone rather than
+  // writing an empty set that would read as "measured, nobody sold anything".
+  if (result.producers) {
+    const producerRows = result.producers.map((p) => ({
+      dataset_id: datasetId,
+      license_number: p.licenseNumber,
+      name: p.name,
+      dba: p.dba,
+      units: p.units,
+      revenue_minor: Math.round(p.revenueMinor),
+      line_count: p.lineCount,
+      price_sample_size: p.unitPrice?.sampleSize ?? 0,
+      price_min_minor: p.unitPrice?.minMinor ?? null,
+      price_p25_minor: p.unitPrice?.p25Minor ?? null,
+      price_median_minor: p.unitPrice?.medianMinor ?? null,
+      price_p75_minor: p.unitPrice?.p75Minor ?? null,
+      price_max_minor: p.unitPrice?.maxMinor ?? null,
+      price_avg_minor: p.unitPrice?.avgMinor ?? null,
+      distinct_retailers: p.distinctRetailers,
+      tracked_retailers: p.trackedRetailers,
+      doh_line_count: p.dohLineCount,
+      by_type: p.byType,
+      top_products: p.topProducts,
+    }));
+    await insertInBatches("discovery_producer_stats", producerRows);
+  }
 
   // DOH sellers (migration 0181): WHO sold DOH-compliant product. `undefined`
   // means the payload never measured DOH at all — leave the prior rows'
@@ -746,6 +894,13 @@ export async function persistAggregationResult(
           result.totals.dohInventoryRows == null
             ? null
             : Math.round(result.totals.dohInventoryRows),
+        // Slice 7 (migration 0182): the sell-through SAMPLE size. Without this
+        // the producer list has no stated denominator and could be mistaken
+        // for a complete picture of the market. NULL when never measured.
+        vendor_attributed_retail_lines:
+          result.totals.vendorAttributedRetailLines == null
+            ? null
+            : Math.round(result.totals.vendorAttributedRetailLines),
         ingest_kind: "monthly_zip",
         benchmarks_computed_at: new Date().toISOString(),
       })
@@ -824,6 +979,26 @@ export async function listDohSellers(datasetId: string): Promise<DiscoveryDohSel
     .eq("dataset_id", datasetId)
     .order("revenue_minor", { ascending: false });
   return (data as DiscoveryDohSellerRow[] | null) ?? [];
+}
+
+/**
+ * Slice 7: producer/processors ranked by retail SELL-THROUGH (what consumers
+ * actually bought), revenue desc.
+ *
+ * HONESTY: this list rides the manifest ORIGIN join, which matched ~2% of
+ * inventory rows in the real May-2026 delivery. It is a SAMPLE of the market,
+ * not a census — every consumer must say so. For near-complete "what shipped"
+ * numbers use listSupplierStats() instead. The two must never be summed.
+ */
+export async function listProducerStats(datasetId: string): Promise<DiscoveryProducerStatRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("discovery_producer_stats")
+    .select("*")
+    .eq("dataset_id", datasetId)
+    .order("revenue_minor", { ascending: false });
+  return (data as DiscoveryProducerStatRow[] | null) ?? [];
 }
 
 export async function listMarketSignals(
