@@ -307,6 +307,7 @@ import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runStrainTaxonomyTests } from "../../src/lib/menu/strain-taxonomy";
 import { __runPosCorsCoreTests } from "../../src/lib/pos/cors-core";
 import { __runPosApiBaseCoreTests } from "../../src/lib/pos/api-base-core";
+import { __runCapacitorConfigCoreTests } from "../../src/lib/pos/capacitor-config-core";
 import { __runRegisterHostCoreTests } from "../../src/lib/pos/register-host-core";
 import { __runThemeContrastCoreTests } from "../../src/lib/pos/theme-contrast-core";
 import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
@@ -602,6 +603,7 @@ async function main() {
   assertNoFailures("strain-taxonomy", __runStrainTaxonomyTests());
   assertNoFailures("pos/cors-core", __runPosCorsCoreTests());
   assertNoFailures("pos/api-base-core", __runPosApiBaseCoreTests());
+  assertNoFailures("pos/capacitor-config-core", __runCapacitorConfigCoreTests());
   assertNoFailures("pos/register-host-core", __runRegisterHostCoreTests());
   assertNoFailures("pos/theme-contrast-core", __runThemeContrastCoreTests());
   assertNoFailures("variant-sort", __runVariantSortTests());
