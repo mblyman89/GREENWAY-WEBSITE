@@ -39,6 +39,7 @@ import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSe
 import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,7 @@ export const dynamic = "force-dynamic";
 /** Roles allowed to approve a safe swap (mirrors /api/pos/approve). */
 const SWAP_APPROVER_ROLES = new Set(["manager", "lead"]);
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
   const deviceKey = req.headers.get("x-pos-device-key") ?? "";
   const auth = await authenticateDevice(deviceId, deviceKey);
@@ -260,4 +261,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // BLIND: no expected, no variance, no counted total echoed back beyond ok.
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * CORS preflight. The packaged register app ("Greenway Point of Transaction")
+ * calls this API cross-origin from capacitor://localhost. Policy lives in
+ * @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handlePost(req));
 }

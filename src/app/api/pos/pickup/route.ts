@@ -37,6 +37,7 @@ import {
   completePickupAtRegister,
   loadOrderIntoRegister,
 } from "@/lib/pos/pickup-store";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ function isUuid(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGet(req: NextRequest): Promise<NextResponse> {
   const auth = await authenticateDevice(
     req.headers.get("x-pos-device-id") ?? "",
     req.headers.get("x-pos-device-key") ?? "",
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ queue: result.queue });
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const auth = await authenticateDevice(
     req.headers.get("x-pos-device-id") ?? "",
     req.headers.get("x-pos-device-key") ?? "",
@@ -147,4 +148,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     orderNumber: result.orderNumber,
     receiptNumber: result.receiptNumber,
   });
+}
+
+/**
+ * CORS preflight. The packaged register app ("Greenway Point of Transaction")
+ * calls this API cross-origin from capacitor://localhost. Policy lives in
+ * @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handleGet(req));
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handlePost(req));
 }

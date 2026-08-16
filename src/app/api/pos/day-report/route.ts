@@ -40,6 +40,7 @@ import { refundsForBusinessDay } from "@/lib/pos/refunds-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export const dynamic = "force-dynamic";
 /** Same role gate as /api/pos/approve — the slip reveals expected cash. */
 const APPROVER_ROLES = new Set(["manager", "lead"]);
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
   const deviceKey = req.headers.get("x-pos-device-key") ?? "";
   const auth = await authenticateDevice(deviceId, deviceKey);
@@ -168,4 +169,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     drawer,
     refunds,
   });
+}
+
+/**
+ * CORS preflight. The packaged register app ("Greenway Point of Transaction")
+ * calls this API cross-origin from capacitor://localhost. Policy lives in
+ * @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handlePost(req));
 }

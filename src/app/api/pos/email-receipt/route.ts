@@ -20,11 +20,12 @@ import {
   validateEmailReceiptSnapshot,
 } from "@/lib/pos/email-receipt-core";
 import { isEmailReceiptConfigured, sendEmailReceipt } from "@/lib/pos/email-receipt-store";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+async function handleGet(req: NextRequest): Promise<NextResponse> {
   const auth = await authenticateDevice(
     req.headers.get("x-pos-device-id") ?? "",
     req.headers.get("x-pos-device-key") ?? "",
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ configured: isEmailReceiptConfigured() });
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const auth = await authenticateDevice(
     req.headers.get("x-pos-device-id") ?? "",
     req.headers.get("x-pos-device-key") ?? "",
@@ -66,4 +67,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
   return NextResponse.json({ sent: true, receiptNumber: result.receiptNumber });
+}
+
+/**
+ * CORS preflight. The packaged register app ("Greenway Point of Transaction")
+ * calls this API cross-origin from capacitor://localhost. Policy lives in
+ * @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handleGet(req));
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handlePost(req));
 }
