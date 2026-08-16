@@ -308,6 +308,7 @@ import { __runStrainTaxonomyTests } from "../../src/lib/menu/strain-taxonomy";
 import { __runPosCorsCoreTests } from "../../src/lib/pos/cors-core";
 import { __runPosApiBaseCoreTests } from "../../src/lib/pos/api-base-core";
 import { __runRegisterHostCoreTests } from "../../src/lib/pos/register-host-core";
+import { __runThemeContrastCoreTests } from "../../src/lib/pos/theme-contrast-core";
 import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
 import { __runVariantCollapseTests } from "../../src/lib/menu/variant-collapse-core";
 import { __runNonCannabisTests } from "../../src/lib/naming/noncannabis-core";
@@ -602,6 +603,7 @@ async function main() {
   assertNoFailures("pos/cors-core", __runPosCorsCoreTests());
   assertNoFailures("pos/api-base-core", __runPosApiBaseCoreTests());
   assertNoFailures("pos/register-host-core", __runRegisterHostCoreTests());
+  assertNoFailures("pos/theme-contrast-core", __runThemeContrastCoreTests());
   assertNoFailures("variant-sort", __runVariantSortTests());
   assertNoFailures("variant-collapse", __runVariantCollapseTests());
   __runNonCannabisTests();
