@@ -450,22 +450,89 @@ export type AtmCashLoadsView = {
   totalLoadedCents: number;
   totalLoadedUsd: string;
   /**
-   * The best-known current cash in the machine. PAI's Cash Load report already
-   * reports a post-load "Balance"; the newest load's balance is the most recent
-   * truth. Null when unknown (never invent it).
+   * The machine's balance AT THE MOMENT OF THE LAST LOAD, exactly as PAI
+   * reported it. This is a historical fact, not today's cash — the machine has
+   * been dispensing ever since. Null when unknown (never invent it).
    */
   expectedInMachineCents: number | null;
   expectedInMachineUsd: string;
+  /** ISO date of the load that produced `expectedInMachineCents`, or null. */
+  lastLoadDate: string | null;
+  /**
+   * Cash dispensed since that load, from settled withdrawal totals. Null when
+   * no settlement covers the period (unknown, NOT zero).
+   */
+  dispensedSinceLoadCents: number | null;
+  dispensedSinceLoadUsd: string;
+  /**
+   * CURRENT cash in the machine = balance at last load − cash dispensed since.
+   * Null when either side is unknown. This is the number the owner actually
+   * wants; `expectedInMachineCents` is only its starting point.
+   */
+  currentInMachineCents: number | null;
+  currentInMachineUsd: string;
+  /**
+   * The last settlement date included in the subtraction, or null. Settlements
+   * are whole-day totals, so anything the machine dispensed AFTER this date has
+   * not been settled yet and cannot be counted.
+   */
+  dispensedThroughDate: string | null;
+  /**
+   * True when the last load happened ON a settled day. That day's settlement is
+   * a midnight-to-midnight total, so part of it was dispensed BEFORE the load
+   * and is already reflected in the reported balance. Counting the whole day
+   * would double-count it, so that day is excluded — which makes the result a
+   * conservative UPPER bound. The UI must say so rather than imply precision
+   * the data does not support.
+   */
+  sameDayLoadCaveat: boolean;
   loadCount: number;
 };
 
+/** Minimal settlement shape needed to age a balance forward. Money in CENTS. */
+export type AtmDispenseInput = {
+  settlementDate: string; // ISO yyyy-mm-dd
+  terminalId: string;
+  /**
+   * PAI's "Settlement" column — the cash the machine DISPENSED that day.
+   *
+   * VERIFIED against Michael's real August 2026 extract: every value is a clean
+   * multiple of $20 (the only denomination the machine holds), while the
+   * surcharge runs $2.50 per withdrawal. Subtracting the surcharge would break
+   * that $20 alignment on most days, which proves the surcharge is NOT inside
+   * this figure — it settles on its own separate leg. So this column, and only
+   * this column, is what leaves the cash cassette.
+   */
+  settlementTotalCents: number | null;
+};
+
 /**
- * Build the Cash Loads view. `rows` should be newest-first (the store orders by
- * loaded_at desc). The running "expected in machine" is taken from the newest
- * load's reported post-load Balance when available — that is PAI's own truth,
- * not a guess. When no balance is reported anywhere, it is null.
+ * Build the Cash Loads view.
+ *
+ * `rows` should be newest-first (the store orders by loaded_at desc).
+ *
+ * TWO DIFFERENT NUMBERS, and conflating them was the bug this replaced:
+ *
+ *   expectedInMachineCents  what PAI reported the balance to be AT THE LAST
+ *                           LOAD. A historical fact. It only equals today's
+ *                           cash if the machine has dispensed nothing since,
+ *                           which is never true for a working ATM.
+ *   currentInMachineCents   that balance MINUS everything dispensed since.
+ *                           This is the money actually sitting in the machine.
+ *
+ * The subtraction uses settled daily withdrawal totals. Because a settlement is
+ * a whole-day figure and a load happens at an instant, the load's own day is
+ * excluded: part of that day's dispensing happened BEFORE the load and is
+ * therefore already baked into the reported balance, so counting it again would
+ * subtract it twice. Excluding it can only UNDER-count dispensing, which makes
+ * `currentInMachineCents` a conservative upper bound — the safe direction to be
+ * wrong for someone deciding whether the machine needs a refill. `settlements`
+ * may be omitted, in which case the current figure is null rather than guessed.
  */
-export function buildCashLoadsView(rows: AtmCashLoadInput[]): AtmCashLoadsView {
+export function buildCashLoadsView(
+  rows: AtmCashLoadInput[],
+  settlements?: AtmDispenseInput[] | null,
+): AtmCashLoadsView {
   const views: AtmCashLoadRowView[] = [];
   let totalLoaded = 0;
   let expectedInMachine: number | null = null;
@@ -480,19 +547,69 @@ export function buildCashLoadsView(rows: AtmCashLoadInput[]): AtmCashLoadsView {
       sourceLabel: r.source === "manual" ? "Manual" : "PAI (auto)",
     });
   }
-  // rows are newest-first → the first row carrying a reported balance is current.
+  // rows are newest-first → the first row carrying a reported balance is the
+  // most recent one. Capture WHEN it happened and WHICH terminal it belongs to;
+  // both are needed to age the balance forward correctly.
+  let lastLoadDate: string | null = null;
+  let lastLoadTerminal: string | null = null;
   for (const r of rows) {
     if (r.balanceAfterCents !== null && Number.isFinite(r.balanceAfterCents)) {
       expectedInMachine = Math.trunc(r.balanceAfterCents);
+      lastLoadDate = (r.loadDate ?? "").trim() || null;
+      lastLoadTerminal = (r.terminalId ?? "").trim() || null;
       break;
     }
   }
+
+  // Age that balance forward by the cash settled AFTER the load's own day.
+  let dispensedSince: number | null = null;
+  let dispensedThrough: string | null = null;
+  let sameDayLoadCaveat = false;
+
+  if (expectedInMachine !== null && lastLoadDate !== null && settlements && settlements.length > 0) {
+    for (const s of settlements) {
+      const date = (s?.settlementDate ?? "").trim();
+      if (date === "") continue;
+      // Only this machine's own settlements. A blank terminal on either side is
+      // treated as "not provably the same machine" and skipped, because
+      // subtracting another terminal's withdrawals would be plainly wrong.
+      const term = (s?.terminalId ?? "").trim();
+      if (lastLoadTerminal !== null && term !== "" && term !== lastLoadTerminal) continue;
+      if (lastLoadTerminal !== null && term === "") continue;
+
+      if (date === lastLoadDate) {
+        // Settled on the load's own day: partly pre-load, partly post-load, and
+        // the report cannot tell us the split. Excluded, and flagged on screen.
+        if (s.settlementTotalCents !== null && Number.isFinite(s.settlementTotalCents)) {
+          sameDayLoadCaveat = true;
+        }
+        continue;
+      }
+      if (date < lastLoadDate) continue; // before the load → already in the balance
+
+      const cents = s.settlementTotalCents;
+      if (cents === null || cents === undefined || !Number.isFinite(cents)) continue;
+      dispensedSince = (dispensedSince ?? 0) + Math.trunc(cents);
+      if (dispensedThrough === null || date > dispensedThrough) dispensedThrough = date;
+    }
+  }
+
+  const currentInMachine =
+    expectedInMachine !== null && dispensedSince !== null ? expectedInMachine - dispensedSince : null;
+
   return {
     rows: views,
     totalLoadedCents: totalLoaded,
     totalLoadedUsd: centsToUsd(totalLoaded),
     expectedInMachineCents: expectedInMachine,
     expectedInMachineUsd: centsToUsd(expectedInMachine),
+    lastLoadDate,
+    dispensedSinceLoadCents: dispensedSince,
+    dispensedSinceLoadUsd: centsToUsd(dispensedSince),
+    currentInMachineCents: currentInMachine,
+    currentInMachineUsd: centsToUsd(currentInMachine),
+    dispensedThroughDate: dispensedThrough,
+    sameDayLoadCaveat,
     loadCount: rows.length,
   };
 }
@@ -726,6 +843,21 @@ export function __runAtmUiCoreTests(): void {
   ok(clvNoBal.rows[0].sourceLabel === "Manual", "manual source label");
   ok(clvNoBal.rows[0].loadedAt === "2026-08-01", "loadedAt falls back to iso date");
   ok(buildCashLoadsView([]).loadCount === 0, "empty loads → 0");
+
+  // Aging the balance forward: current cash = balance at last load − dispensed.
+  ok(clv.currentInMachineCents === null, "no settlements → current cash unknown, not guessed");
+  const clvAged = buildCashLoadsView(
+    [{ terminalId: "HG26499", loadedAtRaw: "8/8/26 8:49:11 PM", loadDate: "2026-08-08", cashLoadCents: 236000, balanceAfterCents: 308000, source: "pai" }],
+    [
+      { settlementDate: "2026-08-09", terminalId: "HG26499", settlementTotalCents: 124000 },
+      { settlementDate: "2026-08-08", terminalId: "HG26499", settlementTotalCents: 530000 }, // load's own day
+      { settlementDate: "2026-08-09", terminalId: "OTHER99", settlementTotalCents: 999900 }, // other machine
+    ],
+  );
+  ok(clvAged.dispensedSinceLoadCents === 124000, "aging counts only post-load, same-terminal dispensing");
+  ok(clvAged.currentInMachineCents === 184000, "current cash = 308000 − 124000");
+  ok(clvAged.sameDayLoadCaveat === true, "load-day settlement excluded and flagged");
+  ok(clvAged.dispensedThroughDate === "2026-08-09", "dispensed-through is the max settled date");
 
   // validateManualCashLoad --------------------------------------------------
   const mOk = validateManualCashLoad({ amount: "2000", date: "2026-08-01" });
