@@ -114,9 +114,10 @@ export function canonicalStrainType(raw: string | null | undefined): GreenwayStr
 }
 
 // ---------------------------------------------------------------------------
-// Self-tests — run with: npx tsx src/lib/menu/strain-taxonomy.ts
+// Self-tests — run in CI via scripts/compliance/run-pure-selftests.ts
+// (which asserts failed === 0).
 // ---------------------------------------------------------------------------
-function __runStrainTaxonomyTests() {
+export function __runStrainTaxonomyTests(): { passed: number; failed: number } {
   let pass = 0;
   let fail = 0;
   const eq = (label: string, got: unknown, want: unknown) => {
@@ -124,7 +125,6 @@ function __runStrainTaxonomyTests() {
       pass++;
     } else {
       fail++;
-      // eslint-disable-next-line no-console
       console.error(`FAIL ${label}: got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
     }
   };
@@ -168,14 +168,12 @@ function __runStrainTaxonomyTests() {
   eq("isLeaning indica-hybrid", isLeaningHybrid("indica-hybrid"), true);
   eq("isLeaning hybrid", isLeaningHybrid("hybrid"), false);
 
-  // eslint-disable-next-line no-console
   console.log(`strain-taxonomy self-tests: ${pass} passed, ${fail} failed`);
-  if (fail > 0) process.exitCode = 1;
+  if (fail > 0 && typeof process !== "undefined") process.exitCode = 1;
+  return { passed: pass, failed: fail };
 }
 
-// Node/tsx entrypoint guard (no-op in Next bundle).
-declare const require: { main?: unknown } | undefined;
-declare const module: unknown;
-if (typeof require !== "undefined" && typeof module !== "undefined" && require.main === module) {
-  __runStrainTaxonomyTests();
-}
+// SLICE: the standalone `require.main === module` entry guard was removed —
+// this suite now runs in CI via scripts/compliance/run-pure-selftests.ts
+// (which asserts failed === 0), and the guard tripped eslint's
+// no-assign-module-variable rule. Same treatment as strain-terpenes (SLICE 39).
