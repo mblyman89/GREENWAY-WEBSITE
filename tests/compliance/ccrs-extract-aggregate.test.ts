@@ -22,6 +22,11 @@ import {
   TOP_TYPE_MOVERS_PER_TYPE,
   BRAND_BRIDGE_MIN_MANIFESTS,
   BRAND_BRIDGE_MIN_SHARE,
+  TOP_DOH_SELLERS,
+  packInvLane0,
+  unpackInvProductId,
+  unpackInvMedical,
+  MAX_PACKABLE_PRODUCT_ID,
   type AggregationResult,
 } from "@/lib/discovery/ccrs-extract/aggregate";
 import type {
@@ -222,8 +227,9 @@ function inventory(
   productId: string | null,
   strainId: string | null = null,
   externalIdentifier: string | null = null,
+  isMedical: boolean | null = null,
 ): InventoryRow {
-  return { inventoryId, licenseeId: null, productId, strainId, externalIdentifier };
+  return { inventoryId, licenseeId: null, productId, strainId, externalIdentifier, isMedical };
 }
 
 function header(
@@ -1249,6 +1255,7 @@ describe("medical sale-class split", () => {
       productId: "700",
       strainId: null,
       externalIdentifier: null,
+      isMedical: null,
     });
     agg.addSaleHeader({ saleHeaderId: "1", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
     agg.addSaleHeader({ saleHeaderId: "2", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "medical", saleDate: "2025-12-05" });
@@ -1305,7 +1312,7 @@ describe("medical sale-class split", () => {
     const agg = new CcrsAggregator({ selfLicenseNumber: "413541", trackedLicenseNumbers: ["413541"] });
     agg.addLicensee({ licenseeId: "1", licenseNumber: "413541", name: "N", dba: null, status: "Active", city: "C", county: "KITSAP" });
     agg.addProduct(product("700", "Usable Marijuana", "P", 1));
-    agg.addInventory({ inventoryId: "5000", licenseeId: "1", productId: "700", strainId: null, externalIdentifier: null });
+    agg.addInventory({ inventoryId: "5000", licenseeId: "1", productId: "700", strainId: null, externalIdentifier: null, isMedical: null });
     agg.addSaleHeader({ saleHeaderId: "1", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
     agg.addSaleDetail({ saleHeaderId: "1", inventoryId: "5000", quantity: 1, unitPriceMinor: 3000, discountMinor: 0, isDeleted: false });
     const r = agg.result();
@@ -1321,7 +1328,7 @@ describe("medical sale-class split", () => {
       agg.addLicensee({ licenseeId: String(i + 1), licenseNumber: ln, name: `N${i}`, dba: null, status: "Active", city: "C", county: "K" }),
     );
     agg.addProduct(product("700", "Usable Marijuana", "P", 1));
-    agg.addInventory({ inventoryId: "5000", licenseeId: "1", productId: "700", strainId: null, externalIdentifier: null });
+    agg.addInventory({ inventoryId: "5000", licenseeId: "1", productId: "700", strainId: null, externalIdentifier: null, isMedical: null });
     agg.addSaleHeader({ saleHeaderId: "9", sellerLicenseeId: String(MAXID - 1), buyerLicenseeId: "255", saleType: "wholesale", saleDate: "2025-12-05" });
     agg.addSaleDetail({ saleHeaderId: "9", inventoryId: "5000", quantity: 1, unitPriceMinor: 1000, discountMinor: 0, isDeleted: false });
     const r = agg.result();
@@ -1465,5 +1472,338 @@ describe("potency capture", () => {
     const r = agg.result();
     expect(r.potency ?? []).toHaveLength(0);
     expect(r.totals.labResultRows).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DOH compliance (Inventory.IsMedical, chapter 246-70 WAC)
+//
+// Two DIFFERENT medical signals live in the real extract and must never be
+// conflated (verified against the owner's real December 2025 delivery):
+//   * SaleHeader.SaleType = 'RecreationalMedical' -> the SALE was to a patient
+//   * Inventory.IsMedical = True                  -> the PRODUCT is DOH-compliant
+// Inventory column [9] is IsMedical, carrying literal "True"/"False".
+// ---------------------------------------------------------------------------
+
+describe("invMap lane-0 packing (ProductId + DOH flag)", () => {
+  it("round-trips a product id with each DOH code", () => {
+    // Largest ProductId observed in the real December extract.
+    const realMax = 21_795_360;
+    for (const pid of [0, 1, 700, realMax]) {
+      expect(unpackInvProductId(packInvLane0(pid, 0))).toBe(pid);
+      expect(unpackInvProductId(packInvLane0(pid, 1))).toBe(pid);
+      expect(unpackInvProductId(packInvLane0(pid, 2))).toBe(pid);
+    }
+    expect(unpackInvMedical(packInvLane0(realMax, 1))).toBe(true);
+    expect(unpackInvMedical(packInvLane0(realMax, 2))).toBe(false);
+    expect(unpackInvMedical(packInvLane0(realMax, 0))).toBeNull();
+  });
+
+  it("keeps every packed value an exact Float64 integer", () => {
+    const maxPacked = packInvLane0(MAX_PACKABLE_PRODUCT_ID, 2);
+    expect(Number.isSafeInteger(maxPacked)).toBe(true);
+    expect(maxPacked).toBeLessThan(Number.MAX_SAFE_INTEGER);
+    expect(unpackInvProductId(maxPacked)).toBe(MAX_PACKABLE_PRODUCT_ID);
+    expect(unpackInvMedical(maxPacked)).toBe(false);
+  });
+
+  it("records an unpackably large product id as ABSENT, never as a wrong id", () => {
+    // Beyond anything real (CCRS ids are ~2^24). Storing it raw would be
+    // indistinguishable from a packed value and would corrupt BOTH fields, so
+    // the id degrades to "absent" while the DOH answer stays correct.
+    const huge = MAX_PACKABLE_PRODUCT_ID + 1;
+    const packed = packInvLane0(huge, 1);
+    expect(unpackInvProductId(packed)).toBe(0);
+    expect(unpackInvMedical(packed)).toBe(true);
+  });
+
+  it("gives the product field far more headroom than real ids need", () => {
+    // Largest ProductId in the owner's real December 2025 extract.
+    expect(MAX_PACKABLE_PRODUCT_ID).toBeGreaterThan(21_795_360 * 1000);
+  });
+
+  it("reports unknown (never false) for an absent lane", () => {
+    expect(unpackInvMedical(0)).toBeNull();
+    expect(unpackInvProductId(0)).toBe(0);
+  });
+});
+
+describe("CcrsAggregator — DOH product breakout", () => {
+  function dohSetup() {
+    const agg = new CcrsAggregator({
+      selfLicenseNumber: "414868",
+      trackedLicenseNumbers: ["999999"],
+    });
+    agg.addLicensee({
+      licenseeId: "1",
+      licenseNumber: "414868",
+      name: "LYMAN'S MARIJUANA, INC.",
+      dba: "GREENWAY MARIJUANA",
+      status: "Active",
+      city: "Port Orchard",
+      county: "KITSAP",
+    });
+    agg.addLicensee({
+      licenseeId: "2",
+      licenseNumber: "999999",
+      name: "RIVAL CANNABIS LLC",
+      dba: "RIVAL",
+      status: "Active",
+      city: "Bremerton",
+      county: "KITSAP",
+    });
+    agg.addProduct(product("700", "Solid Edible", "Patient Tincture 10mg", 10));
+    agg.addProduct(product("701", "Flower Lot", "Blue Dream 3.5g", 3.5));
+    return agg;
+  }
+
+  it("counts a DOH lot as its own additive class without disturbing retail", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5000", "700", null, null, true));
+    agg.addSaleHeader({ saleHeaderId: "1", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "1", inventoryId: "5000", quantity: 2, unitPriceMinor: 2500, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+
+    // Retail keeps its historical meaning: the DOH line is ALSO a retail line.
+    expect(r.totals.retailLines).toBe(1);
+    expect(r.totals.dohLines).toBe(1);
+    expect(r.totals.dohUnknownLines).toBe(0);
+    const retail = r.statewide.find((b) => b.saleClass === "retail" && b.scope === "overall");
+    const doh = r.statewide.find((b) => b.saleClass === "doh" && b.scope === "overall");
+    expect(retail?.revenueMinor).toBe(5000);
+    expect(doh?.revenueMinor).toBe(5000);
+    expect(doh?.units).toBe(2);
+    expect(doh?.unitPrice?.medianMinor).toBe(2500);
+  });
+
+  it("does NOT count a non-DOH lot as DOH", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5001", "701", null, null, false));
+    agg.addSaleHeader({ saleHeaderId: "2", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "2", inventoryId: "5001", quantity: 1, unitPriceMinor: 1200, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.retailLines).toBe(1);
+    expect(r.totals.dohLines).toBe(0);
+    expect(r.totals.dohUnknownLines).toBe(0);
+    expect(r.statewide.filter((b) => b.saleClass === "doh")).toHaveLength(0);
+  });
+
+  it("treats an unreadable DOH flag as UNKNOWN, never as not-DOH", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5002", "701", null, null, null));
+    agg.addSaleHeader({ saleHeaderId: "3", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "3", inventoryId: "5002", quantity: 1, unitPriceMinor: 900, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.dohLines).toBe(0);
+    expect(r.totals.dohUnknownLines).toBe(1);
+  });
+
+  it("keeps DOH (product) and medical (sale) strictly independent", () => {
+    const agg = dohSetup();
+    // DOH product sold to a RECREATIONAL customer -> doh yes, medical no.
+    agg.addInventory(inventory("5000", "700", null, null, true));
+    agg.addSaleHeader({ saleHeaderId: "10", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "10", inventoryId: "5000", quantity: 1, unitPriceMinor: 2000, discountMinor: 0, isDeleted: false });
+    // Ordinary product sold to a PATIENT -> medical yes, doh no.
+    agg.addInventory(inventory("5001", "701", null, null, false));
+    agg.addSaleHeader({ saleHeaderId: "11", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "medical", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "11", inventoryId: "5001", quantity: 1, unitPriceMinor: 3000, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+
+    expect(r.totals.retailLines).toBe(2);
+    expect(r.totals.dohLines).toBe(1);
+    expect(r.totals.medicalLines).toBe(1);
+    const doh = r.statewide.find((b) => b.saleClass === "doh" && b.scope === "overall");
+    const med = r.statewide.find((b) => b.saleClass === "medical" && b.scope === "overall");
+    // Different lines entirely — the classes must not mirror each other.
+    expect(doh?.revenueMinor).toBe(2000);
+    expect(med?.revenueMinor).toBe(3000);
+  });
+
+  it("counts a line that is BOTH a DOH product and a medical sale in both", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5000", "700", null, null, true));
+    agg.addSaleHeader({ saleHeaderId: "12", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "medical", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "12", inventoryId: "5000", quantity: 1, unitPriceMinor: 4000, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.retailLines).toBe(1);
+    expect(r.totals.dohLines).toBe(1);
+    expect(r.totals.medicalLines).toBe(1);
+  });
+
+  it("never counts a WHOLESALE line as DOH retail volume", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5000", "700", null, null, true));
+    agg.addSaleHeader({ saleHeaderId: "13", sellerLicenseeId: "2", buyerLicenseeId: "1", saleType: "wholesale", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "13", inventoryId: "5000", quantity: 5, unitPriceMinor: 800, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.wholesaleLines).toBe(1);
+    expect(r.totals.dohLines).toBe(0);
+    expect(r.totals.dohUnknownLines).toBe(0);
+    expect(r.statewide.filter((b) => b.saleClass === "doh")).toHaveLength(0);
+  });
+
+  it("reports WHO sold DOH product, with identity and tracked flag", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5000", "700", null, null, true));
+    // Rival (licensee 2) sells more DOH than the owner (licensee 1).
+    agg.addSaleHeader({ saleHeaderId: "20", sellerLicenseeId: "2", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "20", inventoryId: "5000", quantity: 10, unitPriceMinor: 3000, discountMinor: 0, isDeleted: false });
+    agg.addSaleHeader({ saleHeaderId: "21", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "21", inventoryId: "5000", quantity: 1, unitPriceMinor: 2000, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+
+    const sellers = r.dohSellers ?? [];
+    expect(sellers).toHaveLength(2);
+    // Ranked by observed revenue: the rival leads.
+    expect(sellers[0].licenseNumber).toBe("999999");
+    expect(sellers[0].dba).toBe("RIVAL");
+    expect(sellers[0].revenueMinor).toBe(30_000);
+    expect(sellers[0].units).toBe(10);
+    expect(sellers[0].tracked).toBe(true);
+    expect(sellers[0].isSelf).toBe(false);
+    expect(sellers[0].unitPrice?.medianMinor).toBe(3000);
+    // The owner's own store is on the tracked roster.
+    expect(sellers[1].licenseNumber).toBe("414868");
+    // The roster deliberately excludes self, so `tracked` is false here and
+    // `isSelf` is the flag that identifies the owner's own store.
+    expect(sellers[1].tracked).toBe(false);
+    expect(sellers[1].isSelf).toBe(true);
+    expect(sellers[1].revenueMinor).toBe(2000);
+  });
+
+  it("emits doh_mover signals naming the DOH products that moved", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5000", "700", null, null, true));
+    agg.addSaleHeader({ saleHeaderId: "30", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "30", inventoryId: "5000", quantity: 4, unitPriceMinor: 2500, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    const doh = r.signals.filter((s) => s.kind === "doh_mover");
+    expect(doh).toHaveLength(1);
+    expect(doh[0].productName).toBe("Patient Tincture 10mg");
+    expect(doh[0].inventoryType).toBe("Solid Edible");
+    expect(doh[0].units).toBe(4);
+    expect(doh[0].revenueMinor).toBe(10_000);
+    expect(doh[0].medianUnitPriceMinor).toBe(2500);
+  });
+
+  it("bounds the DOH seller list", () => {
+    expect(TOP_DOH_SELLERS).toBeGreaterThan(0);
+    expect(TOP_DOH_SELLERS).toBeLessThanOrEqual(200); // MAX_SUPPLIERS-style payload guard
+  });
+
+  it("still joins a lot to its product after DOH packing (no join drift)", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("5000", "700", "77", null, true));
+    agg.addStrain({ strainId: "77", name: "Blue Dream" });
+    agg.addSaleHeader({ saleHeaderId: "40", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "40", inventoryId: "5000", quantity: 1, unitPriceMinor: 2500, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    // Product AND strain must still resolve — packing must not break the join.
+    expect(r.totals.attributedRetailLines).toBe(1);
+    const byType = r.statewide.find((b) => b.saleClass === "retail" && b.scope === "type");
+    expect(byType?.scopeKey).toBe("Solid Edible");
+    const byStrain = r.statewide.find((b) => b.saleClass === "retail" && b.scope === "strain");
+    expect(byStrain?.scopeKey).toBe("Blue Dream");
+    // Price per gram still computes off the product weight (10g).
+    expect(byType?.pricePerGram?.medianMinor).toBe(250);
+  });
+
+  it("carries a DOH flag even when the lot has no product or strain", () => {
+    const agg = dohSetup();
+    // Real extracts contain lots whose product never joins; the DOH answer is
+    // still knowable and must not be thrown away.
+    agg.addInventory(inventory("5099", null, null, null, true));
+    agg.addSaleHeader({ saleHeaderId: "50", sellerLicenseeId: "1", buyerLicenseeId: null, saleType: "retail", saleDate: "2025-12-05" });
+    agg.addSaleDetail({ saleHeaderId: "50", inventoryId: "5099", quantity: 1, unitPriceMinor: 1500, discountMinor: 0, isDeleted: false });
+    const r = agg.result();
+    expect(r.totals.dohLines).toBe(1);
+    expect(r.totals.attributedRetailLines).toBe(0);
+  });
+
+  it("counts DOH inventory rows at the lot level", () => {
+    const agg = dohSetup();
+    agg.addInventory(inventory("1", "700", null, null, true));
+    agg.addInventory(inventory("2", "700", null, null, true));
+    agg.addInventory(inventory("3", "701", null, null, false));
+    agg.addInventory(inventory("4", "701", null, null, null));
+    const r = agg.result();
+    expect(r.totals.inventoryRows).toBe(4);
+    expect(r.totals.dohInventoryRows).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Payload headroom — MEASURED, never assumed.
+//
+// Adding a fourth benchmark sale class (doh) expands the statewide row count.
+// MAX_STATEWIDE in market-rollups.ts rejects an oversized payload outright, so
+// a silent overflow here would break ingestion for the owner's real monthly
+// upload. This test pins the worst case with real-world cardinalities.
+// ---------------------------------------------------------------------------
+
+describe("statewide benchmark headroom (4 sale classes)", () => {
+  it("stays inside the persistence caps at worst-case cardinality", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [] });
+    // The 13 distinct InventoryType values in the owner's real December 2025
+    // Product table (verified, not invented).
+    const TYPES = [
+      "Solid Edible",
+      "Liquid Edible",
+      "Ethanol Concentrate",
+      "Hydrocarbon Concentrate",
+      "Cannabis Mix Infused",
+      "Flower Lot",
+      "Non-Solvent based Concentrate",
+      "Food Grade Solvent Concentrate",
+      "Cannabis Mix Packaged",
+      "Flower Unlotted",
+      "Concentrate For Inhalation",
+      "Other Material Unlotted",
+      "CO2 Concentrate",
+    ];
+    agg.addLicensee(licensee("1", SELF, "SELF", null, "PORT ORCHARD"));
+    // Far more distinct brands/strains than the per-scope cap keeps, sold in
+    // every class, with DOH-flagged lots — this saturates every bucket.
+    let id = 1;
+    for (let b = 0; b < 1200; b += 1) {
+      const type = TYPES[b % TYPES.length];
+      agg.addProduct(product(String(id), type, `Brand${b} | Item ${b}`, 3.5));
+      agg.addStrain({ strainId: String(id), name: `Strain${b}` });
+      agg.addInventory(inventory(String(id), String(id), String(id), null, true));
+      for (const saleType of ["retail", "medical", "wholesale"] as const) {
+        agg.addSaleHeader({
+          saleHeaderId: String(id * 10 + (saleType === "retail" ? 1 : saleType === "medical" ? 2 : 3)),
+          sellerLicenseeId: "1",
+          buyerLicenseeId: null,
+          saleType,
+          saleDate: "2025-12-05",
+        });
+        agg.addSaleDetail({
+          saleHeaderId: String(id * 10 + (saleType === "retail" ? 1 : saleType === "medical" ? 2 : 3)),
+          inventoryId: String(id),
+          quantity: 1,
+          unitPriceMinor: 1000 + b,
+          discountMinor: 0,
+          isDeleted: false,
+        });
+      }
+      id += 1;
+    }
+    const r = agg.result();
+
+    // Per class: 1 overall + 13 types + 500 brands + 500 strains = 1,014.
+    // Four classes = 4,056, which is 944 rows inside MAX_STATEWIDE (5,000).
+    const byClass = new Map<string, number>();
+    for (const b of r.statewide) byClass.set(b.saleClass, (byClass.get(b.saleClass) ?? 0) + 1);
+    expect(byClass.get("retail")).toBe(1_014);
+    expect(byClass.get("wholesale")).toBe(1_014);
+    expect(byClass.get("medical")).toBe(1_014);
+    expect(byClass.get("doh")).toBe(1_014);
+    expect(r.statewide).toHaveLength(4_056);
+    // Hard caps enforced by sanitizeAggregationResult.
+    expect(r.statewide.length).toBeLessThan(5_000); // MAX_STATEWIDE
+    expect(r.signals.length).toBeLessThan(4_000); // MAX_SIGNALS
+    expect((r.dohSellers ?? []).length).toBeLessThanOrEqual(TOP_DOH_SELLERS);
   });
 });

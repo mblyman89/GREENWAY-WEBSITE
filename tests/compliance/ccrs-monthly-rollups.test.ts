@@ -39,7 +39,7 @@ function validResult(): unknown {
     name: "Phat Panda | Grape Ape 3.5g",
     unitWeightGrams: 3.5,
   });
-  agg.addInventory({ inventoryId: "9001", licenseeId: null, productId: "5001", strainId: "77", externalIdentifier: null });
+  agg.addInventory({ inventoryId: "9001", licenseeId: null, productId: "5001", strainId: "77", externalIdentifier: null, isMedical: null });
   agg.addSaleHeader({
     saleHeaderId: "327733901",
     sellerLicenseeId: "900",
@@ -835,5 +835,204 @@ describe("potency — payload validation", () => {
     expect(out.result.totals.potencyRows).toBe(40);
     expect(out.result.totals.potencyCensoredRows).toBe(7);
     expect(out.result.totals.potencyUnjoinedRows).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DOH capture (Inventory.IsMedical, chapter 246-70 WAC) — migration 0181
+// ---------------------------------------------------------------------------
+
+describe("sanitizeAggregationResult — DOH", () => {
+  it("accepts the doh sale class alongside retail/wholesale/medical", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.statewide as unknown[]).push({
+      scope: "overall",
+      scopeKey: "all",
+      saleClass: "doh",
+      unitPrice: { sampleSize: 3, minMinor: 100, p25Minor: 100, medianMinor: 200, p75Minor: 300, maxMinor: 300, avgMinor: 200 },
+      pricePerGram: null,
+      units: 3,
+      revenueMinor: 600,
+    });
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    const doh = out.result.statewide.find((b) => b.saleClass === "doh");
+    expect(doh?.revenueMinor).toBe(600);
+    expect(doh?.unitPrice?.medianMinor).toBe(200);
+  });
+
+  it("rejects an unknown sale class", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.statewide as unknown[]).push({
+      scope: "overall",
+      scopeKey: "all",
+      saleClass: "definitely_not_a_class",
+      unitPrice: null,
+      pricePerGram: null,
+      units: 1,
+      revenueMinor: 1,
+    });
+    expect(sanitizeAggregationResult(base).ok).toBe(false);
+  });
+
+  it("accepts the doh_mover signal kind", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    (base.signals as unknown[]).push({
+      kind: "doh_mover",
+      licenseNumber: null,
+      inventoryType: "Solid Edible",
+      productName: "Patient Tincture 10mg",
+      brand: null,
+      strainName: null,
+      units: 4,
+      revenueMinor: 10_000,
+      medianUnitPriceMinor: 2500,
+      p25UnitPriceMinor: 2500,
+    });
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.signals.filter((s) => s.kind === "doh_mover")).toHaveLength(1);
+  });
+
+  it("carries the DOH counters through totals", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    Object.assign(base.totals as Record<string, unknown>, {
+      dohLines: 812,
+      dohUnknownLines: 34,
+      dohInventoryRows: 9_100,
+      unpackableProductIds: 0,
+    });
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.totals.dohLines).toBe(812);
+    expect(out.result.totals.dohUnknownLines).toBe(34);
+    expect(out.result.totals.dohInventoryRows).toBe(9_100);
+    expect(out.result.totals.unpackableProductIds).toBe(0);
+  });
+
+  it("keeps 'never measured' distinct from zero for DOH counters", () => {
+    // A payload produced BEFORE DOH capture existed carries no DOH keys at
+    // all. Simulate that by deleting them, exactly as an older browser-side
+    // transformer would have emitted. They must stay undefined (-> NULL in the
+    // database), never coerce to 0, which would assert as fact that the month
+    // had no DOH sales.
+    const legacy = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    const totals = legacy.totals as Record<string, unknown>;
+    delete totals.dohLines;
+    delete totals.dohUnknownLines;
+    delete totals.dohInventoryRows;
+    delete legacy.dohSellers;
+    const out = sanitizeAggregationResult(legacy);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.totals.dohLines).toBeUndefined();
+    expect(out.result.totals.dohUnknownLines).toBeUndefined();
+    expect(out.result.totals.dohInventoryRows).toBeUndefined();
+    expect(out.result.dohSellers).toBeUndefined();
+  });
+
+  it("a live aggregator run DOES measure DOH (0 is a real answer)", () => {
+    // The complement of the test above: a payload from the CURRENT transformer
+    // always carries the counters, so 0 means "measured, none found".
+    const out = sanitizeAggregationResult(validResult());
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.totals.dohLines).toBe(0);
+    expect(out.result.dohSellers).toEqual([]);
+  });
+
+  it("distinguishes 'measured, nobody sold DOH' from 'never measured'", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.dohSellers = [];
+    (base.totals as Record<string, unknown>).dohLines = 0;
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    // Empty array, NOT undefined — the month was measured and found nothing.
+    expect(out.result.dohSellers).toEqual([]);
+    expect(out.result.totals.dohLines).toBe(0);
+  });
+
+  it("sanitizes DOH seller rows, keeping tracked and isSelf apart", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.dohSellers = [
+      {
+        licenseeId: "900",
+        licenseNumber: "999999",
+        name: "RIVAL CANNABIS LLC",
+        dba: "RIVAL",
+        tracked: true,
+        isSelf: false,
+        units: 120,
+        revenueMinor: 360_000,
+        lineCount: 95,
+        unitPrice: { sampleSize: 95, minMinor: 1000, p25Minor: 2000, medianMinor: 3000, p75Minor: 4000, maxMinor: 5000, avgMinor: 3000 },
+      },
+      {
+        licenseeId: "736",
+        licenseNumber: "413541",
+        name: "LYMAN'S MARIJUANA L.L.C.",
+        dba: "GREENWAY MARIJUANA",
+        tracked: false,
+        isSelf: true,
+        units: 10,
+        revenueMinor: 20_000,
+        lineCount: 8,
+        unitPrice: null,
+      },
+    ];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    const sellers = out.result.dohSellers ?? [];
+    expect(sellers).toHaveLength(2);
+    expect(sellers[0].dba).toBe("RIVAL");
+    expect(sellers[0].tracked).toBe(true);
+    expect(sellers[0].isSelf).toBe(false);
+    expect(sellers[0].unitPrice?.medianMinor).toBe(3000);
+    expect(sellers[1].isSelf).toBe(true);
+    expect(sellers[1].tracked).toBe(false);
+    expect(sellers[1].unitPrice).toBeNull();
+  });
+
+  it("rejects a DOH seller row with no licensee id", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.dohSellers = [{ licenseNumber: "999999", units: 1, revenueMinor: 1 }];
+    expect(sanitizeAggregationResult(base).ok).toBe(false);
+  });
+
+  it("rejects an oversized DOH seller list", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.dohSellers = Array.from({ length: 201 }, (_, i) => ({
+      licenseeId: String(i + 1),
+      licenseNumber: null,
+      name: null,
+      dba: null,
+      tracked: false,
+      isSelf: false,
+      units: 1,
+      revenueMinor: 1,
+      lineCount: 1,
+      unitPrice: null,
+    }));
+    expect(sanitizeAggregationResult(base).ok).toBe(false);
+  });
+
+  it("never treats a non-boolean tracked/isSelf as true", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.dohSellers = [
+      {
+        licenseeId: "1",
+        licenseNumber: "111111",
+        name: null,
+        dba: null,
+        tracked: "yes",
+        isSelf: 1,
+        units: 1,
+        revenueMinor: 1,
+        lineCount: 1,
+        unitPrice: null,
+      },
+    ];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.dohSellers?.[0].tracked).toBe(false);
+    expect(out.result.dohSellers?.[0].isSelf).toBe(false);
   });
 });

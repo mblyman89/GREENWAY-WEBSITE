@@ -29,8 +29,10 @@ import { isDiscoveryEnabled } from "./store";
 import type {
   AggregationResult,
   StatewideBenchmark,
+  BenchmarkSaleClass,
   PriceSummary,
   PotencyBenchmark,
+  DohSellerStat,
 } from "./ccrs-extract/aggregate";
 import type {
   BenchmarkMetric,
@@ -39,6 +41,7 @@ import type {
   DiscoveryDataset,
   DiscoveryMarketSignalRow,
   DiscoverySupplierStatRow,
+  DiscoveryDohSellerRow,
 } from "./types";
 
 const BATCH = 500;
@@ -58,6 +61,8 @@ const MAX_COMPETITORS = 200;
 const MAX_SIGNALS = 4_000;
 /** S10: the aggregator emits ≤ TOP_SUPPLIERS_STATEWIDE (100); allow slack. */
 const MAX_SUPPLIERS = 200;
+/** Payload guard for the DOH seller list (aggregator caps at TOP_DOH_SELLERS). */
+const MAX_DOH_SELLERS = 200;
 const MAX_KEY_LEN = 300;
 
 function num(v: unknown): number {
@@ -184,7 +189,10 @@ export function sanitizeAggregationResult(
     const scopeKey = strOrNull(b.scopeKey);
     if (
       (scope !== "type" && scope !== "brand" && scope !== "strain" && scope !== "overall") ||
-      (saleClass !== "retail" && saleClass !== "wholesale" && saleClass !== "medical") ||
+      (saleClass !== "retail" &&
+        saleClass !== "wholesale" &&
+        saleClass !== "medical" &&
+        saleClass !== "doh") ||
       !scopeKey
     ) {
       return { ok: false, error: "Malformed statewide benchmark row." };
@@ -297,11 +305,46 @@ export function sanitizeAggregationResult(
     });
   }
 
+  // DOH sellers ("who sold DOH-compliant product"). BACKWARD COMPATIBLE: a
+  // payload from before DOH capture has no `dohSellers` key at all, which
+  // sanitizes to undefined = "never measured". That is deliberately DISTINCT
+  // from an empty array, which means "measured, and nobody sold DOH product".
+  const dohSellersIn = Array.isArray(r.dohSellers) ? r.dohSellers : null;
+  if (dohSellersIn && dohSellersIn.length > MAX_DOH_SELLERS) {
+    return { ok: false, error: "Too many DOH seller rows." };
+  }
+  let dohSellers: DohSellerStat[] | undefined;
+  if (dohSellersIn) {
+    dohSellers = [];
+    for (const s0 of dohSellersIn) {
+      const s = (s0 ?? {}) as Record<string, unknown>;
+      const licenseeId = strOrNull(s.licenseeId, 32);
+      if (!licenseeId) return { ok: false, error: "Malformed DOH seller row." };
+      dohSellers.push({
+        licenseeId,
+        licenseNumber: strOrNull(s.licenseNumber, 32),
+        name: strOrNull(s.name),
+        dba: strOrNull(s.dba),
+        tracked: s.tracked === true,
+        isSelf: s.isSelf === true,
+        units: num(s.units),
+        revenueMinor: Math.round(num(s.revenueMinor)),
+        lineCount: intOrNull(s.lineCount) ?? 0,
+        unitPrice: sanitizeSummary(s.unitPrice),
+      });
+    }
+  }
+
   const signals: AggregationResult["signals"] = [];
   for (const s0 of signalsIn) {
     const s = (s0 ?? {}) as Record<string, unknown>;
     const kind = s.kind;
-    if (kind !== "statewide_mover" && kind !== "competitor_mover" && kind !== "type_mover") {
+    if (
+      kind !== "statewide_mover" &&
+      kind !== "competitor_mover" &&
+      kind !== "type_mover" &&
+      kind !== "doh_mover"
+    ) {
       return { ok: false, error: "Malformed signal row." };
     }
     signals.push({
@@ -349,6 +392,13 @@ export function sanitizeAggregationResult(
         // state as fact that the month had no medical sales. It stays absent,
         // and absent persists as NULL — "never measured", not "none".
         medicalLines: numOrUndefined(totalsIn.medicalLines),
+        // DOH counters — optional for the same reason as medicalLines. A month
+        // ingested before DOH capture has no honest DOH figure; absent means
+        // "never measured", which is NOT "no DOH product sold".
+        dohLines: numOrUndefined(totalsIn.dohLines),
+        dohUnknownLines: numOrUndefined(totalsIn.dohUnknownLines),
+        dohInventoryRows: numOrUndefined(totalsIn.dohInventoryRows),
+        unpackableProductIds: numOrUndefined(totalsIn.unpackableProductIds),
         // Potency counters — optional for the same reason as medicalLines.
         labResultRows: numOrUndefined(totalsIn.labResultRows),
         potencyRows: numOrUndefined(totalsIn.potencyRows),
@@ -364,6 +414,7 @@ export function sanitizeAggregationResult(
       signals,
       suppliers,
       potency,
+      dohSellers,
     },
   };
 }
@@ -398,15 +449,42 @@ function benchmarkRows(
     period_end: periodEnd,
   };
   const rows: Record<string, unknown>[] = [];
-  // Explicit per-class metric names. NOT a retail/else ternary: "medical" is a
-  // third class and an else-branch would silently file medical rows under
-  // wholesale.
-  const priceMetric: BenchmarkMetric =
-    b.saleClass === "medical"
-      ? "medical_unit_price"
-      : b.saleClass === "retail"
-        ? "retail_unit_price"
-        : "wholesale_unit_price";
+  // Explicit per-class metric names via an EXHAUSTIVE lookup keyed by sale
+  // class. Deliberately NOT a chain of ternaries: with four classes an
+  // else-branch would silently file the odd one out under "wholesale". The
+  // Record<BenchmarkSaleClass, ...> type makes TypeScript fail the build if a
+  // new class is ever added without naming its metrics here.
+  const METRICS: Record<
+    BenchmarkSaleClass,
+    { price: BenchmarkMetric; ppg: BenchmarkMetric; units: BenchmarkMetric; revenue: BenchmarkMetric }
+  > = {
+    retail: {
+      price: "retail_unit_price",
+      ppg: "retail_price_per_gram",
+      units: "retail_units",
+      revenue: "retail_revenue",
+    },
+    wholesale: {
+      price: "wholesale_unit_price",
+      ppg: "wholesale_price_per_gram",
+      units: "wholesale_units",
+      revenue: "wholesale_revenue",
+    },
+    medical: {
+      price: "medical_unit_price",
+      ppg: "medical_price_per_gram",
+      units: "medical_units",
+      revenue: "medical_revenue",
+    },
+    doh: {
+      price: "doh_unit_price",
+      ppg: "doh_price_per_gram",
+      units: "doh_units",
+      revenue: "doh_revenue",
+    },
+  };
+  const metrics = METRICS[b.saleClass];
+  const priceMetric: BenchmarkMetric = metrics.price;
   if (b.unitPrice) {
     rows.push({
       ...base,
@@ -421,12 +499,7 @@ function benchmarkRows(
       value_num: null,
     });
   }
-  const ppgMetric: BenchmarkMetric =
-    b.saleClass === "medical"
-      ? "medical_price_per_gram"
-      : b.saleClass === "retail"
-        ? "retail_price_per_gram"
-        : "wholesale_price_per_gram";
+  const ppgMetric: BenchmarkMetric = metrics.ppg;
   if (b.pricePerGram) {
     rows.push({
       ...base,
@@ -441,12 +514,7 @@ function benchmarkRows(
       value_num: null,
     });
   }
-  const unitsMetric: BenchmarkMetric =
-    b.saleClass === "medical"
-      ? "medical_units"
-      : b.saleClass === "retail"
-        ? "retail_units"
-        : "wholesale_units";
+  const unitsMetric: BenchmarkMetric = metrics.units;
   rows.push({
     ...base,
     metric: unitsMetric,
@@ -459,12 +527,7 @@ function benchmarkRows(
     avg_minor: null,
     value_num: b.units,
   });
-  const revMetric: BenchmarkMetric =
-    b.saleClass === "medical"
-      ? "medical_revenue"
-      : b.saleClass === "retail"
-        ? "retail_revenue"
-        : "wholesale_revenue";
+  const revMetric: BenchmarkMetric = metrics.revenue;
   rows.push({
     ...base,
     metric: revMetric,
@@ -520,6 +583,15 @@ export async function persistAggregationResult(
       .delete()
       .eq("dataset_id", datasetId);
     if (error) throw new Error(`discovery_supplier_stats clear failed: ${error.message}`);
+  }
+  {
+    // DOH sellers (migration 0181). Clear is unconditional so a recompute
+    // never leaves stale DOH rows behind from a previous run.
+    const { error } = await admin
+      .from("discovery_doh_sellers")
+      .delete()
+      .eq("dataset_id", datasetId);
+    if (error) throw new Error(`discovery_doh_sellers clear failed: ${error.message}`);
   }
 
   const benchRows: Record<string, unknown>[] = [];
@@ -614,6 +686,33 @@ export async function persistAggregationResult(
   }));
   await insertInBatches("discovery_supplier_stats", supplierRows);
 
+  // DOH sellers (migration 0181): WHO sold DOH-compliant product. `undefined`
+  // means the payload never measured DOH at all — leave the prior rows'
+  // absence alone rather than writing an empty set that would read as
+  // "measured, nobody sold DOH product".
+  if (result.dohSellers) {
+    const dohRows = result.dohSellers.map((s) => ({
+      dataset_id: datasetId,
+      licensee_id: s.licenseeId,
+      license_number: s.licenseNumber,
+      name: s.name,
+      dba: s.dba,
+      tracked: s.tracked,
+      is_self: s.isSelf,
+      units: s.units,
+      revenue_minor: Math.round(s.revenueMinor),
+      line_count: s.lineCount,
+      price_sample_size: s.unitPrice?.sampleSize ?? 0,
+      price_min_minor: s.unitPrice?.minMinor ?? null,
+      price_p25_minor: s.unitPrice?.p25Minor ?? null,
+      price_median_minor: s.unitPrice?.medianMinor ?? null,
+      price_p75_minor: s.unitPrice?.p75Minor ?? null,
+      price_max_minor: s.unitPrice?.maxMinor ?? null,
+      price_avg_minor: s.unitPrice?.avgMinor ?? null,
+    }));
+    await insertInBatches("discovery_doh_sellers", dohRows);
+  }
+
   // Dataset bookkeeping: derived period, honest line totals, row counts, and
   // benchmarks_computed_at (the transformer computes benchmarks inline).
   {
@@ -635,6 +734,18 @@ export async function persistAggregationResult(
         // claim it had zero medical sales.
         medical_lines:
           result.totals.medicalLines == null ? null : Math.round(result.totals.medicalLines),
+        // DOH capture (migration 0181). A SUBSET of retail_lines, and
+        // INDEPENDENT of medical_lines — the two overlap freely and must never
+        // be subtracted from one another. NULL when never measured.
+        doh_lines: result.totals.dohLines == null ? null : Math.round(result.totals.dohLines),
+        doh_unknown_lines:
+          result.totals.dohUnknownLines == null
+            ? null
+            : Math.round(result.totals.dohUnknownLines),
+        doh_inventory_rows:
+          result.totals.dohInventoryRows == null
+            ? null
+            : Math.round(result.totals.dohInventoryRows),
         ingest_kind: "monthly_zip",
         benchmarks_computed_at: new Date().toISOString(),
       })
@@ -698,6 +809,21 @@ export async function listSupplierStats(datasetId: string): Promise<DiscoverySup
     .eq("dataset_id", datasetId)
     .order("revenue_minor", { ascending: false });
   return (data as DiscoverySupplierStatRow[] | null) ?? [];
+}
+
+/**
+ * Who sold DOH-compliant product in this dataset's month (revenue desc) —
+ * the evidence base for the medical-endorsement decision.
+ */
+export async function listDohSellers(datasetId: string): Promise<DiscoveryDohSellerRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("discovery_doh_sellers")
+    .select("*")
+    .eq("dataset_id", datasetId)
+    .order("revenue_minor", { ascending: false });
+  return (data as DiscoveryDohSellerRow[] | null) ?? [];
 }
 
 export async function listMarketSignals(
