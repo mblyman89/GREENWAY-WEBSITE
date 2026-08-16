@@ -37,6 +37,7 @@ import {
   PAI_DEFAULT_BASE,
   PAI_REPORT_EVENT,
   PAI_REPORT_EVENT_UNIVERSAL,
+  PAI_TERMINAL_STATUS_EVENT,
   type PaiReportKind,
   type PaiReportPlan,
 } from "./pai-endpoints";
@@ -297,6 +298,117 @@ async function downloadOne(plan: PaiReportPlan, cookies: string): Promise<PaiRep
   } catch {
     return { ok: false, kind: plan.kind, error: "Timed out downloading this report from PAI.", ...flags };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Slice A-2e — TERMINAL STATUS (PAI Realtime): the machine's LIVE state.
+//
+// Endpoint CONFIRMED from Michael's live address bar (2026-08):
+//   https://www.paireports.com/myreports/GetNewTerminalStatus.event?ReportCmd=Filter
+// so we use the SAME per-report `.event` GET mechanic the working sync already
+// relies on, with the SDK's DownloadCSV custom command appended. No GUID is
+// needed (and none is sent): this fetches the report as configured in the
+// portal, which is exactly what the owner sees on screen.
+//
+// NO DATE FILTER is sent, deliberately: this report has no historical window —
+// "now" is the only window it has.
+// ---------------------------------------------------------------------------
+
+export type PaiTerminalStatusResult =
+  | { ok: true; csv: string }
+  | { ok: false; error: string };
+
+/**
+ * Log into PAI, download the Terminal Status CSV, log out. Read-only; never
+ * throws; credentials never appear in the returned string.
+ */
+export async function fetchTerminalStatusCsv(): Promise<PaiTerminalStatusResult> {
+  const secrets = await getAtmConnectionSecrets();
+  if (!secrets) {
+    return {
+      ok: false,
+      error:
+        "PAI login isn’t saved yet. Add your paireports.com username and password on the " +
+        "Connection & health tab first.",
+    };
+  }
+
+  const base = (secrets.portalBaseUrl ?? "").trim() || PAI_DEFAULT_BASE;
+  const loginUrl = joinUrl(base, "Login.event");
+  const logoutUrl = joinUrl(base, "DoLogout.event");
+  const customCmd =
+    typeof secrets.reportConfig?.customCmdList === "string"
+      ? (secrets.reportConfig.customCmdList as string).trim()
+      : "";
+  // Allow the .event path to be overridden from report_config WITHOUT a code
+  // change, the same escape hatch the other reports have. Defaults to the
+  // confirmed path.
+  const eventPath =
+    typeof secrets.reportConfig?.terminalStatusEvent === "string" &&
+    (secrets.reportConfig.terminalStatusEvent as string).trim() !== ""
+      ? (secrets.reportConfig.terminalStatusEvent as string).trim()
+      : PAI_TERMINAL_STATUS_EVENT;
+
+  // 1) LOGIN (identical mechanics to the report pull).
+  let cookies = "";
+  try {
+    const res = await fetchWithTimeout(loginUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({ Username: secrets.username, Password: secrets.password }).toString(),
+    });
+    cookies = collectCookies(cookies, res.headers.get("set-cookie"));
+    if (!cookies.toLowerCase().includes("jsessionid")) {
+      return {
+        ok: false,
+        error:
+          "Couldn’t sign in to PAI to read the machine’s status. Double-check the saved " +
+          "username and password on the Connection & health tab.",
+      };
+    }
+  } catch {
+    return { ok: false, error: "Couldn’t reach PAI to sign in (network timeout). Try again shortly." };
+  }
+
+  // 2) DOWNLOAD the CSV (no GUID, no date filter — see the note above).
+  let csv = "";
+  try {
+    const url = buildPaiGuidDownloadUrl(base, eventPath, "", { customCmdList: customCmd });
+    const res = await fetchWithTimeout(url, {
+      method: "GET",
+      headers: {
+        Cookie: cookies,
+        "User-Agent": PAI_USER_AGENT,
+        Accept: "text/csv,application/octet-stream,*/*",
+      },
+    });
+    csv = await res.text();
+  } catch {
+    await bestEffortLogout(logoutUrl, cookies);
+    return { ok: false, error: "Couldn’t download the Terminal Status report from PAI (timeout)." };
+  }
+
+  await bestEffortLogout(logoutUrl, cookies);
+
+  // PAI answers an unauthenticated/expired session with an HTML login page
+  // rather than an HTTP error, so detect that instead of "mapping" HTML.
+  const head = csv.slice(0, 400).toLowerCase();
+  if (head.includes("<!doctype html") || head.includes("<html")) {
+    return {
+      ok: false,
+      error:
+        "PAI returned a web page instead of the Terminal Status CSV. That usually means the " +
+        "login lacks access to that report — check it opens under Reports → ATM Realtime Reports.",
+    };
+  }
+  if (csv.trim() === "") {
+    return { ok: false, error: "PAI returned an empty Terminal Status report." };
+  }
+  return { ok: true, csv };
 }
 
 // ---------------------------------------------------------------------------

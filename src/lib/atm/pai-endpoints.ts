@@ -57,6 +57,25 @@ export const PAI_DEFAULT_CUSTOM_CMD = "DownloadCSV";
 export const PAI_REPORT_EVENT_UNIVERSAL = "Report.event";
 
 /**
+ * The **Terminal Status** report (Reports → ATM Realtime Reports → Terminal
+ * Status). CONFIRMED from Michael's live address bar, 2026-08:
+ *
+ *   https://www.paireports.com/myreports/GetNewTerminalStatus.event?ReportCmd=Filter
+ *
+ * This is the REALTIME snapshot of the machine (status, live cash balance,
+ * transactions since the last settlement) — NOT a date-ranged historical
+ * ledger. It is deliberately kept OUT of `PaiReportKind` (and therefore out of
+ * resolvePaiReportPlan / the date-filter machinery) because:
+ *   • it has no date range to filter — "now" is the only window it has, so
+ *     sending an F_<date> filter would be meaningless at best;
+ *   • the three historical kinds drive the working sync + backfill, and
+ *     widening that union would force every switch, override map and probe to
+ *     handle a report with completely different semantics.
+ * Keeping it separate means the proven sync is untouched by this feature.
+ */
+export const PAI_TERMINAL_STATUS_EVENT = "GetNewTerminalStatus.event";
+
+/**
  * Build the x-www-form-urlencoded BODY to download a report's CSV BY ITS GUID,
  * exactly the way PAI's SDK does:
  *   ReportGUID=<guid>&ReportCmd=Filter&ReportCmd=CustomCommand&CustomCmdList=<cmd>

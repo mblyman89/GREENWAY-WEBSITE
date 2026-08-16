@@ -519,6 +519,136 @@ export async function upsertAtmCashLoads(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Slice A-2e — Terminal Status (PAI Realtime) snapshots  (migration 0183)
+// ---------------------------------------------------------------------------
+
+/** A terminal-status snapshot ready to write (matches atm_terminal_status). */
+export type UpsertAtmTerminalStatusRow = {
+  terminal_id: string;
+  captured_at: string; // ISO timestamptz
+  status: string | null;
+  location: string | null;
+  group_name: string | null;
+  days_until_cash_out: number | null;
+  trxs_since_settlement: number | null;
+  last_trx_raw: string | null;
+  last_wd_trx_raw: string | null;
+  last_rev_trx_raw: string | null;
+  balance_prev_eod_cents: number | null;
+  balance_cents: number | null;
+  raw: Record<string, unknown>;
+};
+
+/**
+ * Upsert terminal-status snapshots on (terminal_id, captured_at). Idempotent:
+ * re-running a sync at the same instant overwrites instead of duplicating.
+ */
+export async function upsertAtmTerminalStatus(
+  rows: UpsertAtmTerminalStatusRow[],
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  if (rows.length === 0) return { ok: true, count: 0 };
+  const admin = createSupabaseAdminClient();
+  try {
+    const { error } = await admin
+      .from("atm_terminal_status")
+      .upsert(rows, { onConflict: "terminal_id,captured_at" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, count: rows.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error writing terminal status." };
+  }
+}
+
+/** The read shape for a stored snapshot. Money in CENTS; null = not reported. */
+export type AtmTerminalStatusRecord = {
+  id: string;
+  terminalId: string;
+  capturedAt: string;
+  status: string | null;
+  location: string | null;
+  groupName: string | null;
+  daysUntilCashOut: number | null;
+  trxsSinceSettlement: number | null;
+  lastTrxRaw: string | null;
+  lastWdTrxRaw: string | null;
+  lastRevTrxRaw: string | null;
+  balancePrevEodCents: number | null;
+  balanceCents: number | null;
+};
+
+const TERMINAL_STATUS_COLS =
+  "id,terminal_id,captured_at,status,location,group_name,days_until_cash_out,trxs_since_settlement,last_trx_raw,last_wd_trx_raw,last_rev_trx_raw,balance_prev_eod_cents,balance_cents";
+
+function mapTerminalStatusRecord(r: Record<string, unknown>): AtmTerminalStatusRecord {
+  return {
+    id: String(r.id),
+    terminalId: String(r.terminal_id ?? "").trim(),
+    capturedAt: String(r.captured_at ?? ""),
+    status: textOrNullDb(r.status),
+    location: textOrNullDb(r.location),
+    groupName: textOrNullDb(r.group_name),
+    daysUntilCashOut: numOrNull(r.days_until_cash_out),
+    trxsSinceSettlement: numOrNull(r.trxs_since_settlement),
+    lastTrxRaw: textOrNullDb(r.last_trx_raw),
+    lastWdTrxRaw: textOrNullDb(r.last_wd_trx_raw),
+    lastRevTrxRaw: textOrNullDb(r.last_rev_trx_raw),
+    balancePrevEodCents: numOrNull(r.balance_prev_eod_cents),
+    balanceCents: numOrNull(r.balance_cents),
+  };
+}
+
+function textOrNullDb(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
+/**
+ * The MOST RECENT snapshot for a terminal (or for the only machine on the
+ * account when no terminal is configured). Returns null when nothing has been
+ * captured yet — the caller must then fall back to the derived estimate rather
+ * than pretending a live reading exists.
+ */
+export async function getLatestAtmTerminalStatus(
+  terminalId?: string | null,
+): Promise<AtmTerminalStatusRecord | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    let q = admin
+      .from("atm_terminal_status")
+      .select(TERMINAL_STATUS_COLS)
+      .order("captured_at", { ascending: false })
+      .limit(1);
+    const want = (terminalId ?? "").trim();
+    if (want !== "") q = q.eq("terminal_id", want);
+    const { data, error } = await q;
+    if (error || !data || data.length === 0) return null;
+    return mapTerminalStatusRecord(data[0] as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
+
+/** Snapshot history, newest first (for trending the balance). */
+export async function listAtmTerminalStatus(limit = 200): Promise<AtmTerminalStatusRecord[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("atm_terminal_status")
+      .select(TERMINAL_STATUS_COLS)
+      .order("captured_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return (data as Array<Record<string, unknown>>).map(mapTerminalStatusRecord);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Record the outcome of a sync/import on the single connection row so the
  * Health chip honestly reflects the last run: 'ok' on success (clears
