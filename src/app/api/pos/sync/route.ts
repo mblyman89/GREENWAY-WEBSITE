@@ -25,6 +25,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice, ingestPosEvents, recordDeviceRejectedReport } from "@/lib/pos/sync-store";
 import { sanitizeRejectedReport } from "@/lib/pos/rejected-report-core";
 import type { PosEventEnvelope } from "@/lib/pos/sale-event-core";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +38,22 @@ export const maxDuration = 60;
 
 const MAX_BATCH = 50;
 
+/**
+ * CORS preflight. The packaged register app ("Greenway Point of Transaction")
+ * calls this API cross-origin from capacitor://localhost, so the browser sends
+ * an OPTIONS request first. Policy lives in @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path below (including any added later) carries
+  // the CORS headers. Missing one would break the native app intermittently.
+  return withPosCors(req, await handlePost(req));
+}
+
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
   const deviceKey = req.headers.get("x-pos-device-key") ?? "";
 

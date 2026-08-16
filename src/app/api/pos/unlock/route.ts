@@ -22,11 +22,25 @@ import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { registerGateForEmployee } from "@/lib/staffing/handbook-ack-store";
 import { recordAudit } from "@/lib/auth/audit";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * CORS preflight. The packaged register app calls this cross-origin from
+ * capacitor://localhost. Policy lives in @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path below carries the CORS headers.
+  return withPosCors(req, await handlePost(req));
+}
+
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
   const deviceKey = req.headers.get("x-pos-device-key") ?? "";
   const auth = await authenticateDevice(deviceId, deviceKey);

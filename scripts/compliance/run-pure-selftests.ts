@@ -305,6 +305,7 @@ import { __runReprocessCoreTests } from "../../src/lib/inventory/reprocess-core"
 import { __runTransformCoreTests } from "../../src/lib/pos/transform";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runStrainTaxonomyTests } from "../../src/lib/menu/strain-taxonomy";
+import { __runPosCorsCoreTests } from "../../src/lib/pos/cors-core";
 import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
 import { __runVariantCollapseTests } from "../../src/lib/menu/variant-collapse-core";
 import { __runNonCannabisTests } from "../../src/lib/naming/noncannabis-core";
@@ -596,6 +597,7 @@ async function main() {
   __runTransformCoreTests();
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
   assertNoFailures("strain-taxonomy", __runStrainTaxonomyTests());
+  assertNoFailures("pos/cors-core", __runPosCorsCoreTests());
   assertNoFailures("variant-sort", __runVariantSortTests());
   assertNoFailures("variant-collapse", __runVariantCollapseTests());
   __runNonCannabisTests();

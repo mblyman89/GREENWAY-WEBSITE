@@ -28,6 +28,7 @@ import { listCustomersByBirthdate } from "@/lib/customers/store";
 import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
 import { tierForPoints } from "@/lib/loyalty/engine";
 import { matchScannedCustomer } from "@/lib/pos/member-match-core";
+import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ function memberLabel(firstName: string, lastName: string | null): string {
   return lastInitial ? `${first} ${lastInitial}.` : first;
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+async function handlePost(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
   const deviceKey = req.headers.get("x-pos-device-key") ?? "";
 
@@ -86,4 +87,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       tierName: tierForPoints(account?.lifetime_points ?? 0, tiers)?.name ?? null,
     },
   });
+}
+
+/**
+ * CORS preflight. The packaged register app ("Greenway Point of Transaction")
+ * calls this API cross-origin from capacitor://localhost. Policy lives in
+ * @/lib/pos/cors-core (pure).
+ */
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
+  return posPreflightResponse(req);
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Wrap once so EVERY return path carries the CORS headers.
+  return withPosCors(req, await handlePost(req));
 }
