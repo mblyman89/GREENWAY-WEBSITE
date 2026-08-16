@@ -341,4 +341,64 @@ describe("runCcrsExtract — potency (LabResult)", () => {
     expect(byType?.scopeKey).toBe("Usable Marijuana");
     expect(byType?.avgMgPerG).toBe(2.3);
   });
+
+  it("carries DOH compliance (Inventory.IsMedical) end to end through a real zip", async () => {
+    // Same delivery, but the lot is flagged DOH-compliant. IsMedical is column
+    // [9] of the real Inventory table; the base fixture writes "False" there,
+    // so this swaps in "True" at that exact position.
+    const dohInventory = tableZip("Inventory_0.csv", [
+      INVENTORY_HEADER,
+      "901\t8001\t77\t\t5001\tINV-1\t100\t50\t\tTrue\t\tFalse\t\t\t\t",
+    ]);
+    const zip = buildDelivery([
+      { name: `${PREFIX}Inventory_0.zip`, data: dohInventory, method: 8 },
+    ]);
+    const { result } = await runCcrsExtract(bytesAsBlob(zip), OPTS);
+
+    // The lot itself is DOH.
+    expect(result.totals.dohInventoryRows).toBe(1);
+    // The RETAIL line that sold it counts as DOH; the wholesale line does not.
+    expect(result.totals.retailLines).toBe(1);
+    expect(result.totals.dohLines).toBe(1);
+    expect(result.totals.dohUnknownLines).toBe(0);
+    // No sale in this fixture is a RecreationalMedical sale, proving DOH
+    // (product) and medical (sales) are measured independently.
+    expect(result.totals.medicalLines).toBe(0);
+    // Real ids pack cleanly.
+    expect(result.totals.unpackableProductIds).toBe(0);
+
+    // Retail math is untouched: qty 2 x $30.00 = $60.00, mirrored into DOH.
+    const retail = result.statewide.find((b) => b.saleClass === "retail" && b.scope === "overall");
+    const doh = result.statewide.find((b) => b.saleClass === "doh" && b.scope === "overall");
+    expect(retail?.revenueMinor).toBe(6000);
+    expect(doh?.revenueMinor).toBe(6000);
+    expect(doh?.units).toBe(2);
+    // The product join still resolves through the packed lane.
+    const dohType = result.statewide.find((b) => b.saleClass === "doh" && b.scope === "type");
+    expect(dohType?.scopeKey).toBe("Usable Marijuana");
+
+    // And we can say WHO sold it: licensee 901, the tracked competitor.
+    const sellers = result.dohSellers ?? [];
+    expect(sellers).toHaveLength(1);
+    expect(sellers[0].licenseeId).toBe("901");
+    expect(sellers[0].licenseNumber).toBe("420001");
+    expect(sellers[0].tracked).toBe(true);
+    expect(sellers[0].isSelf).toBe(false);
+    expect(sellers[0].revenueMinor).toBe(6000);
+
+    // ...and WHICH DOH product moved.
+    const dohMovers = result.signals.filter((s) => s.kind === "doh_mover");
+    expect(dohMovers).toHaveLength(1);
+    expect(dohMovers[0].productName).toBe("Evergreen | Blue Dream 3.5g");
+  });
+
+  it("does not invent DOH volume when the lot is not DOH-compliant", async () => {
+    // The base fixture's lot carries IsMedical = "False".
+    const { result } = await runCcrsExtract(bytesAsBlob(buildDelivery()), OPTS);
+    expect(result.totals.dohInventoryRows).toBe(0);
+    expect(result.totals.dohLines).toBe(0);
+    expect(result.totals.dohUnknownLines).toBe(0);
+    expect(result.statewide.filter((b) => b.saleClass === "doh")).toHaveLength(0);
+    expect(result.dohSellers ?? []).toHaveLength(0);
+  });
 });

@@ -312,7 +312,16 @@ class PotencyAccumulator {
  * "retail" has always meant, so existing months stay comparable to new ones.
  * Consumers that want non-medical retail compute retail − medical.
  */
-export type BenchmarkSaleClass = "retail" | "wholesale" | "medical";
+/**
+ * `doh` = retail lines that sold a DOH-COMPLIANT PRODUCT (Inventory.IsMedical
+ * = True, chapter 246-70 WAC). This is a PRODUCT class and is deliberately
+ * separate from `medical`, which is a SALES class (SaleHeader.SaleType =
+ * RecreationalMedical). Both are ADDITIVE subsets of `retail`: a line can be
+ * counted in retail, medical and doh at once. They answer different questions:
+ *   medical -> "how much did patients buy?"
+ *   doh     -> "how much DOH-compliant product moved, and who moved it?"
+ */
+export type BenchmarkSaleClass = "retail" | "wholesale" | "medical" | "doh";
 
 export type StatewideBenchmark = {
   scope: "type" | "brand" | "strain" | "overall";
@@ -429,8 +438,34 @@ export type CompetitorStat = {
   };
 };
 
+/**
+ * A licensee that SOLD DOH-compliant product at retail this month (the "and by
+ * who" half of the endorsement question). Identity comes from the monthly
+ * licensee table; unresolvable fields stay null — never guessed.
+ */
+export type DohSellerStat = {
+  licenseeId: string;
+  licenseNumber: string | null;
+  name: string | null;
+  dba: string | null;
+  /**
+   * True when this licensee is on the owner's tracked competitor roster.
+   * NOTE: the roster deliberately EXCLUDES the owner's own store (see the
+   * constructor), so `tracked` is false for self — use `isSelf` for that.
+   */
+  tracked: boolean;
+  /** True when this row is the owner's OWN store (the "us vs them" anchor). */
+  isSelf: boolean;
+  units: number;
+  revenueMinor: number;
+  lineCount: number;
+  /** Per-line DOH unit-price distribution (minor units). */
+  unitPrice: PriceSummary | null;
+};
+
 export type MarketSignal = {
-  kind: "statewide_mover" | "competitor_mover" | "type_mover";
+  /** `doh_mover` = a DOH-compliant product (chapter 246-70 WAC) that moved. */
+  kind: "statewide_mover" | "competitor_mover" | "type_mover" | "doh_mover";
   /** For competitor_mover: which tracked license this signal came from. */
   licenseNumber: string | null;
   inventoryType: string | null;
@@ -482,6 +517,27 @@ export type AggregationResult = {
      */
     medicalLines?: number;
     /**
+     * Retail lines that sold a DOH-COMPLIANT lot (Inventory.IsMedical = True,
+     * chapter 246-70 WAC). A SUBSET of retailLines. This is a PRODUCT fact and
+     * is INDEPENDENT of medicalLines (a sales fact) — the two overlap freely.
+     * Optional so payloads persisted before DOH capture still parse.
+     */
+    dohLines?: number;
+    /**
+     * Retail lines whose lot carried NO readable DOH answer (unjoined lot or
+     * blank cell). Reported so the DOH share is honest about its denominator
+     * instead of quietly treating "unknown" as "not DOH".
+     */
+    dohUnknownLines?: number;
+    /** Inventory rows read with IsMedical = True (lot-level, not sales). */
+    dohInventoryRows?: number;
+    /**
+     * Inventory rows whose ProductId exceeded the packable range and was
+     * therefore recorded as absent. Real CCRS ids are ~2^24, so this is 0 on
+     * genuine data; a non-zero value means the file is malformed.
+     */
+    unpackableProductIds?: number;
+    /**
      * LabResult rows read. Optional so payloads persisted before potency
      * capture still parse.
      */
@@ -516,6 +572,12 @@ export type AggregationResult = {
    * potency capture still parse (absent = never measured, NOT "no potency").
    */
   potency?: PotencyBenchmark[];
+  /**
+   * Licensees that sold DOH-compliant product at retail, ranked by observed
+   * revenue. Optional so payloads persisted before DOH capture still parse
+   * (absent = never measured, NOT "nobody sold DOH product").
+   */
+  dohSellers?: DohSellerStat[];
 };
 
 // ---------------------------------------------------------------------------
@@ -549,6 +611,10 @@ export const BRAND_BRIDGE_MIN_MANIFESTS = 3;
 export const BRAND_BRIDGE_MIN_SHARE = 0.8;
 /** S10: statewide wholesale suppliers persisted per month (top by revenue). */
 export const TOP_SUPPLIERS_STATEWIDE = 100;
+/** Top DOH-compliant product movers persisted statewide. */
+export const TOP_SIGNALS_DOH = 100;
+/** Licensees ranked as DOH sellers ("who is selling DOH product"). */
+export const TOP_DOH_SELLERS = 150;
 /** Persisted brand/strain benchmark rows per sale class (top by revenue). */
 const TOP_BENCH_PER_SCOPE = 500;
 /**
@@ -647,6 +713,70 @@ type LicenseeIdentity = {
  * (Verified against the real December 2025 extract: SaleHeader carries
  * SaleType; Inventory carries IsMedical at column 9.)
  */
+/**
+ * DOH compliance packed into lane 0 of invMap (alongside ProductId).
+ *
+ * WHY PACKED AND NOT A THIRD LANE: the real December 2025 delivery ships
+ * Inventory in ELEVEN parts (Inventory_0.zip … Inventory_10.zip), the first of
+ * which is 254.8 MB uncompressed at ~112.8 bytes/row — about 2.37M rows per
+ * part, ~26.1M rows for the table. U53Map rounds capacity to a power of two at
+ * ≤ 0.7 load, so 26.1M entries occupy a 67,108,864-slot table and ONE extra
+ * Float64Array lane would cost 537 MB. Packing the flag into the existing lane
+ * costs ZERO additional bytes. (Measured, not assumed.)
+ *
+ * Lane 0 layout: productId + medicalCode · MEDICAL_FACTOR
+ *   medicalCode 0 = unknown/never read, 1 = IsMedical True, 2 = IsMedical False
+ *
+ * MEDICAL_FACTOR is 2^48. The largest ProductId observed in the real extract
+ * is 21,795,360 (~2^24.4), so the product field has ~12.9 MILLION times the
+ * headroom it needs, and the largest packable value 3·2^48 − 1 ≈ 8.44e14 sits
+ * an order of magnitude below 2^53 − 1 ≈ 9.01e15 — every value is an exact
+ * Float64 integer.
+ *
+ * A ProductId ≥ 2^48 is not a real CCRS surrogate key; it could only come from
+ * malformed data. It CANNOT be stored unambiguously here (a raw id in that
+ * range is indistinguishable from a packed one, which would silently corrupt
+ * BOTH the id and the DOH flag), so it is recorded as ABSENT (0) and counted
+ * in totals.unpackableProductIds. The line is still counted; it simply joins
+ * to no product — honest, and never a wrong answer.
+ */
+const MEDICAL_FACTOR = 2 ** 48;
+const MEDICAL_CODE_UNKNOWN = 0;
+const MEDICAL_CODE_YES = 1;
+const MEDICAL_CODE_NO = 2;
+/** Largest ProductId that can be packed unambiguously. */
+export const MAX_PACKABLE_PRODUCT_ID = MEDICAL_FACTOR - 1;
+
+/**
+ * Pack a lot's ProductId together with its DOH-compliance code.
+ * A ProductId beyond MAX_PACKABLE_PRODUCT_ID is recorded as ABSENT (product
+ * id 0) rather than stored ambiguously — see the doc above.
+ */
+export function packInvLane0(productId: number, medicalCode: number): number {
+  if (!Number.isInteger(productId) || productId < 0) return medicalCode * MEDICAL_FACTOR;
+  if (productId > MAX_PACKABLE_PRODUCT_ID) return medicalCode * MEDICAL_FACTOR;
+  return productId + medicalCode * MEDICAL_FACTOR;
+}
+
+/** Read the ProductId back out of a packed lane-0 value (0 = absent). */
+export function unpackInvProductId(packed: number): number {
+  if (!Number.isFinite(packed) || packed < 0) return 0;
+  return packed % MEDICAL_FACTOR;
+}
+
+/**
+ * Read DOH compliance back out of a packed lane-0 value.
+ * true = DOH-compliant lot, false = explicitly not, null = never read.
+ * null is deliberately DISTINCT from false (standing rule 2).
+ */
+export function unpackInvMedical(packed: number): boolean | null {
+  if (!Number.isFinite(packed) || packed < 0) return null;
+  const code = Math.floor(packed / MEDICAL_FACTOR);
+  if (code === MEDICAL_CODE_YES) return true;
+  if (code === MEDICAL_CODE_NO) return false;
+  return null;
+}
+
 const CLASS_RETAIL = 0;
 const CLASS_WHOLESALE = 1;
 /** Lane-1 marker: this header was a RecreationalMedical sale. */
@@ -739,6 +869,21 @@ export class CcrsAggregator {
     { lineCount: number; revenueMinor: number; price: PriceHistogram }
   >();
   private supplierBuyers = new Map<number, Set<number>>();
+  /**
+   * DOH sellers: which licensees actually moved DOH-compliant product, and at
+   * what prices. This is the "and by who" half of the owner's question —
+   * without it he can see that DOH volume exists but not who is capturing it.
+   *
+   * Keyed by seller LicenseeId (a number), so it is bounded by the licensee
+   * table (~1.7k rows/month), not by sale volume. Retail lines only: the
+   * question is about counter sales, not inter-licensee transfers.
+   */
+  private dohSellers = new Map<
+    number,
+    { units: number; revenueMinor: number; lineCount: number; price: PriceHistogram }
+  >();
+  /** DOH product movers: product name → volume/price. Bounded like the mover map. */
+  private dohProducts = new Map<string, MoverAcc>();
   private minDate: string | null = null;
   private maxDate: string | null = null;
   /**
@@ -760,6 +905,10 @@ export class CcrsAggregator {
     wholesaleLines: 0,
     attributedRetailLines: 0,
     medicalLines: 0,
+    dohLines: 0,
+    dohUnknownLines: 0,
+    dohInventoryRows: 0,
+    unpackableProductIds: 0,
     labResultRows: 0,
     potencyRows: 0,
     potencyCensoredRows: 0,
@@ -912,8 +1061,31 @@ export class CcrsAggregator {
     }
     const productId = row.productId ? Number(row.productId) : 0;
     const strainId = row.strainId ? Number(row.strainId) : 0;
-    if (!productId && !strainId) return;
-    this.invMap.set(idNum, Number.isFinite(productId) ? productId : 0, Number.isFinite(strainId) ? strainId : 0);
+    // DOH compliance (chapter 246-70 WAC) rides in lane 0 alongside the
+    // ProductId — see MEDICAL_FACTOR. A blank/unreadable cell stays "unknown"
+    // rather than being read as "not DOH", so an absent answer never
+    // masquerades as a negative one.
+    const medicalCode =
+      row.isMedical === true
+        ? MEDICAL_CODE_YES
+        : row.isMedical === false
+          ? MEDICAL_CODE_NO
+          : MEDICAL_CODE_UNKNOWN;
+    if (medicalCode === MEDICAL_CODE_YES) this.totals.dohInventoryRows += 1;
+    // Honesty counter: a ProductId too large to pack is dropped to "absent"
+    // rather than stored ambiguously. Real ids are ~2^24, so this stays 0.
+    if (Number.isFinite(productId) && productId > MAX_PACKABLE_PRODUCT_ID) {
+      this.totals.unpackableProductIds += 1;
+    }
+    // A lot with NO product and NO strain still matters when it carries a DOH
+    // answer: the sale line needs that flag even if it can't be attributed to
+    // a product. Only a lot that tells us nothing at all is skipped.
+    if (!productId && !strainId && medicalCode === MEDICAL_CODE_UNKNOWN) return;
+    this.invMap.set(
+      idNum,
+      packInvLane0(Number.isFinite(productId) ? productId : 0, medicalCode),
+      Number.isFinite(strainId) ? strainId : 0,
+    );
   }
 
   addStrain(row: StrainRow): void {
@@ -951,7 +1123,9 @@ export class CcrsAggregator {
     // filed against exactly the same scopes. (If censored rows were counted
     // only statewide, a per-type row would understate how much was set aside.)
     const invId = row.inventoryId ? Number(row.inventoryId) : NaN;
-    const productId = Number.isFinite(invId) ? this.invMap.get(invId, 0) : undefined;
+    const packedInv = Number.isFinite(invId) ? this.invMap.get(invId, 0) : undefined;
+    // Lane 0 packs DOH compliance alongside the ProductId (see MEDICAL_FACTOR).
+    const productId = packedInv === undefined ? undefined : unpackInvProductId(packedInv);
     const product = productId ? this.productById.get(productId) : undefined;
     const invType = product?.inventoryType ?? null;
     if (!invType) this.totals.potencyUnjoinedRows += 1;
@@ -1020,6 +1194,23 @@ export class CcrsAggregator {
     // so sale details can attribute the spend to that competitor's suppliers.
     let buyerSlot = 0;
     let supplierId = 0;
+    if (classCode === CLASS_RETAIL) {
+      // DOH "and by who": on a RETAIL header the seller is the STORE that rang
+      // the sale. Those id bits are otherwise unused on retail headers
+      // (supplierId is packed for wholesale only), so the retail seller rides
+      // in the SAME field at zero extra memory. The field is mutually
+      // exclusive by class — every existing consumer of the unpacked
+      // supplierLicenseeId is already gated on `saleClass === "wholesale"`, so
+      // nothing downstream changes meaning.
+      if (
+        Number.isFinite(sellerNum) &&
+        Number.isInteger(sellerNum) &&
+        sellerNum > 0 &&
+        sellerNum < MAX_PACKED_SUPPLIER_ID
+      ) {
+        supplierId = sellerNum;
+      }
+    }
     if (classCode === CLASS_WHOLESALE) {
       // S10: pack the seller licensee id for EVERY wholesale header (not just
       // tracked-buyer ones) so sale details can also feed the STATEWIDE
@@ -1080,6 +1271,9 @@ export class CcrsAggregator {
     const trackedSlot = rest % 256; // tracked SELLER slot (retail attribution)
     const buyerRest = (rest - trackedSlot) / 256;
     const buyerSlot = buyerRest % 256; // tracked BUYER slot (wholesale sourcing, S7)
+    // On WHOLESALE lines this is the supplier (seller) licensee id; on RETAIL
+    // lines the same bits carry the SELLING STORE's licensee id (DOH "by who").
+    // Read it only under the matching class guard.
     const supplierLicenseeId = (buyerRest - buyerSlot) / 256;
 
     const qty = row.quantity != null && row.quantity > 0 ? row.quantity : 1;
@@ -1094,8 +1288,12 @@ export class CcrsAggregator {
 
     // Resolve product context (may fail on out-of-month lots — counted honestly).
     const invNum = row.inventoryId ? Number(row.inventoryId) : Number.NaN;
-    const productId = Number.isFinite(invNum) ? (this.invMap.get(invNum, 0) ?? 0) : 0;
+    const packedInv = Number.isFinite(invNum) ? (this.invMap.get(invNum, 0) ?? 0) : 0;
+    const productId = unpackInvProductId(packedInv);
     const strainId = Number.isFinite(invNum) ? (this.invMap.get(invNum, 1) ?? 0) : 0;
+    // DOH compliance of the LOT that was sold (chapter 246-70 WAC). null when
+    // the lot never resolved or carried no readable flag — never assumed false.
+    const isDohProduct = packedInv ? unpackInvMedical(packedInv) : null;
     const product = productId ? this.productById.get(productId) : undefined;
     const strainName = strainId ? (this.strainNameById.get(strainId) ?? null) : null;
     const attributed = product != null;
@@ -1121,6 +1319,74 @@ export class CcrsAggregator {
       this.bench("medical", "type", invType, unitMinor, ppgMinor, qty, lineMinor);
       if (brand) this.bench("medical", "brand", brand, unitMinor, ppgMinor, qty, lineMinor);
       if (strainName) this.bench("medical", "strain", strainName, unitMinor, ppgMinor, qty, lineMinor);
+    }
+
+    // -- DOH breakout: the PRODUCT was DOH-compliant (chapter 246-70 WAC) --
+    //
+    // Answers the owner's endorsement question: how much DOH-compliant product
+    // moves statewide, at what prices, and WHO is selling it. ADDITIVE like the
+    // medical block (these lines are also counted as retail), and INDEPENDENT
+    // of it: doh is a product fact, medical is a sales fact, and a line can be
+    // both, either or neither.
+    if (saleClass === "retail") {
+      if (isDohProduct === null) {
+        // Honest denominator: the lot never resolved or carried no readable
+        // flag. Counted separately so a DOH share is never computed as if
+        // "unknown" meant "not DOH".
+        this.totals.dohUnknownLines += 1;
+      } else if (isDohProduct) {
+        this.totals.dohLines += 1;
+        this.bench("doh", "overall", "all", unitMinor, ppgMinor, qty, lineMinor);
+        this.bench("doh", "type", invType, unitMinor, ppgMinor, qty, lineMinor);
+        if (brand) this.bench("doh", "brand", brand, unitMinor, ppgMinor, qty, lineMinor);
+        if (strainName) this.bench("doh", "strain", strainName, unitMinor, ppgMinor, qty, lineMinor);
+
+        // WHO is selling DOH product. Keyed by the selling store's licensee id
+        // (packed on retail headers above); bounded by the licensee table.
+        if (supplierLicenseeId > 0) {
+          let seller = this.dohSellers.get(supplierLicenseeId);
+          if (!seller) {
+            seller = { units: 0, revenueMinor: 0, lineCount: 0, price: new PriceHistogram() };
+            this.dohSellers.set(supplierLicenseeId, seller);
+          }
+          seller.units += qty;
+          seller.revenueMinor += lineMinor;
+          seller.lineCount += 1;
+          seller.price.add(unitMinor);
+        }
+
+        // WHICH DOH products are moving. Same bounded heavy-hitters discipline
+        // as the statewide mover map.
+        if (product?.name) {
+          let dp = this.dohProducts.get(product.name);
+          if (!dp) {
+            if (this.dohProducts.size >= MOVER_MAP_CAP) this.pruneDohProducts();
+            dp = {
+              inventoryType: invType,
+              brand,
+              strainName,
+              units: 0,
+              revenueMinor: 0,
+              price: new PriceHistogram(),
+              vendorCounts: null,
+            };
+            this.dohProducts.set(product.name, dp);
+          }
+          dp.units += qty;
+          dp.revenueMinor += lineMinor;
+          dp.price.add(unitMinor);
+          // Producer/processor attribution, same manifest-origin join the
+          // statewide movers use — so "who makes the DOH product" is answerable.
+          if (Number.isFinite(invNum)) {
+            const vendorLicNum = this.invVendor.get(invNum);
+            if (vendorLicNum !== undefined && vendorLicNum > 0) {
+              const lic = String(vendorLicNum);
+              if (!dp.vendorCounts) dp.vendorCounts = new Map();
+              dp.vendorCounts.set(lic, (dp.vendorCounts.get(lic) ?? 0) + 1);
+            }
+          }
+        }
+      }
     }
 
     // -- statewide movers (retail only; that's the sell-through signal) --
@@ -1308,6 +1574,15 @@ export class CcrsAggregator {
     this.statewideMovers = new Map(keep);
   }
 
+  /** Same bounded heavy-hitters discipline for the DOH product map. */
+  private pruneDohProducts(): void {
+    this.totals.moverMapPrunes += 1;
+    const keep = [...this.dohProducts.entries()]
+      .sort((a, b) => b[1].revenueMinor - a[1].revenueMinor)
+      .slice(0, MOVER_KEEP);
+    this.dohProducts = new Map(keep);
+  }
+
   /**
    * Statewide + per-type potency rows, deterministically ordered. A series
    * with neither a reading nor a non-detect is omitted entirely rather than
@@ -1487,6 +1762,18 @@ export class CcrsAggregator {
     for (const [productName, m] of movers) {
       signals.push(moverSignal("statewide_mover", null, productName, m));
     }
+    // DOH product leaders: the top DOH-compliant products statewide, with the
+    // same manifest-derived producer/processor attribution the other movers
+    // carry — so the endorsement question can be answered at product level
+    // ("what DOH product actually sells, and who makes it").
+    {
+      const dohMovers = [...this.dohProducts.entries()]
+        .sort((a, b) => b[1].revenueMinor - a[1].revenueMinor || a[0].localeCompare(b[0]))
+        .slice(0, TOP_SIGNALS_DOH);
+      for (const [productName, m] of dohMovers) {
+        signals.push(moverSignal("doh_mover", null, productName, m));
+      }
+    }
     // Task I (I4): per-inventory-type product leaders ("top 10 products from
     // every single type"). Grouped over the FULL mover map (not just the
     // statewide top-100) so small-revenue types still get their leaders.
@@ -1545,6 +1832,34 @@ export class CcrsAggregator {
         };
       });
 
+    // DOH sellers — WHO moved DOH-compliant product at retail, ranked by
+    // observed revenue. `tracked` marks the owner's roster competitors so the
+    // endorsement question can be answered locally as well as statewide.
+    const dohSellers: DohSellerStat[] = [...this.dohSellers.entries()]
+      .sort(
+        (a, b) =>
+          b[1].revenueMinor - a[1].revenueMinor ||
+          b[1].lineCount - a[1].lineCount ||
+          a[0] - b[0],
+      )
+      .slice(0, TOP_DOH_SELLERS)
+      .map(([sellerId, s]) => {
+        const id = this.licenseeInfoById.get(sellerId);
+        const licenseNumber = id?.licenseNumber ?? null;
+        return {
+          licenseeId: String(sellerId),
+          licenseNumber,
+          name: id?.name ?? null,
+          dba: id?.dba ?? null,
+          tracked: this.trackedSlotByLicenseeId.has(sellerId),
+          isSelf: licenseNumber != null && licenseNumber.trim() === this.selfLicense,
+          units: round2(s.units),
+          revenueMinor: s.revenueMinor,
+          lineCount: s.lineCount,
+          unitPrice: s.price.summary(),
+        };
+      });
+
     // Task I (I1): period = the DOMINANT SaleHeader month's full span. The
     // histogram is never guessed — no dated headers means a null period. Ties
     // break toward the NEWEST month (a delivery is named for its newest data).
@@ -1579,6 +1894,7 @@ export class CcrsAggregator {
       competitors,
       signals,
       suppliers,
+      dohSellers,
     };
   }
 }

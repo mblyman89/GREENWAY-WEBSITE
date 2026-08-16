@@ -367,6 +367,21 @@ export type InventoryRow = {
    * SHIPPING VENDOR (manifest origin). Verified on the real May-2026 delivery.
    */
   externalIdentifier: string | null;
+  /**
+   * Inventory.IsMedical — the lot is a DOH-COMPLIANT product under
+   * chapter 246-70 WAC. Verified present as column [9] of the real December
+   * 2025 Inventory table, carrying the literal strings "True" / "False".
+   *
+   * THIS IS A PRODUCT FACT, NOT A SALES FACT. Do not confuse it with
+   * SaleHeader.SaleType = 'RecreationalMedical', which says the SALE was made
+   * to a registered patient. A DOH-compliant product sold to a recreational
+   * customer is not a medical sale, and an ordinary product sold to a patient
+   * is one. The two signals are kept strictly separate.
+   *
+   * null = the cell was blank or unreadable ("never measured"), which is NOT
+   * the same as False.
+   */
+  isMedical: boolean | null;
 };
 
 /** Task I (I4): manifest header — who SHIPPED product (the vendor side). */
@@ -546,6 +561,10 @@ export function mapInventory(row: string[], idx: Map<string, number>): Inventory
     productId: cell(row, idx, "productid"),
     strainId: cell(row, idx, "strainid"),
     externalIdentifier: cell(row, idx, "externalidentifier"),
+    // Column [9] of the real Inventory table. toBool already accepts the
+    // literal "True"/"False" the extract uses, and returns null for anything
+    // else so an unreadable cell is never silently read as "not medical".
+    isMedical: toBool(cell(row, idx, "ismedical")),
   };
 }
 

@@ -205,7 +205,56 @@ export type DiscoveryDataset = {
    * the medical split existed and was never measured — NOT that it was zero.
    */
   medical_lines?: number | null;
+  /**
+   * DOH capture (migration 0181): retail lines whose Inventory lot carried
+   * IsMedical = True — a DOH-compliant PRODUCT under chapter 246-70 WAC.
+   *
+   * A SUBSET of retail_lines, but INDEPENDENT of medical_lines: `medical` is a
+   * SALES fact (sold to a patient) and `doh` is a PRODUCT fact (the lot is
+   * DOH-compliant). They overlap freely and neither contains the other, so
+   * never subtract one from the other.
+   *
+   * NULL means the dataset was ingested before DOH capture existed and was
+   * never measured — NOT that it was zero.
+   */
+  doh_lines?: number | null;
+  /**
+   * Retail lines whose lot carried no readable DOH answer. The honest
+   * denominator for a DOH share, so "unknown" is never counted as "not DOH".
+   */
+  doh_unknown_lines?: number | null;
+  /** Inventory lots flagged IsMedical = True (how much DOH product EXISTS). */
+  doh_inventory_rows?: number | null;
   ingest_kind?: string | null; // 'csv' | 'monthly_zip'
+};
+
+/**
+ * Row of discovery_doh_sellers (migration 0181). One row per licensee that
+ * sold DOH-compliant product at retail in the dataset's month. Money in minor
+ * units.
+ */
+export type DiscoveryDohSellerRow = {
+  id: number;
+  dataset_id: string;
+  licensee_id: string;
+  license_number: string | null;
+  name: string | null;
+  dba: string | null;
+  /** On the owner's competitor roster (the roster EXCLUDES the owner's store). */
+  tracked: boolean;
+  /** The owner's own store — the "us" side of the comparison. */
+  is_self: boolean;
+  units: number;
+  revenue_minor: number;
+  line_count: number;
+  price_sample_size: number;
+  price_min_minor: number | null;
+  price_p25_minor: number | null;
+  price_median_minor: number | null;
+  price_p75_minor: number | null;
+  price_max_minor: number | null;
+  price_avg_minor: number | null;
+  created_at: string;
 };
 
 /** Row of discovery_competitor_stats (migrations 0106 + 0107). Money in minor units. */
@@ -356,7 +405,16 @@ export type BenchmarkMetric =
   | "medical_unit_price"
   | "medical_price_per_gram"
   | "medical_units"
-  | "medical_revenue";
+  | "medical_revenue"
+  // DOH breakout (Inventory.IsMedical, chapter 246-70 WAC). A DOH-compliant
+  // PRODUCT is a different fact from a medical SALE: these lines are also
+  // counted in retail_*, and they overlap medical_* freely (a DOH product can
+  // be sold to a recreational customer, and an ordinary product to a patient).
+  // Never subtract doh_* from medical_* or vice versa.
+  | "doh_unit_price"
+  | "doh_price_per_gram"
+  | "doh_units"
+  | "doh_revenue";
 
 export type DiscoveryBenchmark = {
   id: number;

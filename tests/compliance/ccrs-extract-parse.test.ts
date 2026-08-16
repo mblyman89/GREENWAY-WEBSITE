@@ -357,6 +357,7 @@ describe("row mappers", () => {
       productId: "9001",
       strainId: "77",
       externalIdentifier: null, // blank cell — never fabricated (Task I I4)
+      isMedical: false, // Inventory column [9] — "False" in this fixture row
     });
 
     // Task I (I4): the lot id (ExternalIdentifier) is now carried through —
@@ -366,6 +367,28 @@ describe("row mappers", () => {
       iIdx,
     );
     expect(invWithLot?.externalIdentifier).toBe("LOT.752489.9ba888");
+
+    // DOH compliance (chapter 246-70 WAC) comes from Inventory column [9],
+    // IsMedical. VERBATIM row from the owner's real December 2025 extract:
+    const realDecemberRow =
+      "3\t49468432\t4690271\t20711\t13679196\t\t20.00\t20.00\t17.56\tTrue\t07825681239\tFalse\tAdam Mall\t2025-01-08 20:09:23\t\t";
+    const realInv = mapInventory(realDecemberRow.split("\t"), iIdx);
+    expect(realInv).toEqual({
+      inventoryId: "49468432",
+      licenseeId: "3",
+      productId: "13679196",
+      strainId: "4690271",
+      externalIdentifier: "07825681239",
+      isMedical: true,
+    });
+
+    // A blank IsMedical cell means "never measured" — NOT "not DOH". Reading
+    // it as false would state a fact the file never asserted.
+    const blankMedical = mapInventory(
+      "42\t50066319\t77\t\t9001\tlot-1\t100\t40\t500.00\t\t\tFalse\t\t\t\t".split("\t"),
+      iIdx,
+    );
+    expect(blankMedical?.isMedical).toBeNull();
 
     const sIdx = headerIndexMap(STRAIN_HEADER.split("\t"));
     expect(mapStrain("77\t42\tLemon Cherry Runtz\tHybrid\t\tFalse\t\t\t\t".split("\t"), sIdx)).toEqual({
