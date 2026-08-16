@@ -834,7 +834,7 @@ export function RegisterShell({
             cache-first so the wordmark renders on OFFLINE boot; the
             /_next/image optimizer endpoint is never cached. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="h-10 w-auto opacity-90" />
+        <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark h-10 w-auto opacity-90" />
         <p className="text-sm text-[var(--pos-text-faint)]">Loading register…</p>
       </main>
     );
@@ -1668,8 +1668,8 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
   return (
     <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="mb-6 h-9 w-auto opacity-90" />
-      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-8 shadow-[var(--admin-shadow)]">
+      <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark mb-6 h-9 w-auto opacity-90" />
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-8 shadow-[var(--pos-shadow)]">
         <h1 className="text-xl font-semibold">Register setup</h1>
         <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
           A manager provisions this iPad in the back office (Register Activity → POS devices) and
@@ -1801,7 +1801,7 @@ function LockScreen({
   return (
     <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="mb-5 h-10 w-auto opacity-90" />
+      <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark mb-5 h-10 w-auto opacity-90" />
       <StatusChips online={online} pendingCount={pendingCount} name={creds.name} />
       {banner ? (
         <button type="button" onClick={onClearBanner} className="mb-4 max-w-md rounded-lg bg-[var(--pos-warn-soft)] px-4 py-2 text-sm text-[var(--pos-warn)]">
@@ -2013,8 +2013,11 @@ function HomeScreen({
           the left, who/where/status on the right. Chrome tokens keep this
           readable in BOTH themes (navy on light, near-black on dark). */}
       <header className="flex flex-wrap items-center gap-x-6 gap-y-0 bg-[var(--pos-chrome)] px-5 text-[var(--pos-chrome-ink)]">
+        {/* Opts OUT of the light-mode recolor (.pos-wordmark-on-chrome): the top
+            bar is navy in BOTH themes, so the white mark is already correct
+            here and must NOT be re-inked to navy-on-navy. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="h-6 w-auto" />
+        <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="pos-wordmark-on-chrome h-6 w-auto" />
         <nav className="flex items-center text-xs font-bold tracking-[0.08em]">
           <span className="border-b-2 border-[var(--pos-accent)] px-3 py-4">REGISTER</span>
           <button
@@ -2274,7 +2277,7 @@ function HomeScreen({
           {/* AO-2 — the scan-first hero (approved mockup): one big affordance.
               Tapping it opens the ID gate with its scanner box already focused
               — a wedge scan there lands with zero extra taps. */}
-          <section className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-10 text-center shadow-[var(--admin-shadow)]">
+          <section className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-10 text-center shadow-[var(--pos-shadow)]">
             <span className="text-5xl" aria-hidden>
               🪪
             </span>
@@ -4131,8 +4134,12 @@ function TillModal({
                   value={tips}
                   onChange={(e) => setTips(e.target.value)}
                 />
+                {/* This used a hardcoded Tailwind red tuned for the dark
+                    canvas, which measures ~3:1 on the light theme's white
+                    modal. --pos-danger is the themed equivalent and is
+                    readable in both. */}
                 {tips.trim() !== "" && tipsMinor === null && (
-                  <p className="mt-1 text-xs text-red-400">
+                  <p className="mt-1 text-xs text-[var(--pos-danger)]">
                     Enter tips as dollars and cents (like 42.50) or leave it blank.
                   </p>
                 )}
