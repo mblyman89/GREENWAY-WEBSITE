@@ -238,6 +238,104 @@ describe("buildCashLoadsView (expected-in-machine from PAI's own reported balanc
   });
 });
 
+describe("buildCashLoadsView — CURRENT cash in machine (balance aged forward by dispensing)", () => {
+  // Michael's real August 2026 PAI extract. Last load 8/8/26 8:49:11 PM left the
+  // machine holding $3,080. Settlement rows are PAI's "Settlement" column, which
+  // is the cash DISPENSED that day (always a clean multiple of $20 -- the only
+  // denomination the machine holds -- which is what proves the $2.50/withdrawal
+  // surcharge is NOT inside it and must never be subtracted from the cassette).
+  const LOADS = [
+    { terminalId: "HG26499", loadedAtRaw: "8/8/26 8:49:11 PM", loadDate: "2026-08-08", cashLoadCents: 236000, balanceAfterCents: 308000, source: "pai" as const },
+    { terminalId: "HG26499", loadedAtRaw: "8/8/26 3:45:06 PM", loadDate: "2026-08-08", cashLoadCents: 284000, balanceAfterCents: 286000, source: "pai" as const },
+    { terminalId: "HG26499", loadedAtRaw: "8/7/26 3:35:43 PM", loadDate: "2026-08-07", cashLoadCents: 228000, balanceAfterCents: 270000, source: "pai" as const },
+  ];
+  const s = (settlementDate: string, settlementTotalCents: number | null, terminalId = "HG26499") => ({
+    settlementDate,
+    terminalId,
+    settlementTotalCents,
+  });
+
+  it("subtracts settled dispensing after the load day to get today's cash", () => {
+    // Loaded to $3,080 on 8/8; the machine then paid out $1,240 on 8/9 and
+    // $860 on 8/10. Real cash left = 308000 - 124000 - 86000 = 98000.
+    const v = buildCashLoadsView(LOADS, [s("2026-08-10", 86000), s("2026-08-09", 124000)]);
+    expect(v.expectedInMachineCents).toBe(308000); // historical, unchanged
+    expect(v.lastLoadDate).toBe("2026-08-08");
+    expect(v.dispensedSinceLoadCents).toBe(210000);
+    expect(v.currentInMachineCents).toBe(98000);
+    expect(v.currentInMachineUsd).toBe("$980.00");
+    expect(v.dispensedThroughDate).toBe("2026-08-10"); // max date, not last seen
+  });
+
+  it("never subtracts the surcharge -- only the dispensed cash leaves the cassette", () => {
+    // 8/9 had 66 surcharged withdrawals at $2.50 = $165.00 of fee income that
+    // settles on its own separate leg. If it were wrongly folded in, the answer
+    // would be $963.50 and would no longer land on a $20 boundary.
+    const v = buildCashLoadsView(LOADS, [s("2026-08-09", 124000)]);
+    expect(v.currentInMachineCents).toBe(184000);
+    expect(v.currentInMachineCents! % 2000).toBe(0); // still a whole $20 multiple
+  });
+
+  it("excludes the load's OWN day (part of it was dispensed before the load) and flags it", () => {
+    // This is Michael's actual state right after the 8/9 sync: settlements run
+    // through 8/8 and the last load is also 8/8. That day's $5,300 is a
+    // midnight-to-midnight total -- most of it was paid out BEFORE the 8:49 PM
+    // load and is already reflected in the $3,080. Subtracting it would show a
+    // nonsense negative balance, so it is excluded and the caveat is raised.
+    const v = buildCashLoadsView(LOADS, [s("2026-08-08", 530000), s("2026-08-07", 444000)]);
+    expect(v.dispensedSinceLoadCents).toBeNull();
+    expect(v.currentInMachineCents).toBeNull(); // unknown, NOT zero and NOT negative
+    expect(v.currentInMachineUsd).toBe("—");
+    expect(v.sameDayLoadCaveat).toBe(true);
+    expect(v.expectedInMachineCents).toBe(308000); // card falls back to this
+  });
+
+  it("ignores settlements dated BEFORE the load -- already baked into the balance", () => {
+    const v = buildCashLoadsView(LOADS, [s("2026-08-07", 444000), s("2026-08-01", 348000)]);
+    expect(v.dispensedSinceLoadCents).toBeNull();
+    expect(v.currentInMachineCents).toBeNull();
+    expect(v.sameDayLoadCaveat).toBe(false); // none landed on the load day
+  });
+
+  it("returns null (never a guess) when settlements are absent, empty, or all null", () => {
+    expect(buildCashLoadsView(LOADS).currentInMachineCents).toBeNull();
+    expect(buildCashLoadsView(LOADS, null).currentInMachineCents).toBeNull();
+    expect(buildCashLoadsView(LOADS, []).currentInMachineCents).toBeNull();
+    // A settled day with no reported amount is unknown, not zero.
+    const v = buildCashLoadsView(LOADS, [s("2026-08-09", null)]);
+    expect(v.dispensedSinceLoadCents).toBeNull();
+    expect(v.currentInMachineCents).toBeNull();
+  });
+
+  it("never subtracts another terminal's withdrawals", () => {
+    const v = buildCashLoadsView(LOADS, [s("2026-08-09", 124000, "OTHER99"), s("2026-08-09", 40000)]);
+    expect(v.dispensedSinceLoadCents).toBe(40000); // only HG26499's own
+    expect(v.currentInMachineCents).toBe(268000);
+    // A blank terminal can't be proven to be this machine, so it is skipped too.
+    const blank = buildCashLoadsView(LOADS, [s("2026-08-09", 124000, "")]);
+    expect(blank.dispensedSinceLoadCents).toBeNull();
+  });
+
+  it("cannot age a balance it never had", () => {
+    const v = buildCashLoadsView(
+      [{ terminalId: "HG26499", loadedAtRaw: null, loadDate: "2026-08-01", cashLoadCents: 200000, balanceAfterCents: null, source: "manual" }],
+      [s("2026-08-09", 124000)],
+    );
+    expect(v.expectedInMachineCents).toBeNull();
+    expect(v.currentInMachineCents).toBeNull();
+    expect(v.lastLoadDate).toBeNull();
+  });
+
+  it("ages from the MOST RECENT load, not the oldest, and reconciles to real dispensing", () => {
+    // Rows arrive newest-first from the store. The 8/7 load ($2,700) must not be
+    // the anchor while the 8/8 load ($3,080) exists.
+    const v = buildCashLoadsView(LOADS, [s("2026-08-09", 124000)]);
+    expect(v.lastLoadDate).toBe("2026-08-08");
+    expect(v.expectedInMachineCents).toBe(308000);
+    expect(v.currentInMachineCents).toBe(184000);
+  });
+});
+
 describe("validateManualCashLoad (integer cents; never guesses)", () => {
   it("parses good input to cents", () => {
     const r = validateManualCashLoad({ amount: "2000", date: "2026-08-01" });

@@ -87,7 +87,11 @@ export default async function AtmPage({
 
   const conn = await getAtmConnection();
   // Only pull the data a given tab needs (keeps the health tab snappy).
-  const settlements = tab === "transactions" ? await listAtmSettlements() : [];
+  // The loads tab also needs settlements: the machine's reported balance is only
+  // true as of the last load, so it must be aged forward by what was dispensed
+  // since. Without them the card would show stale cash.
+  const settlements =
+    tab === "transactions" || tab === "loads" ? await listAtmSettlements() : [];
   const cashLoads = tab === "loads" ? await listAtmCashLoads() : [];
   const reconcileInputs = tab === "reconcile" ? await getAtmReconcileInputs() : null;
   const encryptionOn = isAtRestEncryptionConfigured();
@@ -200,7 +204,11 @@ export default async function AtmPage({
         ) : tab === "transactions" ? (
           <SettlementsTab settlements={settlements} />
         ) : tab === "loads" ? (
-          <CashLoadsTab cashLoads={cashLoads} terminalId={conn.terminalId} />
+          <CashLoadsTab
+            cashLoads={cashLoads}
+            settlements={settlements}
+            terminalId={conn.terminalId}
+          />
         ) : (
           <ReconcileTab inputs={reconcileInputs} />
         )}
@@ -657,26 +665,59 @@ function SettlementsTab({
 
 function CashLoadsTab({
   cashLoads,
+  settlements,
   terminalId,
 }: {
   cashLoads: Awaited<ReturnType<typeof listAtmCashLoads>>;
+  settlements: Awaited<ReturnType<typeof listAtmSettlements>>;
   terminalId: string;
 }) {
-  const view = buildCashLoadsView(cashLoads);
+  const view = buildCashLoadsView(cashLoads, settlements);
+
+  // Plain-English hint for the headline number. It must never imply more
+  // precision than the settled data supports.
+  const currentHint =
+    view.currentInMachineCents !== null
+      ? `Balance at the ${view.lastLoadDate ?? "last"} load, minus ${view.dispensedSinceLoadUsd} dispensed through ${view.dispensedThroughDate}${
+          view.sameDayLoadCaveat ? ". Load-day withdrawals aren't split out, so treat this as a high estimate" : ""
+        }`
+      : view.expectedInMachineCents === null
+        ? "PAI hasn't reported a balance yet"
+        : "No settled withdrawals since the last load yet — sync to update";
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          label="Expected cash in machine"
+          label="Current cash in machine"
+          value={
+            view.currentInMachineCents !== null
+              ? view.currentInMachineUsd
+              : view.expectedInMachineUsd
+          }
+          hint={currentHint}
+          tone="green"
+        />
+        <StatCard
+          label="Balance at last load"
           value={view.expectedInMachineUsd}
           hint={
             view.expectedInMachineCents === null
               ? "PAI hasn't reported a balance yet"
-              : "From the most recent reported balance"
+              : `What PAI reported on ${view.lastLoadDate ?? "the last load"} — before any withdrawals since`
           }
-          tone="green"
         />
+        <StatCard
+          label="Dispensed since last load"
+          value={view.dispensedSinceLoadUsd}
+          hint={
+            view.dispensedSinceLoadCents === null
+              ? "No settled withdrawals since that load"
+              : `Settled withdrawals through ${view.dispensedThroughDate}`
+          }
+        />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-1">
         <StatCard
           label="Total cash loaded"
           value={view.totalLoadedUsd}
@@ -756,7 +797,10 @@ function CashLoadsTab({
         )}
         <p className="mt-3 text-xs text-white/40">
           You load the machine with physical cash (not from the ATM bank account), so loads do not expect a
-          matching bank debit. &ldquo;Expected cash in machine&rdquo; uses PAI&rsquo;s own reported balance.
+          matching bank debit. &ldquo;Balance at last load&rdquo; is PAI&rsquo;s own reported figure at that
+          moment; &ldquo;Current cash in machine&rdquo; subtracts the cash settled since. Withdrawals settle
+          as whole days, so anything dispensed after the last settlement date isn&rsquo;t counted yet — the
+          current figure is a high estimate, never a low one.
         </p>
       </div>
     </div>
