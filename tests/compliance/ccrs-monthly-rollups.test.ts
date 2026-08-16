@@ -1036,3 +1036,310 @@ describe("sanitizeAggregationResult — DOH", () => {
     expect(out.result.dohSellers?.[0].isSelf).toBe(false);
   });
 });
+
+describe("sanitizeAggregationResult — Slice 7 producer/processor intelligence", () => {
+  it("carries a supplier's sell-in mix through, capped and rounded", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.suppliers = [
+      {
+        licenseeId: "950",
+        licenseNumber: "610001",
+        name: "EVERGREEN FARMS LLC",
+        dba: "Evergreen Farms",
+        lineCount: 12,
+        revenueMinor: 18_000.4,
+        unitPrice: null,
+        distinctBuyers: 3,
+        trackedBuyers: 1,
+        byType: [
+          {
+            inventoryType: "Concentrate",
+            units: 5,
+            revenueMinor: 10_000,
+            lineCount: 2,
+            medianUnitPriceMinor: 2_000,
+          },
+          // An unnamed type is not a statable fact — dropped, never labelled.
+          { inventoryType: null, units: 9, revenueMinor: 900, lineCount: 1 },
+        ],
+        topProducts: [
+          {
+            productName: "Live Resin 1g",
+            inventoryType: "Concentrate",
+            brand: "Evergreen",
+            units: 5,
+            revenueMinor: 10_000,
+            lineCount: 2,
+            medianUnitPriceMinor: 2_000,
+          },
+        ],
+        unattributedLines: 4,
+      },
+    ];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    const s = out.result.suppliers[0];
+    expect(s?.revenueMinor).toBe(18_000); // money stays integral minor units
+    expect(s?.byType).toHaveLength(1);
+    expect(s?.byType?.[0]?.inventoryType).toBe("Concentrate");
+    expect(s?.topProducts?.[0]?.productName).toBe("Live Resin 1g");
+    expect(s?.unattributedLines).toBe(4);
+  });
+
+  it("keeps 'never measured' distinct from 'measured, nothing there' for a supplier mix", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.suppliers = [
+      // Pre-Slice-7 shape: no mix keys at all.
+      {
+        licenseeId: "950",
+        licenseNumber: "610001",
+        name: null,
+        dba: null,
+        lineCount: 1,
+        revenueMinor: 100,
+        unitPrice: null,
+        distinctBuyers: 0,
+        trackedBuyers: 0,
+      },
+      // Slice-7 shape that genuinely measured nothing.
+      {
+        licenseeId: "951",
+        licenseNumber: "610002",
+        name: null,
+        dba: null,
+        lineCount: 1,
+        revenueMinor: 100,
+        unitPrice: null,
+        distinctBuyers: 0,
+        trackedBuyers: 0,
+        byType: [],
+        topProducts: [],
+        unattributedLines: 1,
+      },
+    ];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.suppliers[0]?.byType).toBeUndefined(); // never measured
+    expect(out.result.suppliers[0]?.unattributedLines).toBeUndefined();
+    expect(out.result.suppliers[1]?.byType).toEqual([]); // measured: none
+    expect(out.result.suppliers[1]?.unattributedLines).toBe(1);
+  });
+
+  it("carries producer sell-through rows and their coverage counters", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.producers = [
+      {
+        licenseNumber: "610001",
+        name: "EVERGREEN FARMS LLC",
+        dba: "Evergreen Farms",
+        units: 4,
+        revenueMinor: 9_500.7,
+        lineCount: 3,
+        unitPrice: {
+          sampleSize: 3,
+          minMinor: 1_500,
+          p25Minor: 1_500,
+          medianMinor: 1_500,
+          p75Minor: 5_000,
+          maxMinor: 5_000,
+          avgMinor: 2_666,
+        },
+        distinctRetailers: 2,
+        trackedRetailers: 1,
+        dohLineCount: 1,
+        byType: [
+          {
+            inventoryType: "Usable Marijuana",
+            units: 3,
+            revenueMinor: 4_500,
+            lineCount: 2,
+            medianUnitPriceMinor: 1_500,
+          },
+        ],
+        topProducts: [],
+      },
+    ];
+    Object.assign(base.totals as Record<string, unknown>, {
+      vendorAttributedRetailLines: 3,
+      supplierMixLines: 1,
+      mixMapPrunes: 0,
+    });
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    const p = out.result.producers?.[0];
+    expect(p?.licenseNumber).toBe("610001");
+    expect(p?.revenueMinor).toBe(9_501);
+    expect(p?.distinctRetailers).toBe(2);
+    expect(p?.trackedRetailers).toBe(1);
+    expect(p?.dohLineCount).toBe(1);
+    expect(p?.unitPrice?.maxMinor).toBe(5_000);
+    expect(p?.byType[0]?.inventoryType).toBe("Usable Marijuana");
+    // The sample size must survive — without it the list has no denominator.
+    expect(out.result.totals.vendorAttributedRetailLines).toBe(3);
+    expect(out.result.totals.supplierMixLines).toBe(1);
+    // 0 here is a measured answer, not an absence.
+    expect(out.result.totals.mixMapPrunes).toBe(0);
+  });
+
+  it("treats an absent producers key as 'never measured', not 'no producers'", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    delete base.producers;
+    delete (base.totals as Record<string, unknown>).vendorAttributedRetailLines;
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.producers).toBeUndefined();
+    expect(out.result.totals.vendorAttributedRetailLines).toBeUndefined();
+  });
+
+  it("distinguishes an empty producers array as 'measured, none found'", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.producers = [];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.producers).toEqual([]);
+  });
+
+  it("rejects a producer row with no license number (nothing to attribute it to)", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.producers = [{ name: "MYSTERY GROWER", units: 5, revenueMinor: 100 }];
+    expect(sanitizeAggregationResult(base).ok).toBe(false);
+  });
+
+  it("rejects an oversized producer list", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.producers = Array.from({ length: 251 }, (_, i) => ({
+      licenseNumber: `61${String(i).padStart(4, "0")}`,
+      units: 1,
+      revenueMinor: 1,
+      byType: [],
+      topProducts: [],
+    }));
+    expect(sanitizeAggregationResult(base).ok).toBe(false);
+  });
+
+  it("caps an oversized per-licensee mix instead of trusting the payload", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.producers = [
+      {
+        licenseNumber: "610001",
+        units: 1,
+        revenueMinor: 1,
+        byType: Array.from({ length: 500 }, (_, i) => ({
+          inventoryType: `Type ${i}`,
+          units: 1,
+          revenueMinor: 1,
+          lineCount: 1,
+          medianUnitPriceMinor: 1,
+        })),
+        topProducts: Array.from({ length: 500 }, (_, i) => ({
+          productName: `Product ${i}`,
+          units: 1,
+          revenueMinor: 1,
+          lineCount: 1,
+        })),
+      },
+    ];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    expect(out.result.producers?.[0]?.byType).toHaveLength(60); // MAX_MIX_ROWS
+    expect(out.result.producers?.[0]?.topProducts).toHaveLength(60);
+  });
+
+  it("coerces non-numeric mix values rather than propagating junk", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    base.producers = [
+      {
+        licenseNumber: "610001",
+        units: "lots",
+        revenueMinor: null,
+        lineCount: "many",
+        distinctRetailers: {},
+        trackedRetailers: [],
+        dohLineCount: "some",
+        byType: [
+          {
+            inventoryType: "Concentrate",
+            units: "5",
+            revenueMinor: "10000",
+            lineCount: null,
+            medianUnitPriceMinor: "nope",
+          },
+        ],
+        topProducts: [{ productName: "Live Resin 1g", units: NaN, revenueMinor: Infinity }],
+      },
+    ];
+    const out = sanitizeAggregationResult(base);
+    if (!out.ok) throw new Error(out.error);
+    const p = out.result.producers?.[0];
+    expect(p?.units).toBe(0);
+    expect(p?.revenueMinor).toBe(0);
+    expect(p?.lineCount).toBe(0);
+    expect(p?.distinctRetailers).toBe(0);
+    expect(p?.trackedRetailers).toBe(0);
+    expect(p?.dohLineCount).toBe(0);
+    expect(p?.byType[0]?.units).toBe(0);
+    expect(p?.byType[0]?.medianUnitPriceMinor).toBeNull();
+    expect(p?.topProducts[0]?.units).toBe(0);
+    expect(p?.topProducts[0]?.revenueMinor).toBe(0);
+  });
+});
+
+describe("migration 0182 — discovery_producer_stats schema", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase/migrations/0182_discovery_producer_stats.sql"),
+    "utf8",
+  );
+
+  it("is idempotent (safe to re-run by hand)", () => {
+    expect(sql).toContain("create table if not exists public.discovery_producer_stats");
+    expect(sql).toContain("add column if not exists by_type jsonb");
+    expect(sql).toContain("add column if not exists top_products jsonb");
+    expect(sql).toContain("add column if not exists unattributed_lines bigint");
+    expect(sql).toContain("add column if not exists vendor_attributed_retail_lines bigint");
+    expect(sql).toContain("create index if not exists idx_disc_producer_stats_dataset");
+    expect(sql).toContain("drop policy if exists discovery_producer_stats_read");
+  });
+
+  it("keeps every money column bigint (the S8 overflow lesson)", () => {
+    for (const col of [
+      "revenue_minor",
+      "price_min_minor",
+      "price_p25_minor",
+      "price_median_minor",
+      "price_p75_minor",
+      "price_max_minor",
+      "price_avg_minor",
+    ]) {
+      const m = new RegExp(`${col}\\s+bigint`).test(sql);
+      expect(m, `${col} must be bigint`).toBe(true);
+    }
+    expect(sql).not.toMatch(/_minor\s+integer/);
+  });
+
+  it("enables RLS with staff-only policies", () => {
+    expect(sql).toContain("alter table public.discovery_producer_stats enable row level security");
+    expect(sql).toContain("for select using (public.is_staff())");
+    expect(sql).toContain("for all using (public.is_staff()) with check (public.is_staff())");
+  });
+
+  it("documents the sampling caveat so no consumer can mistake it for a census", () => {
+    // The caveat must live in a COMMENT ON, not merely a file comment: that is
+    // the copy a future engineer sees when they inspect the live database.
+    const tableComment = /comment on table public\.discovery_producer_stats is\s+'([^']*(?:''[^']*)*)'/i.exec(sql);
+    expect(tableComment, "discovery_producer_stats must carry a table comment").not.toBeNull();
+    const body = tableComment?.[1] ?? "";
+    expect(body).toMatch(/NOT a census/i);
+    expect(body).toMatch(/never sum with discovery_supplier_stats/i);
+    expect(body).toContain("vendor_attributed_retail_lines");
+    // And the file header must warn against summing the two revenue figures.
+    expect(sql).toMatch(/NEVER sum discovery_producer_stats/i);
+    // The sell-in columns must each explain that NULL means "never measured".
+    expect(sql).toMatch(/comment on column public\.discovery_supplier_stats\.by_type is/i);
+    expect(sql).toMatch(/NULL = never measured/i);
+  });
+
+  it("is uniquely keyed per dataset and license so re-uploads cannot duplicate", () => {
+    expect(sql).toContain("unique (dataset_id, license_number)");
+    expect(sql).toContain("on delete cascade");
+  });
+});
