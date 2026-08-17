@@ -58,6 +58,21 @@ const SEAM = path.join(REPO, "src/lib/pos/pos-storage.ts");
 
 const shellSrc = readFileSync(SHELL, "utf8");
 const saleFlowSrc = readFileSync(SALEFLOW, "utf8");
+
+/**
+ * Strip comments so a scan tests CODE, not documentation about code.
+ *
+ * Line comments are removed FIRST, and that order is not cosmetic. Doing block
+ * comments first is a trap: RegisterShell contains a line comment ending
+ * "...(see" whose next line begins "public/pos-sw.js)", and the "/*" inside
+ * that path opens a block comment that swallows thousands of characters of REAL
+ * CODE. A scan run over that mangled text would report "no localStorage calls"
+ * because the calls had been eaten, not because they were gone. Stripping line
+ * comments first makes that impossible.
+ */
+function stripComments(src: string): string {
+  return src.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+}
 const coreSrc = readFileSync(CORE, "utf8");
 const seamSrc = readFileSync(SEAM, "utf8");
 
@@ -121,6 +136,10 @@ describe("the key registry matches the code that actually runs", () => {
       "src/lib/pos/favorites-core.ts",
       "src/lib/pos/theme-core.ts",
       "src/lib/pos/medical-testmode-core.ts",
+      // Phase 1.2 moved the device pairing into the secure store, which now
+      // owns that literal. Following it here keeps this test honest: the key is
+      // still in use by the shipping code, just from a different module.
+      "src/lib/pos/pos-secure-store.ts",
     ]) {
       const src = readFileSync(path.join(REPO, file), "utf8");
       for (const m of src.matchAll(/^export const [A-Z_]+ = "(gw-pos-[a-z0-9-]+)";/gm)) used.add(m[1]!);
@@ -178,10 +197,15 @@ describe("the shell no longer touches localStorage directly", () => {
     // The boot body must be INSIDE the hydrate callback. If someone moves a
     // read back outside it, the queue would read empty on the iPad and a
     // pending sale would be orphaned.
-    const hydrateAt = shellSrc.indexOf("void hydratePosStorage()");
+    // Matched loosely on purpose: Phase 1.2 wrapped this in a Promise.all so
+    // the secure store hydrates alongside it. What must stay true is the
+    // ORDER — hydration is started before any read — not the exact spelling.
+    const hydrateAt = shellSrc.indexOf("hydratePosStorage()");
     const firstQueueRead = shellSrc.indexOf("parseQueue(posStorageGet(LS_QUEUE))");
     expect(hydrateAt).toBeGreaterThan(-1);
     expect(firstQueueRead).toBeGreaterThan(hydrateAt);
+    // And the read really is inside the callback, not merely after the call.
+    expect(stripComments(shellSrc)).toMatch(/\.then\(\(\[?verdict\]?\) => \{/);
   });
 
   it("guards every persist-on-mount effect against writing before hydration", () => {
@@ -219,7 +243,7 @@ describe("the core stays pure", () => {
     // Strip comments first: the file EXPLAINS localStorage at length, and a
     // naive scan would flag its own documentation. What matters is that no
     // executable line touches a browser or plugin API.
-    const code = coreSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const code = stripComments(coreSrc);
     expect(code).not.toMatch(/\bwindow\s*\./);
     expect(code).not.toMatch(/\blocalStorage\s*\./);
     expect(code).not.toMatch(/^import /m);
@@ -237,7 +261,7 @@ describe("the core stays pure", () => {
     // Strip comments FIRST. A plain substring check passes happily against a
     // commented-out registration, which would silently stop running the core's
     // 99 self-tests in CI — mutation testing caught exactly that.
-    const live = runner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const live = stripComments(runner);
     expect(live).toMatch(/^import \{ __runPosStorageCoreTests \}/m);
     expect(live).toMatch(/^\s*assertNoFailures\("pos\/pos-storage-core", __runPosStorageCoreTests\(\)\);$/m);
   });

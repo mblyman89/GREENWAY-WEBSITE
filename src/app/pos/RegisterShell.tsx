@@ -57,6 +57,12 @@ import {
   medicalTestModeBannerActive,
 } from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
+import {
+  hydrateSecureStore,
+  loadPairing,
+  savePairing,
+  secureStoreWriteAlert,
+} from "@/lib/pos/pos-secure-store";
 // AB-1: every register request goes through posFetch so the SAME code works
 // in the browser PWA (relative, same-origin) and in the packaged iPad app
 // (absolute, pointed at the real server). See lib/pos/api-base-core.
@@ -114,7 +120,10 @@ import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-
 // Local storage keys (device-scoped; every durable fact lives server-side)
 // ---------------------------------------------------------------------------
 
-const LS_DEVICE = "gw-pos-device"; // { deviceId, deviceKey, name, registerId }
+// The device pairing key is no longer named here: Phase 1.2 moved that value
+// out of general storage and into `pos-secure-store`, which owns the literal
+// (`WEB_PAIRING_KEY`) so the browser build keeps reading exactly what it always
+// saved. The shell reaches it through loadPairing()/savePairing() only.
 const LS_QUEUE = "gw-pos-queue"; // serialized offline queue
 const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
 const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
@@ -138,16 +147,18 @@ type DrawerInfo = { sessionId: string; openedAt: string | null; businessDay: str
 
 type Screen = "setup" | "locked" | "home";
 
+/**
+ * Read this register's pairing.
+ *
+ * Phase 1.2: the pairing is the one value that identifies this till to the
+ * server, so it now goes through `pos-secure-store` (the keychain on the
+ * packaged iPad app, unchanged localStorage in the browser) instead of the
+ * general storage seam. `loadPairing()` also validates the SHAPE of what it
+ * finds, so a half-written credential sends the register to the setup screen
+ * rather than letting it post sales with a key the server will reject.
+ */
 function loadCreds(): DeviceCreds | null {
-  try {
-    const raw = posStorageGet(LS_DEVICE);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as DeviceCreds;
-    if (!parsed?.deviceId || !parsed?.deviceKey) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
+  return loadPairing();
 }
 
 export function RegisterShell({
@@ -345,7 +356,12 @@ export function RegisterShell({
     // for the mirror. On the browser PWA the localStorage backend resolves in
     // the same tick, so this is a no-op there and the register behaves exactly
     // as it always has.
-    void hydratePosStorage().then((verdict) => {
+    // The secure store is hydrated ALONGSIDE the general one, and both must
+    // finish before anything reads. `loadCreds()` below reads the pairing
+    // synchronously out of the secure mirror; running it early would look
+    // exactly like "this register was never set up" and would drop a working
+    // till onto the setup screen mid-shift.
+    void Promise.all([hydratePosStorage(), hydrateSecureStore()]).then(([verdict]) => {
       if (cancelled) return;
       bootFromStorage(verdict);
     });
@@ -537,12 +553,16 @@ export function RegisterShell({
   // must never unmount the shell; the alert warns the pairing won't survive
   // a restart.
   const persistCreds = useCallback((c: DeviceCreds) => {
-    try {
-      posStorageSet(LS_DEVICE, JSON.stringify(c));
-      setStorageAlert((prev) => (prev === storageFailureAlert("device") ? null : prev));
-    } catch {
+    // Phase 1.2 — the pairing goes to the secure store, which validates it,
+    // never logs it, and (on the packaged app) keeps it in the iPad keychain
+    // pinned to this device only. It reports failure by return value rather
+    // than by throwing, so provisioning can never unmount the shell.
+    if (!savePairing(c)) {
       setStorageAlert(storageFailureAlert("device"));
+      return;
     }
+    const alert = secureStoreWriteAlert();
+    setStorageAlert((prev) => (alert ?? (prev === storageFailureAlert("device") ? null : prev)));
   }, []);
 
   // ── enqueue + flush ──
