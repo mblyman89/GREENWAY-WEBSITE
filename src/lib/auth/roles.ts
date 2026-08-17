@@ -58,6 +58,7 @@ export type Permission =
   | "inventory.manage"
   | "reports.view"
   | "books.view"
+  | "financials.view"
   | "users.manage"
   | "settings.manage"
   | "staffing.manage"
@@ -92,13 +93,28 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "reports.view": ["owner", "admin", "manager", "readonly"],
   // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
   // permission from "reports.view", which also grants manager and readonly.
-  // The database gates every accounting RPC on is_admin() = owner|admin
-  // (migration 0001). If the books nav were hung off reports.view, a manager
-  // would see the link, click it, and hit a raw database refusal -- and the
-  // "fix" someone would reach for is loosening the DATABASE, which would hand
-  // over the entire ledger. This list MUST stay equal to owner+admin; the
-  // test in books-view-core.ts asserts it against the page gate.
-  "books.view": ["owner", "admin"],
+  // The database gates every accounting RPC on is_owner() = owner (migration
+  // 0179). If the books nav were hung off reports.view, a manager would see the
+  // link, click it, and hit a raw database refusal -- and the "fix" someone
+  // would reach for is loosening the DATABASE, which would hand over the entire
+  // ledger.
+  //
+  // OWNER DECISION, recorded verbatim (Michael, 2026-08-17):
+  //   "I know at the beginning of the books build I wanted it to be owner and
+  //    admin, but I've changed my mind, there is no reason anyone else needs to
+  //    see my books or my financials ever, so I want strict controls over all of
+  //    those things. The only thing an admin can do is pay vendors and pay
+  //    employees."
+  //
+  // This list MUST stay equal to ["owner"] alone; the test in books-view-core.ts
+  // asserts it against the page gate, and a mutation test proves re-adding admin
+  // fails the build.
+  "books.view": ["owner"],
+  // The financial REPORTS (P&L, sales, COGS, excise, cash, the Sage journal and
+  // COA mapping, and the CSV exports of all of it). Split out from reports.view
+  // -- which grants manager and readonly -- for exactly the reason above. Same
+  // owner decision, same rule: owner alone.
+  "financials.view": ["owner"],
   "users.manage": ["owner", "admin"],
   "settings.manage": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
@@ -137,6 +153,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.manage": "Manage inventory lots, COAs & manifests",
   "reports.view": "View reports & exports",
   "books.view": "View the accounting books (general ledger)",
+  "financials.view": "View financial reports & accounting exports",
   "users.manage": "Manage staff & roles",
   "settings.manage": "Change settings",
   "staffing.manage": "Manage employees, shifts & time clock",
@@ -166,6 +183,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "media.manage",
   "reports.view",
   "books.view",
+  "financials.view",
   "staffing.manage",
   "timeclock.use",
   "sales_limit.override",

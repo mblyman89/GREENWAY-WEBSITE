@@ -138,10 +138,12 @@ export const adminNav: AdminNavItem[] = [
   { label: "Loans", href: "/admin/loans", permission: "settings.manage", icon: "🏠", group: "Admin" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
   { label: "Crypto Portfolio", href: "/admin/crypto", permission: "settings.manage", icon: "\u20bf", group: "Admin" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
   { label: "ATM", href: "/admin/atm", permission: "settings.manage", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
-  // F5-K: THE BOOKS. Gated on "books.view" (owner+admin ONLY), which mirrors
-  // the database's is_admin() check on every accounting RPC. Do NOT change
-  // these to "reports.view" -- that permission also grants manager and
-  // readonly, who would see the links and then hit a raw database refusal.
+  // F5-K: THE BOOKS. Gated on "books.view" (OWNER ONLY as of the 2026-08-17
+  // owner decision), which mirrors the database's is_owner() check on every
+  // accounting RPC (migration 0179). Do NOT change these to "reports.view" --
+  // that permission also grants manager and readonly, who would see the links
+  // and then hit a raw database refusal.
+  { label: "General Journal", href: "/admin/books/journal", permission: "books.view", icon: "\u270d\ufe0f", group: "Admin" }, // writing hand: manual entries
   { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Admin" }, // scales: debits = credits
   { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Admin" }, // ledger book
   { label: "Chart of Accounts", href: "/admin/books/accounts", permission: "books.view", icon: "\ud83d\uddc3\ufe0f", group: "Admin" }, // card file index

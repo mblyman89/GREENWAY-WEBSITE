@@ -12,7 +12,7 @@ export type SaveAccountingResult = { ok: true } | { ok: false; error: string };
  * Account ids are kept as text (leading zeros matter in Sage 50).
  */
 export async function saveAccountingSettingsAction(formData: FormData): Promise<SaveAccountingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
 
   const get = (k: string) => String(formData.get(k) ?? "").trim();
   const patch = {

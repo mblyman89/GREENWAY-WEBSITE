@@ -55,17 +55,37 @@ export const ALL_STAFF_ROLES: readonly StaffRole[] = Object.keys(
 ) as StaffRole[];
 
 /**
- * WHO MAY READ THE BOOKS. This must mirror `is_admin()` in migration 0001
- * exactly: `role in ('owner','admin')`.
+ * WHO MAY READ THE BOOKS.
+ *
+ * OWNER DECISION, recorded verbatim (Michael, 2026-08-17):
+ *   "I know at the beginning of the books build I wanted it to be owner and
+ *    admin, but I've changed my mind, there is no reason anyone else needs to
+ *    see my books or my financials ever, so I want strict controls over all of
+ *    those things. The only thing an admin can do is pay vendors and pay
+ *    employees."
+ *
+ * So this is the OWNER ALONE. It mirrors `is_owner()` (migration 0179), NOT
+ * `is_admin()` (migration 0001), which remains owner+admin and still guards the
+ * two powers Michael deliberately preserved: paying vendors (payables.manage)
+ * and paying employees (staffing.manage).
  */
 export function canReadBooks(role: StaffRole | null | undefined): boolean {
-  return role === "owner" || role === "admin";
+  return role === "owner";
 }
 
 /**
  * The roles the DATABASE would accept, written out independently of
  * `canReadBooks` so a test can compare the two without one being defined in
  * terms of the other. Comparing a function to itself proves nothing.
+ *
+ * `is_owner()` in migration 0179 -- the gate the books actually use.
+ */
+export const DB_IS_OWNER_ROLES: readonly StaffRole[] = ["owner"] as const;
+
+/**
+ * `is_admin()` in migration 0001. Retained NOT because the books use it, but so
+ * a test can prove the books gate is strictly NARROWER than it -- i.e. that the
+ * lockdown genuinely removed access rather than renaming a constant.
  */
 export const DB_IS_ADMIN_ROLES: readonly StaffRole[] = ["owner", "admin"] as const;
 
@@ -378,16 +398,17 @@ export function __runBooksViewCoreTests(): void {
   // reaches data they should not see.
   for (const role of ALL_STAFF_ROLES) {
     const app = canReadBooks(role);
-    const db = DB_IS_ADMIN_ROLES.includes(role);
+    const db = DB_IS_OWNER_ROLES.includes(role);
     ok(
       app === db,
       `the page gate and the database gate agree for role "${role}" (page=${app}, db=${db})`,
     );
   }
   ok(canReadBooks("owner"), "owner can read the books");
-  ok(canReadBooks("admin"), "admin can read the books");
   // NEGATIVE CONTROLS (rule 15b). These are the roles that pass "reports.view"
-  // but must NOT reach the ledger.
+  // but must NOT reach the ledger. As of the 2026-08-17 owner decision, ADMIN
+  // is one of them.
+  ok(!canReadBooks("admin"), "an ADMIN cannot read the books (owner decision 2026-08-17)");
   ok(!canReadBooks("manager"), "a MANAGER cannot read the books (passes reports.view!)");
   ok(!canReadBooks("readonly"), "READONLY cannot read the books (passes reports.view!)");
   ok(!canReadBooks("staff"), "staff cannot read the books");
@@ -437,16 +458,23 @@ export function __runBooksViewCoreTests(): void {
   // And the permission must NOT have been hung off reports.view, which also
   // grants manager and readonly. This is the specific mistake F5-K exists to
   // prevent, so it gets its own named assertion.
-  const booksRoles = [...rolesForPermission("books.view")].sort();
-  eq(booksRoles, ["admin", "owner"], "books.view is owner+admin ONLY");
-  ok(
-    !can("manager", "books.view"),
-    "a manager does NOT get books.view (they DO get reports.view)",
-  );
-  ok(
-    !can("readonly", "books.view"),
-    "readonly does NOT get books.view (they DO get reports.view)",
-  );
+  //
+  // OWNER DECISION 2026-08-17 (supersedes the earlier owner+admin rule):
+  //   "there is no reason anyone else needs to see my books or my financials
+  //    ever... The only thing an admin can do is pay vendors and pay employees."
+  // This assertion previously read ["admin", "owner"]. It is now owner alone.
+  const booksRoles = [...rolesForPermission("books.view")];
+  eq(booksRoles, ["owner"], "books.view is OWNER ONLY");
+  for (const role of ALL_ROLES) {
+    if (role === "owner") continue;
+    ok(!can(role, "books.view"), `role "${role}" does NOT get books.view`);
+    ok(!canReadBooks(role), `role "${role}" cannot read the books`);
+  }
+  ok(!can("admin", "books.view"), "an admin does NOT get books.view (owner decision)");
+  // Negative control: the admin must KEEP the two powers Michael preserved,
+  // otherwise this lockdown has gone too far and broken vendor/employee payment.
+  ok(can("admin", "payables.manage"), "an admin KEEPS pay-vendors (payables.manage)");
+  ok(can("admin", "staffing.manage"), "an admin KEEPS pay-employees (staffing.manage)");
   // Negative control (rule 15b): prove those two roles really do hold
   // reports.view, otherwise the two assertions above would be trivially true
   // and would still pass if the whole matrix were empty.

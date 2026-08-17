@@ -29,7 +29,7 @@
  * accepted.
  *
  * The single most important test in this file is the one that proves
- * `canReadBooks` and `DB_IS_ADMIN_ROLES` agree ACROSS EVERY ROLE. They are
+ * `canReadBooks` and `DB_IS_OWNER_ROLES` agree ACROSS EVERY ROLE. They are
  * written independently in the source precisely so a test can compare them;
  * comparing a function to itself proves nothing.
  */
@@ -38,6 +38,7 @@ import {
   ALL_STAFF_ROLES,
   canReadBooks,
   DB_IS_ADMIN_ROLES,
+  DB_IS_OWNER_ROLES,
   formatCents,
   splitDebitCredit,
   describeBooks,
@@ -63,31 +64,49 @@ describe("books-view-core: the embedded self-tests", () => {
 // ACCESS -- the most consequential function in the file
 // ===========================================================================
 describe("books-view-core: who may read the books", () => {
-  it("agrees with DB_IS_ADMIN_ROLES for EVERY role, swept", () => {
+  // OWNER DECISION 2026-08-17 (supersedes the earlier owner+admin rule):
+  //   "there is no reason anyone else needs to see my books or my financials
+  //    ever, so I want strict controls over all of those things. The only thing
+  //    an admin can do is pay vendors and pay employees."
+  // These three tests previously asserted owner+admin. The DB counterpart is
+  // now is_owner(), mirrored in source as DB_IS_OWNER_ROLES.
+  it("agrees with DB_IS_OWNER_ROLES for EVERY role, swept", () => {
     // The whole point: two independent statements of the same rule must match
     // across the entire domain, not at one sampled value.
     for (const role of ALL_STAFF_ROLES) {
       expect(canReadBooks(role), `role=${role}`).toBe(
-        DB_IS_ADMIN_ROLES.includes(role),
+        DB_IS_OWNER_ROLES.includes(role),
       );
     }
   });
 
-  it("admits exactly owner and admin -- and nobody else", () => {
+  it("admits the owner and NOBODY else -- admin included", () => {
     expect(canReadBooks("owner")).toBe(true);
-    expect(canReadBooks("admin")).toBe(true);
 
     // NEGATIVE CONTROLS. Each of these is a real role in this system.
+    // "admin" is the one that changed, and is the whole point of the decision.
+    expect(canReadBooks("admin")).toBe(false);
     expect(canReadBooks("manager")).toBe(false);
     expect(canReadBooks("content_editor")).toBe(false);
     expect(canReadBooks("staff")).toBe(false);
     expect(canReadBooks("readonly")).toBe(false);
   });
 
-  it("counts exactly two admitted roles (a widened gate fails here)", () => {
+  it("counts exactly ONE admitted role (a widened gate fails here)", () => {
     const admitted = ALL_STAFF_ROLES.filter((r) => canReadBooks(r));
-    expect(admitted.sort()).toEqual(["admin", "owner"]);
-    expect(admitted).toHaveLength(2);
+    expect(admitted).toEqual(["owner"]);
+    expect(admitted).toHaveLength(1);
+  });
+
+  it("is strictly narrower than the old is_admin gate it replaced", () => {
+    // Proves the lockdown actually removed access rather than renaming a
+    // constant. If someone re-widens canReadBooks back to is_admin, this fails.
+    expect(DB_IS_OWNER_ROLES.length).toBeLessThan(DB_IS_ADMIN_ROLES.length);
+    for (const role of DB_IS_OWNER_ROLES) {
+      expect(DB_IS_ADMIN_ROLES.includes(role), `role=${role}`).toBe(true);
+    }
+    const removed = DB_IS_ADMIN_ROLES.filter((r) => !DB_IS_OWNER_ROLES.includes(r));
+    expect(removed).toEqual(["admin"]);
   });
 
   it("refuses null, undefined and unknown roles rather than defaulting open", () => {

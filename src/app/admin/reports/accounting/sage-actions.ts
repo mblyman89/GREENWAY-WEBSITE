@@ -18,7 +18,7 @@ const BASE = "/admin/reports/accounting";
 
 /** Upload a report used for Sage import. Staff (reports.view) may upload. */
 export async function uploadSageReportAction(formData: FormData) {
-  const session = await requirePermission("reports.view");
+  const session = await requirePermission("financials.view");
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     redirect(`${BASE}?tab=sage&error=${encodeURIComponent("Choose a file to upload.")}`);
@@ -54,7 +54,7 @@ export async function uploadSageReportAction(formData: FormData) {
 
 /** Delete an uploaded report. */
 export async function deleteSageReportAction(formData: FormData) {
-  const session = await requirePermission("reports.view");
+  const session = await requirePermission("financials.view");
   const id = ((formData.get("id") as string | null) ?? "").trim();
   if (!id) redirect(`${BASE}?tab=sage`);
   const result = await deleteSageUpload(id);
@@ -73,13 +73,13 @@ export async function deleteSageReportAction(formData: FormData) {
 
 /** Ask the grounded Sage 50 assistant a question (returns the answer). */
 export async function askSageAssistantAction(question: string, uploadId?: string | null): Promise<SageAskResult> {
-  const session = await requirePermission("reports.view");
+  const session = await requirePermission("financials.view");
   return askSageAssistant(question, { id: session.profile.id, email: session.email }, uploadId ?? null);
 }
 
 /** Validate a mapped GL accounts against an uploaded Chart of Accounts. */
 export async function validateChartOfAccountsAction(uploadId: string): Promise<ChartValidationOutcome> {
-  const session = await requirePermission("reports.view");
+  const session = await requirePermission("financials.view");
   const result = await validateChartOfAccounts(uploadId);
   if (result.ok) {
     await recordAudit({
@@ -96,7 +96,7 @@ export async function validateChartOfAccountsAction(uploadId: string): Promise<C
 
 /** Clear the Sage chat history. */
 export async function clearSageChatAction() {
-  const session = await requirePermission("reports.view");
+  const session = await requirePermission("financials.view");
   await clearSageChatHistory();
   await recordAudit({
     actorId: session.profile.id,
