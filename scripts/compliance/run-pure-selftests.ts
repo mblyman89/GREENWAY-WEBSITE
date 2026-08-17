@@ -114,6 +114,7 @@ import { __runFixedAssetsCoreTests } from "../../src/lib/accounting/fixed-assets
 import { __runBooksViewCoreTests } from "../../src/lib/accounting/books-view-core";
 import { __runGlRefusalCoreTests } from "../../src/lib/accounting/gl-refusal-core";
 import { __runJournalAdvisorCoreTests } from "../../src/lib/accounting/journal-advisor-core";
+import { __runCutoverCoreTests } from "../../src/lib/accounting/cutover-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -722,6 +723,9 @@ async function main() {
   __runBooksViewCoreTests();
   __runGlRefusalCoreTests();
   __runJournalAdvisorCoreTests();
+  console.log("journal-advisor-core self-tests: all passed");
+  __runCutoverCoreTests();
+  console.log("cutover-core self-tests: all passed");
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

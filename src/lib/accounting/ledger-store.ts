@@ -15,10 +15,11 @@
  * database, where it cannot be bypassed by a future page that forgets to ask.
  *
  * In particular this file does NOT decide who is allowed to read the books.
- * The RPCs are all `security definer` and check `is_admin()` themselves, so a
- * caller who is not an admin gets refused by Postgres even if the page that
- * called it had a bug. The role check in the page is a courtesy that produces
- * a nice screen; THIS is not the guarantee either — the database is.
+ * The RPCs are all `security definer` and check `is_owner()` themselves (they
+ * checked `is_admin()` until migration 0179 narrowed the books to the owner
+ * alone), so a caller who is not the owner gets refused by Postgres even if the
+ * page that called it had a bug. The role check in the page is a courtesy that
+ * produces a nice screen; THIS is not the guarantee either — the database is.
  *
  * ---------------------------------------------------------------------------
  * THE `ok` / `refusal` SHAPE, AND WHY NOTHING HERE THROWS
@@ -305,4 +306,91 @@ export async function getOverrideReport(
     return refused<OverrideReport>("The override report returned nothing at all.");
   }
   return { ok: true, data: data as OverrideReport };
+}
+
+// ---------------------------------------------------------------------------
+// THE CONVERSION (0184, slice books-02)
+//
+// Leaving Cultivera and Sage behind on 1 November 2026. The dates live in one
+// row of `gl_conversion_config` rather than in constants scattered through the
+// code, so that moving the cut-over is a data change rather than a deploy.
+// `cutover-core.ts` states the SAME dates independently in TypeScript, and a
+// test compares the two; that redundancy is the point, because a silent
+// disagreement between the app's idea of the cut-over and the database's would
+// mis-date the single most important journal in the ledger.
+// ---------------------------------------------------------------------------
+
+export type ConversionConfig = {
+  cutover_date: string;
+  opening_balance_date: string;
+  parallel_run_start: string;
+  parallel_run_end: string;
+  legacy_pos_system: string;
+  legacy_gl_system: string;
+  legacy_retired: boolean;
+  legacy_retired_at: string | null;
+  legacy_retired_note: string | null;
+};
+
+export async function getConversionConfig(): Promise<
+  LedgerResult<ConversionConfig>
+> {
+  const admin = await createBooksClient();
+  const { data, error } = await admin
+    .from("gl_conversion_config")
+    .select(
+      "cutover_date, opening_balance_date, parallel_run_start, parallel_run_end, " +
+        "legacy_pos_system, legacy_gl_system, legacy_retired, legacy_retired_at, " +
+        "legacy_retired_note",
+    )
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) return refused<ConversionConfig>(error);
+  if (data == null) {
+    return refused<ConversionConfig>(
+      "The conversion settings row is missing. Migration 0184 seeds it; if this " +
+        "environment has not had 0184 applied yet, apply it before converting.",
+    );
+  }
+  return { ok: true, data: data as unknown as ConversionConfig };
+}
+
+/** One row of the opening balance worksheet, as stored by 0176. */
+export type OpeningBalanceRow = {
+  account_code: string;
+  amount_cents: number;
+  evidence_kind: string;
+  evidence_ref: string;
+  evidence_note: string | null;
+  assumption_note: string | null;
+  status: string;
+  exclusion_reason: string | null;
+};
+
+export async function listOpeningBalanceRows(
+  entityCode: string,
+): Promise<LedgerResult<OpeningBalanceRow[]>> {
+  const admin = await createBooksClient();
+  const { data: entity, error: entityError } = await admin
+    .from("gl_entities")
+    .select("id")
+    .eq("code", entityCode)
+    .maybeSingle();
+  if (entityError) return refused<OpeningBalanceRow[]>(entityError);
+  if (entity == null) {
+    return refused<OpeningBalanceRow[]>(
+      `GL_UNKNOWN_ENTITY: there is no set of books called ${entityCode}`,
+    );
+  }
+
+  const { data, error } = await admin
+    .from("gl_opening_balances")
+    .select(
+      "account_code, amount_cents, evidence_kind, evidence_ref, evidence_note, " +
+        "assumption_note, status, exclusion_reason",
+    )
+    .eq("entity_id", (entity as { id: string }).id)
+    .order("account_code", { ascending: true });
+  if (error) return refused<OpeningBalanceRow[]>(error);
+  return { ok: true, data: (data ?? []) as unknown as OpeningBalanceRow[] };
 }
