@@ -309,6 +309,7 @@ import { __runPosCorsCoreTests } from "../../src/lib/pos/cors-core";
 import { __runPosApiBaseCoreTests } from "../../src/lib/pos/api-base-core";
 import { __runCapacitorConfigCoreTests } from "../../src/lib/pos/capacitor-config-core";
 import { __runPosStorageCoreTests } from "../../src/lib/pos/pos-storage-core";
+import { __runPosSecureStoreCoreTests } from "../../src/lib/pos/pos-secure-store-core";
 import { __runRegisterHostCoreTests } from "../../src/lib/pos/register-host-core";
 import { __runThemeContrastCoreTests } from "../../src/lib/pos/theme-contrast-core";
 import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
@@ -606,6 +607,7 @@ async function main() {
   assertNoFailures("pos/api-base-core", __runPosApiBaseCoreTests());
   assertNoFailures("pos/capacitor-config-core", __runCapacitorConfigCoreTests());
   assertNoFailures("pos/pos-storage-core", __runPosStorageCoreTests());
+  assertNoFailures("pos/pos-secure-store-core", __runPosSecureStoreCoreTests());
   assertNoFailures("pos/register-host-core", __runRegisterHostCoreTests());
   assertNoFailures("pos/theme-contrast-core", __runThemeContrastCoreTests());
   assertNoFailures("variant-sort", __runVariantSortTests());
