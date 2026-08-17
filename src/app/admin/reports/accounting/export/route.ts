@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const url = new URL(request.url);
   const range = resolveRange({
     from: url.searchParams.get("from") ?? undefined,

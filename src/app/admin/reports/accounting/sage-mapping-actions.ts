@@ -18,7 +18,7 @@ export type SageMappingResult = { ok: true } | { ok: false; error: string };
 
 /** Save one bucket row of the Sage category mapping. */
 export async function saveSageCategoryAccountAction(formData: FormData): Promise<SageMappingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const get = (k: string) => String(formData.get(k) ?? "").trim();
 
   const bucket = get("bucket");
@@ -55,7 +55,7 @@ export async function saveSageCategoryAccountAction(formData: FormData): Promise
 
 /** Map a back-office menu category to a Sage bucket (upsert). */
 export async function saveSageCategoryMapAction(formData: FormData): Promise<SageMappingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const source = normalizeCategory(String(formData.get("source_category") ?? ""));
   const bucket = String(formData.get("bucket") ?? "").trim();
   if (!source) return { ok: false, error: "Category is required." };
@@ -83,7 +83,7 @@ export async function saveSageCategoryMapAction(formData: FormData): Promise<Sag
 
 /** Remove a category → bucket mapping. */
 export async function deleteSageCategoryMapAction(formData: FormData): Promise<SageMappingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const source = normalizeCategory(String(formData.get("source_category") ?? ""));
   if (!source) return { ok: false, error: "Category is required." };
   try {
@@ -105,7 +105,7 @@ export async function deleteSageCategoryMapAction(formData: FormData): Promise<S
 
 /** Save the store-wide Sage export settings (0091 accounting_settings columns). */
 export async function saveSageExportSettingsAction(formData: FormData): Promise<SageMappingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const get = (k: string) => String(formData.get(k) ?? "").trim();
   const patch = {
     gl_ap_account: get("gl_ap_account"),
@@ -139,7 +139,7 @@ export async function saveSageExportSettingsAction(formData: FormData): Promise<
  * (the DB check constraint on the 7 seeded buckets rejects new keys).
  */
 export async function createSageCategoryBucketAction(formData: FormData): Promise<SageMappingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const get = (k: string) => String(formData.get(k) ?? "").trim();
 
   const label = get("label");
@@ -187,7 +187,7 @@ export async function createSageCategoryBucketAction(formData: FormData): Promis
 
 /** Deactivate a category bucket (kept in the table; excluded from exports/forms). */
 export async function deactivateSageCategoryBucketAction(formData: FormData): Promise<SageMappingResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("financials.view");
   const bucket = String(formData.get("bucket") ?? "").trim();
   if (!isValidBucketKey(bucket)) return { ok: false, error: "Unknown bucket." };
   try {

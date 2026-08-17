@@ -113,6 +113,7 @@ import { __runFixedAssetsCoreTests } from "../../src/lib/accounting/fixed-assets
 // tests/compliance/books-view-core.test.ts.
 import { __runBooksViewCoreTests } from "../../src/lib/accounting/books-view-core";
 import { __runGlRefusalCoreTests } from "../../src/lib/accounting/gl-refusal-core";
+import { __runJournalAdvisorCoreTests } from "../../src/lib/accounting/journal-advisor-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -720,6 +721,7 @@ async function main() {
   __runFixedAssetsCoreTests();
   __runBooksViewCoreTests();
   __runGlRefusalCoreTests();
+  __runJournalAdvisorCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

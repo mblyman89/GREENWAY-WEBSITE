@@ -77,8 +77,8 @@ export default async function AccountingPage({
     error?: string;
   }>;
 }) {
-  const session = await requirePermission("reports.view");
-  const canEdit = can(session.profile.role, "settings.manage");
+  const session = await requirePermission("financials.view");
+  const canEdit = can(session.profile.role, "financials.view");
   const sp = await searchParams;
   const range = resolveRange(sp);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
