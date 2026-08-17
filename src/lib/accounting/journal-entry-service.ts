@@ -10,7 +10,7 @@
  *
  * WHAT IT DOES, IN ORDER
  *   1. Confirms the caller is the OWNER. Not owner-or-admin — owner.
- *      (Owner decision 2026-08-17; database side is migration 0179.)
+ *      (Owner decision 2026-08-17; database side is migration 0185.)
  *   2. Loads the accounts and period state the advisor needs.
  *   3. Runs the PURE advisor (`journal-advisor-core`) to decide whether to
  *      push back, and on what.

@@ -9,7 +9,7 @@
  *
  * The gate is `requireBooksAccess()`, which is `is_owner()` in application form.
  * It is deliberately NOT the only protection: every accounting RPC is
- * `security definer` and re-checks `is_owner()` itself (migration 0179), so the
+ * `security definer` and re-checks `is_owner()` itself (migration 0185), so the
  * books stay shut even if this page were mis-gated.
  */
 

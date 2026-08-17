@@ -140,11 +140,12 @@ export const adminNav: AdminNavItem[] = [
   { label: "ATM", href: "/admin/atm", permission: "settings.manage", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
   // F5-K: THE BOOKS. Gated on "books.view" (OWNER ONLY as of the 2026-08-17
   // owner decision), which mirrors the database's is_owner() check on every
-  // accounting RPC (migration 0179). Do NOT change these to "reports.view" --
+  // accounting RPC (migration 0185). Do NOT change these to "reports.view" --
   // that permission also grants manager and readonly, who would see the links
   // and then hit a raw database refusal.
   { label: "General Journal", href: "/admin/books/journal", permission: "books.view", icon: "\u270d\ufe0f", group: "Admin" }, // writing hand: manual entries
   { label: "Conversion", href: "/admin/books/conversion", permission: "books.view", icon: "\ud83d\udd01", group: "Admin" }, // leaving Cultivera and Sage, 2026-11-01
+  { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Admin" }, // receipt: what survives 280E and what it takes
   { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Admin" }, // scales: debits = credits
   { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Admin" }, // ledger book
   { label: "Chart of Accounts", href: "/admin/books/accounts", permission: "books.view", icon: "\ud83d\uddc3\ufe0f", group: "Admin" }, // card file index

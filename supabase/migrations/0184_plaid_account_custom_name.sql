@@ -1,5 +1,15 @@
 -- =============================================================================
--- 0158_plaid_account_custom_name.sql
+-- 0184_plaid_account_custom_name.sql
+--
+-- RENUMBERED from 0158. It shared that number with
+-- `0158_atm_upsert_constraints.sql` (both landed in PR #898). Migrations are
+-- applied by hand in numeric order, so a duplicate number is a migration that
+-- can quietly get skipped. This file was moved rather than the ATM one because
+-- 0183 refers to "the exact bug fixed in 0158", and that breadcrumb should keep
+-- pointing at the ATM constraint fix it was written about.
+--
+-- If you have ALREADY applied this against your database under its old name,
+-- nothing needs doing: it is idempotent, and re-running it is harmless.
 --
 -- Adds an owner-assigned NICKNAME to each Plaid account so Michael can type a
 -- friendly name (e.g. "Timberland Checking", "Wife's Citi Costco Visa") that

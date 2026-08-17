@@ -18,7 +18,7 @@
  * NOTE ON WHAT THIS DOES AND DOES NOT GUARANTEE.
  * This produces a pleasant screen for someone who should not be here. It is
  * NOT the thing that protects the ledger — the RPCs in 0175-0177 are all
- * `security definer` and check `is_owner()` themselves (migration 0179), so the
+ * `security definer` and check `is_owner()` themselves (migration 0185), so the
  * books stay shut even if this file were deleted. Belt and braces, deliberately.
  */
 

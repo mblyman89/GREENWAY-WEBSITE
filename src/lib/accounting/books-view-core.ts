@@ -64,7 +64,7 @@ export const ALL_STAFF_ROLES: readonly StaffRole[] = Object.keys(
  *    those things. The only thing an admin can do is pay vendors and pay
  *    employees."
  *
- * So this is the OWNER ALONE. It mirrors `is_owner()` (migration 0179), NOT
+ * So this is the OWNER ALONE. It mirrors `is_owner()` (migration 0185), NOT
  * `is_admin()` (migration 0001), which remains owner+admin and still guards the
  * two powers Michael deliberately preserved: paying vendors (payables.manage)
  * and paying employees (staffing.manage).
@@ -78,7 +78,7 @@ export function canReadBooks(role: StaffRole | null | undefined): boolean {
  * `canReadBooks` so a test can compare the two without one being defined in
  * terms of the other. Comparing a function to itself proves nothing.
  *
- * `is_owner()` in migration 0179 -- the gate the books actually use.
+ * `is_owner()` in migration 0185 -- the gate the books actually use.
  */
 export const DB_IS_OWNER_ROLES: readonly StaffRole[] = ["owner"] as const;
 

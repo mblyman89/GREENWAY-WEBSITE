@@ -849,9 +849,9 @@ describe("source-level drift guards", () => {
     expect(body).not.toContain('"admin"');
   });
 
-  it("migration 0179 exists, defines is_owner(), and re-gates the gl_* surface", () => {
+  it("migration 0185 exists, defines is_owner(), and re-gates the gl_* surface", () => {
     const sql = readFileSync(
-      resolve(__dirname, "../../supabase/migrations/0179_books_owner_only.sql"),
+      resolve(__dirname, "../../supabase/migrations/0185_books_owner_only.sql"),
       "utf8",
     );
     expect(sql).toContain("create or replace function public.is_owner()");

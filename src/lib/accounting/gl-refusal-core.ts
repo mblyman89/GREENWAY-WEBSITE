@@ -118,6 +118,12 @@ const REFUSALS: Record<
       "Staff operate the till; the general ledger is not part of that job. Sign in as the owner or an admin to view this.",
     isPermission: true,
   },
+  GL_NOT_OWNER: {
+    title: "Posting to the books is yours alone \u2014 not an admin's.",
+    whatToDo:
+      "This is a narrower gate than GL_FORBIDDEN, and the difference is deliberate. An admin CAN still do the day job: enter a vendor bill, schedule it, and pay it. What an admin cannot do is write that bill into the general ledger, because the ledger is the thing your tax return is built from and only you sign that return. Sign in as the owner to post it. If you were expecting an admin to be able to do this, they should hand you the bill for posting instead \u2014 nothing is lost, the bill keeps waiting.",
+    isPermission: true,
+  },
   // NOTE: there is no separate GL_OB_FORBIDDEN. The opening balance worksheet,
   // the blessing function and the Opening Balance Equity close all raise plain
   // GL_FORBIDDEN (0176 lines 289, 364, 526). A GL_OB_FORBIDDEN entry existed
@@ -397,6 +403,12 @@ const REFUSALS: Record<
     title: "An automatic entry has to be traceable to its source.",
     whatToDo:
       "Without a stable reference back to the sale, bill or bank line it came from, a retry would post the same money twice. This is a defect to report rather than something to work around.",
+  },
+
+  GL_NO_SOURCE_REF: {
+    title: "That bill has no reference tying it to the invoice it came from.",
+    whatToDo:
+      "The reference is what stops the same bill being posted twice. If the button is pressed again, or the network drops after the entry is written but before the screen updates, the reference is the only thing that lets the books recognise \u201Cthis one is already in\u201D. Without it, a retry quietly doubles a purchase \u2014 which overstates inventory now and overstates cost of goods sold later, on the one number \u00a7280E lets you subtract. Post the bill from the vendor bill screen rather than by hand, so the invoice number travels with it.",
   },
 
   // --- intercompany -------------------------------------------------------

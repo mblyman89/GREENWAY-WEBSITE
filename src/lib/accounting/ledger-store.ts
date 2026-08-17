@@ -16,7 +16,7 @@
  *
  * In particular this file does NOT decide who is allowed to read the books.
  * The RPCs are all `security definer` and check `is_owner()` themselves (they
- * checked `is_admin()` until migration 0179 narrowed the books to the owner
+ * checked `is_admin()` until migration 0185 narrowed the books to the owner
  * alone), so a caller who is not the owner gets refused by Postgres even if the
  * page that called it had a bug. The role check in the page is a courtesy that
  * produces a nice screen; THIS is not the guarantee either — the database is.
@@ -309,7 +309,7 @@ export async function getOverrideReport(
 }
 
 // ---------------------------------------------------------------------------
-// THE CONVERSION (0184, slice books-02)
+// THE CONVERSION (0186, slice books-02)
 //
 // Leaving Cultivera and Sage behind on 1 November 2026. The dates live in one
 // row of `gl_conversion_config` rather than in constants scattered through the
@@ -348,8 +348,8 @@ export async function getConversionConfig(): Promise<
   if (error) return refused<ConversionConfig>(error);
   if (data == null) {
     return refused<ConversionConfig>(
-      "The conversion settings row is missing. Migration 0184 seeds it; if this " +
-        "environment has not had 0184 applied yet, apply it before converting.",
+      "The conversion settings row is missing. Migration 0186 seeds it; if this " +
+        "environment has not had 0186 applied yet, apply it before converting.",
     );
   }
   return { ok: true, data: data as unknown as ConversionConfig };

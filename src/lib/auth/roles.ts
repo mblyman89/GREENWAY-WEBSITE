@@ -94,7 +94,7 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
   // permission from "reports.view", which also grants manager and readonly.
   // The database gates every accounting RPC on is_owner() = owner (migration
-  // 0179). If the books nav were hung off reports.view, a manager would see the
+  // 0185). If the books nav were hung off reports.view, a manager would see the
   // link, click it, and hit a raw database refusal -- and the "fix" someone
   // would reach for is loosening the DATABASE, which would hand over the entire
   // ledger.

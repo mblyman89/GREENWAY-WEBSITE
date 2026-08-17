@@ -502,26 +502,26 @@ describe("canRetireLegacySystem", () => {
 // was wrong, silently, for ten months of business.
 // ===========================================================================
 describe("SQL/TypeScript drift: the cut-over date", () => {
-  const sql = readMigration("0184_cutover_config.sql");
+  const sql = readMigration("0186_cutover_config.sql");
 
-  it("migration 0184 seeds the same dates this module exports", () => {
+  it("migration 0186 seeds the same dates this module exports", () => {
     expect(sql).toContain(`date '${CUTOVER_DATE}'`);
     expect(sql).toContain(`date '${OPENING_BALANCE_DATE}'`);
     expect(sql).toContain(`date '${PARALLEL_RUN_END}'`);
   });
 
-  it("migration 0184 enforces that the opening date is the day before cut-over", () => {
+  it("migration 0186 enforces that the opening date is the day before cut-over", () => {
     // A CHECK constraint, not a comment — the database must refuse a bad pair.
     expect(sql).toContain("opening_balance_date = cutover_date - 1");
   });
 
-  it("migration 0184 re-points the two hard-coded cut-over functions", () => {
+  it("migration 0186 re-points the two hard-coded cut-over functions", () => {
     expect(sql).toContain("gl_bless_opening_balances");
     expect(sql).toContain("gl_close_opening_balance_equity");
     expect(sql).toContain("gl_opening_balance_date()");
   });
 
-  it("migration 0184 ships an audit that proves no hard-coded date remains", () => {
+  it("migration 0186 ships an audit that proves no hard-coded date remains", () => {
     expect(sql).toContain("gl_audit_cutover_date");
   });
 
@@ -537,14 +537,14 @@ describe("SQL/TypeScript drift: the cut-over date", () => {
     expect(sql).toContain("'accrual'");
   });
 
-  it("0176 still contains the literals 0184 rewrites (or this migration is a no-op)", () => {
-    // If 0176 is ever edited so these strings vanish, 0184's replace() silently
+  it("0176 still contains the literals 0186 rewrites (or this migration is a no-op)", () => {
+    // If 0176 is ever edited so these strings vanish, 0186's replace() silently
     // does nothing and the cut-over date quietly reverts to 2025-12-31. This
     // test is the tripwire for that.
     const ob = readMigration("0176_opening_balances.sql");
     expect(ob).toContain("p_journal_date   := date '2025-12-31'");
     expect(ob).toContain("p_journal_date := date '2025-12-31'");
-    // ...and 0184 must target BOTH spacings.
+    // ...and 0186 must target BOTH spacings.
     expect(sql).toContain("'p_journal_date   := date ''2025-12-31'''");
     expect(sql).toContain("'p_journal_date := date ''2025-12-31'''");
   });
