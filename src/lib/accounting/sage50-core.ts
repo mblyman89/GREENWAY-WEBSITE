@@ -79,10 +79,40 @@ export function clean(s: string): string {
   return s.replace(/"/g, "").replace(/[\r\n]+/g, " ");
 }
 
-/** Quote a CSV cell only when it contains a comma or newline. */
+/**
+ * Quote a CSV cell only when it needs quoting.
+ *
+ * DEFECT FIXED 2026-08-16: the test was `/[,\n]/`, which does not match a LONE
+ * CARRIAGE RETURN. A value containing a bare `\r` -- routine when a vendor name
+ * or memo has been pasted in from Excel or from anything Windows-authored --
+ * was emitted unquoted, and every CSV reader that treats a lone `\r` as a line
+ * terminator (the RFC 4180 default, and what Sage 50 does) then saw ONE journal
+ * line as TWO. The second fragment has no date, no account and no amount, so
+ * the import either fails on a row nobody can find or, worse, posts a partial
+ * line. Proven by building a one-line journal with `\r` in the description and
+ * splitting on /\r\n|\r|\n/: 3 rows came back where 2 were correct.
+ *
+ * The repo already had a correct implementation of this in
+ * src/lib/discovery/statewide-market-core.ts (which does test for `\r`); this
+ * now matches that proven behaviour rather than inventing a third convention.
+ *
+ * SECOND DEFECT FIXED AT THE SAME TIME: embedded double quotes were stripped
+ * ONLY on the branch that quoted the cell. A value with a quote but no comma
+ * -- `Shelf 6" bracket`, `Paid ACME "rebate"` -- took the other branch and was
+ * emitted RAW, putting a bare `"` inside an unquoted field. That is malformed
+ * CSV, and a compliant reader then treats everything after it as quoted text:
+ * the 6" bracket line parsed as FIVE fields instead of six, with the
+ * description reading `Shelf 6 bracket,10.00` and the Amount column GONE.
+ * A journal line that loses its amount is the worst possible outcome here.
+ *
+ * Quotes are now stripped unconditionally, before the decision to quote. That
+ * is deliberately lossy rather than doubling them (`""`), because it is what
+ * the Sage 50 import expects; it is asserted in the tests so nobody "improves"
+ * it into RFC-style doubling by accident.
+ */
 export function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return /[,\n]/.test(s) ? `"${s.replace(/"/g, "")}"` : s;
+  const s = (v == null ? "" : String(v)).replace(/"/g, "");
+  return /[,\r\n]/.test(s) ? `"${s}"` : s;
 }
 
 /** Timestamped Sage 50 file name. */

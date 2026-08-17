@@ -811,6 +811,55 @@ export function __runSageHelperCoreTests(): void {
   ok(coaNoHeader.ok === true && coaNoHeader.accounts.length === 2, "headerless coa parsed");
   ok(coaNoHeader.warnings.some((w) => w.includes("canonical position")), "headerless warns");
 
+  // `ok` IS A GATE, NOT A DECORATION.
+  // sage-helper.ts uses `coa.ok` as the ONLY thing standing between an
+  // unreadable upload and a G/L validation run. If `ok` were ever hard-coded
+  // true, a junk file would sail through and every mapping would be reported
+  // missing against an empty chart. Added after a mutation (`ok: true`)
+  // survived this gate.
+  for (const [label, text] of [
+    ["empty", ""],
+    ["whitespace only", "   \n\n \t \n"],
+    ["header row only", "Account ID,Account Description,Account Type,Inactive"],
+    ["header + blank rows", "Account ID,Account Description,Account Type,Inactive\n,,,\n,,,"],
+  ] as [string, string][]) {
+    const r = parseChartOfAccounts(text);
+    eq(r.accounts.length, 0, `coa ${label}: no accounts`);
+    ok(r.ok === false, `coa ${label}: ok must be false when nothing parsed`);
+  }
+  for (const s of [
+    "",
+    "   ",
+    "Account ID,Account Description",
+    "Account ID,Account Description\n,,",
+    "Account ID,Account Description\n10000,CASH",
+    "10000,CASH,1,False",
+  ]) {
+    const r = parseChartOfAccounts(s);
+    ok(r.ok === (r.accounts.length > 0), `coa ok===accounts>0 for ${JSON.stringify(s)}`);
+  }
+  // An unread trial balance must never report itself balanced.
+  for (const [label, text] of [
+    ["empty", ""],
+    ["header only", "Account ID,Account Description,Debit Amt,Credit Amt"],
+    ["prose", "no data here at all"],
+  ] as [string, string][]) {
+    const r = parseTrialBalance(text);
+    ok(r.ok === false, `tb ${label}: not ok`);
+    eq(r.accountCount, 0, `tb ${label}: no accounts`);
+    ok(r.balanced === false, `tb ${label}: never reports balanced`);
+    ok(r.warnings.length > 0, `tb ${label}: says why`);
+  }
+  for (const [label, text] of [
+    ["empty", ""],
+    ["header only", "Vendor ID,Vendor,Invoice/CM #,Amount Due"],
+    ["prose", "nothing"],
+  ] as [string, string][]) {
+    const r = parseAgedPayables(text);
+    ok(r.ok === false, `ap ${label}: not ok`);
+    eq(r.vendorCount, 0, `ap ${label}: no vendors`);
+  }
+
   // GL mapping validation
   const val = validateGlMappingAgainstCoa(
     [
