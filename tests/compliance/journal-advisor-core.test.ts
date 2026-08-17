@@ -864,6 +864,26 @@ describe("source-level drift guards", () => {
     expect(sql.toLowerCase()).toContain("idempotent");
   });
 
+  it("gl_audit_owner_only_gate() EXCLUDES ITSELF, or it reports a false alarm forever", () => {
+    // FOUND BY RUNNING IT (slice books-04), not by reading it.
+    //
+    // The audit searches every function body for the literal strings
+    // 'is_admin()' and 'GL_FORBIDDEN'. Its OWN body necessarily contains both
+    // -- they are the patterns it hunts for -- so without a self-exclusion it
+    // matches itself and returns one row on a perfectly healthy database.
+    //
+    // The documentation the owner follows says "AN EMPTY RESULT MEANS THE
+    // BOOKS ARE OWNER-ONLY." So a self-match teaches him that the very first
+    // migration he applies did not work. Verified against live PostgreSQL 15:
+    // one row before the fix, zero rows after, and a deliberately planted
+    // is_admin()/GL_FORBIDDEN function is still caught.
+    const sql = readFileSync(
+      resolve(__dirname, "../../supabase/migrations/0185_books_owner_only.sql"),
+      "utf8",
+    );
+    expect(sql).toContain("not like 'gl\\_audit\\_%'");
+  });
+
   it("the journal write path goes through gl_submit_journal, never a raw insert", () => {
     const src = readSrc("journal-entry-service.ts");
     expect(src).toContain("submitJournal");

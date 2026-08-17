@@ -541,11 +541,59 @@
 
 ---
 
-## BOOKKEEPING BRANCH — the general ledger (slices books-01 → books-03)
+## BOOKKEEPING BRANCH — the general ledger (slices books-01 → books-04)
 
 > **Plain-English walkthrough of how to actually run these:**
 > see **`docs/HOW_TO_RUN_A_MIGRATION.md`**. It is written for the owner, step by
 > step, with what success looks like and what to do when it goes red.
+>
+> **⚠️ READ THIS FIRST IF YOU ALREADY TRIED TO RUN 0185 (fixed 2026-08-17):**
+> `0185_books_owner_only.sql` had a real bug that would have stopped it dead on
+> the very first paste, and it was found the only way it could be found — by
+> building a throwaway PostgreSQL database and actually running all 188
+> migrations against it. The migration rewrites the accounting security policies,
+> and to do that it first reads the list of roles each policy applies to. A
+> policy written "to public" stores that as role number 0, and PostgreSQL renders
+> role 0 as the literal text `unknown (OID=0)` rather than as `public`. That text
+> was then pasted back into the rebuilt policy, producing
+> `ERROR: syntax error at or near "("`.
+>
+> **Why it mattered so much:** the migration DROPS the old policies before it
+> rebuilds them. Failing in the middle would have left the accounting tables with
+> their old doors removed and the new ones not yet hung. (A migration runs inside
+> a transaction, so the failure would have rolled back cleanly — but you would
+> have been staring at a red error on step one of the books with no idea why.)
+>
+> **What to do:** nothing special. Just run the current file. The fix is one
+> line — role 0 is now filtered out — and 0185 is idempotent, so running it now
+> is correct whether or not you tried before.
+>
+> **⚠️ SECOND 0185 BUG, ALSO FIXED (2026-08-17):** rebuilding the database from
+> scratch a second time exposed a separate defect, this time in the verification
+> step rather than the migration body. `gl_audit_owner_only_gate()` finds
+> problems by scanning every function in the database for the text `is_admin()`
+> together with `GL_FORBIDDEN`. Because the audit function must quote those two
+> strings in order to search for them, it matched **itself** and returned one row
+> on a completely healthy database — directly contradicting the instruction
+> "expect zero rows" printed below. Fixed by excluding `gl_audit_%` functions as
+> a class (they are STABLE reporters that never gate anything, so excluding them
+> cannot mask a real hole). **Verified both directions against live PostgreSQL
+> 15:** zero rows on a clean database, and a deliberately planted function still
+> gated on `is_admin()` is still detected. Pinned by
+> `tests/compliance/journal-advisor-core.test.ts`.
+>
+> **✅ FULL-STACK VERIFICATION (2026-08-17):** all **188** migrations were applied
+> in order to a fresh PostgreSQL 15 database — **0 failures** — and then the
+> payroll stack was exercised end to end against that live database:
+> `gl_audit_payroll_wiring()` returned **zero rows**; all **13** labor roles
+> matched the TypeScript taxonomy exactly; the journal produced by
+> `buildPayrollJournal()` was posted through the real `gl_post_payroll_run()` and
+> the ledger came back **balanced to the cent (sum = 0)** with cost classes
+> intact (`cogs_allocable` 120000, `nondeductible_280e` 779954); re-posting the
+> same run was correctly ignored as a duplicate; re-posting *changed* numbers was
+> **refused** (`GL_PAYROLL_RUN_CHANGED`); posting lines with the cost classes
+> stripped was **refused** (`GL_PAYROLL_NO_COST_CLASS`); and under row-level
+> security a manager saw **0** payroll rows while the owner saw all **13**.
 >
 > **NOTE ON NUMBERING (2026-08-17):** two files were renumbered because the same
 > number had been used twice, and these are run by hand in numeric order by
@@ -610,3 +658,77 @@
   **Until this is run, the new `/admin/books/bills` page still explains §280E,
   still walks the decision tree and still does all the math on screen (the
   engine is pure TypeScript and needs no database), but no bill can post.**
+
+- [ ] **`supabase/migrations/0188_payroll_to_gl.sql`** — books-04: payroll, and
+  the answer to the question you asked directly — *"I would like the ability to
+  assign employees as cogs so I can write them off."*
+
+  **The short answer, before the details: mostly no, and the reason is not a
+  limitation of this software.** Greenway is an I-502 RETAILER, which in tax
+  language makes it a **reseller**. The rule that governs a reseller's inventory
+  cost is Reg. §1.471-3(b), and it lets you add to the invoice price only
+  *"transportation or other necessary charges incurred in acquiring possession
+  of the goods."* It contains **no direct-labor clause at all**. The paragraph
+  that does allow *"expenditures for direct labor"* is §1.471-3(c), and it
+  applies only to merchandise *"produced by the taxpayer"* — and even that
+  paragraph excludes *"any cost of selling."* Three Tax Court cases (Patients
+  Mutual/Harborside 151 T.C. 176; Alternative Health Care Advocates 151 T.C.
+  225; Richmond Patients Group T.C. Memo 2020-52) held dispensaries doing far
+  more hands-on work than Greenway to be resellers. Richmond even trimmed and
+  dried product and was still a reseller.
+
+  **So a budtender's hour can never become cost of goods sold. There is one
+  narrow door, and this migration builds it properly:** time spent *acquiring
+  possession* — meeting the transporter, checking the manifest against the
+  cases, moving product into the vault — rides the same clause inbound freight
+  rides. That time, and only that time, can go to account **61000 Payroll —
+  Inventory Handling**, and only when you can prove the minutes.
+
+  What the migration adds:
+  1. **`gl_payroll_labor_roles`** — the closed list of **13** labor roles, each
+     seeded with its treatment, its account and its §280E cost class. It mirrors
+     `src/lib/accounting/payroll-cogs-core.ts`, and a test parses this SQL and
+     compares every row against the TypeScript in both directions so the two can
+     never drift. **Three CHECK constraints make the dangerous states literally
+     unrepresentable in the database:** a never-inventoriable role can never
+     point at a COGS account; a COGS-account role must carry a COGS class; and
+     `cogs_direct` — the producer-only class — is refused outright.
+  2. **Task attribution on the time clock** — `time_punches` gains
+     `labor_role_code`, `inbound_manifest_id` and `task_note`. This is the piece
+     that was genuinely missing: the clock recorded *that* somebody worked, never
+     *what they worked on*, and without that there is no evidence to support any
+     allocation. Purely additive — existing punches and the existing CHECK
+     constraint are untouched.
+  3. **`gl_payroll_allocations`** — allocations in integer milli-percent, with
+     `document_ref` and `basis_note` **NOT NULL**, plus a trigger that refuses an
+     allocation that is not supported. An allocation you cannot document is an
+     allocation you do not have; that is the Harborside fact pattern in one line.
+  4. **`gl_post_payroll_run(...)`** — the only route from payroll to the ledger.
+     Owner-only. It **never auto-posts** — payroll always lands as a DRAFT for
+     you to review — and it validates the §280E cost class on every single line
+     before delegating to `gl_submit_journal`. A fingerprint guard
+     (`GL_PAYROLL_RUN_CHANGED`) catches the nastiest case of all: a run that is
+     corrected and re-submitted for the same period, where the reference matches
+     and the money does not, so the correction would otherwise be silently
+     discarded and the original wrong numbers kept.
+  5. Owner-only RLS on everything new.
+
+  Requires `is_owner()` (0185), `gl_journals`/`gl_submit_journal` (0172/0174) and
+  `payroll_runs` (0057). Its **§0 precondition guard** checks for all of them and
+  stops with `MIGRATION_OUT_OF_ORDER` rather than half-building itself.
+  Idempotent — verified by applying it three times in a row against a real
+  PostgreSQL 15 database. Then run:
+
+  ```sql
+  select * from gl_audit_payroll_wiring();
+  ```
+
+  and expect **zero rows**. That function checks eleven separate things and
+  lists only problems, so an empty result is the all-clear. It was tested by
+  deliberately stripping every CHECK constraint off the table and confirming it
+  still catches selling labor sitting in a COGS account — it is a real smoke
+  alarm, not a decorative one.
+
+  **Until this is run, payroll keeps working exactly as it does today (admins
+  can still pay employees) and the new payroll screen still teaches and still
+  does all the arithmetic on screen, but no payroll run can reach the ledger.**

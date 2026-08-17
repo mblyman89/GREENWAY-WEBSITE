@@ -91,9 +91,15 @@ begin
       p.polcmd                                     as polcmd,
       pg_get_expr(p.polqual,      p.polrelid)      as qual,
       pg_get_expr(p.polwithcheck, p.polrelid)      as withcheck,
+      -- p.polroles contains OID 0 for a policy written "to public" (the
+      -- common case). pg_get_userbyid(0) does NOT raise and does NOT return
+      -- 'public' -- it returns the literal string 'unknown (OID=0)', which
+      -- then gets pasted straight into a CREATE POLICY ... TO clause and
+      -- fails with a syntax error. Filter on the OID itself, not on what a
+      -- pretty-printer happens to call it.
       array(
         select pg_get_userbyid(oid) from unnest(p.polroles) as oid
-        where pg_get_userbyid(oid) <> 'public'
+        where oid <> 0
       )                                            as rolenames
     from pg_policy p
     join pg_class c     on c.oid = p.polrelid
@@ -251,6 +257,24 @@ language sql stable security definer set search_path = public as $$
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
     and p.prokind = 'f'
+    -- SELF-EXCLUSION (bug fix, slice books-04).
+    --
+    -- Without this line the audit REPORTS ITSELF. Its own body contains the
+    -- literal text 'is_admin()' and 'GL_FORBIDDEN' -- it has to, those are the
+    -- strings it hunts for -- so pg_get_functiondef() of this very function
+    -- matches both LIKE patterns and returns one row, every time, forever.
+    --
+    -- That matters because the documentation tells the owner "AN EMPTY RESULT
+    -- MEANS THE BOOKS ARE OWNER-ONLY." He runs the one-liner after applying
+    -- 0185, sees a row, and reasonably concludes the lockdown failed when in
+    -- fact it succeeded. A verification tool that cries wolf on a clean system
+    -- is worse than no tool, because it trains the owner to ignore it.
+    --
+    -- gl_audit_% functions are excluded as a class rather than by exact name:
+    -- every audit function must quote the dangerous patterns it searches for,
+    -- so they are all structurally prone to this. They are STABLE reporters
+    -- that never enforce anything, so excluding them cannot hide a real gate.
+    and p.proname not like 'gl\_audit\_%'
     and pg_get_functiondef(p.oid) like '%is_admin()%'
     and pg_get_functiondef(p.oid) like '%GL_FORBIDDEN%';
 $$;
