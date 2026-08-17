@@ -26,6 +26,16 @@ export function RefusalNotice({ refusal }: { refusal: GlRefusal }) {
     <div className={`rounded-2xl border p-5 ${border}`}>
       <p className="text-sm font-bold text-white">{refusal.title}</p>
 
+      {/* THE SPECIFICS FIRST. The title says what kind of problem this is; this
+          line says which journal, which account, which dates, how many cents.
+          It comes from the database's own sentence. Before this was added the
+          owner was told "that entry does not balance" and never told by how
+          much, which made a recognised refusal LESS informative than an
+          unrecognised one. */}
+      {refusal.detail ? (
+        <p className="mt-2 text-sm leading-relaxed text-white/85">{refusal.detail}</p>
+      ) : null}
+
       {refusal.whatToDo ? (
         <p className="mt-2 text-sm leading-relaxed text-white/70">{refusal.whatToDo}</p>
       ) : null}

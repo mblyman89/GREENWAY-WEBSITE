@@ -105,6 +105,14 @@ import { __runCoaCoreTests } from "../../src/lib/accounting/coa-core";
 import { __runPostingCoreTests } from "../../src/lib/accounting/posting-core";
 import { __runTrialBalanceCoreTests } from "../../src/lib/accounting/trial-balance-core";
 import { __runFixedAssetsCoreTests } from "../../src/lib/accounting/fixed-assets-core";
+// The two modules that stand between Michael and the books: what he is allowed
+// to SEE (books-view-core) and how the books say NO (gl-refusal-core). Both
+// shipped with full self-test suites that this runner never called -- 222
+// assertions that only ran if a human typed the command by hand. Registered
+// here so a break in either turns BOTH gates red. See the audit note in
+// tests/compliance/books-view-core.test.ts.
+import { __runBooksViewCoreTests } from "../../src/lib/accounting/books-view-core";
+import { __runGlRefusalCoreTests } from "../../src/lib/accounting/gl-refusal-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -710,6 +718,8 @@ async function main() {
   __runPostingCoreTests();
   __runTrialBalanceCoreTests();
   __runFixedAssetsCoreTests();
+  __runBooksViewCoreTests();
+  __runGlRefusalCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

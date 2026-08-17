@@ -473,6 +473,38 @@ export function buildDepreciationSchedule(a: FixedAssetInput): DepreciationYearR
     let amount = applyRateCents(basis, rate);
     let note: string | null = null;
 
+    // FINAL-YEAR SWEEP. Pub. 946 (2025), "Mid-quarter convention" paragraph,
+    // stating the rule that applies whenever the property is held for the whole
+    // recovery period: "If you hold the property for the entire recovery
+    // period, your depreciation deduction for the year that includes the final
+    // month of the recovery period is the amount of your unrecovered basis in
+    // the property."
+    //
+    // The published table percentages are rounded to three decimal places, so
+    // applying them literally for all 40 years does NOT always recover exactly
+    // 100% of basis. On a $1,234,567.89 building the table leaves 2-3 cents
+    // stranded; on very small bases it can strand the entire amount (a 1-cent
+    // basis rounds to zero in every one of the 40 years and would recover
+    // NOTHING). Stranded basis is real money that is never deducted and never
+    // explained, and it also breaks the reconciliation between the fixed-asset
+    // schedule and the balance sheet.
+    //
+    // So the last year of the recovery period takes the remainder, exactly as
+    // the IRS prescribes, instead of the table rate. This runs BEFORE the
+    // disposal branch because a disposal in the final year is prorated (the
+    // asset left mid-year, so the remainder is NOT all deductible — what is
+    // left over is recovered through gain or loss on the sale instead).
+    const isFinalRecoveryYear = ry === lastRecoveryYear;
+    const notDisposedThisYear = !(a.disposedYear != null && taxYear === a.disposedYear);
+    if (isFinalRecoveryYear && notDisposedThisYear) {
+      const remainder = basis - accumulated;
+      if (remainder !== amount) {
+        amount = remainder;
+        note =
+          "Final year of the recovery period: the deduction is the remaining unrecovered basis, not the table percentage. IRS Pub. 946: \"If you hold the property for the entire recovery period, your depreciation deduction for the year that includes the final month of the recovery period is the amount of your unrecovered basis in the property.\" This sweeps up the few cents the published percentages leave behind, so the whole cost is recovered and the schedule ties to the balance sheet.";
+      }
+    }
+
     // Disposal year: prorate the full-year amount by half-months of service.
     if (a.disposedYear != null && taxYear === a.disposedYear) {
       const hm = disposalHalfMonths(a.disposedMonth as number);
@@ -1006,10 +1038,119 @@ export function __runFixedAssetsCoreTests(): void {
     100_001_00,
     "a realistic $100,001 building also recovers exactly its basis",
   );
+  // The final year must EXPLAIN why it differs from the table percentage. It
+  // reaches that point by one of two lawful routes: the Pub. 946 final-year
+  // sweep (deduct the unrecovered remainder) or the hard cap (never deduct more
+  // than basis). Which one fires depends on whether the rounded percentages
+  // undershoot or overshoot for this particular basis, so the assertion is on
+  // the guarantee — the year is reasoned about and says so — not on which
+  // branch happened to produce it.
+  const realLastNote = realRows[realRows.length - 1].note ?? "";
   expect(
-    "the realistic case is capped in its final year",
-    (realRows[realRows.length - 1].note ?? "").includes("Capped at unrecovered basis"),
+    "the realistic case explains its final year",
+    realLastNote.includes("Final year of the recovery period") ||
+      realLastNote.includes("Capped at unrecovered basis"),
   );
+  // The cap branch must stay REACHABLE. If the sweep above were ever written so
+  // that it swallowed every case, the cap would become dead code and the
+  // "never exceed basis" guarantee would rest on nothing. $0.59 placed in
+  // service in September is a basis found by search, not chosen for
+  // convenience, where the rounded percentages overshoot and the cap bites in
+  // recovery year 31 — long before the final-year sweep could apply.
+  const capProbe = buildDepreciationSchedule({
+    ...overshoot,
+    assetTag: "CAP-REACHABLE",
+    depreciableBasisCents: 59,
+    placedInServiceMonth: 9,
+  });
+  expect(
+    "the cap branch is still reachable before the final year",
+    capProbe.some(
+      (r) =>
+        r.recoveryYear < NONRES_REAL_TABLE_YEARS &&
+        (r.note ?? "").includes("Capped at unrecovered basis"),
+    ),
+  );
+  eq(
+    capProbe.reduce((s, r) => s + r.depreciationCents, 0),
+    59,
+    "the capped probe still recovers exactly its basis",
+  );
+
+  // PUB. 946 FINAL-YEAR SWEEP (regression guard for defect D7).
+  // The published table percentages are rounded to three decimals, so applying
+  // them literally can strand basis: a 1-cent asset rounded to zero in all 40
+  // years and recovered NOTHING, and a $1,234,567.89 building stranded 2-3
+  // cents. Stranded basis is money never deducted and never explained. Every
+  // basis must now recover in full, in every month.
+  for (const b of [1, 2, 3, 7, 50, 100_00, 123_456_789]) {
+    for (let m = 1; m <= 12; m++) {
+      const rr = buildDepreciationSchedule({
+        ...overshoot,
+        assetTag: "SWEEP",
+        depreciableBasisCents: b,
+        placedInServiceMonth: m,
+      });
+      eq(
+        rr.reduce((s, r) => s + r.depreciationCents, 0),
+        b,
+        `basis ${b} placed in month ${m} recovers in full`,
+      );
+    }
+  }
+  // A disposal must NOT trigger the sweep: the asset left mid-year, so the
+  // remaining basis is recovered through gain or loss on the sale, not as a
+  // final-year deduction. Deducting the remainder here would overstate the
+  // deduction in the year of sale.
+  // Derived, not hardcoded: the final recovery year for an asset placed in
+  // service in `placedInServiceYear` is that year + 39.
+  const dispFinalYear = overshoot.placedInServiceYear + NONRES_REAL_TABLE_YEARS - 1;
+  const dispFinal = buildDepreciationSchedule({
+    ...overshoot,
+    assetTag: "DISPOSED-FINAL-YEAR",
+    depreciableBasisCents: 100_000_00,
+    placedInServiceMonth: 3,
+    disposedYear: dispFinalYear,
+    disposedMonth: 6,
+  });
+  const dispLast = dispFinal[dispFinal.length - 1];
+  expect(
+    "a disposal in the final recovery year still prorates rather than sweeping",
+    (dispLast.note ?? "").includes("Disposal year") &&
+      !(dispLast.note ?? "").includes("Final year of the recovery period"),
+  );
+  expect(
+    "a disposal leaves basis unrecovered, to be settled on the sale",
+    dispLast.remainingBasisCents > 0,
+  );
+  // ...and the AMOUNT must be the prorated TABLE rate, not the prorated
+  // remainder. Asserting only on the note above was not enough: a mutation that
+  // let the sweep fire on a disposal survived, because the disposal branch runs
+  // afterwards and overwrites the note — the explanation looked right while the
+  // number was wrong. Distinguishing case found by search: a 2-cent basis where
+  // the year-40 table rate rounds to 0 but the remainder is 2 cents.
+  for (let m = 1; m <= 12; m++) {
+    const tinyDisposed = buildDepreciationSchedule({
+      ...overshoot,
+      assetTag: "DISPOSAL-AMOUNT",
+      depreciableBasisCents: 2,
+      placedInServiceMonth: m,
+      disposedYear: dispFinalYear,
+      disposedMonth: 6,
+    });
+    const finalRow = tinyDisposed.find((r) => r.recoveryYear === NONRES_REAL_TABLE_YEARS);
+    if (!finalRow) continue;
+    const tableAmount = applyRateCents(
+      2,
+      macrsRateMilliPct("nonresidential_real", NONRES_REAL_TABLE_YEARS, m),
+    );
+    const wanted = Number(mulDivRoundHalfUp(BigInt(tableAmount), BigInt(11), BigInt(24)));
+    eq(
+      finalRow.depreciationCents,
+      wanted,
+      `disposal in month ${m} prorates the table rate, not the remainder`,
+    );
+  }
 
   // The independent guard.
   assertAccumulatedWithinBasis("OK", 100, 100);

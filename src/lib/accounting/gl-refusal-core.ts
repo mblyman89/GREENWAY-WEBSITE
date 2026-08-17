@@ -62,6 +62,23 @@ export type GlRefusal = {
   /** What to do about it. Empty when we genuinely do not know. */
   whatToDo: string;
   /**
+   * THE SPECIFICS, straight from the database, with the machine token stripped
+   * off the front. This is where the ACTUAL NUMBERS, ACCOUNT CODES AND DATES
+   * live: "journal 41 is out of balance by 2500 cents", "the range starts
+   * 2026-12-31 and ends 2026-01-01", "account 12100 (Inventory - Cannabis)".
+   *
+   * WHY THIS FIELD EXISTS (defect D3, found 2026-08-16): this value was
+   * previously computed and then thrown away by a ternary whose two branches
+   * were identical, so a recognised refusal showed the generic explanation and
+   * NOTHING ELSE. The owner was told "that entry does not balance" but never
+   * told BY HOW MUCH, and the raw text was only rendered for UNRECOGNISED
+   * failures. The better a refusal was understood, the less it told him. That
+   * is exactly backwards, so the specifics are now a first-class field.
+   *
+   * Empty string when the database sent a bare code with no sentence after it.
+   */
+  detail: string;
+  /**
    * The original message, always preserved. Never shown as the primary text
    * for a recognised refusal, but always available so nothing is hidden.
    */
@@ -101,11 +118,10 @@ const REFUSALS: Record<
       "Staff operate the till; the general ledger is not part of that job. Sign in as the owner or an admin to view this.",
     isPermission: true,
   },
-  GL_OB_FORBIDDEN: {
-    title: "The opening balance worksheet is admin-only.",
-    whatToDo: "Sign in as the owner or an admin to view this.",
-    isPermission: true,
-  },
+  // NOTE: there is no separate GL_OB_FORBIDDEN. The opening balance worksheet,
+  // the blessing function and the Opening Balance Equity close all raise plain
+  // GL_FORBIDDEN (0176 lines 289, 364, 526). A GL_OB_FORBIDDEN entry existed
+  // here for months and could never fire. See the drift test.
 
   // --- the report asked for something impossible (0175) ----------------
   TB_NO_ENTITY: {
@@ -162,7 +178,7 @@ const REFUSALS: Record<
     title: "This change has to be made by a signed-in person.",
     whatToDo: "Sign in again, so the record can name who decided it.",
   },
-  GL_LINE_IN_THE_SAND: {
+  GL_BEFORE_LINE_IN_THE_SAND: {
     title: "That date is before the cut-over.",
     whatToDo:
       "The books start on 1 January 2026. Anything earlier belongs to the old records, which are kept as history and never edited.",
@@ -194,20 +210,38 @@ const REFUSALS: Record<
     whatToDo:
       "Add the balances from the closing trial balance first. Posting an empty cut-over would quietly produce a set of books with nothing in them.",
   },
-  GL_OB_OUT_OF_BALANCE: {
-    title: "The opening balances do not balance.",
-    whatToDo:
-      "The difference is shown above. Every figure must trace to the closing statements before this can be finalised.",
-  },
+  // NOTE: there is no GL_OB_OUT_OF_BALANCE either. An unbalanced opening
+  // balance sheet is caught by gl_post_journal and comes back as the ordinary
+  // GL_OUT_OF_BALANCE, which is already explained above.
   GL_OB_INACTIVE_ACCOUNT: {
     title: "One of these accounts has been retired.",
     whatToDo:
       "A retired account cannot take an opening balance. Either reactivate it or move the figure to the account that replaced it.",
   },
-  GL_OB_WRONG_ENTITY: {
+  GL_OB_ACCOUNT_NOT_ALLOWED_FOR_ENTITY: {
     title: "That account belongs to a different set of books.",
     whatToDo:
       "Each account belongs to one entity. Check you are on the right set of books.",
+  },
+  GL_OB_UNKNOWN_ACCOUNT: {
+    title: "There is no account with that number.",
+    whatToDo:
+      "Check the account number against the chart of accounts. If the old books used a number this chart does not have, map it to its replacement rather than inventing an account.",
+  },
+  GL_OB_NOT_BALANCE_SHEET: {
+    title: "Opening balances are for balance-sheet accounts only.",
+    whatToDo:
+      "Income and expense accounts start every year at zero, so they cannot carry an opening balance. Last year's profit belongs in Retained Earnings (40300).",
+  },
+  GL_OB_PARENT_ACCOUNT: {
+    title: "That account is a heading, not a place to put money.",
+    whatToDo:
+      "It has accounts underneath it. Put the balance on the specific account beneath the heading, so it lands where reports expect it.",
+  },
+  GL_OB_NO_ACTOR: {
+    title: "Finalising the opening balances has to be done by a signed-in person.",
+    whatToDo:
+      "You appear to be signed out. Sign in again — the entry every other number depends on cannot be anonymous.",
   },
   GL_OB_NO_EVIDENCE: {
     title: "Every opening balance needs to say where it came from.",
@@ -225,6 +259,283 @@ const REFUSALS: Record<
     title: "The override record cannot be edited or deleted.",
     whatToDo:
       "That is deliberate — a record that can be tidied up afterwards is worth nothing. If an override was a mistake, reverse the entry; that correction becomes part of the record too.",
+  },
+
+  // -------------------------------------------------------------------------
+  // ADDED 2026-08-16 (defect D2). Fifty-seven refusals that the migrations
+  // genuinely raise had no translation at all, so every one of them reached
+  // the screen as "Unexpected problem — this is not one of the checks we
+  // wrote", followed by raw Postgres text. Each refusal below was written by
+  // reading the actual `raise exception` line in supabase/migrations, not from
+  // memory. The drift test in tests/compliance/gl-refusal-core.test.ts now
+  // fails the build if a new refusal is added to SQL without a translation.
+  // -------------------------------------------------------------------------
+
+  // --- the entry itself is malformed ------------------------------------
+  GL_TOO_FEW_LINES: {
+    title: "An entry needs at least two lines.",
+    whatToDo:
+      "Every entry moves money from somewhere to somewhere else, so it takes a minimum of two lines. Add the other side of it.",
+  },
+  GL_BAD_AMOUNT: {
+    title: "One of the amounts is not a whole number of cents.",
+    whatToDo:
+      "Money is kept in whole cents so nothing can drift by a fraction of a penny. Round the figure to the nearest cent.",
+  },
+  GL_UNKNOWN_ACCOUNT: {
+    title: "One of the account numbers is not in the chart of accounts.",
+    whatToDo:
+      "Check the number. If the account genuinely should exist, add it to the chart first — an entry pointing at a made-up account would never appear on a report.",
+  },
+  GL_INACTIVE_ACCOUNT: {
+    title: "One of these accounts has been retired.",
+    whatToDo:
+      "Retired accounts stay for history but take no new entries. Use the account that replaced it, or reactivate it if retiring it was a mistake.",
+  },
+  GL_ENTITY_MISMATCH: {
+    title: "One of the lines belongs to a different set of books.",
+    whatToDo:
+      "Every line of an entry has to be on the same set of books as the entry itself. If you are moving money between businesses, record it as an intercompany transfer instead.",
+  },
+  GL_ACCOUNT_NOT_ALLOWED_FOR_ENTITY: {
+    title: "That account is not available on this set of books.",
+    whatToDo:
+      "Some accounts belong to one business only. Check you are on the right set of books, or pick the equivalent account for this one.",
+  },
+  GL_CONTROL_ACCOUNT: {
+    title: "That account is maintained automatically and cannot be typed into.",
+    whatToDo:
+      "Accounts like Accounts Payable and Inventory are totals kept in step with their detail. Record the underlying transaction — the bill, the payment, the receipt — and this account updates itself. Typing directly into it is how a total stops agreeing with the detail behind it.",
+  },
+  GL_INVENTORY_MANUAL: {
+    title: "Inventory cannot be changed by a typed journal entry.",
+    whatToDo:
+      "Inventory moves when goods move. Post the receipt, the sale, or a counted adjustment so the number has evidence behind it. This matters more here than anywhere else: inventory is what makes cost of goods sold deductible under 280E.",
+  },
+  GL_COST_CLASS_REQUIRED: {
+    title: "This line needs to say how it is treated for tax.",
+    whatToDo:
+      "Every expense on the cannabis books has to be marked as cost of goods sold or as non-deductible under 280E. Unmarked expenses are how a deduction gets claimed that cannot be defended.",
+  },
+  GL_COST_CLASS_NOT_ALLOWED: {
+    title: "A balance-sheet line must not carry a 280E tax treatment.",
+    whatToDo:
+      "Cash, inventory and loans are not expenses, so they are neither deductible nor non-deductible. Clear the tax treatment on this line.",
+  },
+  GL_NORMAL_BALANCE: {
+    title: "That account is set up the wrong way round.",
+    whatToDo:
+      "Each account has a natural side — assets and expenses sit on the debit side, liabilities, equity and income on the credit side. This one disagrees with its own type, which would make every report using it read backwards.",
+  },
+
+  // --- period and timing -------------------------------------------------
+  GL_NO_PERIOD: {
+    title: "There is no accounting period open for that date.",
+    whatToDo:
+      "Months have to exist before anything can be recorded in them. Open the fiscal year (or the month) first, then post this.",
+  },
+  GL_PERIOD_CLOSED: {
+    title: "That month is closed.",
+    whatToDo:
+      "Closed months do not accept new entries, which is what makes a closed month mean something. If this genuinely belongs there, reopen the month with a written reason; otherwise date it in the current month.",
+  },
+  GL_PERIOD_LOCKED: {
+    title: "That month is locked because a tax return was filed on it.",
+    whatToDo:
+      "This one cannot be reopened at all. A filed return has to keep matching the books it came from. Record the correction in the current month instead — that is how amendments are handled.",
+  },
+  GL_PERIOD_NOT_CLOSED: {
+    title: "That month is not closed yet.",
+    whatToDo: "It has to be closed before this step can happen.",
+  },
+  GL_PERIOD_NOT_OPEN: {
+    title: "That month is not open.",
+    whatToDo: "It is already closed or locked, so this step does not apply to it.",
+  },
+  GL_OPEN_DRAFTS: {
+    title: "There are unfinished entries in that month.",
+    whatToDo:
+      "Closing a month with drafts still in it would leave real transactions stranded outside the books. Post them or delete them, then close.",
+  },
+  GL_BAD_FISCAL_YEAR: {
+    title: "That is not a year these books cover.",
+    whatToDo: "The books begin in 2026. Anything earlier belongs to the old records.",
+  },
+
+  // --- posting, reversal and permanence ---------------------------------
+  GL_IMMUTABLE: {
+    title: "Posted entries cannot be changed or deleted.",
+    whatToDo:
+      "This is the single most important rule in the system and it is not going to bend. To correct a posted entry, reverse it and post the right one — both stay on the record, which is exactly what an examiner expects to see.",
+  },
+  GL_APPEND_ONLY: {
+    title: "That record is permanent and cannot be edited or deleted.",
+    whatToDo:
+      "It is a history log. A history that can be rewritten afterwards proves nothing, so it only ever grows.",
+  },
+  GL_NOT_POSTED: {
+    title: "Only a posted entry can be reversed.",
+    whatToDo:
+      "This one is still a draft, so there is nothing on the books to undo. Edit it or delete it directly.",
+  },
+  GL_ALREADY_REVERSED: {
+    title: "This entry has already been reversed.",
+    whatToDo:
+      "Reversing it twice would put the money back a second time. Look at the reversal that already exists before doing anything else.",
+  },
+  GL_NOT_FOUND: {
+    title: "That entry no longer exists.",
+    whatToDo:
+      "It may have been deleted while this page was open. Reload and check the current state.",
+  },
+  GL_REASON_REQUIRED: {
+    title: "This needs a written reason.",
+    whatToDo:
+      "Reversing a posted entry and reopening a closed month both change history, so both have to say why in your own words. Write the sentence you would want to read a year from now.",
+  },
+  GL_NO_IDEMPOTENCY_KEY: {
+    title: "An automatic entry has to be traceable to its source.",
+    whatToDo:
+      "Without a stable reference back to the sale, bill or bank line it came from, a retry would post the same money twice. This is a defect to report rather than something to work around.",
+  },
+
+  // --- intercompany -------------------------------------------------------
+  GL_INTERCOMPANY_SAME_ENTITY: {
+    title: "A transfer between businesses needs two different businesses.",
+    whatToDo:
+      "Both sides of this name the same set of books. If you are moving money inside one business, that is an ordinary entry, not a transfer.",
+  },
+  GL_INTERCOMPANY_NO_REF: {
+    title: "Both halves of a transfer must share a reference.",
+    whatToDo:
+      "The two sides live on different sets of books, so a shared reference is the only thing tying them back together. Without it, one side can be found and the other cannot.",
+  },
+  GL_OWNERSHIP: {
+    title: "The ownership percentages do not add up to 100%.",
+    whatToDo:
+      "Anything allocated by ownership would be silently over- or under-allocated. Fix the percentages so they total exactly 100%.",
+  },
+
+  // --- automatic posting --------------------------------------------------
+  GL_AUTOPOST_NOT_ELIGIBLE: {
+    title: "That kind of entry is never posted automatically.",
+    whatToDo:
+      "Estimates, allocations and judgment calls always get a human look before they reach the books. Review it and post it yourself.",
+  },
+  GL_AUTOPOST_NO_TEMPLATE: {
+    title: "Nothing posts itself without a rule approved in advance.",
+    whatToDo:
+      "Set up and approve a posting template first. The rule has to be agreed before it runs, not after.",
+  },
+  GL_AUTOPOST_TEMPLATE_UNAPPROVED: {
+    title: "That automatic posting rule has never been approved.",
+    whatToDo: "Review the rule and approve it before it is allowed to post anything.",
+  },
+  GL_AUTOPOST_TEMPLATE_INACTIVE: {
+    title: "That automatic posting rule is switched off.",
+    whatToDo: "Switch it back on if it should be running, or post this entry by hand.",
+  },
+  GL_AUTOPOST_TEMPLATE_EXPIRED: {
+    title: "That automatic posting rule has expired.",
+    whatToDo:
+      "Rules carry an end date on purpose, so an old arrangement cannot keep posting quietly after it ended. Extend it or replace it.",
+  },
+  GL_AUTOPOST_TEMPLATE_NOT_YET_EFFECTIVE: {
+    title: "That automatic posting rule has not started yet.",
+    whatToDo:
+      "It takes effect on a later date. Either wait for it, or change its start date if it should already be running.",
+  },
+  GL_AUTOPOST_WRONG_ENTITY: {
+    title: "That posting rule belongs to a different set of books.",
+    whatToDo: "Use the rule set up for this business.",
+  },
+  GL_AUTOPOST_WRONG_SOURCE_KIND: {
+    title: "That posting rule is for a different kind of transaction.",
+    whatToDo:
+      "A rule written for sales cannot post a bill. Use the right rule, or write one for this kind of transaction.",
+  },
+  GL_AUTOPOST_OVER_LIMIT: {
+    title: "This is larger than the ceiling set on that rule.",
+    whatToDo:
+      "Automatic rules carry a size limit so an unusual amount always gets a human look. Post it yourself after checking it, or raise the ceiling deliberately.",
+  },
+  GL_AUTOPOST_OUT_OF_TOLERANCE: {
+    title: "The amount does not match what was expected closely enough.",
+    whatToDo:
+      "The difference is outside the tolerance on that rule, which is the system telling you something is off. Compare the bill to the order before posting anything.",
+  },
+  GL_AUTOPOST_NO_THREE_WAY_MATCH: {
+    title: "A bill posts itself only when three documents agree.",
+    whatToDo:
+      "The purchase order, the record of what actually arrived, and the invoice all have to line up. One of them does not. Check what was ordered against what came in and what you were billed.",
+  },
+  GL_TEMPLATE_NEEDS_REASON: {
+    title: "Changing an automatic posting rule needs a written reason.",
+    whatToDo:
+      "A rule that posts money by itself is exactly the thing that has to explain why it changed. Write it in your own words.",
+  },
+
+  // --- chart of accounts --------------------------------------------------
+  GL_ACCOUNT_EXISTS: {
+    title: "There is already an account with that number.",
+    whatToDo: "Pick a different number — two accounts cannot share one.",
+  },
+  GL_ACCOUNT_IMMUTABLE: {
+    title: "That account cannot be renumbered or deleted.",
+    whatToDo:
+      "It either has history behind it or it is one the system depends on. Retire it and create a new account instead; the history stays where the reports expect it.",
+  },
+  GL_ACCOUNT_IN_USE: {
+    title: "That account has entries in it and cannot be deleted.",
+    whatToDo:
+      "Deleting it would take real history with it. Mark it inactive instead — it stops appearing for new entries but its past stays intact.",
+  },
+  GL_ACCOUNT_BLOCK: {
+    title: "That number is in the wrong range for that kind of account.",
+    whatToDo:
+      "The numbering ranges decide what an account is: assets, liabilities, equity, income, expenses. Pick a number from the right range so every report groups it correctly.",
+  },
+  GL_ACCOUNT_PARENT: {
+    title: "That account cannot sit under that heading.",
+    whatToDo:
+      "An account has to live inside its own heading, and it cannot be its own parent. Choose a heading of the same type.",
+  },
+  GL_ENTITY_UNKNOWN: {
+    title: "That account is restricted to a business that does not exist.",
+    whatToDo:
+      "Usually a typo in the business code. A mistyped code silently removes the account from every filtered report, so it is refused outright. Leave it blank to mean \u201Cany business\u201D.",
+  },
+  GL_NOT_APPROVED: {
+    title: "That has to be approved first.",
+    whatToDo:
+      "A proposed account or a suggested classification only takes effect once you have approved it.",
+  },
+  GL_DECISION_REQUIRED: {
+    title: "A decision has to record who made it.",
+    whatToDo:
+      "Approving or rejecting a suggestion has to be attributable to a person. Sign in again if you have been signed out.",
+  },
+  GL_MAPPING_INCOMPLETE: {
+    title: "That old account has nowhere to go.",
+    whatToDo:
+      "Every old account being carried over needs a destination in the new chart. Say where this balance should land.",
+  },
+  GL_MAPPING_INVALID: {
+    title: "That account cannot carry a balance forward.",
+    whatToDo:
+      "Income and expense accounts start each year at zero, so their balances do not carry over. Last year's result belongs in Retained Earnings.",
+  },
+  GL_MAP_TARGET: {
+    title: "That balance is mapped to an account that does not exist.",
+    whatToDo:
+      "The balance would vanish at the cut-over — the worst kind of error, because nothing would look wrong afterwards. Point it at a real account in the new chart.",
+  },
+
+  // --- fixed assets --------------------------------------------------------
+  GL_LAND_NOT_DEPRECIABLE: {
+    title: "Land and construction in progress are never depreciated.",
+    whatToDo:
+      "Land does not wear out, so its cost comes back on sale rather than over time (IRS Pub. 946). If you are depreciating a building, put the depreciation against Buildings and leave the land alone. If you are selling the property, that is allowed — but a sale unwinds accumulated depreciation in the opposite direction from this entry, so record the final depreciation first and the sale second.",
   },
 };
 
@@ -306,6 +617,7 @@ export function explainGlRefusal(err: ErrorLike): GlRefusal {
       title: "Something failed, and it did not say why.",
       whatToDo:
         "No message came back at all. Nothing was changed. Please report this — a silent failure is worth investigating.",
+      detail: "",
       raw: "",
       isPermission: false,
     };
@@ -323,6 +635,9 @@ export function explainGlRefusal(err: ErrorLike): GlRefusal {
       title: "Unexpected problem — this is not one of the checks we wrote.",
       whatToDo:
         "Nothing was changed by this. The exact message is shown below; please report it rather than retrying blindly.",
+      // For an unrecognised failure the whole raw text is shown by the UI, so
+      // repeating part of it here would only duplicate it on screen.
+      detail: "",
       raw,
       isPermission: false,
     };
@@ -330,13 +645,22 @@ export function explainGlRefusal(err: ErrorLike): GlRefusal {
 
   // Keep the detail sentence from the database, because it usually contains
   // the actual figures and dates involved.
+  //
+  // DEFECT D3 (fixed 2026-08-16): this value used to be computed and then
+  // discarded by `detail && detail !== known.title ? `${known.whatToDo}` :
+  // known.whatToDo` -- a ternary whose two branches were character-for-
+  // character identical. The comment above claimed the detail was kept; it
+  // was not. Now it is returned as its own field and the UI renders it, so
+  // "that entry does not balance" is followed by BY HOW MUCH.
   const detail = stripRefusalCode(raw);
 
   return {
     recognised: true,
     code,
     title: known.title,
-    whatToDo: detail && detail !== known.title ? `${known.whatToDo}` : known.whatToDo,
+    whatToDo: known.whatToDo,
+    // Never echo the generic title back as if it were specific detail.
+    detail: detail === known.title ? "" : detail,
     raw,
     isPermission: known.isPermission === true,
   };
@@ -429,6 +753,27 @@ export function __runGlRefusalCoreTests(): void {
   ok(backwards.recognised, "TB_RANGE_BACKWARDS recognised");
   ok(!backwards.isPermission, "a backwards range is not a permission problem");
 
+  // --- DEFECT D3 REGRESSION --------------------------------------------
+  // The database's own sentence carries the ACTUAL figures. It used to be
+  // computed and thrown away by a ternary with two identical branches, so a
+  // recognised refusal told the owner less than an unrecognised one did.
+  ok(
+    backwards.detail === "the range starts 2026-12-31 and ends 2026-01-01.",
+    `the specifics survive onto .detail (got ${JSON.stringify(backwards.detail)})`,
+  );
+  const unbalanced = explainGlRefusal(
+    "GL_OUT_OF_BALANCE: journal 41 is out of balance by 2500 cents (debits and credits must be equal)",
+  );
+  ok(unbalanced.detail.includes("2500"), "the owner is told BY HOW MUCH, not just that it fails");
+  ok(unbalanced.detail.includes("journal 41"), "and WHICH journal");
+  // The machine token must never survive into the human-facing detail.
+  ok(!unbalanced.detail.includes("GL_OUT_OF_BALANCE"), "detail carries no machine token");
+  // A bare code with no sentence must not fabricate detail.
+  eq(explainGlRefusal("GL_OUT_OF_BALANCE:").detail, "", "a bare code produces no detail");
+  // An unrecognised failure shows its raw text in full, so detail stays empty
+  // rather than printing the same words twice on screen.
+  eq(explainGlRefusal("fetch failed").detail, "", "unknown failures do not duplicate raw as detail");
+
   // --- explainGlRefusal: THE CRITICAL BRANCH ---------------------------
   // An unknown failure must NEVER be dressed up as understood.
   const unknown = explainGlRefusal("fetch failed");
@@ -460,9 +805,51 @@ export function __runGlRefusalCoreTests(): void {
   ok(!isPermissionRefusal("GL_OUT_OF_BALANCE: x"), "out of balance is not");
   ok(!isPermissionRefusal("fetch failed"), "unknown is not a permission wall");
 
+  // --- DEFECT D1 REGRESSION --------------------------------------------
+  // Four codes sat in this catalogue that NOTHING in the codebase ever raised
+  // (GL_LINE_IN_THE_SAND, GL_OB_FORBIDDEN, GL_OB_OUT_OF_BALANCE,
+  // GL_OB_WRONG_ENTITY). They looked like coverage and provided none, while
+  // the REAL refusals fell through to "not one of the checks we wrote". The
+  // authoritative spellings are asserted here; the drift test in
+  // tests/compliance/gl-refusal-core.test.ts checks the whole set against the
+  // migrations on every run.
+  ok(
+    explainGlRefusal("GL_BEFORE_LINE_IN_THE_SAND: dated 2025-12-31").recognised,
+    "the real pre-cut-over code is the one that is explained",
+  );
+  ok(
+    !knownRefusalCodes().includes("GL_LINE_IN_THE_SAND"),
+    "the phantom GL_LINE_IN_THE_SAND spelling is gone",
+  );
+  ok(
+    !knownRefusalCodes().includes("GL_OB_FORBIDDEN"),
+    "GL_OB_FORBIDDEN never existed; the OB worksheet raises plain GL_FORBIDDEN",
+  );
+  ok(
+    explainGlRefusal("GL_FORBIDDEN: the opening balance worksheet is admin-only.").isPermission,
+    "the OB worksheet refusal is understood as a permission wall",
+  );
+  ok(
+    explainGlRefusal(
+      "GL_OB_ACCOUNT_NOT_ALLOWED_FOR_ENTITY: account 12100 (Inventory) may only be used by these books: greenway.",
+    ).recognised,
+    "the real OB wrong-entity code is explained",
+  );
+
   // --- coverage --------------------------------------------------------
   const codes = knownRefusalCodes();
-  ok(codes.length >= 25, `at least 25 refusals are explained (got ${codes.length})`);
+  ok(codes.length >= 70, `at least 70 refusals are explained (got ${codes.length})`);
+  // Spot-check the ones that cost real money if they read as gibberish.
+  for (const c of [
+    "GL_IMMUTABLE",
+    "GL_PERIOD_LOCKED",
+    "GL_INVENTORY_MANUAL",
+    "GL_COST_CLASS_REQUIRED",
+    "GL_LAND_NOT_DEPRECIABLE",
+    "GL_AUTOPOST_NO_THREE_WAY_MATCH",
+  ]) {
+    ok(codes.includes(c), `${c} is explained in plain English`);
+  }
   ok(codes.includes("GL_APPROVAL_REQUIRED"), "the approval rule is explained");
   ok(codes.includes("GL_OVERRIDE_LOG_APPEND_ONLY"), "the override log rule is explained");
   // Every entry must actually have both halves filled in. A blank whatToDo
