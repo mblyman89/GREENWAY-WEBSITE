@@ -52,7 +52,7 @@ export type PlaidAccountRecord = {
   itemId: string;
   name: string | null;
   officialName: string | null;
-  /** Owner-assigned nickname (migration 0158). NULL = fall back to the bank name. */
+  /** Owner-assigned nickname (migration 0184). NULL = fall back to the bank name. */
   customName: string | null;
   mask: string | null;
   type: string | null;
@@ -344,7 +344,7 @@ export async function setPlaidAccountRole(
 }
 
 /**
- * Set (or clear) an account's owner-assigned nickname (migration 0158).
+ * Set (or clear) an account's owner-assigned nickname (migration 0184).
  * Pass null/blank to clear it (falls back to the bank name). Written ONLY here,
  * never by a sync, so /accounts refreshes can't clobber the owner's name.
  */

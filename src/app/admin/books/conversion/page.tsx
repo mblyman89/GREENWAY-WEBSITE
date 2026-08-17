@@ -27,7 +27,7 @@
  * number afterwards is measured from it, and it balances either way.
  *
  * OWNER-ONLY, like every other set of books, via `requireBooksAccess()` and
- * again in Postgres via `is_owner()` (migration 0179).
+ * again in Postgres via `is_owner()` (migration 0185).
  */
 import Link from "next/link";
 

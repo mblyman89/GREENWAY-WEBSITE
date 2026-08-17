@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0179 — BOOKS ARE OWNER-ONLY (slice books-01)
+-- 0185 — BOOKS ARE OWNER-ONLY (slice books-01)
 --
 -- OWNER DECISION, 2026-08-17, recorded verbatim (standing rule 1):
 --
@@ -138,7 +138,7 @@ begin
     v_count := v_count + 1;
   end loop;
 
-  raise notice '0179 §2: re-gated % gl_* policies from is_admin() to is_owner()', v_count;
+  raise notice '0185 §2: re-gated % gl_* policies from is_admin() to is_owner()', v_count;
 end
 $regate$;
 
@@ -195,7 +195,7 @@ begin
     v_count := v_count + 1;
   end loop;
 
-  raise notice '0179 §3: re-gated % accounting function(s) from is_admin() to is_owner()', v_count;
+  raise notice '0185 §3: re-gated % accounting function(s) from is_admin() to is_owner()', v_count;
 end
 $refunc$;
 
@@ -256,7 +256,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 comment on function public.gl_audit_owner_only_gate() is
-  'Post-apply check for 0179. Returns one row per gl_* policy or accounting guard still gated on is_admin(). AN EMPTY RESULT MEANS THE BOOKS ARE OWNER-ONLY.';
+  'Post-apply check for 0185. Returns one row per gl_* policy or accounting guard still gated on is_admin(). AN EMPTY RESULT MEANS THE BOOKS ARE OWNER-ONLY.';
 
 revoke all on function public.gl_audit_owner_only_gate() from public;
 grant execute on function public.gl_audit_owner_only_gate() to authenticated, service_role;

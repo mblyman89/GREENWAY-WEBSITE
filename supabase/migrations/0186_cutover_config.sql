@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0184 — THE CUT-OVER IS 2026-11-01, NOT 2026-01-01 (slice books-02)
+-- 0186 — THE CUT-OVER IS 2026-11-01, NOT 2026-01-01 (slice books-02)
 --
 -- WHAT THIS FIXES, AND WHY IT IS URGENT
 --
@@ -193,7 +193,7 @@ comment on function public.gl_cutover_date() is
 --
 -- Rather than re-declaring both function bodies here (which would duplicate ~150
 -- lines of 0176 and guarantee the copies drift), the literal is REPLACED inside
--- the live definitions, the same catalog-driven technique 0179 used for the
+-- the live definitions, the same catalog-driven technique 0185 used for the
 -- owner-only re-gate. A function whose text no longer contains the literal is
 -- left untouched, so this is safe to run repeatedly.
 --
@@ -236,17 +236,17 @@ begin
     if v_new is distinct from v_def then
       execute v_new;
       v_count := v_count + 1;
-      raise notice '0184: re-pointed %() at gl_opening_balance_date()', r.proname;
+      raise notice '0186: re-pointed %() at gl_opening_balance_date()', r.proname;
     end if;
   end loop;
 
-  raise notice '0184: % cut-over function(s) re-pointed', v_count;
+  raise notice '0186: % cut-over function(s) re-pointed', v_count;
 end $repoint$;
 
 -- -----------------------------------------------------------------------------
 -- §5  RLS — the config is part of the books, so it is OWNER ONLY
 --
--- Consistent with 0179 and with the owner decision: "there is no reason anyone
+-- Consistent with 0185 and with the owner decision: "there is no reason anyone
 -- else needs to see my books or my financials ever."
 -- -----------------------------------------------------------------------------
 alter table public.gl_conversion_config enable row level security;
@@ -267,7 +267,7 @@ create policy gl_conversion_config_owner_write
 -- -----------------------------------------------------------------------------
 -- §6  AUDIT — prove no cut-over function still carries the old literal date
 --
--- Empty result = passing. Same shape as gl_audit_owner_only_gate() in 0179.
+-- Empty result = passing. Same shape as gl_audit_owner_only_gate() in 0185.
 -- -----------------------------------------------------------------------------
 create or replace function public.gl_audit_cutover_date()
 returns table (function_name text, problem text)

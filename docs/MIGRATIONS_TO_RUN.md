@@ -538,3 +538,75 @@
   auto-detected strain types still flow to the menu and the strain library —
   but making a manual strain-type PICK shows a friendly banner naming this
   migration instead of saving.**
+
+---
+
+## BOOKKEEPING BRANCH — the general ledger (slices books-01 → books-03)
+
+> **Plain-English walkthrough of how to actually run these:**
+> see **`docs/HOW_TO_RUN_A_MIGRATION.md`**. It is written for the owner, step by
+> step, with what success looks like and what to do when it goes red.
+>
+> **NOTE ON NUMBERING (2026-08-17):** two files were renumbered because the same
+> number had been used twice, and these are run by hand in numeric order by
+> reading file names — a duplicate number means one file silently gets skipped.
+> `0179_books_owner_only.sql` → **`0185`**; `0184_cutover_config.sql` →
+> **`0186`**; and a second, older duplicate (`0158`, from PR #898) moved to
+> **`0184_plaid_account_custom_name.sql`**. Same SQL inside, and all of them are
+> idempotent, so if you already ran one under its old name there is nothing to
+> undo. `tests/compliance/migration-numbering.test.ts` now fails the build if a
+> duplicate or a gap is ever introduced again.
+
+- [ ] **`supabase/migrations/0185_books_owner_only.sql`** — books-01: locks the
+  general ledger, the trial balance and the accounting reports to the OWNER
+  alone (not admins). Creates `public.is_owner()`, which every later books
+  migration depends on, and re-points the accounting RLS policies at it.
+  Idempotent. Ends with a review function — run
+  `select * from gl_audit_owner_only_gate();` and expect **zero rows** (it lists
+  only problems, so empty means every door is locked).
+  **Until this is run, `/admin/reports/accounting` and its two CSV download
+  links are still readable by managers.**
+
+- [ ] **`supabase/migrations/0186_cutover_config.sql`** — books-02: sets the real
+  cut-over from Cultivera/Sage to this system as **2026-11-01**, with opening
+  balances dated **2026-10-31** (the day before, so the opening figures land in
+  the prior period and never overlap live activity). Replaces the wrong seeded
+  date of 2025-12-31. Requires `is_owner()` from 0185, so run 0185 first.
+  Idempotent. Then run `select * from gl_audit_cutover_date();` and expect
+  **zero rows**.
+  **Until this is run, the Conversion screen reports its settings row missing.**
+
+- [ ] **`supabase/migrations/0187_vendor_bills_to_gl.sql`** — books-03: connects
+  vendor bills to the ledger, which is the gap that mattered most — `vendors`,
+  `inbound_manifests`, `noncannabis_invoices` and `vendor_manifest_payments` all
+  existed, and **none of them reached the general ledger**. This migration adds:
+  1. **`gl_vendor_purchase_kinds`** — the closed list of **24** purchase kinds,
+     each seeded with its treatment (inventory / expense / asset / trust /
+     quarantine), its debit account, and its §280E cost class. This table is a
+     MIRROR of `src/lib/accounting/vendor-bill-core.ts`, which is the single
+     brain; a test parses this SQL and compares all 24 rows against the
+     TypeScript in both directions, so the two can never drift apart. Two CHECK
+     constraints make the dangerous states unrepresentable: an inventoriable
+     kind can never carry a disallowed cost class, and trust money must post to
+     a balance-sheet account.
+  2. **`gl_vendor_profiles`** — per-vendor defaults, so a vendor you buy the
+     same thing from every week stops asking the same question every week.
+  3. **Bridge columns** `gl_journal_id` + `gl_posted_at` on
+     `noncannabis_invoices` and `inbound_manifests` — the thread from the paper
+     to the journal and back.
+  4. **`gl_post_vendor_bill(...)`** — the only route from a bill to the ledger.
+     It refuses anyone who is not the owner (`GL_NOT_OWNER`) and refuses a bill
+     with no idempotency reference (`GL_NO_SOURCE_REF`), then delegates to
+     `gl_submit_journal` so every existing guarantee — balance, period status,
+     control accounts, cost-class rules — applies unchanged. Both refusals have
+     plain-English translations in `gl-refusal-core.ts`.
+  5. Owner-only RLS on the new tables.
+
+  Requires `is_owner()` (0185) and `gl_journals` (0172). Its **§0 precondition
+  guard** checks for both and stops with `MIGRATION_OUT_OF_ORDER` rather than
+  half-building itself. Idempotent — the 24 seed rows use
+  `on conflict (code) do update`, so re-running refreshes them in place. Then
+  run `select * from gl_audit_vendor_bill_wiring();` and expect **zero rows**.
+  **Until this is run, the new `/admin/books/bills` page still explains §280E,
+  still walks the decision tree and still does all the math on screen (the
+  engine is pure TypeScript and needs no database), but no bill can post.**

@@ -23,7 +23,7 @@
  *      therefore dated 2026-10-31 — the close of business the day before. The
  *      parallel run is 2026-11-01 through 2026-12-31. These were hard-coded as
  *      2025-12-31 throughout the ledger, built for a 1 January cut-over that is
- *      not happening; migration 0184 moves them and this module is the
+ *      not happening; migration 0186 moves them and this module is the
  *      application-side statement of the same truth, so a test can compare the
  *      two independently.
  *
