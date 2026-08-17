@@ -411,6 +411,59 @@ const REFUSALS: Record<
       "The reference is what stops the same bill being posted twice. If the button is pressed again, or the network drops after the entry is written but before the screen updates, the reference is the only thing that lets the books recognise \u201Cthis one is already in\u201D. Without it, a retry quietly doubles a purchase \u2014 which overstates inventory now and overstates cost of goods sold later, on the one number \u00a7280E lets you subtract. Post the bill from the vendor bill screen rather than by hand, so the invoice number travels with it.",
   },
 
+  // --- payroll and the employee-as-COGS question (0188) -------------------
+  //
+  // These five are the most expensive refusals in the whole catalogue, because
+  // the mistake they prevent is the one that FEELS safest: every cannabis
+  // operator has heard that "you can put payroll in COGS." For a grower that is
+  // often true. For a retailer it is mostly false, and the difference is worth
+  // real money on the return.
+  GL_PAYROLL_SELLING_LABOR_TO_COGS: {
+    title: "That wage cannot be cost of goods sold \\u2014 and this is the expensive one.",
+    whatToDo:
+      "Greenway buys finished product and resells it, so the tax rules treat it as a RESELLER. The reseller inventory rule, Reg. \\u00a71.471-3(b), lets you add only \\u201Ctransportation or other necessary charges incurred in acquiring possession of the goods\\u201D to inventory \\u2014 it has no direct-labor clause at all. The clause everybody quotes, Reg. \\u00a71.471-3(c), is the PRODUCER rule, and even that one excludes \\u201Cany cost of selling.\\u201D Harborside argued this exact point and lost (Patients Mutual, 151 T.C. 176). So budtender, marketing, manager, security, compliance and inventory-counting wages are disallowed by \\u00a7280E, full stop. HERE IS WHAT DOES WORK: time your people spend RECEIVING deliveries and DRIVING to collect product is spent acquiring possession, and that time can ride into inventory. Split their hours by task on the payroll screen, and the receiving share goes to account 61000 legitimately.",
+  },
+  GL_PAYROLL_UNKNOWN_ROLE: {
+    title: "There is no labor role by that name.",
+    whatToDo:
+      "The list of roles is deliberately closed, because an open-ended list of job titles is exactly how \\u201Cwarehouse associate\\u201D quietly becomes a cost-of-goods account that nobody can explain three years later in an audit. If a genuinely new kind of work exists, add it to the taxonomy first with its \\u00a7280E treatment and the authority behind it, then use it.",
+  },
+  GL_PAYROLL_NO_TASK_DETAIL: {
+    title: "Clock-in and clock-out is not enough to put wages into inventory.",
+    whatToDo:
+      "To claim receiving time as cost of goods sold you need records showing WHAT the person was doing, not just that they were here. \\u00a76001 requires records sufficient to establish the amount, and a percentage typed into a box after the fact is a guess wearing a record\\u2019s clothes. The fix is ordinary: have staff tag their punches with what they were doing. After about a month of tagged punches the claim supports itself, and the number stops being an estimate.",
+  },
+  GL_PAYROLL_NOT_TIED_TO_DELIVERIES: {
+    title: "Receiving time has to point at actual deliveries.",
+    whatToDo:
+      "The reason receiving labor survives \\u00a7280E is that it is spent \\u201Cacquiring possession of the goods.\\u201D That is a claim about specific goods, so it has to be tied to specific deliveries. Link the receiving punches to the manifests they were spent on. Then the claim is not \\u201Cabout 10% of payroll\\u201D \\u2014 it is \\u201Cthese 42 punches, each tied to a numbered manifest,\\u201D which is a completely different conversation with an examiner.",
+  },
+  GL_PAYROLL_NO_COST_CLASS: {
+    title: "That payroll entry is missing its \\u00a7280E labels.",
+    whatToDo:
+      "This one is worth understanding, because it is the failure that hides. Every \\u00a7280E report reads the COST CLASS on each line, not the account number. A payroll entry posted without those labels balances perfectly, looks completely normal, and quietly drops the wages out of the disallowed column and the receiving labor out of cost of goods sold. Nothing appears broken \\u2014 the only symptom is a wrong tax return months later. Post payroll from the payroll screen, which attaches the labels automatically.",
+  },
+  GL_PAYROLL_COGS_CLASS_MISMATCH: {
+    title: "That line goes into a cost-of-goods account but is not labelled as one.",
+    whatToDo:
+      "A cost that rides into inventory has to say so on the line itself, because that label is what an examiner reads and what the \\u00a7280E reports total. The account number alone is not enough. If this really is receiving labor, label it as an allocable cost of goods; if it is not, it belongs in wages instead.",
+  },
+  GL_PAYROLL_DIRECT_LABOR_CLAIMED: {
+    title: "A reseller has no \\u201Cdirect labor\\u201D to claim.",
+    whatToDo:
+      "This is a fine distinction that matters enormously. \\u201CDirect labor\\u201D is a PRODUCER concept from Reg. \\u00a71.471-3(c) \\u2014 the paragraph for people who grow or manufacture. Greenway buys finished product and resells it, so the reseller rule, Reg. \\u00a71.471-3(b), governs instead, and it has no direct-labor clause at all. What it does have is \\u201Cnecessary charges incurred in acquiring possession of the goods,\\u201D which is an ALLOCABLE cost, not a direct one. Label it as allocable and it is a defensible position; label it as direct labor and it invites the examiner to ask why a retailer is using a grower\\u2019s rule.",
+  },
+  GL_PAYROLL_UNCLASSIFIED_EXPENSE: {
+    title: "Those wages were posted without saying what \\u00a7280E does to them.",
+    whatToDo:
+      "Wages are never simply \\u201Cunclassified.\\u201D They are one of three things: disallowed by \\u00a7280E (the usual answer for a cannabis retailer), belonging to a separate business like the ATM or the rental property (fully deductible over there), or an allocable cost of acquiring goods (receiving and driver-collection time). Leaving the label off does not make the question go away \\u2014 it just moves the wrong answer onto the tax return where nobody will notice it. Pick which of the three this is.",
+  },
+  GL_PAYROLL_RUN_CHANGED: {
+    title: "This payroll was already posted, and the numbers have changed since.",
+    whatToDo:
+      "Nothing is lost and nothing is wrong \\u2014 the books are just refusing to quietly overwrite a payroll that is already in them, because overwriting is how a quarter of withholding disappears without a trace. Post a correcting entry instead: the original stays where it is, the correction sits next to it, and the pair of them shows exactly what changed and why. That is what a reviewer wants to see anyway.",
+  },
+
   // --- intercompany -------------------------------------------------------
   GL_INTERCOMPANY_SAME_ENTITY: {
     title: "A transfer between businesses needs two different businesses.",

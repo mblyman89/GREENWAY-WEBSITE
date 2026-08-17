@@ -119,6 +119,10 @@ import { __runCutoverCoreTests } from "../../src/lib/accounting/cutover-core";
 // §280E lets Greenway keep (inventory → COGS) versus what it disallows, with
 // verbatim authority behind every call.
 import { __runVendorBillCoreTests } from "../../src/lib/accounting/vendor-bill-core";
+// Slice books-04: payroll and the employee-as-COGS question. Reseller vs
+// producer character, the narrow evidence-gated acquisition-labor door, the
+// hard block on selling labor, and the balanced payroll journal.
+import { __runPayrollCogsCoreTests } from "../../src/lib/accounting/payroll-cogs-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -731,6 +735,7 @@ async function main() {
   __runCutoverCoreTests();
   console.log("cutover-core self-tests: all passed");
   __runVendorBillCoreTests();
+  __runPayrollCogsCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

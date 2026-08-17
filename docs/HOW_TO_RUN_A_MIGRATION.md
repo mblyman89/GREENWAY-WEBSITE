@@ -170,9 +170,90 @@ a door I left unlocked.
 
 ---
 
+## Something I fixed before you ran anything
+
+Before writing this list I did something I hadn't done before: I built a real,
+empty PostgreSQL database in the sandbox and ran **all 188 migrations** against
+it, start to finish, the way you would. Not a test that pretends to run them —
+the actual files, against an actual database.
+
+**`0185` failed.** The very first one. On the very first paste.
+
+Here's what happened, in plain English. That migration rewrites the security
+rules on your accounting tables. To do that it first has to read the existing
+rules and see who each one applies to. Some of them apply to "everyone", and
+PostgreSQL stores "everyone" internally as the number zero. When my code asked
+PostgreSQL to turn that number back into a name, it didn't say `public` — it
+handed back the literal text `unknown (OID=0)`. That text then got pasted into
+the new rule, and the whole thing died on a stray bracket:
+
+```
+ERROR:  syntax error at or near "("
+```
+
+Two things worth saying about it:
+
+**It would have hit you on step one.** Not on some rare edge case months from
+now — on the first command of the first migration of the books project, with no
+obvious reason why.
+
+**It wouldn't have damaged anything.** Migrations run inside a transaction,
+which means it's all-or-nothing: the moment it errored, the database undid
+everything it had done and put your old rules back exactly as they were. So you
+were never at risk of ending up half-locked. But you'd have been staring at a
+red error with no idea what to do, and that's bad enough.
+
+**What you need to do about it: nothing.** The fix is one line — the zero is now
+filtered out — and it's already in the file. `0185` is idempotent, so just run
+it as listed below whether or not you tried before.
+
+I'm telling you this in detail for a reason. No amount of reading the file would
+have found it, and no test I'd written would have caught it, because the test and
+the code shared the same wrong assumption about what PostgreSQL returns. It took
+actually running the thing against a real database. That's now part of how I ship
+these, permanently.
+
+### And then the smoke alarm cried wolf
+
+Running the whole stack again on a clean database found a **second** problem with
+`0185` — this one in the safety check itself.
+
+I told you above that `select * from gl_audit_owner_only_gate();` should come
+back **empty**, and that anything it lists is a door left unlocked. On a
+perfectly healthy database, it came back with **one row**, every single time:
+
+```
+ function | gl_audit_owner_only_gate | GL_FORBIDDEN guard still references is_admin()
+```
+
+It was reporting **itself**.
+
+The reason is almost funny. That check works by reading through every function in
+your database looking for two specific phrases — the name of the old admin-level
+permission, and the error code for a blocked action. To look for those phrases,
+it has to *contain* those phrases. So when it read through every function, it
+read itself, found both phrases sitting right there in its own instructions, and
+dutifully reported itself as a problem.
+
+Harmless to your data. Genuinely bad for you, though, because I'd just finished
+telling you "empty means you're safe." You'd have run it, seen a row, and
+concluded the lockdown failed — when it had actually worked perfectly. A smoke
+alarm that goes off while you're cooking dinner every night is worse than no
+smoke alarm, because eventually you take the battery out.
+
+**Fixed.** The check now skips the audit functions themselves. I verified both
+halves of that: on a clean database it now returns **zero rows**, and when I
+deliberately planted a bad function that really was still gated on the old admin
+permission, it caught it immediately. So it's quieter *and* it still works.
+
+**What you need to do about it: nothing.** Same as before — the fix is in the
+file, and `0185` is idempotent, so just run it as listed below.
+
+---
+
 ## Your actual to-do list right now
 
-Three migrations are waiting. In this order:
+**Four** migrations are waiting. In this order:
 
 - [ ] **`0185_books_owner_only.sql`** — locks your books and financial reports to
       you alone. Until you run this, `/admin/reports/accounting` and its two
@@ -193,8 +274,71 @@ Three migrations are waiting. In this order:
       does the math on screen, but nothing can post.
       Then check: `select * from gl_audit_vendor_bill_wiring();` → want **empty**.
 
-All three are safe to run twice. If you've already done one, do it again anyway —
+- [ ] **`0188_payroll_to_gl.sql`** — payroll, and the answer to your question
+      about writing off employees. This is the big one from this slice.
+      Until you run this, payroll works exactly as it does today (your admin can
+      still pay people) and the new payroll page still teaches and does all the
+      math on screen — but no payroll run can reach your books.
+      Then check: `select * from gl_audit_payroll_wiring();` → want **empty**.
+
+All four are safe to run twice. If you've already done one, do it again anyway —
 it costs you thirty seconds and removes all doubt.
+
+### About that fourth one — the employees-as-COGS question
+
+You asked for **"the ability to assign employees as cogs so I can write them
+off."** I need to give you the real answer rather than the one you wanted, and
+then show you the part you actually can have.
+
+**The wall.** In tax language your store is a **reseller** — you buy finished
+product and sell it. The rule for a reseller's inventory cost is Reg.
+§1.471-3(b), and it lets you add to what you paid only *"transportation or other
+necessary charges incurred in acquiring possession of the goods."* Read that
+twice, because what matters is what **isn't** in it: there is no mention of labor
+anywhere in that paragraph.
+
+The paragraph that *does* say *"expenditures for direct labor"* is the next one
+down, §1.471-3(c) — and it only applies to goods *"produced by the taxpayer."*
+You don't produce; your licence doesn't even permit it. And even that paragraph
+carves out *"any cost of selling."* So a budtender's hour can't become cost of
+goods sold for a grower either.
+
+This has been litigated, and the taxpayers lost every time. Harborside (*Patients
+Mutual*, 151 T.C. 176) was the big one. *Richmond Patients Group* trimmed and
+dried product and the court **still** called them a reseller. If trimming and
+drying didn't do it, nothing happening on your sales floor will.
+
+**The door.** There is one, and it's real. Time spent *acquiring possession* —
+meeting the transporter at the door, counting cases against the manifest,
+confirming the CCRS record, moving product into the vault — is the exact thing
+§1.471-3(b) describes. It rides in on the same clause your inbound freight rides
+in on. That time can go into inventory cost.
+
+But it's narrow, and it comes with a price: **you have to be able to prove the
+minutes.** Under §6001 the burden of proof is yours, not theirs. Harborside
+didn't lose because its theory was illegal — it lost because its numbers weren't
+supported. So this migration also adds the missing piece: your time clock now
+records *what someone was working on*, and can tie a receiving task to the
+specific delivery it belongs to. Without that, there is nothing to prove and the
+system will refuse the allocation — on purpose.
+
+It will also refuse to let you claim more than 25% of payroll as receiving time,
+and it'll ask you to confirm anything above 10%. A retail store that takes a
+handful of deliveries a week does not spend a quarter of its wage bill on the
+receiving dock, and a number that big fails the smell test before anyone opens a
+single record. An overstated claim doesn't just lose you the overstatement — it
+poisons the honest part of it too.
+
+**What this is worth to you.** Not as much as you hoped, and more than nothing.
+The honest framing is that the receiving allocation is a modest, defensible
+recovery on a tax rule that is genuinely brutal to your industry. The much bigger
+win in this migration is that every wage dollar is now **tagged** rather than
+lumped together — so when your CPA asks what's disallowed under §280E, the answer
+is a number you can produce in a second and defend line by line, instead of an
+afternoon of reconstruction.
+
+**0188 must go after 0185.** Like `0187`, it checks first and stops with
+`MIGRATION_OUT_OF_ORDER` rather than half-building itself.
 
 **0187 must go after 0185.** It checks for `is_owner()` before it does anything,
 and if that function isn't there yet it stops with a message that says
@@ -217,8 +361,10 @@ So:
   numbered `0158`, from back in PR #898. The Plaid one moved to **`0184`**, the
   free slot the cut-over vacated.
 
-Your migration folder is now **187 files, no duplicates, no gaps** — a clean run
-from `0001` to `0187` (`0187` is the new vendor-bills one from this slice).
+Your migration folder is now **188 files, no duplicates, no gaps** — a clean run
+from `0001` to `0188` (`0187` is the vendor-bills one, `0188` is the new payroll
+one). I've since confirmed that by applying all 188 of them, in order, to a real
+empty database — which is how the `0185` bug above came to light.
 
 And there's now a test that fails the build if anyone ever creates a duplicate
 number again. It can't come back silently.

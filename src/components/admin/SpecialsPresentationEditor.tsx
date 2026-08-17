@@ -247,8 +247,20 @@ export function SpecialsPresentationEditor(props: Props) {
               <p className="text-xs text-[var(--admin-text-muted)]">
                 The hero&rsquo;s <strong>eyebrow</strong>, <strong>title</strong>, and{" "}
                 <strong>subtitle</strong> are edited in{" "}
-                <Link href="/admin/site-content" className="text-[var(--admin-accent)] hover:underline">
-                  Site Content
+                {/*
+                  DEAD-LINK FIX (books-04). This pointed at /admin/site-content,
+                  which does not exist: the Site Content junk-drawer page was
+                  retired in MIG-7 PR-B and its live preview moved to Website
+                  Sync (see the header comment in
+                  src/app/admin/website-sync/page.tsx). Re-pointed at the
+                  ?tab=preview surface that actually owns this now. Enforced by
+                  tests/compliance/admin-dead-links.test.ts.
+                */}
+                <Link
+                  href="/admin/website-sync?tab=preview"
+                  className="text-[var(--admin-accent)] hover:underline"
+                >
+                  Website Sync
                 </Link>{" "}
                 (or by clicking them directly in{" "}
                 <Link href="/specials?preview=1" className="text-[var(--admin-accent)] hover:underline" target="_blank" rel="noreferrer">
@@ -354,7 +366,7 @@ export function SpecialsPresentationEditor(props: Props) {
             {/* Creative Studio nudge for on-brand hero art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide hero in{" "}
-              <Link href="/admin/creative" className="text-[var(--admin-accent)] hover:underline">
+              <Link href="/admin/marketing/midjourney" className="text-[var(--admin-accent)] hover:underline">
                 Creative Studio
               </Link>{" "}
               &mdash; pick the <strong>&ldquo;Specials &mdash; top hero banner&rdquo;</strong> preset,
@@ -732,7 +744,7 @@ export function SpecialsPresentationEditor(props: Props) {
             {/* Nudge to Creative Studio for on-brand banner art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide banner in{" "}
-              <Link href="/admin/creative" className="text-[var(--admin-accent)] hover:underline">
+              <Link href="/admin/marketing/midjourney" className="text-[var(--admin-accent)] hover:underline">
                 Creative Studio
               </Link>{" "}
               — pick the <strong>&ldquo;Specials banner&rdquo;</strong> preset and the{" "}
