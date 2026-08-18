@@ -41,6 +41,7 @@ import {
   type AdvisorFinding,
   type AdvisorVerdict,
 } from "@/lib/accounting/journal-advisor-core";
+import { FingerprintScreen } from "./JournalExplainer";
 import type { ManualJournalResult } from "@/lib/accounting/journal-entry-service";
 import { previewJournalAction, submitJournalAction } from "./actions";
 
@@ -126,10 +127,17 @@ export function JournalEntryForm({
   accounts,
   defaultEntity,
   defaultDate,
+  priorManualUseByAccount,
 }: {
   accounts: readonly AccountOption[];
   defaultEntity: AdvisorEntityCode;
   defaultDate: string;
+  /**
+   * Real hand-posting history, account code -> times used in a MANUAL entry.
+   * Undefined means "history unavailable", which SUPPRESSES the seldom-used
+   * check rather than firing it blindly. See FingerprintScreen for why.
+   */
+  priorManualUseByAccount?: Readonly<Record<string, number>>;
 }) {
   const [entityCode, setEntityCode] = useState<AdvisorEntityCode>(defaultEntity);
   const [journalDate, setJournalDate] = useState(defaultDate);
@@ -221,6 +229,21 @@ export function JournalEntryForm({
       }
     });
   };
+
+  // What the AS 2401.61 screen sees. Built from the SAME state the entry is
+  // built from, so the screen can never describe an entry other than the one on
+  // screen. Signed cents: debit positive, credit negative (the sign wall).
+  const screenLines = useMemo(
+    () =>
+      lines
+        .filter((l) => l.accountCode !== "" && (l.debit !== "" || l.credit !== ""))
+        .map((l) => ({
+          accountCode: l.accountCode,
+          amountCents: (toCents(l.debit) ?? 0) - (toCents(l.credit) ?? 0),
+          description: l.description === "" ? null : l.description,
+        })),
+    [lines],
+  );
 
   const findings = verdict?.findings ?? [];
   const blocks = findings.filter((f) => f.severity === "block");
@@ -469,6 +492,14 @@ export function JournalEntryForm({
           </span>
         )}
       </div>
+
+      {/* ── the examiner's questions, live while typing ──────────────────── */}
+      <FingerprintScreen
+        journalDate={journalDate}
+        memo={memo}
+        lines={screenLines}
+        priorManualUseByAccount={priorManualUseByAccount}
+      />
 
       {/* ── the advisor's answer ───────────────────────────────────────── */}
       <div aria-live="polite" className="space-y-3">

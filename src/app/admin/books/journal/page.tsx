@@ -17,9 +17,10 @@ import Link from "next/link";
 
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { listAccounts, isEntityCode } from "@/lib/accounting/ledger-store";
 import type { AdvisorEntityCode } from "@/lib/accounting/journal-advisor-core";
+import { listAccounts, isEntityCode, getManualAccountUsage } from "@/lib/accounting/ledger-store";
 import { JournalEntryForm, type AccountOption } from "./JournalEntryForm";
+import { JournalExplainer } from "./JournalExplainer";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,16 @@ export default async function JournalPage({
     );
   }
 
-  const accountsResult = await listAccounts(null, false);
+  // Real hand-posting history for the AS 2401.61(a) "seldom-used account"
+  // screen. If this read fails the screen is fed `undefined`, which SUPPRESSES
+  // that one check rather than firing it against an empty map -- an empty map
+  // makes every account look unfamiliar, and a warning on every entry teaches
+  // the reader to ignore warnings.
+  const [accountsResult, usageResult] = await Promise.all([
+    listAccounts(null, false),
+    getManualAccountUsage(entity),
+  ]);
+  const priorManualUse = usageResult.ok ? usageResult.data : undefined;
   const accounts: AccountOption[] = accountsResult.ok
     ? accountsResult.data.map((a) => ({
         code: a.code,
@@ -112,8 +122,11 @@ export default async function JournalPage({
           accounts={accounts}
           defaultEntity={entity}
           defaultDate={pacificToday()}
+          priorManualUseByAccount={priorManualUse}
         />
       )}
+
+      <JournalExplainer />
     </div>
   );
 }

@@ -56,6 +56,10 @@ import {
   type ReconciliationBar,
 } from "@/lib/accounting/bank-match-core";
 
+// The verbatim-quotation component. Shared, not local -- see the note below
+// where the private copy used to live.
+import { Quote } from "@/components/admin/books/AuthorityPanel";
+
 // ===========================================================================
 // SHARED PRESENTATION
 // ===========================================================================
@@ -100,19 +104,12 @@ const BAR_TONE: Record<
   },
 };
 
-/** A verbatim quotation. Styled so it can never be mistaken for our own words. */
-function Quote({ cite, children }: { cite: string; children: React.ReactNode }) {
-  return (
-    <figure className="my-3 border-l-4 border-amber-400/30 bg-amber-400/[0.10] py-2 pl-4 pr-3">
-      <blockquote className="text-sm italic leading-relaxed text-white/80">
-        {children}
-      </blockquote>
-      <figcaption className="mt-1 text-xs font-medium text-amber-300">
-        — {cite}
-      </figcaption>
-    </figure>
-  );
-}
+/**
+ * The verbatim-quotation component now lives in one shared place
+ * (components/admin/books/AuthorityPanel) so that every books screen renders
+ * someone else's words identically. It used to be defined privately here, which
+ * meant three screens had three answers to "what does a quote look like".
+ */
 
 // ===========================================================================
 // §1  THE SIGN WALL

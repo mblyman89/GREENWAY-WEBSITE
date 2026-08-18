@@ -136,6 +136,13 @@ import { __runPayrollCogsCoreTests } from "../../src/lib/accounting/payroll-cogs
 // reconciliation that adjusts BOTH sides and refuses to plug the difference,
 // the three-way loan split, and the structuring pattern an examiner would see.
 import { __runBankMatchCoreTests } from "../../src/lib/accounting/bank-match-core";
+// Slice books-07: the guidance layer. The merged authority registry that every
+// books screen quotes from, the cross-registry DRIFT SCANNER that proves all
+// of those registries still agree with one another, the AS 2401.61 fingerprint
+// screen on manual journal entries, and the mentor sequences. This suite is
+// what stands between a verbatim quotation and a silently altered one -- a
+// citation error in front of the IRS is not a cosmetic bug.
+import { __runBooksGuidanceCoreTests } from "../../src/lib/accounting/books-guidance-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -753,6 +760,8 @@ async function main() {
   __runPayrollCogsCoreTests();
   __runBankMatchCoreTests();
   console.log("bank-match-core self-tests: all passed");
+  __runBooksGuidanceCoreTests();
+  console.log("books-guidance-core self-tests: all passed");
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
