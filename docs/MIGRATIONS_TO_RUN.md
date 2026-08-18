@@ -816,3 +816,92 @@
   everything, and every number on it is still computed live by the real engine
   (it is pure TypeScript and needs no database), but no bank match can be
   stored.**
+
+- [ ] **`supabase/migrations/0190_owner_only_financial_tables.sql`** — books-06:
+  closing the last hole in the owner lock.
+
+  **What was wrong.** Back in `0185` we locked **the books** — every `gl_*`
+  table — so that only you can open them. That was the right move and it worked.
+  But it locked the *ledger*, and it did not lock **the accounts the ledger is
+  built from**.
+
+  Twenty-five tables were still set to `is_staff()`. That check means "is this
+  person an active staff member?" — and nothing else. It does not ask what role
+  they have. It says yes to a manager, yes to a content editor, yes to a
+  read-only analyst. Any one of them could read:
+
+  - **`plaid_transactions`** — every dollar in and out of every connected
+    account, with merchant names and dates;
+  - **`plaid_accounts`** — every account, its last four digits, and its balance;
+  - **`manual_loans`** — every loan, the balance, the rate, the payment;
+  - **`atm_cash_loads`** — how much cash went into the machine and when, which
+    is not really an accounting fact at all. It tells someone when the most
+    money is sitting in your building.
+
+  Put those four together and a person who cannot open your books can rebuild
+  your financial statements anyway. The lock on the front door was real; the
+  window beside it was open.
+
+  **And one of them was worse than a report.** `plaid_items` holds the Plaid
+  **access token**. That is not a page of numbers, it is a **key**. Anyone
+  holding it can pull your entire banking history from *outside* this
+  application — where none of our gates apply and none of our logging sees it.
+  A read-only analyst could read that row.
+
+  **What this migration does.** It rewrites all twenty-five of those tables from
+  `is_staff()` to `is_owner()`. Same lock that is already on your books, now on
+  your bank feed, your ATM, your crypto, and your loans. Your own decision,
+  applied where it was missing:
+
+  > *"there is no reason anyone else needs to see my books or my financials
+  > ever, so I want strict controls over all of those things. The only thing an
+  > admin can do is pay vendors and pay employees."*
+
+  **What it does NOT break, and why you can run it without worrying.**
+
+  1. **Your syncs keep running.** Before writing this, every single place in the
+     app that writes to these tables was checked one by one — all 78 of them.
+     Every one uses the *service role*, which is not subject to these rules at
+     all. Plaid, the crypto wallets, the ATM poller and the loan store are
+     untouched.
+  2. **Your admin can still do their job.** Paying vendors and paying employees
+     live on different permissions (`payables.manage`, `staffing.manage`), and
+     both still include admin. The **Banking** page — the payee vault where
+     vendor and employee bank details live — deliberately stays where it was,
+     because that *is* the pay-vendors tool.
+  3. **The register keeps ringing.** `tax_settings` and `tax_category_rules`
+     look like they belong in this list, and they were deliberately left out.
+     They are the **sales tax and excise rates the point of sale reads to price
+     a basket** — published state rates, nothing about your money. Lock those
+     and every budtender is denied the rate needed to price a cart, and the
+     store stops. That decision is written into the migration itself so nobody
+     "tidies it up" later.
+
+  It refuses to run out of order, like the last few have. If a prerequisite is
+  missing it stops with `MIGRATION_OUT_OF_ORDER` and **names the exact file to
+  run first** — and nothing is changed when it stops. Idempotent: verified by
+  applying it twice against a real PostgreSQL database, exit code 0 both times,
+  with the second run reporting `re-gated 0` because there was nothing left to
+  do.
+
+  **Then run this one line and expect ZERO ROWS back:**
+
+  ```sql
+  select * from gl_audit_financial_tables_gate();
+  ```
+
+  Same rule as always: this function **lists only problems**, so an empty
+  result — the words `(0 rows)` — is the all-clear. It checks two different
+  things, because they are two different failures: a table still readable by
+  any staff member, and a table with no owner lock on it at all.
+
+  That check was itself tested by deliberately breaking the lock on a table in a
+  scratch database and confirming the function noticed, then restoring it and
+  confirming it went quiet. A checker that says "all clear" on a broken lock
+  would be the most dangerous thing in this repository, because it is the thing
+  you would trust.
+
+  **Until this is run**, the four money pages (`/admin/plaid`, `/admin/atm`,
+  `/admin/crypto`, `/admin/loans`) already hide themselves from everyone but
+  you — that half ships with the code. But the tables underneath stay readable
+  by any active staff member until this file is applied.

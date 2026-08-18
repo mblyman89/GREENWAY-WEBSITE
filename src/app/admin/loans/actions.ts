@@ -3,7 +3,8 @@
 /**
  * src/app/admin/loans/actions.ts — server actions for the manual loans page.
  *
- * Each mutating action is gated on the "settings.manage" permission (same gate
+ * Each mutating action is gated on the "finances.view" permission (OWNER ONLY
+ * as of slice books-06; same gate
  * as the Plaid connections page), records an audit entry, then redirects back to
  * /admin/loans with a friendly message. Money arrives as dollar strings from the
  * form and is converted to integer cents in loan-core; rates arrive as percent
@@ -45,7 +46,7 @@ function str(formData: FormData, key: string): string {
 
 /** Create or update a loan. Present `id` => update; absent => insert. */
 export async function saveLoanAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const id = str(formData, "id");
   const name = str(formData, "name");
@@ -120,7 +121,7 @@ export async function saveLoanAction(formData: FormData): Promise<void> {
 
 /** Delete a loan (cascades its payments). */
 export async function deleteLoanAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
   const id = str(formData, "id");
   if (id === "") back({ error: "Missing loan id." });
 
@@ -140,7 +141,7 @@ export async function deleteLoanAction(formData: FormData): Promise<void> {
 
 /** Record a payment against a loan (optionally matched to a Timberland txn). */
 export async function addLoanPaymentAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
   const loanId = str(formData, "loan_id");
   if (loanId === "") back({ error: "Missing loan id." });
 
@@ -182,7 +183,7 @@ export async function addLoanPaymentAction(formData: FormData): Promise<void> {
 
 /** Delete a recorded payment. */
 export async function deleteLoanPaymentAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
   const id = str(formData, "id");
   const loanId = str(formData, "loan_id");
   if (id === "") back({ id: loanId || undefined, error: "Missing payment id." });

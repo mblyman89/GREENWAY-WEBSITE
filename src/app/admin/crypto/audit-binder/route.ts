@@ -3,7 +3,7 @@
  *
  * R1-F6 — the printable, self-contained Crypto Tax Audit Binder.
  *
- * Owner/admin-gated (settings.manage — same gate as the Crypto Portfolio page,
+ * OWNER-gated (finances.view — same gate as the Crypto Portfolio page,
  * Banking, and Bank Feeds). Returns a STANDALONE print-ready HTML document
  * (page-break CSS, Form 8949 box I/L citations, per-year lots, disposals,
  * ordinary-income summary, and every open readiness item flagged in plain
@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  await requirePermission("settings.manage");
+  await requirePermission("finances.view");
 
   const url = new URL(req.url);
   const yearParam = url.searchParams.get("year");

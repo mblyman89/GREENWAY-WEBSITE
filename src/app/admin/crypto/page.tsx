@@ -14,7 +14,9 @@
  *           connected wallet), watch-only assurance, database/pricing posture,
  *           and each wallet's sync status in plain English.
  *
- * Gate: settings.manage = owner + admin only (same as Banking / Bank Feeds).
+ * Gate: finances.view = OWNER ONLY (slice books-06). Was settings.manage
+ * (owner+admin) until migration 0190 re-gated the eleven crypto_* tables behind
+ * this page from is_staff() to is_owner().
  * Renders even when the DB isn't configured (unconfigured-friendly), so the site
  * keeps building/deploying before the service credentials are set.
  *
@@ -101,7 +103,7 @@ export default async function CryptoPage({
 }: {
   searchParams: Promise<{ tab?: string; msg?: string; error?: string }>;
 }) {
-  await requirePermission("settings.manage");
+  await requirePermission("finances.view");
   const sp = await searchParams;
   const tab: CryptoTab = resolveCryptoTab(sp.tab);
 

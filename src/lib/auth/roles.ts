@@ -59,6 +59,7 @@ export type Permission =
   | "reports.view"
   | "books.view"
   | "financials.view"
+  | "finances.view"
   | "users.manage"
   | "settings.manage"
   | "staffing.manage"
@@ -115,6 +116,29 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // -- which grants manager and readonly -- for exactly the reason above. Same
   // owner decision, same rule: owner alone.
   "financials.view": ["owner"],
+  // F6-K (slice books-06): the MONEY PAGES -- the bank feed (Plaid), the
+  // ATM vault, the crypto treasury, and the loans owed to and by the owner.
+  // These pages were previously gated behind "settings.manage", which also
+  // grants ADMIN. That was the last hole in the owner gate: an admin could
+  // not open the books, but could still open /admin/atm, /admin/crypto and
+  // /admin/loans and read every balance, every bank transaction, and every
+  // note payable -- i.e. reconstruct the financial statements the books
+  // permission was written to hide.
+  //
+  // OWNER DECISION, recorded verbatim (Michael, 2026-08-17):
+  //   "there is no reason anyone else needs to see my books or my financials
+  //    ever, so I want strict controls over all of those things. The only
+  //    thing an admin can do is pay vendors and pay employees."
+  //
+  // Paying vendors and paying employees is "payables.manage" + "staffing.manage",
+  // both of which still include admin. Nothing an admin needs was taken away.
+  //
+  // This list MUST stay equal to ["owner"] alone. Migration 0190 re-gates the
+  // 25 underlying tables from is_staff() to is_owner(), so a non-owner who
+  // reached these pages would hit a raw database refusal anyway -- and the
+  // "fix" someone would reach for is loosening the DATABASE. Keep the page
+  // gate and the database gate saying the same word: owner.
+  "finances.view": ["owner"],
   "users.manage": ["owner", "admin"],
   "settings.manage": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
@@ -154,6 +178,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "reports.view": "View reports & exports",
   "books.view": "View the accounting books (general ledger)",
   "financials.view": "View financial reports & accounting exports",
+  "finances.view": "View money accounts (bank feed, ATM vault, crypto, loans)",
   "users.manage": "Manage staff & roles",
   "settings.manage": "Change settings",
   "staffing.manage": "Manage employees, shifts & time clock",
@@ -184,6 +209,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "reports.view",
   "books.view",
   "financials.view",
+  "finances.view",
   "staffing.manage",
   "timeclock.use",
   "sales_limit.override",

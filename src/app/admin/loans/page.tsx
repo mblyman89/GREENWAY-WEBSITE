@@ -39,7 +39,7 @@ export default async function LoansPage({
 }: {
   searchParams: Promise<Search>;
 }): Promise<React.JSX.Element> {
-  await requirePermission("settings.manage");
+  await requirePermission("finances.view");
   const sp = await searchParams;
 
   const dbReady = isSupabaseServiceConfigured;

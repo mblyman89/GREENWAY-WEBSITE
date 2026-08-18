@@ -253,7 +253,7 @@ file, and `0185` is idempotent, so just run it as listed below.
 
 ## Your actual to-do list right now
 
-**Five** migrations are waiting. In this order:
+**Six** migrations are waiting. In this order:
 
 - [ ] **`0185_books_owner_only.sql`** — locks your books and financial reports to
       you alone. Until you run this, `/admin/reports/accounting` and its two
@@ -289,7 +289,18 @@ file, and `0185` is idempotent, so just run it as listed below.
       still does every calculation on screen — but no match can be recorded.
       Then check: `select * from gl_audit_bank_wiring();` → want **empty**.
 
-All five are safe to run twice. If you've already done one, do it again anyway —
+- [ ] **`0190_owner_only_financial_tables.sql`** — the newest one, and the
+      shortest to explain. `0185` locked your **books** to you alone. It did not
+      lock the **bank feed, the ATM, the crypto, or the loans** — twenty-five
+      tables that were still readable by *any* active staff member, of any role,
+      including a read-only analyst. One of them holds the key to your bank
+      history. This file puts the same lock you already have on your books onto
+      all twenty-five.
+      Nothing breaks: every sync uses the service role and is unaffected, and
+      your admin keeps paying vendors and employees exactly as before.
+      Then check: `select * from gl_audit_financial_tables_gate();` → want **empty**.
+
+All six are safe to run twice. If you've already done one, do it again anyway —
 it costs you thirty seconds and removes all doubt.
 
 ### About that fourth one — the employees-as-COGS question
@@ -381,6 +392,46 @@ and if that function isn't there yet it stops with a message that says
 `MIGRATION_OUT_OF_ORDER` in plain sight, rather than half-building itself. If you
 see that, run `0185` first and then come back to `0187`.
 
+**0190 must go after 0185 as well** — and after the four files that create the
+things it locks (`0156` ATM, `0157` Plaid, `0160` crypto, `0171` loans). It
+checks for all five before it changes anything. If one is missing it stops and
+tells you exactly which file to run, by name, and confirms that nothing was
+changed. That check was proved the same way the `0189` one was: by building
+throwaway databases that were each missing a different prerequisite, running
+`0190` against each, and confirming a different, correct sentence came back
+every time.
+
+### The `0190` check line, and what "empty" means
+
+After you run `0190`, run this:
+
+```sql
+select * from gl_audit_financial_tables_gate();
+```
+
+You want to see the words **`(0 rows)`** and nothing else. Same convention as
+every other check in this document: **it lists only problems.** A blank result
+is the good result.
+
+If something *is* printed, it will be one of two sentences, and they mean
+different things:
+
+- **"still references is_staff()"** — that table is still readable by any
+  active staff member. The lock did not take on it. Run `0190` again.
+- **"exists but has no is_owner() policy"** — that table has no owner lock on it
+  at all. This is the more serious of the two. Send it to me.
+
+Both sentences name the table, so you never have to guess which one is the
+problem.
+
+One thing worth saying plainly, because it is the reason this check exists at
+all: **I tested the checker by breaking the lock on purpose.** In a scratch
+database I put one table back the way it was, confirmed the function noticed and
+said so, then removed the lock entirely, confirmed it noticed *that* too, and
+then restored it and confirmed it went quiet again. A checker that prints
+"all clear" over a broken lock would be the most dangerous file in this
+repository — because it is the one you would trust and stop looking behind.
+
 ### A note on the numbering
 
 You noticed I'd used `0179` twice. You were right, and thank you — that was a
@@ -397,9 +448,10 @@ So:
   numbered `0158`, from back in PR #898. The Plaid one moved to **`0184`**, the
   free slot the cut-over vacated.
 
-Your migration folder is now **189 files, no duplicates, no gaps** — a clean run
-from `0001` to `0189` (`0187` is the vendor-bills one, `0188` is payroll, `0189`
-is the new bank-matching one). I've since confirmed that by applying them, in
+Your migration folder is now **190 files, no duplicates, no gaps** — a clean run
+from `0001` to `0190` (`0187` is the vendor-bills one, `0188` is payroll, `0189`
+is bank matching, and `0190` is the new owner-lock on your money accounts).
+I've since confirmed that by applying them, in
 order, to a real empty database — which is how the `0185` bug above came to
 light. I re-check the count, the gaps and the duplicates on every slice; those
 three checks are automated now, so a duplicate number cannot come back quietly.

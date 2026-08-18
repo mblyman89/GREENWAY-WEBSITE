@@ -1,7 +1,8 @@
 "use server";
 
 /**
- * /admin/atm server actions — ATM/PAI Slice A-2a (settings.manage = owner + admin).
+ * /admin/atm server actions — ATM/PAI Slice A-2a (finances.view = OWNER ONLY,
+ * re-gated in slice books-06 alongside migration 0190).
  *
  * Mirrors src/app/admin/settings/banking/vault-actions.ts: gate with
  * requirePermission, do the work in the server-only store (secrets encrypted
@@ -38,7 +39,7 @@ function back(qs: { tab?: string; msg?: string; error?: string }): never {
 }
 
 export async function saveAtmConnectionAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const portalBaseUrl = String(formData.get("portal_base_url") ?? "").trim();
   const terminalId = String(formData.get("terminal_id") ?? "").trim();
@@ -77,7 +78,7 @@ export async function saveAtmConnectionAction(formData: FormData): Promise<void>
 }
 
 export async function clearAtmCredentialsAction(): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const result = await clearAtmCredentials();
   if (!result.ok) back({ error: result.error });
@@ -101,7 +102,7 @@ export async function clearAtmCredentialsAction(): Promise<void> {
  * carries the amount + date but no secret.
  */
 export async function recordManualCashLoadAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const terminalId = String(formData.get("terminal_id") ?? "").trim();
   const amount = String(formData.get("amount") ?? "");
@@ -146,7 +147,7 @@ export async function recordManualCashLoadAction(formData: FormData): Promise<vo
  * `atm.sync.manual` records counts + problem count, never file contents.
  */
 export async function importAtmCsvsAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const cashLoadCsv = String(formData.get("cash_load_csv") ?? "");
   const simpleSummaryCsv = String(formData.get("simple_summary_csv") ?? "");
@@ -179,7 +180,7 @@ export async function importAtmCsvsAction(formData: FormData): Promise<void> {
  * Michael at the manual import above. Never guesses an endpoint.
  */
 export async function runAtmLiveSyncAction(): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
   const result = await runAtmLiveSync();
 
   await recordAudit({
@@ -217,7 +218,7 @@ export async function runAtmLiveSyncAction(): Promise<void> {
  * the daily sync keeps it current. Audit: atm.sync.backfill.
  */
 export async function runAtmBackfillAction(): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
   const result = await runAtmLiveSync({ history: true });
 
   await recordAudit({
@@ -261,7 +262,7 @@ export async function runAtmBackfillAction(): Promise<void> {
  * guessed. Audit: atm.discover.fields (records the discovered names, no secrets).
  */
 export async function discoverPaiReportFieldsAction(): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
   const result = await discoverReportFilterFields();
 
   if (!result.ok) {
@@ -340,7 +341,7 @@ const KIND_LABEL: Record<PaiReportKind, string> = {
  * Audit: atm.select.report.
  */
 export async function selectPaiReportAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const rawKind = String(formData.get("kind") ?? "").trim();
   const kind = REPORT_KINDS.find((k) => k === rawKind);
@@ -406,7 +407,7 @@ export async function selectPaiReportAction(formData: FormData): Promise<void> {
  * otherwise we show the ranked table so Michael can pick. Audit: atm.probe.report.
  */
 export async function probeReportCandidatesAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const rawKind = String(formData.get("kind") ?? "").trim();
   const kind = REPORT_KINDS.find((k) => k === rawKind);
