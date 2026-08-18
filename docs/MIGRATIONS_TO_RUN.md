@@ -732,3 +732,87 @@
   **Until this is run, payroll keeps working exactly as it does today (admins
   can still pay employees) and the new payroll screen still teaches and still
   does all the arithmetic on screen, but no payroll run can reach the ledger.**
+
+- [ ] **`supabase/migrations/0189_bank_matching.sql`** — books-05: connecting the
+  bank feed to the books, and stopping the two mistakes that do not look like
+  mistakes.
+
+  **Why this one matters more than it sounds like it should.** Everywhere else
+  in the books, an error announces itself: an unbalanced entry will not post, a
+  bill with no vendor will not post. Bank matching is the exception, in the two
+  worst possible ways.
+
+  **The first is the sign wall.** Your bank feed and your ledger use exactly
+  opposite conventions. In the Plaid feed a POSITIVE number means money **left**
+  your account. In the ledger a POSITIVE number means a **debit**. Money leaving
+  the bank has to *credit* the bank account — a negative — so for the cash line
+  the two systems are precise mirror images. Get that crossing backwards and
+  **both lines of the entry flip together**: debits still equal credits, the
+  journal still balances, nothing turns red, no report complains. The only
+  symptom is a wrong tax return. This is not hypothetical for you — *backwards
+  card signs* is already in the old books.
+
+  This migration puts a `check` constraint in the database itself requiring
+  `ledger_cash_cents = -plaid_amount_cents` on every stored match, so a
+  backwards match cannot be written even if something bypassed the screen
+  entirely. A screen can be bypassed; a constraint cannot.
+
+  **The second is worse, because it looks like success.** Suppose the bank took
+  a $77 service charge and your books never heard of it. That fee is *already
+  inside* the closing balance the bank sent you. When the reconciliation brings
+  it across to compare like with like, **it cancels itself out** — the
+  difference comes to exactly `$0.00` while the expense is missing from your
+  profit and loss entirely. A reconciliation that congratulates you at that
+  moment is worse than one that fails, because you would stop looking.
+
+  So this migration stores **two separate answers**, not one: `ties` (did the
+  arithmetic close?) and `complete` (is anything still unrecorded?). And it
+  carries a `check (signed_off_at is null or complete)`, meaning **the database
+  physically refuses to let a month be signed off while a settled bank line
+  still has no entry.** The Washington State Auditor's BARS Manual §3.1.9.15(4)
+  is the authority, in its own words: *"Identifying transactions from the bank
+  accounts need to be recorded in the accounting records. For example, some of
+  these items could include interest earned, bank fees or charges, NSF checks,
+  and unrecorded deposits ... Accounting records should be updated for all such
+  transactions identified in the bank statements."*
+
+  What else it builds:
+  1. The match tables, storing the evidence in **both directions** — bank row to
+     journal and journal back to bank row. WAC 314-55-087(2)(b) requires the
+     ability to *"trace any transaction back to the original source or forward
+     to a final total"*, and a one-way link satisfies neither half of that. A
+     match is never deleted when you change your mind; it is **superseded**, and
+     the supersession is itself a record, because the retention period is five
+     years.
+  2. **Double-match protection** in both directions, so one bank line cannot be
+     matched twice and one journal cannot absorb two bank lines.
+  3. The **cut-over guard** — nothing can be matched into a period before
+     `2026-01-01`, refused by the database rather than by a screen.
+  4. **`gl_sign_off_bank_reconciliation(...)`** — owner-only, and it revokes a
+     stale signature automatically: re-run a reconciliation after signing it and
+     the signature clears, because a signature given to one set of numbers must
+     not survive onto a different set.
+  5. Owner-only RLS on everything new.
+
+  Requires `is_owner()` (0185), `gl_journals`/`gl_submit_journal` (0172/0174) and
+  the Plaid tables (0157). Its **§0 precondition guard** checks for all of them
+  and stops with `MIGRATION_OUT_OF_ORDER` rather than half-building itself.
+  Idempotent — verified by applying it repeatedly against a real PostgreSQL
+  database, exit code 0 and zero errors every time.
+
+  **Then run this one line and expect ZERO ROWS back:**
+
+  ```sql
+  select * from gl_audit_bank_wiring();
+  ```
+
+  If you are not sure what that means in practice, it is spelled out step by
+  step in `docs/HOW_TO_RUN_A_MIGRATION.md`. The short version: that function
+  checks the controls above and **lists only problems**, so an empty result —
+  the words `(0 rows)` — is the all-clear. Anything printed is a problem
+  described in plain English.
+
+  **Until this is run, the new `/admin/books/bank` page still teaches
+  everything, and every number on it is still computed live by the real engine
+  (it is pure TypeScript and needs no database), but no bank match can be
+  stored.**

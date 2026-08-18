@@ -313,7 +313,7 @@ export const PRESETS: Preset[] = [
     id: "home-band",
     label: "Homepage banner band",
     description:
-      "Wide, short background band for the homepage \\u201cShop by Category\\u201d / \\u201cShop by Brand\\u201d sections (matches the 1600\\u00d7560 band). Textless \\u2014 the title, subtitle and buttons are layered on top automatically.",
+      "Wide, short background band for the homepage “Shop by Category” / “Shop by Brand” sections (matches the 1600×560 band). Textless — the title, subtitle and buttons are layered on top automatically.",
     brief: {
       composition:
         "very wide short banner background composition, subtle background-style art with generous negative space, key subject kept toward the right two-thirds so overlaid headings and buttons on the left stay readable",

@@ -253,7 +253,7 @@ file, and `0185` is idempotent, so just run it as listed below.
 
 ## Your actual to-do list right now
 
-**Four** migrations are waiting. In this order:
+**Five** migrations are waiting. In this order:
 
 - [ ] **`0185_books_owner_only.sql`** — locks your books and financial reports to
       you alone. Until you run this, `/admin/reports/accounting` and its two
@@ -281,7 +281,15 @@ file, and `0185` is idempotent, so just run it as listed below.
       math on screen — but no payroll run can reach your books.
       Then check: `select * from gl_audit_payroll_wiring();` → want **empty**.
 
-All four are safe to run twice. If you've already done one, do it again anyway —
+- [ ] **`0189_bank_matching.sql`** — bank matching. This is the newest one, and
+      it is the one that catches the mistakes that don't announce themselves.
+      Every entry in your books gets matched against a line that actually hit
+      the bank, so nothing is invented and nothing is missed.
+      Until you run this, the new **Bank & Reconcile** page still teaches and
+      still does every calculation on screen — but no match can be recorded.
+      Then check: `select * from gl_audit_bank_wiring();` → want **empty**.
+
+All five are safe to run twice. If you've already done one, do it again anyway —
 it costs you thirty seconds and removes all doubt.
 
 ### About that fourth one — the employees-as-COGS question
@@ -340,6 +348,34 @@ afternoon of reconstruction.
 **0188 must go after 0185.** Like `0187`, it checks first and stops with
 `MIGRATION_OUT_OF_ORDER` rather than half-building itself.
 
+**0189 must go after all of them** — and as of this slice it now checks, which
+it did not before. I found that while writing this page: `0187` and `0188` both
+refuse politely if you run them early, and `0189` didn't. Pasted out of order it
+would have thrown a raw database error at you a few hundred lines in, about a
+table you've never heard of, with no hint about which earlier file you'd missed.
+
+Nothing would have been damaged — every one of these files runs inside a
+transaction, so an out-of-order run changes nothing at all — but you'd have had
+no way of knowing that, and no way of knowing what to do next. So `0189` now
+opens with five checks, and if any of them fails you get a sentence that names
+the file to run first, like this one:
+
+```
+MIGRATION_OUT_OF_ORDER: 0189 bridges plaid_transactions (migration 0157)
+to the ledger. Run 0157_plaid_foundation.sql first.
+```
+
+That's the whole error. Read it, run the file it names, come back. **If you see
+that message, nothing happened to your database** — you have not half-installed
+anything, and you don't need to undo anything.
+
+I proved this rather than assuming it. I built five throwaway databases in the
+sandbox, each one missing a different prerequisite, ran `0189` against each, and
+confirmed all five produced their own plain-English sentence naming their own
+file. Then I ran it against the real one and confirmed it stayed silent and
+applied cleanly. There's also a test now that fails the build if anyone ever
+removes those checks, or waters one down so it stops naming the file.
+
 **0187 must go after 0185.** It checks for `is_owner()` before it does anything,
 and if that function isn't there yet it stops with a message that says
 `MIGRATION_OUT_OF_ORDER` in plain sight, rather than half-building itself. If you
@@ -361,10 +397,12 @@ So:
   numbered `0158`, from back in PR #898. The Plaid one moved to **`0184`**, the
   free slot the cut-over vacated.
 
-Your migration folder is now **188 files, no duplicates, no gaps** — a clean run
-from `0001` to `0188` (`0187` is the vendor-bills one, `0188` is the new payroll
-one). I've since confirmed that by applying all 188 of them, in order, to a real
-empty database — which is how the `0185` bug above came to light.
+Your migration folder is now **189 files, no duplicates, no gaps** — a clean run
+from `0001` to `0189` (`0187` is the vendor-bills one, `0188` is payroll, `0189`
+is the new bank-matching one). I've since confirmed that by applying them, in
+order, to a real empty database — which is how the `0185` bug above came to
+light. I re-check the count, the gaps and the duplicates on every slice; those
+three checks are automated now, so a duplicate number cannot come back quietly.
 
 And there's now a test that fails the build if anyone ever creates a duplicate
 number again. It can't come back silently.
@@ -385,4 +423,4 @@ text inside; only the file name changed. And they're idempotent anyway.
 | What does success look like? | `Success. No rows returned` |
 | What if it errors? | Nothing changed. Send me the red text. |
 | What does the audit check mean? | **Empty = good.** It only lists problems. |
-| Do I ever type SQL myself? | Only the two `select * from …` lines above. Copy-paste them. |
+| Do I ever type SQL myself? | Only the `select * from …` check lines above. Copy-paste them. |
