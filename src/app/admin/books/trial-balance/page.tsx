@@ -30,6 +30,7 @@ import {
 } from "@/lib/accounting/books-view-core";
 import { RefusalNotice } from "@/components/admin/books/RefusalNotice";
 import { BooksToolbar } from "@/components/admin/books/BooksToolbar";
+import { TrialBalanceExplainer } from "./TrialBalanceExplainer";
 
 export const dynamic = "force-dynamic";
 
@@ -203,6 +204,13 @@ export default async function TrialBalancePage({
           </p>
         </>
       ) : null}
+
+      {/*
+        The guidance sits BELOW the numbers deliberately. Michael came here to
+        read a trial balance; the explainer's job is to change what he concludes
+        from it, which only works after he has seen it.
+      */}
+      <TrialBalanceExplainer />
     </div>
   );
 }

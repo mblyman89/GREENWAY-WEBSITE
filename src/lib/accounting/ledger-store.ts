@@ -394,3 +394,78 @@ export async function listOpeningBalanceRows(
   if (error) return refused<OpeningBalanceRow[]>(error);
   return { ok: true, data: (data ?? []) as unknown as OpeningBalanceRow[] };
 }
+
+// ---------------------------------------------------------------------------
+// MANUAL ACCOUNT USAGE (slice books-07)
+// ---------------------------------------------------------------------------
+
+/**
+ * How many times each account has been used in a MANUAL journal entry before.
+ *
+ * This exists to feed the AS 2401.61(a) "seldom-used account" screen on the
+ * journal page. That standard asks whether an entry touches accounts that are
+ * rarely used, so the question can only be answered against real history --
+ * a hard-coded list would be a guess, and a guess is the one thing this
+ * codebase does not permit.
+ *
+ * WHY `source_kind = 'manual'` AND NOT EVERY ENTRY:
+ * The point of .61(a) is unusual HAND activity. Automated postings (POS sales,
+ * excise, payroll, bank) touch the same handful of accounts thousands of times
+ * and would drown the signal completely -- an account could look thoroughly
+ * routine on the strength of machine traffic while having been keyed by hand
+ * exactly once. Counting only manual entries is what makes the screen mean
+ * "you rarely post here yourself".
+ *
+ * Drafts count as well as posted entries. Someone who has drafted to an account
+ * repeatedly is familiar with it, which is precisely what the screen measures.
+ *
+ * Returns a map of account CODE -> count. Accounts never used by hand are
+ * simply absent, which the screen treats as zero.
+ */
+export async function getManualAccountUsage(
+  entityCode: string,
+): Promise<LedgerResult<Record<string, number>>> {
+  const admin = await createBooksClient();
+
+  const { data: entity, error: entityError } = await admin
+    .from("gl_entities")
+    .select("id")
+    .eq("code", entityCode)
+    .maybeSingle();
+  if (entityError) return refused<Record<string, number>>(entityError);
+  if (entity == null) {
+    return refused<Record<string, number>>(
+      `GL_UNKNOWN_ENTITY: there is no set of books called ${entityCode}`,
+    );
+  }
+
+  // The line carries `account_id` (a uuid), not the code, so the code is
+  // embedded from gl_accounts. `!inner` keeps a line whose account somehow
+  // vanished from producing a row with a null code.
+  const { data, error } = await admin
+    .from("gl_journal_lines")
+    .select("gl_accounts!inner(code), gl_journals!inner(source_kind)")
+    .eq("entity_id", (entity as { id: string }).id)
+    .eq("gl_journals.source_kind", "manual");
+  if (error) return refused<Record<string, number>>(error);
+
+  const rows = (data ?? []) as unknown as {
+    gl_accounts: { code: string } | { code: string }[] | null;
+  }[];
+
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    // PostgREST returns an embedded row as an object, but returns an array
+    // when it cannot prove the relationship is to-one. Both shapes are handled
+    // because getting this wrong would silently produce an empty map -- and an
+    // empty map makes EVERY account look seldom-used, which is the exact
+    // false-alarm storm this function exists to prevent.
+    const acct = Array.isArray(r.gl_accounts) ? r.gl_accounts[0] : r.gl_accounts;
+    const code = acct?.code;
+    if (typeof code === "string" && code !== "") {
+      out[code] = (out[code] ?? 0) + 1;
+    }
+  }
+
+  return { ok: true, data: out };
+}
