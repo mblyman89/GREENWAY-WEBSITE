@@ -3,8 +3,9 @@
 /**
  * /admin/plaid server actions — Plaid Slice P2 (Connect flow).
  *
- * Gate: requirePermission("settings.manage") (owner + admin only — same as
- * Banking / ATM / Payroll). Mirrors src/app/admin/atm/actions.ts: gate → do the
+ * Gate: requirePermission("finances.view") — OWNER ONLY as of slice books-06
+ * (was owner+admin under settings.manage). Migration 0190 re-gates the plaid_*
+ * tables to is_owner() to match. Mirrors src/app/admin/atm/actions.ts: gate → do the
  * work in the server-only store (secrets encrypted there) → write an audit entry
  * with NO secret → revalidate + redirect back with a friendly msg/error.
  *
@@ -87,7 +88,7 @@ function siteBaseUrl(): string {
 export async function createPlaidLinkTokenAction(
   credentialSetKey?: string,
 ): Promise<{ ok: true; linkToken: string } | { ok: false; error: string }> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   // Pick the credential set to link under (which person's Plaid account). The
   // picker only offers configured sets; we guard again here. Default primary.
@@ -144,7 +145,7 @@ export async function exchangePlaidPublicTokenAction(
   publicToken: string,
   credentialSetKey?: string,
 ): Promise<{ ok: true; accounts: number } | { ok: false; error: string }> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const token = (publicToken ?? "").trim();
   if (!token) return { ok: false, error: "Missing connection token from Plaid. Please try connecting again." };
@@ -260,7 +261,7 @@ export async function exchangePlaidPublicTokenAction(
  * Redirects back to the Health tab with a friendly result.
  */
 export async function assignPlaidAccountRoleAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const accountId = String(formData.get("account_id") ?? "").trim();
   const requestedRole = String(formData.get("role") ?? "");
@@ -300,7 +301,7 @@ export async function assignPlaidAccountRoleAction(formData: FormData): Promise<
  * Health tab with a friendly result. Audit: plaid.account.renamed.
  */
 export async function setPlaidAccountNameAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const accountId = String(formData.get("account_id") ?? "").trim();
   if (!accountId) back({ tab: "health", error: "Missing account. Please try again." });
@@ -336,7 +337,7 @@ export async function setPlaidAccountNameAction(formData: FormData): Promise<voi
  * error status in the store, so a partial failure still saves whatever synced.
  */
 export async function runPlaidSyncNowAction(): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const result = await runAllPlaidSync();
 
@@ -374,7 +375,7 @@ export async function runPlaidSyncNowAction(): Promise<void> {
  * tab. Audit: plaid.item.removed.
  */
 export async function removePlaidItemAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const itemId = String(formData.get("item_id") ?? "").trim();
   if (!itemId) back({ tab: "connections", error: "Missing connection. Please try again." });

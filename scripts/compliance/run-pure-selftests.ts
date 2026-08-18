@@ -112,6 +112,13 @@ import { __runFixedAssetsCoreTests } from "../../src/lib/accounting/fixed-assets
 // here so a break in either turns BOTH gates red. See the audit note in
 // tests/compliance/books-view-core.test.ts.
 import { __runBooksViewCoreTests } from "../../src/lib/accounting/books-view-core";
+// Slice books-06: the OWNER GATE over the money pages -- the bank feed, the
+// ATM vault, the crypto treasury and the loans. books-view-core guards the
+// ledger; this one guards the accounts the ledger is built from, and holds
+// the 25-table inventory that migration 0190 re-gates from is_staff() to
+// is_owner(). If the page gate and the database gate ever disagree, these
+// self-tests are what say so out loud.
+import { __runOwnerGateCoreTests } from "../../src/lib/auth/owner-gate-core";
 import { __runGlRefusalCoreTests } from "../../src/lib/accounting/gl-refusal-core";
 import { __runJournalAdvisorCoreTests } from "../../src/lib/accounting/journal-advisor-core";
 import { __runCutoverCoreTests } from "../../src/lib/accounting/cutover-core";
@@ -735,6 +742,8 @@ async function main() {
   __runTrialBalanceCoreTests();
   __runFixedAssetsCoreTests();
   __runBooksViewCoreTests();
+  __runOwnerGateCoreTests();
+  console.log("owner-gate-core self-tests: all passed");
   __runGlRefusalCoreTests();
   __runJournalAdvisorCoreTests();
   console.log("journal-advisor-core self-tests: all passed");

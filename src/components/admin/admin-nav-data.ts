@@ -134,10 +134,16 @@ export const adminNav: AdminNavItem[] = [
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "\ud83d\udc64", group: "Admin" }, // 👤 user
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" }, // 🔌 integrations
   { label: "Banking", href: "/admin/settings/banking", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Admin" }, // bank / ACH origination
-  { label: "Bank Feeds", href: "/admin/plaid", permission: "settings.manage", icon: "\ud83d\udd17", group: "Admin" }, // 🔗 Plaid: read-only bank/credit feeds for automatic bookkeeping (P2)
-  { label: "Loans", href: "/admin/loans", permission: "settings.manage", icon: "🏠", group: "Admin" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
-  { label: "Crypto Portfolio", href: "/admin/crypto", permission: "settings.manage", icon: "\u20bf", group: "Admin" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
-  { label: "ATM", href: "/admin/atm", permission: "settings.manage", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
+  { label: "Bank Feeds", href: "/admin/plaid", permission: "finances.view", icon: "\ud83d\udd17", group: "Admin" }, // 🔗 Plaid: read-only bank/credit feeds for automatic bookkeeping (P2)
+  { label: "Loans", href: "/admin/loans", permission: "finances.view", icon: "🏠", group: "Admin" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
+  { label: "Crypto Portfolio", href: "/admin/crypto", permission: "finances.view", icon: "\u20bf", group: "Admin" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
+  { label: "ATM", href: "/admin/atm", permission: "finances.view", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
+  // Slice books-06: the four MONEY pages moved from "settings.manage"
+  // (owner+admin) to "finances.view" (OWNER ONLY), matching migration 0190,
+  // which re-gates the 25 tables behind them from is_staff() to is_owner().
+  // "Banking" above deliberately stays on settings.manage -- it is the vendor
+  // and employee payee vault, i.e. how an admin pays vendors and pays
+  // employees, which the owner explicitly kept with admin.
   // F5-K: THE BOOKS. Gated on "books.view" (OWNER ONLY as of the 2026-08-17
   // owner decision), which mirrors the database's is_owner() check on every
   // accounting RPC (migration 0185). Do NOT change these to "reports.view" --

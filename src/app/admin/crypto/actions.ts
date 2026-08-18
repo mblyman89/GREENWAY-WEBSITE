@@ -3,8 +3,9 @@
 /**
  * /admin/crypto server actions — Crypto Portfolio.
  *
- * Gate: requirePermission("settings.manage") (owner + admin only — same as
- * Banking / Bank Feeds / ATM / Payroll). Mirrors src/app/admin/plaid/actions.ts:
+ * Gate: requirePermission("finances.view") — OWNER ONLY as of slice books-06
+ * (was owner+admin under settings.manage). Migration 0190 re-gates the crypto_*
+ * tables to is_owner() to match. Mirrors src/app/admin/plaid/actions.ts:
  * gate → validate in the pure core → write via the server-only store → audit
  * with NO secret (public address only) → revalidate + redirect with a friendly
  * message.
@@ -59,7 +60,7 @@ function back(qs: { tab?: string; msg?: string; error?: string }): never {
  * Plaid's "Connected! Accounts will appear on the next sync.")
  */
 export async function addCryptoWalletAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const parsed = parseAddWallet({
     chain: String(formData.get("chain") ?? ""),
@@ -105,7 +106,7 @@ export async function addCryptoWalletAction(formData: FormData): Promise<void> {
  * with a friendly message. Same owner/admin gate as adding a wallet.
  */
 export async function renameWalletAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const parsed = parseWalletLabel({
     walletId: String(formData.get("walletId") ?? ""),
@@ -146,7 +147,7 @@ export async function renameWalletAction(formData: FormData): Promise<void> {
  * next "Sync now" resumes from where it left off.
  */
 export async function runCryptoSyncNowAction(): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const result = await runAllCryptoSync();
 
@@ -185,7 +186,7 @@ export async function runCryptoSyncNowAction(): Promise<void> {
  * message.
  */
 export async function setCryptoAssetHiddenAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const assetId = String(formData.get("assetId") ?? "").trim();
   const hidden = String(formData.get("hidden") ?? "") === "1";
@@ -229,7 +230,7 @@ export async function setCryptoAssetHiddenAction(formData: FormData): Promise<vo
  * table isn't migrated yet the store no-ops and we still report success.
  */
 export async function classifyTransactionAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const txId = String(formData.get("txId") ?? "").trim();
   const primitiveRaw = String(formData.get("primitive") ?? "").trim();
@@ -280,14 +281,14 @@ export async function classifyTransactionAction(formData: FormData): Promise<voi
  * pair (e.g. hot wallet \u2192 Ledger Stax) into a durable, non-taxable relocation
  * the cost-basis engine can carry basis + date across.
  *
- * Gate settings.manage \u2192 validate in the pure builder (distinct wallets, valid
+ * Gate finances.view \u2192 validate in the pure builder (distinct wallets, valid
  * exact-decimal amount) \u2192 upsert via the server-only store \u2192 audit (public ids
  * only) \u2192 back to the Reconcile tab with a plain-English confirmation. Graceful:
  * if the transfers table isn't migrated yet the store reports it and we surface
  * that message rather than crashing.
  */
 export async function confirmTransferAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const outTxId = String(formData.get("outTxId") ?? "").trim();
   const inTxId = String(formData.get("inTxId") ?? "").trim();
@@ -346,10 +347,10 @@ export async function confirmTransferAction(formData: FormData): Promise<void> {
  * it is treated as a non-taxable self-transfer (basis carries over), and we can
  * pull its history + trace one hop further back. 'rejected' => "not mine": the
  * decision is remembered so we stop re-suggesting it. Audited either way. Gate
- * is settings.manage, identical to every other crypto write.
+ * is finances.view, identical to every other crypto write.
  */
 export async function confirmOwnerWalletAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("finances.view");
 
   const address = String(formData.get("address") ?? "").trim();
   const chainRaw = String(formData.get("chain") ?? "").trim();

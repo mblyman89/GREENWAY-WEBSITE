@@ -8,7 +8,10 @@
  *   Tab 2 — Transactions & Fees: settlement/surcharge tables  → built in A-2b.
  *   Tab 3 — Cash Loads: physical cash loads + expected-in-machine → A-2b.
  *
- * Gate: settings.manage = owner + admin ONLY (same as Banking/Payroll).
+ * Gate: finances.view = OWNER ONLY (slice books-06). Was settings.manage
+ * (owner+admin) until migration 0190 re-gated the six atm_* tables behind this
+ * page from is_staff() to is_owner(). The page gate and the database gate now
+ * say the same word: owner.
  * Renders even when the DB/PAI isn't configured (unconfigured-friendly card).
  *
  * A-2a deliberately ships NO network code — the live PAI login/download and
@@ -88,7 +91,7 @@ export default async function AtmPage({
 }: {
   searchParams: Promise<{ tab?: string; msg?: string; error?: string }>;
 }) {
-  await requirePermission("settings.manage");
+  await requirePermission("finances.view");
   const sp = await searchParams;
   const tab: AtmTab = resolveAtmTab(sp.tab);
 

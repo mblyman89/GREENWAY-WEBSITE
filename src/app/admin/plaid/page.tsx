@@ -10,7 +10,10 @@
  *   Tab 2 — Health: per-item status (plain English) + the role picker
  *           (tag each account main | atm | credit, one account per role).
  *
- * Gate: settings.manage = owner + admin only (same as Banking / ATM / Payroll).
+ * Gate: finances.view = OWNER ONLY (slice books-06). Was settings.manage
+ * (owner+admin) until migration 0190 re-gated the six plaid_* tables behind this
+ * page from is_staff() to is_owner(). plaid_items holds the Plaid ACCESS TOKEN,
+ * which is a key, not a report -- it was the single most exposed row in the app.
  * Renders even when Plaid or the DB isn't configured (unconfigured-friendly
  * card), so the site keeps building/deploying before the keys are set.
  *
@@ -121,7 +124,7 @@ export default async function PlaidPage({
     range?: string;
   }>;
 }) {
-  await requirePermission("settings.manage");
+  await requirePermission("finances.view");
   const sp = await searchParams;
   const tab: PlaidTab = resolvePlaidTab(sp.tab);
 
