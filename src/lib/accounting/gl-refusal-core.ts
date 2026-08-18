@@ -419,49 +419,49 @@ const REFUSALS: Record<
   // often true. For a retailer it is mostly false, and the difference is worth
   // real money on the return.
   GL_PAYROLL_SELLING_LABOR_TO_COGS: {
-    title: "That wage cannot be cost of goods sold \\u2014 and this is the expensive one.",
+    title: "That wage cannot be cost of goods sold — and this is the expensive one.",
     whatToDo:
-      "Greenway buys finished product and resells it, so the tax rules treat it as a RESELLER. The reseller inventory rule, Reg. \\u00a71.471-3(b), lets you add only \\u201Ctransportation or other necessary charges incurred in acquiring possession of the goods\\u201D to inventory \\u2014 it has no direct-labor clause at all. The clause everybody quotes, Reg. \\u00a71.471-3(c), is the PRODUCER rule, and even that one excludes \\u201Cany cost of selling.\\u201D Harborside argued this exact point and lost (Patients Mutual, 151 T.C. 176). So budtender, marketing, manager, security, compliance and inventory-counting wages are disallowed by \\u00a7280E, full stop. HERE IS WHAT DOES WORK: time your people spend RECEIVING deliveries and DRIVING to collect product is spent acquiring possession, and that time can ride into inventory. Split their hours by task on the payroll screen, and the receiving share goes to account 61000 legitimately.",
+      "Greenway buys finished product and resells it, so the tax rules treat it as a RESELLER. The reseller inventory rule, Reg. §1.471-3(b), lets you add only “transportation or other necessary charges incurred in acquiring possession of the goods” to inventory — it has no direct-labor clause at all. The clause everybody quotes, Reg. §1.471-3(c), is the PRODUCER rule, and even that one excludes “any cost of selling.” Harborside argued this exact point and lost (Patients Mutual, 151 T.C. 176). So budtender, marketing, manager, security, compliance and inventory-counting wages are disallowed by §280E, full stop. HERE IS WHAT DOES WORK: time your people spend RECEIVING deliveries and DRIVING to collect product is spent acquiring possession, and that time can ride into inventory. Split their hours by task on the payroll screen, and the receiving share goes to account 61000 legitimately.",
   },
   GL_PAYROLL_UNKNOWN_ROLE: {
     title: "There is no labor role by that name.",
     whatToDo:
-      "The list of roles is deliberately closed, because an open-ended list of job titles is exactly how \\u201Cwarehouse associate\\u201D quietly becomes a cost-of-goods account that nobody can explain three years later in an audit. If a genuinely new kind of work exists, add it to the taxonomy first with its \\u00a7280E treatment and the authority behind it, then use it.",
+      "The list of roles is deliberately closed, because an open-ended list of job titles is exactly how “warehouse associate” quietly becomes a cost-of-goods account that nobody can explain three years later in an audit. If a genuinely new kind of work exists, add it to the taxonomy first with its §280E treatment and the authority behind it, then use it.",
   },
   GL_PAYROLL_NO_TASK_DETAIL: {
     title: "Clock-in and clock-out is not enough to put wages into inventory.",
     whatToDo:
-      "To claim receiving time as cost of goods sold you need records showing WHAT the person was doing, not just that they were here. \\u00a76001 requires records sufficient to establish the amount, and a percentage typed into a box after the fact is a guess wearing a record\\u2019s clothes. The fix is ordinary: have staff tag their punches with what they were doing. After about a month of tagged punches the claim supports itself, and the number stops being an estimate.",
+      "To claim receiving time as cost of goods sold you need records showing WHAT the person was doing, not just that they were here. §6001 requires records sufficient to establish the amount, and a percentage typed into a box after the fact is a guess wearing a record’s clothes. The fix is ordinary: have staff tag their punches with what they were doing. After about a month of tagged punches the claim supports itself, and the number stops being an estimate.",
   },
   GL_PAYROLL_NOT_TIED_TO_DELIVERIES: {
     title: "Receiving time has to point at actual deliveries.",
     whatToDo:
-      "The reason receiving labor survives \\u00a7280E is that it is spent \\u201Cacquiring possession of the goods.\\u201D That is a claim about specific goods, so it has to be tied to specific deliveries. Link the receiving punches to the manifests they were spent on. Then the claim is not \\u201Cabout 10% of payroll\\u201D \\u2014 it is \\u201Cthese 42 punches, each tied to a numbered manifest,\\u201D which is a completely different conversation with an examiner.",
+      "The reason receiving labor survives §280E is that it is spent “acquiring possession of the goods.” That is a claim about specific goods, so it has to be tied to specific deliveries. Link the receiving punches to the manifests they were spent on. Then the claim is not “about 10% of payroll” — it is “these 42 punches, each tied to a numbered manifest,” which is a completely different conversation with an examiner.",
   },
   GL_PAYROLL_NO_COST_CLASS: {
-    title: "That payroll entry is missing its \\u00a7280E labels.",
+    title: "That payroll entry is missing its §280E labels.",
     whatToDo:
-      "This one is worth understanding, because it is the failure that hides. Every \\u00a7280E report reads the COST CLASS on each line, not the account number. A payroll entry posted without those labels balances perfectly, looks completely normal, and quietly drops the wages out of the disallowed column and the receiving labor out of cost of goods sold. Nothing appears broken \\u2014 the only symptom is a wrong tax return months later. Post payroll from the payroll screen, which attaches the labels automatically.",
+      "This one is worth understanding, because it is the failure that hides. Every §280E report reads the COST CLASS on each line, not the account number. A payroll entry posted without those labels balances perfectly, looks completely normal, and quietly drops the wages out of the disallowed column and the receiving labor out of cost of goods sold. Nothing appears broken — the only symptom is a wrong tax return months later. Post payroll from the payroll screen, which attaches the labels automatically.",
   },
   GL_PAYROLL_COGS_CLASS_MISMATCH: {
     title: "That line goes into a cost-of-goods account but is not labelled as one.",
     whatToDo:
-      "A cost that rides into inventory has to say so on the line itself, because that label is what an examiner reads and what the \\u00a7280E reports total. The account number alone is not enough. If this really is receiving labor, label it as an allocable cost of goods; if it is not, it belongs in wages instead.",
+      "A cost that rides into inventory has to say so on the line itself, because that label is what an examiner reads and what the §280E reports total. The account number alone is not enough. If this really is receiving labor, label it as an allocable cost of goods; if it is not, it belongs in wages instead.",
   },
   GL_PAYROLL_DIRECT_LABOR_CLAIMED: {
-    title: "A reseller has no \\u201Cdirect labor\\u201D to claim.",
+    title: "A reseller has no “direct labor” to claim.",
     whatToDo:
-      "This is a fine distinction that matters enormously. \\u201CDirect labor\\u201D is a PRODUCER concept from Reg. \\u00a71.471-3(c) \\u2014 the paragraph for people who grow or manufacture. Greenway buys finished product and resells it, so the reseller rule, Reg. \\u00a71.471-3(b), governs instead, and it has no direct-labor clause at all. What it does have is \\u201Cnecessary charges incurred in acquiring possession of the goods,\\u201D which is an ALLOCABLE cost, not a direct one. Label it as allocable and it is a defensible position; label it as direct labor and it invites the examiner to ask why a retailer is using a grower\\u2019s rule.",
+      "This is a fine distinction that matters enormously. “Direct labor” is a PRODUCER concept from Reg. §1.471-3(c) — the paragraph for people who grow or manufacture. Greenway buys finished product and resells it, so the reseller rule, Reg. §1.471-3(b), governs instead, and it has no direct-labor clause at all. What it does have is “necessary charges incurred in acquiring possession of the goods,” which is an ALLOCABLE cost, not a direct one. Label it as allocable and it is a defensible position; label it as direct labor and it invites the examiner to ask why a retailer is using a grower’s rule.",
   },
   GL_PAYROLL_UNCLASSIFIED_EXPENSE: {
-    title: "Those wages were posted without saying what \\u00a7280E does to them.",
+    title: "Those wages were posted without saying what §280E does to them.",
     whatToDo:
-      "Wages are never simply \\u201Cunclassified.\\u201D They are one of three things: disallowed by \\u00a7280E (the usual answer for a cannabis retailer), belonging to a separate business like the ATM or the rental property (fully deductible over there), or an allocable cost of acquiring goods (receiving and driver-collection time). Leaving the label off does not make the question go away \\u2014 it just moves the wrong answer onto the tax return where nobody will notice it. Pick which of the three this is.",
+      "Wages are never simply “unclassified.” They are one of three things: disallowed by §280E (the usual answer for a cannabis retailer), belonging to a separate business like the ATM or the rental property (fully deductible over there), or an allocable cost of acquiring goods (receiving and driver-collection time). Leaving the label off does not make the question go away — it just moves the wrong answer onto the tax return where nobody will notice it. Pick which of the three this is.",
   },
   GL_PAYROLL_RUN_CHANGED: {
     title: "This payroll was already posted, and the numbers have changed since.",
     whatToDo:
-      "Nothing is lost and nothing is wrong \\u2014 the books are just refusing to quietly overwrite a payroll that is already in them, because overwriting is how a quarter of withholding disappears without a trace. Post a correcting entry instead: the original stays where it is, the correction sits next to it, and the pair of them shows exactly what changed and why. That is what a reviewer wants to see anyway.",
+      "Nothing is lost and nothing is wrong — the books are just refusing to quietly overwrite a payroll that is already in them, because overwriting is how a quarter of withholding disappears without a trace. Post a correcting entry instead: the original stays where it is, the correction sits next to it, and the pair of them shows exactly what changed and why. That is what a reviewer wants to see anyway.",
   },
 
   // --- intercompany -------------------------------------------------------
@@ -594,6 +594,147 @@ const REFUSALS: Record<
     title: "That balance is mapped to an account that does not exist.",
     whatToDo:
       "The balance would vanish at the cut-over — the worst kind of error, because nothing would look wrong afterwards. Point it at a real account in the new chart.",
+  },
+
+  // --- slice books-05: bank matching and reconciliation ---------------------
+  //
+  // Why this block is longer and gentler than the others: every OTHER refusal in
+  // this file stops something that is visibly broken. These stop things that
+  // look perfect. A wrongly matched bank transaction still balances — flip the
+  // sign and both lines flip together, so debits still equal credits and no
+  // screen turns red. There is nothing to notice. That means the explanation has
+  // to do the work the missing error message cannot, which is why each of these
+  // says what went wrong, why it is invisible, and exactly what to do instead.
+
+  GL_BANK_PENDING_ROW: {
+    title: "That line is still pending at the bank.",
+    whatToDo:
+      "A pending charge is the bank's best guess, not a fact yet. Both the amount and the date can still change before it settles, and some pending lines disappear entirely. If it were recorded now, the books would state a number the bank later contradicts, and the correction would have to be found by hand. Give it one to three days; once it settles it appears here ready to match, and nothing is lost in the meantime.",
+  },
+  GL_BANK_REMOVED_ROW: {
+    title: "The bank withdrew that line, so there is nothing to record.",
+    whatToDo:
+      "Plaid marks a transaction as removed when the bank reverses or cancels it — a duplicate charge pulled back, an authorisation that never completed. The correct entry for an event that did not happen is no entry at all. The row is kept on file rather than deleted so the audit trail still shows it was seen and considered, which is exactly what WAC 314-55-087(2)(b) asks for.",
+  },
+  GL_BANK_SIGN_DISAGREES: {
+    title: "The bank and the entry disagree about which way the money moved.",
+    whatToDo:
+      "This is the single most important block in the whole bank screen, and it is worth knowing why. Your bank feed records a positive number when money LEAVES; the ledger records a positive number when an account is DEBITED. Those two conventions are exact opposites, so one crossing has to happen and it has to happen in exactly one place. When a sign gets flipped, both lines of the entry flip together — the journal still balances, debits still equal credits, and absolutely nothing looks wrong. That is what happened with the backwards card signs in the old books, and it went unnoticed for a long time for precisely this reason. The rule to hold on to: money arriving in the bank DEBITS the bank account; money leaving CREDITS it.",
+  },
+  GL_BANK_AMOUNT_MISMATCH: {
+    title: "The bank amount and the entry amount are not the same.",
+    whatToDo:
+      "A near-miss almost always has a real cause worth finding: a merchant fee netted out of a deposit, two days of takings banked together, or a partial payment on a bill. Do not stretch either number to make them meet. Either correct the entry to what the bank actually did, or split the deposit so each piece matches its own bank line. A forced match is a wrong number that will never be questioned again, because it looks settled.",
+  },
+  GL_BANK_ALREADY_MATCHED: {
+    title: "That bank line is already matched to an entry.",
+    whatToDo:
+      "One line at the bank is one event in the world, so it gets exactly one entry. Matching it twice records the same money twice — and because both entries balance, the books look completely healthy while the income or the expense is doubled. If the first match was wrong, undo it: the old match is kept on file as superseded rather than deleted, so the trail still shows what happened and why it changed.",
+  },
+  GL_BANK_JOURNAL_ALREADY_MATCHED: {
+    title: "That entry is already matched to a different bank line.",
+    whatToDo:
+      "The mirror image of the block above, and it matters just as much. If one entry could absorb two bank lines, one of those lines would never get its own record and the money it represents would simply be missing from the books. Undo the earlier match if it was wrong, or create the second entry this bank line actually needs.",
+  },
+  GL_BANK_DATE_TOO_FAR: {
+    title: "Those two are too far apart to be the same event.",
+    whatToDo:
+      "Cash genuinely lags: takings counted at close on Friday may not reach the bank until Wednesday, and that is normal. Months apart is not lag, it is coincidence — two unrelated transactions that happen to share an amount look identical to any matcher. If this really is the same event, then the date on one of them is wrong, and that is the thing to fix.",
+  },
+  GL_BANK_ENTITY_MISMATCH: {
+    title: "That entry belongs to a different set of books.",
+    whatToDo:
+      "You keep four separate sets of books — the shop, the ATM business, the land, and you personally — and keeping them genuinely separate is what protects the tax treatment of each one. Money that crosses between them is a loan or a distribution, never a shared entry. Post it in the entity that actually owns the bank account, then record the movement between entities deliberately, so both sides show it.",
+  },
+  GL_BANK_TRANSFER_AS_INCOME: {
+    title: "A transfer between your own accounts needs both sides identified.",
+    whatToDo:
+      "Moving your own money is not income and it is not an expense — it is the same dollar in a different pocket. If only one side gets recorded, the deposit looks like revenue you never earned and the withdrawal looks like a cost you never paid, and both are wrong at the same time. The IRS says this directly in IRM 4.10.4.2.3.7(3)(b): “Nontaxable funds, transfers-in, and returned deposits need to be subtracted from total deposits to get ‘Taxable Deposits.’” Point at the matching line in the other account and it posts cleanly through the in-transit account, with both halves visible.",
+  },
+  GL_BANK_DOUBLE_COUNT_RISK: {
+    title: "Creating a new entry here risks recording the same money twice.",
+    whatToDo:
+      "Your sales already post from the point of sale, and your bills already post from the purchasing screen. By the time the deposit reaches the bank, the income is on the books — the bank line is the proof it landed, not a second sale. Match it to the entry that already exists. Only create something new when nothing on the books explains the money, and then say what it was so it lands in the right account with the right tax label.",
+  },
+  GL_BANK_LOAN_SINGLE_LINE: {
+    title: "A loan payment cannot be recorded as one number.",
+    whatToDo:
+      "One payment leaves the bank, but three separate things happen, and only one of them is an expense. The interest is deductible under IRC §163(a). The principal is not an expense at all — it reduces what you owe, which increases what you own. The escrow is still your money, just held by the servicer to pay taxes and insurance later. Coding the whole payment to an expense account overstates the deduction and understates your equity, every single month, invisibly. Take the three figures straight off the servicer's statement rather than working them out — the statement is the evidence an examiner asks for, and the three must add up to the payment exactly.",
+  },
+  GL_BANK_NO_COST_CLASS: {
+    title: "That new entry has no §280E label.",
+    whatToDo:
+      "Every §280E report reads the cost class on the line, never the account number. A line posted without one balances perfectly and looks entirely normal on screen, while quietly dropping out of the disallowed column. Nothing appears broken and nothing ever will — the only symptom shows up on a tax return months later. Say what the cost was and the label follows automatically.",
+  },
+  GL_BANK_UNCLASSIFIED: {
+    title: "That line has not been identified yet.",
+    whatToDo:
+      "This block is deliberate, and it is the one people find most annoying until they see the alternative. A guess that lands in the wrong account is far more expensive than a line that sits and waits for you, because the guess looks finished — nobody ever goes back to check it. An unlabelled line you review is safer than a labelled one you trust. Tell it what this was and it remembers the pattern for next time.",
+  },
+  GL_BANK_NON_INTEGER_CENTS: {
+    title: "That bank amount is not a whole number of cents.",
+    whatToDo:
+      "Money in this system is always a whole number of cents, because fractions of a cent are how rounding errors get in and then compound quietly. A fraction here means something upstream did floating-point arithmetic on money. Do not round it away at this point — whatever produced the fraction is producing it everywhere else too, and this is the visible edge of it.",
+  },
+  GL_BANK_PRE_CUTOVER: {
+    title: "That bank line is dated before these books begin.",
+    whatToDo:
+      "Anything before the cut-over belongs to the Sage books and to years your accountant has already closed and filed. Posting it here would create a second, contradictory record of a period that is already settled — and if the two ever get compared, neither one can be trusted. If it genuinely belongs in the current year, the date is wrong at the source and that is where to correct it.",
+  },
+  GL_BANK_INVALID_DATE: {
+    title: "That date cannot be read as a calendar date.",
+    whatToDo:
+      "Every entry has to land in a period, because periods are what tax returns are made of, and a date that cannot be read cannot be placed in one. This nearly always means the bank feed sent something unexpected rather than that you did anything wrong. The raw payload is kept on file so the original can be checked.",
+  },
+  GL_BANK_COMMINGLED: {
+    title: "That is a personal cost inside a business set of books.",
+    whatToDo:
+      "If the company paid for something personal, that is not an expense of the company — it is money taken out of it, which is an owner draw. Recording it as an expense understates the profit the company actually made, overstates its costs, and in an S corporation it quietly changes your basis as well, so it is wrong in three places at once. Post it as a draw and all three land correctly together. If it truly was a business cost, give it the business label instead. The IRS looks for exactly this: IRM 4.10.4.2.3.4(4)(j) lists “Significant commingling of business and personal funds” as a sign of weak controls.",
+  },
+  GL_BANK_MATCH_NOT_FOUND: {
+    title: "That bank line or that entry no longer exists.",
+    whatToDo:
+      "Something referenced by this match has been removed or replaced since the screen was loaded — often because a sync ran in between. Reload the bank screen and the current picture will be there. Nothing was posted, so nothing needs undoing.",
+  },
+  GL_BANK_ACCOUNT_NOT_CASH: {
+    title: "That is not a cash account.",
+    whatToDo:
+      "A bank match has to land on an account that represents actual money at a bank — the operating account, the ATM vault account, undeposited funds, or cash in transit. Pointing it at anything else would mean the reconciliation could never tie, because the balance being proved would not be the balance the bank reports.",
+  },
+
+  // --- signing off a month: TIES is not the same as DONE --------------------
+  //
+  // These three guard the last step, and the first of them guards the subtlest
+  // failure in the whole system. A reconciliation has two different kinds of
+  // reconciling item and they are NOT interchangeable:
+  //
+  //   TIMING DIFFERENCES  (an uncashed cheque, a deposit still in transit)
+  //     The books are already RIGHT. The bank simply has not caught up. These
+  //     clear themselves. No entry is needed, and posting one would be wrong.
+  //
+  //   UNRECORDED ITEMS    (a bank fee, interest, an NSF, a forgotten auto-debit)
+  //     The books are WRONG until an entry is posted. These never clear
+  //     themselves, because nothing is coming to clear them.
+  //
+  // The trap: an unrecorded bank line is ALREADY inside the bank's closing
+  // balance, so when the reconciliation adds it to the ledger side it cancels
+  // itself out and the difference comes to exactly zero. The month appears to
+  // tie perfectly while an expense is missing from the books entirely.
+
+  GL_BANK_UNRECORDED_ITEMS: {
+    title: "This month balances, but it is not finished.",
+    whatToDo:
+      "This is the one worth reading twice, because it is the failure that looks like success. Some bank lines this month have no entry against them — a service charge, interest, an NSF, an auto-debit nobody recorded. Here is why that still showed a difference of zero: an unrecorded charge is ALREADY inside the closing balance the bank reported, so when the reconciliation adds it to your side too, it cancels itself out. The arithmetic closes perfectly while the expense is missing from the books completely. Nothing turns red, and the only symptom appears on a tax return months later, as a deduction you were entitled to and never took. Balancing and being finished are two different questions, so this asks them separately. Post an entry for each listed line, run the reconciliation again, then sign off. Washington's own audit manual puts it plainly (BARS §3.1.9.15(4)): \"Identifying transactions from the bank accounts need to be recorded in the accounting records. For example, some of these items could include interest earned, bank fees or charges, NSF checks, and unrecorded deposits ... Accounting records should be updated for all such transactions identified in the bank statements.\"",
+  },
+  GL_BANK_DOES_NOT_TIE: {
+    title: "This month is out by an amount nobody has explained.",
+    whatToDo:
+      "You are allowed to sign this off — but only with a note saying what the difference is and what you are doing about it, and that note is the whole point. An unexplained gap is a question, and a question you write down is one you can still answer next month. What must never happen is the other route: creating an entry that simply forces the two sides to agree. That entry is a plug, and a plug is a lie that balances. It is exactly the $4,624,697.31 inventory adjustment in the old books — one number invented to make a page tie, sitting there for years looking completely ordinary because nothing about it was ever out of balance. Find the cause first: a transposed figure, a duplicate deposit, a cheque cut but never sent, an entry in the wrong month. If you genuinely cannot find it, say so in the note and sign off honestly. Washington's audit manual expects the difference to be resolved rather than absorbed (BARS §3.1.9.15(5)): \"After adjusting for reconciling items, there should be no further differences between bank statements and accounting records.\"",
+  },
+  GL_BANK_ALREADY_SIGNED_OFF: {
+    title: "That month has already been signed off.",
+    whatToDo:
+      "A sign-off is a statement, with your name and a timestamp on it, that you personally reviewed this month and accepted it — which is precisely the evidence an examiner asks for and the reason it cannot be quietly re-signed. If something has since come to light, do not overwrite the old signature: run the reconciliation again. Re-running deliberately clears the signature so the month can be reviewed and signed afresh, and both the original sign-off and the new one remain on the record. That trail is worth more than a tidy one, because it shows a mistake being caught and corrected rather than a period that was simply never wrong.",
   },
 
   // --- fixed assets --------------------------------------------------------
@@ -924,6 +1065,154 @@ export function __runGlRefusalCoreTests(): void {
     ok(r.title.trim().length > 0, `${c} has a title`);
     ok(r.whatToDo.trim().length > 0, `${c} says what to do`);
     ok(!r.title.includes(c), `${c} title does not leak the machine token`);
+  }
+
+  // --- SUBSTANCE, not merely non-emptiness ---------------------------------
+  //
+  // The three checks above were the whole guard, and a mutation campaign found
+  // the hole: an explanation gutted down to a stub still passed, because
+  // "TODO" and "Please try again." are both non-empty strings.
+  //
+  // Non-empty is the wrong bar. The entire purpose of this file is that the
+  // owner is told what to DO, and "something went wrong" is precisely the
+  // reassuring non-answer this file exists to prevent (see the header). The
+  // real shortest instruction in the table is 38 characters, so 30 is a floor
+  // no genuine explanation trips over and no stub can clear.
+  const MIN_TITLE = 15;
+  const MIN_INSTRUCTION = 30;
+  for (const c of codes) {
+    const r = REFUSALS[c];
+    ok(
+      r.title.trim().length >= MIN_TITLE,
+      `${c} title is a real sentence, not a stub (got ${r.title.trim().length} chars)`,
+    );
+    ok(
+      r.whatToDo.trim().length >= MIN_INSTRUCTION,
+      `${c} instruction is a real instruction, not a stub (got ${r.whatToDo.trim().length} chars)`,
+    );
+  }
+  // NEGATIVE CONTROL (rule 15b): prove those thresholds can actually reject
+  // something. If they were set to 0 the loop above would be decorative.
+  ok("TODO".length < MIN_INSTRUCTION, "a TODO stub would be rejected as an instruction");
+  ok(
+    "Something went wrong, please try again.".length >= MIN_INSTRUCTION,
+    "length alone cannot catch a plausible-sounding non-answer",
+  );
+  // ...which is exactly why length is not the only guard. The banned-phrase
+  // check below catches the plausible-sounding ones that are long enough.
+  const NON_ANSWERS = [
+    "please try again",
+    "something went wrong",
+    "an error occurred",
+    "unknown error",
+    "contact support",
+    "todo",
+    "tbd",
+  ];
+  for (const c of codes) {
+    const w = REFUSALS[c].whatToDo.toLowerCase();
+    for (const phrase of NON_ANSWERS) {
+      ok(
+        !w.includes(phrase),
+        `${c} does not fall back on the non-answer "${phrase}"`,
+      );
+    }
+  }
+  // NEGATIVE CONTROL for the banned-phrase guard.
+  ok(
+    NON_ANSWERS.some((p) => "Something went wrong, please try again.".toLowerCase().includes(p)),
+    "the non-answer guard genuinely detects a cheerful fallback",
+  );
+
+  // --- D9 REGRESSION: no LITERAL escape sequences in reader-facing prose ----
+  //
+  // A real defect, found in this file and fixed: 51 explanations contained a
+  // DOUBLED backslash-u escape, e.g. "\\u00a7280E". In TypeScript source that
+  // is a backslash followed by the letter u — not the character it names — so
+  // the owner literally read "\u00a7280E report reads the cost class" on
+  // screen instead of "§280E report reads the cost class".
+  //
+  // Nothing failed. It typechecked, every test passed, and the string was
+  // non-empty, so every check above was perfectly happy. The only symptom was
+  // gibberish in front of the one person these sentences exist for — in the
+  // middle of the explanation of the most expensive rule in the business.
+  //
+  // This guard is the reason it cannot come back. Prose renders characters.
+  const ESCAPE_IN_PROSE = /\\u[0-9a-fA-F]{4}/;
+  for (const c of codes) {
+    const r = REFUSALS[c];
+    ok(
+      !ESCAPE_IN_PROSE.test(r.title),
+      `${c} title renders real characters, not a literal escape sequence`,
+    );
+    ok(
+      !ESCAPE_IN_PROSE.test(r.whatToDo),
+      `${c} instruction renders real characters, not a literal escape sequence`,
+    );
+  }
+  // NEGATIVE CONTROL (rule 15b): prove the guard above can actually fail.
+  // If this regex ever stops matching, the loop is decorative.
+  ok(
+    ESCAPE_IN_PROSE.test("Every \\u00a7280E report reads the cost class"),
+    "the escape-sequence guard genuinely detects the D9 defect",
+  );
+  ok(
+    !ESCAPE_IN_PROSE.test("Every §280E report reads the cost class"),
+    "the escape-sequence guard does not fire on correct prose",
+  );
+
+  // --- the three sign-off refusals (slice books-05, defect D8) -------------
+  //
+  // These arrive from gl_sign_off_bank_reconciliation(). Before this block
+  // they had no translation at all, so the owner would have been shown a raw
+  // GL_ token at the exact moment the system was trying to stop him closing a
+  // month that was not finished.
+  for (const c of [
+    "GL_BANK_UNRECORDED_ITEMS",
+    "GL_BANK_DOES_NOT_TIE",
+    "GL_BANK_ALREADY_SIGNED_OFF",
+  ]) {
+    ok(codes.includes(c), `${c} is explained in plain English`);
+    ok(explainGlRefusal(`${c}: raw database detail`).recognised, `${c} is recognised`);
+  }
+
+  // The unrecorded-items explanation must teach the trap, not just report it.
+  // "Ties" and "complete" are different questions and the wording has to say
+  // so, because the whole defect was a month that tied and was not finished.
+  {
+    const r = REFUSALS.GL_BANK_UNRECORDED_ITEMS;
+    ok(
+      /cancels itself out/i.test(r.whatToDo),
+      "the unrecorded-items explanation says WHY the difference came to zero",
+    );
+    ok(
+      /3\.1\.9\.15\(4\)/.test(r.whatToDo),
+      "the unrecorded-items explanation cites BARS 3.1.9.15(4) verbatim",
+    );
+    ok(
+      /interest earned, bank fees or charges, NSF checks, and unrecorded deposits/.test(
+        r.whatToDo,
+      ),
+      "the BARS quotation is reproduced exactly, not paraphrased",
+    );
+    ok(
+      !/^Everything ties/i.test(r.title),
+      "the title must never congratulate a month that is not finished",
+    );
+  }
+  // The does-not-tie explanation must name the plug for what it is. The owner's
+  // own $4,624,697.31 entry is the permanent teaching example (standing rule 19).
+  {
+    const r = REFUSALS.GL_BANK_DOES_NOT_TIE;
+    ok(
+      /4,624,697\.31/.test(r.whatToDo),
+      "the does-not-tie explanation cites the owner's real plug entry",
+    );
+    ok(/plug/i.test(r.whatToDo), "the does-not-tie explanation names a plug a plug");
+    ok(
+      /3\.1\.9\.15\(5\)/.test(r.whatToDo),
+      "the does-not-tie explanation cites BARS 3.1.9.15(5)",
+    );
   }
 
   console.log(`gl-refusal-core: PASSED ${passed} assertions`);

@@ -123,6 +123,12 @@ import { __runVendorBillCoreTests } from "../../src/lib/accounting/vendor-bill-c
 // producer character, the narrow evidence-gated acquisition-labor door, the
 // hard block on selling labor, and the balanced payroll journal.
 import { __runPayrollCogsCoreTests } from "../../src/lib/accounting/payroll-cogs-core";
+// Slice books-05: bank matching and reconciliation. The sign bridge between
+// Plaid's convention (positive = money out) and the ledger's (positive =
+// debit), the refusals that make a silently-wrong match noisy, the
+// reconciliation that adjusts BOTH sides and refuses to plug the difference,
+// the three-way loan split, and the structuring pattern an examiner would see.
+import { __runBankMatchCoreTests } from "../../src/lib/accounting/bank-match-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -736,6 +742,8 @@ async function main() {
   console.log("cutover-core self-tests: all passed");
   __runVendorBillCoreTests();
   __runPayrollCogsCoreTests();
+  __runBankMatchCoreTests();
+  console.log("bank-match-core self-tests: all passed");
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

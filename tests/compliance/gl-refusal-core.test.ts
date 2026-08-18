@@ -60,6 +60,10 @@ import {
   __runGlRefusalCoreTests,
   type GlRefusal,
 } from "@/lib/accounting/gl-refusal-core";
+// The engine's runtime list of finding codes, used to prove that every bank
+// code exempted from the SQL drift check is genuinely raisable in TypeScript
+// rather than a phantom hidden behind the exemption list.
+import { ALL_BANK_FINDING_CODES } from "@/lib/accounting/bank-match-core";
 
 // ---------------------------------------------------------------------------
 // The embedded suite, so both gates cover the same ground.
@@ -497,6 +501,25 @@ describe("drift: the catalogue is checked against the migrations themselves", ()
       "TB_NO_ENTITY",
       "TB_UNKNOWN_ENTITY",
       "TB_RANGE_BACKWARDS",
+      // ---- books-05: the bank matcher's TypeScript-layer refusals ----------
+      // These eight are raised by evaluateMatch() in bank-match-core.ts rather
+      // than by migration 0189. That split is deliberate, not an oversight: the
+      // database enforces the rules that must hold no matter what (the sign
+      // wall, the cut-over date, double-matching, whether a month is complete),
+      // while these are judgements about a PROPOSED match, made before anything
+      // is submitted, so that Michael is told what is wrong while he can still
+      // fix it rather than after a refusal.
+      //
+      // Each one is proved reachable by the test immediately below, so adding a
+      // name here cannot be used to silence a genuinely dead entry.
+      "GL_BANK_COMMINGLED",
+      "GL_BANK_DATE_TOO_FAR",
+      "GL_BANK_DOUBLE_COUNT_RISK",
+      "GL_BANK_INVALID_DATE",
+      "GL_BANK_LOAN_SINGLE_LINE",
+      "GL_BANK_NON_INTEGER_CENTS",
+      "GL_BANK_NO_COST_CLASS",
+      "GL_BANK_TRANSFER_AS_INCOME",
     ]);
 
     const phantom = explained
@@ -509,6 +532,63 @@ describe("drift: the catalogue is checked against the migrations themselves", ()
       phantom,
       `These codes are explained in gl-refusal-core.ts but nothing raises them. Either the spelling is wrong (so the REAL refusal falls through as "unexpected"), or the entry is dead:\n  ${phantom.join("\n  ")}`,
     ).toEqual([]);
+  });
+
+  it("the TypeScript-only allowlist cannot be used to hide a dead code", () => {
+    /*
+      WHY THIS TEST EXISTS.
+
+      The phantom-code test above has one escape hatch: `raisedInTypeScriptOnly`.
+      Anything added to that list stops being checked. That makes the list the
+      weakest point in the whole drift guard - the obvious way to make a failing
+      phantom-code test go quiet is to paste the failing code into it, and
+      nothing would ever complain again.
+
+      So the eight bank codes added for books-05 are verified here against the
+      engine's OWN runtime list of finding codes. If a code is in the allowlist
+      but the engine cannot produce it, it is a phantom that was smuggled past
+      the guard, and this fails.
+
+      Note the mapping: the catalogue is keyed on database-style names
+      (GL_BANK_SIGN_DISAGREES) while the TypeScript engine raises the same
+      concept without the GL_ prefix (BANK_SIGN_DISAGREES). That prefix
+      difference is precisely the sort of thing that produces a code which
+      "looks explained" while the real refusal falls through to the screen as an
+      unexpected error - which was defect D1 in this very file. Asserting the
+      correspondence here keeps the two naming schemes locked together.
+    */
+    const bankCodesInAllowlist = [
+      "GL_BANK_COMMINGLED",
+      "GL_BANK_DATE_TOO_FAR",
+      "GL_BANK_DOUBLE_COUNT_RISK",
+      "GL_BANK_INVALID_DATE",
+      "GL_BANK_LOAN_SINGLE_LINE",
+      "GL_BANK_NON_INTEGER_CENTS",
+      "GL_BANK_NO_COST_CLASS",
+      "GL_BANK_TRANSFER_AS_INCOME",
+    ];
+
+    const engineCodes = new Set<string>(ALL_BANK_FINDING_CODES);
+
+    // Guards the guard: if the import ever resolves to something empty, every
+    // assertion below would pass while checking nothing.
+    expect(engineCodes.size).toBeGreaterThan(10);
+
+    for (const glCode of bankCodesInAllowlist) {
+      const engineCode = glCode.replace(/^GL_/, "");
+      expect(
+        engineCodes.has(engineCode),
+        `${glCode} is on the TypeScript-only allowlist but the engine cannot raise ${engineCode} - it is a phantom, not an exemption`,
+      ).toBe(true);
+
+      // ...and it must genuinely be absent from the catalogue's SQL side, or it
+      // does not belong on a TypeScript-only list in the first place.
+      expect(knownRefusalCodes()).toContain(glCode);
+    }
+
+    // Negative control (standing rule 15): a made-up code must NOT be
+    // findable, proving this test discriminates rather than passing anything.
+    expect(engineCodes.has("BANK_NOT_A_REAL_CODE")).toBe(false);
   });
 
   it("has no duplicate entries in the catalogue", () => {
