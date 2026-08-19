@@ -144,6 +144,8 @@ import { __runBankMatchCoreTests } from "../../src/lib/accounting/bank-match-cor
 // citation error in front of the IRS is not a cosmetic bug.
 import { __runBooksGuidanceCoreTests } from "../../src/lib/accounting/books-guidance-core";
 import { __runBooksLedgerGuidanceCoreTests } from "../../src/lib/accounting/books-ledger-guidance-core";
+import { __runInventoryAuditAuthoritiesTests } from "../../src/lib/inventory/inventory-audit-authorities";
+import { __runInventoryAuditCoreTests } from "../../src/lib/inventory/inventory-audit-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -766,6 +768,14 @@ async function main() {
 
   __runBooksLedgerGuidanceCoreTests();
   console.log("books-ledger-guidance-core self-tests: all passed");
+
+  // books-10, THE INVENTORY AUDITOR. The authorities run first: if a citation is
+  // broken there is no point testing the machinery that quotes it.
+  __runInventoryAuditAuthoritiesTests();
+  console.log("inventory-audit-authorities self-tests: all passed");
+
+  __runInventoryAuditCoreTests();
+  console.log("inventory-audit-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

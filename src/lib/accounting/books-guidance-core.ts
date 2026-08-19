@@ -52,6 +52,7 @@ import { PAYROLL_AUTHORITIES, type PayrollAuthority } from "./payroll-cogs-core"
 import { BANK_AUTHORITIES, type BankAuthority } from "./bank-match-core";
 import { GATE_AUTHORITIES, type GateAuthority } from "@/lib/auth/owner-gate-core";
 import { LEDGER_AUTHORITIES_NEW } from "./books-ledger-authorities";
+import { INVENTORY_AUDIT_AUTHORITIES_NEW } from "@/lib/inventory/inventory-audit-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -474,7 +475,14 @@ function fromGate(a: GateAuthority): GuidanceAuthority {
   return { id: a.id, kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
 
-export type SourceRegistry = "vendor-bill" | "payroll" | "bank" | "gate" | "new" | "ledger";
+export type SourceRegistry =
+  | "vendor-bill"
+  | "payroll"
+  | "bank"
+  | "gate"
+  | "new"
+  | "ledger"
+  | "inventory-audit";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -483,6 +491,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "gate",
   "new",
   "ledger",
+  "inventory-audit",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -498,6 +507,14 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // must mean the same thing on every screen, which is the entire reason
     // this file exists.
     ...LEDGER_AUTHORITIES_NEW.map((a) => ({ tag: "ledger" as const, authority: a })),
+    // books-10. Same reasoning as the ledger block above: the inventory
+    // auditor's research lives in its own leaf module, but merges HERE so that
+    // §1.471-2 means one thing whether you are reading the trial balance or a
+    // count sheet.
+    ...INVENTORY_AUDIT_AUTHORITIES_NEW.map((a) => ({
+      tag: "inventory-audit" as const,
+      authority: a,
+    })),
   ];
 }
 
