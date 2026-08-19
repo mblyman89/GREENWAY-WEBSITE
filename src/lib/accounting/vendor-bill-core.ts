@@ -90,7 +90,25 @@ import type { CostClass, EntityCode } from "./ledger-core";
  * quote is wrong, fix it against the primary source and update the test — never
  * the other way around.
  */
-export type AuthorityKind = "statute" | "regulation" | "case" | "irs_guidance" | "gaap" | "state_law";
+/**
+ * The kinds of authority this module can cite.
+ *
+ * Declared as a runtime array with the type DERIVED from it, so there is
+ * exactly one place the list exists. books-09 added `legislative_history`:
+ * S. Rep. No. 97-494 had been labelled a "statute" because no correct value was
+ * reachable, which silently overstated a committee report as binding law.
+ */
+export const ALL_AUTHORITY_KINDS = [
+  "statute",
+  "regulation",
+  "case",
+  "irs_guidance",
+  "gaap",
+  "legislative_history",
+  "state_law",
+] as const;
+
+export type AuthorityKind = (typeof ALL_AUTHORITY_KINDS)[number];
 
 export type Authority = {
   /** Stable key used by findings and by the UI. */
@@ -124,7 +142,10 @@ export const AUTHORITIES: readonly Authority[] = [
   },
   {
     id: "SENATE_REPORT_97_494",
-    kind: "statute",
+    // NOT a statute. A Senate committee report is legislative history:
+    // persuasive evidence of what Congress meant, but it does not itself bind.
+    // Labelling it "statute" overstated its weight on screen.
+    kind: "legislative_history",
     cite: "S. Rep. No. 97-494, at 309 (1982)",
     quote:
       "All deductions and credits for amounts paid or incurred in the illegal trafficking in drugs listed " +

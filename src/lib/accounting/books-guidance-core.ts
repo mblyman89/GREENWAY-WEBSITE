@@ -550,8 +550,22 @@ export type AuthorityDrift = {
  * remember to eyeball.
  */
 export function findAuthorityDrift(): readonly AuthorityDrift[] {
+  return driftBetween(taggedCandidates());
+}
+
+/**
+ * The comparison itself, over any set of tagged authorities.
+ *
+ * Exported so the detector can be tested on SYNTHETIC disagreements. Once a
+ * class of drift is fixed everywhere in the real registries, real data stops
+ * exercising the check for it — and an unexercised check is one edit away from
+ * being silently disabled.
+ */
+export function driftBetween(
+  candidates: readonly { tag: SourceRegistry; authority: GuidanceAuthority }[],
+): readonly AuthorityDrift[] {
   const byId = new Map<string, Array<{ tag: SourceRegistry; authority: GuidanceAuthority }>>();
-  for (const c of taggedCandidates()) {
+  for (const c of candidates) {
     const list = byId.get(c.authority.id) ?? [];
     list.push(c);
     byId.set(c.authority.id, list);
@@ -602,33 +616,21 @@ export const DIVERGENCE_RULINGS: readonly DivergenceRuling[] = [
   {
     id: "CCA_201504011",
     field: "quote",
-    winner: "vendor-bill",
-    finding:
-      "Verified against the primary document (I.R.S. C.C.A. 201504011, PDF at irs.gov/pub/irs-wd/201504011.pdf). " +
-      "The vendor-bill text is one unbroken sentence pair appearing verbatim in the memo's analysis: " +
-      "'Section 263A is a timing provision. It does not change the character of any expense from " +
-      "\"nondeductible\" to \"deductible,\" or vice versa.' The payroll-cogs text presents that sentence spliced " +
-      "to material from a different, non-adjacent part of the memo, and paraphrases it: the phrase " +
-      "'determines cost of goods sold using the applicable inventory-costing regulations' does not appear in " +
-      "the document. The memo's CONCLUSION says a taxpayer 'determines COGS using the applicable " +
-      "inventory-costing regulations under §471 as they existed when §280E was enacted', and its analysis says " +
-      "the taxpayer 'is entitled to determine inventoriable costs using the applicable inventory-costing " +
-      "regulations under §471 as they existed when §280E was enacted'. Both are real sentences; neither is the " +
-      "one payroll-cogs-core presents inside quotation marks as continuous text.",
-    losingRegistryIsDefective: true,
-  },
-  {
-    id: "SENATE_REPORT_97_494",
-    field: "kind",
     winner: "payroll",
     finding:
-      "S. Rep. No. 97-494 is a Senate committee report — LEGISLATIVE HISTORY, not a statute. payroll-cogs-core " +
-      "labels it 'legislative_history' correctly. vendor-bill-core labels it 'statute', which overstates its " +
-      "weight: legislative history is persuasive, a statute binds. The likely cause is mechanical rather than " +
-      "careless — vendor-bill-core's AuthorityKind union has no 'legislative_history' member, so there was no " +
-      "correct value available to it. This registry's union includes one, which is why the misclassification " +
-      "surfaces here.",
-    losingRegistryIsDefective: true,
+      "RESOLVED IN books-09. Re-verified against the primary document (I.R.S. C.C.A. 201504011, PDF at " +
+      "irs.gov/pub/irs-wd/201504011.pdf, text extracted with pdftotext). The memo contains BOTH passages, " +
+      "but they are not adjacent: the timing sentence — 'Section 263A is a timing provision. It does not " +
+      "change the character of any expense from \"nondeductible\" to \"deductible,\" or vice versa.' — sits in " +
+      "the analysis, while 'A taxpayer trafficking in a Schedule I or Schedule II controlled substance " +
+      "determines COGS using the applicable inventory-costing regulations under §471 as they existed when " +
+      "§280E was enacted.' is CONCLUSION (1) on the memo's first page. The original payroll text ran the two " +
+      "together inside one pair of quotation marks with no ellipsis AND paraphrased the second ('determines " +
+      "cost of goods sold' for the memo's 'determines COGS'), which is why this was logged as a defect. " +
+      "books-09 restored the exact wording and inserted '...' to mark the jump. Both registries are now " +
+      "verbatim-accurate; they simply quote different amounts of the same memo. The fuller text wins because " +
+      "the §471-as-of-1982 conclusion is the operative holding for a §280E taxpayer.",
+    losingRegistryIsDefective: false,
   },
   {
     id: "ALPENGLOW_EXCLUSION",
@@ -1423,17 +1425,100 @@ export function __runBooksGuidanceCoreTests(): void {
 
   // ── DRIFT DETECTION: the reason this module exists ────────────────────────
   {
-    // The scanner must actually FIND the three known disagreements. A scanner
-    // that finds nothing is indistinguishable from a scanner that is broken,
-    // so assert the exact set rather than "no unresolved drift" alone.
+    // The scanner must actually FIND the known disagreements. A scanner that
+    // finds nothing is indistinguishable from a scanner that is broken, so
+    // assert the exact set rather than "no unresolved drift" alone.
+    //
+    // books-09 removed SENATE_REPORT_97_494.kind from this set by FIXING it:
+    // vendor-bill-core's AuthorityKind union gained a legislative_history
+    // member, so both registries now agree and there is no drift left to find.
+    // The two that remain are benign and ruled on — one registry quotes more of
+    // the same memo, the other omits a pinpoint page.
     const found = findAuthorityDrift().map((d) => `${d.id}.${d.field}`).sort();
     eq(
       found.join(","),
-      "ALPENGLOW_EXCLUSION.cite,CCA_201504011.quote,SENATE_REPORT_97_494.kind",
-      "the drift scanner finds exactly the three known disagreements",
+      "ALPENGLOW_EXCLUSION.cite,CCA_201504011.quote",
+      "the drift scanner finds exactly the two remaining known disagreements",
     );
   }
   eq(unresolvedDrift().length, 0, "every drift found has an investigated ruling");
+  {
+    // THE LABELS MUST NOT LIE ABOUT WEIGHT.
+    //
+    // The `kind` can be correct while the BADGE still says something binding:
+    // labels are what Michael actually reads. Nothing else asserts this, so a
+    // one-word edit could print "Statute" over a committee report.
+    // Rank 3 means binding law -- only those three labels may claim it.
+    // Stated one-directionally on purpose. "Washington rule" is binding (weight
+    // 3) without containing the word "statute", so a two-way keyword match
+    // would be a false alarm. The DANGER is only ever one direction: something
+    // merely persuasive wearing the vocabulary of binding law.
+    for (const k of ALL_GUIDANCE_AUTHORITY_KINDS) {
+      if (GUIDANCE_KIND_WEIGHT[k] === 3) continue;
+      const label = GUIDANCE_KIND_LABELS[k];
+      ok(
+        !/\bstatute\b|\bregulation\b/i.test(label),
+        `${k} is weight ${GUIDANCE_KIND_WEIGHT[k]} (not binding law) so its badge ` +
+          `must not read "${label}" — that claims a force it does not have`,
+      );
+    }
+    eq(
+      GUIDANCE_KIND_LABELS.legislative_history,
+      "Legislative history",
+      "a committee report is badged as legislative history, never as a statute",
+    );
+  }
+  {
+    // THE FIELDS THAT GET CHECKED AT ALL.
+    //
+    // books-09 fixed the last real `kind` disagreement, which means real data
+    // no longer exercises the kind-detector: dropping "kind" from this list
+    // would now break nothing visible. That is precisely when a guarantee rots.
+    // So assert the contract directly — legal WEIGHT is checked, and a
+    // disagreement about it is an error, not a warning.
+    eq(
+      [...DRIFT_CHECKED_FIELDS].sort().join(","),
+      "cite,kind,quote",
+      "drift is checked on the words, the legal weight, AND the citation",
+    );
+    eq(DRIFT_SEVERITY.kind, "error", "a disagreement about legal WEIGHT is an error");
+    eq(DRIFT_SEVERITY.quote, "error", "a disagreement about the WORDS is an error");
+    eq(DRIFT_SEVERITY.cite, "warn", "a missing pinpoint page is untidy, not dangerous");
+  }
+  {
+    // AND PROVE THE DETECTOR ACTUALLY FIRES ON A KIND DISAGREEMENT.
+    //
+    // Synthetic, because the real registries now agree — which is the whole
+    // problem. This is the Senate-Report defect reconstructed in miniature:
+    // the same document, described as binding law by one module and as
+    // persuasive history by another.
+    const a: GuidanceAuthority = {
+      id: "SYNTHETIC_WEIGHT_TEST",
+      kind: "statute",
+      cite: "S. Rep. No. 1-1, at 1 (1900)",
+      quote: "Identical text in both registries.",
+      soWhat: "Only the KIND differs, so only a kind-check can catch it.",
+      source: "synthetic",
+    };
+    const b: GuidanceAuthority = { ...a, kind: "legislative_history" };
+    const found = driftBetween([
+      { tag: "vendor-bill", authority: a },
+      { tag: "payroll", authority: b },
+    ]);
+    eq(found.length, 1, "a kind-only disagreement is DETECTED");
+    eq(found[0].field, "kind", "and it is reported as a kind disagreement");
+    eq(found[0].severity, "error", "and it is an error, because it misstates legal weight");
+    // NEGATIVE CONTROL: identical authorities must produce NO drift, or the
+    // detector is just returning true and the test above proves nothing.
+    eq(
+      driftBetween([
+        { tag: "vendor-bill", authority: a },
+        { tag: "payroll", authority: a },
+      ]).length,
+      0,
+      "two registries that agree produce NO drift",
+    );
+  }
   {
     // NEGATIVE CONTROL: prove the scanner can actually fail. If the quote
     // comparison were replaced by a constant true, this would not throw.
@@ -1444,9 +1529,25 @@ export function __runBooksGuidanceCoreTests(): void {
     ok(texts.size > 1, "the drift record actually carries two DIFFERENT texts");
   }
   {
-    const senate = findAuthorityDrift().find((d) => d.id === "SENATE_REPORT_97_494")!;
-    eq(senate.field, "kind", "the Senate Report disagreement is about KIND");
-    eq(senate.severity, "error", "a kind disagreement is an ERROR — it misstates legal weight");
+    // books-09: this disagreement is GONE because it was fixed at source. The
+    // meaningful assertion is now the opposite one — no registry may quietly
+    // reintroduce it. If someone re-labels the Senate Report a statute in
+    // either module, drift reappears here and this fails.
+    eq(
+      findAuthorityDrift().find((d) => d.id === "SENATE_REPORT_97_494"),
+      undefined,
+      "the Senate Report kind-disagreement is fixed at source, not merely papered over",
+    );
+    eq(
+      VENDOR_BILL_AUTHORITIES.find((a) => a.id === "SENATE_REPORT_97_494")!.kind,
+      "legislative_history",
+      "vendor-bill-core labels the Senate Report legislative history",
+    );
+    eq(
+      PAYROLL_AUTHORITIES.find((a) => a.id === "SENATE_REPORT_97_494")!.kind,
+      "legislative_history",
+      "payroll-cogs-core labels the Senate Report legislative history",
+    );
   }
   {
     const alp = findAuthorityDrift().find((d) => d.id === "ALPENGLOW_EXCLUSION")!;
@@ -1464,7 +1565,20 @@ export function __runBooksGuidanceCoreTests(): void {
       !cca.quote.includes("determines cost of goods sold using the applicable"),
       "the merge REJECTS the paraphrased CCA text that does not appear in the source document",
     );
-    eq(cca.quote.length, 136, "the winning CCA quote is the short, verbatim one");
+    // books-09: the winner is now the FULLER payroll text, because it is also
+    // verbatim. It must carry the operative §471-as-of-1982 conclusion...
+    ok(
+      cca.quote.includes(
+        "determines COGS using the applicable inventory-costing regulations under §471",
+      ),
+      "the winning CCA quote carries the memo's operative CONCLUSION, in the memo's own words",
+    );
+    // ...and it must mark the jump between two non-adjacent passages. An
+    // ellipsis is the difference between quoting and fabricating.
+    ok(
+      cca.quote.includes("..."),
+      "the winning CCA quote marks the jump between non-adjacent passages with an ellipsis",
+    );
   }
   {
     const senate = findGuidanceAuthority("SENATE_REPORT_97_494")!;
@@ -1493,10 +1607,17 @@ export function __runBooksGuidanceCoreTests(): void {
       `ruling ${r.id}.${r.field} names a real registry as winner`,
     );
   }
+  // books-09 FIXED both defects this list was invented to track, at their
+  // source: payroll-cogs-core now quotes CCA 201504011 accurately (verified
+  // against irs.gov/pub/irs-wd/201504011.pdf), and vendor-bill-core now labels
+  // S. Rep. No. 97-494 legislative_history after its AuthorityKind union was
+  // widened to make the correct value reachable. An EMPTY list is therefore the
+  // correct state -- and this assertion is what forced the fix to be real
+  // rather than a comment: had either registry been left wrong, it would fail.
   eq(
     knownDefectsInOtherModules().map((d) => d.id).sort().join(","),
-    "CCA_201504011,SENATE_REPORT_97_494",
-    "exactly two defects in other modules are outstanding and must be reported",
+    "",
+    "no defects in other modules are outstanding — books-09 fixed both at source",
   );
 
   // ── KIND DERIVATION (gate authorities have no kind of their own) ──────────

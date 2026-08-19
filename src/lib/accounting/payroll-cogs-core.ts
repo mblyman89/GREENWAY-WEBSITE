@@ -258,8 +258,8 @@ export const PAYROLL_AUTHORITIES: readonly PayrollAuthority[] = [
     cite: "I.R.S. Chief Counsel Advice 201504011 (Jan. 23, 2015)",
     quote:
       "Section 263A is a timing provision. It does not change the character of any expense from " +
-      "'nondeductible' to 'deductible' or vice versa. A taxpayer trafficking in a Schedule I or Schedule II " +
-      "controlled substance determines cost of goods sold using the applicable inventory-costing regulations " +
+      "\"nondeductible\" to \"deductible,\" or vice versa. ... A taxpayer trafficking in a Schedule I or " +
+      "Schedule II controlled substance determines COGS using the applicable inventory-costing regulations " +
       "under §471 as they existed when §280E was enacted.",
     soWhat:
       "The IRS put in writing which rulebook you are held to: §471 as it read in 1982. Not today's §263A, not " +
@@ -443,19 +443,55 @@ export const PAYROLL_AUTHORITIES: readonly PayrollAuthority[] = [
     source: "RCW 49.46.020, Minimum hourly wage.",
   },
   {
+    // WAC 314-55-083 is "Security and traceability requirements". Quoted here
+    // for the two things payroll actually leans on: the state COMPELS the
+    // security spend, and it COMPELS seed-to-sale tracking. Note the last
+    // sentence -- Washington makes the licensee bear the cost, and §280E then
+    // disallows it. That combination is the whole cruelty of the statute.
     id: "WAC_314_55_083_TRACEABILITY",
     kind: "state_law",
-    cite: "WAC 314-55-083",
+    cite: "WAC 314-55-083(2), (4)",
     quote:
-      "Licensees are required to keep records that clearly reflect all financial transactions and the " +
-      "financial condition of the business. The following records must be kept and maintained on the " +
-      "licensed premises for a three-year period and must be made available for inspection...",
+      "(2) Alarm systems. At a minimum, each licensed premises must have a security alarm system on all " +
+      "perimeter entry points and perimeter windows. ... (4) Traceability: To prevent diversion and to " +
+      "promote public safety, cannabis licensees must track cannabis from seed to sale. Licensees must " +
+      "provide the required information on a system specified by the LCB. All costs related to the " +
+      "reporting requirements are borne by the licensee.",
     soWhat:
-      "Washington already requires you to keep three years of records that 'clearly reflect all financial " +
-      "transactions'. So the time records this system asks for are not extra paperwork invented by your " +
-      "bookkeeping software — the state expects records anyway. You may as well keep them in a shape that " +
-      "also defends a federal tax position.",
-    source: "WAC 314-55-083, What are the required records and what are the reporting requirements?",
+      "The state orders the alarm, the cameras and the seed-to-sale reporting, and says in the same breath " +
+      "that you pay for all of it. None of that makes the spend deductible — §280E does not care that a " +
+      "cost was legally compulsory. Track the time against these duties honestly, because the traceability " +
+      "record is also the evidence that your receiving hours line up with real deliveries.",
+    source:
+      "WAC 314-55-083, Security and traceability requirements for cannabis licensees " +
+      "(current text WSR 24-19-040, filed 9/11/24, effective 10/12/24). " +
+      "https://app.leg.wa.gov/wac/default.aspx?cite=314-55-083",
+  },
+  {
+    // Added by books-09. The recordkeeping rule is 087, NOT 083, and since
+    // WSR 24-19-040 (eff. 10/12/24) the period is FIVE years, not three.
+    // Subsection (1)(e) names employee records explicitly, which is precisely
+    // what a payroll-to-COGS allocation has to stand on.
+    id: "WAC_314_55_087_EMPLOYEE_RECORDS",
+    kind: "state_law",
+    cite: "WAC 314-55-087(1), (1)(c), (1)(e)",
+    quote:
+      "Cannabis licensees are responsible to keep records that clearly reflect all financial transactions " +
+      "and the financial condition of the business. The following records must be kept and maintained on " +
+      "the licensed premises for a five-year period and must be made available for inspection if requested " +
+      "by an employee of the LCB: ... (c) Accounting and tax records related to the licensed business and " +
+      "each true party of interest; ... (e) All employee records to include, but not limited to, training, " +
+      "payroll, and date of hire;",
+    soWhat:
+      "Washington already requires FIVE years of employee and payroll records that 'clearly reflect all " +
+      "financial transactions'. So the time records this system asks for are not extra paperwork invented " +
+      "by your bookkeeping software — the state expects them regardless. You may as well keep them in a " +
+      "shape that also defends a federal tax position. Note the period changed from three years to five " +
+      "with WSR 24-19-040, effective 10/12/2024; anything still saying three years is out of date.",
+    source:
+      "WAC 314-55-087, Recordkeeping requirements for cannabis licensees " +
+      "(current text WSR 24-19-040, filed 9/11/24, effective 10/12/24). " +
+      "https://app.leg.wa.gov/wac/default.aspx?cite=314-55-087",
   },
 ] as const;
 
@@ -810,9 +846,10 @@ export const LABOR_ROLES: readonly LaborRole[] = [
     neverInventoriable: false,
     plainEnglish:
       "Keeping the state's records is a cost of being licensed, not a cost of acquiring goods. §280E " +
-      "disallows it. Worth doing well anyway: WAC 314-55-083 requires three years of records that 'clearly " +
-      "reflect all financial transactions', and those same records are what defends everything else here.",
-    authorityIds: ["IRC_280E", "WAC_314_55_083_TRACEABILITY"],
+      "disallows it. Worth doing well anyway: WAC 314-55-087(1) requires FIVE years of records that " +
+      "'clearly reflect all financial transactions', and those same records are what defends everything " +
+      "else here.",
+    authorityIds: ["IRC_280E", "WAC_314_55_087_EMPLOYEE_RECORDS", "WAC_314_55_083_TRACEABILITY"],
   },
   {
     code: "delivery_driver",
@@ -1036,7 +1073,12 @@ export function substantiationGaps(sub: TimeSubstantiation): SubstantiationGap[]
       howToFix:
         "Link each receiving task to the manifest it belongs to. Greenway already records inbound manifests; " +
         "the link is the missing piece.",
-      authorityIds: ["IRC_6001_SUBSTANTIATION", "REG_1_471_3_B_RESELLER", "WAC_314_55_083_TRACEABILITY"],
+      authorityIds: [
+        "IRC_6001_SUBSTANTIATION",
+        "REG_1_471_3_B_RESELLER",
+        "WAC_314_55_083_TRACEABILITY",
+        "WAC_314_55_087_EMPLOYEE_RECORDS",
+      ],
     });
   }
 

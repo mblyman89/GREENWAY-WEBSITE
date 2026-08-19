@@ -173,7 +173,7 @@ export default async function DispositionPage({
           "Vendor return: get the processor's RMA first, then follow the manifest checklist — manifests must be generated in the CCRS portal and submitted 48–72h before pickup (WAC 314-55-085).",
           `Destruction: scheduling opens a ${holdHours}-hour hold (a STORE POLICY you can tune below — the old 72-hour LCB notice was removed from the rule). Product must be rendered unusable BEFORE leaving the premises: grind + mix at least 50% non-cannabis waste (WAC 314-55-097).`,
           "Recalls: NEVER destroy recall-affected product before notifying the LCB and coordinating with your enforcement officer (WAC 314-55-225) — the completion form enforces this.",
-          "Everything posts to the CCRS InventoryAdjustment.csv on the Compliance tab; keep all records 3 years (WAC 314-55-087).",
+          "Everything posts to the CCRS InventoryAdjustment.csv on the Compliance tab; keep all records 5 years (WAC 314-55-087).",
         ]}
       />
 

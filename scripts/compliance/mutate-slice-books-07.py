@@ -55,9 +55,15 @@ class Mutation:
 MUTATIONS: list[Mutation] = [
     Mutation(
         name="quote-drift-silently-accepted",
-        breaks="The paraphrased CCA text (which does not appear in the source document) wins the merge.",
-        old='    id: "CCA_201504011",\n    field: "quote",\n    winner: "vendor-bill",',
-        new='    id: "CCA_201504011",\n    field: "quote",\n    winner: "payroll",',
+        breaks=(
+            "The CCA merge drops the memo's operative CONCLUSION (COGS is computed under "
+            "\u00a7471 as it stood in 1982) and keeps only the timing sentence."
+        ),
+        # books-09 note: this mutation used to run the other way (payroll -> vendor-bill)
+        # back when payroll's text was a defective paraphrase. Payroll is now the
+        # verified-correct fuller quote, so the mutation was inverted to stay lethal.
+        old='    id: "CCA_201504011",\n    field: "quote",\n    winner: "payroll",',
+        new='    id: "CCA_201504011",\n    field: "quote",\n    winner: "vendor-bill",',
     ),
     Mutation(
         name="quote-drift-downgraded-to-warning",
@@ -74,8 +80,12 @@ MUTATIONS: list[Mutation] = [
     Mutation(
         name="senate-report-reclassified-as-statute",
         breaks="Persuasive legislative history is presented with the binding force of law.",
-        old='    id: "SENATE_REPORT_97_494",\n    field: "kind",\n    winner: "payroll",',
-        new='    id: "SENATE_REPORT_97_494",\n    field: "kind",\n    winner: "vendor-bill",',
+        # books-09 note: the old anchor was the SENATE_REPORT_97_494 divergence
+        # ruling, which no longer exists -- the defect was fixed at source in
+        # vendor-bill-core, so the two registries agree and the ruling was
+        # deleted. The live guarantee is now the classification itself.
+        old='  legislative_history: "Legislative history",',
+        new='  legislative_history: "Statute",',
     ),
     Mutation(
         name="legislative-history-weighted-as-law",
@@ -168,10 +178,17 @@ MUTATIONS: list[Mutation] = [
         new='      question: "This looks suspicious and may be fraud.",',
     ),
     Mutation(
-        name="known-defect-list-quietly-emptied",
-        breaks="The two real defects found in other modules stop being reported to the owner.",
+        name="known-defect-filter-inverted",
+        breaks=(
+            "The defect report inverts: rulings already RESOLVED get re-reported as "
+            "outstanding defects, and any genuinely defective registry is hidden."
+        ),
+        # books-09 note: this used to replace the body with `return []`. Both defects
+        # are now fixed at source, so an empty list is the CORRECT answer and that
+        # mutation had become a no-op that could never be caught. Inverting the
+        # predicate is the mutation that still proves the assertion is load-bearing.
         old="  return DIVERGENCE_RULINGS.filter((r) => r.losingRegistryIsDefective);",
-        new="  return [];",
+        new="  return DIVERGENCE_RULINGS.filter((r) => !r.losingRegistryIsDefective);",
     ),
 ]
 

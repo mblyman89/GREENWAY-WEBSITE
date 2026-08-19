@@ -42,6 +42,7 @@ import { resolve } from "node:path";
 import {
   __runVendorBillCoreTests,
   AUTHORITIES,
+  ALL_AUTHORITY_KINDS,
   PURCHASE_KINDS,
   BILL_HARD_BLOCKS,
   DECISION_TREE,
@@ -138,7 +139,9 @@ describe("authorities are real, verbatim and load-bearing", () => {
       expect(a.quote.trim().length, `${a.id} quote`).toBeGreaterThan(20);
       expect(a.soWhat.trim().length, `${a.id} soWhat`).toBeGreaterThan(20);
       expect(a.source.trim().length, `${a.id} source`).toBeGreaterThan(3);
-      expect(["statute", "regulation", "case", "irs_guidance", "gaap", "state_law"]).toContain(a.kind);
+      // Derived from the module, never retyped: a hand-copied union here is
+      // what let a Senate committee report masquerade as a statute.
+      expect(ALL_AUTHORITY_KINDS as readonly string[]).toContain(a.kind);
     }
   });
 

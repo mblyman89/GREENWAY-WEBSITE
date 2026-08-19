@@ -124,8 +124,9 @@
   replaces `reset_operational_data()` with a guarded version taking
   `acknowledge_wac_314_55_087 boolean default false`. When completed orders or
   recorded CCRS export/adjustment batches exist, the wipe REFUSES unless called
-  with the acknowledgement — WAC 314-55-087 requires three-year record
-  retention, so post-go-live data can't be destroyed by accident. The delete
+  with the acknowledgement — WAC 314-55-087 requires FIVE-year record
+  retention (three years until WSR 24-19-040, effective 10/12/2024), so
+  post-go-live data can't be destroyed by accident. The delete
   body is byte-for-byte the 0069 set (same tables, same child→parent order).
   Drops the old zero-arg signature first so the PostgREST rpc name stays
   unambiguous; idempotent to re-run. **The Danger Zone page now requires an

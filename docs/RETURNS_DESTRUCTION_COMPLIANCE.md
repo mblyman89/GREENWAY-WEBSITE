@@ -123,7 +123,8 @@ Operational requirements:
    reasons lists "Returned to seller → Other", confirming `Other` +
    detail is the LCB-expected encoding for product going back up the chain.
 5. **Records.** Keep the manifest, the processor confirmation, and the RMA
-   with the return record for three years (WAC 314-55-087 record retention).
+   with the return record for five years (WAC 314-55-087 record retention —
+   three years until WSR 24-19-040, effective 10/12/2024).
 
 ---
 
@@ -178,8 +179,10 @@ facility for compostable mix).
 
 ### 5.3 Records the rule requires
 
-Per current WAC 314-55-097 (record duty referencing WAC 314-55-087, 3-year
-retention), the licensee must keep records of:
+Per current WAC 314-55-097 — subsection (7)(e) states "All required records
+must be kept consistent with the requirements in WAC 314-55-087", so waste
+records inherit the WAC 314-55-087 retention period, which is FIVE years since
+WSR 24-19-040 (effective 10/12/2024) — the licensee must keep records of:
 
 - **what** was destroyed (product, lot/inventory identifier, quantity),
 - **when** it was rendered unusable and disposed,
@@ -303,7 +306,7 @@ Design decisions (deliberate, documented):
 - WAC 314-55-225 (recalls): https://app.leg.wa.gov/wac/default.aspx?cite=314-55-225
 - WAC 314-55-083 (traceability): https://app.leg.wa.gov/wac/default.aspx?cite=314-55-083
 - WAC 314-55-085 (transport/manifest): https://app.leg.wa.gov/wac/default.aspx?cite=314-55-085
-- WAC 314-55-087 (records, 3-year retention): https://app.leg.wa.gov/wac/default.aspx?cite=314-55-087
+- WAC 314-55-087 (records, 5-year retention): https://app.leg.wa.gov/wac/default.aspx?cite=314-55-087
 - WSR 22-14-111 (rulemaking that removed the old 72h notice language)
 - CCRS FAQ (customer-return answer, verbatim §2): https://lcb.wa.gov/ccrs/faq
 - CCRS Upload User Guide (June 2025 PDF, lcb.wa.gov) — Operation semantics,
