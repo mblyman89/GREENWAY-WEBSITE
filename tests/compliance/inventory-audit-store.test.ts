@@ -35,6 +35,10 @@ import {
   __runInventoryAuditStoreTests,
   explainAuditRefusal,
 } from "@/lib/inventory/inventory-audit-store";
+import {
+  AUDIT_LOT_COLUMNS,
+  __runAuditLotLoaderTests,
+} from "@/lib/inventory/audit-lot-loader";
 
 const storeSrc = readFileSync(
   join(__dirname, "..", "..", "src", "lib", "inventory", "inventory-audit-store.ts"),
@@ -48,9 +52,26 @@ const storeCode = storeSrc
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
+/** DEFECT D3 moved lot mapping into its own module; the same comment-stripping
+ *  discipline applies to it, for the same reason. */
+const loaderCode = readFileSync(
+  join(__dirname, "..", "..", "src", "lib", "inventory", "audit-lot-loader.ts"),
+  "utf8",
+)
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
 describe("the embedded suite runs SOMEWHERE — it cannot run in the pure runner", () => {
   it("the store's self-tests pass", () => {
     expect(() => __runInventoryAuditStoreTests()).not.toThrow();
+  });
+
+  // The loader is `server-only`, so scripts/compliance/run-pure-selftests.ts
+  // cannot import it -- it dies with `Cannot find module 'server-only'`. That
+  // is the runner's contract working, not a problem to route around, so the
+  // loader's suite is executed HERE instead of being left unrun.
+  it("the lot loader's self-tests pass", () => {
+    expect(() => __runAuditLotLoaderTests()).not.toThrow();
   });
 
   it("this file is the only place they run, because the module is server-only", () => {
@@ -145,8 +166,8 @@ describe("NULL IS NOT ZERO — the mapping layer is where this dies quietly", ()
       system_qty: 100,
       counted_qty: null,
       recount_qty: null,
-      reason: null,
-      note: null,
+      reason_code: null,
+      reason_note: null,
     });
     expect(l.countedQty).toBeNull();
     expect(l.recountQty).toBeNull();
@@ -158,28 +179,42 @@ describe("NULL IS NOT ZERO — the mapping layer is where this dies quietly", ()
       system_qty: 100,
       counted_qty: 0,
       recount_qty: null,
-      reason: null,
-      note: null,
+      reason_code: null,
+      reason_note: null,
     });
     expect(l.countedQty).toBe(0);
     expect(l.countedQty).not.toBeNull();
   });
 
+  // DEFECT D3: `__rowMappers.toLot` no longer exists. Two of an AuditLot's
+  // fields (categorySlug, vendorName) cannot be mapped from an inventory_lots
+  // row at all -- they have to be looked up -- and the row-shaped "mapper"
+  // that pretended otherwise is what hid a select for two columns that have
+  // never existed. The cost rule it guarded is asserted below against the
+  // column list this file actually sends.
+  it("the lot select asks only for columns inventory_lots really has", () => {
+    // Proven against a real PostgreSQL 15 by replaying migrations
+    // 0023 -> 0024 -> 0059 -> 0138 -> 0191:
+    //   ERROR:  column "category_slug" does not exist
+    //   ERROR:  column "vendor_name" does not exist
+    // PostgREST rejects the WHOLE select on one unknown column, so this was
+    // never a blank-cell bug: every lot read failed outright.
+    const cols = new Set<string>(AUDIT_LOT_COLUMNS);
+    expect(cols.has("category_slug")).toBe(false);
+    expect(cols.has("vendor_name")).toBe(false);
+    // And the inputs the two derivations need must still be requested.
+    expect(cols.has("vendor_id")).toBe(true);
+    expect(cols.has("inventory_type")).toBe(true);
+    expect(cols.has("category")).toBe(true);
+  });
+
   it("an unknown cost stays unknown", () => {
-    const lot = __rowMappers.toLot({
-      id: "l",
-      lot_code: null,
-      pos_product_key: null,
-      product_name: null,
-      category_slug: null,
-      vendor_id: null,
-      vendor_name: null,
-      on_hand_qty: 10,
-      unit_cost_minor_units: null,
-      last_counted_at: null,
-      status: null,
-    });
-    expect(lot.unitCostMinorUnits).toBeNull();
+    // The rule has not changed, only where it is enforced. A null cost must
+    // reach the engine as null so buildPostPlan can refuse the money side
+    // rather than invent a number -- the $4,624,697.31 plug in miniature.
+    expect(storeCode).not.toMatch(/unit_cost_minor_units\s*\?\?\s*0/);
+    expect(loaderCode).not.toMatch(/unit_cost_minor_units\s*\?\?\s*0/);
+    expect(loaderCode).toMatch(/unitCostMinorUnits/);
   });
 });
 

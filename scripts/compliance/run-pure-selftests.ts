@@ -146,6 +146,11 @@ import { __runBooksGuidanceCoreTests } from "../../src/lib/accounting/books-guid
 import { __runBooksLedgerGuidanceCoreTests } from "../../src/lib/accounting/books-ledger-guidance-core";
 import { __runInventoryAuditAuthoritiesTests } from "../../src/lib/inventory/inventory-audit-authorities";
 import { __runInventoryAuditCoreTests } from "../../src/lib/inventory/inventory-audit-core";
+// Slice books-12: THE AUDITING HUB. The mentoring content and the ISA 501
+// method authorities. Pure by construction: if these ever needed a database to
+// run, the hub would be teaching from something that could change under it.
+import { __runAuditHubAuthoritiesTests } from "../../src/lib/inventory/audit-hub-authorities";
+import { __runAuditHubGuidanceCoreTests } from "../../src/lib/inventory/audit-hub-guidance-core";
 // Slice books-11: THE STORE LAYER. The pure half of "post an approved count
 // to the shelf and to the books" -- the gate that decides whether a session may
 // be posted at all, the plan of shelf moves and journal lines it would produce,
@@ -788,6 +793,14 @@ async function main() {
   // point asking whether we posted it correctly.
   __runInventoryAuditPostCoreTests();
   console.log("inventory-audit-post-core self-tests: all passed");
+
+  // books-12, THE AUDITING HUB. Authorities first, then the guidance that
+  // quotes them -- same ordering rule as books-10, for the same reason.
+  __runAuditHubAuthoritiesTests();
+  console.log("audit-hub-authorities self-tests: all passed");
+
+  __runAuditHubGuidanceCoreTests();
+  console.log("audit-hub-guidance-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

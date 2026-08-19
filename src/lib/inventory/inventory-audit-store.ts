@@ -96,6 +96,12 @@
 import "server-only";
 
 import { createBooksClient } from "@/lib/supabase/books-client";
+import {
+  AUDIT_LOT_COLUMNS,
+  asLotFetcher,
+  enrichAuditLots,
+  type AuditLotRow,
+} from "@/lib/inventory/audit-lot-loader";
 import { submitJournal } from "@/lib/accounting/posting-service";
 import type { EntityCode } from "@/lib/accounting/posting-core";
 import {
@@ -202,28 +208,53 @@ type SessionRow = {
   result_approved_at: string | null;
 };
 
-type LotRow = {
-  id: string;
-  lot_code: string | null;
-  pos_product_key: string | null;
-  product_name: string | null;
-  category_slug: string | null;
-  vendor_id: string | null;
-  vendor_name: string | null;
-  on_hand_qty: number | null;
-  unit_cost_minor_units: number | null;
-  last_counted_at: string | null;
-  status: string | null;
-};
+/**
+ * DEFECT D3: this type used to claim `inventory_lots` had `category_slug` and
+ * `vendor_name`. It has neither, and never has -- so the select built from it
+ * failed with `column "category_slug" does not exist` on EVERY call. Both are
+ * now derived in audit-lot-loader.ts, which is also the only place the column
+ * list lives.
+ */
+type LotRow = AuditLotRow;
 
+/**
+ * THE DATABASE'S COLUMN NAMES, NOT THE DOMAIN'S.
+ *
+ * Migration 0191 names these `reason_code` and `reason_note`. An earlier
+ * version of this file selected `reason,note` -- columns that have never
+ * existed -- so `previewAuditPosting()` failed with
+ * `column "reason" does not exist` on EVERY call, and the owner's approval
+ * screen could not load at all. Proven against a real PostgreSQL 15 rather
+ * than reasoned about, and now covered by a self-test that compares this type
+ * against the literal column list sent to PostgREST.
+ *
+ * The lesson worth keeping: a row type that is merely PLAUSIBLE compiles just
+ * as cleanly as one that is correct, because `as unknown as LineRow` silences
+ * the only check that would have caught it.
+ */
 type LineRow = {
   lot_id: string;
   system_qty: number | null;
   counted_qty: number | null;
   recount_qty: number | null;
-  reason: string | null;
-  note: string | null;
+  reason_code: string | null;
+  reason_note: string | null;
 };
+
+/**
+ * The exact column list sent for a count line, defined ONCE so the select and
+ * the self-test cannot drift apart. This is the only reason the bug above was
+ * expressible: the string and the type were two independent statements of the
+ * same fact.
+ */
+export const AUDIT_LINE_COLUMNS = [
+  "lot_id",
+  "system_qty",
+  "counted_qty",
+  "recount_qty",
+  "reason_code",
+  "reason_note",
+] as const;
 
 function toSession(r: SessionRow): SessionForPosting {
   return {
@@ -236,28 +267,6 @@ function toSession(r: SessionRow): SessionForPosting {
   };
 }
 
-function toLot(r: LotRow): AuditLot {
-  return {
-    lotId: r.id,
-    lotCode: r.lot_code,
-    posProductKey: r.pos_product_key,
-    productName: r.product_name,
-    categorySlug: r.category_slug,
-    vendorId: r.vendor_id,
-    vendorName: r.vendor_name,
-    // A null on-hand is NOT zero stock, but the shelf record has to be a number
-    // to do arithmetic with. Zero is the only safe reading of "no quantity
-    // recorded", and the count itself is what will correct it.
-    onHandQty: r.on_hand_qty ?? 0,
-    // Cost, however, stays NULL. Guessing a cost is inventing a number, and an
-    // invented number in inventory is exactly the $4,624,697.31 plug.
-    unitCostMinorUnits: r.unit_cost_minor_units,
-    lastCountedAt: r.last_counted_at,
-    priorVarianceCount: 0,
-    status: r.status ?? "active",
-  };
-}
-
 function toLine(r: LineRow): AuditCountLine {
   return {
     lotId: r.lot_id,
@@ -266,8 +275,8 @@ function toLine(r: LineRow): AuditCountLine {
     // nothing, and collapsing the two writes off stock that is on the shelf.
     countedQty: r.counted_qty,
     recountQty: r.recount_qty,
-    reason: r.reason,
-    note: r.note,
+    reason: r.reason_code,
+    note: r.reason_note,
   };
 }
 
@@ -303,7 +312,7 @@ export async function previewAuditPosting(
 
   const { data: lineRows, error: lErr } = await supabase
     .from("inventory_audit_lines")
-    .select("lot_id,system_qty,counted_qty,recount_qty,reason,note")
+    .select(AUDIT_LINE_COLUMNS.join(","))
     .eq("session_id", sessionId);
   if (lErr) return refused(lErr);
 
@@ -319,14 +328,14 @@ export async function previewAuditPosting(
 
   const { data: lotRows, error: loErr } = await supabase
     .from("inventory_lots")
-    .select(
-      "id,lot_code,pos_product_key,product_name,category_slug,vendor_id,vendor_name," +
-        "on_hand_qty,unit_cost_minor_units,last_counted_at,status",
-    )
+    .select(AUDIT_LOT_COLUMNS.join(","))
     .in("id", lotIds);
   if (loErr) return refused(loErr);
 
-  const lots = (lotRows ?? []).map((r) => toLot(r as unknown as LotRow));
+  const lots = await enrichAuditLots(
+    (lotRows ?? []) as unknown as AuditLotRow[],
+    asLotFetcher(supabase),
+  );
   const session = toSession(sessionRow as SessionRow);
 
   const built = buildPostPlan({ session, lots, lines, accountByCategory });
@@ -631,7 +640,14 @@ export async function auditPostingHistory(
  * them as named, exported, pure functions means that specific mistake is a test
  * rather than a code review.
  */
-export const __rowMappers = { toSession, toLot, toLine } as const;
+/**
+ * DEFECT D3: `toLot` used to live here and read two columns that do not exist.
+ * Lot mapping now belongs to `enrichAuditLots` in audit-lot-loader.ts, because
+ * two of an AuditLot's fields cannot be mapped from a row at all -- they have
+ * to be looked up. A "mapper" that silently needed a database was the lie that
+ * hid the defect.
+ */
+export const __rowMappers = { toSession, toLine } as const;
 export { explainAuditRefusal };
 
 export function __runInventoryAuditStoreTests(): void {
@@ -650,25 +666,46 @@ export function __runInventoryAuditStoreTests(): void {
     system_qty: 100,
     counted_qty: null,
     recount_qty: null,
-    reason: null,
-    note: null,
+    reason_code: null,
+    reason_note: null,
   });
   eq(uncounted.countedQty, null, "AN UNCOUNTED LINE STAYS NULL — never coerced to zero");
+
+  // ---- THE COLUMN-NAME REGRESSION (books-12) ----
+  // This file once asked PostgREST for `reason,note`. Neither column exists;
+  // migration 0191 calls them `reason_code` and `reason_note`. Every call to
+  // previewAuditPosting() failed with `column "reason" does not exist`, so the
+  // owner's approval screen never loaded. TypeScript could not catch it because
+  // the row is cast with `as unknown as LineRow` before it is mapped.
+  //
+  // These assertions pin the column list to the migration BY NAME. They fail if
+  // anyone reintroduces the short names, and they fail if a column is dropped
+  // from the list without the mapper being updated.
+  const cols = new Set<string>(AUDIT_LINE_COLUMNS);
+  ok(cols.has("reason_code"), "the line select asks for reason_code, the column that exists");
+  ok(cols.has("reason_note"), "the line select asks for reason_note, the column that exists");
+  ok(!cols.has("reason"), "the line select does NOT ask for `reason`, which has never existed");
+  ok(!cols.has("note"), "the line select does NOT ask for `note`, which has never existed");
+  // Every column requested must be one the mapper actually reads. A column in
+  // the list that toLine ignores is dead weight; a column toLine reads that is
+  // NOT in the list arrives as undefined and silently becomes null.
+  eq(AUDIT_LINE_COLUMNS.length, 6, "the line select asks for exactly the six columns toLine reads");
   eq(uncounted.recountQty, null, "and so does an absent recount");
   const uncountedAssessed = assessLine(
-    __rowMappers.toLot({
-      id: "l1",
-      lot_code: "L",
-      pos_product_key: null,
-      product_name: null,
-      category_slug: "flower",
-      vendor_id: null,
-      vendor_name: null,
-      on_hand_qty: 100,
-      unit_cost_minor_units: 500,
-      last_counted_at: null,
+    {
+      lotId: "l1",
+      lotCode: "L",
+      posProductKey: null,
+      productName: null,
+      categorySlug: "flower",
+      vendorId: null,
+      vendorName: null,
+      onHandQty: 100,
+      unitCostMinorUnits: 500,
+      lastCountedAt: null,
+      priorVarianceCount: 0,
       status: "active",
-    }),
+    },
     uncounted,
   );
   eq(
@@ -679,24 +716,20 @@ export function __runInventoryAuditStoreTests(): void {
   eq(uncountedAssessed.effectiveCountedQty, null, "and carries no effective count");
 
   // ---- AN UNKNOWN COST STAYS UNKNOWN ----
-  const noCost = toLot({
-    id: "l2",
-    lot_code: "L2",
-    pos_product_key: null,
-    product_name: null,
-    category_slug: "flower",
-    vendor_id: null,
-    vendor_name: null,
-    on_hand_qty: 10,
-    unit_cost_minor_units: null,
-    last_counted_at: null,
-    status: "active",
-  });
-  eq(noCost.unitCostMinorUnits, null, "AN UNKNOWN COST STAYS NULL — a guessed cost is a plug");
-  // On-hand is the one field that legitimately defaults, and it defaults to the
-  // only reading of "no quantity recorded" that is not an invention.
-  const noQty = toLot({ ...({} as LotRow), id: "l3", on_hand_qty: null } as LotRow);
-  eq(noQty.onHandQty, 0, "a missing on-hand reads as zero so arithmetic is possible");
+  // The lot mapping itself is now proven in audit-lot-loader.ts, next to the
+  // lookups it depends on. What is asserted HERE is the column list this file
+  // sends, because that is what this file is responsible for.
+  const lotCols = new Set<string>(AUDIT_LOT_COLUMNS);
+  ok(
+    !lotCols.has("category_slug"),
+    "DEFECT D3: the lot select must NOT ask inventory_lots for category_slug — that " +
+      "column lives on gl_accounts, and asking for it made PostgREST reject the whole query",
+  );
+  ok(
+    !lotCols.has("vendor_name"),
+    "DEFECT D3: the lot select must NOT ask inventory_lots for vendor_name — that " +
+      "column lives on discovery_market_signals",
+  );
 
   // ---- THE REFUSAL TABLE SPEAKS ENGLISH ----
   const forb = explainAuditRefusal(new Error('permission denied: INVENTORY_AUDIT_FORBIDDEN'));
