@@ -143,6 +143,7 @@ import { __runBankMatchCoreTests } from "../../src/lib/accounting/bank-match-cor
 // what stands between a verbatim quotation and a silently altered one -- a
 // citation error in front of the IRS is not a cosmetic bug.
 import { __runBooksGuidanceCoreTests } from "../../src/lib/accounting/books-guidance-core";
+import { __runBooksLedgerGuidanceCoreTests } from "../../src/lib/accounting/books-ledger-guidance-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -762,6 +763,10 @@ async function main() {
   console.log("bank-match-core self-tests: all passed");
   __runBooksGuidanceCoreTests();
   console.log("books-guidance-core self-tests: all passed");
+
+  __runBooksLedgerGuidanceCoreTests();
+  console.log("books-ledger-guidance-core self-tests: all passed");
+
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

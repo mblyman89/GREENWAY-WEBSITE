@@ -145,6 +145,48 @@ export async function getGeneralLedger(
   return { ok: true, data: (data ?? []) as LedgerRow[] };
 }
 
+/**
+ * THE SAME LEDGER, BUT FROM THE BEGINNING OF TIME UP TO `toDate`.
+ *
+ * WHY THIS EXISTS. `gl_general_ledger` computes its running balance as a window
+ * function over ONLY the rows inside the requested range. The ledger page used
+ * to pass `from = 2026-01-01` (the line in the sand), while migration 0172
+ * REQUIRES the opening-balance journal to be dated 2025-12-31 — so the page was
+ * excluding the one entry that says what Michael owned on day one, and then
+ * printing the result in a column headed "Balance".
+ *
+ * Proven against a real PostgreSQL 15 with $4,000 of opening cash and a $3,000
+ * payment in March: the screen showed NEGATIVE $3,000.00 where the truth was
+ * POSITIVE $1,000.00. That is not a cosmetic error — "negative cash" and
+ * "negative inventory" are two of the owner's real historical disasters, and a
+ * report that manufactures them on correct books teaches him to ignore the exact
+ * signal that matters.
+ *
+ * THE FIX is what every general ledger package has printed for fifty years: a
+ * BALANCE FORWARD line. Read inception-to-date once, then fold everything before
+ * the window into a single opening figure (`foldBalanceForward` in
+ * books-ledger-guidance-core, which is pure and fully tested off-line). The
+ * period view is preserved exactly; the balance becomes true.
+ *
+ * Note the deliberate `p_from: null`. The SQL function's own default is
+ * 2025-12-31 — it was always right, and the page was overriding it.
+ */
+export async function getGeneralLedgerToDate(
+  entityCode: string,
+  accountCode?: string | null,
+  toDate?: string | null,
+): Promise<LedgerResult<LedgerRow[]>> {
+  const admin = await createBooksClient();
+  const { data, error } = await admin.rpc("gl_general_ledger", {
+    p_entity_code: entityCode,
+    p_account_code: accountCode ?? null,
+    p_from: null,
+    p_to: toDate ?? null,
+  });
+  if (error) return refused<LedgerRow[]>(error);
+  return { ok: true, data: (data ?? []) as LedgerRow[] };
+}
+
 // ---------------------------------------------------------------------------
 // CHART OF ACCOUNTS
 // ---------------------------------------------------------------------------
