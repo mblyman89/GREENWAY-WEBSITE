@@ -120,6 +120,21 @@
     parent inventory account while all 21 children stayed wide open. Splitting
     one pluggable bucket into 21 pluggable buckets fixes nothing.
 
+20. **COMMIT AND PUSH WITH A HUMAN-LOOKING EMAIL ADDRESS (per Michael, Aug 2026).**
+    The repository is now PRIVATE, and Vercel rejects the bot-style address git
+    was defaulting to ("your email address does not look valid"). A deploy that
+    refuses to build is a broken deploy no matter how good the code is.
+    Michael has temporarily set GitHub to accept pushes from any email address,
+    which means NOTHING WILL STOP A BAD ADDRESS BUT THIS RULE. Use:
+
+        git -c user.name="Greenway Dev" \
+            -c user.email="dev@greenwaymarijuana.com" commit ...
+
+    NOT the `NNNNNN+name[bot]@users.noreply.github.com` form, and never anything
+    containing an IP address or a raw numeric id. Verify with
+    `git log -1 --format='%an <%ae>'` BEFORE pushing — after the push it is
+    history, and rewriting history on a protected branch is not an option.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

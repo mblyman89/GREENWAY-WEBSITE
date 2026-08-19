@@ -72,6 +72,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard
+  { label: "Inventory Auditing", href: "/admin/inventory/audits", permission: "inventory.manage", icon: "\ud83d\udd0d", group: "Inventory" }, // 🔍 blind counts, variance review, work papers — NOT /admin/audit, which is the security log
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" }, // ♻️ disposition
 
   // MKTG & ADV: promos, content, email, creative

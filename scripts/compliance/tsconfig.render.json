@@ -1,0 +1,28 @@
+{
+  /*
+   * tsconfig for the books-12 VISUAL CONFIRMATION HARNESS only.
+   *
+   * The count sheet and the variance review are client components that import
+   * their server actions, and those actions import `requirePermission`, which
+   * imports the "server-only" marker. That marker is supplied by the Next
+   * bundler, not by a package in node_modules, so running these components
+   * through plain `tsx` cannot resolve it.
+   *
+   * WHY THIS IS A SEPARATE FILE AND NOT AN EDIT TO tsconfig.json:
+   * adding a "server-only" path to the root tsconfig would make the REAL Next
+   * build resolve the marker to a no-op stub as well. The marker's entire job
+   * is to make the build fail loudly when server code is pulled into a client
+   * bundle. Aliasing it globally to satisfy a screenshot script would switch
+   * that protection off for the whole application in order to take a picture.
+   *
+   * This reuses tests/compliance/server-only-stub.ts rather than adding a
+   * second stub, so there is one place where this trade-off is documented.
+   */
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["../../src/*"],
+      "server-only": ["../../tests/compliance/server-only-stub.ts"]
+    }
+  }
+}

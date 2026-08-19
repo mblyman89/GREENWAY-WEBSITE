@@ -53,6 +53,7 @@ import { BANK_AUTHORITIES, type BankAuthority } from "./bank-match-core";
 import { GATE_AUTHORITIES, type GateAuthority } from "@/lib/auth/owner-gate-core";
 import { LEDGER_AUTHORITIES_NEW } from "./books-ledger-authorities";
 import { INVENTORY_AUDIT_AUTHORITIES_NEW } from "@/lib/inventory/inventory-audit-authorities";
+import { AUDIT_HUB_AUTHORITIES_NEW } from "@/lib/inventory/audit-hub-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -482,7 +483,8 @@ export type SourceRegistry =
   | "gate"
   | "new"
   | "ledger"
-  | "inventory-audit";
+  | "inventory-audit"
+  | "audit-hub";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -492,6 +494,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "new",
   "ledger",
   "inventory-audit",
+  "audit-hub",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -513,6 +516,14 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // count sheet.
     ...INVENTORY_AUDIT_AUTHORITIES_NEW.map((a) => ({
       tag: "inventory-audit" as const,
+      authority: a,
+    })),
+    // books-12. The HOW-TO-COUNT authorities (ISA 501), kept separate from the
+    // books-10 WHAT-THE-NUMBER-MEANS authorities because they answer a
+    // different question and are cited on different screens. Merged here for
+    // the usual reason: one registry, so a citation means one thing everywhere.
+    ...AUDIT_HUB_AUTHORITIES_NEW.map((a) => ({
+      tag: "audit-hub" as const,
       authority: a,
     })),
   ];
