@@ -10,6 +10,35 @@
  * missing half its entries, because every journal individually sums to zero.
  * The wording of the banner is deliberate and is asserted in the tests for
  * `describeBooks()`.
+ *
+ * -----------------------------------------------------------------------------
+ * WHAT THE "BALANCE" COLUMN ACTUALLY MEANS (books-08)
+ * -----------------------------------------------------------------------------
+ * This page originally summed only the lines inside the requested window, whose
+ * default start is 2026-01-01. The cut-over opening balances are dated
+ * 2025-12-31 — the single pre-2026 date the schema allows (0172's
+ * line-in-the-sand check constraint) — so they fell outside every default view.
+ *
+ * Consequences, all confirmed by executing against Postgres rather than by
+ * reading the code:
+ *   • every account opened at cut-over was understated by its opening balance;
+ *   • accounts were reported as sitting on the "unusual side" purely because
+ *     the opening balance that put them on the normal side was excluded;
+ *   • and the report STILL footed and STILL certified, because excluding an
+ *     entire balanced journal removes equal debits and credits. A report that is
+ *     wrong AND self-certifying is worse than one that is merely wrong.
+ *
+ * The fix reads inception-to-date and applies the requested window in a pure
+ * fold (`foldBalanceForward`), which is the SAME function the general ledger
+ * screen uses. Sharing the function is the point: two screens that each run
+ * their own query eventually disagree, and the first anyone hears of it is a
+ * number that will not tie.
+ *
+ * The fold is NATURE-AWARE. Assets, liabilities and equity carry from inception;
+ * income and expenses carry only from the start of the fiscal year being viewed,
+ * because a year-end closing entry sweeps them into Retained Earnings. Folding
+ * everything from inception would be harmless in 2026 and would silently double
+ * -count revenue from 2027 onward.
  */
 import Link from "next/link";
 
@@ -17,14 +46,21 @@ import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   getTrialBalanceCheck,
-  getGeneralLedger,
+  getGeneralLedgerToDate,
+  listAccounts,
   ENTITY_LABELS,
   isEntityCode,
 } from "@/lib/accounting/ledger-store";
+import type { AccountType, NormalBalance } from "@/lib/accounting/ledger-core";
+import {
+  foldBalanceForward,
+  natureMapFrom,
+  buildTrialBalance,
+  type AccountFacts,
+} from "@/lib/accounting/books-ledger-guidance-core";
 import {
   describeBooks,
   formatCents,
-  splitDebitCredit,
   validateRange,
   LINE_IN_THE_SAND,
 } from "@/lib/accounting/books-view-core";
@@ -64,39 +100,41 @@ export default async function TrialBalancePage({
   // instant, readable answer. The database checks again regardless.
   const rangeCheck = validateRange(from, to);
 
-  const [check, ledger] = await Promise.all([
+  // READ INCEPTION-TO-DATE, NOT JUST THE WINDOW.
+  //
+  // This page used to read from `from` (default 2026-01-01), which excluded the
+  // cut-over opening balances dated 2025-12-31 — the only pre-2026 date the
+  // schema allows. Every asset therefore appeared short by its opening figure,
+  // several accounts were reported as sitting on the "wrong side" purely because
+  // their opening balance was missing, and the report STILL footed, so nothing
+  // warned anybody. Proven by running it against Postgres, not by reading it.
+  //
+  // The window the reader asked for is still honoured — it is applied by the
+  // pure fold below, which turns everything earlier into a balance forward.
+  const [check, ledger, accountsResult] = await Promise.all([
     rangeCheck.ok ? getTrialBalanceCheck(entity, from, to) : Promise.resolve(null),
-    rangeCheck.ok ? getGeneralLedger(entity, null, from, to) : Promise.resolve(null),
+    rangeCheck.ok ? getGeneralLedgerToDate(entity, null, to) : Promise.resolve(null),
+    rangeCheck.ok ? listAccounts(entity, true) : Promise.resolve(null),
   ]);
 
-  // Roll the ledger lines up per account. Done here rather than in SQL so the
-  // page shows exactly the same lines the general ledger screen would show —
-  // two different queries producing two different totals is precisely the kind
-  // of drift this whole project exists to end.
-  const perAccount = new Map<
-    string,
-    { code: string; name: string; balance: number; lines: number }
-  >();
-  if (ledger?.ok) {
-    for (const r of ledger.data) {
-      const key = r.account_code;
-      const cur = perAccount.get(key) ?? {
-        code: r.account_code,
-        name: r.account_name,
-        balance: 0,
-        lines: 0,
-      };
-      cur.balance += r.debit_cents - r.credit_cents;
-      cur.lines += 1;
-      perAccount.set(key, cur);
-    }
-  }
-  const rows = [...perAccount.values()]
-    .filter((r) => r.balance !== 0)
-    .sort((a, b) => a.code.localeCompare(b.code));
+  // Roll the ledger lines up per account using THE SAME pure fold the general
+  // ledger screen uses. Two screens sharing one function cannot drift apart;
+  // two screens each running their own query eventually always do.
+  const facts: AccountFacts[] = (accountsResult?.ok ? accountsResult.data : []).map((a) => ({
+    code: a.code,
+    name: a.name,
+    accountType: a.account_type as AccountType,
+    normalBalance: a.normal_balance as NormalBalance,
+  }));
 
-  const totalDebit = rows.reduce((n, r) => n + splitDebitCredit(r.balance).debit, 0);
-  const totalCredit = rows.reduce((n, r) => n + splitDebitCredit(r.balance).credit, 0);
+  const sections = ledger?.ok
+    ? foldBalanceForward(ledger.data, from, natureMapFrom(facts))
+    : [];
+  const tb = buildTrialBalance(sections, facts);
+
+  const rows = tb.lines;
+  const totalDebit = tb.totalDebitCents;
+  const totalCredit = tb.totalCreditCents;
 
   return (
     <div className="space-y-5">
@@ -129,7 +167,15 @@ export default async function TrialBalancePage({
               lineCount: Number(check.data.line_count ?? 0),
               accountCount: Number(check.data.account_count ?? 0),
               differenceCents: Number(check.data.difference_cents ?? 0),
-              abnormalCount: Number(check.data.abnormal_count ?? 0),
+              // ABNORMAL COUNT COMES FROM THE FOLD, NOT FROM THE RPC.
+              //
+              // The RPC counts abnormal accounts over the requested WINDOW, and
+              // the default window begins after the cut-over opening balances.
+              // Every asset opened by the cut-over therefore looked abnormal on
+              // day one. Counting from the folded closing balances — opening
+              // carried forward plus the period's activity — asks the question
+              // the reader thinks is being asked.
+              abnormalCount: tb.abnormalCount,
             });
             return (
               <div className={`rounded-2xl border p-5 ${TONE_CLS[v.tone]}`}>
@@ -138,6 +184,28 @@ export default async function TrialBalancePage({
               </div>
             );
           })()}
+
+          {tb.unmappedAccountCodes.length > 0 ? (
+            <div className="rounded-2xl border border-[var(--admin-orange)]/45 bg-[var(--admin-orange)]/[0.08] p-5">
+              <p className="text-sm font-black text-white">
+                {tb.unmappedAccountCodes.length} account
+                {tb.unmappedAccountCodes.length === 1 ? "" : "s"} on this report
+                {tb.unmappedAccountCodes.length === 1 ? " is" : " are"} not in the
+                chart for this entity.
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-white/75">
+                Their money is included in the totals below, so the report still
+                adds up — but nothing here knows whether they belong on the debit
+                or the credit side, so they have not been checked for being on the
+                wrong side. This is usually a mistyped entity code: it is how
+                eighteen accounts, including the whole of payroll, once went
+                missing from a report that looked perfectly healthy. Codes:{" "}
+                <span className="tabular-nums font-semibold text-white">
+                  {tb.unmappedAccountCodes.join(", ")}
+                </span>
+              </p>
+            </div>
+          ) : null}
 
           <div className="overflow-hidden rounded-2xl border border-white/10">
             <table className="w-full text-sm">
@@ -156,28 +224,30 @@ export default async function TrialBalancePage({
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => {
-                    const { debit, credit } = splitDebitCredit(r.balance);
-                    return (
-                      <tr key={r.code} className="border-t border-white/5">
-                        <td className="px-4 py-2.5">
-                          <Link
-                            href={`/admin/books/ledger?entity=${entity}&account=${r.code}&from=${from}&to=${to}`}
-                            className="font-medium text-white hover:text-[var(--admin-accent)]"
-                          >
-                            <span className="tabular-nums text-white/50">{r.code}</span>{" "}
-                            {r.name}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-white/85">
-                          {debit ? formatCents(debit) : ""}
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-white/85">
-                          {credit ? formatCents(credit) : ""}
-                        </td>
-                      </tr>
-                    );
-                  })
+                  rows.map((r) => (
+                    <tr key={r.accountCode} className="border-t border-white/5">
+                      <td className="px-4 py-2.5">
+                        <Link
+                          href={`/admin/books/ledger?entity=${entity}&account=${r.accountCode}&from=${from}&to=${to}`}
+                          className="font-medium text-white hover:text-[var(--admin-accent)]"
+                        >
+                          <span className="tabular-nums text-white/50">{r.accountCode}</span>{" "}
+                          {r.accountName}
+                        </Link>
+                        {r.isAbnormal ? (
+                          <span className="ml-2 rounded-full bg-[var(--admin-gold)]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--admin-gold)]">
+                            unusual side
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-white/85">
+                        {r.debitCents ? formatCents(r.debitCents) : ""}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-white/85">
+                        {r.creditCents ? formatCents(r.creditCents) : ""}
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
               {rows.length > 0 ? (

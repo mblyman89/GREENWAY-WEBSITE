@@ -8,6 +8,13 @@
  * Accounts with an unexpected type are still shown, at the end: an account
  * that quietly vanishes from this list is an account nobody remembers to
  * reconcile.
+ *
+ * BOOKS-08 adds the guidance layer below the list. The chart itself was already
+ * solid — coa-core enforces blocks, derives normal balances, handles contra
+ * accounts and refuses auto-posting — so what was missing was never enforcement.
+ * It was the explanation of why the choice matters: in a §280E business the
+ * account decides whether a dollar is deductible, and that cannot be enforced,
+ * only taught.
  */
 import Link from "next/link";
 
@@ -16,6 +23,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { listAccounts, ENTITY_LABELS, ENTITY_CODES, isEntityCode } from "@/lib/accounting/ledger-store";
 import { groupAccountsByType, costClassBadgeLabel } from "@/lib/accounting/books-view-core";
 import { RefusalNotice } from "@/components/admin/books/RefusalNotice";
+import { AccountsExplainer } from "./AccountsExplainer";
 
 export const dynamic = "force-dynamic";
 
@@ -132,6 +140,8 @@ export default async function AccountsPage({
               No accounts found for this set of books.
             </div>
           ) : null}
+
+          <AccountsExplainer />
         </>
       ) : null}
     </div>

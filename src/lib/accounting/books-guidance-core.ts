@@ -51,6 +51,7 @@ import {
 import { PAYROLL_AUTHORITIES, type PayrollAuthority } from "./payroll-cogs-core";
 import { BANK_AUTHORITIES, type BankAuthority } from "./bank-match-core";
 import { GATE_AUTHORITIES, type GateAuthority } from "@/lib/auth/owner-gate-core";
+import { LEDGER_AUTHORITIES_NEW } from "./books-ledger-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -473,7 +474,7 @@ function fromGate(a: GateAuthority): GuidanceAuthority {
   return { id: a.id, kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
 
-export type SourceRegistry = "vendor-bill" | "payroll" | "bank" | "gate" | "new";
+export type SourceRegistry = "vendor-bill" | "payroll" | "bank" | "gate" | "new" | "ledger";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -481,6 +482,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "bank",
   "gate",
   "new",
+  "ledger",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -491,6 +493,11 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...BANK_AUTHORITIES.map((a) => ({ tag: "bank" as const, authority: fromBank(a) })),
     ...GATE_AUTHORITIES.map((a) => ({ tag: "gate" as const, authority: fromGate(a) })),
     ...GUIDANCE_AUTHORITIES_NEW.map((a) => ({ tag: "new" as const, authority: a })),
+    // books-08. Kept in its own module because it is the ledger/chart slice's
+    // research, but merged HERE so there is exactly one registry: a citation
+    // must mean the same thing on every screen, which is the entire reason
+    // this file exists.
+    ...LEDGER_AUTHORITIES_NEW.map((a) => ({ tag: "ledger" as const, authority: a })),
   ];
 }
 
