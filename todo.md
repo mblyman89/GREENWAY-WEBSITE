@@ -135,6 +135,29 @@
     `git log -1 --format='%an <%ae>'` BEFORE pushing — after the push it is
     history, and rewriting history on a protected branch is not an option.
 
+    **20a. `--squash` THROWS THE AUTHOR AWAY. USE `--rebase`.** Discovered on
+    slice books-12, and the reason this sub-rule exists: the branch commit was
+    correctly authored `Greenway Dev <dev@greenwaymarijuana.com>`, verified
+    before pushing exactly as rule 20 says. `gh pr merge --squash` then created
+    a BRAND NEW commit on main authored by the bot anyway, because a squash
+    does not replay your commit — it manufactures a different one. Rule 20 was
+    satisfied and main still ended up with a bot address on it.
+
+        gh pr merge <n> --repo <owner/repo> --rebase --delete-branch
+
+    A rebase merge REPLAYS the original commits and preserves their author. The
+    repository allows merge, rebase and squash (verified via the API), so this
+    costs nothing. Squash is only acceptable when the branch author is already
+    the identity you want on main.
+
+    VERIFY AFTER MERGING, NOT JUST BEFORE PUSHING:
+
+        git log -1 --format='%an <%ae>' main
+
+    If it shows a bot address, say so plainly — do not quietly leave it. The
+    whole point of this rule is Vercel refusing to build, and Vercel reads
+    what is on MAIN, not what was on the branch.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
