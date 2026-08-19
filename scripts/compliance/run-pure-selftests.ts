@@ -146,6 +146,12 @@ import { __runBooksGuidanceCoreTests } from "../../src/lib/accounting/books-guid
 import { __runBooksLedgerGuidanceCoreTests } from "../../src/lib/accounting/books-ledger-guidance-core";
 import { __runInventoryAuditAuthoritiesTests } from "../../src/lib/inventory/inventory-audit-authorities";
 import { __runInventoryAuditCoreTests } from "../../src/lib/inventory/inventory-audit-core";
+// Slice books-11: THE STORE LAYER. The pure half of "post an approved count
+// to the shelf and to the books" -- the gate that decides whether a session may
+// be posted at all, the plan of shelf moves and journal lines it would produce,
+// and the SIGN WALL check that keeps a shrink a DEBIT to COGS. The SQL half
+// lives in migration 0192 and is exercised by scripts/accounting.
+import { __runInventoryAuditPostCoreTests } from "../../src/lib/inventory/inventory-audit-post-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
@@ -776,6 +782,12 @@ async function main() {
 
   __runInventoryAuditCoreTests();
   console.log("inventory-audit-core self-tests: all passed");
+
+  // books-11, THE STORE LAYER. Runs after inventory-audit-core because it
+  // consumes that module's assessments: if the assessment is wrong there is no
+  // point asking whether we posted it correctly.
+  __runInventoryAuditPostCoreTests();
+  console.log("inventory-audit-post-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
