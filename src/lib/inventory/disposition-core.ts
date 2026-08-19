@@ -12,7 +12,9 @@
  *  • Destruction — current WAC 314-55-097: render unusable BEFORE leaving the
  *    premises (grind + mix to ≥50% non-cannabis by volume; other methods need
  *    PRIOR LCB approval); keep records of method + final destination
- *    (3-year retention, WAC 314-55-087).
+ *    (5-year retention: WAC 314-55-097(7)(e) requires waste records to be
+ *    kept "consistent with the requirements in WAC 314-55-087", and 087(1) is
+ *    a five-year period since WSR 24-19-040, eff. 10/12/2024).
  *  • Recalls — WAC 314-55-225: destruction of recall-affected product is
  *    PROHIBITED until LCB is notified and destruction is coordinated with the
  *    enforcement officer.
@@ -262,7 +264,7 @@ export function validateDestructionCompletion(d: DestructionCompletionDraft): De
     return {
       ok: false,
       error:
-        "Record the final destination / disposal facility for the waste — WAC 314-55-097 requires it in your records (kept 3 years).",
+        "Record the final destination / disposal facility for the waste — WAC 314-55-097 requires it in your records (kept 5 years).",
     };
   }
   return { ok: true };
@@ -343,7 +345,7 @@ export const VENDOR_RETURN_MANIFEST_STEPS: readonly string[] = [
   "Get the processor's written acceptance (RMA number) BEFORE anything moves.",
   "Create the transport manifest in the CCRS portal — POS-generated manifests are not valid and contingency manifests were discontinued (Nov 2025).",
   "Submit the manifest 48–72 hours before pickup; LCB confirms manifests Mon/Wed/Fri by email (info@lcb.wa.gov).",
-  "Do not release product until the manifest is confirmed. Keep the manifest + RMA with this record for 3 years (WAC 314-55-087).",
+  "Do not release product until the manifest is confirmed. Keep the manifest + RMA with this record for 5 years (WAC 314-55-087).",
 ];
 
 // ---------------------------------------------------------------------------

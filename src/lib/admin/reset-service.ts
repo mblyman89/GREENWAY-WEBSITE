@@ -35,7 +35,8 @@ export type ResetOperationalDataSummary = {
  * S-6 retention guard (migration 0097): when completed orders or CCRS batches
  * exist, the DB function refuses unless `acknowledgeRetention` is true — the
  * caller must have collected the export-first attestation (WAC 314-55-087
- * three-year record retention) before passing it.
+ * FIVE-year record retention, per WSR 24-19-040 eff. 10/12/2024) before
+ * passing it.
  *
  * Backward-compatible: if 0097 hasn't been applied yet the guarded signature
  * doesn't exist, so we retry the legacy zero-argument call (owner applies

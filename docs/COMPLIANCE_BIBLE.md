@@ -176,9 +176,18 @@ escalating suspensions — "exceeding transaction limits" is an enforcement cate
   POS should block completing sales outside the window.
 
 ### 3.6 Records — WAC 314-55-087 (Category IV if violated)
-- **Minimum SIX years** (current + previous five), on premises: purchase invoices, bank
-  statements, accounting/tax records, contracts, employee records, inventory records,
-  theft records, donated product records, **detailed sales records**.
+- **THE RULE: a five-year period**, on premises. WAC 314-55-087(1) (current text, WSR
+  24-19-040, filed 9/11/24, effective 10/12/24): records "must be kept and maintained on
+  the licensed premises for a five-year period and must be made available for inspection
+  if requested by an employee of the LCB". The period was THREE years before that
+  amendment; anything in this repo still saying three years is stale.
+- **OUR POLICY: retain at least six years.** That extra year is a deliberate margin of
+  safety (it also covers the federal §6501(e)(1) six-year assessment window for a
+  substantial omission of gross income) — it is NOT what the WAC says. Do not cite six
+  years to a regulator as the requirement.
+- Covered classes: purchase invoices, bank statements, accounting/tax records, contracts,
+  employee records, inventory records, theft records, donated product records,
+  **detailed sales records**.
 - Consequence for the POS: sales/inventory/till data may never be hard-deleted inside
   the retention window; "reset" tooling must be guarded; COAs archived and retrievable.
 
@@ -327,7 +336,8 @@ Full AI-ready inventory with per-file findings: `research/notes/phase3-system-in
    sale keeps {date, patient id, card dates, SKU, price} for 5 years.
 5. **Every CCRS file passes the Slice-105 gate** before it can be zipped; every submission
    is archived immutably with checksums; errors are ingested and reconciled.
-6. **Nothing that is a WAC 314-55-087 record can be hard-deleted** inside 6 years.
+6. **Nothing that is a WAC 314-55-087 record can be hard-deleted** inside 6 years
+   (the rule requires five; we hold six by policy).
 7. **No lot becomes sellable** without passing the lot-activation gate (lab pass + external id).
 8. **All staff mutations are permission-gated and audited**; compliance-sensitive settings
    (limits, tax rates, license) are owner-only and high-sensitivity in the anomaly engine.

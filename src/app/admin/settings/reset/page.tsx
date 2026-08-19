@@ -107,7 +107,7 @@ export default async function ResetDataSettingsPage({
           <h2 className="text-sm font-semibold text-white">Confirm reset</h2>
           <p className="mt-1 text-sm text-white/60">
             This cannot be undone. Washington requires licensees to keep sales, inventory, transport,
-            and destruction records for <strong className="text-white/80">three years</strong> (WAC
+            and destruction records for <strong className="text-white/80">five years</strong> (WAC
             314-55-087). If completed sales or CCRS submissions exist, the reset refuses unless you
             attest that everything has been exported first.
           </p>
@@ -121,7 +121,7 @@ export default async function ResetDataSettingsPage({
               />
               <span className="text-sm text-amber-100/90">
                 I attest that all records required by <strong>WAC 314-55-087</strong> (sales, inventory,
-                manifests, destruction — 3-year retention) have been <strong>exported and stored
+                manifests, destruction — 5-year retention) have been <strong>exported and stored
                 outside this system</strong> before this reset.
               </span>
             </label>

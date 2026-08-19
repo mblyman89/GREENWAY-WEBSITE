@@ -181,7 +181,8 @@ export async function savePricingSettingsAction(fd: FormData): Promise<ActionRes
  * members / enrichments, brands, vendors, promotions, people/hardware, or the
  * audit log.
  *
- * Triple-gated (S-6, WAC 314-55-087 three-year record retention):
+ * Triple-gated (S-6, WAC 314-55-087 FIVE-year record retention — the period
+ * was three years until WSR 24-19-040, effective 10/12/2024):
  *   1. settings.manage permission,
  *   2. a typed confirmation phrase NAMING the rule,
  *   3. an export-first attestation checkbox. The attestation is forwarded to
@@ -206,7 +207,7 @@ export async function resetOperationalDataAction(fd: FormData): Promise<void> {
     redirect(
       "/admin/settings/reset?error=" +
         encodeURIComponent(
-          "You must attest that all records required by WAC 314-55-087 (3-year retention) have been exported before resetting.",
+          "You must attest that all records required by WAC 314-55-087 (5-year retention) have been exported before resetting.",
         ),
     );
   }
