@@ -154,6 +154,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Conversion", href: "/admin/books/conversion", permission: "books.view", icon: "\ud83d\udd01", group: "Admin" }, // leaving Cultivera and Sage, 2026-11-01
   { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Admin" }, // receipt: what survives 280E and what it takes
   { label: "Payroll & COGS", href: "/admin/books/payroll", permission: "books.view", icon: "\ud83d\udc77", group: "Admin" }, // construction worker: which labor may be inventoried (books-04)
+  { label: "Payroll Setup (W-4)", href: "/admin/books/payroll-setup", permission: "books.view", icon: "\ud83e\uddfe", group: "Admin" }, // W-4 -> withholding, and the mentoring blockers (books-13)
   { label: "Bank & Reconcile", href: "/admin/books/bank", permission: "books.view", icon: "\ud83c\udfe6", group: "Admin" }, // bank: matching the feed to the books, and the two silent errors (books-05)
   { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Admin" }, // scales: debits = credits
   { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Admin" }, // ledger book
