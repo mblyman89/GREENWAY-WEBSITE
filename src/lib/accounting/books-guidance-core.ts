@@ -63,6 +63,7 @@ import { INVENTORY_AUDIT_AUTHORITIES_NEW } from "@/lib/inventory/inventory-audit
 import { PAYROLL_TAX_AUTHORITIES } from "@/lib/payroll/payroll-tax-authorities";
 import { AUDIT_HUB_AUTHORITIES_NEW } from "@/lib/inventory/audit-hub-authorities";
 import { TAX_PENALTY_AUTHORITIES_NEW } from "./tax-penalty-authorities";
+import { FINANCIAL_STATEMENT_AUTHORITIES_NEW } from "./financial-statement-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -495,7 +496,8 @@ export type SourceRegistry =
   | "inventory-audit"
   | "audit-hub"
   | "tax-penalty"
-  | "payroll-tax";
+  | "payroll-tax"
+  | "financial-statement";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -508,6 +510,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "audit-hub",
   "tax-penalty",
   "payroll-tax",
+  "financial-statement",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -558,6 +561,17 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // ONE registry, so a citation means one thing everywhere.
     ...PAYROLL_TAX_AUTHORITIES.map((a) => ({
       tag: "payroll-tax" as const,
+      authority: a,
+    })),
+    // books-17. The FINANCIAL STATEMENT authorities: how a statement is laid
+    // out (Reg S-X as a presentation canon, NOT as binding law), the FASB
+    // conceptual rules against netting and against using a note as a
+    // substitute for a number, where Washington's 37% excise actually lands,
+    // and the two S-corporation equity accounts that look identical and have
+    // different floors. Merged here for the usual reason: 1367 must mean the
+    // same thing on the equity statement as it will on next year's K-1.
+    ...FINANCIAL_STATEMENT_AUTHORITIES_NEW.map((a) => ({
+      tag: "financial-statement" as const,
       authority: a,
     })),
   ];
