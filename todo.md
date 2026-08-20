@@ -467,6 +467,37 @@
     reads a collection must also refuse to pass when it reads NOTHING, because a
     gate that inspects zero items approves everything.
 
+40. **AN UNREACHABLE GUARD IS AN UNTESTED GUARD — GIVE IT A DOOR.** (books-19.)
+    `allocateProRata` ends with a check that the split pieces add back to the
+    whole, and throws ALLOCATION LOST MONEY if they do not. That check can only
+    fire if the allocator directly above it is already broken, so no ordinary
+    input reaches it. The mutation harness deleted the entire guard and all 117
+    tests stayed green: the cent-level protection that everything else in the
+    engine leans on was completely unverified. Defensive assertions of this kind
+    are exactly the code a future tidy-up deletes, reasonably, because nothing
+    fails when they go. So: any guard that cannot be reached by legitimate input
+    MUST be given a deliberate way in — an exported test-only fault switch, a
+    fixture parameter, an injectable clock — and a test that provokes it and
+    watches it fire. If you cannot make a guard fire on purpose, you do not know
+    that it works, and you should assume it does not. Corollary: the switch must
+    default off, must be restored in a `finally`, and must itself be covered by a
+    test proving it is off again afterwards.
+
+41. **A MUTANT THAT SURVIVES ON YOUR DATA MAY BE A BUG IN YOUR FIXTURES, NOT A
+    HOLE IN YOUR LOGIC.** (books-19.) A mutant replaced the largest-remainder
+    tie-break with a plain alphabetical sort, and the suite stayed green. The
+    logic was not the problem and neither was the coverage: on the Greenway
+    roster — Michael Lyman 85, Mother 10, Nicholas Mullan 5 — alphabetical order
+    happens to coincide with remainder order, so both implementations place the
+    odd cent identically. Every test used the real roster, which felt like
+    realism and was actually a blind spot. When a mutant survives, do not
+    immediately add assertions; first ask whether the FIXTURE is capable of
+    telling the two behaviours apart, and if it is not, construct one that is
+    (here: Alice 10%, Zoe 90%, one cent — where alphabet and entitlement point
+    opposite ways). Realistic fixtures prove the system works for today's facts.
+    Adversarial fixtures prove the LOGIC is right. Compliance code needs both,
+    because the roster will change and the logic must survive it.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

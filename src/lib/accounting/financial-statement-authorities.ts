@@ -432,7 +432,9 @@ export const IRC_1367_BASIS_ADJUSTMENTS: GuidanceAuthority = {
     "(C) any nonseparately computed loss determined under subparagraph (B) of section 1366(a)(1), " +
     "(D) any expense of the corporation not deductible in computing its taxable income and not " +
     "properly chargeable to capital account, and (E) the amount of the shareholder's deduction for " +
-    "depletion for any oil and gas property held by the S corporation.",
+    "depletion for any oil and gas property held by the S corporation to the extent such deduction " +
+    "does not exceed the proportionate share of the adjusted basis of such property allocated to " +
+    "such shareholder under section 613A(c)(11)(B).",
   soWhat:
     "Subparagraph (D) is the one that hurts. Every dollar §280E disallows is 'an expense not deductible " +
     "in computing taxable income and not properly chargeable to capital account' — so it eats your " +
@@ -456,11 +458,12 @@ export const IRC_1368_DISTRIBUTIONS_AND_AAA: GuidanceAuthority = {
     "from the sale or exchange of property. ... (d) Certain adjustments taken into account. Subsections " +
     "(b) and (c) shall be applied by taking into account (to the extent proper) — (1) the adjustments " +
     "to the basis of the shareholder's stock described in section 1367, and (2) the adjustments to the " +
-    "accumulated adjustments account which are required by subsection (e)(1). ... (e)(1)(A) In general. " +
-    "Except as otherwise provided in this paragraph, the term 'accumulated adjustments account' means " +
+    "accumulated adjustments account which are required by subsection (e)(1). ... (e) Definitions and " +
+    "special rules. For purposes of this section— (1) Accumulated adjustments account. (A) In general. " +
+    "Except as otherwise provided in this paragraph, the term \"accumulated adjustments account\" means " +
     "an account of the S corporation which is adjusted for the S period in a manner similar to the " +
     "adjustments under section 1367 (except that no adjustment shall be made for income (and related " +
-    "expenses) which is exempt from tax under this title and the phrase '(but not below zero)' shall " +
+    "expenses) which is exempt from tax under this title and the phrase \"(but not below zero)\" shall " +
     "be disregarded in section 1367(a)(2)) ...",
   soWhat:
     "Two things, and they are the two most commonly confused numbers in an S corporation. FIRST: the " +
