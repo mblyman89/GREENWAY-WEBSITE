@@ -539,6 +539,87 @@
     must stop the owner from doing the right thing the wrong way, not just from
     doing the wrong thing.
 
+44. **A GUARD'S JUSTIFYING COMMENT IS A CLAIM ABOUT THE REPOSITORY, AND AN
+    UNTESTED CLAIM IS A LIE WITH A CITATION.** (books-21.) The books-20
+    authority-id tripwire extracted ids with `/"([A-Z0-9_]{3,})"/` and carried a
+    comment explaining that this was "the shape every authority id in this repo
+    has." That sentence was the entire load-bearing justification for the
+    pattern, and it was false when it was written: 29 of 80 ids were
+    lower-kebab. The gate therefore reported PASS while never once looking at
+    them — including all 10 added in this slice, one of which I had invented out
+    of thin air. The comment is what made the hole invisible, because a reviewer
+    who reads a narrow pattern asks "why so narrow?" and a reviewer who reads a
+    narrow pattern plus a confident explanation stops asking. So: when a guard's
+    scope is justified by a claim about what exists in the tree, that claim gets
+    its own test. If the comment says "every X is shaped like Y", write the test
+    that enumerates X and asserts the shape, and let it fail the day someone
+    adds a differently-shaped X. Corollary: prefer a gate that discovers its
+    inputs by walking the tree over one that trusts a hand-written list or a
+    remembered convention — I also kept a list of authority-id source files that
+    silently omitted `src/lib/payroll/`, and an id resolved from a directory I
+    did not know I was searching. Two conventions in one repo is not a bug
+    (rule 42 already warned about this), but a gate that only knows one of them
+    is.
+
+45. **A REGRESSION TEST MUST GUARD THE PLACE THE BUG WILL APPEAR NEXT, NOT ONLY
+    THE PLACE YOU JUST REMOVED IT FROM.** (books-21.) `FIRST_S_CORP_YEAR = 2026`
+    was deleted from `basis-aaa-core.ts` and `cogs-position-core.ts`, and I
+    wrote a test asserting neither of those two files declares it. Then I wrote
+    a whole new module, `s-corporation-year-core.ts`, whose entire reason for
+    existing is that the S-election year is evidence and not a constant — and my
+    test did not look at it. The mutation harness reintroduced the constant into
+    exactly that module and the mutant SURVIVED. The test had memorised the
+    crime scene instead of understanding the crime. This is rule 23 (fix the
+    class, not the instance) applied to tests rather than to code: the class here
+    is "no module in this layer may hardcode the election year", and the correct
+    test scans the directory, so a file created next month is covered on the day
+    it is created. Enumerate, do not enumerate-by-hand. And note which tool
+    caught it: not review, not the type checker, not 7,000 green tests — the
+    mutation harness, doing the one job a green suite cannot do (rules 33, 38).
+
+46. **A ZERO THAT NOBODY COMPUTED LOOKS EXACTLY LIKE A ZERO THAT SOMEBODY
+    COMPUTED, AND ONLY ONE OF THEM IS AN ANSWER.** (books-21.) Asked what a
+    year-late Form 1120-S costs, the penalty engine returned **$0.00**. Not an
+    error, not a refusal, not a warning — a clean, confident, formatted zero. It
+    reached that number honestly: §6651 charges a percentage of the tax shown on
+    the return, an S corporation generally shows none, five per cent of nothing
+    is nothing. The engine had simply never heard of §6699, which charges a
+    flat amount per shareholder per month instead, and which puts the real floor
+    at $7,020 for three shareholders. `grep -c 6699` returned 0. So the system
+    did not merely fail to warn Michael; it actively told him that filing a year
+    late was free, which is worse than saying nothing, because a warning gets
+    checked and a number gets believed. The general rule: for any question the
+    system will answer with money, ask what makes the answer ZERO or EMPTY, and
+    require that the zero be REACHED rather than DEFAULTED. If no statute in the
+    registry applies to the fact pattern, that is a refusal — "I have no rule
+    for this" — and never a total. This is the arithmetic twin of rule 43: a
+    guard that no path emits reviews as protection; a zero that no rule produced
+    reviews as good news. Practical test, and it is cheap: take every penalty,
+    tax and interest figure the engine can output, feed it the WORST realistic
+    facts, and if anything comes back at or near zero, find out why before
+    believing it.
+
+47. **PROSE IS A DELIVERABLE WITH NO TEST SUITE, SO DIFF IT AGAINST HEAD FOR
+    CHARACTERS THAT HAVE NO BUSINESS EXISTING.** (books-21, and it was my own
+    fresh mistake, caught minutes after I made it.) Patching the roadmap through
+    a placeholder token, I substituted an em-dash where every `§` belonged, and
+    shipped `§6621` as `—6621` in twenty-one places across a document written
+    specifically so Michael could understand what changed. No test covers a
+    markdown file. Nothing would ever have failed. The technique that caught it
+    is worth keeping: `git show HEAD:<file> | grep -c '<suspect pattern>'`
+    returned 0 while the working copy returned 21, which proves every single
+    occurrence is mine and makes the fix mechanical and total rather than
+    eyeballed. Then assert the character accounting — 21 em-dashes fewer, 21
+    section signs more, byte length unchanged — so the repair cannot quietly
+    over-reach into the 65 em-dashes that were doing legitimate work. Rule 29
+    says plain English is a deliverable; this is the corollary that a deliverable
+    gets verified even when the compiler has no opinion about it. Related, and
+    the reason the bug happened at all: files in this repo disagree about whether
+    they store `§` as a literal byte or as `\u00a7`, so always extract the exact
+    bytes with `repr()` before patching, and never assume a multi-patch script
+    partially applied — a failed `assert` rolls back everything after it and
+    leaves the earlier edits looking done.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

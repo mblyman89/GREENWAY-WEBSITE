@@ -16,7 +16,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   ALL_COGS_REFUSAL_CODES,
-  FIRST_S_CORP_YEAR,
   LAST_SUPPORTED_YEAR,
   adviseOnMethodChange,
   assertCogsCents,
@@ -34,6 +33,7 @@ import {
   type MethodChangeFacts,
   type PositionElection,
 } from "@/lib/accounting/cogs-position-core";
+import { SYSTEM_START_YEAR } from "@/lib/accounting/s-corporation-year-core";
 import {
   COGS_POSITION_LESSONS,
   assertEveryCogsFunctionIsTaught,
@@ -413,7 +413,7 @@ describe("validation refuses rather than warns", () => {
   });
 
   it("refuses a year before the S election and stops there", () => {
-    const r = validateCogsInput(input({ fiscalYear: FIRST_S_CORP_YEAR - 1 }));
+    const r = validateCogsInput(input({ fiscalYear: SYSTEM_START_YEAR - 1 }));
     expect(codesOf(r)).toEqual(["FISCAL_YEAR_OUT_OF_RANGE"]);
   });
 
@@ -425,8 +425,8 @@ describe("validation refuses rather than warns", () => {
   it("accepts the first and last supported years at the boundary", () => {
     const first = validateCogsInput(
       input({
-        fiscalYear: FIRST_S_CORP_YEAR,
-        positionElection: { ...GOOD_ELECTION, fiscalYear: FIRST_S_CORP_YEAR },
+        fiscalYear: SYSTEM_START_YEAR,
+        positionElection: { ...GOOD_ELECTION, fiscalYear: SYSTEM_START_YEAR },
       }),
     );
     expect(codesOf(first)).not.toContain("FISCAL_YEAR_OUT_OF_RANGE");

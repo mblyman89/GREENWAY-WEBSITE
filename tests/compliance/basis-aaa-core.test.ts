@@ -23,7 +23,6 @@ import {
   type ShareholderYearInput,
   type BasisYearInput,
   ALL_BASIS_REFUSAL_CODES,
-  FIRST_S_CORP_YEAR,
   LAST_SUPPORTED_YEAR,
   assertBasisCents,
   validateBasisInput,
@@ -38,6 +37,41 @@ import {
   validateCarryForwardFacts,
   setAllocationFaultForTesting,
 } from "@/lib/accounting/basis-aaa-core";
+import type { SElectionFacts } from "@/lib/accounting/s-corporation-year-core";
+import { SYSTEM_START_YEAR } from "@/lib/accounting/s-corporation-year-core";
+
+/**
+ * books-21. These fixtures used to say `fiscalYear: SYSTEM_START_YEAR` and rely
+ * on 2026 BEING the first S year, which is the defect this slice corrects.
+ *
+ * Two named election scenarios replace that, because the interesting cases are
+ * now different from each other rather than all being the same year:
+ *
+ *   FIRST_YEAR_ELECTION   \u2014 the election starts in the year under test, so the
+ *                           AAA opens at zero as a matter of law. Used by the
+ *                           tests that are ABOUT first-year behaviour.
+ *   GREENWAY_ELECTION     \u2014 Michael's real situation. The election is a decade
+ *                           old, so 2026 is an ORDINARY CONTINUING YEAR whose
+ *                           opening AAA is carried in from a filed return.
+ *
+ * The election year in GREENWAY_ELECTION is 2016 and it is A TEST FIXTURE, not
+ * a finding. Michael said "late 2015 - early 2016", which spans two tax years,
+ * and the production value deliberately refuses until he confirms which. Using
+ * a concrete year HERE is legitimate because these tests are about the
+ * MECHANISM \u2014 that a continuing year carries balances forward \u2014 and that
+ * mechanism is identical whichever of the two years turns out to be right.
+ */
+const FIRST_YEAR_ELECTION: SElectionFacts = {
+  year: SYSTEM_START_YEAR,
+  evidenceSource: "test fixture: election deliberately aligned to the year under test",
+  statedRange: null,
+};
+
+const GREENWAY_ELECTION: SElectionFacts = {
+  year: 2016,
+  evidenceSource: "test fixture standing in for the oldest Form 1120-S on hand",
+  statedRange: null,
+};
 import {
   BASIS_AAA_AUTHORITIES_NEW,
   BASIS_AAA_AUTHORITY_IDS_OWNED_ELSEWHERE,
@@ -101,20 +135,25 @@ function greenwayRoster(
 function year(over: Partial<BasisYearInput> = {}): BasisYearInput {
   return {
     entityCode: "greenway",
-    fiscalYear: FIRST_S_CORP_YEAR,
+    fiscalYear: SYSTEM_START_YEAR,
     ordinaryIncomeCents: 0,
     taxExemptIncomeCents: 0,
     nonDeductibleExpenseCents: 0,
     shareholders: greenwayRoster(),
     hasAccumulatedEarningsAndProfits: false,
     electiveOrderingAdopted: false,
-    // The default year is FIRST_S_CORP_YEAR, which is exempt from the
+    // The default fixture is a FIRST S YEAR, which is exempt from the
     // carry-forward gate because there is no prior year. Left null rather than
     // true so that any test moving the year forward has to face the gate
     // honestly instead of inheriting a free pass from the helper.
     openingBalancesCarriedFromPriorYear: null,
     beginningAaaCents: 0,
     beginningOaaCents: 0,
+    // books-21. Defaulting to the first-year scenario keeps every pre-existing
+    // test meaning exactly what it meant before this slice: `beginningAaaCents:
+    // 0` above is only legal in a first S year, so the default must be one.
+    sElection: FIRST_YEAR_ELECTION,
+    openingAaaEvidenceSource: null,
     ...over,
   };
 }
@@ -658,7 +697,7 @@ describe("refusals", () => {
 
   it("refuses a non-zero opening AAA in the first S year \u2014 \u00a71.1368-2(a)(1)", () => {
     const r = computeBasisAndAaa(
-      year({ fiscalYear: FIRST_S_CORP_YEAR, beginningAaaCents: 1 }),
+      year({ fiscalYear: SYSTEM_START_YEAR, beginningAaaCents: 1 }),
     );
     expect(codes(r)).toContain("AAA_OPENING_NOT_ZERO_IN_FIRST_YEAR");
   });
@@ -666,9 +705,15 @@ describe("refusals", () => {
   it("permits a non-zero opening AAA in a LATER year that was properly carried", () => {
     const r = computeBasisAndAaa(
       year({
-        fiscalYear: FIRST_S_CORP_YEAR + 1,
+        fiscalYear: SYSTEM_START_YEAR + 1,
         beginningAaaCents: 500_000,
         openingBalancesCarriedFromPriorYear: true,
+        // books-21 added the source requirement, and this fixture went red
+        // without it. The fixture was the suspect, not the engine (rule 22): a
+        // continuing year IS required to say where its opening AAA came from,
+        // and this test's whole premise is that the balance "was properly
+        // carried" \u2014 so saying so out loud is the point, not an inconvenience.
+        openingAaaEvidenceSource: `the ${SYSTEM_START_YEAR} computation in this system`,
       }),
     );
     expect(r.ok).toBe(true);
@@ -678,7 +723,7 @@ describe("refusals", () => {
     for (const provenance of [null, false]) {
       const r = computeBasisAndAaa(
         year({
-          fiscalYear: FIRST_S_CORP_YEAR + 1,
+          fiscalYear: SYSTEM_START_YEAR + 1,
           beginningAaaCents: 500_000,
           openingBalancesCarriedFromPriorYear: provenance,
         }),
@@ -692,7 +737,7 @@ describe("refusals", () => {
   it("does not ask the first S year where its opening balances came from", () => {
     // There is no prior year to carry from, so the gate must not fire.
     const r = computeBasisAndAaa(
-      year({ fiscalYear: FIRST_S_CORP_YEAR, openingBalancesCarriedFromPriorYear: null }),
+      year({ fiscalYear: SYSTEM_START_YEAR, openingBalancesCarriedFromPriorYear: null }),
     );
     expect(codes(r)).not.toContain("PRIOR_YEAR_NOT_CARRIED");
   });
@@ -714,7 +759,7 @@ describe("refusals", () => {
   });
 
   it("refuses a year before the S election and after the supported range", () => {
-    expect(codes(computeBasisAndAaa(year({ fiscalYear: FIRST_S_CORP_YEAR - 1 })))).toContain(
+    expect(codes(computeBasisAndAaa(year({ fiscalYear: SYSTEM_START_YEAR - 1 })))).toContain(
       "FISCAL_YEAR_OUT_OF_RANGE",
     );
     expect(codes(computeBasisAndAaa(year({ fiscalYear: LAST_SUPPORTED_YEAR + 1 })))).toContain(
@@ -794,8 +839,44 @@ describe("refusals", () => {
         shareholders: greenwayRoster({ michael: { suspendedLossCarryforwardCents: -1 } }),
       }),
       year({
-        fiscalYear: FIRST_S_CORP_YEAR + 1,
+        fiscalYear: SYSTEM_START_YEAR + 1,
         openingBalancesCarriedFromPriorYear: null,
+      }),
+      // books-21 codes. Each of these fires exactly one of the new refusals,
+      // and each is a real mistake somebody could make rather than a synthetic
+      // poke at the validator.
+      //
+      // The election year is simply not on file.
+      year({ sElection: { year: null, evidenceSource: null, statedRange: null } }),
+      // What Michael actually said: a RANGE spanning two tax years.
+      year({
+        sElection: { year: null, evidenceSource: null, statedRange: "late 2015 - early 2016" },
+      }),
+      // A year with nothing behind it. Rule 11.
+      year({ sElection: { year: 2016, evidenceSource: null, statedRange: null } }),
+      // A typo, not a disagreement.
+      //
+      // This fixture is itself a small lesson. It first read `year: 20_16`,
+      // meant as "a mistyped year" \u2014 but `20_16` is a NUMERIC SEPARATOR, so it
+      // is exactly 2016, a perfectly valid election year, and the test
+      // correctly reported the code as unreachable. The test was right and the
+      // fixture was wrong (rule 22, and rule 41: a mutant that survives on your
+      // data may be a bug in your fixtures). 1015 is unambiguously a typo:
+      // Subchapter S did not exist in the eleventh century.
+      year({ sElection: { year: 1015, evidenceSource: "mistyped", statedRange: null } }),
+      // An election claimed to start AFTER the year being computed.
+      year({
+        fiscalYear: SYSTEM_START_YEAR,
+        sElection: { year: SYSTEM_START_YEAR + 5, evidenceSource: "x", statedRange: null },
+      }),
+      // THE SHIPPED BUG ITSELF, as an input: a zero opening AAA in a continuing
+      // year. This is the case that used to be not merely allowed but FORCED.
+      year({ sElection: GREENWAY_ELECTION, beginningAaaCents: 0 }),
+      // A continuing year with a real balance but no document behind it.
+      year({
+        sElection: GREENWAY_ELECTION,
+        beginningAaaCents: 500_000,
+        openingAaaEvidenceSource: null,
       }),
     ];
     for (const i of inputs) for (const c of codes(computeBasisAndAaa(i))) seen.add(c);
@@ -830,7 +911,7 @@ describe("refusals", () => {
       year({ ordinaryIncomeCents: 1.5 }),
       year({ shareholders: [] }),
       year({ hasAccumulatedEarningsAndProfits: null }),
-      year({ beginningAaaCents: 500, fiscalYear: FIRST_S_CORP_YEAR }),
+      year({ beginningAaaCents: 500, fiscalYear: SYSTEM_START_YEAR }),
     ]) {
       for (const c of codes(computeBasisAndAaa(i))) emitted.add(c);
     }
@@ -953,7 +1034,7 @@ describe("carry forward", () => {
       computeBasisAndAaa(year({ ordinaryIncomeCents: 1_000_000 })),
     );
     const next = carryForward(y1);
-    expect(next.fiscalYear).toBe(FIRST_S_CORP_YEAR + 1);
+    expect(next.fiscalYear).toBe(SYSTEM_START_YEAR + 1);
     expect(next.beginningAaaCents).toBe(y1.aaa.endingAaaCents);
     expect(next.beginningOaaCents).toBe(y1.aaa.endingOaaCents);
     for (const sh of next.shareholders) {
@@ -1020,7 +1101,7 @@ describe("carry forward", () => {
         expect(sh.endingDebtBasisCents).toBeGreaterThanOrEqual(0);
       }
     }
-    expect(state.fiscalYear).toBe(FIRST_S_CORP_YEAR + 4);
+    expect(state.fiscalYear).toBe(SYSTEM_START_YEAR + 4);
   });
 });
 

@@ -67,6 +67,7 @@ import { FINANCIAL_STATEMENT_AUTHORITIES_NEW } from "./financial-statement-autho
 import { PERIOD_CLOSE_AUTHORITIES_NEW } from "./period-close-authorities";
 import { BASIS_AAA_AUTHORITIES_NEW } from "./basis-aaa-authorities";
 import { COGS_POSITION_AUTHORITIES_NEW } from "./cogs-position-authorities";
+import { INTEREST_AUTHORITIES_NEW } from "./interest-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -489,23 +490,19 @@ function fromGate(a: GateAuthority): GuidanceAuthority {
   return { id: a.id, kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
 
-export type SourceRegistry =
-  | "vendor-bill"
-  | "payroll"
-  | "bank"
-  | "gate"
-  | "new"
-  | "ledger"
-  | "inventory-audit"
-  | "audit-hub"
-  | "tax-penalty"
-  | "payroll-tax"
-  | "financial-statement"
-  | "period-close"
-  | "basis-aaa"
-  | "cogs-position";
-
-export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
+/**
+ * books-21 inverted this pair, for the same reason it inverted the refusal
+ * codes in basis-aaa-core.ts.
+ *
+ * It used to be a hand-written union of fourteen strings AND a hand-written
+ * array of the same fourteen. `readonly SourceRegistry[]` proves every element
+ * of the array is in the union but nothing proves the reverse, so a registry
+ * added to the union and forgotten in the array would compile \u2014 and the array
+ * is what the coverage tests walk. The list is now the single source of truth
+ * and the union is derived from it. Standing rule 42: prefer a gate that cannot
+ * be forgotten over a discipline that can.
+ */
+export const ALL_SOURCE_REGISTRIES = [
   "vendor-bill",
   "payroll",
   "bank",
@@ -520,7 +517,10 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "period-close",
   "basis-aaa",
   "cogs-position",
+  "interest",
 ] as const;
+
+export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
 function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAuthority }> {
@@ -614,6 +614,19 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // judgment, that a retail licensee can never be a producer.
     ...COGS_POSITION_AUTHORITIES_NEW.map((a) => ({
       tag: "cogs-position" as const,
+      authority: a,
+    })),
+    // books-21. INTEREST, DAILY COMPOUNDING, AND THE PENALTY THAT WAS MISSING.
+    // \u00a76621's rate structure and \u00a76622's daily compounding, both of which the
+    // books-16 engine described in prose and never computed \u2014 plus \u00a76699, the
+    // per-shareholder penalty for a late Form 1120-S, which did not appear
+    // anywhere in this codebase at all. \u00a76651(a) and (j) are here to prove that
+    // the $435 in the penalty engine is the statutory BASE rather than a stale
+    // figure. \u00a71361(a) and \u00a76621(c) are a matched pair: the second says the
+    // punitive "large corporate underpayment" rate reaches only a C
+    // corporation, and the first says Greenway is not one.
+    ...INTEREST_AUTHORITIES_NEW.map((a) => ({
+      tag: "interest" as const,
       authority: a,
     })),
   ];
