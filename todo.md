@@ -498,6 +498,47 @@
     Adversarial fixtures prove the LOGIC is right. Compliance code needs both,
     because the roster will change and the logic must survive it.
 
+42. **TWO NAMESPACES OF UPPERCASE STRINGS WILL EVENTUALLY TRADE PLACES, AND THE
+    COMPILER WILL NOT CARE.** (books-20.) The refusal telling the owner to
+    physically count ending inventory cited `INVENTORY_COUNTED` as one of its
+    authorities. That identifier is real — it is a PERIOD-CLOSE CHECKLIST id
+    from `period-close-core.ts`. It is not a `GuidanceAuthority` id. Because
+    `authorityIds` is typed `readonly string[]`, the compiler was satisfied;
+    because the id looks exactly like an authority id, review was satisfied
+    too. The only place the defect would ever have shown itself is the moment
+    Michael clicked "why?" and the citation panel came back empty — precisely
+    the moment the citation was load-bearing. The lesson is not "be careful
+    with ids." It is that whenever two families of bare strings share a
+    spelling convention, a permanent repo-wide resolution gate is required, not
+    a habit of care. `tests/compliance/authority-id-resolution.test.ts` now
+    walks every file under `src/`, extracts every id cited in an `authorityIds`
+    position, and fails if any one of them does not resolve. Prefer a gate that
+    cannot be forgotten over a discipline that can.
+
+43. **A REFUSAL CODE THAT NO CODE PATH EMITS IS NOT PROTECTION, IT IS
+    DECORATION — AND IT REVIEWS AS PROTECTION.** (books-20.) Three refusal
+    codes were declared in the union and in the exported `ALL_*_CODES` list and
+    were never emitted by any line of the engine. Two were false alarms, thrown
+    up by a crude detector that only matched `code: "X"` and missed a ternary
+    — a fair reminder that the detector is a suspect too (rule 22 applies to
+    the tools as much as to the tests). But the third,
+    `METHOD_CHANGE_WITHOUT_CONSENT`, was genuinely dead, and it was the single
+    most consequential guard in the slice: §446(e) is the sentence that defeats
+    the plan every taxpayer in this position has, which is "we will just start
+    doing it right next year and say nothing about the old years." It could not
+    possibly have fired, because the input type carried no prior-year position
+    to compare against. Reading the union, the slice looked protected. Running
+    it, the screen would have let a twelve-year method be silently abandoned.
+    So: for every declared code, prove SOMETHING emits it, and do it with a
+    source-level gate rather than by hand-picking one input per code, which
+    only re-implements the engine (rule 39). Corollary, learned the same hour:
+    a gate must fire in both directions (rule 34) even when one direction feels
+    virtuous. Changing TOWARDS the conservative treatment is still a change of
+    method, still needs consent first, and doing it quietly forfeits the audit
+    protection the same change would have carried on a Form 3115. The system
+    must stop the owner from doing the right thing the wrong way, not just from
+    doing the wrong thing.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

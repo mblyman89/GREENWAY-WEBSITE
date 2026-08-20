@@ -38,7 +38,8 @@ rule 1. The order:
 | 1 | **Financial statements** | trial balance, chart of accounts | **SHIPPED — books-17, PR #989** |
 | 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | **SHIPPED — books-18, PR #992** |
 | 3 | **Basis and AAA tracking** | the statement of stockholders' equity | **SHIPPED — books-19, PR #993** |
-| 4 | **Form 1120-S and Schedule K-1** | the statements + AAA/basis | **NEXT** |
+| 4a | **Form 1125-A and the COGS position** | inventory + the 280E wall | **SHIPPED — books-20, PR #TBD** |
+| 4b | **Form 1120-S and Schedule K-1** | the statements + AAA/basis + 1125-A | **NEXT** |
 | 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
 | 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | not started |
 | 7 | **WA B&O and local taxes** | the income statement's revenue lines | not started |
@@ -222,10 +223,52 @@ something — a loan from the company, additional compensation, or a gift betwee
 shareholders. The engine names the variance, names the test, and says what must
 be verified.
 
-### 4. Form 1120-S and Schedule K-1
+### 4a. Form 1125-A and the COGS position — SHIPPED (books-20)
+
+Form 1125-A is the schedule that carries cost of goods sold onto line 2 of the
+1120-S, so it had to be built before the return that consumes it.
+
+Under §280E, inventory is very nearly the only relief Greenway has, which makes
+this the single highest-stakes number on the return. The slice therefore does
+something no other slice does: it computes cost of goods sold **both ways** —
+the strict §1.471-3(b) reseller reading, and the treatment carried forward from
+the grandfather's twelve years of returns — shows the gap between them in
+dollars, and refuses to file either one until the owner has made a dated,
+named, reasoned, per-year election on the record.
+
+What the slice established from source text rather than assumption:
+
+- **Greenway is a reseller permanently, as a matter of Washington law.** RCW
+  69.50.328 forbids a producer or processor from having any financial interest
+  in a retailer, so the more generous §1.471-3(c) producer rules are not
+  available and never will be while the retail licence is held. This is a
+  computed result in the engine, not a configurable field.
+- **Twelve consistent years is a METHOD, not an error** — §1.446-1(e)(2)(ii)(a).
+  That cuts both ways: it means the treatment cannot simply be corrected going
+  forward, and it means changing it requires consent under §446(e) FIRST.
+- **A voluntary Form 3115 buys audit protection for the earlier years** — Rev.
+  Proc. 2015-13 §8.01, read from the official Internal Revenue Bulletin and
+  mirrored into `docs/authorities/`. All eight exceptions in §8.02 were read;
+  none applies on the facts as stated today, but two of them are live
+  conditions that the advice now surfaces rather than glosses.
+- **A positive §481(a) adjustment spreads over four years; a negative one is
+  taken in one** — §7.03(1) — and a positive adjustment under $50,000 may
+  elect one year under §7.03(3)(c).
+
+The §280E switch (standing rule 8) was tested here and found a real defect:
+throwing the repeal switch initially closed the dollar gap to zero, which
+looked like good news and was not — the engine had closed it by bending the
+conservative yardstick rather than by removing exposure. §280E denies a
+"deduction or credit" and says nothing about inventories, so repeal does not
+change what §471 allows into cost of goods sold. The gap survives repeal; what
+changes is that it becomes a question of TIMING under §162 rather than of
+permanent disallowance.
+
+### 4b. Form 1120-S and Schedule K-1
 
 Including Schedule L (balance sheet per books), M-1 (book-to-tax
-reconciliation), M-2 (AAA), and the K-1 per shareholder.
+reconciliation), M-2 (AAA), and the K-1 per shareholder. Line 2 comes from the
+Form 1125-A built in 4a.
 
 **Known exposure to model, not to hide:** reasonable compensation. Roughly $55k
 of W-2 wages against roughly $630k of K-1 income is the classic audit trigger.
@@ -356,6 +399,7 @@ exists.
 | — | `docs/authorities/` — 3,922 pages of source text + verbatim verifier | #991 |
 | books-18 | period close gate: an unanswered check is not a passed check | #992 |
 | books-19 | basis and AAA tracking; federal source text mirrored so quotes are machine-proved | #993 |
+| books-20 | Form 1125-A: cost of goods sold computed BOTH ways, with a dated election on the record | #TBD |
 | — | standing rules 40–41, learned from books-19 | #993 |
 
 ---

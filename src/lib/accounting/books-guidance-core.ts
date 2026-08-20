@@ -66,6 +66,7 @@ import { TAX_PENALTY_AUTHORITIES_NEW } from "./tax-penalty-authorities";
 import { FINANCIAL_STATEMENT_AUTHORITIES_NEW } from "./financial-statement-authorities";
 import { PERIOD_CLOSE_AUTHORITIES_NEW } from "./period-close-authorities";
 import { BASIS_AAA_AUTHORITIES_NEW } from "./basis-aaa-authorities";
+import { COGS_POSITION_AUTHORITIES_NEW } from "./cogs-position-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -501,7 +502,8 @@ export type SourceRegistry =
   | "payroll-tax"
   | "financial-statement"
   | "period-close"
-  | "basis-aaa";
+  | "basis-aaa"
+  | "cogs-position";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -517,6 +519,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "financial-statement",
   "period-close",
   "basis-aaa",
+  "cogs-position",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -598,6 +601,19 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // was genuinely missing.
     ...BASIS_AAA_AUTHORITIES_NEW.map((a) => ({
       tag: "basis-aaa" as const,
+      authority: a,
+    })),
+    // books-20. HOW YOU LEAVE A METHOD YOU HAVE BEEN USING FOR TWELVE YEARS.
+    // The reseller-versus-producer authorities are NOT here: §1.471-3(b), (c)
+    // and (f), §280E, Harborside, Alterman and CHAMP were registered by the
+    // payroll-COGS and vendor-bill slices and standing rule 2 forbids a second
+    // copy. What is new is the machinery around CHANGING a position — §446(e)
+    // consent, §481(a) true-up, and the Rev. Proc. 2015-13 audit protection
+    // that makes correcting yourself safer than sitting still — plus the
+    // Washington statute that decides, as a matter of state law rather than
+    // judgment, that a retail licensee can never be a producer.
+    ...COGS_POSITION_AUTHORITIES_NEW.map((a) => ({
+      tag: "cogs-position" as const,
       authority: a,
     })),
   ];

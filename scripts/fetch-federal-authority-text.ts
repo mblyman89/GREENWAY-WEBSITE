@@ -32,8 +32,9 @@ type Target =
   | { readonly kind: "cfr"; readonly section: string }
   | { readonly kind: "usc"; readonly section: string };
 
-/** Exactly the sources books-19 quotes. Extend as later slices need more. */
+/** The sources books-19 and books-20 quote. Extend as later slices need more. */
 const TARGETS: readonly Target[] = [
+  // books-19 \u2014 basis and AAA
   { kind: "cfr", section: "1.1361-1" },
   { kind: "cfr", section: "1.1367-1" },
   { kind: "cfr", section: "1.1367-2" },
@@ -43,6 +44,17 @@ const TARGETS: readonly Target[] = [
   { kind: "usc", section: "1366" },
   { kind: "usc", section: "1367" },
   { kind: "usc", section: "1368" },
+  // books-20 \u2014 cost of goods sold, inventories, and methods of accounting
+  { kind: "cfr", section: "1.446-1" },
+  { kind: "cfr", section: "1.471-1" },
+  { kind: "cfr", section: "1.471-2" },
+  { kind: "cfr", section: "1.471-3" },
+  { kind: "cfr", section: "1.61-3" },
+  { kind: "usc", section: "446" },
+  { kind: "usc", section: "471" },
+  { kind: "usc", section: "481" },
+  { kind: "usc", section: "280E" },
+  { kind: "usc", section: "162" },
 ];
 
 function urlFor(t: Target): string {

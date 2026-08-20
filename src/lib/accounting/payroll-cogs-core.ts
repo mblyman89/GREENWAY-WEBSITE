@@ -182,7 +182,7 @@ export const PAYROLL_AUTHORITIES: readonly PayrollAuthority[] = [
     kind: "regulation",
     cite: "26 C.F.R. §1.471-3(f)",
     quote:
-      "Notwithstanding the other paragraphs of this section, cost shall not include an amount which is of a " +
+      "Notwithstanding the other rules of this section, cost shall not include an amount which is of a " +
       "type for which a deduction would be disallowed under section 162 (c), (f), or (g) and the regulations " +
       "thereunder in the case of a business expense.",
     soWhat:
