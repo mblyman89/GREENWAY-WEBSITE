@@ -9,7 +9,7 @@
  * findings (no raw rows) and is forbidden from inventing events — see
  * buildAnomalySystemPrompt in audit-anomaly-core.ts. Advisory / drafts-only.
  *
- * Matches the Activity Log page's dark theme (black surfaces, white/opacity
+ * Matches the Security Log page's dark theme (black surfaces, white/opacity
  * text, var(--admin-accent) accent) rather than the stone theme used elsewhere.
  */
 import { useEffect, useRef, useState, useTransition } from "react";

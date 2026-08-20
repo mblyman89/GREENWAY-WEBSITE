@@ -54,7 +54,7 @@ function timeLabel(value: string): string {
 }
 
 export default async function AuditLogPage() {
-  await requirePermission("users.manage");
+  await requirePermission("audit.view");
   const logs = await loadAudit();
 
   // Humanize + classify once on the server; the client timeline filters/searches these.
@@ -99,13 +99,13 @@ export default async function AuditLogPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Activity Log"
-        subtitle="A plain-language history of every change made across the back office."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Activity Log" }]} />}
+        title="Security Log"
+        subtitle="A plain-language history of every change made across the back office \u2014 including your own."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Security Log" }]} />}
         help={
           <HelpPanel
             id="audit"
-            title="How the activity log works"
+            title="How the Security Log works"
             steps={[
               "Every change anyone makes is recorded automatically.",
               "The security review at the top flags anything unusual for you.",

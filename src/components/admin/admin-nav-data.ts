@@ -22,6 +22,8 @@ export type AdminNavItem = {
     | "Employee"
     | "Medical"
     | "CCRS"
+    | "Accounting"
+    | "Lyman"
     | "Admin";
   comingSoon?: boolean;
 };
@@ -72,7 +74,6 @@ export const adminNav: AdminNavItem[] = [
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard
-  { label: "Inventory Auditing", href: "/admin/inventory/audits", permission: "inventory.manage", icon: "\ud83d\udd0d", group: "Inventory" }, // 🔍 blind counts, variance review, work papers — NOT /admin/audit, which is the security log
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" }, // ♻️ disposition
 
   // MKTG & ADV: promos, content, email, creative
@@ -135,10 +136,11 @@ export const adminNav: AdminNavItem[] = [
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "\ud83d\udc64", group: "Admin" }, // 👤 user
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" }, // 🔌 integrations
   { label: "Banking", href: "/admin/settings/banking", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Admin" }, // bank / ACH origination
-  { label: "Bank Feeds", href: "/admin/plaid", permission: "finances.view", icon: "\ud83d\udd17", group: "Admin" }, // 🔗 Plaid: read-only bank/credit feeds for automatic bookkeeping (P2)
-  { label: "Loans", href: "/admin/loans", permission: "finances.view", icon: "🏠", group: "Admin" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
-  { label: "Crypto Portfolio", href: "/admin/crypto", permission: "finances.view", icon: "\u20bf", group: "Admin" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
-  { label: "ATM", href: "/admin/atm", permission: "finances.view", icon: "\ud83c\udfe7", group: "Admin" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
+  { label: "Bank Feeds", href: "/admin/plaid", permission: "finances.view", icon: "\ud83d\udd17", group: "Lyman" }, // 🔗 Plaid: read-only bank/credit feeds for automatic bookkeeping (P2)
+  { label: "Loans", href: "/admin/loans", permission: "finances.view", icon: "🏠", group: "Lyman" }, // manual loans + amortization schedule (mortgage, financing) with Timberland audit trail
+  { label: "Crypto Portfolio", href: "/admin/crypto", permission: "finances.view", icon: "\u20bf", group: "Lyman" }, // ₿ watch-only crypto portfolio: read-only wallets, USD valuation, IRS cost-basis (C3)
+  { label: "ATM", href: "/admin/atm", permission: "finances.view", icon: "\ud83c\udfe7", group: "Lyman" }, // ATM sign: PAI ATM (paireports.com) settlements, surcharge revenue & cash loads
+  { label: "Security Log", href: "/admin/audit", permission: "audit.view", icon: "\ud83d\udd0e", group: "Lyman" }, // who did what, and when. Renamed from "Audit Log" (books-22) so it is not confused with Inventory Auditing, and re-gated from users.manage to audit.view = OWNER ONLY: this is the record an admin would have to edit to hide something, so the admin is exactly who should not be reading it.
   // Slice books-06: the four MONEY pages moved from "settings.manage"
   // (owner+admin) to "finances.view" (OWNER ONLY), matching migration 0190,
   // which re-gates the 25 tables behind them from is_staff() to is_owner().
@@ -150,19 +152,19 @@ export const adminNav: AdminNavItem[] = [
   // accounting RPC (migration 0185). Do NOT change these to "reports.view" --
   // that permission also grants manager and readonly, who would see the links
   // and then hit a raw database refusal.
-  { label: "General Journal", href: "/admin/books/journal", permission: "books.view", icon: "\u270d\ufe0f", group: "Admin" }, // writing hand: manual entries
-  { label: "Conversion", href: "/admin/books/conversion", permission: "books.view", icon: "\ud83d\udd01", group: "Admin" }, // leaving Cultivera and Sage, 2026-11-01
-  { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Admin" }, // receipt: what survives 280E and what it takes
-  { label: "Payroll & COGS", href: "/admin/books/payroll", permission: "books.view", icon: "\ud83d\udc77", group: "Admin" }, // construction worker: which labor may be inventoried (books-04)
-  { label: "Payroll Setup (W-4)", href: "/admin/books/payroll-setup", permission: "books.view", icon: "\ud83e\uddfe", group: "Admin" }, // W-4 -> withholding, and the mentoring blockers (books-13)
-  { label: "Bank & Reconcile", href: "/admin/books/bank", permission: "books.view", icon: "\ud83c\udfe6", group: "Admin" }, // bank: matching the feed to the books, and the two silent errors (books-05)
-  { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Admin" }, // scales: debits = credits
-  { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Admin" }, // ledger book
-  { label: "Chart of Accounts", href: "/admin/books/accounts", permission: "books.view", icon: "\ud83d\uddc3\ufe0f", group: "Admin" }, // card file index
+  { label: "Inventory Auditing", href: "/admin/inventory/audits", permission: "inventory.manage", icon: "\ud83d\udd0d", group: "Accounting" }, // 🔍 blind counts, variance review, work papers — NOT /admin/audit, which is the security log
+  { label: "General Journal", href: "/admin/books/journal", permission: "books.view", icon: "\u270d\ufe0f", group: "Accounting" }, // writing hand: manual entries
+  { label: "Conversion", href: "/admin/books/conversion", permission: "books.view", icon: "\ud83d\udd01", group: "Accounting" }, // leaving Cultivera and Sage, 2026-11-01
+  { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Accounting" }, // receipt: what survives 280E and what it takes
+  { label: "Payroll & COGS", href: "/admin/books/payroll", permission: "books.view", icon: "\ud83d\udc77", group: "Accounting" }, // construction worker: which labor may be inventoried (books-04)
+  { label: "Payroll Setup (W-4)", href: "/admin/books/payroll-setup", permission: "books.view", icon: "\ud83e\uddfe", group: "Accounting" }, // W-4 -> withholding, and the mentoring blockers (books-13)
+  { label: "Bank & Reconcile", href: "/admin/books/bank", permission: "books.view", icon: "\ud83c\udfe6", group: "Accounting" }, // bank: matching the feed to the books, and the two silent errors (books-05)
+  { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Accounting" }, // scales: debits = credits
+  { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Accounting" }, // ledger book
+  { label: "Chart of Accounts", href: "/admin/books/accounts", permission: "books.view", icon: "\ud83d\uddc3\ufe0f", group: "Accounting" }, // card file index
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udda8\ufe0f", group: "Admin" }, // 🖨️ hardware
   { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal limits
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "\ud83e\udde0", group: "Admin" }, // 🧠 AI
-  { label: "Audit Log", href: "/admin/audit", permission: "users.manage", icon: "\ud83d\udd0e", group: "Admin" }, // 🔎 audit trail
   { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "\u2699\ufe0f", group: "Admin" }, // ⚙️ settings
   { label: "Help & FAQ", href: "/admin/help", permission: "dashboard.view", icon: "\ud83d\udca1", group: "Admin" }, // 💡 help
   { label: "Menu Imports", href: "/admin/menu-imports", permission: "menu.import", icon: "\ud83d\udce5", group: "Admin" }, // 📥 import
@@ -179,5 +181,29 @@ export const navGroups: AdminNavItem["group"][] = [
   "Employee",
   "Medical",
   "CCRS",
+  // books-22: the two OWNER tabs. "Accounting" is the bookkeeping surface
+  // (the nine books screens plus Inventory Auditing, which is where a physical
+  // count becomes a journal entry). "Lyman" is the owner's own money and the
+  // Security Log. Both are placed AFTER the operating tabs and BEFORE "Admin"
+  // so the day-to-day staff tabs stay leftmost where they are reached most.
+  //
+  // "Lyman" is owner-only in full: all five items are finances.view or
+  // audit.view, both of which are ["owner"] alone. For every non-owner the
+  // group has zero visible items and buildNavGroups drops the tab entirely --
+  // nobody sees a tab that refuses to open.
+  //
+  // "Accounting" is owner-only EXCEPT for one deliberate item: Inventory
+  // Auditing is "inventory.manage" (owner|admin|manager), because the audit
+  // TREE is also where staff do the counting -- /admin/inventory/audits/[id]/count
+  // is the employee count sheet, and migration 0191 grants staff write on
+  // inventory_audit_lines precisely so they can fill it in. Locking the whole
+  // tree to the owner would break the count sheet, which is the opposite of
+  // the goal. What IS owner-only is everything that matters: the session rows,
+  // scope approval, result approval and posting are all is_owner() in the
+  // database (0191/0192), so a manager reaching this screen can see and count,
+  // and cannot approve or post. nav-gate-core.test.ts records this as an
+  // explicit, named exception rather than letting it pass as an oversight.
+  "Accounting",
+  "Lyman",
   "Admin",
 ];
