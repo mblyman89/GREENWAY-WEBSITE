@@ -465,7 +465,7 @@ exists.
 | books-18 | period close gate: an unanswered check is not a passed check | #992 |
 | books-19 | basis and AAA tracking; federal source text mirrored so quotes are machine-proved | #993 |
 | books-20 | Form 1125-A: cost of goods sold computed BOTH ways, with a dated election on the record | #994 |
-| books-21 | the S-corporation year is EVIDENCE not a constant; §6621/§6622 interest; §6699 found missing entirely | #TBD |
+| books-21 | the S-corporation year is EVIDENCE not a constant; §6621/§6622 interest; §6699 found missing entirely | #995 |
 | — | standing rules 40–41, learned from books-19 | #993 |
 
 ---
