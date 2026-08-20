@@ -382,6 +382,57 @@
     in one place. Items owed BY me are listed there too, so he can hold me to
     them.
 
+33. **ATTACK THE SUITE *AFTER* IT GOES GREEN, NOT BEFORE.** (books-17.) A green
+    suite is the START of testing, not the end of it. In books-17 the engine was
+    at 110/110 passing with 10/10 mutations caught, and a deliberate adversarial
+    probe then found SIX real defects: money printing "$0.10.5", duplicate
+    shareholder names double counting a payout, one account subtracted twice,
+    a shareholder named `constructor` returning a function instead of zero, a
+    negative distribution inventing basis, and an S corporation with no
+    shareholders. A second pass after the suite reached 130 found a seventh.
+    None of them would ever have surfaced from writing more tests of the kind
+    already written. Budget a probe phase per slice: hostile inputs, prototype
+    keys, negatives, zeros, duplicates, empty collections, and values at the
+    edge of what the number type can hold. **Fix the CLASS, never the instance.**
+
+34. **EVERY GATE MUST RUN IN BOTH DIRECTIONS.** (books-17, defect D7.) A check
+    that each citation resolves does NOT prove each authority is used. The
+    reverse gate had never been written, so an authority could sit in the
+    registry, be counted in the total, appear in the browser, and drive nothing
+    — a control that is really an ornament. Writing the reverse gate immediately
+    caught a genuinely load-bearing authority that had been orphaned through 130
+    passing tests and 16 caught mutations. Whenever a gate asserts "everything
+    in A is valid in B", write its twin asserting "nothing in B is unused by A".
+
+35. **VERBATIM MUST BE MECHANICALLY VERIFIED, NOT CAREFULLY TYPED.** (books-17.)
+    Standing rule 24 says the quote is sacred; this says how to prove it. Where
+    the primary source exists as a file, a script must normalise whitespace and
+    assert each quote is an EXACT SUBSTRING of that source, and the script must
+    itself be mutation-tested by paraphrasing one word to confirm it fails. In
+    books-17 the mutant was "representationally faithful" → "representationally
+    accurate": invisible to the eye, caught instantly by the check. The `source`
+    field must name the precise file, so the claim is re-verifiable by a
+    stranger rather than trusted because I said so.
+
+36. **A LICENSED SOURCE IS A BLOCKER TO RAISE, NOT A GAP TO PAPER OVER.**
+    (books-17.) The FASB Codification could not be quoted, so the authorities
+    file said so IN THE FILE, cited the ASC by number without quoting it, and
+    used public sources for the verbatim text while stating plainly that
+    Regulation S-X does not bind Greenway at all. Michael read that admission
+    and obtained the Codification himself within a day. **Naming a sourcing
+    limitation out loud is what gets it fixed; quietly substituting a textbook
+    summary and calling it the law would have hidden the problem forever.** When
+    better authority later arrives, UPGRADE the record and keep the weaker one
+    as the reasoning — do not silently delete the history.
+
+37. **THE SANDBOX IS NOT STORAGE.** (Learned the hard way.) A rollback destroyed
+    `.git`, every uncommitted source file, `/tmp`, and the research and evidence
+    directories in one stroke. Nothing that had been merged was lost; everything
+    that had not been merged was. Commit early, push often, and treat anything
+    existing only in the workspace as already gone. Recovery is `gh repo clone`
+    — plain `git clone` fails with "could not read Username", and `gh auth
+    setup-git` must be run before the first push of a session.
+
 32. **NEVER OVERWRITE THIS FILE — APPEND ONLY.** `todo.md` is a TRACKED repo
     file holding the standing rules and the full slice history. Session scratch
     plans belong in `/workspace/todo.md`, which is NOT the repo. Rules 1–20a are
