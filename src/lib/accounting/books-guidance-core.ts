@@ -53,7 +53,16 @@ import { BANK_AUTHORITIES, type BankAuthority } from "./bank-match-core";
 import { GATE_AUTHORITIES, type GateAuthority } from "@/lib/auth/owner-gate-core";
 import { LEDGER_AUTHORITIES_NEW } from "./books-ledger-authorities";
 import { INVENTORY_AUDIT_AUTHORITIES_NEW } from "@/lib/inventory/inventory-audit-authorities";
+// books-16. THIS IMPORT CLOSES A HOLE. PAYROLL_TAX_AUTHORITIES has existed
+// since the payroll slice, but it was never merged into this registry, so
+// `findGuidanceAuthority("irc-6656-deposit-penalty")` returned undefined even
+// though the record was sitting right there in src/lib/payroll/. Thirty-six
+// authorities were invisible to every "cite your source" surface in the app.
+// Found because the books-16 penalty engine cites six of them and the rule-16
+// wiring test refused to let a dangling citation ship.
+import { PAYROLL_TAX_AUTHORITIES } from "@/lib/payroll/payroll-tax-authorities";
 import { AUDIT_HUB_AUTHORITIES_NEW } from "@/lib/inventory/audit-hub-authorities";
+import { TAX_PENALTY_AUTHORITIES_NEW } from "./tax-penalty-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -484,7 +493,9 @@ export type SourceRegistry =
   | "new"
   | "ledger"
   | "inventory-audit"
-  | "audit-hub";
+  | "audit-hub"
+  | "tax-penalty"
+  | "payroll-tax";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -495,6 +506,8 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "ledger",
   "inventory-audit",
   "audit-hub",
+  "tax-penalty",
+  "payroll-tax",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -524,6 +537,27 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // the usual reason: one registry, so a citation means one thing everywhere.
     ...AUDIT_HUB_AUTHORITIES_NEW.map((a) => ({
       tag: "audit-hub" as const,
+      authority: a,
+    })),
+    // books-16. The PENALTY authorities: what every agency charges when a
+    // payment is late, how each one counts time, and the three-way
+    // deductibility split between the tax, the penalty and the interest.
+    // Merged here for the usual reason: RCW 82.32.090 must say the same thing
+    // on the excise screen as it does on the sales tax screen.
+    ...TAX_PENALTY_AUTHORITIES_NEW.map((a) => ({
+      tag: "tax-penalty" as const,
+      authority: a,
+    })),
+    // books-16, and this one is a REPAIR rather than an addition. These 36
+    // records were written during the payroll slice and then orphaned: the
+    // module exported them, nothing imported them here, and so every one of
+    // them was unreachable through findGuidanceAuthority(). The penalty engine
+    // cites six (ESD late penalty and interest, L&I late penalty and
+    // injunction, IRC 6656, IRC 6651), which is how the omission surfaced.
+    // Wiring the whole registry rather than the six keeps the rule intact:
+    // ONE registry, so a citation means one thing everywhere.
+    ...PAYROLL_TAX_AUTHORITIES.map((a) => ({
+      tag: "payroll-tax" as const,
       authority: a,
     })),
   ];
