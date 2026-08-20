@@ -620,6 +620,53 @@
     partially applied — a failed `assert` rolls back everything after it and
     leaves the earlier edits looking done.
 
+### RULE 48: A CHECK THAT CANNOT CLASSIFY ITS INPUT MUST FAIL, NEVER SKIP.
+    Earned in books-22, from a defect in my own test file. I built a sweep that
+    read every nav item's page off disk, extracted the page's guard, and
+    compared it to the permission the menu advertised. It went GREEN on the
+    first run. Rule 38 says treat that as a suspect, so I measured the coverage
+    instead of trusting the colour, and found the sweep was comparing 72 of 80
+    pages. The other 8 were SKIPPED SILENTLY: 6 because the href was served by
+    a dynamic `[slug]` route my path resolver could not find, and 2 because the
+    page used `requireStaff()`, which my extractor classified as `kind:"none"`
+    and the sweep ignored. The second one is the dangerous shape. Downgrading a
+    money page from `requirePermission("finances.view")` to `requireStaff()` --
+    opening the owner's ATM cash to every cashier on the floor -- would not have
+    turned the test red. It would have removed that page from the test and
+    reported success. THE RULE: any checker that reads real artifacts and
+    classifies them must treat "I could not classify this" as a FAILURE with the
+    item named, never as a `continue`. Skipping is how a suite quietly shrinks
+    to zero while still printing green. And the coverage itself is an assertion:
+    assert the count of things actually compared, because `filter(...).length >
+    30` proves only that the helper is not completely broken, whereas listing
+    every unresolved item proves the sweep is whole. Corollary to rule 39 -- a
+    checker nobody checked is not evidence -- and to rule 40: an unreachable
+    guard is an untested guard, and a skipped item is unreachable.
+
+### RULE 49: WHEN THE RIGHT AND WRONG IMPLEMENTATIONS RETURN THE SAME VALUE TODAY, TEST THE STRUCTURE.
+    Earned in books-22 from a MUTANT THAT SURVIVED. `ownerOnlyPermissions()` is
+    written to derive its answer from the permission matrix at call time, and
+    its comment says exactly why: "a hand-copied list is a second source of
+    truth that drifts the first time someone edits the matrix and not the copy."
+    I replaced the derivation with a hardcoded array of the same four permission
+    names. Every test still passed -- 43 of them -- because today the copied
+    answer and the derived answer are IDENTICAL. They only diverge the first
+    time somebody narrows a permission and forgets the copy, which is the exact
+    future the comment promises to prevent. No assertion about the returned
+    VALUE can ever catch this, because the values agree; a test that waits for
+    them to disagree is a test that starts working only after the damage. So
+    assert the MECHANISM: read the function's own source and require that it
+    references the matrix, and that it contains no literal permission strings at
+    all. THE RULE: when a correct implementation and a dangerous one are
+    observationally equivalent at the moment you write the test, the test must
+    move up a level and constrain HOW the answer is produced. This is rule 44
+    with teeth -- the comment was a claim about the repository, and this is the
+    only kind of test that can hold it. Also, from the same run: a survivor is a
+    SUSPECT, not a verdict (rule 41). Of my two survivors, one was a real gap in
+    the tests and one was a badly written mutant that changed nothing. Assume
+    the second and you talk yourself out of every real finding; assume the first
+    and you rewrite working code. Check which, every time.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
