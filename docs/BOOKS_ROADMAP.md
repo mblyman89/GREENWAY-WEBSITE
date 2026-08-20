@@ -35,8 +35,8 @@ rule 1. The order:
 
 | # | Slice | Consumes | Status |
 |---|-------|----------|--------|
-| 1 | **Financial statements** | trial balance, chart of accounts | **IN PROGRESS — books-17** |
-| 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | not started |
+| 1 | **Financial statements** | trial balance, chart of accounts | **SHIPPED — books-17, PR #989** |
+| 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | **NEXT** |
 | 3 | **Basis and AAA tracking** | the statement of stockholders' equity | not started |
 | 4 | **Form 1120-S and Schedule K-1** | the statements + AAA/basis | not started |
 | 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
@@ -91,7 +91,7 @@ generalizes a pattern, and a pattern cannot be generalized from one example.
 
 ## Detail per slice
 
-### 1. Financial statements — IN PROGRESS (books-17)
+### 1. Financial statements — SHIPPED (books-17, PR #989, merged 5e1c1a37)
 
 Four reports, per entity and combined, with eliminations:
 
@@ -107,6 +107,29 @@ Four reports, per entity and combined, with eliminations:
 
 Hard requirement, standing rule 27b: **a statement that does not tie must not
 render.** No plugs, ever.
+
+**Shipped as PR #989.** All four statements built, plus stock basis and AAA.
+Fourteen refusal codes; the engine returns no numbers at all when the books do
+not tie, when counted cash disagrees by a single cent, or when accumulated E&P
+is unconfirmed. AAA deliberately carries **no zero floor** while stock basis
+does — §1368(e)(1)(A) disregards "but not below zero" and §1367(a)(2) does not,
+so they are tracked as genuinely different numbers.
+
+Seven defects were found by attacking the suite *after* it was already green;
+the seventh (authorities cited by nothing) had left a load-bearing authority
+orphaned through 130 passing tests. All fixed at the class level.
+
+**Combined statements and eliminations were NOT built.** The four ledger
+entities are real but the intercompany eliminations have no evidence behind
+them yet, and inventing them would be standing rule 1. Per-entity statements
+work today; the combined view waits for the intercompany detail.
+
+**What changed underneath everything:** Michael obtained the FASB Codification
+on 2026-08-20. Four presentation rules that previously rested only on the
+conceptual framework or on Regulation S-X — which does not bind this entity at
+all — now rest on binding GAAP: ASC 205-10-45-1 and 45-1A, ASC 210-20-45-4,
+ASC 230-10-45-7, ASC 330-10-30-1. Every quote is verbatim and mechanically
+verified against the source rather than trusted.
 
 ### 2. Period close screen
 
@@ -221,6 +244,16 @@ exists.
 7. **Tax rates pending confirmation** — IRC §6621 quarterly underpayment rates,
    the DOR 2026 annual rate, and the §6651(j) 60-day minimum. Michael is
    gathering these.
+8. **Whether Greenway has ever adopted the recurring item exception under
+   Treas. Reg. §1.461-5** — raised by books-17. The excise tax accrual turns on
+   economic performance under §1.461-4(g)(6). If the recurring item exception
+   was elected, an excise liability can be deducted in the year it accrues even
+   when paid shortly after year end; if it was not, it cannot. This is an
+   accounting-method fact recorded on a filed return, so it comes from the
+   returns, never from reasoning about what would be sensible. The tax bridge
+   will keep presenting both treatments until the returns settle it.
+9. **Intercompany detail between the four ledger entities** — blocks the
+   combined statements and the eliminations described in slice 1.
 
 ---
 
@@ -238,7 +271,7 @@ exists.
 | books-14 | L&I employee share taken from the rate notice, not half of medical aid | #985 |
 | books-15 | rates become dated, evidenced rows — never constants | #986 |
 | books-16 | penalties and interest for all five agencies, with a CPA who explains each | #987 |
-| books-17 | financial statements | *in progress* |
+| books-17 | financial statements: 280E wall on the face, basis and AAA, binding GAAP | #989 |
 
 ---
 
