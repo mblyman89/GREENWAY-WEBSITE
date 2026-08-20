@@ -467,7 +467,7 @@ exists.
 | books-19 | basis and AAA tracking; federal source text mirrored so quotes are machine-proved | #993 |
 | books-20 | Form 1125-A: cost of goods sold computed BOTH ways, with a dated election on the record | #994 |
 | books-21 | the S-corporation year is EVIDENCE not a constant; §6621/§6622 interest; §6699 found missing entirely | #995 |
-| books-22 | owner-only screens gathered into the Accounting and Lyman tabs; the Audit Log became the OWNER-ONLY Security Log; the first test that compares what the menu advertises against what the page enforces | #TBD |
+| books-22 | owner-only screens gathered into the Accounting and Lyman tabs; the Audit Log became the OWNER-ONLY Security Log; the first test that compares what the menu advertises against what the page enforces | #996 |
 | — | standing rules 40–41, learned from books-19 | #993 |
 
 ---
