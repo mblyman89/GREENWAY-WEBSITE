@@ -948,7 +948,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         q: "Can I see who changed what?",
-        a: "Yes — the Audit Log records important actions with who did them and when, so nothing important is a mystery.",
+        a: "Yes — the Security Log records important actions with who did them and when, so nothing important is a mystery. It is owner-only, because it is the record someone would have to edit to hide something.",
         href: "/admin/audit",
       },
     ],

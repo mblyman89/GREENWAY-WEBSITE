@@ -61,6 +61,7 @@ export type Permission =
   | "financials.view"
   | "finances.view"
   | "users.manage"
+  | "audit.view"
   | "settings.manage"
   | "staffing.manage"
   | "timeclock.use"
@@ -140,6 +141,32 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // gate and the database gate saying the same word: owner.
   "finances.view": ["owner"],
   "users.manage": ["owner", "admin"],
+  // books-22: THE SECURITY LOG (/admin/audit, renamed from "Audit Log").
+  //
+  // This used to ride on "users.manage", which is ["owner","admin"] and is ALSO
+  // the gate for /admin/users. That coupling meant the log could not be taken
+  // away from the admin without also taking away user management -- which the
+  // owner did NOT ask for. Hence a scoped permission.
+  //
+  // OWNER DECISION, recorded verbatim (Michael, books-22):
+  //   "I am fine with my admin manager to pay employees and vendors, but they
+  //    shouldn't be able to see my personal finances, the plaid feeds, the
+  //    crypto, the atm, or the audit log, which you are right, let's change it
+  //    to be Security Log. I do also want you to make sure the doors are all
+  //    closed and locked tight."
+  //
+  // The log records every action every user takes, including the owner's. It is
+  // the record an admin would have to edit to hide something, so the admin is
+  // exactly who should not be reading it. Renamed to "Security Log" because
+  // "Audit Log" sat one menu away from "Inventory Auditing" and the two mean
+  // completely different things (standing rule 42).
+  //
+  // This list MUST stay equal to ["owner"] alone. /admin/audit reads audit_logs
+  // through the SERVICE ROLE client, which bypasses RLS -- so this page gate is
+  // the real lock, not a convenience. Migration 0193 additionally re-gates the
+  // table's SELECT policy from is_admin() to is_owner() so both layers say the
+  // same word; nav-gate-core.test.ts asserts all of it.
+  "audit.view": ["owner"],
   "settings.manage": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
   // Task S-b: the time clock previously piggybacked on "loyalty.view" as a
@@ -180,6 +207,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "financials.view": "View financial reports & accounting exports",
   "finances.view": "View money accounts (bank feed, ATM vault, crypto, loans)",
   "users.manage": "Manage staff & roles",
+  "audit.view": "Read the Security Log (who did what, and when)",
   "settings.manage": "Change settings",
   "staffing.manage": "Manage employees, shifts & time clock",
   "timeclock.use": "Clock in & out (time clock)",
@@ -214,6 +242,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "timeclock.use",
   "sales_limit.override",
   "users.manage",
+  "audit.view",
   "settings.manage",
 ];
 

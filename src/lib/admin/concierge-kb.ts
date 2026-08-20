@@ -69,7 +69,9 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Employee: Time Clock, Payroll, Samples, Register Activity.",
       "Medical: Patient Records, Authorization Intake.",
       "CCRS: opens Compliance Health.",
-      "Admin: Users, Integrations, Equipment, Sales Limits, AI Usage, Audit Log, Settings, Help & FAQ, Menu Imports.",
+      "Admin: Users, Integrations, Equipment, Sales Limits, AI Usage, Settings, Help & FAQ, Menu Imports.",
+      "Accounting (owner only): the general ledger, journal, trial balance, chart of accounts, bills & 280E, payroll & COGS, bank reconciliation, conversion, and Inventory Auditing.",
+      "Lyman (owner only): Bank Feeds, Loans, Crypto Portfolio, ATM, and the Security Log.",
     ],
   },
   {
@@ -423,7 +425,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     tab: "Admin",
     href: "/admin/audit",
     facts: [
-      "Admin → Audit Log is a plain-language history of every change made across the back office, with a security review.",
+      "Lyman → Security Log is a plain-language history of every change made across the back office, with a security review. Owner only.",
       "Use it to answer 'who changed what, and when'.",
     ],
   },

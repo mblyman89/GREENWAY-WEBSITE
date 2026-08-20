@@ -441,6 +441,43 @@ export const FINANCE_ROUTES: readonly { route: string; permission: string }[] = 
 ] as const;
 
 /**
+ * OWNER-ONLY ROUTES THAT ARE NOT ABOUT MONEY.
+ *
+ * FINANCE_ROUTES above answers "who may see the owner's financial position".
+ * This list answers a different question: "who may see the record of what
+ * everybody did". They are kept apart because they are gated on different
+ * permissions and would be argued about separately -- merging them would make
+ * the finance list say something it does not mean.
+ *
+ * Added in books-22 on the owner's instruction, verbatim (2026-08-20):
+ *
+ *   "they shouldn't be able to see my personal finances, the plaid feeds, the
+ *    crypto, the atm, or the audit log, which you are right, let's change it
+ *    to be Security Log."
+ *
+ * The Security Log is the record someone would have to edit to hide something,
+ * which is exactly why the person being recorded should not be the person who
+ * can read it -- and why update and delete are revoked from every role,
+ * including the service role, in migration 0130 and again in 0193.
+ */
+export const OWNER_ONLY_OVERSIGHT_ROUTES: readonly {
+  route: string;
+  permission: string;
+  why: string;
+}[] = [
+  {
+    route: "/admin/audit",
+    permission: "audit.view",
+    why:
+      "The Security Log: who did what, and when. It was on users.manage, which " +
+      "is owner|admin, so the admin could read the log of their own actions. " +
+      "Moved to its own owner-only permission rather than by narrowing " +
+      "users.manage, because narrowing that would also have taken user " +
+      "management away from the admin, which the owner did not ask for.",
+  },
+] as const;
+
+/**
  * Money-adjacent routes that DELIBERATELY stay on settings.manage (owner|admin).
  *
  * /admin/settings/banking is the VENDOR AND EMPLOYEE PAYEE VAULT. It reads
@@ -466,7 +503,13 @@ export const DELIBERATELY_NOT_OWNER_ONLY: readonly {
       "The vendor and employee payee vault. Reads vendors, vendor_bank_details " +
       "and employees -- not the owner's accounts, balances or positions. This " +
       "is how an admin pays vendors and pays employees, which the owner " +
-      "explicitly kept with admin.",
+      "explicitly kept with admin. RE-CONFIRMED 2026-08-20, in the same " +
+      "sentence that closed the other doors: \"I am fine with my admin manager " +
+      "to pay employees and vendors, but they shouldn't be able to see my " +
+      "personal finances, the plaid feeds, the crypto, the atm, or the audit " +
+      "log.\" The instruction to lock things down was not an instruction to " +
+      "lock this one down, and a tidy-up that swept it in would be breaking " +
+      "payroll to satisfy a pattern.",
   },
 ] as const;
 
@@ -758,6 +801,33 @@ export function __runOwnerGateCoreTests(): void {
       `${r.route} cannot be in BOTH the owner-only list and the exclusion list`,
     );
   }
+  // ── books-22: the oversight route, kept separate from the money routes ──
+  eq(OWNER_ONLY_OVERSIGHT_ROUTES.length, 1, "one oversight route today: the Security Log");
+  ok(
+    OWNER_ONLY_OVERSIGHT_ROUTES.some((r) => r.route === "/admin/audit"),
+    "the Security Log is recorded as owner-only",
+  );
+  for (const r of OWNER_ONLY_OVERSIGHT_ROUTES) {
+    eq(r.permission, "audit.view", `${r.route} is gated on audit.view`);
+    ok(r.why.length >= 60, `${r.route}: the reason must actually explain`);
+    ok(
+      !FINANCE_ROUTES.some((f) => f.route === r.route),
+      `${r.route} must not also be listed as a money route`,
+    );
+    ok(
+      !DELIBERATELY_NOT_OWNER_ONLY.some((d) => d.route === r.route),
+      `${r.route} cannot be owner-only AND deliberately not owner-only`,
+    );
+  }
+  // The owner re-confirmed the banking exception in the SAME sentence that
+  // closed the other doors. Rule 24: the quote is what makes it a decision.
+  ok(
+    DELIBERATELY_NOT_OWNER_ONLY.some((r) =>
+      r.why.includes("I am fine with my admin manager to pay employees and vendors"),
+    ),
+    "the banking exception carries the owner's own words",
+  );
+
   for (const r of FINANCE_ROUTES) {
     ok(r.route.startsWith("/admin/"), `${r.route} is an admin route`);
     eq(

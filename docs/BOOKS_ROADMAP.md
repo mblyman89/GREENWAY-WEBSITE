@@ -40,6 +40,7 @@ rule 1. The order:
 | 3 | **Basis and AAA tracking** | the statement of stockholders' equity | **SHIPPED — books-19, PR #993** |
 | 4a | **Form 1125-A and the COGS position** | inventory + the 280E wall | **SHIPPED — books-20, PR #994** |
 | — | **Correction slice: the S-corporation year, §6621 interest, §6699** | nothing — it FIXES 3 and 4a | **SHIPPED — books-21** |
+| — | **Cleanup slice: the Accounting and Lyman tabs; the Security Log; nav/page gate agreement** | nothing — it LOCKS what 1–4a built | **SHIPPED — books-22** |
 | 4b | **Form 1120-S and Schedule K-1** | the statements + AAA/basis + 1125-A | **NEXT** |
 | 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
 | 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | not started |
@@ -466,6 +467,7 @@ exists.
 | books-19 | basis and AAA tracking; federal source text mirrored so quotes are machine-proved | #993 |
 | books-20 | Form 1125-A: cost of goods sold computed BOTH ways, with a dated election on the record | #994 |
 | books-21 | the S-corporation year is EVIDENCE not a constant; §6621/§6622 interest; §6699 found missing entirely | #995 |
+| books-22 | owner-only screens gathered into the Accounting and Lyman tabs; the Audit Log became the OWNER-ONLY Security Log; the first test that compares what the menu advertises against what the page enforces | #TBD |
 | — | standing rules 40–41, learned from books-19 | #993 |
 
 ---
