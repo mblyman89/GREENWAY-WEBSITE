@@ -182,7 +182,7 @@ export const AUTHORITIES: readonly Authority[] = [
     quote:
       "In the case of merchandise produced by the taxpayer since the beginning of the taxable year, (1) the " +
       "cost of raw materials and supplies entering into or consumed in connection with the product, (2) " +
-      "expenditures for direct labor, (3) indirect production costs incident to and necessary for the " +
+      "expenditures for direct labor, and (3) indirect production costs incident to and necessary for the " +
       "production of the particular article, including in such indirect production costs an appropriate " +
       "portion of management expenses, but not including any cost of selling or return on capital, whether " +
       "by way of interest or profit.",

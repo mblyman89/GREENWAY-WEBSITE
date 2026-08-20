@@ -38,7 +38,17 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   }
 
   // 26 CFR §1.1367-1(f)  ->  federal/cfr-1.1367-1.txt
-  const cfr = /^26 CFR §(1\.\d+-\d+)/.exec(cite);
+  //
+  // BOTH SPELLINGS. The registry contains "26 CFR §" and "26 C.F.R. §" in
+  // roughly equal numbers, because different slices were written by different
+  // hands on different days. The original pattern matched only the first, so
+  // twenty-eight regulation quotes were being SKIPPED and reported as "no
+  // local copy to check against" while their source text sat on disk the whole
+  // time. A verifier that quietly declines to check the thing you asked it to
+  // check is worse than no verifier, because it produces a green line of
+  // output that means nothing. Found while wiring books-20, which added six
+  // more C.F.R. quotes and noticed the verified count had not moved by six.
+  const cfr = /^26 C\.?F\.?R\.? §(1\.\d+-\d+)/.exec(cite);
   if (cfr) {
     const p = join(dir, "federal", `cfr-${cfr[1]}.txt`);
     return existsSync(p) ? p : null;
@@ -48,6 +58,26 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   const usc = /^26 U\.S\.C\. §(\d+)/.exec(cite);
   if (usc) {
     const p = join(dir, "federal", `usc-${usc[1]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // Rev. Proc. 2015-13, §8.01  ->  federal/revproc-2015-13.txt
+  // books-20. The method-change procedure is quoted from the official Internal
+  // Revenue Bulletin, which is mirrored here in full, so these quotes are
+  // checkable rather than merely cited.
+  const rp = /^Rev\. Proc\. (\d{4})-(\d+)/.exec(cite);
+  if (rp) {
+    const p = join(dir, "federal", `revproc-${rp[1]}-${rp[2]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // RCW 69.50.328  ->  state-wa/rcw-69.50.328.txt
+  // books-20. Washington statutes decide whether Greenway is a reseller or a
+  // producer, which decides which half of §1.471-3 applies to it. A conclusion
+  // that consequential is not allowed to rest on an unverifiable paraphrase.
+  const rcw = /^RCW ([\d.]+)/.exec(cite);
+  if (rcw) {
+    const p = join(dir, "state-wa", `rcw-${rcw[1]}.txt`);
     return existsSync(p) ? p : null;
   }
 
