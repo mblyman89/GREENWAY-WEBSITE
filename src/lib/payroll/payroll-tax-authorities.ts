@@ -399,11 +399,14 @@ export const RCW_51_16_140_LNI_DEDUCTION: GuidanceAuthority = {
     "required to be by him or her paid from the wages or earnings of any of his or her workers, and the " +
     "making of or attempt to make any such deduction shall be a gross misdemeanor.",
   soWhat:
-    "Washington lets you take exactly one thing out of an employee's check for workers' comp: half of " +
-    "the MEDICAL AID portion. Not half of the total premium — half of one piece of it. The accident " +
-    "fund and the supplemental pension are yours to pay. And read subsection (2) again: taking any " +
-    "more than that is not a bookkeeping mistake, it is a gross misdemeanor. That is a crime, not a " +
-    "penalty. This is why the system blocks instead of warning.",
+    "This is the medical aid half, and note the verb: you SHALL deduct it. It is not optional. But " +
+    "read it for what it does not say, too — this section covers medical aid only. It is not the " +
+    "whole employee share. Two other funds are also split with the worker (see RCW 51.32.073 for " +
+    "the supplemental pension and RCW 51.32.090(6) for stay-at-work), and the accident fund is " +
+    "yours alone. Then read subsection (2): taking more than the law allows is not a bookkeeping " +
+    "mistake, it is a gross misdemeanor. A crime, not a penalty. That asymmetry is why this system " +
+    "reads the employee rate off your L&I notice instead of deriving it, always rounds the " +
+    "worker's share DOWN, and refuses outright rather than estimating.",
   source: "https://app.leg.wa.gov/RCW/default.aspx?cite=51.16.140",
 };
 
@@ -447,6 +450,92 @@ export const RCW_51_16_060_LNI_HOURS: GuidanceAuthority = {
     "and it is reported by risk class. That means your timeclock hours are tax data — they carry the " +
     "same accuracy burden as dollars do, and they have to be kept per person, per class.",
   source: "https://app.leg.wa.gov/RCW/default.aspx?cite=51.16.060",
+};
+
+/**
+ * ⭐ THE AUTHORITY THAT CAUGHT A DEFECT IN OUR OWN CODE (books-14).
+ *
+ * We originally believed the supplemental pension was the employer's alone.
+ * RCW 51.32.073(1) says the opposite in plain words: the employer "shall retain
+ * from the earnings of each worker" an amount that is then "matched in an equal
+ * amount by each employer." It is a half-and-half split and it is MANDATORY.
+ *
+ * Read subsection (2) carefully too - it is the ONLY carve-out, and it applies
+ * to RCW 51.16.210, which is horse racing. It has nothing to do with retail.
+ */
+export const RCW_51_32_073_SUPPLEMENTAL_PENSION: GuidanceAuthority = {
+  id: "rcw-51-32-073-supplemental-pension-split",
+  kind: "state_law",
+  cite: "RCW 51.32.073(1), (2)",
+  quote:
+    "(1) Except as provided in subsection (2) of this section, each employer shall retain from the " +
+    "earnings of each worker that amount as shall be fixed from time to time by the director, the " +
+    "basis for measuring said amount to be determined by the director. The money so retained shall " +
+    "be matched in an equal amount by each employer, and all such moneys shall be remitted to the " +
+    "department in such manner and at such intervals as the department directs and shall be placed " +
+    "in the supplemental pension fund ... (2) None of the amount assessed for the supplemental " +
+    "pension fund under RCW 51.16.210 may be retained from the earnings of workers covered under " +
+    "RCW 51.16.210.",
+  soWhat:
+    "The supplemental pension is split with your workers, half and half, and the statute says " +
+    "'shall' - you do not have a choice about it. This corrected a real bug in this system. The " +
+    "first version of our workers' comp math treated the pension as entirely yours and would have " +
+    "under-withheld about $202 a year per full-time employee, quietly, forever. Under-withholding " +
+    "is not the safe direction: the shortfall becomes your cost, and Washington does not let you " +
+    "go back and claw it out of a worker's later paycheck.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=51.32.073",
+};
+
+/**
+ * The Stay-at-Work fund. Note the verb: "may collect," and "up to one-half."
+ * This is the only one of the three shared funds that is PERMISSIVE. It is a
+ * ceiling, not a formula - which is one more reason this system reads the split
+ * off the rate notice instead of trying to re-derive it.
+ */
+export const RCW_51_32_090_STAY_AT_WORK: GuidanceAuthority = {
+  id: "rcw-51-32-090-stay-at-work-split",
+  kind: "state_law",
+  cite: "RCW 51.32.090(6)",
+  quote:
+    "The department shall create a Washington stay-at-work account which shall be funded by " +
+    "assessments of employers insured through the state fund for the costs of the payments " +
+    "authorized by subsection (4) of this section, for the cost of creating a reserve for " +
+    "anticipated liabilities, and for costs authorized in RCW 51.32.095(2). Employers may collect " +
+    "up to one-half the fund assessment from workers.",
+  soWhat:
+    "Stay-at-Work is the third fund your employees help pay for, but this one is optional and " +
+    "capped: you MAY collect up to half, and no more. Because it is optional, there is no single " +
+    "correct employee share that software can compute from the base rates alone - it depends on " +
+    "what you elected. L&I already resolved all of this and printed the answer on your rate " +
+    "notice, so that is the number this system uses.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=51.32.090",
+};
+
+/**
+ * L&I's own arithmetic, in L&I's own words. This is the formula that let us
+ * reconstruct Michael's $0.16445 employee rate exactly and prove the old code
+ * was wrong. Note what the experience factor does and does not touch.
+ */
+export const LNI_PREMIUM_RATE_FORMULA: GuidanceAuthority = {
+  id: "lni-premium-rate-formula",
+  kind: "state_law",
+  cite: "WA Dept. of Labor & Industries, \"Calculating Premium Rates\"",
+  quote:
+    "Here's how L&I calculates the premium rate for each of the business's risk classifications: " +
+    "1. Multiplying the business's experience factor by the sum of the Accident Fund, Medical Aid " +
+    "Fund, and Stay at Work base rates, and then 2. Adding the base rate for the Supplemental " +
+    "Pension Fund. ... The business's experience factor is 0.9789. ... Accident Fund: $0.0221 ... " +
+    "Medical Aid Fund: $0.0160 ... Stay At Work: $0.0003 ... Supplemental Pension Fund: $0.1120 ... " +
+    "0.9789 x ($0.0221 + $0.0160 + $0.0003) + $0.1120 = $0.1496 per hour worked.",
+  soWhat:
+    "Two things fall out of this that matter. First, your experience factor multiplies three of " +
+    "the funds but NOT the supplemental pension - the pension is added on at full price. Second, " +
+    "these rates run to four and five decimal places of a dollar. Your own employee rate is " +
+    "$0.16445 per hour. That cannot be stored as whole cents, which is why this system tracks L&I " +
+    "rates in thousandths of a cent. Rounding $0.16445 down to 16 cents would be wrong every " +
+    "hour, and rounding it up to 17 cents would be an unlawful deduction.",
+  source:
+    "https://lni.wa.gov/insurance/rates-risk-classes/rates-for-workers-compensation/calculating-premium-rates",
 };
 
 // ---------------------------------------------------------------------------
@@ -618,6 +707,9 @@ export const PAYROLL_TAX_AUTHORITIES: readonly GuidanceAuthority[] = [
   RCW_51_16_140_LNI_DEDUCTION,
   RCW_51_16_035_LNI_CLASSIFICATION,
   RCW_51_16_060_LNI_HOURS,
+  RCW_51_32_073_SUPPLEMENTAL_PENSION,
+  RCW_51_32_090_STAY_AT_WORK,
+  LNI_PREMIUM_RATE_FORMULA,
   // when the check cannot carry its own withholding
   PUB15_INSUFFICIENT_FUNDS_ORDERING,
   PUB15_COLLECTING_UNDERWITHHELD,

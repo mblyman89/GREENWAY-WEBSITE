@@ -156,7 +156,7 @@ export const PAYROLL_EDIT_TARGET_LABELS: Record<PayrollEditTarget, string> = {
   additional_medicare_withheld: "Additional Medicare withheld",
   wa_paid_leave_withheld: "WA Paid Leave withheld",
   wa_cares_withheld: "WA Cares withheld",
-  lni_employee_withheld: "L&I withheld (employee half)",
+  lni_employee_withheld: "L&I withheld (employee share)",
   gross_wages: "Gross wages",
   hours_worked: "Hours worked",
   net_pay: "Net pay",

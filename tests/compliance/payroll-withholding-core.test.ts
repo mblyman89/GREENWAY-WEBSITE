@@ -1378,7 +1378,7 @@ describe("designed refusals", () => {
 
   it("refuses L&I without a risk class, naming the audit risk", () => {
     const r = computeLniForPeriod({
-      hundredthHours: 8_000, employerOnlyRateCentsPerHour: 50, medicalAidRateCentsPerHour: 30,
+      hundredthHours: 8_000, employeeRateMilliCentsPerHour: 16_445, employerRateMilliCentsPerHour: 39_485,
       riskClassCode: null, rateNoticeDocumentId: "doc",
     });
     expect(r.ok).toBe(false);
@@ -1390,14 +1390,15 @@ describe("designed refusals", () => {
 
   it("refuses L&I without rates, and warns about the deduction limit before it is asked", () => {
     const r = computeLniForPeriod({
-      hundredthHours: 8_000, employerOnlyRateCentsPerHour: null, medicalAidRateCentsPerHour: null,
-      riskClassCode: "6420-00", rateNoticeDocumentId: null,
+      hundredthHours: 8_000, employeeRateMilliCentsPerHour: null, employerRateMilliCentsPerHour: null,
+      riskClassCode: "6403-00", rateNoticeDocumentId: null,
     });
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("unreachable");
     expect(r.refusal.code).toBe("lni_rate_not_evidenced");
-    expect(r.refusal.message).toMatch(/half of the MEDICAL AID piece/);
-    expect(r.refusal.message).toMatch(/not half of the total/);
+    expect(r.refusal.message).toMatch(/gross misdemeanor/);
+    expect(r.refusal.whatToDo).toMatch(/five decimal places/);
+    expect(r.refusal.whatToDo).toMatch(/do not round/);
   });
 
   it("gives every refusal a real authority record", () => {
@@ -1406,7 +1407,7 @@ describe("designed refusals", () => {
         ytd: ZERO_YTD, periodWagesCents: 1, combinedRateMilliPct: null, rateNoticeDocumentId: null,
       }),
       computeLniForPeriod({
-        hundredthHours: 1, employerOnlyRateCentsPerHour: null, medicalAidRateCentsPerHour: null,
+        hundredthHours: 1, employeeRateMilliCentsPerHour: null, employerRateMilliCentsPerHour: null,
         riskClassCode: null, rateNoticeDocumentId: null,
       }),
     ];
@@ -1428,78 +1429,196 @@ describe("designed refusals", () => {
 // 13) L&I - THE GROSS MISDEMEANOR GUARD
 // ===========================================================================
 
-describe("L&I employee deduction limit (RCW 51.16.140)", () => {
-  const lni = (hundredthHours: number, employerOnly: number, medicalAid: number) =>
+describe("L&I employee share (RCW 51.16.140, 51.32.073, 51.32.090)", () => {
+  // Michael's real 2026 rate notice. LYMAN'S MARIJUANA LLC, L&I account
+  // 521,756-00, risk class 6403 "Stores: Specialty Groceries", experience
+  // factor 0.9. Per hour worked:
+  //     employee withholding  $0.16445  -> 16_445 milli-cents
+  //     employer portion      $0.39485  -> 39_485 milli-cents
+  //     total                 $0.55930  -> 55_930 milli-cents
+  const EE = 16_445;
+  const ER = 39_485;
+
+  const lni = (hundredthHours: number, employeeRate = EE, employerRate = ER) =>
     computeLniForPeriod({
       hundredthHours,
-      employerOnlyRateCentsPerHour: employerOnly,
-      medicalAidRateCentsPerHour: medicalAid,
-      riskClassCode: "6420-00",
+      employeeRateMilliCentsPerHour: employeeRate,
+      employerRateMilliCentsPerHour: employerRate,
+      riskClassCode: "6403-00",
       rateNoticeDocumentId: "lni-2026",
     });
 
-  it("deducts exactly half of the MEDICAL AID rate and nothing else", () => {
-    const r = lni(8_000, 50, 30); // 80 hrs, 50c/hr employer-only, 30c/hr medical aid
+  it("reproduces Michael's actual rate notice exactly (Rule 19 corpus)", () => {
+    // 80.00 hours: employee 8000 * 16445 / 100000 = 1315.6c -> floor 1315
+    //              employer 8000 * 39485 / 100000 = 3158.8c -> round 3159
+    const r = lni(8_000);
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("unreachable");
-    expect(r.value.totalPremiumCents).toBe(6_400); // $64.00
-    expect(r.value.employeeCents).toBe(1_200); // half of $24.00 medical aid
-    expect(r.value.employerCents).toBe(5_200);
+    expect(r.value.employeeCents).toBe(1_315);
+    expect(r.value.employerCents).toBe(3_159);
+    expect(r.value.totalPremiumCents).toBe(4_474);
   });
 
-  it("is structurally incapable of deducting half the TOTAL premium", () => {
-    // Deducting half of $64.00 = $32.00 would be a gross misdemeanor. The
-    // function computes the employee share from the medical aid rate alone, so
-    // there is no input that makes it deduct half the total - unless the
-    // employer-only rate happens to be zero.
-    for (const [hrs, emp, med] of [
-      [8_000, 50, 30], [4_000, 120, 15], [16_000, 7, 91], [100, 1, 1], [12_345, 33, 44],
-    ] as Array<[number, number, number]>) {
-      const r = lni(hrs, emp, med);
+  it("REGRESSION: does not fall back to the medical-aid-only bug", () => {
+    // The original implementation computed the employee share as half the
+    // medical aid rate alone: 0.9 * 0.1493 / 2 = $0.067185/hr, which over 80
+    // hours is 537c. It ignored the supplemental pension (RCW 51.32.073, a
+    // MANDATORY half) and stay-at-work (RCW 51.32.090(6), a permissive half).
+    // That under-deducted by $0.097265 per hour, about 59% short.
+    const r = lni(8_000);
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("unreachable");
+    expect(r.value.employeeCents).not.toBe(537);
+    expect(r.value.employeeCents).toBeGreaterThan(537);
+    // And the shortfall the old code would have produced, to the cent.
+    expect(r.value.employeeCents - 537).toBe(778);
+  });
+
+  it("carries a sub-cent hourly rate that integer cents could not represent", () => {
+    // $0.16445/hr is 16.445 cents. Storing it as whole cents would force a
+    // choice between 16 (wrong, under) and 17 (wrong, and an UNLAWFUL
+    // over-deduction). Milli-cents make it exact.
+    const one = lni(100);
+    expect(one.ok).toBe(true);
+    if (!one.ok) throw new Error("unreachable");
+    expect(one.value.employeeCents).toBe(16);
+    expect(one.value.employerCents).toBe(39);
+
+    // Over 2000 hours the fractional part compounds into real money, which is
+    // exactly what a whole-cent rate would have silently lost.
+    const many = lni(200_000);
+    expect(many.ok).toBe(true);
+    if (!many.ok) throw new Error("unreachable");
+    expect(many.value.employeeCents).toBe(32_890); // 2000 * 16.445 = $328.90
+    expect(many.value.employeeCents).not.toBe(32_000); // what 16c/hr would give
+    expect(many.value.employeeCents).not.toBe(34_000); // what 17c/hr would give
+  });
+
+  it("rounds the fraction of a cent to the EMPLOYER, never the worker", () => {
+    // An over-deduction of even one cent is unlawful (RCW 51.16.140(2), a gross
+    // misdemeanor). An employer absorbing one cent is not. Sweep every
+    // milli-cent remainder and prove the employee side never rounds up.
+    for (let rate = 1; rate <= 2_000; rate += 7) {
+      const r = lni(100, rate, 0); // exactly one hour
       expect(r.ok).toBe(true);
       if (!r.ok) continue;
-      const halfTotal = divideRoundHalfUp(r.value.totalPremiumCents, 2);
-      if (emp > 0) expect(r.value.employeeCents).toBeLessThan(halfTotal);
-      // And never more than half the total, under any circumstances.
-      expect(r.value.employeeCents).toBeLessThanOrEqual(halfTotal);
+      const exact = (100 * rate) / 100_000;
+      expect(r.value.employeeCents).toBe(Math.floor(exact));
+      expect(r.value.employeeCents).toBeLessThanOrEqual(exact);
     }
   });
 
-  it("never charges the employee for the accident fund or supplemental pension", () => {
-    // Raise ONLY the employer-only rate. The employee's deduction must not move.
-    const a = lni(8_000, 10, 30);
-    const b = lni(8_000, 900, 30);
+  it("floors a sub-penny employee amount to zero rather than up to one", () => {
+    const r = lni(100, 50, 0); // 0.05 cents for one hour
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("unreachable");
+    expect(r.value.employeeCents).toBe(0);
+  });
+
+  it("honours partial hours exactly - never rounds the timesheet to whole hours", () => {
+    // Rule 15 mutation M7 survived the first campaign: every other test in this
+    // block used a whole number of hours (80.00), so an engine that quietly did
+    // Math.round(hours) before applying the rate passed everything. Real
+    // timesheets are not whole hours. A 15-minute rounding of the HOURS - as
+    // opposed to the premium - is a different and much larger error than the
+    // sub-cent rounding tested above, and L&I audits reconcile reported hours
+    // against the payroll register.
+    //
+    // 77.25 hours x $0.16445/hr = $12.7037..., floors to $12.70
+    // 77.25 hours x $0.39485/hr = $30.5021..., rounds to $30.50
+    // An engine that rounded 77.25 down to 77.00 would report $12.66 / $30.40.
+    const quarter = lni(7_725);
+    expect(quarter.ok).toBe(true);
+    if (!quarter.ok) throw new Error("unreachable");
+    expect(quarter.value.employeeCents).toBe(1_270);
+    expect(quarter.value.employerCents).toBe(3_050);
+    expect(quarter.value.employeeCents).not.toBe(1_266); // the whole-hour mutant
+    expect(quarter.value.employerCents).not.toBe(3_040);
+
+    // A half hour rounds the other way under Math.round, so test both
+    // directions: 38.50 hours must not be treated as 39.00.
+    const half = lni(3_850);
+    expect(half.ok).toBe(true);
+    if (!half.ok) throw new Error("unreachable");
+    expect(half.value.employeeCents).toBe(633);
+    expect(half.value.employerCents).toBe(1_520);
+    expect(half.value.employeeCents).not.toBe(641); // rounded UP to 39 hours
+    expect(half.value.employerCents).not.toBe(1_540);
+
+    // And prove it generally: the premium must be strictly monotonic in hours
+    // at the granularity the timesheet actually records. If any engine rounded
+    // hours, whole runs of hundredth-hours would collapse onto one value.
+    const seen = new Set<number>();
+    for (let hh = 7_700; hh <= 7_800; hh += 25) {
+      const r = lni(hh);
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      seen.add(r.value.totalPremiumCents);
+    }
+    // 5 distinct quarter-hour steps must produce 5 distinct premiums.
+    expect(seen.size).toBe(5);
+  });
+
+  it("always reconciles - no cent is created or destroyed", () => {
+    for (const hrs of [0, 1, 100, 833, 8_000, 12_345, 200_000]) {
+      const r = lni(hrs);
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      expect(r.value.employeeCents + r.value.employerCents).toBe(r.value.totalPremiumCents);
+      expect(r.value.employeeCents).toBeGreaterThanOrEqual(0);
+      expect(r.value.employerCents).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("never lets the employee share exceed the employer's evidenced rate split", () => {
+    // The worker's share comes off the notice; it can never be half the total
+    // by accident, and it must track the evidenced employee rate alone.
+    const a = lni(8_000, EE, 10_000);
+    const b = lni(8_000, EE, 90_000);
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok || !b.ok) throw new Error("unreachable");
+    // Moving ONLY the employer rate must not move the employee's deduction.
     expect(a.value.employeeCents).toBe(b.value.employeeCents);
     expect(b.value.employerCents).toBeGreaterThan(a.value.employerCents);
   });
 
-  it("rounds the odd penny to the EMPLOYER, never the worker", () => {
-    // An over-deduction of even one cent is an unlawful deduction. An employer
-    // absorbing one cent is not. The rounding must always fall the same way.
-    for (let med = 1; med <= 99; med += 2) {
-      const r = lni(100, 0, med); // exactly one hour
-      expect(r.ok).toBe(true);
-      if (!r.ok) continue;
-      const total = r.value.totalPremiumCents;
-      expect(r.value.employeeCents).toBe(Math.floor(total / 2));
-      expect(r.value.employeeCents).toBeLessThanOrEqual(r.value.employerCents);
-      expect(r.value.employeeCents + r.value.employerCents).toBe(total);
-    }
+  it("treats hours as integers in hundredths - floats are refused here too", () => {
+    expect(() => lni(80.5)).toThrow(/hundredths of an hour/);
+    expect(() => lni(-1)).toThrow(/non-negative/);
   });
 
-  it("treats hours as integers in hundredths - floats are refused here too", () => {
-    expect(() => lni(80.5, 50, 30)).toThrow(/hundredths of an hour/);
-    expect(() => lni(-1, 50, 30)).toThrow(/non-negative/);
+  it("refuses a fractional or negative rate - milli-cents are integers", () => {
+    expect(() => lni(100, 16_445.5, ER)).toThrow(/milli-cents per hour/);
+    expect(() => lni(100, EE, 39_485.5)).toThrow(/milli-cents per hour/);
+    expect(() => lni(100, -1, ER)).toThrow(/cannot be negative/);
+    expect(() => lni(100, EE, -1)).toThrow(/cannot be negative/);
   });
 
   it("charges zero for zero hours", () => {
-    const r = lni(0, 50, 30);
+    const r = lni(0);
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("unreachable");
     expect(r.value.totalPremiumCents).toBe(0);
     expect(r.value.employeeCents).toBe(0);
+    expect(r.value.employerCents).toBe(0);
+  });
+
+  it("cites the supplemental pension and stay-at-work authorities", () => {
+    // The whole point of the fix: these two funds are also split with the
+    // worker. If these records vanish, the reasoning behind the number is gone.
+    const sp = findPayrollAuthority("rcw-51-32-073-supplemental-pension-split");
+    expect(sp).toBeDefined();
+    expect(sp!.quote).toMatch(/shall retain from the/);
+    expect(sp!.quote).toMatch(/matched in an equal amount by each employer/);
+
+    const saw = findPayrollAuthority("rcw-51-32-090-stay-at-work-split");
+    expect(saw).toBeDefined();
+    expect(saw!.quote).toMatch(/may collect up to one-half the fund assessment from workers/);
+
+    const formula = findPayrollAuthority("lni-premium-rate-formula");
+    expect(formula).toBeDefined();
+    expect(formula!.quote).toMatch(/experience factor/);
+    expect(formula!.quote).toMatch(/Supplemental Pension Fund/);
   });
 });
 
@@ -1524,9 +1643,9 @@ function baseCheckArgs() {
     waCaresRateMilliPct: WA_CARES_RATE_2026_MILLI_PCT,
     waCaresExemptionApprovalDocumentId: null,
     employeeClaimsWaCaresExemption: false,
-    lniEmployerOnlyRateCentsPerHour: 50,
-    lniMedicalAidRateCentsPerHour: 30,
-    lniRiskClassCode: "6420-00",
+    lniEmployeeRateMilliCentsPerHour: 16_445,
+    lniEmployerRateMilliCentsPerHour: 39_485,
+    lniRiskClassCode: "6403-00",
     lniRateNoticeDocumentId: "lni-2026",
   };
 }
@@ -1549,8 +1668,12 @@ describe("a whole paycheck", () => {
     expect(c.pfml.employeeShareCents).toBe(1_614);
     expect(c.waCares.employeeCents).toBe(1_160);
     expect(c.lni.ok).toBe(true);
-    expect(c.totalEmployeeWithheldCents).toBe(34_889);
-    expect(c.netPayCents).toBe(165_111);
+    // 15_615 + 12_400 + 2_900 + 1_614 + 1_160 + 1_315 = 35_004.
+    // The L&I line is 1_315, not the old 1_200: 80.00 hours x $0.16445/hr
+    // = $13.156, floored to $13.15 in the worker's favour. See the L&I
+    // describe block for the full derivation from Michael's rate notice.
+    expect(c.totalEmployeeWithheldCents).toBe(35_004);
+    expect(c.netPayCents).toBe(164_996);
     expect(c.hasRefusals).toBe(false);
   });
 
@@ -1610,9 +1733,9 @@ describe("a whole paycheck", () => {
     //   federal income    $0.00  <- trust fund (zero at this wage)
     //   WA Paid Leave     $0.08  <- state trust money
     //   WA Cares          $0.06  <- state trust money
-    //   L&I employee half $12.00 <- a premium, last in line
+    //   L&I employee share $13.15 <- a premium, last in line
     //                     ------
-    //                     $12.91  against $10.00 of gross
+    //                     $14.06  against $10.00 of gross
     const c = computePaycheckTaxes({ ...baseCheckArgs(), grossWagesCents: 1_000 });
 
     expect(c.fica.employeeOasdiCents).toBe(62);
@@ -1620,8 +1743,8 @@ describe("a whole paycheck", () => {
     expect(c.pfml.employeeShareCents).toBe(8);
     expect(c.waCares.employeeCents).toBe(6);
     expect(c.lni.ok).toBe(true);
-    expect(c.lni.ok && c.lni.value.employeeCents).toBe(1_200);
-    expect(c.fullEmployeeWithholdingCents).toBe(1_291);
+    expect(c.lni.ok && c.lni.value.employeeCents).toBe(1_315);
+    expect(c.fullEmployeeWithholdingCents).toBe(1_406);
 
     // Everything ahead of L&I in the queue was collected in full.
     expect(c.uncollectedByTax.find((u) => u.label === "Social Security and Medicare")).toBeUndefined();
@@ -1631,11 +1754,11 @@ describe("a whole paycheck", () => {
 
     // L&I is last, so L&I is what got cut short - by exactly the difference.
     expect(c.uncollectedByTax).toHaveLength(1);
-    expect(c.uncollectedByTax[0]!.label).toBe("L&I medical aid (employee half)");
-    expect(c.uncollectedByTax[0]!.shortfallCents).toBe(291);
+    expect(c.uncollectedByTax[0]!.label).toBe("L&I workers' comp (employee share)");
+    expect(c.uncollectedByTax[0]!.shortfallCents).toBe(406);
 
     expect(c.totalEmployeeWithheldCents).toBe(1_000);
-    expect(c.uncollectedEmployeeTaxCents).toBe(291);
+    expect(c.uncollectedEmployeeTaxCents).toBe(406);
     expect(c.netPayCents).toBe(0);
   });
 
@@ -1650,11 +1773,11 @@ describe("a whole paycheck", () => {
     expect(c.federalIncomeTax.line4b_withholdingCents).toBe(0);
     expect(c.pfml.employeeShareCents).toBe(0);
     expect(c.waCares.employeeCents).toBe(0);
-    expect(c.lni.ok && c.lni.value.employeeCents).toBe(1_200);
+    expect(c.lni.ok && c.lni.value.employeeCents).toBe(1_315);
 
     expect(c.uncollectedByTax).toHaveLength(1);
-    expect(c.uncollectedByTax[0]!.label).toBe("L&I medical aid (employee half)");
-    expect(c.uncollectedByTax[0]!.shortfallCents).toBe(1_199);
+    expect(c.uncollectedByTax[0]!.label).toBe("L&I workers' comp (employee share)");
+    expect(c.uncollectedByTax[0]!.shortfallCents).toBe(1_314);
     expect(c.totalEmployeeWithheldCents).toBe(1);
     expect(c.netPayCents).toBe(0);
   });
@@ -1674,7 +1797,7 @@ describe("a whole paycheck", () => {
     // the next lines in order, and L&I - dead last - eats the entire shortfall.
     expect(c.totalEmployeeWithheldCents).toBe(20);
     expect(c.uncollectedByTax).toHaveLength(1);
-    expect(c.uncollectedByTax[0]!.label).toBe("L&I medical aid (employee half)");
+    expect(c.uncollectedByTax[0]!.label).toBe("L&I workers' comp (employee share)");
     expect(c.uncollectedByTax[0]!.shortfallCents).toBe(
       c.fullEmployeeWithholdingCents - 20,
     );
@@ -1742,8 +1865,8 @@ describe("a whole paycheck", () => {
       ...baseCheckArgs(),
       stateUnemploymentRateMilliPct: null,
       sutaRateNoticeDocumentId: null,
-      lniEmployerOnlyRateCentsPerHour: null,
-      lniMedicalAidRateCentsPerHour: null,
+      lniEmployeeRateMilliCentsPerHour: null,
+      lniEmployerRateMilliCentsPerHour: null,
       lniRiskClassCode: null,
       lniRateNoticeDocumentId: null,
     });
@@ -1962,8 +2085,8 @@ describe("authorities", () => {
       grossWagesCents: 1,
       stateUnemploymentRateMilliPct: null,
       sutaRateNoticeDocumentId: null,
-      lniEmployerOnlyRateCentsPerHour: null,
-      lniMedicalAidRateCentsPerHour: null,
+      lniEmployeeRateMilliCentsPerHour: null,
+      lniEmployerRateMilliCentsPerHour: null,
       lniRiskClassCode: null,
       lniRateNoticeDocumentId: null,
     });
