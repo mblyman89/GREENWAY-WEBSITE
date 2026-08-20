@@ -1,0 +1,625 @@
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+   Assets
+
+
+
+   305 Cash and Cash Equivalents
+   305 Cash and Cash Equivalents
+    10 Overall
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   305-10-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph                  Action        Accounting Standards Update                              Date
+                           Cash                            Superseded       Maintenance Update 2017-21                       12/22/2017
+                           Cash and Cash
+                                                           Superseded       Maintenance Update 2017-21                       12/22/2017
+                           Equivalents
+                           305-10-05-1                     Superseded       Maintenance Update 2017-21                       12/22/2017
+                           305-10-15-1                     Superseded       Maintenance Update 2017-21                       12/22/2017
+                           305-10-15-2                     Superseded       Maintenance Update 2017-21                       12/22/2017
+                                                                            Accounting Standards Update No.
+                           305-10-55-1                     Superseded                                                        10/01/2012
+                                                                            2012-04
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     1/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   305-10-05-1            Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   305-10-15-1            Paragraph superseded by Maintenance Update 2017-21.
+
+   305-10-15-2            Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   20 Glossary
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     2/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   305-10-55-1            Paragraph superseded by Accounting Standards Update No. 2012-04.
+
+
+
+
+   S00 Status
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     3/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   305-10-S00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph           Action           Accounting Standards Update                               Date
+                           305-10-S50-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+
+
+
+
+   S50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   305-10-S50-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+   305 Cash and Cash Equivalents
+    942 Financial Services—Depository and
+    Lending
+   00 Status
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     4/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   305-942-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph           Action           Accounting Standards Update                               Date
+                           942-305-05-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+                           942-305-05-2           Superseded           Maintenance Update 2017-21                         12/22/2017
+                           942-305-15-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+                           942-305-45-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+                           942-305-50-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   305-942-05-1           Paragraph superseded by Maintenance Update 2017-21.
+
+   305-942-05-2           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   15 Scope and Scope Exceptions
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     5/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   305-942-15-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   305-942-45-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     6/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   305-942-50-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+   305 Cash and Cash Equivalents
+    946 Financial Services—Investment
+    Companies
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   305-946-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph           Action           Accounting Standards Update                               Date
+                           946-305-05-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+                           946-305-15-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     7/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+                           946-305-45-1           Superseded           Maintenance Update 2017-21                         12/22/2017
+                           946-305-45-2           Superseded           Maintenance Update 2017-21                         12/22/2017
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   305-946-05-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   305-946-15-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   45 Other Presentation Matters
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     8/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   305-946-45-1           Paragraph superseded by Maintenance Update 2017-21.
+
+   305-946-45-2           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+   305 Cash and Cash Equivalents
+    954 Health Care Entities
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   305-954-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph                  Action       Accounting Standards Update                               Date
+                           Donor-Imposed
+                                                      Superseded Maintenance Update 2017-21                                  12/22/2017
+                           Restriction
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     9/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+                           Donor-Imposed                                    Accounting Standards Update No.
+                                                          Added                                                              08/18/2016
+                           Restriction                                      2016-14
+                           954-305-05-1                   Superseded        Maintenance Update 2017-21                       12/22/2017
+                           954-305-15-1                   Superseded        Maintenance Update 2017-21                       12/22/2017
+                           954-305-45-1                   Superseded        Maintenance Update 2017-21                       12/22/2017
+                                                                            Accounting Standards Update No.
+                           954-305-45-1                   Amended                                                            08/18/2016
+                                                                            2016-14
+                                                                            Accounting Standards Update No.
+                           954-305-45-1                   Amended                                                            10/01/2012
+                                                                            2012-04
+                           954-305-45-3                   Superseded        Maintenance Update 2017-21                       12/22/2017
+                                                                            Accounting Standards Update No.
+                           954-305-45-3                   Amended                                                            08/18/2016
+                                                                            2016-14
+                                                                            Accounting Standards Update No.
+                           954-305-45-4                   Superseded                                                         08/18/2016
+                                                                            2016-14
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   305-954-05-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 10/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   305-954-15-1           Paragraph superseded by Maintenance Update 2017-21.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 11/12
+ 8/19/2026, 11:31 PM                                                                                       Combine Sections - 305 Cash and Cash Equivalents
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   305-954-45-1           Paragraph superseded by Maintenance Update 2017-21.
+
+   305-954-45-2           Paragraph not used.
+
+   305-954-45-3           Paragraph superseded by Maintenance Update 2017-21.
+
+   305-954-45-4           Paragraph superseded by Accounting Standards Update No. 2016-14.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 12/12
+

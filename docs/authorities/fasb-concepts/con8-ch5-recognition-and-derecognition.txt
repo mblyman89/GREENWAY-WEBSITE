@@ -1,0 +1,2542 @@
+    Statement of Financial Accounting Concepts No. 8
+                                        August 2023
+
+
+
+
+Conceptual Framework for Financial Reporting
+
+    Chapter 5, Recognition and Derecognition
+Copyright © 2023 by Financial Accounting Foundation. All rights reserved.
+Certain portions may include material copyrighted by American Institute of
+Certified Public Accountants. Content copyrighted by Financial Accounting
+Foundation, or any third parties who have not provided specific permission,
+may not be reproduced, stored in a retrieval system, or transmitted, in any form
+or by any means, electronic, mechanical, photocopying, recording, or
+otherwise, without the prior written permission of the Financial Accounting
+Foundation or such applicable third party. Financial Accounting Foundation
+claims no copyright in any portion hereof that constitutes a work of the United
+States Government.
+       Statement of Financial Accounting
+                         Concepts No. 8
+
+                                                  August 2023
+
+
+
+
+Conceptual Framework for Financial Reporting
+
+          Chapter 5, Recognition and Derecognition
+
+
+
+
+            Financial Accounting Standards Board
+         801 MAIN AVENUE, PO BOX 5116, NORWALK, CONNECTICUT 06856-5116
+Statement of Financial Accounting Concepts No. 8
+
+Conceptual Framework for Financial Reporting
+
+Chapter 5, Recognition and Derecognition
+
+August 2023
+
+CONTENTS
+                                                                                                    Paragraph
+                                                                                                     Numbers
+
+Chapter 5: Recognition and Derecognition........................................... RD1–RD14
+   Introduction ....................................................................................... RD1–RD2
+   Recognition ................................................................................................ RD3
+   Recognition Criteria .......................................................................... RD4–RD7
+   Element Definitions .................................................................................... RD8
+   Measurability ................................................................................... RD9–RD11
+   Faithful Representation ............................................................................ RD12
+   Derecognition ................................................................................ RD13–RD14
+Appendix A: Basis for Conclusions................................................. BC5.1–BC5.11
+   Introduction .................................................................................. BC5.1–BC5.3
+   Recognition Criteria and the Qualitative Characteristics .......................... BC5.4
+   Measurability Criterion ................................................................. BC5.5–BC5.7
+   Faithful Representation and Relevance Criteria .......................... BC5.8–BC5.9
+   Derecognition ........................................................................... BC5.10–BC5.11
+Appendix B: Concepts Statement 5 Marked to Show Superseded Text............ B1
+Appendix C: Amendments to the Conceptual Framework for
+ Financial Reporting .................................................................................. C1–C8
+   Amendments to Chapter 4, Elements of Financial Statements,
+     of Concepts Statement 8 ............................................................................ C2
+   Amendments to Chapter 7, Presentation, of Concepts Statement 8 ............. C3
+   Amendments to Chapter 8, Notes to Financial Statements,
+     of Concepts Statement 8 ..................................................................... C4–C7
+   Amendments to Concepts Statement 7 ........................................................ C8
+Conceptual Framework for Financial
+Reporting
+CHAPTER 5: RECOGNITION AND DERECOGNITION
+
+Introduction
+RD1. This chapter sets forth recognition and derecognition criteria to guide when
+an item should be incorporated into and removed from financial statements. This
+chapter builds on the foundation described in other concepts, bringing those
+concepts together to apply them to recognition and derecognition issues.
+
+RD2. A reporting entity achieves the objective of general purpose financial
+reporting by providing a full set of financial statements including financial
+information about the reporting entity’s (a) resources, (b) claims to those
+resources, and (c) changes in those resources and claims during the period. The
+recognition and derecognition criteria provide concepts for the Board to consider
+when determining whether an item should be recognized or derecognized in
+financial statements of a reporting entity.
+
+Recognition
+RD3. Recognition is the process of incorporating an item in financial statements of
+a reporting entity as an asset, liability, equity, revenue, gain, expense, loss, or
+investment by or distribution to owners. A recognized item is depicted in both
+words and numbers, with the amount included in financial statement totals. For an
+asset or a liability, recognition involves recording the acquisition or incurrence of
+the item and later changes in the item (related to measurement), including changes
+that result in its removal from financial statements (as addressed in paragraphs
+RD13 and RD14). Because recognition means the depiction of an item in both
+words and numbers, with the amount included in the totals of financial statements,
+disclosure of an amount by any other means is not a substitution for recognition.
+
+Recognition Criteria
+RD4. The recognition criteria are intended to provide direction for resolving issues
+that involve accounting recognition. The reporting entity’s assets, liabilities, equity,
+and changes in those elements are candidates for recognition in financial
+statements.
+
+RD5. An item and its financial information should meet three recognition criteria to
+be recognized in financial statements, subject to the pervasive cost constraint and
+materiality considerations. Those criteria are:
+
+
+
+                                                                                      1
+    a.   Definitions—The item meets the definition of an element of financial
+         statements.
+    b.   Measurability—The item is measurable and has a relevant measurement
+         attribute.
+    c.   Faithful Representation—The item can be depicted and measured with
+         faithful representation.
+
+RD6. Items recognized in accordance with the criteria in paragraph RD5 would
+meet the fundamental qualitative characteristic of relevance, as discussed in
+Chapter 3, Qualitative Characteristics of Useful Financial Information, of this
+Concepts Statement. Relevant financial information is capable of making a
+difference in the decisions made by users. To be relevant, financial information
+about an item must have predictive value, confirmatory value, or both.
+
+RD7. All three criteria are subject to the cost constraint: the benefits from
+recognizing a particular item should justify the costs of providing and using the
+financial information. Recognition also is subject to materiality considerations. The
+cost constraint and materiality are discussed in Chapter 3 of this Concepts
+Statement.
+
+Element Definitions
+RD8. An item must meet the definition of an element in Chapter 4, Elements of
+Financial Statements, of this Concepts Statement to be recognized in financial
+statements. Recognizing an item that does not meet the definition of an element
+would be inconsistent with the fundamental qualitative characteristic of faithful
+representation by misrepresenting a reporting entity’s (a) resources, (b) claims to
+those resources, or (c) changes in those resources and claims during the period.
+
+Measurability
+RD9. An item must be measurable with a relevant measurement attribute to be
+recognized in financial statements. A relevant measurement attribute for an item
+being considered for recognition cannot be determined in isolation. Relevance
+should be evaluated in the context of the objective of general purpose financial
+reporting: providing financial information about a reporting entity that is useful to
+existing and potential investors, lenders, and other resource providers in making
+decisions about providing resources to the entity.
+
+RD10. The decision usefulness of financial information may be affected by the
+degree of measurement uncertainty. However, an item that has measurement
+uncertainty may still provide decision-useful financial information to resource
+providers through confirmatory value or predictive value. Furthermore, the
+measurement of that item can be faithfully represented if the measurement
+process is (a) complete, (b) neutral, and (c) free from error. Disclosures may be
+necessary to provide information about measurement uncertainty.
+
+
+
+
+2
+RD11. Measurement uncertainty also may relate to the existence of that item
+rather than its measurement. If the existence of an item is uncertain, that item
+would presumably fail to meet the definition of an element (the first criterion; see
+paragraph RD5(a)) and, therefore, would not be recognized in financial
+statements.
+
+Faithful Representation
+RD12. Faithful representation, as discussed in Chapter 3 of this Concepts
+Statement, is a fundamental qualitative characteristic. To be useful, financial
+information not only must represent relevant phenomena, but it also must faithfully
+represent the phenomena that it purports to represent. Financial information that
+is faithfully represented must be complete, neutral, and free from error. To achieve
+the objective of general purpose financial reporting, an item recognized in financial
+statements must be depicted and measured with faithful representation.
+
+Derecognition
+RD13. Derecognition is the process of removing an item from financial statements
+of a reporting entity as an asset, liability, or equity. Derecognition should occur
+when an item no longer meets any one of the recognition criteria in paragraph
+RD5. For example, an item should not continue to be recognized if it does not meet
+the definition of an element because continued recognition of that item would
+violate the definitions recognition criterion.
+
+RD14. In certain arrangements, an entity may have continuing involvement in the
+asset, liability, or equity item that is being evaluated for derecognition. The nature
+and extent of the continuing involvement may influence the derecognition
+consideration at the standards level. However, that involvement also may create
+rights or obligations that meet the recognition requirements of paragraph RD5 and
+therefore should be recognized to faithfully represent the results of the
+arrangement.
+
+
+This chapter of Concepts Statement 8 was adopted by the affirmative vote of five
+members of the Financial Accounting Standards Board. Dr. Joseph abstained. Ms.
+Botosan dissented.
+
+Ms. Botosan does not support certain aspects of this chapter at this time for the
+following reasons.
+
+This chapter includes three criteria for the FASB to consider in decisions about the
+recognition of items in financial statements. Ms. Botosan agrees that an item must
+meet the definition of an element to be recognized in the financial statements. Ms.
+Botosan also agrees that to be recognized, an item must have a relevant
+measurement attribute that is measurable. Ms. Botosan is concerned, therefore,
+that the Conceptual Framework lacks measurement concepts, such that the
+
+
+
+                                                                                    3
+concept of what is a “relevant” measurement attribute remains unaddressed within
+the framework.
+
+Ms. Botosan believes that this omission will significantly challenge the practical
+application of the recognition concepts. Furthermore, Ms. Botosan is concerned
+that the omission undermines the ability of the Conceptual Framework to act as “a
+coherent system of interrelated objectives and fundamental concepts.”1 Ms.
+Botosan notes that in the basis for conclusions of Chapter 2, The Reporting Entity,
+the Board acknowledges the importance of coherence within the framework.
+Specifically, the basis for conclusions states that “because the Conceptual
+Framework is intended to be a coherent system of interrelated objectives and
+fundamental concepts, there is a need to develop a concept of the reporting
+entity.”2 Similarly, because recognition depends on having a relevant
+measurement attribute, Ms. Botosan believes that there is an equally pressing
+need for the Conceptual Framework to address what constitutes such an attribute.
+
+Ms. Botosan believes that in the absence of concepts that address what
+constitutes a relevant measurement attribute, the existing broad relevance
+criterion for recognition should be retained. That criterion requires that information
+about an item must be capable of making a difference in user decisions, which is
+broader than the criterion of a relevant measurement attribute. Ms. Botosan
+believes that removal of the broad relevant criterion places considerably more
+pressure on the absent concept of a relevant measurement attribute.
+Consequently, Ms. Botosan would have preferred to finalize this chapter after the
+completion of the chapter on measurement, which is currently in initial
+deliberations.
+
+Ms. Botosan notes that her concern is not new but also was expressed 39 years
+ago in a 1984 dissent to FASB Concepts Statement No. 5, Recognition and
+Measurement in Financial Statements of Business Enterprises, which has been
+replaced by this chapter. Specifically, Board member John W. March predicted that
+Concepts Statement 5 would not offer sufficient guidance for the work of the Board
+because “to be useful, it needs to be supplemented with more specific guidance
+for selecting measurement attributes for specific assets, liabilities, and
+transactions.”
+
+In addition, Ms. Botosan does not support the faithful representation criterion
+because she believes that faithful representation as it is explained in Chapter 3,
+Qualitative Characteristics of Useful Financial Information, is a vacuous concept
+and that a criterion based on this concept will play little, if any, role in recognition
+considerations. Paragraph QC12 of Chapter 3 states that “financial reports
+represent economic phenomena in words and numbers” and “to be useful, financial
+information . . . must faithfully represent the phenomena that it purports to
+represent.” However, faithful representation is operationalized with a focus on any
+
+1
+ Chapter 1, The Objective of General Purpose Financial Reporting, first page of “Statements
+of Financial Accounting Concepts.”
+2
+ Chapter 2, The Reporting Entity, paragraph BC2.3.
+
+
+
+4
+measurement attribute that is “complete, neutral, and free from error.” For
+example, Chapter 3 states that the representation of an estimate can be faithful if
+“the amount is described clearly and accurately as being an estimate, the nature
+and limitations of the estimating process are explained, and no errors have been
+made in selecting and applying an appropriate process for developing the
+estimate” (paragraph QC15). Furthermore, an estimate “can be a faithful
+representation if the reporting entity has applied properly an appropriate process,
+described properly the estimate, and explained any uncertainties that significantly
+affect the estimate” (paragraph QC16). Thus, a fair value estimate is deemed to
+be a faithful representation of the fair value measurement attribute if the reporting
+entity has applied properly an appropriate process for estimating fair value,
+described properly the fair value estimate, and explained any uncertainties that
+significantly affect the fair value estimate. Similarly, a historical cost estimate of the
+historical cost measurement attribute or any other measurement estimate
+corresponding to its measurement attribute is deemed to be a faithful
+representation of the measurement attribute if the reporting entity has applied
+properly an appropriate process for estimating the measurement attribute,
+described properly the estimate, and explained any uncertainties that significantly
+affect the estimate.
+
+Given this and consistent with the majority of comment letters received in response
+to the Exposure Draft on this chapter, Ms. Botosan cannot conceive of an instance
+in which an item could meet the definition of an element and be measurable and
+have a relevant measurement attribute (assuming that concept were delineated)
+but the item could not be depicted and measured with faithful representation as
+that concept is described in Chapter 3. Accordingly, Ms. Botosan does not support
+the inclusion of faithful representation as a standalone recognition criterion.
+
+Members of the Financial Accounting Standards Board:
+
+                              Richard R. Jones, Chair
+                              James L. Kroeker, Vice Chairman
+                              Christine A. Botosan
+                              Frederick L. Cannon
+                              Susan M. Cosper
+                              Marsha L. Hunt
+                              Joyce T. Joseph
+
+
+
+
+                                                                                        5
+Appendix A: Basis for Conclusions
+Introduction
+BC5.1. The following basis for conclusions summarizes the Board’s considerations
+in reaching the conclusions in this chapter. It includes reasons for accepting some
+alternatives and rejecting others. Individual Board members gave greater weight
+to some factors than others.
+
+BC5.2. Recognition concepts were previously set forth in FASB Concepts
+Statement No. 5, Recognition and Measurement in Financial Statements of
+Business Enterprises. The Board concluded that the discussion of the recognition
+concepts in Concepts Statement 5 could be further developed and improved with
+the objective of providing a foundation for future standards for business and not-
+for-profit entities. The decisions reflect changes to the fundamental qualitative
+characteristics of useful financial information since Concepts Statement 5 was
+originally issued in 1984.
+
+BC5.3. Concepts Statement 5 did not explicitly address the issue of derecognition.
+The Board decided to develop conceptual guidance to address that issue to
+provide a more comprehensive framework on which to evaluate future standard-
+setting decisions.
+
+Recognition Criteria and the Qualitative Characteristics
+BC5.4. Some of the recognition criteria in this chapter are derived from the
+qualitative characteristics of useful financial information in Chapter 3 of this
+Concepts Statement. To be consistent with the fundamental qualitative
+characteristics described in Chapter 3, the following changes were made to the
+recognition criteria in Concepts Statement 5:
+
+    a.   The phrase sufficient reliability was removed from the measurability
+         criterion.
+    b.   The reliability criterion was replaced with the faithful representation
+         criterion.
+    c.   The relevance criterion was not retained; however, the fundamental
+         qualitative characteristic of relevance is inherent in all three recognition
+         criteria.
+
+The Board concluded that an item recognized in financial statements must meet
+the definition of an element. Recognizing an item that does not meet the definition
+of an element would be inconsistent with the objective of general purpose financial
+reporting. As such, the Board decided to retain the elements criterion described in
+Concept Statement 5.
+
+
+
+
+                                                                                   7
+Measurability Criterion
+BC5.5. The measurability criterion in Concepts Statement 5 contains language that
+is susceptible to alternative interpretations. For example, it is not clear whether the
+phrase sufficient reliability refers to the fundamental qualitative characteristic of
+reliability as was defined in FASB Concepts Statement No. 2, Qualitative
+Characteristics of Accounting Information (superseded), or to a notion of precision.
+
+BC5.6. As discussed in paragraph 76 of Concepts Statement 5 (as issued), the
+term sufficient refers to the level of uncertainty involving the measurement of an
+item. Certain items, such as contingencies, are susceptible to measurement
+uncertainty. While the passage of time in many cases reduces or resolves
+measurement uncertainty, waiting until the measurement of an item is sufficiently
+reliable could result in the delayed recognition of an item that meets the definition
+of an element and can, despite its measurement uncertainty, be faithfully
+represented. Consequently, that delayed recognition may reduce the usefulness
+of the financial information that is presented in financial statements. Therefore, the
+Board concluded that the phrase sufficient reliability may refer to the act of only
+recognizing items that can be measured with an unspecified degree of certainty
+when a reporting entity identifies an item that meets the definition of an element.
+
+BC5.7. The Board concluded that to reduce ambiguity in the measurability
+criterion, the phrase sufficient reliability should be removed. However, an item that
+meets the definition of an element should be recognized in financial statements
+when it can be (a) measured with a relevant measurement attribute and (b)
+faithfully represented through depiction and measurement—although, as noted in
+paragraph RD10, the degree of measurement uncertainty may affect the decision
+usefulness of the financial information.
+
+Faithful Representation and Relevance Criteria
+BC5.8. When Concepts Statement 5 was issued, relevance and reliability were
+fundamental qualitative characteristics in Concepts Statement 2. Concepts
+Statement 2 has since been superseded by Chapter 3 of this Concepts Statement.
+Chapter 3 identifies relevance and faithful representation as fundamental
+qualitative characteristics. In the basis for conclusions of Chapter 3, the Board
+concluded that the term faithful representation “encompasses the main
+characteristics that the previous frameworks included as aspects of reliability.”
+Therefore, the Board concluded that the reliability criterion, along with its
+explanatory paragraphs, should be updated to refer to faithful representation and
+its aspects of (a) completeness, (b) neutrality, and (c) freedom from error.
+
+BC5.9. The Board also concluded that the relevance of an item, subject to
+materiality considerations, is inherently met when the item meets the definition of
+an element, can be measured using a relevant measurement attribute, and can be
+faithfully represented. As such, the Board decided to remove the relevance
+criterion as a standalone recognition criterion. However, because a relevant item
+
+
+
+8
+can still be measured with an irrelevant measurement attribute, the Board decided
+that the fundamental qualitative characteristic of relevance would remain in the
+measurability criterion as discussed in paragraph BC5.7.
+
+Derecognition
+BC5.10. Concepts Statement 5 does not explicitly address the issue of
+derecognition. The Board decided that, conceptually, derecognition should occur
+when an asset, liability, or equity element no longer meets one of the recognition
+criteria.
+
+BC5.11. An entity may have continuing involvement in an item that is being
+evaluated for derecognition (for example, an option to repurchase an item that was
+sold). The Board decided that when this circumstance occurs, continuing to
+recognize the original item would be inappropriate if the original item no longer
+meets the criteria in paragraph RD5. In developing standards, the Board should
+evaluate whether the continuing involvement results in a new item that meets the
+criteria in paragraph RD5. If so, that new item should be recognized (for example,
+recognizing an option and derecognizing the original item sold). The Board
+concluded that in this scenario, a failure to derecognize the original item and to
+recognize the new item would not be a faithful representation.
+
+
+
+
+                                                                                9
+Appendix B: Concepts Statement 5 Marked to
+Show Superseded Text
+B1.   The outlined text is superseded by this chapter.
+
+NOTE: The text highlighted in grey has been previously superseded by chapters
+in this Concepts Statement. The outlined text is superseded by this chapter. The
+superseded text is left in the document for context. Mr. March’s dissent has not
+been edited because portions of his dissent may be applicable to areas that have
+been retained in Concepts Statement 5.
+
+Statements of Financial Accounting Concepts
+      This Statement of Financial Accounting Concepts is one of a series of
+publications in the Board’s conceptual framework for financial accounting and
+reporting. Statements in the series are intended to set forth objectives and
+fundamentals that will be the basis for development of financial accounting and
+reporting standards. The objectives identify the goals and purposes of financial
+reporting. The fundamentals are the underlying concepts of financial accounting—
+concepts that guide the selection of transactions, events, and circumstances to be
+accounted for; their recognition and measurement; and the means of summarizing
+and communicating them to interested parties. Concepts of that type are
+fundamental in the sense that other concepts flow from them and repeated
+reference to them will be necessary in establishing, interpreting, and applying
+accounting and reporting standards.
+      The conceptual framework is a coherent system of interrelated objectives and
+fundamentals that is expected to lead to consistent standards and that prescribes
+the nature, function, and limits of financial accounting and reporting. It is expected
+to serve the public interest by providing structure and direction to financial
+accounting and reporting to facilitate the provision of evenhanded financial and
+related information that helps promote the efficient allocation of scarce resources
+in the economy and society, including assisting capital and other markets to
+function efficiently.
+      Establishment of objectives and identification of fundamental concepts will not
+directly solve financial accounting and reporting problems. Rather, objectives give
+direction, and concepts are tools for solving problems.
+      The Board itself is likely to be the most direct beneficiary of the guidance
+provided by the Statements in this series. They will guide the Board in developing
+accounting and reporting standards by providing the Board with a common
+foundation and basic reasoning on which to consider merits of alternatives.
+      However, knowledge of the objectives and concepts the Board will use in
+developing standards also should enable those who are affected by or interested
+in financial accounting standards to understand better the purposes, content, and
+characteristics of information provided by financial accounting and reporting. That
+knowledge is expected to enhance the usefulness of, and confidence in, financial
+
+
+
+                                                                                   11
+accounting and reporting. The concepts also may provide some guidance in
+analyzing new or emerging problems of financial accounting and reporting in the
+absence of applicable authoritative pronouncements.
+      Statements of Financial Accounting Concepts do not establish standards
+prescribing accounting procedures or disclosure practices for particular items or
+events, which are issued by the Board as Statements of Financial Accounting
+Standards. Rather, Statements in this series describe concepts and relations that
+will underlie future financial accounting standards and practices and in due course
+serve as a basis for evaluating existing standards and practices. *
+      The Board recognizes that in certain respects current generally accepted
+accounting principles may be inconsistent with those that may derive from the
+objectives and concepts set forth in Statements in this series. However, a
+Statement of Financial Accounting Concepts does not (a) require a change in
+existing generally accepted accounting principles; (b) amend, modify, or interpret
+Statements of Financial Accounting Standards, Interpretations of the FASB,
+Opinions of the Accounting Principles Board, or Bulletins of the Committee on
+Accounting Procedure that are in effect; or (c) justify either changing existing
+generally accepted accounting and reporting practices or interpreting the
+pronouncements listed in item (b) based on personal interpretations of the
+objectives and concepts in the Statements of Financial Accounting Concepts.
+      Since a Statement of Financial Accounting Concepts does not establish
+generally accepted accounting principles or standards for the disclosure of
+financial information outside of financial statements in published financial reports,
+it is not intended to invoke application of Rule 203 or 204 of the Rules of Conduct
+of the Code of Professional Ethics of the American Institute of Certified Public
+Accountants (or successor rules or arrangements of similar scope and intent). †
+      Like other pronouncements of the Board, a Statement of Financial Accounting
+Concepts may be amended, superseded, or withdrawn by appropriate action
+under the Board’s Rules of Procedure.
+
+
+
+
+*Pronouncements such as APB Statement No. 4, Basic Concepts and Accounting Principles
+
+Underlying Financial Statements of Business Enterprises, and the Accounting Terminology
+Bulletins will continue to serve their intended purpose—they describe objectives and
+concepts underlying standards and practices existing at the time of their issuance.
+†Rule 203 prohibits a member of the American Institute of Certified Public Accountants from
+
+expressing an opinion that financial statements conform with generally accepted accounting
+principles if those statements contain a material departure from an accounting principle
+promulgated by the Financial Accounting Standards Board, unless the member can
+demonstrate that because of unusual circumstances financial statements otherwise would
+have been misleading. Rule 204 requires members of the Institute to justify departures from
+standards promulgated by the Financial Accounting Standards Board for the disclosure of
+information outside of financial statements in published financial reports.
+
+
+
+12
+Statement of Financial Accounting Concepts No. 5
+
+Recognition and Measurement in Financial Statements of
+Business Enterprises
+
+December 1984
+
+
+CONTENTS
+                                                                                                     Paragraph
+                                                                                                      Numbers
+
+Highlights
+Introduction, Scope, and Limitations .................................................................1–4
+Financial Statements .......................................................................................5–57
+     Financial Statements, Financial Reporting, and Recognition .....................5–9
+     Financial Statements and Objectives of Financial Reporting .................10–12
+     Full Set of Financial Statements.............................................................13–14
+     Purposes and Limitations of Financial Statements.................................15–24
+          General Purpose Financial Statements and Individual Users .........15–16
+          Usefulness of Financial Statements, Individually and Collectively ..17–24
+               Classification and Aggregation in Financial Statements ..........20–22
+               Complementary Nature of Financial Statements .....................23–24
+     Individual Financial Statements .............................................................25–57
+          Statement of Financial Position.......................................................26–29
+          Statements of Earnings and Comprehensive Income .....................30–51
+               Earnings...................................................................................33–38
+               Comprehensive Income ...........................................................39–41
+               Relationships between Earnings and Comprehensive
+                Income ...................................................................................42–44
+               Financial Capital Maintenance .................................................45–48
+               Recognition Implications of Earnings .......................................49–51
+          Statement of Cash Flows ................................................................52–54
+          Statement of Investments by and Distributions to Owners ..............55–57
+Recognition Criteria .......................................................................................58–77
+     Purposes of Criteria .............................................................................. 59–60
+     Structure of Recognition Criteria ............................................................61–62
+     Fundamental Recognition Criteria ..........................................................63–77
+          Definitions .............................................................................................64
+          Measurability ...................................................................................65–72
+               Measurement Attributes ...........................................................66–70
+
+
+
+
+                                                                                                                 13
+                                                                                                       Paragraph
+                                                                                                        Numbers
+
+              Monetary Unit or Measurement Scale......................................71–72
+        Relevance .......................................................................................73–74
+        Reliability.........................................................................................75–77
+Guidance in Applying Criteria to Components of Earnings ............................78–87
+    Revenues and Gains..............................................................................83–84
+    Expenses and Losses ............................................................................85–87
+        Consumption of Benefits .......................................................................86
+        Loss or Lack of Future Benefit ..............................................................87
+Recognition of Changes in Assets and Liabilities ..........................................88–90
+Summary .............................................................................................................91
+Appendix: Background Information ............................................................. 92–108
+Summary Index of Concepts Defined or Discussed
+
+
+
+
+14
+                                HIGHLIGHTS
+                  [Best understood in context of full Statement]
+
+
+•   This Statement sets forth recognition criteria and guidance on what
+    information should be incorporated into financial statements and when. The
+    Statement provides a basis for consideration of criteria and guidance by first
+    addressing financial statements that should be presented and their
+    contribution to financial reporting. It gives particular attention to statements of
+    earnings and comprehensive income. The Statement also addresses certain
+    measurement issues that are closely related to recognition.
+•   Financial statements are a central feature of financial reporting—a principal
+    means of communicating financial information to those outside an entity.
+    Some useful information is better provided by financial statements and some
+    is better provided, or can only be provided, by notes to financial statements,
+    supplementary information, or other means of financial reporting. For items
+    that meet criteria for recognition, disclosure by other means is not a substitute
+    for recognition in financial statements.
+•   Recognition is the process of formally incorporating an item in the financial
+    statements of an entity as an asset, liability, revenue, expense, or the like. A
+    recognized item is depicted in both words and numbers, with the amount
+    included in the statement totals.
+•   A full set of financial statements for a period should show:
+    – Financial position at the end of the period
+    – Earnings for the period
+    – Comprehensive income for the period
+    – Cash flows during the period
+    – Investments by and distributions to owners during the period.
+•   Financial statements individually and collectively contribute to meeting the
+    objectives of financial reporting. No one financial statement is likely to provide
+    all the financial statement information that is useful for a particular kind of
+    decision.
+•   The parts of a financial statement also contribute to meeting the objectives of
+    financial reporting and may be more useful to those who make investment,
+    credit, and similar decisions than the whole.
+•   Financial statements result from simplifying, condensing, and aggregating
+    masses of data. As a result, they convey information that would be obscured
+    if great detail were provided. Although those simplifications, condensations,
+    and aggregations are both necessary and useful, the Board believes that it is
+    important to avoid focusing attention almost exclusively on “the bottom line,”
+    earnings per share, or other highly simplified condensations.
+•   A statement of financial position provides information about an entity’s assets,
+    liabilities, and equity and their relationships to each other at a moment in time.
+    The statement delineates the entity’s resource structure—major classes and
+    amounts of assets—and its financing structure—major classes and amounts
+    of liabilities and equity.
+
+
+
+                                                                                    15
+•    A statement of financial position does not purport to show the value of a
+     business enterprise but, together with other financial statements and other
+     information, should provide information that is useful to those who desire to
+     make their own estimates of the enterprise’s value. Those estimates are part
+     of financial analysis, not of financial reporting, but financial accounting aids
+     financial analysis.
+•    Statements of earnings and of comprehensive income together reflect the
+     extent to which and the ways in which the equity of an entity increased or
+     decreased from all sources other than transactions with owners during a
+     period.
+•    The concept of earnings set forth in this Statement is similar to net income for
+     a period in present practice; however, it excludes certain accounting
+     adjustments of earlier periods that are recognized in the current period—
+     cumulative effect of a change in accounting principle is the principal example
+     from present practice. The Board expects the concept of earnings to be
+     subject to the process of gradual change or evolution that has characterized
+     the development of net income.
+•    Earnings is a measure of entity performance during a period. It measures the
+     extent to which asset inflows (revenues and gains) associated with cash-to-
+     cash cycles substantially completed during the period exceed asset outflows
+     (expenses and losses) associated, directly or indirectly, with the same cycles.
+•    Comprehensive income is a broad measure of the effects of transactions and
+     other events on an entity, comprising all recognized changes in equity (net
+     assets) of the entity during a period from transactions and other events and
+     circumstances except those resulting from investments by owners and
+     distributions to owners.
+•    A variety of terms are used for net income in present practice. The Board
+     anticipates that a variety of terms will be used in future financial statements
+     as names for earnings (for example, net income, profit, or net loss) and for
+     comprehensive income (for example, total nonowner changes in equity or
+     comprehensive loss).
+•    Earnings and comprehensive income are not the same because certain gains
+     and losses are included in comprehensive income but are excluded from
+     earnings. Those items fall into two classes that are illustrated by certain
+     present practices:
+     – Effects of certain accounting adjustments of earlier periods that are
+           recognized in the current period (already described)
+     – Certain other changes in net assets (principally certain holding gains and
+           losses) that are recognized in the period but are excluded from earnings,
+           such as some changes in market values of investments in marketable
+           equity securities classified as noncurrent assets, some changes in market
+           values of investments in industries having specialized accounting
+           practices for marketable securities, and foreign currency translation
+           adjustments.
+•    The full set of financial statements discussed in this Statement is based on
+     the concept of financial capital maintenance.
+
+
+
+
+16
+•   Future standards may change what is recognized as components of earnings.
+    Future standards may also recognize certain changes in net assets as
+    components of comprehensive income but not of earnings.
+•   A statement of cash flows directly or indirectly reflects an entity’s cash receipts
+    classified by major sources and its cash payments classified by major uses
+    during a period, including cash flow information about its operating, financing,
+    and investing activities.
+•   A statement of investments by and distributions to owners reflects an entity’s
+    capital transactions during a period—the extent to which and in what ways the
+    equity of the entity increased or decreased from transactions with owners as
+    owners.
+•   An item and information about it should meet four fundamental recognition
+    criteria to be recognized and should be recognized when the criteria are met,
+    subject to a cost-benefit constraint and a materiality threshold. Those criteria
+    are:
+    –   Definitions. The item meets the definition of an element of financial
+        statements.
+    –   Measurability. It has a relevant attribute measurable with sufficient
+        reliability.
+    –   Relevance. The information about it is capable of making a difference in
+        user decisions.
+    –   Reliability. The information is representationally faithful, verifiable, and
+        neutral.
+•   Items currently reported in the financial statements are measured by different
+    attributes (for example, historical cost, current [replacement] cost, current
+    market value, net realizable value, and present value of future cash flows),
+    depending on the nature of the item and the relevance and reliability of the
+    attribute measured. The Board expects use of different attributes to continue.
+•   The monetary unit or measurement scale in current practice in financial
+    statements is nominal units of money, that is, unadjusted for changes in
+    purchasing power of money over time. The Board expects that nominal units
+    of money will continue to be used to measure items recognized in financial
+    statements.
+•   Further guidance in applying the criteria for recognizing components of
+    earnings is necessary because of the widely acknowledged importance of
+    earnings as a primary measure of entity performance. Guidance for
+    recognizing components of earnings is concerned with identifying which
+    cycles are substantially complete and with associating particular revenues,
+    gains, expenses, and losses with those cycles.
+•   In assessing the prospect that as yet uncompleted transactions will be
+    concluded successfully, a degree of skepticism is often warranted. As a
+    reaction to uncertainty, more stringent requirements have historically been
+    imposed for recognizing revenues and gains as components of earnings than
+    for recognizing expenses and losses. Those conservative reactions influence
+    the guidance for applying the recognition criteria to components of earnings.
+•   Guidance for recognizing revenues and gains is based on their being:
+
+
+
+
+                                                                                    17
+     –   Realized or realizable. Revenues and gains are generally not recognized
+         as components of earnings until realized or realizable and
+     –   Earned. Revenues are not recognized until earned. Revenues are
+         considered to have been earned when the entity has substantially
+         accomplished what it must do to be entitled to the benefits represented
+         by the revenues. For gains, being earned is generally less significant than
+         being realized or realizable.
+•    Guidance for expenses and losses is intended to recognize:
+     – Consumption of benefit. Expenses are generally recognized when an
+         entity’s economic benefits are consumed in revenue-earning activities or
+         otherwise or
+     – Loss or lack of benefit. Expenses or losses are recognized if it becomes
+         evident that previously recognized future economic benefits of assets
+         have been reduced or eliminated, or that liabilities have been incurred or
+         increased, without associated economic benefits.
+•    In a limited number of situations, the Board may determine that the most
+     useful information results from recognizing the effects of certain events in
+     comprehensive income but not in earnings, and set standards accordingly.
+     Certain changes in net assets that meet the fundamental recognition criteria
+     may qualify for recognition in comprehensive income even though they do not
+     qualify for recognition as components of earnings.
+•    Information based on current prices should be recognized if it is sufficiently
+     relevant and reliable to justify the costs involved and more relevant than
+     alternative information.
+•    Most aspects of current practice are consistent with the recognition criteria
+     and guidance in this Statement, but the criteria and guidance do not foreclose
+     the possibility of future changes in practice. When evidence indicates that
+     information that is more useful (relevant and reliable) than information
+     currently reported is available at a justifiable cost, it should be included in
+     financial statements.
+
+
+
+
+18
+Statement of Financial Accounting Concepts No. 5
+
+Recognition and Measurement in Financial Statements of
+Business Enterprises
+
+December 1984
+
+INTRODUCTION, SCOPE, AND LIMITATIONS
+1.    This Statement sets forth fundamental recognition criteria and guidance on
+what information should be formally incorporated into financial statements and
+when. It builds on the foundation laid by earlier concepts Statements, bringing
+those concepts together to apply them to broad recognition issues. As a basis for
+considering recognition criteria, the Statement first addresses financial statements
+that should be presented and how those financial statements contribute to the
+objectives of financial reporting. Both that discussion and the later discussion of
+recognition give particular attention to statements of earnings and comprehensive
+income.
+2.    The recognition criteria and guidance in this Statement are generally
+consistent with current practice and do not imply radical change. Nor do they
+foreclose the possibility of future changes in practice. The Board intends future
+change to occur in the gradual, evolutionary way that has characterized past
+change.
+3.     This Statement also addresses certain measurement issues that are closely
+related to recognition. Measurement involves choice of an attribute by which to
+quantify a recognized item and choice of a scale of measurement (often called
+“unit of measure”). The Statement notes that different attributes are currently used
+to measure different items in financial statements and that the Board expects the
+use of different attributes to continue. The Statement further notes that the
+measurement scale in current practice is nominal units of money (that is,
+unadjusted for changes in purchasing power over time) and that the Board expects
+use of nominal units to continue.
+4.     This Statement is not intended to apply to organizations other than business
+enterprises. Recognition criteria and guidance on what information should be
+formally incorporated into financial statements of nonbusiness organizations can
+be considered only after completion of another Board project that concerns
+significant underlying concepts upon which recognition criteria and guidance are
+built. The Board issued its Exposure Draft, Proposed Amendments to FASB
+Concepts Statements 2 and 3 to Apply Them to Nonbusiness Organizations, on
+July 7, 1983 and held public hearings on that matter on November 14 and 15,
+1983. Since that project is still in progress, all references in this Statement are to
+the original Statements, FASB Concepts Statements No. 2, Qualitative
+Characteristics of Accounting Information, and No. 3, Elements of Financial
+Statements of Business Enterprises.
+
+
+                                                                                   19
+FINANCIAL STATEMENTS
+
+Financial Statements, Financial Reporting, and
+Recognition
+5.    Financial statements are a central feature of financial reporting—a principal
+means of communicating financial information to those outside an entity. In
+external general purpose financial reporting, a financial statement is a formal
+tabulation of names and amounts of money derived from accounting records that
+displays either financial position of an entity at a moment in time or one or more
+kinds of changes in financial position of the entity during a period of time. Items
+that are recognized in financial statements are financial representations of certain
+resources (assets) of an entity, claims to those resources (liabilities and owners’
+equity), and the effects of transactions and other events and circumstances that
+result in changes in those resources and claims. The financial statements of an
+entity are a fundamentally related set that articulate with each other and derive
+from the same underlying data.1
+6.     Recognition is the process of formally recording or incorporating an item into
+the financial statements of an entity as an asset, liability, revenue, expense, or the
+like. Recognition includes depiction of an item in both words and numbers, with the
+amount included in the totals of the financial statements. For an asset or liability,
+recognition involves recording not only acquisition or incurrence of the item but
+also later changes in it, including changes that result in removal from the financial
+statements.2
+7.    Although financial statements have essentially the same objectives as
+financial reporting, some useful information is better provided by financial
+statements and some is better provided, or can only be provided, by notes to
+financial statements or by supplementary information or other means of financial
+reporting:3
+     a.   Information disclosed in notes or parenthetically on the face of financial
+          statements, such as significant accounting policies or alternative
+
+1
+ FASB Concepts Statement No. 1, Objectives of Financial Reporting by Business
+Enterprises, pars. 6 and 18; Concepts Statement 3, pars. 6 and 14 and 15. Financial position
+and changes in financial position are used here in a broad sense and do not refer to specific
+financial statements. “Used broadly, financial position refers to state or status of assets or
+claims to assets at moments in time, and changes in financial position refers to flows or
+changes in assets or claims to assets over time” (Concepts Statement 3, par. 14, footnote
+6). “Through the financial accounting process, the myriad and complex effects of the
+economic activities of an enterprise are accumulated, analyzed, quantified, classified,
+recorded, summarized, and reported as information of two basic types: (1) financial position,
+which relates to a point in time, and (2) changes in financial position, which relate to a period
+of time” (APB Statement No. 4, Basic Concepts and Accounting Principles Underlying
+Financial Statements of Business Enterprises, par. 10).
+2
+ Concepts Statement 3, pars. 83, 6, 25, 26, and 34 and 35.
+3
+ Concepts Statement 1, par. 5.
+
+
+
+20
+          measures for assets or liabilities, amplifies or explains information
+          recognized in the financial statements.4 That sort of information is
+          essential to understanding the information recognized in financial
+          statements and has long been viewed as an integral part of financial
+          statements prepared in accordance with generally accepted accounting
+          principles.
+     b.   Supplementary information, such as disclosures of the effects of
+          changing prices, and other means of financial reporting, such as
+          management discussion and analysis, add information to that in the
+          financial statements or notes, including information that may be relevant
+          but that does not meet all recognition criteria.5
+8.    The scope of this concepts Statement is limited to recognition (and
+measurement) in financial statements. That limitation on scope does not alter the
+status of notes, supplementary information, or other means of financial reporting;
+those types of information remain important and useful for the reasons discussed
+in the preceding paragraph. To clarify the scope of this concepts Statement, the
+diagram on page 32 illustrates the types of information used in investment, credit,
+and similar decisions. Since recognition means depiction of an item in both words
+and numbers, with the amount included in the totals of the financial statements,
+disclosure by other means is not recognition.
+9.    Disclosure of information about the items in financial statements and their
+measures that may be provided by notes or parenthetically on the face of financial
+statements, by supplementary information, or by other means of financial reporting
+is not a substitute for recognition in financial statements for items that meet
+recognition criteria. Generally, the most useful information about assets, liabilities,
+revenues, expenses, and other items of financial statements and their measures
+(that with the best combination of relevance and reliability) should be recognized
+in the financial statements.
+
+
+
+
+4
+ For example, notes provide essential descriptive information for long-term obligations,
+including when amounts are due, what interest they bear, and whether important restrictions
+are imposed by related covenants. For inventory, the notes provide information on the
+measurement method used—FIFO cost, LIFO cost, current market value, etc. For an
+estimated litigation liability, an extended discussion of the circumstances, counsel’s opinions,
+and the basis for management’s judgment may all be provided in the notes. For sales, useful
+information about revenue recognition policies may appear only in the notes (FASB
+Statement No. 47, Disclosure of Long-Term Obligations; ARB No. 43, Chapter 4, “Inventory
+Pricing,” statement 8; FASB Statement No. 5, Accounting for Contingencies, par. 10; and
+APB Statement 4, par. 199).
+5
+ Concepts Statement 1, pars. 6, 7, and 22. Supplementary financial statements, complete or
+partial, may be useful, especially to introduce and to gain experience with new kinds of
+information. Criteria for including information in supplementary statements may have much
+in common with recognition criteria for primary statements discussed here, but the criteria
+discussed in this Statement apply specifically to primary financial statements.
+
+
+
+                                                                                             21
+Financial Statements and Objectives of Financial
+Reporting
+10. FASB Concepts Statement No. 1, Objectives of Financial Reporting by
+Business Enterprises, describes the broad purposes of financial reporting,
+including financial statements.6 Financial reporting should provide:
+
+     Information that is useful to present and potential investors and creditors and
+     other users in making rational investment, credit, and similar decisions
+     (paragraphs 34–36)
+
+     Information to help investors, creditors, and others assess the amounts,
+     timing, and uncertainty of prospective net cash inflows to the related
+     enterprise because their prospects for receiving cash from investments in,
+     loans to, or other participation in the enterprise depend significantly on its cash
+     flow prospects (paragraphs 37–39)
+
+
+
+6
+ Paragraphs 8–33 of Concepts Statement 1 give needed background. They describe factors
+affecting the objectives of general purpose external financial reporting, such as
+characteristics of the environment in the United States, characteristics and limitations of
+information provided, potential users and their interests, and the nature of the objectives. For
+example, “financial reporting is but one source of information needed by those who make
+economic decisions about business enterprises” (par. 22).
+
+
+
+22
+    Information about the economic resources of an enterprise, the claims to
+    those resources (obligations of the enterprise to transfer resources to other
+    entities and owners’ equity), and the effects of transactions, events, and
+    circumstances that change resources and claims to those resources
+    (paragraph 40).
+
+11. Concepts Statement 1 also gives guidance about the kinds of information
+that financial reporting, including financial statements, should provide:
+    Information about an enterprise’s economic resources, obligations, and
+    owners’ equity (paragraph 41)
+
+    Information about an enterprise’s performance provided by measures of
+    earnings and comprehensive income7 and their components measured by
+    accrual accounting (paragraphs 42–48)
+
+    Information about how an enterprise obtains and spends cash, about its
+    borrowing and repayment of borrowing, about its capital (equity) transactions,
+    including cash dividends and other distributions of enterprise resources to
+    owners, and about other factors that may affect an enterprise’s liquidity or
+    solvency (paragraph 49)
+
+    Information about how management of an enterprise has discharged its
+    stewardship responsibility to owners (stockholders) for the use of enterprise
+    resources entrusted to it (paragraphs 50–53).
+
+12. A full, articulated set of several financial statements that provide those
+various kinds of information about an entity’s financial position and changes in its
+financial position is necessary to satisfy the broad purposes of financial reporting.
+
+Full Set of Financial Statements
+13. The amount and variety of information that financial reporting should provide
+about an entity require several financial statements. A full set of financial
+statements for a period should show:
+
+    Financial position at the end of the period
+    Earnings (net income)8 for the period
+    Comprehensive income (total nonowner changes in equity)8 for the period
+    Cash flows during the period
+    Investments by and distributions to owners during the period.
+
+7
+ Concepts Statement 3 used the term comprehensive income for the concept that was called
+earnings in Concepts Statement 1 and reserved the term earnings for possible use to
+designate a component part of comprehensive income (par. 1, footnote 1). Earnings,
+including its relationship to comprehensive income, is a major topic of this Statement.
+8
+ Pars. 33 and 40
+
+
+
+                                                                                     23
+Information about earnings, comprehensive income, cash flows, and transactions
+with owners have in common that they are different kinds of information about the
+effects of transactions and other events and circumstances that change assets and
+liabilities during a period.
+14. This Statement does not consider details of displaying those different kinds
+of information and does not preclude the possibility that some entities might
+choose to combine some of that information in a single statement. In present
+practice, for example, a reconciliation of beginning and ending balances of retained
+earnings is sometimes appended to an income statement.
+
+Purposes and Limitations of Financial Statements
+
+General Purpose Financial Statements and Individual Users
+15. General purpose financial statements, to which the objectives of financial
+reporting apply, are directed toward the common interest of various potential users
+in the ability of a business enterprise to generate favorable cash flows. 9 General
+purpose financial statements are feasible only because groups of users of financial
+information have generally similar needs. But “general purpose” does not mean
+“all purpose,” and financial statements do not necessarily satisfy all users equally
+well.
+16. Each decision maker judges what accounting information is useful, and that
+judgment is influenced by factors such as the decisions to be made, the methods
+of decision making to be used, the information already possessed or obtainable
+from other sources, and the decision maker’s capacity (alone or with professional
+help) to process the information. Even users of financial statement information who
+make generally similar kinds of decisions differ from each other in those matters.10
+
+Usefulness of Financial Statements, Individually and
+Collectively
+17. Financial statements of an entity individually and collectively contribute to
+meeting the objectives of financial reporting. Component parts of financial
+statements also contribute to meeting the objectives.
+18. Each financial statement provides a different kind of information, and, with
+limited exceptions (paragraph 14), the various kinds of information cannot be
+combined into a smaller number of statements without unduly complicating the
+information. Moreover, the information each provides is used for various purposes,
+and particular users may be especially interested in the information in one of the
+statements. Paragraphs 26–57 of this Statement summarize how individual
+financial statements provide the information listed in paragraph 13.
+9
+ Concepts Statement 1, par. 30.
+10
+  Concepts Statement 2, pars. 23–26 and 32–41. For example, information cannot be useful
+to decision makers who cannot understand it, even though it may otherwise be relevant to a
+decision and be reliable. Understandability of information is related to the characteristics of
+the decision maker as well as to the characteristics of the information itself.
+
+
+
+24
+19. The following two sections first describe how classification and aggregation,
+if done and used with care, enhance the decision usefulness of financial
+statements and how financial statements complement each other.
+
+Classification and Aggregation in Financial Statements
+20. Classification in financial statements facilitates analysis by grouping items
+with essentially similar characteristics and separating items with essentially
+different characteristics. Analysis aimed at objectives such as predicting amounts,
+timing, and uncertainty of future cash flows requires financial information
+segregated into reasonably homogeneous groups. For example, components of
+financial statements that consist of items that have similar characteristics in one or
+more respects, such as continuity or recurrence, stability, risk, and reliability, are
+likely to have more predictive value than if their characteristics are dissimilar.
+21. Financial statements result from processing vast masses of data and involve
+needs to simplify, to condense, and to aggregate.11 Real things and events that
+affect a dynamic and complex business enterprise are represented in financial
+statements by words and numbers, which are necessarily highly simplified symbols
+of the real thing. Real transactions and other events are voluminous and are
+interpreted, combined, and condensed to be reflected in financial statements.
+Numerous items and components are aggregated into sums or totals. The resulting
+financial statements convey information that would be obscured from most users
+if great detail, such as descriptions of each transaction or event, were provided.
+22. Although those simplifications, condensations, and aggregations are both
+necessary and useful, the Board believes it is important to avoid focusing attention
+almost exclusively on “the bottom line,” earnings per share, or other highly
+simplified condensations. Summary data, such as the amounts of net assets,
+comprehensive income, earnings, or earnings per share, may be useful as general
+indicators of the amount of investment or overall past performance and are often
+used in efforts to compare an entity with many other entities. But, in a complex
+business enterprise, summary amounts include many heterogeneous things and
+events. Components of a financial statement often reflect more homogeneous
+classes of items than the whole statement. The individual items, subtotals, or other
+parts of a financial statement may often be more useful than the aggregate to those
+who make investment, credit, and similar decisions.
+
+Complementary Nature of Financial Statements
+23. Financial statements interrelate (articulate) because they reflect different
+aspects of the same transactions or other events affecting an entity. 12 Although
+11
+  “. . . It is a very fundamental principle indeed that knowledge is always gained by the orderly
+loss of information, that is, by condensing and abstracting and indexing the great buzzing
+confusion of information that comes from the world around us into a form which we can
+appreciate and comprehend” (Kenneth E. Boulding, Economics as a Science [New York:
+McGraw-Hill Book Company, 1970], p. 2, emphasis added).
+12
+  Concepts Statement 3, pars. 14 and 15.
+
+
+
+                                                                                             25
+each presents information different from the others, none is likely to serve only a
+single purpose or provide all the financial statement information that is useful for a
+particular kind of assessment or decision. Significant tools of financial analysis,
+such as rates of return and turnover ratios, depend on interrelationships between
+financial statements and their components.
+
+24.    Financial statements complement each other. For example:
+
+      a.   Statements of financial position include information that is often used in
+           assessing an entity’s liquidity and financial flexibility,13 but a statement of
+           financial position provides only an incomplete picture of either liquidity or
+           financial flexibility unless it is used in conjunction with at least a cash flow
+           statement.
+      b.   Statements of earnings and comprehensive income generally reflect a
+           great deal about the profitability of an entity during a period, but that
+           information can be interpreted most meaningfully or compared with that
+           of the entity for other periods or that of other entities only if it is used in
+           conjunction with a statement of financial position, for example, by
+           computing rates of return on assets or equity.
+      c.   Statements of cash flows commonly show a great deal about an entity’s
+           current cash receipts and payments, but a cash flow statement provides
+           an incomplete basis for assessing prospects for future cash flows
+           because it cannot show interperiod relationships. Many current cash
+           receipts, especially from operations, stem from activities of earlier
+           periods, and many current cash payments are intended or expected to
+           result in future, not current, cash receipts. Statements of earnings and
+           comprehensive income, especially if used in conjunction with statements
+           of financial position, usually provide a better basis for assessing future
+           cash flow prospects of an entity than do cash flow statements alone.14
+      d.   Statements of investments by and distributions to owners provide
+           information about significant sources of increases and decreases in
+           assets, liabilities, and equity, but that information is of little practical value
+           unless used in conjunction with other financial statements, for example,
+           by comparing distributions to owners with earnings and comprehensive
+           income or by comparing investments by and distributions to owners with
+           borrowings and repayments of debt.
+
+Individual Financial Statements
+25. This discussion summarizes how individual financial statements provide the
+information listed in paragraph 13. It also introduces recognition considerations,
+which are the subject of the sections following.
+
+
+13
+  Liquidity reflects an asset’s or liability’s nearness to cash. Financial flexibility is the ability
+of an entity to take effective actions to alter amounts and timing of cash flows so it can
+respond to unexpected needs and opportunities.
+14
+  Concepts Statement 1, pars. 42–46.
+
+
+
+26
+Statement of Financial Position
+26. A statement of financial position provides information about an entity’s
+assets, liabilities, and equity and their relationships to each other at a moment in
+time. The statement delineates the entity’s resource structure—major classes and
+amounts of assets—and its financing structure—major classes and amounts of
+liabilities and equity.
+27. A statement of financial position does not purport to show the value of a
+business enterprise15 but, together with other financial statements and other
+information, should provide information that is useful to those who desire to make
+their own estimates of the enterprise’s value. As a result of limitations stemming
+from uncertainty and cost-benefit considerations, not all assets and not all liabilities
+are included in a statement of financial position, and some assets and liabilities
+that are included are affected by events, such as price changes or accretion, that
+are not recognized. Statements of financial position also commonly use different
+attributes to measure different assets and liabilities.16
+28. Uncertainty and related limitations of financial accounting put the burden of
+estimating values of business enterprises and of investments in them on investors,
+creditors, and others. Information about components of earnings and
+comprehensive income often plays a significant part in that analysis. For example,
+investors may use that information to help estimate “earning power,” or other
+amounts that they perceive as representative of long-term earning ability of an
+enterprise, as a significant step in comparing the market price of an equity security
+with its “intrinsic value.” Those estimates and analyses are part of financial
+analysis, not financial reporting,17 but financial accounting facilitates financial
+analysis by, among other things, classifying financial statement information in
+homogeneous groups.18
+29. Important uses of information about an entity’s financial position include
+helping users to assess factors such as the entity’s liquidity, financial flexibility,
+profitability, and risk. Comparisons among entities and computations of rates of
+return are enhanced to the extent that significant asset and liability groupings are
+homogeneous in general characteristics and measurement.
+
+
+15
+  Ibid., par. 41.
+16
+  The different attributes are defined and their current use illustrated in paragraphs 66-70 of
+this Statement.
+17
+  “. . . [A]ccrual accounting provides measures of earnings rather than evaluations of
+management’s performance, estimates of ‘earning power,’ predictions of earnings,
+assessments of risk, or confirmations or rejections of predictions or assessments. Investors,
+creditors, and other users of the information do their own evaluating, estimating, predicting,
+assessing, confirming, or rejecting. For example, procedures such as averaging or
+normalizing reported earnings for several periods and ignoring or averaging out the financial
+effects of ‘nonrepresentative’ transactions and events are commonly used in estimating
+‘earning power.’ However, both the concept of ‘earning power’ and the techniques for
+estimating it are part of financial analysis and are beyond the scope of financial reporting”
+(Concepts Statement 1, par. 48).
+18
+  Pars. 20–22 of this Statement.
+
+
+
+                                                                                            27
+Statements of Earnings and Comprehensive Income
+30. Statements of earnings and comprehensive income together reflect the
+extent to which and the ways in which the equity of an entity increased or
+decreased from all sources other than transactions with owners during a period.
+Investors, creditors, managers, and others need information about the causes of
+changes in an entity’s assets and liabilities—including results of its ongoing major
+or central operations, results of its incidental or peripheral transactions, and effects
+of other events and circumstances stemming from the environment that are often
+partly or wholly beyond the control of the entity and its management.
+31. Effects of an entity’s various activities, transactions, and events differ in
+stability, risk, and predictability, indicating a need for information about various
+components of earnings and comprehensive income. That need underlies the
+distinctions between revenues and gains, between expenses and losses, between
+various kinds of gains and losses, and between measures found in present
+practice such as income from continuing operations and net income.19
+32. Since the parts of a financial statement may be more useful to decision
+makers than the whole (paragraphs 20–22), this Statement emphasizes
+usefulness of components, interrelationships, and different perspectives as well as
+usefulness, collectively and individually, of financial statements.
+
+Earnings
+33. The concept of earnings described in this Statement is similar to net income
+in present practice. It includes almost all of what is in present net income for a
+period, and a statement of earnings based on it will be much like a present income
+statement. Present practice accepts a variety of terms for net income, and the
+Board anticipates that net income, profit, net loss, and other equivalent terms will
+continue to be used in financial statements as names for earnings. However,
+earnings is not exactly the same as present net income, and this Statement uses
+the term earnings in part to distinguish the concept described here from present
+net income.
+
+
+
+
+19
+ Concepts Statement 3, pars. 61 and 151.
+
+
+
+28
+34. Earnings does not include the cumulative effect of certain accounting
+adjustments of earlier periods that are recognized in the current period. 20 The
+principal example that is included in present net income but excluded from
+earnings is the cumulative effect of a change in accounting principle, but others
+may be identified in the future. Earnings is a measure of performance for a period
+and to the extent feasible excludes items that are extraneous to that period—items
+that belong primarily to other periods.21 The following condensed statements show
+the similarities and major existing difference between earnings and present net
+income.
+
+                                                                Present
+                                                               Net Income            Earnings
+     Revenues                                                         100                100
+     Expenses                                                          80                 80
+     Gain from unusual source                                          (3)                (3)
+     Income from continuing operations                                 23                 23
+     Loss on discontinued operations
+          Income from operating discontinued segment           10               10
+          Loss on disposal of discontinued segment             12       2       12         2
+     Income before extraordinary items                                                    21
+      and effect of a change in accounting principle                   21
+        Extraordinary loss                                      6                          6
+        Cumulative effect on prior years of a change
+           in accounting principle                              2       8
+     Earnings                                                                             15
+     Net Income                                                        13
+
+
+
+35. The Board expects the concept of earnings to be subject to the process of
+gradual change or evolution that has characterized the development of net income.
+Present practice has developed over a long time, and that evolution has resulted
+in significant changes in what net income reflects, such as a shift toward what is
+commonly called an “all-inclusive” income statement. Those changes have
+resulted primarily from standard-setting bodies’ responses to several factors, such
+as changes in the business and economic environment and perceptions about the
+nature and limitations of financial statements, about the needs of users of financial
+statements, and about the need to prevent or cure perceived abuse(s) in financial
+reporting. Those factors sometimes may conflict or appear to conflict. For example,
+an all-inclusive income statement is intended, among other things, to avoid
+discretionary omissions of losses (or gains) from an income statement, thereby
+
+20
+  That is, the cumulative effect on equity at the beginning of the period for which an earnings
+statement is provided, sometimes called a “catch-up adjustment.”
+21
+  Prior period adjustments as defined in FASB Statement No. 16, Prior Period Adjustments,
+are not included in net income in present practice and are not, therefore, differences between
+earnings in this Statement and present net income. Statement 16 narrowed considerably the
+definition of prior period adjustments in APB Opinions No. 9, Reporting the Results of
+Operations, and No. 30, Reporting the Results of Operations—Reporting the Effects of
+Disposal of a Segment of a Business, and Extraordinary, Unusual and Infrequently Occurring
+Events and Transactions. Some items that were prior period adjustments under those
+Opinions are included in net income in present practice, and some argue that the existing
+definition is too narrow because as a result net income includes items that belong to other
+periods.
+
+
+
+                                                                                                29
+avoiding presentation of a more (or less) favorable report of performance or
+stewardship than is justified. However, because income statements also are used
+as a basis for estimating future performance and assessing future cash flow
+prospects, arguments have been advanced urging exclusion of unusual or
+nonrecurring gains and losses that might reduce the usefulness of an income
+statement for any one year for predictive purposes.
+36. Earnings is a measure of performance during a period that is concerned
+primarily with the extent to which asset inflows associated with cash-to-cash
+cycles22 substantially completed (or completed) during the period exceed (or are
+less than) asset outflows associated, directly or indirectly, with the same cycles.
+Both an entity’s ongoing major or central activities and its incidental or peripheral
+transactions involve a number of overlapping cash-to-cash cycles of different
+lengths. At any time, a significant proportion of those cycles is normally incomplete,
+and prospects for their successful completion and amounts of related revenues,
+expenses, gains, and losses vary in degree of uncertainty. Estimating those
+uncertain results of incomplete cycles is costly and involves risks, but the benefits
+of timely financial reporting based on sales or other more relevant events, rather
+than on cash receipts or other less relevant events, outweigh those costs and risks.
+37. Final results of incomplete cycles usually can be reliably measured at some
+point of substantial completion (for example, at the time of sale, usually meaning
+delivery) or sometimes earlier in the cycle (for example, as work proceeds on
+certain long-term, construction-type contracts), so it is usually not necessary to
+delay recognition until the point of full completion (for example, until after
+receivables have been collected and warranty obligations have been satisfied).
+Guidance for applying recognition criteria to components of earnings (paragraphs
+78–87) helps define earnings by aiding in making those determinations.
+38. Earnings focuses on what the entity has received or reasonably expects to
+receive for its output (revenues) and what it sacrifices to produce and distribute
+that output (expenses). Earnings also includes results of the entity’s incidental or
+peripheral transactions and some effects of other events and circumstances
+stemming from the environment (gains and losses).23
+
+Comprehensive Income
+39. Comprehensive income is a broad measure of the effects of transactions and
+other events on an entity, comprising all recognized changes in equity (net assets)
+
+22
+  The patterns of cash-to-cash cycles vary by industry. “Descriptions of operations of
+business enterprises commonly describe a cycle that begins with cash outlays and ends with
+cash receipts. That description . . . generally fits manufacturing, merchandising, financial,
+and service enterprises whose operations comprise primarily activities such as acquiring
+goods and services, increasing their value by adding time, place, or form utility, selling them,
+and collecting the selling price. Cash receipts may precede cash payments, however, and
+commonly do in the operations of some service and financial enterprises” (Concepts
+Statement 1, par. 39, footnote 8).
+23
+  Concepts Statement 3, paragraphs 50 and 63–73, defines revenues, expenses, gains, and
+losses.
+
+
+
+30
+of the entity during a period from transactions and other events and circumstances
+except those resulting from investments by owners and distributions to owners.24
+40. Just as a variety of terms are used for net income in present practice, the
+Board anticipates that total nonowner changes in equity, comprehensive loss, and
+other equivalent terms will be used in future financial statements as names for
+comprehensive income.
+41. Components of comprehensive income other than those that are included in
+earnings present no recognition problems in addition to those involved in
+recognizing assets and liabilities, for which fundamental criteria are described later
+(paragraphs 58–77).
+
+Relationships between Earnings and Comprehensive Income
+42. Earnings and comprehensive income have the same broad components—
+revenues, expenses, gains, and losses—but are not the same because certain
+classes of gains and losses are included in comprehensive income but are
+excluded from earnings.25 Those items fall into two classes that are illustrated by
+certain present practices:
+
+     a.   Effects of certain accounting adjustments of earlier periods that are
+          recognized in the period, such as the principal example in present
+          practice—cumulative effects of changes in accounting principles—which
+          are included in present net income but are excluded from earnings as set
+          forth in this Statement (paragraphs 33 and 34)
+     b.   Certain other changes in net assets (principally certain holding gains and
+          losses) that are recognized in the period, such as some changes in
+          market values of investments in marketable equity securities classified as
+          noncurrent assets, some changes in market values of investments in
+          industries having specialized accounting practices for marketable
+          securities, and foreign currency translation adjustments.26
+Both classes and the items they comprise are subject to evolutionary change
+(paragraph 35).
+
+
+24
+  Ibid., pars. 50, 56–62, and 147–152.
+25
+  That possibility was noted in Concepts Statement 3: “. . . the reason for using
+comprehensive income rather than earnings in this Statement is that the Board has decided
+to reserve earnings for possible use to designate a different concept that is a component part
+of—that is, is narrower than or less than—comprehensive income. . . .“ (par. 58, footnote
+reference omitted).
+26
+  FASB Statements No. 12, Accounting for Certain Marketable Securities; No. 60, Accounting
+and Reporting by Insurance Enterprises; and No. 52, Foreign Currency Translation. Changes
+in market values of marketable securities are included in earnings by some other entities
+having specialized accounting practices for marketable securities (for example, securities
+brokers and dealers and investment companies) and for some classes of marketable
+securities (for example, securities held in trading accounts of banks and futures contracts
+that are considered speculative [FASB Statement No. 80, Accounting for Futures Contracts]).
+
+
+
+                                                                                           31
+43. Differences between earnings and comprehensive income require some
+distinguishing terms. The items in both classes described in paragraph 42 are
+gains and losses under the definitions in Concepts Statement 3 (paragraphs 67–
+73), but to refer to some gains and losses that are included in earnings and other
+gains and losses that are included in comprehensive income but are excluded from
+earnings is not only clumsy but also likely to be confusing. This Statement
+therefore uses gains and losses for those included in earnings and uses
+cumulative accounting adjustments and other nonowner changes in equity for
+those excluded from earnings but included in comprehensive income.
+44. The relationships between earnings and comprehensive income described
+in the foregoing paragraphs mean that statements of earnings and comprehensive
+income complement each other something like this:27
+
+     +     Revenues            100          +      Earnings                        15
+     –     Expenses             80          –      Cumulative accounting
+                                                     adjustments                     2
+     +     Gains                 3
+                                            +      Other nonowner
+     –     Losses                8                  changes in equity                1
+
+     =     Earnings             15          =      Comprehensive income            14
+
+
+
+
+Financial Capital Maintenance
+45. The full set of articulated financial statements discussed in this Statement is
+based on the concept of financial capital maintenance.
+46. An enterprise receives a return only after its capital has been maintained or
+recovered. The concept of capital maintenance, therefore, is critical in
+distinguishing an enterprise’s return on investment from return of its investment.
+Both investors and the enterprises in which they acquire an interest invest financial
+resources with the expectation that the investment will generate more financial
+resources than they invested.
+47. A return on financial capital results only if the financial (money) amount of an
+enterprise’s net assets at the end of a period exceeds the financial amount of net
+assets at the beginning of the period after excluding the effects of transactions with
+owners. The financial capital concept is the traditional view and is the capital
+maintenance concept in present financial statements.28 In contrast, a return on
+physical capital results only if the physical productive capacity of the enterprise at
+the end of the period (or the resources needed to achieve that capacity) exceeds
+
+27
+  Earnings and its components are the same as in the example in paragraph 34. Both
+cumulative accounting adjustments and other nonowner changes in equity may be either
+additions to or deductions from earnings. The signs used in the example are for illustration
+only.
+28
+  Concepts Statement 3, par. 58. “Comprehensive income as defined in paragraph 56 is a
+return on financial capital” (Ibid.).
+
+
+
+32
+the physical productive capacity at the beginning of the period, also after excluding
+the effects of transactions with owners. The physical capital maintenance concept
+can be implemented only if inventories and property, plant, and equipment (and
+perhaps other assets) are measured by their current costs, while the financial
+capital maintenance concept does not require measurement by a particular
+attribute.
+48. The principal difference between the two capital maintenance concepts
+involves the effects of price changes during a period on assets while held and
+liabilities while owed. Under the financial capital concept, if the effects of those
+price changes are recognized, they are conceptually holding gains and losses
+(though they are commonly reported under other names)29 and are included in the
+return on capital. Under the physical capital concept, those changes would be
+recognized but conceptually would be capital maintenance adjustments that would
+be included directly in equity and not included in return on capital. Both earnings
+and comprehensive income as set forth in this Statement, like present net income,
+include holding gains and losses that would be excluded from income under a
+physical capital maintenance concept.
+
+Recognition Implications of Earnings
+49. Although recognition involves considerations of relevance and comparability,
+recognition criteria, conventions, and rules are primarily intended to increase
+reliability—they are means of coping with the uncertainty that surrounds business
+and economic activities. Uncertainty in business and economic affairs is a
+continuum, ranging from mere lack of absolute sureness to a degree of vagueness
+that precludes anything other than guesswork. Since uncertainty surrounds an
+entity’s incomplete cash-to-cash cycles in varying degrees, measuring progress
+reliably involves determining whether uncertainty about future cash flows has been
+reduced to an acceptable level.
+50. In response to uncertainty, there has been a general tendency to emphasize
+purchase and sale transactions and to apply conservative procedures in
+accounting recognition. Perceptions about characteristics such as realizability and
+volatility may also help to explain why some events are recognized in present
+practice while others are not. For example, revenues are sometimes recognized
+before sale if readily realizable (if sale is a more-or-less effortless or perfunctory
+activity, and uncertainty about amounts involved is reduced to an acceptable level
+by quoted prices for interchangeable units in active markets or other reliable
+measures).30 Those characteristics may also help to explain certain special
+recognition rules. For example, so-called translation adjustments from translating
+foreign currency financial statements are excluded from net income but are
+reported separately in comprehensive income (paragraphs 39 and 42) because
+they are considered not only unrealized but also unrealizable short of sale or
+liquidation of the investment in the entity. Effects of exchange rate changes on the
+
+29
+  For example, under the FIFO method in present practice, gains from price increases on
+inventory while held reduce cost of goods sold.
+30
+  ARB No. 43, Chapter 4, par. 16; FASB Statement 12, pars. 14–16, 27, and 28.
+
+
+
+                                                                                    33
+net investment are considered too uncertain and remote to be included in operating
+results.31 Similarly, a reason commonly given for the same treatment for certain
+changes in market values of investments in marketable equity securities is that
+they may be temporary, and temporary fluctuations in market values of long-term
+investments should not be included in net income.32
+51. Since earnings in this Statement is similar to net income for a period in
+present practice, criteria and guidance given in the Statement for recognizing
+components of earnings (paragraphs 58–87) are generally similar to revenue and
+expense recognition criteria or rules in present practice. Future standards may
+change what is recognized as components of earnings (paragraph 35). Moreover,
+because of the differences between earnings and comprehensive income, future
+standards also may recognize certain changes in net assets as components of
+comprehensive income but not as components of earnings.33
+
+Statement of Cash Flows
+52. A statement of cash flows directly or indirectly reflects an entity’s cash
+receipts classified by major sources and its cash payments classified by major
+uses during a period. It provides useful information about an entity’s activities in
+generating cash through operations to repay debt, distribute dividends, or reinvest
+to maintain or expand operating capacity; about its financing activities, both debt
+and equity; and about its investing or spending of cash. Important uses of
+information about an entity’s current cash receipts and payments include helping
+to assess factors such as the entity’s liquidity, financial flexibility, profitability, and
+risk.
+53. Since neither earnings nor comprehensive income measured by accrual
+accounting is the same as cash flow from operations, cash flow statements provide
+significant information about amounts, causes, and intervals of time between
+earnings and comprehensive income and cash receipts and outlays. Users
+commonly consider that information in assessing the relationship between
+earnings or comprehensive income and associated cash flows.
+54. Statements of cash flows present few recognition problems because all cash
+receipts and payments are recognized when they occur. Reporting cash flows
+involves no estimates or allocations and few judgments except regarding
+classification in cash flow statements.34
+
+
+
+
+31
+  Statement 52, pars. 111–113.
+32
+  Statement 12, pars. 21, 29, and 30.
+33
+  A possibility that has been suggested is the “inventory profits” that would result if cost of
+goods sold were reported on LIFO while inventories were reported on FIFO.
+34
+  Determinations about the particular items to be reported within cash flow statements and
+the form of those statements are matters that may be developed further in Statements of
+Financial Accounting Standards or in practice.
+
+
+
+34
+Statement of Investments by and Distributions to Owners
+55. A statement of investments by and distributions to owners reflects the extent
+to which and in what ways the equity of an entity increased or decreased from
+transactions with owners as owners35 during a period. That is, it reflects the capital
+transactions36 of the entity, in contrast to its income transactions—those with
+nonowners—which are reflected in statements of earnings and comprehensive
+income. Statements of comprehensive income and statements of transactions with
+owners together include all changes in equity (net assets) recognized during a
+period.
+56. Investments by owners establish or increase ownership interests in the entity
+and may be received in the form of cash, goods or services, or satisfaction or
+conversion of the entity’s liabilities. Distributions decrease ownership interests and
+include not only cash dividends when declared (or other cash withdrawals by
+owners of noncorporate entities) but also transactions such as reacquisitions of
+the entity’s equity securities and distributions “in kind” of noncash assets.
+Information about those events is useful, in conjunction with other financial
+statement information, to investors, creditors, and other users as an aid in
+assessing factors such as the entity’s financial flexibility, profitability, and risk.
+57. Transactions with owners are now normally recognized when they occur.
+Recognition problems concerning them can be difficult; for example, problems
+sometimes arise in distinguishing transactions with owners from transactions with
+certain creditors, and investments and dividends in kind may present
+measurement problems.37 However, the recognition implications of earnings that
+lead to special guidance do not apply to transactions with owners, and that sort of
+special guidance is not needed for them.
+
+
+RECOGNITION CRITERIA
+
+58. As noted in paragraphs 6–9, recognition is the process of formally recording
+or incorporating an item into the financial statements of an entity as an asset,
+liability, revenue, expense, or the like. A recognized item is depicted in both words
+
+35
+  Rather than as its employees, suppliers, customers, lenders, or the like (Concepts
+Statement 3, par. 44); that Statement defines investments by and distributions to owners in
+paragraphs 52–55.
+36
+  Capital transactions are transactions with owners that affect ownership interests (equity) in
+an entity:
+           Although capital is not a precise term in referring to ownership interests
+     because it is also applied to assets and liabilities in various ways, it is used in this
+     discussion because capital is part of so many terms commonly used to describe
+     aspects of ownership interests; for example, investments by owners are commonly
+     called capital contributions, distributions to owners are commonly called capital
+     distributions, and discussions of comprehensive income and its components often
+     refer to capital maintenance. [Concepts Statement 3, par. 144]
+37
+  Concepts Statement 3, par. 49, and APB Opinion No. 29, Accounting for Nonmonetary
+Transactions.
+
+
+
+                                                                                            35
+and numbers, with the amount included in the statement totals. Recognition
+comprehends both initial recognition of an item and recognition of subsequent
+changes in or removal of a previously recognized item.
+
+Purposes of Criteria
+59. Criteria are set forth in this Statement to provide direction for resolving issues
+that involve accounting recognition. An entity’s assets and liabilities and the effects
+of events on them and on its equity are candidates for recognition in its financial
+statements.
+60. Some events that affect assets, liabilities, or equity are not recognized in
+financial statements at the time they occur. Some events that result in future
+benefits, for example, creation of product awareness by advertising and promotion,
+may perhaps never be recognized as separate assets. Other events, for example,
+a disaster loss of unknown dimension, are recognized only when sufficient
+information about the effects of the event has become available at a justifiable cost
+to reduce uncertainty to an acceptable level. Recognition criteria aid in making
+those determinations.
+
+Structure of Recognition Criteria
+61. The recognition criteria in this Statement are derived from the qualitative
+characteristics of financial information in Concepts Statement 2 and are helpful in
+making the definitions of elements of financial statements in Concepts Statement
+3 operational in resolving financial reporting issues.
+62. The fundamental criteria apply to all recognition decisions. Further guidance
+is provided in paragraphs 78–87 for applying the fundamental criteria to
+components of earnings.
+
+Fundamental Recognition Criteria
+63. An item and information about it should meet four fundamental recognition
+criteria to be recognized and should be recognized when the criteria are met,
+subject to a cost-benefit constraint and a materiality threshold. Those criteria are:
+
+     Definitions–The item meets the definition of an element of financial
+     statements.
+     Measurability–It has a relevant attribute measurable with sufficient reliability.
+     Relevance–The information about it is capable of making a difference in user
+     decisions.
+     Reliability–The information is representationally faithful, verifiable, and
+     neutral.
+
+
+
+
+36
+All four criteria are subject to a pervasive cost-benefit constraint: the expected
+benefits from recognizing a particular item should justify perceived costs of
+providing and using the information.38 Recognition is also subject to a materiality
+threshold: an item and information about it need not be recognized in a set of
+financial statements if the item is not large enough to be material and the aggregate
+of individually immaterial items is not large enough to be material to those
+financial statements.39
+
+Definitions
+64. The definitions are those in FASB Concepts Statement No. 3, Elements of
+Financial Statements of Business Enterprises.40 To be recognized in financial
+statements, a resource must meet the definition of an asset, and an obligation
+must meet the definition of a liability. A change in equity must meet the definition
+of a revenue, expense, gain, or loss to be recognized as a component of
+comprehensive income. 41
+
+Measurability
+65. The asset, liability, or change in equity must have a relevant attribute 42 that
+can be quantified in monetary units with sufficient reliability. Measurability must be
+considered together with both relevance and reliability.
+
+Measurement Attributes
+66. Items currently reported in financial statements are measured by different
+attributes, depending on the nature of the item and the relevance and reliability of
+the attribute measured. The Board expects the use of different attributes to
+continue.
+67.   Five different attributes of assets (and liabilities) are used in present practice:
+
+38
+  Concepts Statement 2, pars. 32 and 33 and 133–144.
+39
+  “Individual judgments are required to assess materiality. . . . The essence of the materiality
+concept is clear. The omission or misstatement of an item in a financial report is material if,
+in the light of surrounding circumstances, the magnitude of the item is such that it is probable
+that the judgment of a reasonable person relying upon the report would have been changed
+or influenced by the inclusion or correction of the item” (Concepts Statement 2, par. 132).
+40
+  Concepts Statement 3 does not define elements of cash flow statements but notes classes
+of items that may be called elements of financial statements, for example, cash provided by
+operations, cash provided by borrowing, cash provided by issuing equity securities, and so
+forth (par. 4). However, all items in cash flow statements involve cash receipts or payments,
+which for recognition purposes are covered by the definitions in that Statement.
+41
+  As already noted (pars. 42 and 43), the items called cumulative accounting adjustments
+and other nonowner changes in equity are gains and losses under the definitions in Concepts
+Statement 3.
+42
+  Attribute “refers to the traits or aspects of an element to be quantified or measured, such
+as historical cost/historical proceeds, current cost/current proceeds, etc. Attribute is a
+narrower concept than measurement, which includes not only identifying the attribute to be
+measured but also selecting a scale of measurement (for example, units of money or units
+of constant purchasing power)” (Concepts Statement 1, par. 2, footnote 2).
+
+
+
+                                                                                             37
+     a.   Historical cost (historical proceeds). Property, plant, and equipment and
+          most inventories are reported at their historical cost, which is the amount
+          of cash, or its equivalent, paid to acquire an asset, commonly adjusted
+          after acquisition for amortization or other allocations. Liabilities that
+          involve obligations to provide goods or services to customers are
+          generally reported at historical proceeds, which is the amount of cash, or
+          its equivalent, received when the obligation was incurred and may be
+          adjusted after acquisition for amortization or other allocations.
+     b.   Current cost. Some inventories are reported at their current
+          (replacement) cost, which is the amount of cash, or its equivalent, that
+          would have to be paid if the same or an equivalent asset were acquired
+          currently.
+     c.   Current market value. Some investments in marketable securities are
+          reported at their current market value, which is the amount of cash, or its
+          equivalent, that could be obtained by selling an asset in orderly
+          liquidation. Current market value is also generally used for assets
+          expected to be sold at prices lower than previous carrying amounts.
+          Some liabilities that involve marketable commodities and securities, for
+          example, the obligations of writers of options or sellers of common shares
+          who do not own the underlying commodities or securities, are reported at
+          current market value.
+     d.   Net realizable (settlement) value. Short-term receivables and some
+          inventories are reported at their net realizable value, which is the
+          nondiscounted amount of cash, or its equivalent, into which an asset is
+          expected to be converted in due course of business less direct costs, if
+          any, necessary to make that conversion. Liabilities that involve known or
+          estimated amounts of money payable at unknown future dates, for
+          example, trade payables or warranty obligations, generally are reported
+          at their net settlement value, which is the nondiscounted amounts of cash,
+          or its equivalent, expected to be paid to liquidate an obligation in the due
+          course of business, including direct costs, if any, necessary to make that
+          payment.
+     e.   Present (or discounted) value of future cash flows. Long-term receivables
+          are reported at their present value (discounted at the implicit or historical
+          rate), which is the present or discounted value of future cash inflows into
+          which an asset is expected to be converted in due course of business
+          less present values of cash outflows necessary to obtain those inflows.
+          Long-term payables are similarly reported at their present value
+          (discounted at the implicit or historical rate), which is the present or
+          discounted value of future cash outflows expected to be required to
+          satisfy the liability in due course of business.
+68. The different attributes often have the same amounts, particularly at initial
+recognition. As a result, there may be agreement about the appropriate amount for
+an item but disagreement about the attribute being used. Present financial
+statements frequently are characterized as being based on the historical cost
+(historical proceeds) attribute. That no doubt reflects the fact that, for most
+enterprises, a great many of the individual events recognized in financial
+
+
+38
+statements are acquisitions of goods or services for cash or equivalent that are
+recorded at historical cost. Although the “historical cost system” description may
+be convenient and describes well present practice for some major classes of
+assets (most inventories, property, plant, and equipment, and intangibles), it
+describes less well present practice for a number of other classes of assets and
+liabilities—for example, trade receivables, notes payable, and warranty
+obligations.
+69. “Historical exchange price” is more descriptive of the quantity most generally
+reflected in financial statements in present practice (and “transaction-based
+system” would be a better description of the present accounting model than
+“historical cost system”). Amounts initially recorded for trade receivables and long-
+term notes payable, for example, generally fit the historical exchange price
+description. But some assets are acquired, and some liabilities are incurred,
+without exchanges—for example, assets found or received as contributions and
+income tax or litigation liabilities. There is no historical exchange price in those
+situations, and some other attribute must be used. Moreover, carrying amounts of
+assets (liabilities) are frequently reduced (increased) from historical exchange
+price to a lower (higher) current cost, current market value, or net realizable value,
+even though no subsequent exchange of the assets held or liabilities owed has
+occurred. And some assets are carried at current market value, independent of
+historical exchange price.
+70. Rather than attempt to characterize present practice as being based on a
+single attribute with numerous major exceptions for diverse reasons, this concepts
+Statement characterizes present practice as based on different attributes. Rather
+than attempt to select a single attribute and force changes in practice so that all
+classes of assets and liabilities use that attribute, this concepts Statement
+suggests that use of different attributes will continue, and discusses how the Board
+may select the appropriate attribute in particular cases.43
+
+Monetary Unit or Measurement Scale
+71. The monetary unit or measurement scale in financial statements in current
+practice is nominal units of money, that is, unadjusted for changes in purchasing
+power of money over time. An ideal measurement scale would be one that is stable
+over time. At low rates of change in general purchasing power (inflation or
+deflation), nominal units of money are relatively stable. Also, preparation and use
+of financial statements is simpler with nominal units than with other units of
+measure, such as units of constant general purchasing power (used, for example,
+in supplementary disclosures of the effects of changing prices), 44 artificial
+monetary units (for example, the European Currency Unit or ECU), or units of a
+commodity (for example, ounces of gold). However, as rates of change in general
+
+
+43
+  This discussion of measurement attributes is based in part on the FASB Discussion
+Memorandum, Conceptual Framework for Financial Accounting and Reporting: Elements of
+Financial Statements and Their Measurement (December 2, 1976), paragraphs 388–574,
+which further describes and illustrates each of the attributes and remains a useful reference.
+44
+  FASB Statement No. 33, Financial Reporting and Changing Prices, as amended.
+
+
+
+                                                                                           39
+purchasing power increase, financial statements expressed in nominal units of
+money become progressively less useful and less comparable.
+72. The Board expects that nominal units of money will continue to be used to
+measure items recognized in financial statements. However, a change from
+present circumstances (for example, an increase in inflation to a level at which
+distortions became intolerable) might lead the Board to select another, more stable
+measurement scale.
+
+Relevance
+73. Relevance is a primary qualitative characteristic. To be relevant, information
+about an item must have feedback value or predictive value (or both) for users and
+must be timely.45 Information is relevant if it has the capacity to make a difference
+in investors’, creditors’, or other users’ decisions. To be recognized, the information
+conveyed by including an asset, liability, or change therein in the financial
+statements must be relevant.
+74. The relevance of particular information about an item being considered for
+recognition cannot be determined in isolation. Relevance should be evaluated in
+the context of the principal objective of financial reporting: providing information
+that is useful in making rational investment, credit, and similar decisions. 46
+Relevance should also be evaluated in the context of the full set of financial
+statements—with consideration of how recognition of a particular item contributes
+to the aggregate decision usefulness.
+
+Reliability
+75. Reliability is the other primary qualitative characteristic. To be reliable,
+information about an item must be representationally faithful, verifiable, and
+neutral.47 To be reliable, information must be sufficiently faithful in its
+representation of the underlying resource, obligation, or effect of events and
+sufficiently free of error and bias to be useful to investors, creditors, and others in
+making decisions. To be recognized, information about the existence and amount
+of an asset, liability, or change therein must be reliable.
+76. Reliability may affect the timing of recognition. The first available information
+about an event that may have resulted in an asset, liability, or change therein is
+sometimes too uncertain to be recognized: it may not yet be clear whether the
+effects of the event meet one or more of the definitions or whether they are
+measurable, and the cost of resolving those uncertainties may be excessive.
+Information about some items that meet a definition may never become sufficiently
+reliable at a justifiable cost to recognize the item. For other items, those
+uncertainties are reduced as time passes, and reliability is increased as additional
+information becomes available.
+
+
+
+45
+ Concepts Statement 2, pars. 46–57.
+46
+ Concepts Statement 1, pars. 34–40.
+47
+ Concepts Statement 2, pars. 58–110.
+
+
+
+40
+77. Unavailability or unreliability of information may delay recognition of an item,
+but waiting for virtually complete reliability or minimum cost may make the
+information so untimely that it loses its relevance. At some intermediate point,
+uncertainty may be reduced at a justifiable cost to a level tolerable in view of the
+perceived relevance of the information. If other criteria are also met, that is the
+appropriate point for recognition. Thus, recognition may sometimes involve a
+trade-off between relevance and reliability.
+
+GUIDANCE IN APPLYING CRITERIA TO COMPONENTS
+OF EARNINGS
+78. This section discusses the need for and provides further guidance in applying
+the fundamental criteria in recognizing components of earnings. Changes in net
+assets are recognized as components of earnings if they qualify under the
+guidance in paragraphs 83–87. Certain changes in net assets (discussed in
+paragraphs 42–44 and 49–51) that meet the four fundamental recognition criteria
+just described may qualify for recognition in comprehensive income even though
+they do not qualify for recognition as components of earnings based on that
+guidance.
+79. Further guidance in applying the recognition criteria to components of
+earnings is necessary because of the widely acknowledged importance of
+information about earnings and its components as a primary measure of
+performance for a period. The performance measured is that of the entity, not
+necessarily that of its management, and includes the recognized effects upon the
+entity of events and circumstances both within and beyond the control of the entity
+and its management.48 The widely acknowledged importance of earnings
+information leads to guidance intended in part to provide more stringent
+requirements for recognizing components of earnings than for recognizing other
+changes in assets or liabilities.
+80. As noted in paragraph 36, earnings measures the extent to which asset
+inflows (revenues and gains) associated with substantially completed cash-to-cash
+cycles exceed asset outflows (expenses and losses) associated, directly or
+indirectly, with the same cycles. Guidance for recognizing components of earnings
+is concerned with identifying which cycles are substantially complete and with
+associating particular revenues, gains, expenses, and losses with those cycles.
+81. In assessing the prospect that as yet uncompleted transactions will be
+concluded successfully, a degree of skepticism is often warranted.49 Moreover, as
+a reaction to uncertainty, more stringent requirements historically have been
+imposed for recognizing revenues and gains than for recognizing expenses and
+
+
+48
+  “What happens to a business enterprise is usually so much a joint result of a complex
+interaction of many factors that neither accounting nor other statistical analysis can discern
+with reasonable accuracy the degree to which management, or any other factor, affected the
+joint result” (Concepts Statement 1, par. 53).
+49
+  Concepts Statement 2, par. 97.
+
+
+
+                                                                                           41
+losses, and those conservative reactions influence the guidance for applying the
+recognition criteria to components of earnings.
+82. The guidance stated here is intended to summarize key considerations in a
+form useful for guidance for future standard setting—guidance which also is
+consistent with the vast bulk of current practice. The following paragraphs provide
+guidance separately for recognition of revenues and gains and for expenses and
+losses as components of earnings.
+
+Revenues and Gains
+83. Further guidance for recognition of revenues and gains is intended to provide
+an acceptable level of assurance of the existence and amounts of revenues and
+gains before they are recognized. Revenues and gains of an enterprise during a
+period are generally measured by the exchange values of the assets (goods or
+services) or liabilities involved, and recognition involves consideration of two
+factors, (a) being realized or realizable and (b) being earned, with sometimes one
+and sometimes the other being the more important consideration.
+
+     a.   Realized or realizable. Revenues and gains generally are not recognized
+          until realized or realizable.50 Revenues and gains are realized when
+          products (goods or services), merchandise, or other assets are
+          exchanged for cash or claims to cash. Revenues and gains are realizable
+          when related assets received or held are readily convertible to known
+          amounts of cash or claims to cash. Readily convertible assets have (i)
+          interchangeable (fungible) units and (ii) quoted prices available in an
+          active market that can rapidly absorb the quantity held by the entity
+          without significantly affecting the price.
+     b.   Earned. Revenues are not recognized until earned. An entity’s revenue-
+          earning activities involve delivering or producing goods, rendering
+          services, or other activities that constitute its ongoing major or central
+          operations,51 and revenues are considered to have been earned when
+          the entity has substantially accomplished what it must do to be entitled to
+          the benefits represented by the revenues. Gains commonly result from
+50
+  The terms realized and realizable are used in the Board’s conceptual framework in precise
+senses, focusing on conversion or convertibility of noncash assets into cash or claims to cash
+(Concepts Statement 3, par. 83). Realized has sometimes been used in a different, broader
+sense: for example, some have used that term to include realizable or to include certain
+conversions of noncash assets into other assets that are also not cash or claims to cash.
+APB Statement 4, paragraphs 148–153, used the term realization even more broadly as a
+synonym for recognition.
+51
+  “Most types of revenue are the joint result of many profit-directed activities of an enterprise
+and revenue is often described as being ‘earned’ gradually and continuously by the whole of
+enterprise activities. Earning in this sense is a technical term that refers to the activities that
+give rise to the revenue—purchasing, manufacturing, selling, rendering service, delivering
+goods, allowing other entities to use enterprise assets, the occurrence of an event specified
+in a contract, and so forth. All of the profit-directed activities of an enterprise that comprise
+the process by which revenue is earned may be called the earning process” (APB Statement
+4, par. 149). Concepts Statement 3, paragraph 64, footnote 31, contains the same concept.
+
+
+
+42
+           transactions and other events that involve no “earning process,” and for
+           recognizing gains, being earned is generally less significant than being
+           realized or realizable.
+84.    In recognizing revenues and gains:
+
+      a.   The two conditions (being realized or realizable and being earned) are
+           usually met by the time product or merchandise is delivered or services
+           are rendered to customers, and revenues from manufacturing and selling
+           activities and gains and losses from sales of other assets are commonly
+           recognized at time of sale (usually meaning delivery).52
+      b.   If sale or cash receipt (or both) precedes production and delivery (for
+           example, magazine subscriptions), revenues may be recognized as
+           earned by production and delivery.
+      c.   If product is contracted for before production, revenues may be
+           recognized by a percentage-of-completion method as earned—as
+           production takes place—provided reasonable estimates of results at
+           completion and reliable measures of progress are available.53
+      d.   If services are rendered or rights to use assets extend continuously over
+           time (for example, interest or rent), reliable measures based on
+           contractual prices established in advance are commonly available, and
+           revenues may be recognized as earned as time passes.
+      e.   If products or other assets are readily realizable because they are salable
+           at reliably determinable prices without significant effort (for example,
+           certain agricultural products, precious metals, and marketable securities),
+           revenues and some gains or losses may be recognized at completion of
+           production or when prices of the assets change. Paragraph 83(a)
+           describes readily realizable (convertible) assets.
+      f.   If product, services, or other assets are exchanged for nonmonetary
+           assets that are not readily convertible into cash, revenues or gains or
+           losses may be recognized on the basis that they have been earned and
+           the transaction is completed. Gains or losses may also be recognized if
+           nonmonetary assets are received or distributed in nonreciprocal
+           transactions. Recognition in both kinds of transactions depends on the
+           provision that the fair values involved can be determined within
+           reasonable limits.54
+      g.   If collectibility of assets received for product, services, or other assets is
+           doubtful, revenues and gains may be recognized on the basis of cash
+           received.
+
+
+52
+  The requirement that revenue be earned before it is recorded “usually causes no problems
+because the earning process is usually complete or nearly complete by the time of [sale]”
+(APB Statement 4, par. 153).
+53
+  If production is long in relation to reporting periods, such as for long-term, construction-type
+contracts, recognizing revenues as earned has often been deemed to result in information
+that is significantly more relevant and representationally faithful than information based on
+waiting for delivery, although at the sacrifice of some verifiability. (Concepts Statement 2,
+paragraphs 42–45, describes trade-offs of that kind.)
+54
+  APB Opinion 29.
+
+
+
+                                                                                              43
+Expenses and Losses
+85. Further guidance for recognition of expenses and losses is intended to
+recognize consumption (using up) of economic benefits or occurrence or discovery
+of loss of future economic benefits during a period. Expenses and losses are
+generally recognized when an entity’s economic benefits are used up in delivering
+or producing goods, rendering services, or other activities that constitute its
+ongoing major or central operations or when previously recognized assets are
+expected to provide reduced or no further benefits.
+
+Consumption of Benefits
+86. Consumption of economic benefits during a period may be recognized either
+directly or by relating it to revenues recognized during the period:55
+
+     a.   Some expenses, such as cost of goods sold, are matched with
+          revenues—they are recognized upon recognition of revenues that result
+          directly and jointly from the same transactions or other events as the
+          expenses.
+     b.   Many expenses, such as selling and administrative salaries, are
+          recognized during the period in which cash is spent or liabilities are
+          incurred for goods and services that are used up either simultaneously
+          with acquisition or soon after.
+     c.   Some expenses, such as depreciation and insurance, are allocated by
+          systematic and rational procedures to the periods during which the
+          related assets are expected to provide benefits.
+
+Loss or Lack of Future Benefit
+87. An expense or loss is recognized if it becomes evident that previously
+recognized future economic benefits of an asset have been reduced or eliminated,
+or that a liability has been incurred or increased, without associated economic
+benefits.
+
+RECOGNITION OF CHANGES IN ASSETS AND
+LIABILITIES
+88. Initial recognition of assets acquired and liabilities incurred generally involves
+measurement based on current exchange prices at the date of recognition. Once
+an asset or a liability is recognized, it continues to be measured at the amount
+initially recognized until an event that changes the asset or liability or its amount
+occurs and meets the recognition criteria.
+89. Events that change assets and liabilities are of two types: (a) inflows
+(acquisitions of assets or incurrences of liabilities) and outflows (sale or other
+disposal or loss of assets and settlement or cancellation of liabilities) and (b)
+
+55
+ Concepts Statement 3, pars. 84–89.
+
+
+
+44
+changes of amounts of assets while held or of liabilities while owed by the entity.
+The latter also are of two types: (i) changes in utility or substance and (ii) changes
+in price. Examples of changes in utility or substance that are recognized in current
+practice include use of assets in production, depreciation of assets used in
+administrative activities, and fire damage to assets.
+90. Information based on current prices should be recognized if it is sufficiently
+relevant and reliable to justify the costs involved and more relevant than alternative
+information. The merits of recognizing changes in prices may be clear in certain
+cases, and, as already noted, some price changes are recognized in present
+practice. In other cases, the relative merits of information based on current prices
+and alternative information may be unclear or may be a matter of dispute. In
+considering the application of the fundamental recognition criteria, those relative
+merits must be evaluated in the light of the circumstances of each case.
+
+SUMMARY
+91. Most aspects of current practice are consistent with the recognition criteria
+and guidance in this Statement, but the criteria and guidance do not foreclose the
+possibility of future changes in practice. This Statement is intended to provide
+guidance for orderly change in accounting standards when needed. When
+evidence indicates that information about an item that is more useful (relevant and
+reliable) than information currently reported is available at a justifiable cost, it
+should be included in financial statements.
+
+    This Statement was adopted by the affirmative vote of six members of the
+Financial Accounting Standards Board. Mr. March dissented.
+
+      Mr. March dissents from this Statement because (a) it does not adopt
+measurement concepts oriented toward what he believes is the most useful single
+attribute for recognition purposes, the cash equivalent of recognized transactions
+reduced by subsequent impairments or loss of service value—instead it suggests
+selecting from several different attributes without providing sufficient guidance for
+the selection process; (b) it identifies all nonowner changes in assets and liabilities
+as comprehensive income and return on equity, thereby including in income,
+incorrectly in his view, capital inputs from nonowners, unrealized gains from price
+changes, amounts that should be deducted to maintain capital in real terms, and
+foreign currency translation adjustments; (c) it uses a concept of income that is
+fundamentally based on measurements of assets, liabilities, and changes in them,
+rather than adopting the Statement’s concept of earnings as the definition of
+income; and (d) it fails to provide sufficient guidance for initial recognition and
+derecognition of assets and liabilities.
+      Mr. March would not, in general, recognize increases in prices of assets and
+decreases in prices of liabilities before they are realized. He believes present
+measurement practice can be characterized as largely using a single attribute, the
+cash equivalent of recognized transactions reduced by subsequent impairments
+or loss of service value, and that present practices that recognize revenues or
+gains from changes in prices before realization, such as the uses of current market
+
+
+
+                                                                                    45
+values and net realizable values cited in paragraphs 67(c) and (d) and 69, are
+exceptions to the general use of that single attribute. Mr. March is concerned that
+the guidance in paragraph 90 would permit, and perhaps point toward, more
+recognition of changes in current prices before realization. He believes that
+income, recognition, and measurement concepts based largely on the single
+attribute that he proposes are most relevant to reporting capital committed,
+performance, and the investment and realization of resources.
+      Mr. March objects to comprehensive income, defined in Concepts Statement
+3 and confirmed in this Statement, as a concept of income because it includes all
+recognized changes (including price changes) in assets and liabilities other than
+investments by owners and distributions to owners. He would exclude from
+income, and include in the amount of capital to be maintained (in addition to
+transactions with owners), what he would consider to be direct capital inputs to the
+enterprise from nonowner sources. Those include governmental and other capital
+contributions or grants and capital arising in reorganizations, recapitalizations, and
+extinguishments or restatements of debt capital.
+      Mr. March would also require that income must first deduct a provision for
+maintenance of capital in real terms (adjusted for changes in purchasing power of
+money over time, paragraphs 71–72). He believes that is necessary to avoid
+reporting a return of capital as income. Complex implementation should not be
+necessary to provide for the erosion of capital caused by the effects of inflation on
+the unit of measure. A “rubber yardstick” is a poor measuring tool. Mr. March would
+also exclude from income foreign currency translation adjustments (excluded from
+earnings but included in comprehensive income by paragraph 42(b)), which he
+believes are analogous to provisions for maintenance of capital in real terms.
+      The description of earnings (paragraphs 33–38) and the guidance for applying
+recognition criteria to components of earnings (paragraphs 78–87) is consistent
+with Mr. March’s view that income should measure performance and that
+performance flows primarily from an entity’s fulfillment of the terms of its
+transactions with outside entities that result in revenues, other proceeds on
+resource dispositions (gains), costs (expenses) associated with those revenues
+and proceeds, and losses sustained. However, Mr. March believes that those
+concepts are fundamental and should be embodied in definitions of the elements
+of financial statements and in basic income recognition criteria rather than basing
+income on measurements of assets, liabilities, and changes in them.
+      Disregarding the foregoing objections, Mr. March believes this Statement
+offers insufficient guidance for the near-term future work of the Board. To be useful,
+it needs to be supplemented with more specific guidance for selecting
+measurement attributes for specific assets, liabilities, and transactions and for
+deciding when the criteria require recognition or derecognition of an asset or a
+liability.
+
+
+
+
+46
+Members of the Financial Accounting Standards Board:
+
+            Donald J. Kirk, Chairman
+            Frank E. Block
+            Victor H. Brown
+            Raymond C. Lauver
+            John W. March
+            David Mosso
+            Robert T. Sprouse
+
+
+
+
+                                                       47
+Appendix
+
+BACKGROUND INFORMATION
+92. The Board’s study of recognition and measurement concepts has spanned
+several years. The need to develop those concepts was identified early in the
+conceptual framework project, and the first FASB Concepts Statement, Objectives
+of Financial Reporting by Business Enterprises, listed them among several
+separate matters to be covered:
+
+          . . . Later Statements are expected to cover the elements of financial
+     statements and their recognition, measurement, and display . . . , criteria
+     for distinguishing information to be included in financial statements from
+     that which should be provided by other means of financial reporting, and
+     criteria for evaluating and selecting accounting information (qualitative
+     characteristics). [paragraph 2].
+
+93. During that period, three FASB Research Reports,56 a Discussion
+Memorandum,57 a concepts Statement,58 and an Exposure Draft59 have dealt in
+whole or in part with recognition and measurement matters, and the Board has
+discussed those matters extensively.
+94. The once-separate projects on recognition and on measurement were
+combined, principally because in the Board’s view certain recognition questions,
+which are among the most important to be dealt with, are so closely related to
+measurement issues that it is not productive to discuss them separately. For
+example, the question of whether the appropriate attribute to measure a particular
+item is a past exchange price or a current exchange price is not easily separable
+from the question of whether events such as price changes should be recognized.
+95. The Board issued an Exposure Draft, Recognition and Measurement in
+Financial Statements of Business Enterprises, on December 30, 1983 and
+received 104 letters of comment on it.
+96. The changes made to the Exposure Draft were largely in response to
+suggestions in those comment letters and are intended to improve the clarity and
+
+56
+  Recognition of Contractual Rights and Obligations: An Exploratory Study of Conceptual
+Issues, by Yuji Ijiri, December 1980; Survey of Present Practices in Recognizing Revenues,
+Expenses, Gains, and Losses, by Henry R. Jaenicke, January 1981; and Recognition in
+Financial Statements: Underlying Concepts and Practical Conventions, by L. Todd Johnson
+and Reed K. Storey, July 1982.
+57
+  FASB Discussion Memorandum, Conceptual Framework for Financial Accounting and
+Reporting: Elements of Financial Statements and Their Measurement, December 2, 1976,
+Part III.
+58
+  FASB Concepts Statement No. 3, Elements of Financial Statements of Business
+Enterprises, pars. 16 and 17, 37–43, and 74–89.
+59
+  FASB Exposure Draft, Reporting Income, Cash Flows, and Financial Position of Business
+Enterprises, November 1981, pars. 13–16 and elsewhere. This Statement supersedes that
+Exposure Draft.
+
+
+
+48
+organization of the ideas presented in the Exposure Draft. The Board believes that
+the substance of this Statement is not significantly changed from the Exposure
+Draft. Noteworthy changes made and changes suggested but not made are
+discussed below.
+97. The discussion of financial statements, financial reporting, and recognition in
+paragraphs 5–12 has been expanded and reorganized in response to comments
+that the status of notes, supplementary information, and other means of financial
+reporting outside of financial statements (all of which are outside the scope of this
+concepts Statement) was unclear.
+98. The term full set of financial statements has been used in paragraph 13 and
+elsewhere in response to comments that complete set, the term used in the
+Exposure Draft, implied that no further information beyond the listed financial
+statements was needed and to comments that complete set had been used in
+some standards in a different way.
+99. A number of respondents inferred from the discussion of cash flow
+statements in the Exposure Draft that the Board had decided one or more specific
+issues about cash flow reporting. Those issues include the direct and indirect
+methods of presentation; whether or not “cash” should include equivalents to cash
+and, if so, what instruments qualify; whether or not the nonmonetary transactions
+currently reported in statements of changes in financial position should appear in
+cash flow statements; and the definitions of cash provided by (or used for)
+operations, financing activities, and investing activities. Those and other specific
+cash flow statement issues mentioned by respondents are beyond the scope of
+this concepts Statement. The discussion of the statement of cash flows was
+revised to emphasize that.
+100. Many respondents criticized the term comprehensive income and some
+criticized the term earnings as unwarranted innovations likely to cause confusion
+and legal difficulties. Those terms are not new. They were first used in their present
+senses in Concepts Statement 3, in which the Board defined comprehensive
+income as an element of financial statements and reserved the term earnings for
+possible later use to designate a component part of comprehensive income. This
+Statement carries forward the concept of comprehensive income and describes a
+concept for earnings. The Board retained the idea of two separate measures both
+to reflect present practice for the items discussed in paragraph 42(b) and to allow
+for the possibility that future standards may recognize some items, for example,
+the cumulative accounting adjustments discussed in paragraph 42(a), in
+comprehensive income but not in earnings.
+101. The Board explored the alternative terms for comprehensive income and
+earnings suggested by respondents, as well as other possibilities suggested by its
+staff, but concluded that the other terms had disadvantages greater than those
+attaching to the terms originally selected. The Statement was revised to indicate
+that the Board anticipates that, as with net income in present practice, a variety of
+terms will be used in future financial statements as names for earnings (for
+example, net income, profit, or net loss) and for comprehensive income (for
+example, total nonowner changes in equity or comprehensive loss).
+
+
+
+                                                                                   49
+102. Some respondents urged the Board to clarify the concept of earnings. The
+discussion in paragraphs 36–38, the table in paragraph 44, and footnote 26 have
+been rewritten to explain more fully what the Board intended.
+103. The materiality threshold for recognition, implicit in the conceptual
+framework, has been made explicit in paragraph 63 at the suggestion of several
+respondents. Some respondents suggested that materiality and cost-benefit
+considerations should be fundamental recognition criteria. No change was made
+because the Board believes that, while those considerations affect the application
+of the criteria, they are different in character from the four fundamental recognition
+criteria.
+104. Several respondents urged the Board to include the question of the monetary
+unit or measurement scale within the scope of the Statement. The Exposure Draft
+described present practice as using nominal units of money but left the unit of
+measure outside its scope. The Board clarified the matter by indicating in
+paragraph 72 that it expects that nominal units of money will continue to be used
+to measure items recognized in financial statements.
+105. The discussion of measurement has been expanded, in response to the
+suggestions of several respondents, to explain and illustrate the different attributes
+more fully and to discuss why different attributes are needed to describe present
+practice and are expected to continue to be used to measure items in financial
+statements.
+106. Some respondents expressed concern that the guidance in paragraph 84(e)
+(concerning circumstances under which revenue or gain may be recognized at
+completion of production or when prices of assets change) and the guidance in
+paragraph 87 (concerning recognition of losses when it becomes evident that
+assets have been reduced or eliminated or liabilities incurred or increased without
+associated benefits) meant significant change from present practice. Those
+paragraphs describe concepts that the Board believes underlie many current
+practices and standards, just as do the other parts of the guidance for recognition
+of components of earnings. They have been retained and clarified.
+107. Several respondents urged the Board to address in this Statement certain
+specific recognition and measurement issues including definitive guidance for
+recognition of contracts that are fully executory (that is, contracts as to which
+neither party has as yet carried out any part of its obligations, which are generally
+not recognized in present practice) and selection of measurement attributes for
+particular assets and liabilities. Those issues have long been, and remain,
+unresolved on a general basis. As noted in the introductory statement to this and
+earlier concepts Statements (page 21), establishment of objectives and
+identification of fundamental concepts will not directly solve specific financial
+accounting and reporting problems. Rather, objectives give direction, and
+concepts are tools for solving problems.
+108. The Board and others who use this Statement will be guided and aided by
+the concepts it sets forth, but judgments, based on the particular circumstances of
+each case, will continue to play a major role in solving problems of recognition and
+
+
+
+
+50
+measurement in financial statements. The Board believes that further development
+of recognition, measurement, and display matters will occur as the concepts are
+applied at the standards level.
+
+
+
+
+                                                                             51
+Summary Index of Concepts Defined or Discussed
+
+                                                                                                        Paragraph
+                                                                                                         Numbers
+
+Articulation .......................................................................................... 5, 12, 23, 45
+Attributes measured .................................................. 66–70, footnote 42, 105, 107
+Capital maintenance......................................................................................45–48
+Cash flow, statement of ............................................................... 13, 24, 52–54, 99
+Comprehensive income......................................... 13, 24, 30–32, 39–44, 100–101
+Consumption of benefit .......................................................................................86
+Cumulative accounting adjustments ...................................................... 42–44, 100
+Current market value .....................................................................................67, 69
+Current prices ......................................................................................................90
+Current (replacement) cost............................................................................67, 69
+Definitions .....................................................................................................63–64
+Distributions to owners, statement of ................................................ 13, 24, 55–57
+Earned...........................................................................................................83–84
+Earnings .................................................... 13, 24, 30–38, 42–44, 49–51, 100–102
+Expenses ......................................................................................................85–87
+Financial flexibility ........................................................................... 24, footnote 13
+Financial position, statement of ......................................................... 13, 24, 26–30
+Financial statements ................................................................................. 5–57, 97
+Full set of financial statements ......................................................................13, 98
+Gains .............................................................................................................83–84
+Guidance for components of earnings................................................... 78–87, 106
+Historical cost ................................................................................................67–69
+Investments by owners, statement of ................................................ 13, 24, 55–57
+Liquidity ........................................................................................... 24, footnote 13
+Losses ................................................................................................... 85–87, 106
+Loss of benefit .....................................................................................................87
+Measurability ........................................................................................... 63, 65–72
+Net realizable (settlement) value .........................................................................67
+Notes to financial statements .................................................... 7–9, footnote 4, 97
+Other means of financial reporting ........................................................ 7-9, 92, 97
+Other nonowner changes in equity ............................................ 42–44, footnote 27
+Present value ......................................................................................................67
+Realized and realizable ............................................................. 83–84, footnote 50
+Recognition ............................................................................. 6–7, 58, 94, 97, 108
+Recognition criteria...................................................................................... 63, 103
+Relevance ............................................................................................... 63, 73–74
+Reliability .................................................................................................63, 75–77
+Revenues ......................................................................................................83–84
+Supplementary information .........................................................................7–9, 97
+Unit of measure ..................................................................................... 71–72, 104
+
+
+
+
+52
+Appendix C: Amendments to the Conceptual
+Framework for Financial Reporting
+C1. Concepts Statement 8 and FASB Concepts Statement No. 7, Using Cash Flow
+Information and Present Value in Accounting Measurements, are amended as
+described in paragraphs C2–C8. Added text is underlined, and deleted text is
+struck out.
+
+
+Amendments to Chapter 4, Elements of Financial
+Statements, of Concepts Statement 8
+C2. Amend footnote 1 of paragraph E2 as follows:
+    1Decisions about recognizing, measuring, and displaying elements of financial
+
+    statements depend on evaluations such as what information is most relevant
+    for investment, credit, and other resource allocation decisions and whether
+    the information is reliable enough to be trusted. Other significant evaluations
+    of that information involve its comparability with information about other
+    periods or other entities, its materiality, and whether the benefits of providing
+    it exceed the costs. Those matters are discussed in Chapter 3, Qualitative
+    Characteristics of Useful Information, and Chapter 5, Recognition and
+    Derecognition, of this FASB Concepts Statement No. 8, Conceptual
+    Framework for Financial Reporting, and recognition criteria and guidance for
+    business entities are set forth in FASB Concepts Statement No. 5,
+    Recognition and Measurement in Financial Statements of Business
+    Enterprises.
+
+Amendments to Chapter 7, Presentation, of Concepts
+Statement 8
+C3. Amend footnote 4 of paragraph PR12 as follows:
+    4Recognition criteria are in FASB Concepts Statement No. 5, Recognition and
+
+    Measurement in Financial Statements of Business EnterprisesChapter 5,
+    Recognition and Derecognition, of this Concepts Statement.
+
+Amendments to Chapter 8, Notes to Financial Statements,
+of Concepts Statement 8
+C4. Amend footnote 1 of paragraph D2 as follows:
+
+
+
+
+                                                                                  53
+     1Definitionsof elements and recognition criteria are in FASB Concepts
+     Statements No. 6, Elements of Financial Statements, and No. 5, Recognition
+     and Measurement in Financial Statements of Business EnterprisesChapter 4,
+     Elements of Financial Statements, and Chapter 5, Recognition and
+     Derecognition, of this Concepts Statement, respectively.
+
+C5. Amend paragraph D5 and its related footnote 2 as follows:
+
+     D5. FASB Concepts Statement No. 5, Recognition and Measurement in
+     Financial Statements of Business Enterprises,2 identifies in general terms the
+     purpose of notes to financial statements. Paragraph 7 states:
+     Although financial statements have essentially the same objectives as
+     financial reporting,… some useful information is better provided by financial
+     statements and some is better provided, or can only be provided, by notes to
+     financial statements or by supplementary information …:or other means of
+     financial reporting. a. Information disclosed in notes or parenthetically on the
+     face of financial statements… amplifies or explains information recognized in
+     the financial statements. [Footnote references omitted.]
+
+     2
+      Although the recognition criteria and measurement attributes discussed in Concepts
+     Statement 5 are intended to apply specifically to business enterprises, the general
+     discussion of financial statements and notes also is applicable to not-for-profit
+     organizations and employee benefit plans.
+
+C6. Amend paragraph D6 as follows:
+
+     D6. According to paragraph 6 of Concepts Statement 5RD3 of Chapter 5,
+     Recognition and Derecognition, of this Concepts Statement, recognition is
+     defined as:
+
+               … the process of formally recording or incorporating an item ininto
+           the financial statements of a reportingan entity as an asset, liability,
+           equity, revenue, gain, expense, or the likeloss, or investment by or
+           distribution to owners. Recognition includes depiction of an itemA
+           recognized item is depicted in both words and numbers, with the
+           amount included in the totals of the financial statementsstatement
+           totals.
+
+C7. Amend footnote 3 of paragraph D7 as follows:
+     3In some cases, as indicated in the quote from Concepts Statement 5 in
+     paragraph D5, an entity has a choice of providing information in notes or
+     parenthetically on the face of financial statements. For convenience and ease
+     of reading, this chapter specifically refers only to notes, but the concepts
+     discussed also apply to information disclosed parenthetically.
+
+
+
+
+54
+Amendments to Concepts Statement 7
+C8. Amend paragraph 12 as follows:
+
+    12. This Statement addresses measurement issues and does not address
+    recognition questions. Paragraph 6 of Concepts Statement 5RD3 of Chapter
+    5, Recognition and Derecognition, of FASB Concepts Statement No. 8,
+    Conceptual Framework for Financial Reporting, defines recognition in the
+    following terms:
+
+            Recognition is the process of formally recording or incorporating
+        an item ininto the financial statements of a reportingan entity as an
+        asset, liability, equity, revenue, gain, expense, loss, or the
+        likeinvestment by or distribution to owners. Recognition includes
+        depiction of an itemA recognized item is depicted in both words and
+        numbers, with the amount included in the totals of the financial
+        statementsstatement totals. For an asset or a liability, recognition
+        involves recording not onlythe acquisition or incurrence of the item but
+        alsoand later changes in the item (related to measurement)it,
+        including changes that result in its removal from the financial
+        statements (as addressed in paragraphs RD13 and RD14). [Footnote
+        reference omitted.]Because recognition means the depiction of an
+        item in both words and numbers, with the amount included in the totals
+        of financial statements, disclosure of an amount by any other means
+        is not recognition.
+
+
+
+
+                                                                                   55
+

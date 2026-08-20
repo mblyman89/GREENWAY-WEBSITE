@@ -1,0 +1,864 @@
+            Accounting and Reporting for Personal Financial Statements               18,931
+
+
+Section 10,350
+   Statement of Position 82-1
+   Accounting and Financial Repor ting for
+   P e rs o n a l F i n a n c i a l S ta te m e n t s
+                                                                        October 1, 1982
+   [Amendment to AICPA Industry Audit Guide Audits
+   of Personal Financial Statements]
+
+
+                                             NOTE
+           This statement of position significantly amends the recommendations on
+       accounting principles in the AICPA Industry Audit Guide, Audits of Personal
+       Financial Statements (1968), for personal financial statements dated June 30,
+       1983, or after.
+           Statements of Position of the Accounting Standards Division present the
+       conclusions of at least a majority of the Accounting Standards Executive
+       Committee, which is the senior technical body of the AICPA authorized to speak
+       for the Institute in the areas of financial accounting and reporting. Statement on
+       Auditing Standards No. 69, The Meaning of Present Fairly in Conformity With
+       Generally Accepted Accounting Principles, identifies AICPA Statements of
+       Position as sources of established accounting principles that an AICPA member
+       should consider if the accounting treatment of a transaction or event is not
+       specified by a pronouncement covered by Rule 203 of the AICPA Code of
+       Professional Conduct. In such circumstances, the accounting treatment specified
+       by this Statement of Position should be used or the member should be prepared
+       to justify a conclusion that another treatment better presents the substance of
+       the transaction in the circumstances. However, an entity need not change an
+       accounting treatment followed as of March 15, 1992 to the accounting treatment
+       specified in this Statement of Position.
+
+
+
+
+   Introduction
+        .01 This statement of position deals with the preparation and presenta-
+   tion of personal financial statements, that is, financial statements of individu-
+   als or groups of related individuals (families). Personal financial statements
+   are prepared for individuals either to formally organize and plan their finan-
+   cial affairs in general or for specific purposes, such as obtaining of credit,
+   income tax planning, retirement planning, gift and estate planning, or public
+   disclosure of their financial affairs. Users of personal financial statements rely
+   on them in determining whether to grant credit, in assessing the financial
+   activities of individuals, in assessing the financial affairs of public officials and
+   candidates for public office, and for similar purposes.
+       .02 The 1968 AICPA Industry Audit Guide, Audits of Personal Financial
+   Statements, supported historical cost as the primary basis of measurement for
+   personal financial statements and recommended the presentation of estimated
+   current values as additional information. The preface to that guide stated that
+   “generally accepted accounting principles and auditing standards developed
+   Copyright © 2001    136   5-01   18,931
+AICPA Technical Practice Aids                                                   §10,350.02
+18,932                                 Statements of Position
+  for commercial enterprises are applicable in general to personal financial
+  statements.” However, the increasing use of personal financial statements and
+  experience with the use of the guide suggested the need to reassess those
+  conclusions in light of the purposes for which personal financial statements are
+  prepared, the users to whom they are directed, and the ways in which they are
+  used. This statement of position is the result of that reassessment; it super-
+  sedes the accounting provisions of the 1968 AICPA Industry Audit Guide,
+  Audits of Personal Financial Statements, in accordance with the transition and
+  effective date set forth in paragraph .33 of this statement of position.
+
+  Basis of Presentation of Personal Financial Statements
+       .03 The primary focus of personal financial statements is a person’s
+  assets and liabilities, and the primary users of personal financial statements
+  normally consider estimated current value information to be more relevant for
+  their decisions than historical cost information. Lenders require estimated
+  current value information to assess collateral, and most personal loan applica-
+  tions require estimated current value information. Estimated current values
+  are required for estate, gift, and income tax planning, and estimated current
+  value information about assets is often required in federal and state filings of
+  candidates for public office.
+       .04 The accounting standards division therefore believes personal finan-
+  cial statements should present assets at their estimated current values and
+  liabilities at their estimated current amounts at the date of the financial
+  statements. Paragraph .12 of this statement of position defines estimated
+  current values of assets. Paragraph .27 defines estimated current amounts of
+  liabilities. This statement of position explains how the estimated current
+  values of assets and the estimated current amounts of liabilities should be
+  determined and applied in the preparation and presentation of personal finan-
+  cial statements.11
+
+  Presentation of Personal Financial Statements
+  The Reporting Entity
+      .05 Personal financial statements may be prepared for an individual, a
+  husband and wife, or a family.
+
+  The Form of the Statements
+         .06 Personal financial statements consist of—
+          a.   A statement of financial condition. This is the basic personal finan-
+               cial statement. It presents the estimated current values of assets, the
+               estimated current amounts of liabilities, estimated income taxes on
+               the differences between the estimated current values of assets and
+               the estimated current amounts of liabilities and their tax bases, and
+               net worth at a specified date. The term net worth should be used in
+               the statement to designate the difference between total assets and
+               total liabilities, after deducting estimated income taxes on the differ-
+               ences between the estimated current values of assets and the esti-
+               mated current amounts of liabilities and their tax bases.
+  Copyright © 2001       136    5-01    18,932
+     1
+
+
+     1
+        The division recognizes that users of personal financial statements may sometimes request
+  certain historical cost information. This statement of position does not prohibit supplemental presen-
+  tation of such information.
+
+
+§10,350.03             Copyright © 2001, American Institute of Certified Public Accountants, Inc.
+              Accounting and Reporting for Personal Financial Statements       18,933
+         b.    A statement of changes in net worth. This statement presents the
+               major sources of increases and decreases in net worth. It should
+               present the major sources of increases in net worth: income, increases
+               in the estimated current values of assets, decreases in the estimated
+               current amounts of liabilities, and decreases in estimated income
+               taxes on the differences between the estimated current values of
+               assets and the estimated current amounts of liabilities and their tax
+               bases. It should present the major sources of decreases in net worth:
+               expenses, decreases in the estimated current values of assets, in-
+               creases in the estimated current amounts of liabilities, and increases
+               in estimated income taxes on the differences between the estimated
+               current values of assets and the estimated current amounts of
+               liabilities and their tax bases. One statement combining income and
+               other changes is desirable because of the mix of business and per-
+               sonal items in personal financial statements. The presentation of a
+               statement of changes in net worth is optional.
+         c.    Comparative financial statements. The presentation of comparative
+               financial statements of the current period and one or more prior
+               periods may sometimes be desirable. Such a presentation is more
+               informative than the presentation of financial statements for only
+               one period. The presentation of comparative financial statements is
+               optional.
+   Illustrative financial statements are presented in appendix A [paragraph .34]
+   to this statement of position.
+
+   The Methods of Presentation
+       .07 Assets and liabilities and changes in them should be recognized on the
+   accrual basis, not on the cash basis.
+        .08 The most useful and readily understood presentation of assets and
+   liabilities in personal financial statements is by order of liquidity and maturity,
+   without classification as current and noncurrent, since the concept of working
+   capital applied to business enterprises is inappropriate for personal financial
+   statements.
+        .09 If personal financial statements are prepared for one of a group of
+   joint owners of assets, the statements should include only the person’s interest
+   as a beneficial owner, as determined under the property laws of the state
+   having jurisdiction. If property is held in joint tenancy, as community property,
+   or through a similar joint ownership arrangement, the legal status of the
+   separate equities of the parties may not be evident. In that case, the person
+   may require legal advice to determine whether an interest in the property
+   should be included among the person’s assets and, if so, the proper allocation
+   of the equity in the property under the applicable state laws.
+       .10 Business interests that constitute a large part of a person’s total
+   assets should be shown separately from other investments. The estimated
+   current value of an investment in a separate entity, such as a closely held
+   corporation, a partnership, or a sole proprietorship, should be shown in one
+   amount as an investment if the entity is marketable as a going concern. Assets
+   and liabilities of the separate entity should not be combined with similar
+   personal items.
+      .11 The estimated current values of assets and the estimated current
+   amounts of liabilities of limited business activities not conducted in a separate
+   Copyright © 1996    120   11-96   18,933
+AICPA Technical Practice Aids                                             §10,350.11
+18,934                                  Statements of Position
+  business entity, such as an investment in real estate and a related mortgage,
+  should be presented as separate amounts, particularly if a large portion of the
+  liabilities may be satisfied with funds from sources unrelated to the invest-
+  ment.
+
+
+  Guidelines for Determining the Estimated Current
+  Values of Assets and the Estimated Current Amounts
+  of Liabilities
+  General
+       .12 Personal financial statements should present assets at their esti-
+  mated current values and liabilities at their estimated current amounts. The
+  estimated current value of an asset in personal financial statements is the
+  amount at which the item could be exchanged between a buyer and seller, each
+  of whom is well informed and willing, and neither of whom is compelled to buy
+  or sell. Costs of disposal, such as commissions, if material, should be considered
+  in determining estimated current values.21 The division recognizes that the
+  estimated current values of some assets may be difficult to determine and the
+  cost of obtaining estimated current values of some assets directly may exceed
+  the benefits of doing so; therefore, the division recommends that judgment be
+  exercised in determining estimated current values.
+       .13 Recent transactions involving similar assets and liabilities in similar
+  circumstances ordinarily provide a satisfactory basis for determining the esti-
+  mated current value of an asset and the estimated current amount of a
+  liability. If recent sales information is unavailable, other methods that may be
+  used include the capitalization of past or prospective earnings, the use of
+  liquidation values, the adjustment of historical cost based on changes in a
+  specific price index, the use of appraisals, or the use of the discounted amounts
+  of projected cash receipts and payments.
+      .14 In determining the estimated current values of some assets (for
+  example, works of art, jewelry, restricted securities, investments in closely
+  held businesses, and real estate), the person may need to consult a specialist.
+      .15 The methods used to determine the estimated current values of assets
+  and the estimated current amounts of liabilities should be followed consis-
+  tently from period to period unless the facts and circumstances dictate a
+  change to different methods.
+
+  Receivables
+      .16 Personal financial statements should present receivables at the dis-
+  counted amounts of cash the person estimates will be collected, using appro-
+  priate interest rates at the date of the financial statements.
+
+  Marketable Securities
+      .17 Marketable securities include both debt and equity securities for
+  which market quotations are available. The estimated current values of such
+  securities are their quoted market prices. The estimated current values of
+  securities traded on securities exchanges are the closing prices of the securities
+  Copyright © 1996        120   11-96     18,934
+     1
+
+     2
+         Paragraph .27 defines the estimated current amount of a liability.
+
+
+§10,350.12             Copyright © 1996, American Institute of Certified Public Accountants, Inc.
+             Accounting and Reporting for Personal Financial Statements                   18,935
+   on the date of the financial statements (valuation date) if the securities were
+   traded on that date. If the securities were not traded on that date but published
+   bid and asked prices are available, the estimated current values of the securi-
+   ties should be within the range of those prices.
+       .18 For securities traded in the over-the-counter market, quotations of bid
+   and asked prices are available from several sources, including the financial
+   press, various quotation publications and financial reporting services, and
+   individual broker-dealers. For those securities, the mean of the bid prices, of
+   the bid and asked prices, or of the prices of a representative selection of
+   broker-dealers quoting the securities may be used as the estimated current
+   values.
+        .19 An investor may hold a large block of the equity securities of a
+   company. A large block of stock might not be salable at the price at which a
+   small number of shares were recently sold or quoted. Further, a large minority
+   interest may be difficult to sell despite isolated sales of a small number of
+   shares. However, a controlling interest may be proportionately more valuable
+   than minority interests that were sold. Consideration of those factors may
+   require adjustments to the price at which the security recently sold. Moreover,
+   restrictions on the transfer of a security may also suggest the need to adjust
+   the recent market price in determining the estimated current value.31
+
+   Options
+       .20 If published prices of options are unavailable, their estimated current
+   values should be determined on the basis of the values of the assets subject to
+   option, considering such factors as the exercise prices and length of the option
+   periods.
+
+   Investment in Life Insurance
+       .21 The estimated current value of an investment in life insurance is the
+   cash value of the policy less the amount of any loans against it. The face
+   amount of life insurance the individuals own should be disclosed.
+
+   Investments in Closely Held Businesses
+        .22 The division recognizes that the estimated current values of invest-
+   ments in closely held businesses usually are difficult to determine. The prob-
+   lems relate to investments in closely held businesses in any form, including
+   sole proprietorships, general and limited partnerships, and corporations. As
+   previously stated, only the net investment in a business enterprise (not its
+   assets and liabilities) should be presented in the statement of financial condi-
+   tion. The net investment should be presented at its estimated current value at
+   the date of the financial statement. Since there is usually no established ready
+   market for such an investment, judgment should be exercised in determining
+   the estimated current value of the investment.
+       .23 There is no one generally accepted procedure for determining the
+   estimated current value of an investment in a closely held business. Several
+   procedures or combinations of procedures may be used to determine the esti-
+   Copyright © 2007      162   12-07    18,935
+         1
+
+     3
+       For further discussion on valuing marketable securities, see the section in AICPA Audit and
+   Accounting Guide, Investment Companies, titled Methods of Valuing Investments, paragraphs 2.28–
+   2.40.
+
+
+AICPA Technical Practice Aids                                                        §10,350.23
+18,936                                     Statements of Position
+  mated current value of a closely held business, including a multiple of earn-
+  ings, liquidation value, reproduction value, appraisals, discounted amounts of
+  projected cash receipts and payments, or adjustments of book value or cost of
+  the person’s share of the equity of the business.41 The owner of an interest in a
+  closely held business may have entered into a buy-sell agreement that specifies
+  the amount (or the basis of determining the amount) to be received in the event
+  of withdrawal, retirement, or sale. If such an agreement exists, it should be
+  considered, but it does not necessarily determine estimated current value.
+  Whatever procedure is used, the objective should be to approximate the
+  amount at which the investment could be exchanged between a buyer and a
+  seller, each of whom is well informed and willing, and neither of whom is
+  compelled to buy or sell.
+
+  Real Estate (Including Leaseholds)
+       .24 Investments in real estate (including leaseholds) should be presented
+  in personal financial statements at their estimated current values. Informa-
+  tion that may be used in determining their estimated current values includes—
+               a.    Sales of similar property in similar circumstances.
+               b.    The discounted amounts of projected cash receipts and payments
+                     relating to the property or the net realizable value of the property,
+                     based on planned courses of action, including leaseholds whose
+                     current rental value exceeds the rent in the lease.
+               c.    Appraisals based on estimates of selling prices and selling costs
+                     obtained from independent real estate agents or brokers familiar
+                     with similar properties in similar locations.
+               d.    Appraisals used to obtain financing.
+               e.    Assessed value for property taxes, including consideration of the
+                     basis for such assessments and their relationship to market values
+                     in the area.
+
+  Intangible Assets
+       .25 Intangible assets should be presented at the discounted amounts of
+  projected cash receipts and payments arising from the planned use or sale of
+  the assets if both the amounts and timing can be reasonably estimated. For
+  example, a record of receipts under a royalty agreement may provide sufficient
+  information to determine its estimated current value. The cost of a purchased
+  intangible should be used if no other information is available.
+
+  Future Interests and Similar Assets
+       .26 Nonforfeitable rights to receive future sums that have all the follow-
+  ing characteristics should be presented as assets at their discounted amounts:
+           •        The rights are for fixed or determinable amounts.
+           •        The rights are not contingent on the holder’s life expectancy or the
+                    occurrence of a particular event, such as disability or death.
+           •        The rights do not require future performance of service by the holder.
+  Nonforfeitable rights that may have those characteristics include—
+           •        Guaranteed minimum portions of pensions.
+  Copyright © 2007           162   12-07     18,936
+       1
+
+   4
+      The book value or cost of a person’s share of the equity of a business adjusted for appraisals of
+  specific assets, such as real estate or equipment, is sometimes used as the estimated current value.
+
+
+§10,350.24                 Copyright © 2007, American Institute of Certified Public Accountants, Inc.
+              Accounting and Reporting for Personal Financial Statements                        18,937
+          •   Vested interests in pension or profit sharing plans.
+          •   Deferred compensation contracts.
+          •   Beneficial interests in trusts.
+          •   Remainder interests in property subject to life estates.
+          •   Annuities.
+          •   Fixed amounts of alimony for a definite future period.
+
+   Payables and Other Liabilities
+        .27 Personal financial statements should present payables and other
+   liabilities at the discounted amounts of cash to be paid. The discount rate
+   should be the rate implicit in the transaction in which the debt was incurred.
+   If, however, the debtor is able to discharge the debt currently at a lower
+   amount, the debt should be presented at the lower amount.51
+
+   Noncancellable Commitments
+        .28 Noncancellable commitments to pay future sums that have all the
+   following characteristics should be presented as liabilities at their discounted
+   amounts:
+          •   The commitments are for fixed or determinable amounts.
+          •   The commitments are not contingent on others’ life expectancies or the
+              occurrence of a particular event, such as disability or death.
+          •   The commitments do not require future performance of service by
+              others.
+   Noncancellable commitments that may have those characteristics include fixed
+   amounts of alimony for a definite future period and charitable pledges.
+
+   Income Taxes Payable
+       .29 The liability for income taxes payable should include unpaid income
+   taxes for completed tax years and an estimated amount for income taxes
+   accrued for the elapsed portion of the current tax year to the date of the
+   financial statements. That estimate should be based on the relationship of
+   taxable income earned to date to total estimated taxable income for the year,
+   net of taxes withheld or paid with estimated income tax returns.
+
+   Estimated Income Taxes on the Differences Between the
+   Estimated Current Values of Assets and the Estimated Current
+   Amounts of Liabilities and Their Tax Bases
+        .30 A provision should be made for estimated income taxes on the differ-
+   ences between the estimated current values of assets and the estimated
+   current amounts of liabilities and their tax bases, including consideration of
+   negative tax bases of tax shelters, if any. The provision should be computed as
+   if the estimated current values of all assets had been realized and the esti-
+   mated current amounts of all liabilities had been liquidated on the statement
+   Copyright © 1996       120    11-96    18,937
+      1
+
+      5
+       For a further discussion of the setting of a discount rate for payables and other liabilities, see
+   APB Opinion 21, Interest on Receivables and Payables, paragraph 13.
+
+
+AICPA Technical Practice Aids                                                              §10,350.30
+18,938                               Statements of Position
+  date, using applicable income tax laws and regulations, considering recapture
+  provisions and available carryovers. The estimated income taxes should be
+  presented between liabilities and net worth in the statement of financial
+  condition. The methods and assumptions used to compute the estimated
+  income taxes should be fully disclosed. Appendix B [paragraph .35] to this
+  statement of position illustrates how to compute the provision.
+
+
+  Financial Statement Disclosures
+       .31 Personal financial statements should include sufficient disclosures to
+  make the statements adequately informative. The disclosures may be made in
+  the body of the financial statements or in the notes. The following enumeration
+  is intended not to be all-inclusive but simply indicative of the nature and type
+  of information that ordinarily should be disclosed:
+        a.   A clear indication of the individuals covered by the financial state-
+             ments
+        b.   That assets are presented at their estimated current values and
+             liabilities are presented at their estimated current amounts
+        c.   The methods used in determining the estimated current values of
+             major assets and the estimated current amounts of major liabilities
+             or major categories of assets and liabilities, since several methods
+             are available, and changes in methods from one period to the next
+        d.   If assets held jointly by the person and by others are included in the
+             statements, the nature of the joint ownership
+        e.   If the person’s investment portfolio is material in relation to his or
+             her other assets and is concentrated in one or a few companies or
+             industries, the names of the companies or industries and the esti-
+             mated current values of the securities
+        f.   If the person has a material investment in a closely held business, at
+             least the following:
+             •   The name of the company and the person’s percentage of owner-
+                 ship
+             •   The nature of the business
+             •   Summarized financial information about assets, liabilities, and
+                 results of operations for the most recent year based on the
+                 financial statements of the business, including information
+                 about the basis of presentation (for example, generally accepted
+                 accounting principles, income tax basis, or cash basis) and any
+                 significant loss contingencies
+        g.   Descriptions of intangible assets and their estimated useful lives
+        h.   The face amount of life insurance the individuals own
+        i.   Nonforfeitable rights that do not have the characteristics discussed
+             in paragraph .26, for example, pensions based on life expectancy
+        j.   The following tax information:
+             •   The methods and assumptions used to compute the estimated
+                 income taxes on the differences between the estimated current
+                 values of assets and the estimated current amounts of liabilities
+  Copyright © 1996     120   11-96     18,938
+§10,350.31           Copyright © 1996, American Institute of Certified Public Accountants, Inc.
+              Accounting and Reporting for Personal Financial Statements       18,939
+                   and their tax bases and a statement that the provision will
+                   probably differ from the amounts of income taxes that might
+                   eventually be paid because those amounts are determined by the
+                   timing and the method of disposal, realization, or liquidation
+                   and the tax laws and regulations in effect at the time of disposal,
+                   realization, or liquidation
+               •   Unused operating loss and capital loss carryforwards
+               •   Other unused deductions and credits, with their expiration
+                   periods, if applicable
+               •   The differences between the estimated current values of major
+                   assets and the estimated current amounts of major liabilities or
+                   categories of assets and liabilities and their tax bases
+         k.    Maturities, interest rates, collateral, and other pertinent details
+               relating to receivables and debt
+         l.    Noncancellable commitments that do not have the characteristics
+               discussed in paragraph .28, for example, operating leases
+        .32 Generally accepted accounting principles other than those discussed
+   in this statement of position may apply to personal financial statements. For
+   example, FASB Statement No. 5, Accounting for Contingencies, and related
+   amendments and interpretations, provide guidance on accounting for contin-
+   gencies, and FASB Statement No. 57, Related Party Disclosures, provides
+   guidance on related-party disclosures.
+
+
+   Transition and Effective Date
+        .33 The accounting standards division recommends that the provisions of
+   this statement of position should apply to personal financial statements dated
+   June 30, 1983, or after. Comparative statements of prior periods should be
+   restated to comply with the provisions of this statement of position.
+
+
+
+
+   Copyright © 1996    120   11-96   18,939
+AICPA Technical Practice Aids                                             §10,350.33
+18,940                                Statements of Position
+      .34
+
+
+  Appendix A
+  Illustrative Financial Statements
+                                  James and Jane Person
+                             Statements of Financial Condition
+                               December 31, 19X3 and 19X2
+
+                                                                     December 31,
+                                                                   19X3          19X2
+  Assets
+   Cash                                                        $     3,700   $    15,600
+   Bonus receivable                                                 20,000        10,000
+   Investments
+     Marketable securities (Note 2)                                160,500       140,700
+     Stock options (Note 3)                                         28,000        24,000
+     Kenbruce Associates (Note 4)                                   48,000        42,000
+     Davekar Company, Inc. (Note 5)                                550,000       475,000
+   Vested interest in deferred profit
+      sharing plan                                                 111,400        98,900
+   Remainder interest in testamentary
+      trust (Note 6)                                               171,900       128,800
+   Cash value of life insurance ($43,600
+      and $42,900), less loans payable
+      to insurance companies ($38,100
+      and $37,700) (Note 7)                                          5,500         5,200
+   Residence (Note 8)                                              190,000       180,000
+   Personal effects (excluding jewelry)
+      (Note 9)                                                      55,000        50,000
+   Jewelry (Note 9)                                                 40,000        36,500
+                                                               $1,384,000    $1,206,700
+
+
+
+
+  Copyright © 1996     120    11-96     18,940
+§10,350.34           Copyright © 1996, American Institute of Certified Public Accountants, Inc.
+            Accounting and Reporting for Personal Financial Statements     18,941
+                                                              December 31,
+                                                           19X3           19X2
+   Liabilities
+    Income taxes—current year balance                 $      8,800    $       400
+    Demand 10.5% note payable to bank                       25,000         26,000
+    Mortgage payable (Note 10)                              98,200         99,000
+    Contingent liabilities (Note 11)
+                                                           132,000        125,400
+   Estimated income taxes on the differences
+      between the estimated current values
+      of assets and the estimated current
+      amounts of liabilities and their
+      tax bases (Note 12)                                   239,000       160,000
+   Net worth                                              1,013,000       921,300
+                                                      $1,384,000      $1,206,700
+
+   The accompanying notes are an integral part of these financial statements.
+   Copyright © 1996   120   11-96   18,941
+
+
+
+
+AICPA Technical Practice Aids                                         §10,350.34
+18,942                               Statements of Position
+
+                             James and Jane Person
+                       Statements of Changes in Net Worth
+                For the Years Ended December 31, 19X3 and 19X2
+
+                                                              Year ended December 31,
+
+                                                                19X3              19X2
+  Realized increases in net worth
+   Salary and bonus                                           $ 95,000           $85,000
+   Dividends and interest income                                 2,300             1,800
+   Distribution from limited partnership                         5,000             4,000
+   Gains on sales of marketable securities                       1,000               500
+
+                                                               103,300            91,300
+  Realized decreases in net worth
+   Income taxes                                                 26,000            22,000
+   Interest expense                                             13,000            14,000
+   Real estate taxes                                             4,000             3,000
+   Personal expenditures                                        36,700            32,500
+
+                                                                79,700            71,500
+
+       Net realized increase in net worth                       23,600            19,800
+  Copyright © 1996     120   11-96     18,942
+
+
+
+
+§10,350.34           Copyright © 1996, American Institute of Certified Public Accountants, Inc.
+            Accounting and Reporting for Personal Financial Statements        18,943
+                                                      Year ended December 31,
+                                                          19X3           19X2
+   Unrealized increases in net worth
+    Marketable securities (net of realized
+        gains on securities sold)                     $     3,000        $       500
+    Stock options                                           4,000                500
+    Davekar Company, Inc.                                  75,000             25,000
+    Kenbruce Associates                                     6,000
+    Deferred profit sharing plan                           12,500              9,500
+    Remainder interest in testamentary
+        trust                                              43,100             25,000
+    Jewelry                                                 3,500
+                                                          147,100             60,500
+   Unrealized decrease in net worth
+    Estimated income taxes in the differences
+        between the estimated current
+        values of assets and the estimated
+        current amounts of liabilities
+        and their tax bases                                79,000             22,000
+     Net unrealized increase in net worth                  68,100             38,500
+     Net increase in net worth                             91,700             58,300
+     Net worth at the beginning of year                   921,300            863,000
+     Net worth at the end of year                     $1,013,000         $921,300
+
+   The accompanying notes are an integral part of these financial statements.
+   Copyright © 2007   162   12-07   18,943
+
+
+
+
+AICPA Technical Practice Aids                                        §10,350.34
+18,944                               Statements of Position
+                                 James and Jane Person
+                             Notes to Financial Statements
+  Note 1. The accompanying financial statements include the assets and liabili-
+  ties of James and Jane Person. Assets are stated at their estimated current
+  values, and liabilities at their estimated current amounts.
+  Note 2. The estimated current values of marketable securities are either (a)
+  their quoted closing prices or (b) for securities not traded on the financial
+  statement date, amounts that fall within the range of quoted bid and asked
+  prices.
+     Marketable securities consist of the following:
+
+                                     December 31, 19X3           December 31, 19X2
+                                 Number of      Estimated     Number of      Estimated
+                                 shares or       current      shares or       current
+                                  bonds          values        bonds          values
+
+  Stocks
+    Jaiven Jewels, Inc.              1,500       $ 98,813
+    McRae Motors, Inc.                 800         11,000          600        $     4,750
+    Parker Sisters, Inc.               400         13,875          200              5,200
+    Rosenfield Rug Co.                                           1,200             96,000
+    Rubin Paint Company                300          9,750          100              2,875
+    Weiss Potato Chips, Inc.           200         20,337          300             25,075
+                                                  153,775                         133,900
+
+  Bonds
+    Jackson Van Lines,
+       Ltd. (12% due 7/1/X9)             5          5,225            5              5,100
+    United Garvey, Inc.
+       (7% due 11/15/X6)                 2          1,500            2              1,700
+                                                    6,725                           6,800
+                                                 $160,500                     $140,700
+
+
+
+  Note 3. Jane Person owns options to acquire 4,000 shares of stock of Winner
+  Corp. at an option price of $5 per share. The option expires on June 30, 19X5.
+  The estimated current value is its published selling price.
+  Note 4. The investment in Kenbruce Associates is an 8% interest in a real
+  estate limited partnership. The estimated current value is determined by the
+  projected annual cash receipts and payments capitalized at a 12% rate.
+  Note 5. James Person owns 50% of the common stock of Davekar Company,
+  Inc., a retail mail order business. The estimated current value of the investment
+  is determined by the provisions of a shareholders’ agreement, which restricts
+  the sale of the stock and, under certain conditions, requires the company to
+  repurchase the stock based on a price equal to the book value of the net assets
+  plus an agreed amount for goodwill. At December 31, 19X3, the agreed amount
+  for goodwill was $112,500, and at December 31, 19X2, it was $ 100,000.
+  Copyright © 2007     162   12-07     18,944
+§10,350.34           Copyright © 2007, American Institute of Certified Public Accountants, Inc.
+            Accounting and Reporting for Personal Financial Statements        18,945
+       A condensed balance sheet of Davekar Company, Inc., prepared in conform-
+   ity with generally accepted accounting principles, is summarized below:
+
+
+                                                               December 31,
+
+                                                           19X3           19X2
+
+    Current assets                                      $3,147,000     $2,975,000
+    Plant, property, and equipment—net                     165,000        145,000
+    Other assets                                           120,000        110,000
+
+       Total assets                                      3,432,000       3,230,000
+
+
+    Current liabilities                                  2,157,000       2,030,000
+    Long-term liabilities                                  400,000         450,000
+
+       Total liabilities                                 2,557,000       2,480,000
+
+       Equity                                           $ 875,000      $ 750,000
+
+
+
+      The sales and net income for 19X3 were $ 10,500,000 and $125,000 and for
+   19X2 were $9,700,000 and $80,000.
+   Note 6. Jane Person is the beneficiary of a remainder interest in a testamen-
+   tary trust under the will of the late Joseph Jones. The amount included in the
+   accompanying statements is her remainder interest in the estimated current
+   value of the trust assets, discounted at 10%.
+   Note 7. At December 31, 19X3 and 19X2, James Person owned a $300,000
+   whole life insurance policy.
+   Note 8. The estimated current value of the residence is its purchase price plus
+   the cost of improvements. The residence was purchased in December 19X1, and
+   improvements were made in 19X2 and 19X3.
+   Note 9. The estimated current values of personal effects and jewelry are the
+   appraised values of those assets, determined by an independent appraiser for
+   insurance purposes.
+   Note 10. The mortgage (collateralized by the residence) is payable in monthly
+   installments of $815 a month, including interest at 10% a year through 20Y8.
+   Note 11. James Person has guaranteed the payment of loans of Davekar
+   Company, Inc., under a $500,000 line of credit. The loan balance was $300,000
+   at December 31, 19X3, and $400,000 at December 31, 19X2.
+   Note 12. The estimated current amounts of liabilities at December 31, 19X3,
+   and December 31, 19X2, equaled their tax bases. Estimated income taxes have
+   been provided on the excess of the estimated current values of assets over their
+   tax bases as if the estimated current values of the assets had been realized on
+   the statement date, using applicable tax laws and regulations. The provision
+   will probably differ from the amounts of income taxes that eventually might be
+   paid because those amounts are determined by the timing and the method of
+   disposal or realization and the tax laws and regulations in effect at the time of
+   disposal or realization.
+   Copyright © 1996   120   11-96   18,945
+AICPA Technical Practice Aids                                           §10,350.34
+18,946                               Statements of Position
+     The estimated current values of assets exceeded their tax bases by $850,000
+  at December 31, 19X3, and by $770,300 at December 31, 19X2. The excess of
+  estimated current values of major assets over their tax bases are—
+                                                                      December 31,
+
+                                                                   19X3           19X2
+
+  Investment in Davekar Company, Inc.                            $430,500       $355,500
+  Vested interest in deferred profit sharing plan                 111,400         98,900
+  Investment in marketable securities                             104,100        100,000
+  Remainder interest in testamentary trust                         97,000         53,900
+
+
+
+
+  Copyright © 1996     120   11-96     18,946
+
+
+
+
+§10,350.34           Copyright © 1996, American Institute of Certified Public Accountants, Inc.
+                   Accounting and Reporting for Personal Financial Statements                     18,947
+             .35
+
+
+   Appendix B
+   Computing the Excess of the Estimated Current Values of
+   Assets Over Their Tax Bases and the Estimated Income Taxes
+   on the Excess
+       This appendix relates to the preceding illustrative financial statements of
+   James and Jane Person (appendix A) and illustrates how to compute the excess
+   of the estimated current values of assets over their tax bases and the provision
+   for estimated income taxes on the excess.11
+      The excess or deficit of the estimated current values of major assets or
+   categories of assets over their tax bases should be disclosed.22 The provision for
+   estimated income taxes should be presented in the statement of financial
+   condition between liabilities and net worth.
+       The assumptions and the tax basis information used in computing the excess
+   of the estimated current values of assets over their tax bases and the estimated
+   income taxes on the excess depend on the facts, circumstances, tax laws and
+   regulations, and assumptions that apply to the individual or individuals for
+   whom the financial statements are prepared. The facts, circumstances, tax laws
+   and regulations, and assumptions used in the following are illustrative only.
+
+
+
+
+   Copyright © 2007         162   12-07    18,947
+     1
+         1
+
+
+
+
+        The provision for estimated income taxes should also reflect tax consequences that result from
+   differences between the estimated current amounts of liabilities and their tax bases.
+     2
+         2
+
+
+
+
+        Differences between the estimated current amounts of major liabilities or categories of liabilities
+   and their tax bases should also be disclosed.
+
+
+AICPA Technical Practice Aids                                                               §10,350.35
+                                                                                                                         (A)
+                                                                                                                      Estimated               (B)                            Effective         Amount of
+                                                                                                                                                                                                                                                   18,948
+
+
+
+                                                                                                                       current                Tax         Excess of           income            estimated
+                                                                                       Description                     values                bases       (A) over (B)        tax rates        income taxes                 Assumptions used
+
+
+
+
+ §10,350.35
+                                                                             Cash                                     $      3,700       $    3,700          —                   —                 —               No tax effect.
+                                                                             Bonus receivable                               20,000            —           $ 20,000              50%              $ 10,000          Maximum tax rate.
+                                                                             Investments
+                                                                               Marketable securities                      160,500             56,400        104,100             36%                 37,500         Weighted average of
+                                                                                                                                                                                                                   short-term and long-term
+                                                                                                                                                                                                                   capital gain rates based on
+                                                                                                                                                                                                                   composition of portfolio.
+                                                                                 Stock options                              28,000            20,000          8,000             50%                   4,000        Short-term capital gain rate.
+                                                                                 Kenbruce Associates                        48,000            24,000         24,000             38%                   9,100        Weighted average of
+                                                                                                                                                                                                                   short-term and long-term
+                                                                                                                                                                                                                   capital gain rates.
+                                                                              Davekar Company, Inc.                       550,000         119,500           430,500             20%                 86,100         Long-term capital gain rate.
+                                                                             Vested interest in                           111,400           —               111,400             50%                 55,700         Maximum tax rate.
+                                                                              deferred profit sharing
+                                                                              plan
+                                                                                                                                                                                                                                                   Statements of Position
+
+
+
+
+                                                                             Remainder interest in                        171,900             74,900         97,000             26%                 25,600         Weighted average of
+                                                                              testamentary trust                                                                                                                   short-term and long-term
+                                                                                                                                                                                                                   capital gain rates.
+                                                                             Cash value of life                              5,500             5,500           —                 —                   —             No tax effect.
+                                                                              insurance
+                                                                             Residence                                    190,000            190,000          —                  —                   —             No tax effect.
+                                                                             Personal effects                              55,000             30,000         25,000             20%                  5,000         Long-term capital gain rate.
+                                                                             Jewelry                                       40,000             10,000         30,000             20%                  6,000         Long-term capital gain rate.
+                                                                                                                                                                       1                                      2
+                                                                                                                      $1,384,000         $534,000          $850,000                              $239,000
+                                                                             1   The excess or deficit of the estimated current values of major assets or categories of assets over their tax bases should be disclosed.
+                                                                             2   This amount should be presented in the statement of financial condition between liabilities and net worth.
+
+
+
+
+Copyright © 2007, American Institute of Certified Public Accountants, Inc.
+            Accounting and Reporting for Personal Financial Statements     18,949
+                 ACCOUNTING STANDARDS DIVISION
+
+             Accounting Standards Executive Committee
+                           (1981-1982)
+    DENNIS R. BERESFORD, Chairman               VAUGHN L. HERSEY
+    HAROLD E. ARNETT                            MITCHELL M. KRASNOFF
+    GILBERT BERGSMAN                            JOSEPH D. LHOTKA
+    JOHN R. DEMING                              WALTER P. SCHUETZE
+    MARVIN A. GOLDMAN                           MICHAEL H. SUTTON
+    ROBERT HAMPTON III                          CHARLES A. WERNER
+    WILLIAM P. HAUWORTH II                      RONALD L. WOLF
+
+
+         Personal Financial Statements Special Committee
+    MARLIN P. ALT, Chairman                     RUSSELL A. MCALPINE, JR.
+    CARROLL L. BACCUS                           RICHARD H. MURVIN
+    DAVID BLITZ                                 E. CHRISTOPHER PALMER
+    ANTHONY P. DOLANSKI                         JOHN M. SCHULZETENBERG
+    RAYMOND W. KLEIN                            GENE A. TRENARY
+    BURTON T. LEFKOWITZ                         LEONARD WEINSTOCK
+
+
+                                    AICPA Staff
+    PAUL ROSENFIELD, Director                   STEVEN RUBIN, Manager
+    Accounting Standards                        Accounting Standards
+
+
+
+
+                                [The next page is 19,061.]
+
+
+
+
+   Copyright © 1996   120   11-96   18,949
+AICPA Technical Practice Aids                                           §10,350.35
+

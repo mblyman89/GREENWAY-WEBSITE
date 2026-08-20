@@ -1,0 +1,1622 @@
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   Expenses
+
+
+
+   705 Cost of Sales and Services
+   705 Cost of Sales and Services
+    10 Overall
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   705-10-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph                   Action         Accounting Standards Update                            Date
+                                                                      Accounting Standards Update
+                           Contract                    Added                                                                 05/28/2014
+                                                                      No. 2014-09
+                                                                      Accounting Standards Update
+                           Customer                    Added                                                                 05/28/2014
+                                                                      No. 2014-09
+                                                                                  Accounting Standards Update
+                           Revenue                         Added                                                             05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-05-1                     Amended                                                           05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-05-1A                    Added                                                             05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-05-2                     Amended                                                           05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-25-2                     Amended                                                           07/22/2015
+                                                                                  No. 2015-11
+                                                                                  Accounting Standards Update
+                           705-10-25-4                     Amended                                                           05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-25-4A                    Added                                                             05/28/2014
+                                                                                  No. 2014-09
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     1/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+                                                                                  Accounting Standards Update
+                           705-10-25-6                     Superseded                                                        05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-25-8                     Amended                                                           05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           705-10-25-9                     Amended                                                           05/28/2014
+                                                                                  No. 2014-09
+                           705-10-25-10                                           Accounting Standards Update
+                                                           Superseded                                                        05/28/2014
+                           through 25-12                                          No. 2014-09
+                           705-10-45-1 through                                    Accounting Standards Update
+                                                           Superseded                                                        05/28/2014
+                           45-5                                                   No. 2014-09
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   705-10-05-1            The Cost of Sales and Services Topic includes the following Subtopics:
+                               a. [ Overall [ ASU 2014-09 153 ] ]
+                               b. [ Accounting for Consideration Received from a Vendor. [ ASU 2014-09 153 ] ]
+
+
+   705-10-05-1A           [ The Overall Subtopic only provides links to guidance on accounting for the cost of sales and
+                          services in other applicable Subtopics because the asset liability model used in the Codification
+                          generally results in the inclusion of that guidance in other Topics. For example, because assets are
+                          sold or remeasured (or liabilities are incurred), the guidance related to the transactions is included in
+                          the applicable Derecognition and Subsequent Measurement Sections of Topic 330 on inventory and
+                          Topic 360 on plant, property, and equipment rather than in this Topic. [ ASU 2014-09 153 ] ]
+
+   705-10-05-2            Included in Section 705-10-25 are links to certain other Subtopics containing guidance applicable to
+                          the recognition of cost of sales and services.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     2/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Contract
+
+
+                          [ An agreement between two or more parties that creates enforceable rights and obligations. [
+                          ASU 2014-09 5 ] ]
+
+
+   Customer
+
+
+                          [ A party that has contracted with an entity to obtain goods or services that are an output of the
+                          entity's ordinary activities in exchange for consideration. [ ASU 2014-09 9 ] ]
+
+
+   Revenue
+
+
+                          [ Inflows or other enhancements of assets of an entity or settlements of its liabilities (or a
+                          combination of both) from delivering or producing goods, rendering services, or other activities that
+                          constitute the entity's ongoing major or central operations. [ ASU 2014-09 9 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     3/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   General
+   705-10-25-1            This Section consists solely of links to other Subtopics because the asset liability model used in the
+                          Codification requires that applicable guidance be included in other Topics. In addition, the following
+                          may not represent a complete list of other Topics containing cost of sales and services guidance.
+
+
+   > Inventory
+
+   705-10-25-2            [ See paragraphs 330-10-35-1A through 35-11 for adjustments affecting cost of sales and services
+                          resulting from the subsequent measurement of inventory. [ ASU 2015-11 10 ] ]
+
+   705-10-25-3            See paragraphs 330-10-30-1 through 30-13 for adjustments affecting cost of sales and services
+                          resulting from establishing the cost basis and the use of inventory pricing methods.
+
+   705-10-25-4            [ See Topic 606 on revenue from contracts with customers, specifically paragraph 606-10-32-10 and
+                          paragraphs 606-10-55-22 through 55-29 for the accounting for a sale with a right of return. [
+                          ASU 2014-09 155 ] ]
+
+
+   > Other Assets and Deferred Costs—Contracts with Customers
+
+   705-10-25-4A           [ See Subtopic 340-40 for guidance on the following costs related to a contract with a customer
+                          within the scope of Topic 606 on revenue from contracts with customers: [ ASU 2014-09 155 ] ]
+                               a. [ Incremental costs of obtaining a contract with a customer [ ASU 2014-09 155 ] ]
+                               b. [ Costs incurred in fulfilling a contract with a customer that are not within the scope of another
+                               Topic. [ ASU 2014-09 155 ] ]
+
+
+   > Property, Plant, and Equipment
+
+   · > Impairment or Disposal of Long-Lived Assets
+   705-10-25-5            See paragraphs 360-10-35-38 through 35-40 for a discussion of the costs to sell long-lived assets
+                          classified as held for sale for purposes of measuring the expected disposal loss.
+
+   705-10-25-6            Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+   > Interim Financial Reporting
+
+   705-10-25-7            See paragraphs 270-10-45-4 through 45-6 for a discussion of recognition principles used for cost of
+                          sales and services used in reporting on an interim basis.
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     4/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   > Extended Warranty and Product Maintenance Contracts
+
+   705-10-25-8            See paragraph 605-20-25-6 for guidance on recognizing a loss on separately priced extended warranty
+                          and product maintenance contracts.
+
+
+   > Consideration Received from a Vendor
+
+   705-10-25-9            See Subtopic 705-20 for a discussion of consideration received from a vendor by a customer.
+
+   705-10-25-10           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-10-25-11           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-10-25-12           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+   > Costs Resulting from Share-Based Payment Transactions
+
+   705-10-25-13           See Section 718-10-25 for a discussion of recognition principles for costs incurred under share-based
+                          payment transactions.
+
+
+   > Costs of Computer Software Sold
+
+   705-10-25-14           For guidance on costs incurred for duplicating the computer software, documentation, and training
+                          materials from product masters and for physically packaging the product for distribution, see Subtopic
+                          985-330.
+
+   705-10-25-15           See Subtopic 350-40 for a discussion of the cost of internal-use computer software sold.
+
+
+
+
+   45 Other Presentation Matters
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     5/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   705-10-45-1            Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-10-45-2            Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-10-45-3            Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-10-45-4            Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-10-45-5            Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+
+   705 Cost of Sales and Services
+    20 Accounting for Consideration Received
+    from a Vendor
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     6/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   General
+   705-20-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph             Action         Accounting Standards Update                                  Date
+                           Cash                                 Accounting Standards Update No.
+                                                 Amended                                                                     06/20/2018
+                           Consideration                        2018-07
+                           Cash                                        Accounting Standards Update No.
+                                                     Added                                                                   05/28/2014
+                           Consideration                               2014-09
+                                                                       Accounting Standards Update No.
+                           Contract                  Added                                                                   05/28/2014
+                                                                       2014-09
+                                                                       Accounting Standards Update No.
+                           Customer                  Added                                                                   05/28/2014
+                                                                       2014-09
+                           Probable (2nd                               Accounting Standards Update No.
+                                                     Added                                                                   05/28/2014
+                           def.)                                       2014-09
+                                                                       Accounting Standards Update No.
+                           Reseller                  Added                                                                   05/28/2014
+                                                                       2014-09
+                                                                       Accounting Standards Update No.
+                           Revenue                   Added                                                                   05/28/2014
+                                                                       2014-09
+                           Standalone                                  Accounting Standards Update No.
+                                                     Added                                                                   05/28/2014
+                           Selling Price                               2014-09
+                                                                       Accounting Standards Update No.
+                           Vendor                    Added                                                                   05/28/2014
+                                                                       2014-09
+                                                                       Accounting Standards Update No.
+                           705-20-05-1               Added                                                                   05/28/2014
+                                                                       2014-09
+                           705-20-25-1                                 Accounting Standards Update No.
+                                                     Added                                                                   05/28/2014
+                           through 25-12                               2014-09
+                           705-20-25-7               Amended           Maintenance Update 2020-18                            11/25/2020
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     7/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   705-20-05-1            [ This Subtopic provides guidance on accounting for consideration received by an entity from a vendor.
+                          [ ASU 2014-09 159 ] ]
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Cash Consideration
+
+
+                          [ Cash payments and credits that the customer can apply against trade amounts owed to the vendor.
+                          In addition, as indicated in Section 718-10-25, consideration in the form of [ EITF 02-16 Exhibit 02-
+                          16B 56.1 ] ] [ share-based payment awards [ ASU 2018-07 4 ] ] [ is recognized in the same period
+                          or periods and in the same manner (that is, capitalize versus expense) as if the entity had paid cash
+                          for the goods or services instead of paying with or using the share-based payment awards. Accordingly,
+                          guidance with respect to cash consideration is applicable to consideration that consists of equity
+                          instruments. [ EITF 02-16 Exhibit 02-16B 56.1 ] ]
+
+
+   Contract
+
+
+                          [ An agreement between two or more parties that creates enforceable rights and obligations. [
+                          ASU 2014-09 5 ] ]
+
+
+   Customer
+
+
+                          [ A party that has contracted with an entity to obtain goods or services that are an output of the
+                          entity's ordinary activities in exchange for consideration. [ ASU 2014-09 9 ] ]
+
+
+   Probable
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     8/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+                          [ The future event or events are likely to occur. [ FAS 005 3 34 ] ]
+
+   Reseller
+
+
+                          [ Any entity that purchases another vendor's products for resale, regardless of whether that entity is a
+                          distributor or wholesaler, a retailer, or other type of reseller. [ EITF 01-09 Exhibit 01-9E 258 ] ]
+
+
+   Revenue
+
+
+                          [ Inflows or other enhancements of assets of an entity or settlements of its liabilities (or a
+                          combination of both) from delivering or producing goods, rendering services, or other activities that
+                          constitute the entity's ongoing major or central operations. [ ASU 2014-09 9 ] ]
+
+
+   Standalone Selling Price
+
+
+                          [ The price at which an entity would sell a promised good or service separately to a customer. [
+                          ASU 2014-09 5 ] ]
+
+
+   Vendor
+
+
+                          [ A service provider or product seller, such as a manufacturer, distributor, or reseller. [ EITF 01-
+                          09 Exhibit 01-9E 263 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     9/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   > Accounting for Consideration Received from a Vendor (Supplier)
+
+   705-20-25-1            [ Consideration from a vendor includes cash amounts that an entity receives or expects to receive
+                          from a vendor (or from other parties that sell the goods or services to the vendor). Consideration from
+                          a vendor also includes credit or other items (for example, a coupon or voucher) that the entity can
+                          apply against amounts owed to the vendor (or to other parties that sell the goods or services to the
+                          vendor). [ ASU 2014-09 159 ] ] [ The entity shall account for consideration from a vendor as a
+                          reduction of the purchase price of the goods or services acquired from the vendor [ EITF 02-
+                          16 DISCUSSION 22.1 ] ] [ unless the consideration from the vendor is one of the following: [ EITF 02-
+                          16 DISCUSSION 22.2.1 ] ]
+                               a. [ In exchange for a distinct good or service (as described in paragraphs 606-10-25-19 through
+                               25-22) that the entity transfers to the vendor [ EITF 02-16 DISCUSSION 22.2.2.1 ] ]
+                               b. [ A reimbursement of costs incurred by the entity to sell the vendor's products [ EITF 02-
+                               16 DISCUSSION 22.2.2.2 ] ]
+                               c. [ Consideration for sales incentives offered to customers by manufacturers. [ ASU 2014-
+                               09 159 ] ]
+
+
+   · > Consideration in Exchange for a Distinct Good or Service
+   705-20-25-2            [ If the consideration from a vendor is in exchange for a distinct good or service (see paragraphs 606-
+                          10-25-19 through 25-22) that an entity transfers to the vendor, then the entity shall account for the
+                          sale of the good or service in the same way that it accounts for other sales to customers in
+                          accordance with Topic 606 on revenue from contracts with customers. [ ASU 2014-09 159 ] ] [ If the
+                          amount of consideration from the vendor exceeds the standalone selling price of the distinct good or
+                          service that the entity transfers to the vendor, then the entity shall account for such excess as a
+                          reduction of the purchase price of any goods or services acquired from the vendor. [ EITF 02-
+                          16 DISCUSSION 23.2.2 ] ] [ If the standalone selling price is not directly observable, the entity shall
+                          estimate it in accordance with paragraphs 606-10-32-33 through 32-35. [ ASU 2014-09 159 ] ]
+
+
+   · > Consideration Is a Reimbursement of Costs Incurred to Sell the Vendor's Products
+   705-20-25-3            [ Cash consideration represents a reimbursement of costs incurred by the entity to sell the vendor's
+                          products and shall be characterized as a reduction of that cost when recognized in the entity's income
+                          statement if the cash consideration represents a reimbursement of a specific, incremental,
+                          identifiable cost incurred by the entity in selling the vendor's products or services. If the amount of
+                          cash consideration paid by the vendor exceeds the cost being reimbursed, that excess amount shall
+                          be characterized in the entity's income statement as a reduction of cost of sales when recognized in
+                          the entity's income statement. [ EITF 02-16 DISCUSSION 24 ] ]
+
+   · > Consideration for Sales Incentives Offered to Customers by Manufacturers
+   705-20-25-4            [ Manufacturers often sell their products to resellers who then sell those products to consumers or
+                          other end users. In some cases, manufacturers will offer sales discounts and incentives directly to
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 10/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+                          consumers—for example, rebates or coupons—in order to stimulate consumer demand for their
+                          products. Because the reseller has direct contact with the consumer, the reseller may agree to accept,
+                          at the point of sale to the consumer, the manufacturer's incentives that are tendered by the consumer
+                          (for example, honoring manufacturer's coupons as a reduction to the price paid by consumers and
+                          then seeking reimbursement from the manufacturer). In other instances, the consumer purchases the
+                          product from the reseller but deals directly with the manufacturer related to the manufacturer's
+                          incentive or discount (for example, a mail-in rebate). [ EITF 03-10 ISSUE 4 ] ]
+
+   705-20-25-5            [ Although the reseller often benefits from the vendor's direct-to-consumer incentives as a result of
+                          increased sales volume, the reseller generally has no control over which consumers or consumer
+                          groups participate in the incentive programs. Because the manufacturer reimburses the reseller for
+                          the value of the discount provided to the consumer, the reseller's gross margin on the product is the
+                          same regardless of whether or not the consumer purchases the product with the manufacturer's
+                          incentive. [ EITF 03-10 ISSUE 5 ] ]
+
+   705-20-25-6            [ The issue is whether consideration received by a reseller from a vendor that is a reimbursement by
+                          the vendor for honoring the vendor's sales incentives offered directly to consumers shall be recorded
+                          as a reduction of the cost of the reseller's purchases from the vendor and, therefore, characterized as
+                          a reduction of cost of sales under the guidance in paragraph 705-20-25-1. [ EITF 03-10 ISSUE 9.1 ] ]
+
+   705-20-25-7            [ For purposes of this guidance, the phrase vendor's sales incentive offered directly to consumers is
+                          limited to a vendor's incentive that meets all the following criteria: [ EITF 03-10 ISSUE 9.2.1 ] ]
+                               a. [ The incentive can be tendered by a consumer at resellers that accept manufacturer's
+                               incentives in partial payment of the price charged by the reseller for the vendor's product. [
+                               EITF 03-10 ISSUE 9.2.2.1 ] ]
+                               b. [ The reseller receives a direct reimbursement from the vendor (or a clearinghouse authorized
+                               by the vendor) based on the face amount of the incentive. [ EITF 03-10 ISSUE 9.2.2.2.1 ] ]
+                               c. [ Terms of reimbursement to the reseller for the vendor's sales incentive offered to the
+                               consumer must not be influenced by or negotiated in conjunction with any other incentive
+                               arrangements between the vendor and the reseller but, rather, may be determined only by the
+                               terms of the incentive offered to consumers. [ EITF 03-10 ISSUE 9.2.2.2.2.1 ] ]
+                               d. [ The reseller is subject to an agency relationship with the vendor, whether expressed or
+                               implied, in the sales incentive transaction between the vendor and the consumer. [ EITF 03-
+                               10 ISSUE 9.2.2.2.2.2 ] ]
+
+
+   705-20-25-8            [ An entity with sales incentive arrangements that meet all of the criteria described in paragraph [
+                          EITF 03-10 DISCUSSION 10.1.1 ] ] [ 705-20-25-7 shall not account for consideration received from a
+                          vendor as a reduction of the purchase price of the goods or services acquired from the vendor and
+                          shall consider the guidance in Topic 606 on revenue from contracts with customers. [ ASU 2014-
+                          09 159 ] ] [ Sales incentives that do not meet all of the criteria in paragraph 705-20-25-7 shall be
+                          accounted for as a reduction of the purchase price of the goods or services acquired from the vendor.
+                          [ EITF 03-10 DISCUSSION 10.2 ] ]
+
+   705-20-25-9            See paragraphs 705-20-25-10 through 25-11 for guidance on the presentation of a rebate pursuant to
+                          a binding agreement.
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 11/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   > Accounting for Certain Consideration Received from a Vendor
+
+   705-20-25-10           [ A rebate or refund of a specified amount of cash consideration that is payable pursuant to a binding
+                          arrangement only if the entity completes a specified cumulative level of purchases or remains a
+                          customer for a specified time period shall be recognized as a reduction of the cost of sales based on
+                          a systematic and rational allocation of the cash consideration offered to each of the underlying
+                          transactions that results in progress by the entity toward earning the rebate or refund provided the
+                          amounts are probable and can be reasonably estimated. If the rebate or refund is not probable and
+                          cannot be reasonably estimated, it shall be recognized as the milestones are achieved. [ EITF 02-
+                          16 DISCUSSION 25 ] ]
+
+   705-20-25-11           [ The ability to make a reasonable estimate of the amount of future cash rebates or refunds depends
+                          on many factors and circumstances that will vary from case to case. However, any of the following
+                          factors may impair an entity's ability to determine whether the rebate or refund is probable and can be
+                          reasonably estimated: [ EITF 02-16 DISCUSSION 26 ] ]
+                               a. [ The rebate or refund relates to purchases that will occur over a relatively long period. [
+                               EITF 02-16 DISCUSSION 27 ] ]
+                               b. [ There is an absence of historical experience with similar products or the inability to apply
+                               such experience because of changing circumstances. [ EITF 02-16 DISCUSSION 28 ] ]
+                               c. [ Significant adjustments to expected cash rebates or refunds have been necessary in the
+                               past. [ EITF 02-16 DISCUSSION 29 ] ]
+                               d. [ The product is susceptible to significant external factors (for example, technological
+                               obsolescence or changes in demand). [ EITF 02-16 DISCUSSION 30 ] ]
+
+
+   705-20-25-12           [ Changes in the estimated amount of cash rebates or refunds and retroactive changes by a vendor to
+                          a previous offer (an increase or a decrease in the rebate amount that is applied retroactively) are
+                          changes in estimate that shall be recognized using a cumulative catch-up adjustment. That is, the
+                          entity would adjust the cumulative balance of its rebate recognized to the revised cumulative estimate
+                          immediately. Entities shall consider whether any portion of the cumulative effect adjustment affects
+                          other accounts (inventory, for example), in which case only a portion of that adjustment would be
+                          reflected in the income statement. [ EITF 02-16 DISCUSSION 31 ] ]
+
+
+
+   705 Cost of Sales and Services
+    905 Agriculture
+   00 Status
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 12/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   705-905-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragrap
+                                         Action             Accounting Standards Update                                      Date
+                           h
+                           Agricultu
+                           ral
+                                         Added              Accounting Standards Update No. 2014-06                          03/14/2014
+                           Coopera
+                           tive
+                           Coopera
+                                         Superseded         Accounting Standards Update No. 2014-06                          03/14/2014
+                           tives
+                           Member
+                           of an
+                           Agricultu
+                                         Added              Accounting Standards Update No. 2014-06                          03/14/2014
+                           ral
+                           Coopera
+                           tive
+                           Nonmem
+                           ber of
+                           an
+                           Agricultu     Added              Accounting Standards Update No. 2014-06                          03/14/2014
+                           ral
+                           Coopera
+                           tive
+                           Patrons       Amended            Accounting Standards Update No. 2014-06                          03/14/2014
+                           905-
+                           705-05-          Amended              Accounting Standards Update No. 2014-06                     03/14/2014
+                           1
+                           905-
+                           705-05-          Amended              Accounting Standards Update No. 2014-06                     03/14/2014
+                           2
+
+
+
+
+   05 Overview and Background
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 13/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   705-905-05-1           This Subtopic only provides links to guidance for agricultural cooperatives on amounts that are
+                          charged to costs of goods sold when boards of directors assign amounts to unprocessed products.
+
+   Cooperatives
+   705-905-05-2           The Cooperatives Subsections only provide links to guidance for agricultural cooperatives on amounts
+                          that are charged to costs of goods sold when boards of directors assign amounts to unprocessed
+                          products.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Agricultural Cooperative
+
+
+                          [ The Agricultural Marketing Act of 1929 defines a cooperative association as [ SOP 85-3 9 63 ] ] [
+                          any association in which farmers act together in processing, preparing for market, handling, and/or
+                          marketing the farm products of persons so engaged, and also means any association in which
+                          farmers act together in purchasing, testing, grading, processing, distributing, and/or furnishing farm
+                          supplies and/or farm business services. Provided, however, that such associations are operated for
+                          producers or purchasers and conform to one or both of the following requirements: [ SOP 85-3 9 64 ]
+                          ]
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 14/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+                               a. [ No member of an agricultural cooperative association is allowed more than one vote because
+                               of the amount of stock or membership capital he may own therein. [ SOP 85-3 9 65 ] ]
+                               b. [ The association does not pay dividends on stock or membership capital in excess of 8
+                               percent per year. [ SOP 85-3 9 66 ] ]
+
+                          [ In addition to meeting either of the requirements in this paragraph, the association shall not deal in
+                          farm products, farm supplies, and farm business services with or for nonmembers of an agricultural
+                          cooperative in an amount greater in value than the total amount of such business transacted by it with
+                          or for members. All business transacted by any cooperative association for or on behalf of the United
+                          States or any agency or instrumentality thereof shall be disregarded in determining the volume of
+                          member and nonmember business transacted by such association. [ SOP 85-3 9 68 ] ]
+
+
+
+   Member of an Agricultural Cooperative
+
+
+                          [ A member of an agricultural cooperative is an owner-patron who is entitled to vote at corporate
+                          meetings of an agricultural cooperative. [ SOP 85-3 2 29.1 ] ]
+
+
+   Nonmember of an Agricultural Cooperative
+
+
+                          [ A nonmember patron is not entitled to voting privileges. A nonmember patron may or may not be
+                          entitled to share in patronage distributions, depending on the articles and bylaws of the agricultural
+                          cooperative or on other agreements. [ SOP 85-3 2 29.2 ] ]
+
+
+   Patrons
+
+
+                          [ Any individual, trust, estate, partnership, corporation, or agricultural cooperative with or for whom a
+                          cooperative does business on a cooperative basis, whether a member of an agricultural cooperative or
+                          nonmember of an agricultural cooperative. [ SOP 85-3 2 32 ] ]
+
+
+
+
+   25 Recognition
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 15/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+              General Note for Fair Value Option:Some of the items subject to the guidance in this Subtopic may qualify for
+              application of the Fair Value Option Subsections of Subtopic 825-10. Those Subsections (see paragraph
+              825-10-05-5) address circumstances in which entities may choose, at specified election dates, to measure
+              eligible items at fair value (the fair value option). See Section 825-10-15 for guidance on the scope of the
+              Fair Value Option Subsections of the Financial Instruments Topic.
+
+
+
+
+   Cooperatives
+   705-905-25-1           See paragraph 905-405-25-1 for guidance on amounts of liabilities to be established and the related
+                          amount to be charged to cost of goods sold when boards of directors assign amounts to unprocessed
+                          products received from patrons.
+
+   705-905-25-2           See paragraph 905-330-25-7 indicating that cost of goods sold will not include a charge for
+                          unprocessed products received from patrons when amounts are not assigned to such products by the
+                          board of directors. See Example 1 (paragraph 905-330-55-1) for an illustration of this guidance.
+
+
+
+   705 Cost of Sales and Services
+    912 Contractors—Federal Government
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 16/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   705-912-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph                  Action          Accounting Standards Update                            Date
+                                                                      Accounting Standards Update
+                           912-705-05-1               Superseded                                                             05/28/2014
+                                                                      No. 2014-09
+                                                                               Accounting Standards Update
+                           912-705-15-1                   Superseded                                                         05/28/2014
+                                                                               No. 2014-09
+                           912-705-25-1                                        Accounting Standards Update
+                                                          Superseded                                                         05/28/2014
+                           through 25-3                                        No. 2014-09
+                                                                               Accounting Standards Update
+                           912-705-50-1                   Superseded                                                         05/28/2014
+                                                                               No. 2014-09
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   705-912-05-1           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 17/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   705-912-15-1           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+              General Note for Fair Value Option:Some of the items subject to the guidance in this Subtopic may qualify for
+              application of the Fair Value Option Subsections of Subtopic 825-10. Those Subsections (see paragraph
+              825-10-05-5) address circumstances in which entities may choose, at specified election dates, to measure
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 18/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              eligible items at fair value (the fair value option). See Section 825-10-15 for guidance on the scope of the
+              Fair Value Option Subsections of the Financial Instruments Topic.
+
+
+
+
+   General
+   705-912-25-1           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-912-25-2           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-912-25-3           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   705-912-50-1           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+
+
+   705 Cost of Sales and Services
+    926 Entertainment—Films
+   00 Status
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 19/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   705-926-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragrap
+                                         Action             Accounting Standards Update                                      Date
+                           h
+                           Revenue       Superseded         Accounting Standards Update No. 2014-09                          05/28/2014
+                           926-
+                           705-25-          Amended              Accounting Standards Update No. 2014-09                     05/28/2014
+                           1
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   705-926-05-1           This Subtopic presents the accounting by entities in the film production and distribution industry for
+                          costs incurred to manufacture or duplicate products held for sale, such as videocassettes and video
+                          discs.
+
+
+
+
+   15 Scope and Scope Exceptions
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 20/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   > Overall Guidance
+
+   705-926-15-1           This Subtopic follows the same Scope and Scope Exceptions as outlined in the Overall Subtopic, see
+                          Section 926-20-15.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Film Prints
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 21/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+                          [ Those materials, produced on behalf of a film distributor for delivery to a theater or other similar
+                          venue, that contain the completed audio and video elements of a film. Such materials are used by the
+                          theater or other similar venue to exhibit the film to its customers. [ SOP 00-2 134 340 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+              General Note for Fair Value Option:Some of the items subject to the guidance in this Subtopic may qualify for
+              application of the Fair Value Option Subsections of Subtopic 825-10. Those Subsections (see paragraph
+              825-10-05-5) address circumstances in which entities may choose, at specified election dates, to measure
+              eligible items at fair value (the fair value option). See Section 825-10-15 for guidance on the scope of the
+              Fair Value Option Subsections of the Financial Instruments Topic.
+
+
+
+
+   General
+   > Costs of Products Held for Sale
+
+   705-926-25-1           [ The costs of producing a film include manufacturing costs. [ SOP 00-2 28 72 ] ] [ An entity shall
+                          charge manufacturing or duplication costs of products for sale, such as videocassettes and digital
+                          video discs, to expense on a unit-specific basis when the related product revenue is recognized. [
+                          SOP 00-2 50 109.1 ] ]
+
+
+   > Theatrical Film Prints
+
+   705-926-25-2           [ An entity shall charge the cost of theatrical film prints to expense over the period benefited. [
+                          SOP 00-2 50 109.2.2 ] ]
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 22/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   705 Cost of Sales and Services
+    976 Real Estate—Retail Land
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   705-976-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragrap
+                                         Action             Accounting Standards Update                                      Date
+                           h
+                           Full
+                           Accrual       Superseded         Accounting Standards Update No. 2014-09                          05/28/2014
+                           Method
+                           976-
+                           705-30-          Superseded           Accounting Standards Update No. 2014-09                     05/28/2014
+                           1
+                           976-
+                           705-30-          Amended              Accounting Standards Update No. 2014-09                     05/28/2014
+                           2
+
+
+
+
+   05 Overview and Background
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 23/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   705-976-05-1           This Subtopic provides measurement guidance concerning the cost of retail land sales.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   > Overall Guidance
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 24/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   705-976-15-1           This Subtopic follows the same Scope and Scope Exceptions as outlined in the Overall Subtopic, see
+                          Section 976-10-15.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   30 Initial Measurement
+
+              General Note:The Initial Measurement Section provides guidance on the criteria and amounts used to
+              measure a particular item at the date of initial recognition.
+
+
+
+
+   General
+   705-976-30-1           Paragraph superseded by Accounting Standards Update No. 2014-09.
+
+   705-976-30-2           [ See Subtopic 340-40 for guidance on incremental costs of obtaining a contract with a customer and
+                          costs to fulfill a contract. [ ASU 2014-09 552 ] ]
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 25/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   705 Cost of Sales and Services
+    985 Software
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   705-985-00-1           No updates have been made to this subtopic.
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   705-985-05-1           This Subtopic only provides links to guidance on costs of sales and services related to computer
+                          software.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 26/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   > Amortization of Capitalized Software Development Costs
+
+   705-985-25-1           Paragraph 985-20-45-1 indicates that the amortization of capitalized costs to develop a software
+                          product that is marketed to others would be charged to cost of sales or a similar expense category.
+
+
+   > Cost of Duplicating Software, Documentation, Training Materials,
+   and Packaging
+
+   705-985-25-2           [ For guidance on costs incurred for duplicating the computer software, documentation, and training
+                          materials from product masters and for physically packaging the product for distribution, see Subtopic
+                          985-330. [ FAS 086 9 36 ] ]
+
+
+   > Costs to Keep Software Current with Hardware Revisions
+
+   705-985-25-3           For guidance on costs to keep certain software current with hardware revisions, see paragraphs 985-
+                          20-55-11 through 55-12.
+
+
+
+
+   S25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 27/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+   General
+   > Film and Software Costs Associated with Developing
+   Entertainment and Educational Software Products
+
+   705-985-S25-1          [ See paragraph 985-705-S99-1, SEC Observer Comment: Accounting for the Film and Software Costs
+                          Associated with Developing Entertainment and Educational Software Products, for SEC Staff views on
+                          the accounting for costs related to the development of entertainment and educational software
+                          products. [ EITF 96-06 DISCUSSION 13.1.2.1 ] ]
+
+
+
+
+   S99 SEC Materials
+
+              General Note:As more fully described in About the Codification, the Codification includes selected SEC and
+              SEC Staff content for reference by public companies. The Codification does not replace or affect how the
+              SEC or SEC Staff issues or updates SEC content. SEC Staff content does not constitute Commission-
+              approved rules or interpretations of the SEC.
+
+
+
+
+   General
+   > SEC Staff Guidance
+
+   · > Comments Made by SEC Observer at Emerging Issues Task Force (EITF) Meetings
+
+   · · > SEC Observer Comment: Accounting for the Film and Software Costs Associated with Developing
+   Entertainment and Educational Software Products
+
+   705-985-S99-1          The following is the text of SEC Observer Comment: Accounting for the Film and Software Costs
+                          Associated with Developing Entertainment and Educational Software Products.
+                               [ The SEC staff has become aware of diversity in the application of generally accepted accounting
+                               principles to exploitation, film, and other software development costs associated with EE
+                               products. [ EITF 96-06 DISCUSSION 12.1 ] ]
+                               [ The SEC staff has learned that certain registrants are recording all costs incurred in the
+                               development of EE products pursuant to the provisions of Topics 340, 720, and 985. [ EITF 96-
+                               06 DISCUSSION 12.2.1.1 ] ]
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 28/29
+ 8/20/2026, 12:17 AM                                                                                        Combine Sections - 705 Cost of Sales and Services
+
+
+
+
+                               [ Other registrants are separating exploitation and film costs from other software development
+                               costs and accounting for the other software development costs using Topic 985 and capitalizing
+                               film and exploitation costs as film cost inventory as described in Topic 926. [ EITF 96-
+                               06 DISCUSSION 12.2.1.2.1 ] ]
+                               [ Still other registrants, principally film production companies, are capitalizing all costs relating to
+                               the development of EE products as film cost inventory. [ EITF 96-06 DISCUSSION 12.2.1.2.2 ] ]
+                               [ The SEC staff views stated here are not intended to apply to costs incurred to produce
+                               computer-generated special effects and images used in products that are exhibited in theaters or
+                               licensed to television stations because those costs are addressed by Topic 926. [ EITF 96-
+                               06 DISCUSSION 12.2.2 ] ]
+                               [ Topic 985 establishes standards of financial accounting and reporting for the costs of all
+                               computer software to be sold, leased, or otherwise marketed as a separate product or as part of
+                               a product or process, whether internally developed and produced or purchased. [ EITF 96-
+                               06 DISCUSSION 13.1.1 ] ]
+                               [ The SEC staff believes that EE products that are sold, leased, or otherwise marketed are
+                               subject to the accounting requirements of Topic 985. [ EITF 96-06 DISCUSSION 13.1.2.1 ] ]
+                               [ The SEC staff does not believe that other standards of financial accounting and reporting or
+                               that industry practice are acceptable alternatives to those requirements. [ EITF 96-
+                               06 DISCUSSION 13.1.2.2 ] ]
+                               [ The SEC staff also believes that film costs incurred in the development of an EE product should
+                               be accounted for under the provisions of Topic 985, not the provisions of Topic 926. [ EITF 96-
+                               06 DISCUSSION 13.2.1 ] ]
+                               [ In addition, exploitation costs should be expensed as incurred unless those costs include
+                               advertising costs that qualify for capitalization in accordance with the provisions of Topics 340
+                               and 720. [ EITF 96-06 DISCUSSION 13.2.2 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 29/29
+

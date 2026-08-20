@@ -1,0 +1,2898 @@
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   Presentation
+
+
+
+   225 Income Statement
+   225 Income Statement
+    10 Overall
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-10-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph                  Action       Accounting Standards Update                               Date
+                           225-10-05-1 through
+                                                          Superseded        Maintenance Update 2017-19                       11/15/2017
+                           05-5
+                                                                            Accounting Standards Update No.
+                           225-10-05-1                    Amended                                                            01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-10-05-4                    Amended                                                            01/09/2015
+                                                                            2015-01
+                           225-10-15-1 through
+                                                          Superseded        Maintenance Update 2017-19                       11/15/2017
+                           15-3
+                           225-10-45-1                    Superseded        Maintenance Update 2017-19                       11/15/2017
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     1/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-10-05-1            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-05-2            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-05-3            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-05-4            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-05-5            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-10-15-1            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-15-2            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-15-3            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   20 Glossary
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     2/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-10-45-1            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S00 Status
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     3/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-10-S00-1           The following table identifies the changes made to this Subtopic.
+                                   Paragraph           Action       Accounting Standards Update                              Date
+                           225-10-S15-1                     Superseded       Maintenance Update 2017-19                      11/15/2017
+                           225-10-S25-1                     Superseded       Maintenance Update 2017-19                      11/15/2017
+                           225-10-S25-2                     Superseded       Maintenance Update 2017-19                      11/15/2017
+                           225-10-S30-1                     Superseded       Maintenance Update 2017-19                      11/15/2017
+                           225-10-S45-1 through
+                                                            Superseded       Maintenance Update 2017-19                      11/15/2017
+                           S45-8
+                           225-10-S50-1                     Superseded       Maintenance Update 2017-19                      11/15/2017
+                           225-10-S99-1 through
+                                                            Superseded       Maintenance Update 2017-19                      11/15/2017
+                           S99-8
+                                                                             Accounting Standards Update No.
+                           225-10-S99-2                     Amended                                                          08/02/2010
+                                                                             2010-21
+                                                                             Accounting Standards Update No.
+                           225-10-S99-4                     Amended                                                          08/27/2012
+                                                                             2012-03
+                                                                             Accounting Standards Update No.
+                           225-10-S99-4                     Amended                                                          08/24/2009
+                                                                             2009-03
+                                                                             Accounting Standards Update No.
+                           225-10-S99-7                     Amended                                                          09/15/2009
+                                                                             2009-07
+                                                                             Accounting Standards Update No.
+                           225-10-S99-8                     Amended                                                          09/15/2009
+                                                                             2009-07
+
+
+
+
+   S15 Scope and Scope Exceptions
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     4/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   > Entities
+
+   225-10-S15-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   S25 Recognition
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     5/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   225-10-S25-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S25-2           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S30 Initial Measurement
+
+              General Note:The Initial Measurement Section provides guidance on the criteria and amounts used to
+              measure a particular item at the date of initial recognition.
+
+
+
+
+   General
+   225-10-S30-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S45 Other Presentation Matters
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     6/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-10-S45-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-6           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-7           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S45-8           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     7/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-10-S50-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S99 SEC Materials
+
+              General Note:As more fully described in About the Codification, the Codification includes selected SEC and
+              SEC Staff content for reference by public companies. The Codification does not replace or affect how the
+              SEC or SEC Staff issues or updates SEC content. SEC Staff content does not constitute Commission-
+              approved rules or interpretations of the SEC.
+
+
+
+
+   General
+   225-10-S99-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-6           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-7           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-10-S99-8           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+    20 Unusual or Infrequently Occurring Items
+   00 Status
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     8/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-20-00-1            The following table identifies the changes made to this Subtopic.
+                               Note: Subtopic title changed by Accounting Standards Update No. 2015-01 on 07/05/2017 from
+                               Extraordinary and Unusual Items to Unusual or Infrequently Occurring Items.
+
+                           Paragraph                       Active           Accounting Standards Update                      Date
+                                                                            Accounting Standards Update No.
+                           Extraordinary Items             Superseded                                                        01/09/2015
+                                                                            2015-01
+                           Infrequency of
+                                                           Superseded       Maintenance Update 2017-19                       11/15/2017
+                           Occurrence
+                           Infrequency of                                   Accounting Standards Update No.
+                                                           Amended                                                           01/09/2015
+                           Occurrence                                       2015-01
+                           Unusual Nature                  Superseded       Maintenance Update 2017-19                       11/15/2017
+                                                                            Accounting Standards Update No.
+                           Unusual Nature                  Amended                                                           01/09/2015
+                                                                            2015-01
+                           225-20-05-1                     Superseded       Maintenance Update 2017-19                       11/15/2017
+                                                                            Accounting Standards Update No.
+                           225-20-05-1                     Amended                                                           01/09/2015
+                                                                            2015-01
+                           225-20-15-1                     Superseded       Maintenance Update 2017-19                       11/15/2017
+                                                                            Accounting Standards Update No.
+                           225-20-15-2                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                           225-20-45-1 through                              Accounting Standards Update No.
+                                                           Superseded                                                        01/09/2015
+                           45-15                                            2015-01
+                           225-20-45-16                    Superseded       Maintenance Update 2017-19                       11/15/2017
+                                                                            Accounting Standards Update No.
+                           225-20-45-16                    Amended                                                           01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-50-1                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-50-2                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                           225-20-50-3                     Superseded       Maintenance Update 2017-19                       11/15/2017
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     9/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                                                                            Accounting Standards Update No.
+                           225-20-50-3                     Amended                                                           01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-50-4                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                           225-20-55-1 through
+                                                           Superseded       Maintenance Update 2017-19                       11/15/2017
+                           55-3
+                                                                            Accounting Standards Update No.
+                           225-20-55-2                     Amended                                                           01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-55-3                     Amended                                                           01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-55-4                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-60-1                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-60-2                     Superseded                                                        01/09/2015
+                                                                            2015-01
+                           225-20-60-3                     Superseded       Maintenance Update 2017-19                       11/15/2017
+                                                                            Accounting Standards Update No.
+                           225-20-60-3                     Amended                                                           01/09/2015
+                                                                            2015-01
+                                                                            Accounting Standards Update No.
+                           225-20-65-1                     Added                                                             01/09/2015
+                                                                            2015-01
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-20-05-1            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 10/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-20-15-1            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-20-15-2            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   45 Other Presentation Matters
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 11/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-20-45-1            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-2            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-3            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-4            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-5            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-6            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-7            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-8            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-9            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-10           Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-11           Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-12           Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-13           Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-14           Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-45-15           Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 12/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-20-45-16           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-20-50-1            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-50-2            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-50-3            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-20-50-4            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   225-20-55-1            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 13/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-20-55-2            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-20-55-3            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-20-55-4            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+
+
+
+   60 Relationships
+
+              General Note:The Relationships Section contains links to guidance that may be helpful to, but not required
+              by, a user of the Subtopic. This Section may not be all-inclusive. The relationship items are organized
+              according to the Topic structure in the Codification.
+
+
+
+
+   General
+   225-20-60-1            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-60-2            Paragraph superseded by Accounting Standards Update No. 2015-01.
+
+   225-20-60-3            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   65 Transition and Open Effective Date
+   Information
+
+              General Note:The Transition Section contains a description of the required transition provisions and a list of
+              the related paragraphs that have been modified. This Section will retain the transition content during the
+              transition period. After the transition period, the transition content will be removed yet will be available in
+              archived versions of the Section.
+
+
+
+
+   General
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 14/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-20-65-1            Paragraph superseded on 07/05/2017 after the end of the transition period stated in Accounting
+                          Standards Update No. 2015-01, Income Statement—Extraordinary and Unusual Items (Subtopic 225-
+                          20): Simplifying Income Statement Presentation by Eliminating the Concept of Extraordinary Items.
+
+
+
+   225 Income Statement
+    30 Business Interruption Insurance
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-30-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph                    Action        Accounting Standards Update                            Date
+                           Business Interruption
+                                                        Superseded Maintenance Update 2017-19                                11/15/2017
+                           Insurance
+                           Gross Margin                 Superseded Maintenance Update 2017-19                                11/15/2017
+                           225-30-05-1                       Superseded        Maintenance Update 2017-19                    11/15/2017
+                           225-30-05-2                       Superseded        Maintenance Update 2017-19                    11/15/2017
+                           225-30-15-1                       Superseded        Maintenance Update 2017-19                    11/15/2017
+                           225-30-45-1                       Superseded        Maintenance Update 2017-19                    11/15/2017
+                                                                               Accounting Standards Update No.
+                           225-30-45-1                       Amended                                                         01/09/2015
+                                                                               2015-01
+                           225-30-50-1                       Superseded        Maintenance Update 2017-19                    11/15/2017
+                                                                               Accounting Standards Update No.
+                           225-30-50-1                       Amended                                                         01/09/2015
+                                                                               2015-01
+
+
+
+
+   05 Overview and Background
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 15/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-30-05-1            Paragraph superseded by Maintenance Update 2017-19.
+
+   225-30-05-2            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-30-15-1            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 16/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-30-45-1            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 17/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   General
+   225-30-50-1            Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+    912 Contractors—Federal Government
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-912-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph        Action          Accounting Standards Update                                     Date
+                           912-225-05-1         Superseded        Maintenance Update 2017-19                                11/15/2017
+                           912-225-05-1         Amended           Accounting Standards Update No. 2014-09                   05/28/2014
+                           912-225-45-1         Superseded        Maintenance Update 2017-19                                11/15/2017
+                           912-225-45-1         Superseded        Accounting Standards Update No. 2014-09                   05/28/2014
+                           912-225-45-2         Superseded        Maintenance Update 2017-19                                11/15/2017
+                           912-225-45-2         Superseded        Accounting Standards Update No. 2014-09                   05/28/2014
+                           912-225-45-3         Superseded        Maintenance Update 2017-19                                11/15/2017
+                           912-225-45-4         Superseded        Maintenance Update 2017-19                                11/15/2017
+                           912-225-45-4         Superseded        Accounting Standards Update No. 2014-09                   05/28/2014
+
+
+
+
+   05 Overview and Background
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 18/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-912-05-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-912-15-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 19/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-912-45-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-912-45-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-912-45-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-912-45-4           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+    915 Development Stage Entities
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-915-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph           Action         Accounting Standards Update                                    Date
+                           Development
+                                               Superseded Accounting Standards Update No. 2014-10                            06/10/2014
+                           Stage Entity
+                           915-225-05-1            Superseded       Accounting Standards Update No. 2014-10                  06/10/2014
+                           915-225-15-1            Superseded       Accounting Standards Update No. 2014-10                  06/10/2014
+                           915-225-45-1            Superseded       Accounting Standards Update No. 2014-10                  06/10/2014
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 20/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-915-05-1           Paragraph superseded by Accounting Standards Update No. 2014-10.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-915-15-1           Paragraph superseded by Accounting Standards Update No. 2014-10.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 21/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-915-45-1           Paragraph superseded by Accounting Standards Update No. 2014-10.
+
+
+
+   225 Income Statement
+    932 Extractive Activities—Oil and Gas
+   00 Status
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 22/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   Status
+   225-932-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph           Action           Accounting Standards Update                               Date
+                           932-225-05-1           Superseded           Maintenance Update 2017-19                         11/15/2017
+                           932-225-15-1           Superseded           Maintenance Update 2017-19                         11/15/2017
+                           932-225-50-1           Superseded           Maintenance Update 2017-19                         11/15/2017
+                           932-225-55-1           Superseded           Maintenance Update 2017-19                         11/15/2017
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-932-05-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 23/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-932-15-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-932-50-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 24/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   General
+   225-932-55-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+    942 Financial Services—Depository and
+    Lending
+   S00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-942-S00-1          The following table identifies the changes made to this Subtopic.
+                           Paragraph         Action          Accounting Standards Update                                    Date
+                           942-225-S25-1         Superseded        Maintenance Update 2017-19                               11/15/2017
+                           942-225-S45-1         Superseded        Maintenance Update 2017-19                               11/15/2017
+                           942-225-S45-2         Superseded        Maintenance Update 2017-19                               11/15/2017
+                           942-225-S50-1         Superseded        Maintenance Update 2017-19                               11/15/2017
+                           942-225-S50-2         Superseded        Maintenance Update 2017-19                               11/15/2017
+                           942-225-S99-1         Superseded        Maintenance Update 2017-19                               11/15/2017
+                           942-225-S99-1         Amended           Accounting Standards Update No. 2010-21                  08/02/2010
+                           942-225-S99-2         Superseded        Maintenance Update 2017-19                               11/15/2017
+
+
+
+
+   S25 Recognition
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 25/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   225-942-S25-1          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-942-S45-1          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-942-S45-2          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S50 Disclosure
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 26/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-942-S50-1          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-942-S50-2          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S99 SEC Materials
+
+              General Note:As more fully described in About the Codification, the Codification includes selected SEC and
+              SEC Staff content for reference by public companies. The Codification does not replace or affect how the
+              SEC or SEC Staff issues or updates SEC content. SEC Staff content does not constitute Commission-
+              approved rules or interpretations of the SEC.
+
+
+
+
+   General
+   225-942-S99-1          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-942-S99-2          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+    944 Financial Services—Insurance
+   S00 Status
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 27/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-944-S00-1          The following table identifies the changes made to this Subtopic.
+                           Paragraph                    Action       Accounting Standards Update                             Date
+                           944-225-S45-1                    Superseded        Maintenance Update 2017-19                     11/15/2017
+                           944-225-S50-1 through
+                                                            Superseded        Maintenance Update 2017-19                     11/15/2017
+                           S50-5
+                           944-225-S99-1                    Superseded        Maintenance Update 2017-19                     11/15/2017
+                                                                              Accounting Standards Update No.
+                           944-225-S99-1                    Amended                                                          08/02/2010
+                                                                              2010-21
+
+
+
+
+   S45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-944-S45-1          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 28/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   S50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-944-S50-1          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-944-S50-2          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-944-S50-3          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-944-S50-4          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-944-S50-5          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S99 SEC Materials
+
+              General Note:As more fully described in About the Codification, the Codification includes selected SEC and
+              SEC Staff content for reference by public companies. The Codification does not replace or affect how the
+              SEC or SEC Staff issues or updates SEC content. SEC Staff content does not constitute Commission-
+              approved rules or interpretations of the SEC.
+
+
+
+
+   General
+   225-944-S99-1          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 29/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+      946 Financial Services—Investment
+      Companies
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-946-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph                       Action      Accounting Standards Update                           Date
+
+                           12b-1                                Superseded        Maintenance Update 2017-19                 11/15/2017
+
+                           946-225-05-1                         Superseded        Maintenance Update 2017-19                 11/15/2017
+
+                           946-225-15-1                         Superseded        Maintenance Update 2017-19                 11/15/2017
+
+                           946-225-45-1 through 45-                               Maintenance Update 2017-19
+                                                                Superseded                                                   11/15/2017
+                           17
+
+                           946-225-50-1                         Superseded        Maintenance Update 2017-19                 11/15/2017
+
+                           946-225-50-2                         Superseded        Maintenance Update 2017-19                 11/15/2017
+
+
+
+
+   05 Overview and Background
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 30/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-946-05-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-946-15-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   20 Glossary
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 31/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-946-45-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-3           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 32/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-946-45-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-6           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-7           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-8           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-9           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-10          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-11          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-12          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-13          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-14          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-15          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-16          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-45-17          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-946-50-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-50-2           Paragraph superseded by Maintenance Update 2017-19.
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 33/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   S00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-946-S00-1          The following table identifies the changes made to this Subtopic.
+                           Paragraph                        Action      Accounting Standards Update                          Date
+                           946-225-S45-1 through                                   Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           S45-3
+                           946-225-S50-1 through                                   Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           S50-3
+                           946-225-S99-1 through                                   Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           S99-3
+
+
+
+
+   S45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 34/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-946-S45-1          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-S45-2          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-S45-3          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-946-S50-1          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-S50-2          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-S50-3          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   S99 SEC Materials
+
+              General Note:As more fully described in About the Codification, the Codification includes selected SEC and
+              SEC Staff content for reference by public companies. The Codification does not replace or affect how the
+              SEC or SEC Staff issues or updates SEC content. SEC Staff content does not constitute Commission-
+              approved rules or interpretations of the SEC.
+
+
+
+
+   General
+   225-946-S99-1          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 35/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-946-S99-2          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-946-S99-3          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+   225 Income Statement
+    954 Health Care Entities
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-954-00-1           The following table identifies the changes made to this Subtopic
+                           Paragraph                       Action      Accounting Standards Update                           Date
+
+                           Affiliate                             Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Affiliate                             Added                                                       04/19/2013
+                                                                                  No. 2013-06
+
+                           Contribution                          Superseded       Maintenance Update 2017-19                 11/15/2017
+                                                                                  Accounting Standards Update
+                           Contribution                          Amended                                                     01/28/2010
+                                                                                  No. 2010-07
+                                                                                  Maintenance Update 2017-19
+                           Donor-Imposed Restriction             Superseded                                                  11/15/2017
+                                                                                  Accounting Standards Update
+                           Donor-Imposed Restriction             Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Equity Transfer                       Superseded                                                  11/15/2017
+                           Functional Expense                                     Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Classification
+                           Functional Expense                                     Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Classification                                         No. 2016-14
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 36/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                           Inherent Contribution                 Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Inherent Contribution                 Added                                                       01/28/2010
+                                                                                  No. 2010-07
+                           Net Assets with Donor                                  Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Restrictions
+                           Net Assets with Donor                                  Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Restrictions                                           No. 2016-14
+                           Net Assets without Donor                               Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Restrictions
+                           Net Assets without Donor                               Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Restrictions                                           No. 2016-14
+
+                           Performance Indicator                 Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           954-225-05-1                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           954-225-15-1                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           954-225-15-2                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           954-225-45-1 through 45-                               Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           10
+                                                                                  Accounting Standards Update
+                           954-225-45-2                          Amended                                                     12/14/2016
+                                                                                  No. 2016-19
+                                                                                  Accounting Standards Update
+                           954-225-45-2                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           954-225-45-2                          Amended                                                     04/19/2013
+                                                                                  No. 2013-06
+                                                                                  Accounting Standards Update
+                           954-225-45-2A                         Added                                                       04/19/2013
+                                                                                  No. 2013-06
+                                                                                  Accounting Standards Update
+                           954-225-45-3                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           954-225-45-4                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           954-225-45-4                          Amended                                                     05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           954-225-45-5                          Amended                                                     05/28/2014
+                                                                                  No. 2014-09
+                                                                                  Accounting Standards Update
+                           954-225-45-6 through 45-9             Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           954-225-45-7                          Amended                                                     08/28/2017
+                                                                                  No. 2017-12
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 37/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                                                                                  Accounting Standards Update
+                           954-225-45-7                          Amended                                                     12/14/2016
+                                                                                  No. 2016-19
+                                                                                  Accounting Standards Update
+                           954-225-45-7                          Amended                                                     01/05/2016
+                                                                                  No. 2016-01
+                                                                                  Accounting Standards Update
+                           954-225-45-7                          Amended                                                     01/09/2015
+                                                                                  No. 2015-01
+                                                                                  Accounting Standards Update
+                           954-225-45-7                          Amended                                                     01/28/2010
+                                                                                  No. 2010-07
+                                                                                  Accounting Standards Update
+                           954-225-45-8                          Amended                                                     06/16/2016
+                                                                                  No. 2016-13
+                           954-225-45-8 through 45-                               Accounting Standards Update
+                                                                 Added                                                       01/05/2016
+                           10                                                     No. 2016-01
+
+                           954-225-50-1                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           954-225-50-2                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           954-225-55-1 through 55-6             Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           954-225-55-1                          Superseded                                                  08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           954-225-55-2 through 55-5             Added                                                       01/05/2016
+                                                                                  No. 2016-01
+                                                                                  Accounting Standards Update
+                           954-225-55-5                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           954-225-55-6                          Added                                                       08/18/2016
+                                                                                  No. 2016-14
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 38/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-954-05-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-954-15-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-15-2           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 39/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   225-954-45-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-2A          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-6           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-7           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-8           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-9           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-45-10          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   50 Disclosure
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 40/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-954-50-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-50-2           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   225-954-55-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-55-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-55-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-55-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-55-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-954-55-6           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 41/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225 Income Statement
+    958 Not-for-Profit Entities
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   225-958-00-1           The following table identifies the changes made to this Subtopic.
+                           Paragraph                       Action      Accounting Standards Update                           Date
+
+                           Affiliate                             Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Affiliate (1st def.)                  Added                                                       08/18/2016
+                                                                                  No. 2016-14
+
+                           Agent                                 Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Bankruptcy Code                       Superseded       Maintenance Update 2017-19                 11/15/2017
+                           Board-Designated                                       Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Endowment Fund
+                           Board-Designated                                       Accounting Standards Update
+                                                                 Amended                                                     08/18/2016
+                           Endowment Fund                                         No. 2016-14
+
+                           Chapter 11                            Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Contribution                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Contribution                          Amended                                                     01/28/2010
+                                                                                  No. 2010-07
+
+                           Disposal Group                        Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Disposal Group                        Amended                                                     04/10/2014
+                                                                                  No. 2014-08
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 42/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                           Donor-Imposed Restriction             Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Donor-Imposed Restriction             Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                           Donor-Restricted                                       Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Endowment Fund
+                           Donor-Restricted                                       Accounting Standards Update
+                                                                 Amended                                                     08/18/2016
+                           Endowment Fund                                         No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Donor-Restricted Support              Superseded                                                  11/15/2017
+                                                                                  Accounting Standards Update
+                           Donor-Restricted Support              Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Endowment Fund                        Superseded                                                  11/15/2017
+                                                                                  Accounting Standards Update
+                           Endowment Fund                        Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Equity Transfer                       Superseded                                                  11/15/2017
+                                                                                  Accounting Standards Update
+                           Equity Transfer                       Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                           Functional Expense                                     Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Classification
+                           Functional Expense                                     Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Classification                                         No. 2016-14
+                           Funds Functioning as                                   Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Endowment
+                           Funds Functioning as                                   Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Endowment                                              No. 2016-14
+
+                           Inherent Contribution                 Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Intermediary                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Lead Interest                         Superseded       Maintenance Update 2017-19                 11/15/2017
+                           Natural Expense                                        Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Classification
+                           Natural Expense                                        Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Classification                                         No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Net Assets                            Superseded                                                  11/15/2017
+                                                                                  Accounting Standards Update
+                           Net Assets                            Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                           Net Assets with Donor                                  Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Restrictions
+                           Net Assets with Donor                                  Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Restrictions                                           No. 2016-14
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 43/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                           Net Assets without Donor                               Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Restrictions
+                           Net Assets without Donor                               Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Restrictions                                           No. 2016-14
+
+                           Not-for-Profit Entity                 Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Permanently Restricted Net                             Accounting Standards Update
+                                                                 Superseded                                                  08/18/2016
+                           Assets                                                 No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Programmatic Investing                Superseded                                                  11/15/2017
+                                                                                  Accounting Standards Update
+                           Programmatic Investing                Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           Reclassification                      Superseded                                                  08/18/2016
+                                                                                  No. 2016-14
+                           Reclassification of Net                                Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           Assets
+                           Reclassification of Net                                Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           Assets                                                 No. 2016-14
+
+                           Remainder Interest                    Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                                                                                  Accounting Standards Update
+                           Restricted Support                    Superseded                                                  08/18/2016
+                                                                                  No. 2016-14
+
+                           Spending Rate                         Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Split-Interest Agreement              Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Stipulation                           Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Temporarily Restricted Net                             Accounting Standards Update
+                                                                 Superseded                                                  08/18/2016
+                           Assets                                                 No. 2016-14
+
+                           Total Return                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           Trustee                               Superseded       Maintenance Update 2017-19                 11/15/2017
+                                                                                  Accounting Standards Update
+                           Unrestricted Net Assets               Superseded                                                  08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           Unrestricted Support                  Superseded                                                  08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Maintenance Update 2017-19
+                           Variance Power                        Superseded                                                  11/15/2017
+
+                           958-225-05-1 through 05-3             Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           958-225-05-2                          Amended          Maintenance Update 2017-06                 04/07/2017
+
+                           958-225-15-1                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 44/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                           958-225-15-2                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+                           958-225-45-1 through 45-                               Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           26
+
+                           958-225-45-1                          Amended          Maintenance Update 2017-06                 04/07/2017
+
+                                                                                  Accounting Standards Update
+                           958-225-45-1                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-3 through 45-8             Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-8                          Amended                                                     01/05/2016
+                                                                                  No. 2016-01
+                                                                                  Accounting Standards Update
+                           958-225-45-9                          Amended                                                     05/28/2014
+                                                                                  No. 2014-09
+                           958-225-45-10 through 45-                              Accounting Standards Update
+                                                                 Amended                                                     08/18/2016
+                           14                                                     No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-11                         Amended                                                     03/10/2017
+                                                                                  No. 2017-07
+                                                                                  Accounting Standards Update
+                           958-225-45-11                         Amended                                                     10/01/2012
+                                                                                  No. 2012-04
+                                                                                  Accounting Standards Update
+                           958-225-45-14A                        Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-14B                        Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-17                         Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-17A                        Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-17B                        Added                                                       08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-18                         Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                           958-225-45-18 through 45-                              Accounting Standards Update
+                                                                 Added                                                       01/05/2016
+                           26                                                     No. 2016-01
+                                                                                  Accounting Standards Update
+                           958-225-45-19                         Superseded                                                  08/18/2016
+                                                                                  No. 2016-14
+                           958-225-45-20 through 45-                              Accounting Standards Update
+                                                                 Amended                                                     08/18/2016
+                           22                                                     No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-45-25                         Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+
+                           958-225-50-1                          Superseded       Maintenance Update 2017-19                 11/15/2017
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 45/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+                                                                                  Accounting Standards Update
+                           958-225-50-1                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                           958-225-55-1 through 55-                               Maintenance Update 2017-19
+                                                                 Superseded                                                  11/15/2017
+                           20
+                                                                                  Accounting Standards Update
+                           958-225-55-2                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                                                                                  Accounting Standards Update
+                           958-225-55-5 through 55-7             Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+
+                           958-225-55-6                          Amended          Maintenance Update 2017-06                 04/07/2017
+
+                                                                                  Accounting Standards Update
+                           958-225-55-6                          Amended                                                     01/09/2015
+                                                                                  No. 2015-01
+                                                                                  Accounting Standards Update
+                           958-225-55-7                          Amended                                                     01/09/2015
+                                                                                  No. 2015-01
+                                                                                  Accounting Standards Update
+                           958-225-55-7                          Amended                                                     04/10/2014
+                                                                                  No. 2014-08
+                                                                                  Accounting Standards Update
+                           958-225-55-9                          Amended                                                     08/18/2016
+                                                                                  No. 2016-14
+                           958-225-55-12 through 55-                              Accounting Standards Update
+                                                                 Amended                                                     08/18/2016
+                           15                                                     No. 2016-14
+                           958-225-55-16 through 55-                              Accounting Standards Update
+                                                                 Added                                                       08/18/2016
+                           20                                                     No. 2016-14
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   225-958-05-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-05-2           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 46/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-958-05-3           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   225-958-15-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-15-2           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+              Editor's Note:All glossary terms have been removed from this Subtopic. See this Subtopic's Status Section
+              (Section 00) and/or this Section's archive for more information.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 47/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+                                                                                                                             Related Proposed ASUs
+
+   225-958-45-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-6           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-7           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-8           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-9           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-10          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-11          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-12          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 48/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-958-45-13          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-14          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-14A Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-14B Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-15          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-16          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-17          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-17A Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-17B Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-18          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-19          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-20          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-21          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-22          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-23          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-24          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-25          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-45-26          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   50 Disclosure
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 49/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   225-958-50-1           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   225-958-55-1           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-2           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-3           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-4           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-5           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-6           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-7           Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 50/51
+ 8/20/2026, 12:08 AM                                                                                                Combine Sections - 225 Income Statement
+
+
+
+
+   225-958-55-8           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-9           Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-10          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-11          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-12          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-13          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-14          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-15          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-16          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-17          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-18          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-19          Paragraph superseded by Maintenance Update 2017-19.
+
+   225-958-55-20          Paragraph superseded by Maintenance Update 2017-19.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 51/51
+
