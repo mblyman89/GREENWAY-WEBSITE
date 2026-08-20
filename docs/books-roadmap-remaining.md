@@ -2,6 +2,11 @@
 
 Written for Michael, in plain English, at the end of slice books-13.
 
+> **See also `docs/BOOKS_ROADMAP.md`** — added in books-17 at Michael's
+> direction. That file is the *tracked status board*: the mandated build order,
+> what is done, what is next, and what is still owed. This file is the
+> *narrative*: why each piece matters and what makes it hard. Keep both.
+
 You asked: *"at the end of the next slice please let me know what all is left to
 build to make our platform complete."* This is that answer. I have kept it
 honest, including the parts that are harder than they look and the parts I
