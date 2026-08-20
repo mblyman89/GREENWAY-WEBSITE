@@ -36,8 +36,8 @@ rule 1. The order:
 | # | Slice | Consumes | Status |
 |---|-------|----------|--------|
 | 1 | **Financial statements** | trial balance, chart of accounts | **SHIPPED — books-17, PR #989** |
-| 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | **NEXT** |
-| 3 | **Basis and AAA tracking** | the statement of stockholders' equity | not started |
+| 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | **SHIPPED — books-18, PR #992** |
+| 3 | **Basis and AAA tracking** | the statement of stockholders' equity | **NEXT** |
 | 4 | **Form 1120-S and Schedule K-1** | the statements + AAA/basis | not started |
 | 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
 | 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | not started |
@@ -131,12 +131,48 @@ all — now rest on binding GAAP: ASC 205-10-45-1 and 45-1A, ASC 210-20-45-4,
 ASC 230-10-45-7, ASC 330-10-30-1. Every quote is verbatim and mechanically
 verified against the source rather than trusted.
 
-### 2. Period close screen
+### 2. Period close screen — SHIPPED (books-18, PR #992)
 
-Wraps the existing `gl_close_period` / `gl_reopen_period` functions in a UI with
-a reconciliation checklist: every balance-sheet account requires a supporting
-artifact before the period may lock. The gate engine is reused later for the
-cut-over gates G1–G5.
+Delivered as `period-close-core.ts`: a pure engine that answers the question the
+database cannot. `gl_close_period` and `gl_reopen_period` already know HOW to
+close a period; they are deliberately NOT reimplemented, because two opinions
+about what "closed" means will drift (standing rule 2). This decides whether a
+period SHOULD close.
+
+- **A ten-item checklist**, each item carrying the question in plain English,
+  why it matters, what counts as evidence, and its binding authority.
+- **`passed: null` is not `passed: false`.** "Nobody looked" and "we looked and
+  it is wrong" are different facts, and collapsing them is exactly how an
+  unanswered question becomes a passed one. An unanswered check blocks.
+- **Two severities, not three.** No "warning" tier, because a warning is a
+  button Michael learns to click past, and a control that is habitually
+  dismissed is not a control (standing rule 27).
+- **Every reason at once.** A checklist that reveals one problem per attempt
+  turns a ten-minute close into a ten-round argument.
+- **A period-identity gate**: the entity must be one of the four sets of books,
+  the month 1–12, the year 2026–2100 — every bound copied from the `gl_periods`
+  check constraints rather than chosen.
+- **The month must have finished.** Closing August on 20 August seals a month
+  with eleven days of sales still to come.
+- **Reopen mirrors the database exactly**, including the 3-character minimum
+  reason, so the screen never accepts a reason the server then rejects. A
+  `locked` period never reopens — the route is an amended return.
+
+Four verbatim ASC 250 authorities behind it, each mechanically verified against
+the Codification text in `docs/authorities/` rather than carefully typed
+(standing rule 35).
+
+**What books-18 taught, at some cost:** the suite went green on its first run
+with 81 passing tests, and attacking it afterwards (standing rule 33) found
+**seven real defects in about ten minutes** — including the engine cheerfully
+reporting "Period 2026-NaN is ready to close. All 10 checks pass." An eighth
+was found by the mutation harness: the mentor coverage gate could be switched
+off entirely with `if (false)` and every test still passed, because its
+self-check re-implemented the gate's logic instead of running it. All eight are
+now permanent tests. 110 tests, 22 mutants, zero survivors.
+
+**Still to build on top of this engine:** the screen itself, and reuse of the
+gate for cut-over gates G1–G5.
 
 ### 3. Basis and AAA tracking
 
@@ -272,6 +308,9 @@ exists.
 | books-15 | rates become dated, evidenced rows — never constants | #986 |
 | books-16 | penalties and interest for all five agencies, with a CPA who explains each | #987 |
 | books-17 | financial statements: 280E wall on the face, basis and AAA, binding GAAP | #989 |
+| — | standing rules 33–37, learned from books-17 | #990 |
+| — | `docs/authorities/` — 3,922 pages of source text + verbatim verifier | #991 |
+| books-18 | period close gate: an unanswered check is not a passed check | #992 |
 
 ---
 

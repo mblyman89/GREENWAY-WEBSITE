@@ -64,6 +64,7 @@ import { PAYROLL_TAX_AUTHORITIES } from "@/lib/payroll/payroll-tax-authorities";
 import { AUDIT_HUB_AUTHORITIES_NEW } from "@/lib/inventory/audit-hub-authorities";
 import { TAX_PENALTY_AUTHORITIES_NEW } from "./tax-penalty-authorities";
 import { FINANCIAL_STATEMENT_AUTHORITIES_NEW } from "./financial-statement-authorities";
+import { PERIOD_CLOSE_AUTHORITIES_NEW } from "./period-close-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -497,7 +498,8 @@ export type SourceRegistry =
   | "audit-hub"
   | "tax-penalty"
   | "payroll-tax"
-  | "financial-statement";
+  | "financial-statement"
+  | "period-close";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -511,6 +513,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "tax-penalty",
   "payroll-tax",
   "financial-statement",
+  "period-close",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -572,6 +575,15 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // same thing on the equity statement as it will on next year's K-1.
     ...FINANCIAL_STATEMENT_AUTHORITIES_NEW.map((a) => ({
       tag: "financial-statement" as const,
+      authority: a,
+    })),
+    // books-18. Why a month gets sealed and what it costs to unseal it: ASC 250
+    // on what counts as an error, and the restatement that follows one. Kept
+    // with the guidance registry rather than inside the close engine so the
+    // close screen and the financial statements cite the SAME 250, not two
+    // drifting copies of it.
+    ...PERIOD_CLOSE_AUTHORITIES_NEW.map((a) => ({
+      tag: "period-close" as const,
       authority: a,
     })),
   ];
