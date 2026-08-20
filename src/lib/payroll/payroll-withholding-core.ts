@@ -1271,7 +1271,7 @@ export type WaPfmlResult = {
  *
  * RCW 50A.10.030(5)(a): an employer with fewer than 50 Washington employees
  * owes no EMPLOYER portion - but still must withhold and remit the EMPLOYEE
- * portion. Skipping the employee half because "we're too small" is a common and
+ * portion. Skipping the employee portion because "we're too small" is a common and
  * expensive misreading, so the small-employer branch says so out loud.
  *
  * The headcount is a point-in-time determination (four-quarter average measured
@@ -1644,9 +1644,12 @@ export function computeWaSutaForPeriod(args: {
 
 export type LniResult = {
   hundredthHours: number;
-  /** Employer's share of the accident fund + supplemental pension, cents. */
+  /** Employer's share, cents. The remainder after the employee's lawful share. */
   employerCents: number;
-  /** Employee's share: exactly HALF the medical aid rate. Nothing else. */
+  /**
+   * Employee's share, cents. Taken STRAIGHT from the employer's rate notice,
+   * never derived by this code. See the long comment on computeLniForPeriod.
+   */
   employeeCents: number;
   totalPremiumCents: number;
   notes: string[];
@@ -1664,13 +1667,62 @@ export type LniResult = {
  * notice; L&I revises them at times it designates (RCW 51.16.035(2)), so there
  * is no public constant we can safely freeze. We refuse without evidence.
  *
- * And the employee's share is not "half of L&I." Under RCW 51.16.140(1) the
- * employer may deduct one-half of the MEDICAL AID portion and nothing else. The
- * accident fund and supplemental pension are the employer's alone. Deducting
- * more is not an accounting error - RCW 51.16.140(2) makes it a GROSS
- * MISDEMEANOR. That is why this function takes the medical aid rate as its own
- * separate parameter and computes the employee share from that rate alone: it
- * is structurally incapable of deducting half the total.
+ * WHAT THIS FUNCTION USED TO GET WRONG (books-14)
+ * -----------------------------------------------
+ * The first version of this code believed the employee's share was "half the
+ * medical aid rate, and nothing else," and its comment asserted that the
+ * supplemental pension was "the employer's alone." That was WRONG, and real
+ * evidence proved it wrong. Michael's actual L&I rate notice shows:
+ *
+ *     total hourly rate        $0.55930
+ *     employee withholding     $0.16445
+ *     employer portion         $0.39485
+ *
+ * Half of medical aid alone would have been $0.067185/hour. The old code would
+ * have under-deducted by $0.097265 for every hour worked - roughly 59% short,
+ * about $202 per year per full-time employee, silently, forever. Under-deducting
+ * is not the "safe" direction: the shortfall becomes the employer's cost, and it
+ * cannot lawfully be recovered from the worker later.
+ *
+ * THREE funds are shared with the worker, not one:
+ *
+ *   1. MEDICAL AID - RCW 51.16.140(1): the employer "shall deduct ... one-half."
+ *      Mandatory, not optional.
+ *   2. SUPPLEMENTAL PENSION - RCW 51.32.073(1): the employer "shall retain from
+ *      the earnings of each worker" an amount "matched in an equal amount by
+ *      each employer." Also mandatory, also a half. The only carve-out is
+ *      subsection (2), which covers RCW 51.16.210 horse racing - not us.
+ *   3. STAY AT WORK - RCW 51.32.090(6): "Employers may collect up to one-half
+ *      the fund assessment from workers." PERMISSIVE, with a ceiling.
+ *
+ * The ACCIDENT FUND is the employer's alone. That part was always right.
+ *
+ * L&I's own published formula (see LNI_PREMIUM_RATE_FORMULA authority) is:
+ *
+ *     rate = experience factor x (accident + medical aid + stay at work)
+ *            + supplemental pension
+ *
+ * Note that the experience factor does NOT touch the supplemental pension.
+ * Reconstructing Michael's notice from WAC 296-17-895 class 6403 base rates
+ * with his experience factor of 0.9 reproduces $0.16445 to the exact cent-
+ * fraction, which is how the defect was found.
+ *
+ * WHY WE NO LONGER COMPUTE THE SPLIT OURSELVES
+ * --------------------------------------------
+ * We could implement the formula above. We deliberately do not. The split
+ * depends on four base rates, an experience factor, which funds the employer
+ * elects to share, and L&I's own rounding - and getting it wrong by one cent in
+ * the wrong direction is a GROSS MISDEMEANOR under RCW 51.16.140(2). L&I already
+ * prints the answer on the rate notice. So we take the employee rate and the
+ * employer rate as separate evidenced inputs and reconcile them against the
+ * total. The software's job here is to refuse, to reconcile, and to round in the
+ * worker's favor - not to re-derive a number the State already computed.
+ *
+ * PRECISION: rates are in MILLI-CENTS PER HOUR (1 cent = 1000 milli-cents;
+ * $1.00 = 100,000 milli-cents). Integer cents cannot represent $0.16445/hour at
+ * all - it is 16.445 cents - and rounding it to 16 cents would itself be a wrong
+ * deduction. Every value on Michael's notice is an exact integer in milli-cents:
+ * 16445, 39485, 55930.
  *
  * Hours are integers in HUNDREDTHS of an hour. Once hours become a tax base
  * they carry the same integrity requirement as money, so floats are forbidden
@@ -1678,17 +1730,23 @@ export type LniResult = {
  */
 export function computeLniForPeriod(args: {
   hundredthHours: number;
-  /** Accident fund + supplemental pension, cents per hour. Employer only. */
-  employerOnlyRateCentsPerHour: number | null;
-  /** Medical aid fund, cents per hour. Split half/half. */
-  medicalAidRateCentsPerHour: number | null;
+  /**
+   * The worker's hourly withholding, in MILLI-CENTS per hour, exactly as
+   * printed on the L&I rate notice. Do not compute this. Read it.
+   */
+  employeeRateMilliCentsPerHour: number | null;
+  /**
+   * The employer's hourly portion, in MILLI-CENTS per hour, exactly as printed
+   * on the L&I rate notice.
+   */
+  employerRateMilliCentsPerHour: number | null;
   riskClassCode: string | null;
   rateNoticeDocumentId: string | null;
 }): Computed<LniResult> {
   const {
     hundredthHours,
-    employerOnlyRateCentsPerHour,
-    medicalAidRateCentsPerHour,
+    employeeRateMilliCentsPerHour,
+    employerRateMilliCentsPerHour,
     riskClassCode,
     rateNoticeDocumentId,
   } = args;
@@ -1713,8 +1771,8 @@ export function computeLniForPeriod(args: {
   }
 
   if (
-    employerOnlyRateCentsPerHour === null ||
-    medicalAidRateCentsPerHour === null ||
+    employeeRateMilliCentsPerHour === null ||
+    employerRateMilliCentsPerHour === null ||
     rateNoticeDocumentId === null
   ) {
     return {
@@ -1723,14 +1781,17 @@ export function computeLniForPeriod(args: {
         code: "lni_rate_not_evidenced",
         message:
           "I can't compute workers' comp without your actual L&I hourly rates. These are set per " +
-          "risk class and L&I changes them when it decides to, so there is no published number I " +
-          "can safely assume. I also need them split out, because the law only lets you deduct " +
-          "half of the MEDICAL AID piece from your employees - not half of the total.",
+          "risk class, they depend on your own experience factor, and L&I changes them when it " +
+          "decides to - so there is no published number I can safely assume. I need the employee " +
+          "withholding rate and the employer rate as two separate figures, because taking even a " +
+          "penny more out of a worker's check than the notice allows is a gross misdemeanor, not " +
+          "a rounding error.",
         whatToDo:
-          "Upload your L&I rate notice. It lists, per class, the accident fund rate, the medical " +
-          "aid rate, and the supplemental pension rate, each as an amount per hour worked. Once " +
-          "those are in, every paycheck computes automatically and the employee half is capped by " +
-          "the software at exactly half the medical aid rate.",
+          "Upload your L&I rate notice, or open your My L&I account and go to your rate and " +
+          "experience factor page. It prints three numbers per risk class: the hourly employee " +
+          "withholding, the hourly employer portion, and the total. Enter those exactly as shown, " +
+          "to all five decimal places - do not round them. Once they are in, every paycheck " +
+          "computes automatically and the worker's share is whatever L&I said it is, nothing more.",
         authorityId: "rcw-51-16-035-lni-classification",
       },
     };
@@ -1739,32 +1800,45 @@ export function computeLniForPeriod(args: {
   if (!Number.isInteger(hundredthHours) || hundredthHours < 0) {
     throw new Error("computeLniForPeriod: hours must be a non-negative integer in hundredths of an hour");
   }
-  if (!Number.isInteger(employerOnlyRateCentsPerHour) || !Number.isInteger(medicalAidRateCentsPerHour)) {
-    throw new Error("computeLniForPeriod: L&I rates must be integer cents per hour");
+  if (
+    !Number.isInteger(employeeRateMilliCentsPerHour) ||
+    !Number.isInteger(employerRateMilliCentsPerHour)
+  ) {
+    throw new Error("computeLniForPeriod: L&I rates must be integers in milli-cents per hour");
+  }
+  if (employeeRateMilliCentsPerHour < 0 || employerRateMilliCentsPerHour < 0) {
+    throw new Error("computeLniForPeriod: L&I rates cannot be negative");
   }
 
-  // Rates are per WHOLE hour; hours arrive in hundredths. Divide once, explicitly.
-  const employerOnly = divideRoundHalfUp(hundredthHours * employerOnlyRateCentsPerHour, 100);
-  const medicalAidTotal = divideRoundHalfUp(hundredthHours * medicalAidRateCentsPerHour, 100);
+  // Rates are per WHOLE hour in MILLI-CENTS; hours arrive in HUNDREDTHS.
+  //   milli-cents x hundredth-hours  ->  divide by 100 (hours) x 1000 (cents)
+  // Do it as ONE division by 100_000 so there is no intermediate rounding step
+  // that could quietly move a cent. Two roundings are not the same as one.
+  //
+  // The employee's share rounds DOWN (floor) so a rounding fraction can never
+  // land on the worker. Over-deducting by a penny is still an unlawful
+  // deduction under RCW 51.16.140(2); the employer absorbing a penny is not.
+  const employeeNumerator = hundredthHours * employeeRateMilliCentsPerHour;
+  const employerNumerator = hundredthHours * employerRateMilliCentsPerHour;
 
-  // RCW 51.16.140(1): the employee pays ONE-HALF of the medical aid amount.
-  // Round the employee's half DOWN so a rounding penny can never fall on the
-  // worker. Over-deducting by a penny is still an unlawful deduction; the
-  // employer absorbing a penny is not.
-  const employeeShare = Math.floor(medicalAidTotal / 2);
-  const employerMedicalAid = medicalAidTotal - employeeShare;
+  const employeeCents = Math.floor(employeeNumerator / 100_000);
+  // The employer gets normal half-up rounding on its own money.
+  const employerCents = divideRoundHalfUp(employerNumerator, 100_000);
 
   return {
     ok: true,
     value: {
       hundredthHours,
-      employerCents: employerOnly + employerMedicalAid,
-      employeeCents: employeeShare,
-      totalPremiumCents: employerOnly + medicalAidTotal,
+      employerCents,
+      employeeCents,
+      totalPremiumCents: employerCents + employeeCents,
       notes: [
-        "The only thing Washington lets you take out of an employee's check for workers' comp is " +
-          "half of the medical aid rate. The accident fund and the supplemental pension are yours. " +
-          "If the total ever looks like it should be split down the middle, it should not be.",
+        "Workers' comp is the one payroll tax charged by the HOUR worked, not as a percentage of " +
+          "wages. Your employees do pay a real share of it - three of the four funds are split " +
+          "with them - but the split is whatever your L&I rate notice says, and this system uses " +
+          "that number rather than trying to re-derive it. Taking more than the notice allows is " +
+          "a gross misdemeanor under RCW 51.16.140(2), so the worker's share is always rounded " +
+          "down and you absorb the fraction of a penny.",
       ],
     },
   };
@@ -1845,8 +1919,10 @@ export function computePaycheckTaxes(args: {
   waCaresRateMilliPct: number;
   waCaresExemptionApprovalDocumentId: string | null;
   employeeClaimsWaCaresExemption: boolean;
-  lniEmployerOnlyRateCentsPerHour: number | null;
-  lniMedicalAidRateCentsPerHour: number | null;
+  /** Hourly employee withholding from the L&I rate notice, in MILLI-CENTS. */
+  lniEmployeeRateMilliCentsPerHour: number | null;
+  /** Hourly employer portion from the L&I rate notice, in MILLI-CENTS. */
+  lniEmployerRateMilliCentsPerHour: number | null;
   lniRiskClassCode: string | null;
   lniRateNoticeDocumentId: string | null;
 }): PaycheckTaxes {
@@ -1896,8 +1972,8 @@ export function computePaycheckTaxes(args: {
 
   const lni = computeLniForPeriod({
     hundredthHours: args.hundredthHours,
-    employerOnlyRateCentsPerHour: args.lniEmployerOnlyRateCentsPerHour,
-    medicalAidRateCentsPerHour: args.lniMedicalAidRateCentsPerHour,
+    employeeRateMilliCentsPerHour: args.lniEmployeeRateMilliCentsPerHour,
+    employerRateMilliCentsPerHour: args.lniEmployerRateMilliCentsPerHour,
     riskClassCode: args.lniRiskClassCode,
     rateNoticeDocumentId: args.lniRateNoticeDocumentId,
   });
@@ -1970,7 +2046,7 @@ export function computePaycheckTaxes(args: {
   //   3. Federal income tax                - trust fund money
   //   4. WA Paid Leave employee share      - state trust money
   //   5. WA Cares employee share           - state trust money
-  //   6. L&I employee half                 - a premium, and the item most
+  //   6. L&I employee share                - a premium, and the item most
   //                                          likely to be what overflowed
   //
   // AND THEN WE REFUSE ANYWAY. Even after ordering, net pay lands at zero and
@@ -1989,7 +2065,7 @@ export function computePaycheckTaxes(args: {
     { label: "federal income tax", amountCents: federalIncomeTax.line4b_withholdingCents },
     { label: "WA Paid Leave", amountCents: pfml.employeeShareCents },
     { label: "WA Cares", amountCents: waCares.employeeCents },
-    { label: "L&I medical aid (employee half)", amountCents: employeeLni },
+    { label: "L&I workers' comp (employee share)", amountCents: employeeLni },
   ]);
   const totalEmployeeWithheld = ordering.totalWithheldCents;
   const uncollectedByTax = ordering.uncollectedByTax;
@@ -2678,8 +2754,8 @@ export function __runPayrollWithholdingCoreTests(): { passed: number; failed: nu
 
   const lniNoClass = computeLniForPeriod({
     hundredthHours: 8_000,
-    employerOnlyRateCentsPerHour: 50,
-    medicalAidRateCentsPerHour: 30,
+    employeeRateMilliCentsPerHour: 16_445,
+    employerRateMilliCentsPerHour: 39_485,
     riskClassCode: null,
     rateNoticeDocumentId: "doc",
   });
@@ -2688,51 +2764,104 @@ export function __runPayrollWithholdingCoreTests(): { passed: number; failed: nu
 
   const lniNoRate = computeLniForPeriod({
     hundredthHours: 8_000,
-    employerOnlyRateCentsPerHour: null,
-    medicalAidRateCentsPerHour: null,
-    riskClassCode: "6420-00",
+    employeeRateMilliCentsPerHour: null,
+    employerRateMilliCentsPerHour: null,
+    riskClassCode: "6403-00",
     rateNoticeDocumentId: null,
   });
   ok(!lniNoRate.ok, "L&I refuses without evidenced rates");
   if (!lniNoRate.ok) {
     eq(lniNoRate.refusal.code, "lni_rate_not_evidenced", "with the rate refusal code");
-    ok(lniNoRate.refusal.message.includes("half of the MEDICAL AID piece"), "and warns about the deduction limit up front");
+    ok(
+      lniNoRate.refusal.message.includes("gross misdemeanor"),
+      "and names the actual criminal exposure up front, not a vague warning",
+    );
+    ok(
+      lniNoRate.refusal.whatToDo.includes("five decimal"),
+      "and tells him not to round the rate, which is the whole reason we use milli-cents",
+    );
   }
 
-  // --- L&I: THE GROSS-MISDEMEANOR GUARD -----------------------------------
-  // 80.00 hours, accident+pension 50c/hr, medical aid 30c/hr.
-  // Employer-only = $40.00. Medical aid total = $24.00. Employee = $12.00.
+  // --- L&I: MICHAEL'S REAL RATE NOTICE (Rule 19 corpus) -------------------
+  // LYMAN'S MARIJUANA LLC, L&I account 521,756-00, class 6403 Stores: Specialty
+  // Groceries, experience factor 0.9. The notice prints, per hour worked:
+  //     employee withholding  $0.16445  -> 16_445 milli-cents
+  //     employer portion      $0.39485  -> 39_485 milli-cents
+  //     total                 $0.55930  -> 55_930 milli-cents
+  // 80.00 hours: employee 1315.6c -> floor 1315. Employer 3158.8c -> 3159.
+  //
+  // THIS IS THE REGRESSION TEST FOR A REAL DEFECT. The previous implementation
+  // computed the employee share as half the medical aid rate alone and would
+  // have returned 537 cents here instead of 1315 - a 59% under-deduction on
+  // every single paycheck. If this assertion ever goes back to a number near
+  // 537, the old bug has returned.
   const lni = computeLniForPeriod({
     hundredthHours: 8_000,
-    employerOnlyRateCentsPerHour: 50,
-    medicalAidRateCentsPerHour: 30,
-    riskClassCode: "6420-00",
+    employeeRateMilliCentsPerHour: 16_445,
+    employerRateMilliCentsPerHour: 39_485,
+    riskClassCode: "6403-00",
     rateNoticeDocumentId: "doc-lni-2026",
   });
   ok(lni.ok, "with evidence, L&I computes");
   if (lni.ok) {
-    eq(lni.value.totalPremiumCents, 6_400, "total premium is $64.00 for 80 hours");
-    eq(lni.value.employeeCents, 1_200, "the employee pays $12.00 - half the MEDICAL AID only");
-    eq(lni.value.employerCents, 5_200, "the employer pays the other $52.00");
+    eq(lni.value.employeeCents, 1_315, "80 hours at $0.16445 is $13.156, floored to $13.15");
+    eq(lni.value.employerCents, 3_159, "the employer's $0.39485 x 80 is $31.588, rounded to $31.59");
+    eq(lni.value.totalPremiumCents, 4_474, "and the two sides sum to the total premium");
+    eq(
+      lni.value.employeeCents + lni.value.employerCents,
+      lni.value.totalPremiumCents,
+      "the split always reconciles - no cent is created or destroyed",
+    );
     ok(
       lni.value.employeeCents !== divideRoundHalfUp(lni.value.totalPremiumCents, 2),
       "and the employee's share is NOT half the total - deducting that would be a gross misdemeanor",
     );
-    eq(lni.value.employeeCents + lni.value.employerCents, lni.value.totalPremiumCents, "the halves still reconcile");
+    ok(
+      lni.value.employeeCents > 537,
+      "REGRESSION: the employee share must exceed the old medical-aid-only figure of 537c",
+    );
   }
-  // An odd medical aid amount must round the employee's penny DOWN, never up.
-  const lniOdd = computeLniForPeriod({
+
+  // One hour, to prove the sub-cent rate survives at the smallest real unit.
+  const lniOneHour = computeLniForPeriod({
     hundredthHours: 100,
-    employerOnlyRateCentsPerHour: 0,
-    medicalAidRateCentsPerHour: 5,
-    riskClassCode: "6420-00",
+    employeeRateMilliCentsPerHour: 16_445,
+    employerRateMilliCentsPerHour: 39_485,
+    riskClassCode: "6403-00",
+    rateNoticeDocumentId: "doc-lni-2026",
+  });
+  ok(lniOneHour.ok, "a single hour computes");
+  if (lniOneHour.ok) {
+    eq(lniOneHour.value.employeeCents, 16, "16.445c floors to 16c for the worker");
+    eq(lniOneHour.value.employerCents, 39, "39.485c rounds to 39c for the employer");
+  }
+
+  // The fraction of a penny must land on the EMPLOYER, never the worker.
+  const lniFraction = computeLniForPeriod({
+    hundredthHours: 100,
+    employeeRateMilliCentsPerHour: 50, // exactly 0.05 cents for one hour
+    employerRateMilliCentsPerHour: 0,
+    riskClassCode: "6403-00",
     rateNoticeDocumentId: "doc",
   });
-  ok(lniOdd.ok, "an odd-cent medical aid premium computes");
-  if (lniOdd.ok) {
-    eq(lniOdd.value.totalPremiumCents, 5, "one hour at 5c/hr is 5 cents");
-    eq(lniOdd.value.employeeCents, 2, "the employee's half rounds DOWN to 2 cents");
-    eq(lniOdd.value.employerCents, 3, "and the employer absorbs the extra penny, never the worker");
+  ok(lniFraction.ok, "a sub-penny employee rate computes");
+  if (lniFraction.ok) {
+    eq(lniFraction.value.employeeCents, 0, "a fraction of a cent floors to ZERO for the worker, never up to 1");
+    eq(lniFraction.value.employerCents, 0, "and the employer rate of zero stays zero");
+  }
+
+  // Zero hours must produce zero, not a refusal and not a stray cent.
+  const lniZero = computeLniForPeriod({
+    hundredthHours: 0,
+    employeeRateMilliCentsPerHour: 16_445,
+    employerRateMilliCentsPerHour: 39_485,
+    riskClassCode: "6403-00",
+    rateNoticeDocumentId: "doc",
+  });
+  ok(lniZero.ok, "zero hours still computes");
+  if (lniZero.ok) {
+    eq(lniZero.value.employeeCents, 0, "no hours worked means nothing withheld");
+    eq(lniZero.value.totalPremiumCents, 0, "and no premium owed");
   }
 
   // --- one full paycheck ---------------------------------------------------
@@ -2752,16 +2881,19 @@ export function __runPayrollWithholdingCoreTests(): { passed: number; failed: nu
     waCaresRateMilliPct: WA_CARES_RATE_2026_MILLI_PCT,
     waCaresExemptionApprovalDocumentId: null,
     employeeClaimsWaCaresExemption: false,
-    lniEmployerOnlyRateCentsPerHour: 50,
-    lniMedicalAidRateCentsPerHour: 30,
-    lniRiskClassCode: "6420-00",
+    lniEmployeeRateMilliCentsPerHour: 16_445,
+    lniEmployerRateMilliCentsPerHour: 39_485,
+    lniRiskClassCode: "6403-00",
     lniRateNoticeDocumentId: "doc-lni-2026",
   });
   ok(!check.hasRefusals, "a fully evidenced payroll produces no refusals");
   // 15615 fed + 12400 SS + 2900 Med + 1614 PFML + 1160 Cares + 1200 L&I = 34889
-  eq(check.totalEmployeeWithheldCents, 34_889, "total withheld from a $2,000 check is $348.89");
-  eq(check.netPayCents, 200_000 - 34_889, "net pay is gross less withholding");
-  eq(check.netPayCents, 165_111, "which is $1,651.11");
+  // 15_615 + 12_400 + 2_900 + 1_614 + 1_160 + 1_315 = 35_004. The L&I line is
+  // 1_315, not the pre-books-14 1_200: 80.00 hours x $0.16445/hr = $13.156,
+  // floored to $13.15 in the worker's favour.
+  eq(check.totalEmployeeWithheldCents, 35_004, "total withheld from a $2,000 check is $350.04");
+  eq(check.netPayCents, 200_000 - 35_004, "net pay is gross less withholding");
+  eq(check.netPayCents, 164_996, "which is $1,649.96");
   ok(check.totalEmployerTaxCents > 0, "and the employer owes their own taxes on top");
   ok(
     check.netPayCents + check.totalEmployeeWithheldCents === check.grossWagesCents,
@@ -2785,8 +2917,8 @@ export function __runPayrollWithholdingCoreTests(): { passed: number; failed: nu
     waCaresRateMilliPct: WA_CARES_RATE_2026_MILLI_PCT,
     waCaresExemptionApprovalDocumentId: null,
     employeeClaimsWaCaresExemption: false,
-    lniEmployerOnlyRateCentsPerHour: null,
-    lniMedicalAidRateCentsPerHour: null,
+    lniEmployeeRateMilliCentsPerHour: null,
+    lniEmployerRateMilliCentsPerHour: null,
     lniRiskClassCode: null,
     lniRateNoticeDocumentId: null,
   });
