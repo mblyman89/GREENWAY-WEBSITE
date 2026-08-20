@@ -40,6 +40,15 @@
  * tax-free draw and a reported capital gain.
  */
 import type { StatementRefusal } from "@/lib/accounting/financial-statements-core";
+import type { SElectionFacts } from "@/lib/accounting/s-corporation-year-core";
+import {
+  aaaMustOpenAtZero,
+  classifySYear,
+  LAST_SUPPORTED_YEAR,
+  openingBalancesMustBeCarriedForward,
+  SYSTEM_START_YEAR,
+  validateSElectionFacts,
+} from "@/lib/accounting/s-corporation-year-core";
 
 // ---------------------------------------------------------------------------
 // 1) MONEY, AND THE REFUSAL TO PRETEND
@@ -61,24 +70,24 @@ export function assertBasisCents(value: number, label: string): void {
   }
 }
 
-export type BasisRefusalCode =
-  | "NOT_INTEGER_CENTS"
-  | "NEGATIVE_INPUT"
-  | "NO_SHAREHOLDERS"
-  | "DUPLICATE_SHAREHOLDER"
-  | "OWNERSHIP_NOT_100_PCT"
-  | "UNKNOWN_SHAREHOLDER_IN_DISTRIBUTIONS"
-  | "EARNINGS_AND_PROFITS_UNKNOWN"
-  | "HAS_ACCUMULATED_EARNINGS_AND_PROFITS"
-  | "ELECTIVE_ORDERING_UNKNOWN"
-  | "BEGINNING_BASIS_NEGATIVE"
-  | "BEGINNING_DEBT_BASIS_NEGATIVE"
-  | "DEBT_BASIS_EXCEEDS_PRINCIPAL"
-  | "FISCAL_YEAR_OUT_OF_RANGE"
-  | "PRIOR_YEAR_NOT_CARRIED"
-  | "AAA_OPENING_NOT_ZERO_IN_FIRST_YEAR";
-
-export const ALL_BASIS_REFUSAL_CODES: readonly BasisRefusalCode[] = [
+/**
+ * books-21 changed the DIRECTION this pair is declared in, and the change is
+ * worth a note because it is a standing-rule-42 hazard caught in the act.
+ *
+ * It used to be a hand-written union AND a hand-written array of the same
+ * fifteen strings. Two lists, one meaning, no compiler relationship between
+ * them: `readonly BasisRefusalCode[]` checks that every element of the array is
+ * a member of the union, but NOTHING checks the reverse. Adding a code to the
+ * union and forgetting the array compiled silently, and the array is what the
+ * coverage tests iterate \u2014 so the new code would simply never be tested, and
+ * the suite would stay green while doing less than it claimed.
+ *
+ * That is not hypothetical. It is exactly the shape of the defect Rule 43 was
+ * written about in books-20: a refusal code that reviews as protection and is
+ * never exercised. Here the array is the single source of truth and the union
+ * is derived from it, so the two cannot disagree. One list, one meaning.
+ */
+export const ALL_BASIS_REFUSAL_CODES = [
   "NOT_INTEGER_CENTS",
   "NEGATIVE_INPUT",
   "NO_SHAREHOLDERS",
@@ -94,14 +103,41 @@ export const ALL_BASIS_REFUSAL_CODES: readonly BasisRefusalCode[] = [
   "FISCAL_YEAR_OUT_OF_RANGE",
   "PRIOR_YEAR_NOT_CARRIED",
   "AAA_OPENING_NOT_ZERO_IN_FIRST_YEAR",
+  // books-21. The mirror of the one above, and the error that was actually
+  // shipped: claiming a zero opening AAA in a CONTINUING year. Standing rule 34
+  // requires a gate to run in BOTH directions, and this is the direction that
+  // costs Michael money rather than merely looking untidy.
+  "AAA_OPENING_ZERO_IN_CONTINUING_YEAR",
+  "OPENING_AAA_NOT_EVIDENCED",
+  // Re-exported from the S-election module so callers of this engine handle one
+  // refusal union rather than two.
+  "S_ELECTION_YEAR_UNKNOWN",
+  "S_ELECTION_YEAR_AMBIGUOUS",
+  "S_ELECTION_YEAR_NOT_EVIDENCED",
+  "S_ELECTION_YEAR_IMPLAUSIBLE",
+  "S_ELECTION_YEAR_AFTER_FISCAL_YEAR",
 ] as const;
+
+export type BasisRefusalCode = (typeof ALL_BASIS_REFUSAL_CODES)[number];
 
 /** Same shape as a statement refusal, narrowed to this slice's codes. */
 export type BasisRefusal = Omit<StatementRefusal, "code"> & { code: BasisRefusalCode };
 
-/** The S election takes effect for Greenway in this year. \u00a71.1368-2(a)(1). */
-export const FIRST_S_CORP_YEAR = 2026;
-export const LAST_SUPPORTED_YEAR = 2100;
+/**
+ * DEFECT CORRECTED IN books-21. This used to read:
+ *
+ *     export const FIRST_S_CORP_YEAR = 2026;
+ *
+ * and it was wrong. Michael has been an S corporation since roughly 2015/2016,
+ * not since 2026. 2026 is when the SOFTWARE starts, which is a different fact.
+ * Conflating them forced the 2026 opening AAA to zero and threw away about a
+ * decade of already-taxed retained earnings, which turns ordinary tax-free
+ * distributions into reported capital gain under \u00a71368(b)(2).
+ *
+ * The year the election started is now an EVIDENCED INPUT on BasisYearInput.
+ * See `s-corporation-year-core.ts` for the full write-up.
+ */
+export { SYSTEM_START_YEAR, LAST_SUPPORTED_YEAR };
 
 // ---------------------------------------------------------------------------
 // 2) INPUTS
@@ -184,6 +220,32 @@ export type BasisYearInput = {
    * The first S year is exempt, because there is no prior year to carry from.
    */
   openingBalancesCarriedFromPriorYear: boolean | null;
+  /**
+   * WHEN THE S ELECTION STARTED. books-21.
+   *
+   * This replaces a hardcoded 2026 that was wrong by about ten years. It is an
+   * input rather than a constant because Michael described the date as "late
+   * 2015 - early 2016", which spans TWO tax years, and standing rule 1 does not
+   * allow either end of that to be written down as fact.
+   *
+   * Everything that used to be decided by comparing against 2026 \u2014 whether the
+   * AAA opens at zero, whether opening balances must be carried forward \u2014 is
+   * now decided against this.
+   */
+  sElection: SElectionFacts;
+  /**
+   * What the opening AAA was read off, for a CONTINUING year.
+   *
+   * `null` refuses. For the first year this software computes, the answer is
+   * Schedule M-2 of the last filed Form 1120-S; for every year after that it is
+   * the prior year's computation. Before books-21 the 2026 opening AAA was
+   * simply forced to zero and needed no source at all, which made it the one
+   * number in the whole system that was allowed to be a plug (rule 12).
+   *
+   * Ignored in the first S year, where the opening AAA is zero as a matter of
+   * law and there is nothing to evidence.
+   */
+  openingAaaEvidenceSource: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -280,6 +342,13 @@ export type BasisAaaResult =
       shareholders: readonly StockBasisSchedule[];
       aaa: AaaSchedule;
       proportionality: ProportionalityFinding;
+      /**
+       * books-21. The election facts this year was computed against, carried on
+       * the RESULT so `carryForward` can propagate them without being told them
+       * again. A chain that has to be re-informed of the election year at every
+       * link is a chain that can disagree with itself about it.
+       */
+      sElection: SElectionFacts;
     };
 
 // ---------------------------------------------------------------------------
@@ -297,20 +366,36 @@ export function validateBasisInput(input: BasisYearInput): readonly BasisRefusal
 
   if (
     !Number.isInteger(input.fiscalYear) ||
-    input.fiscalYear < FIRST_S_CORP_YEAR ||
+    input.fiscalYear < SYSTEM_START_YEAR ||
     input.fiscalYear > LAST_SUPPORTED_YEAR
   ) {
     refusals.push({
       code: "FISCAL_YEAR_OUT_OF_RANGE",
       message:
         `The fiscal year given was ${String(input.fiscalYear)}. This engine only computes basis ` +
-        `for ${FIRST_S_CORP_YEAR} through ${LAST_SUPPORTED_YEAR}.`,
+        `for ${SYSTEM_START_YEAR} through ${LAST_SUPPORTED_YEAR}.`,
+      // books-21 rewrote this remedy. It used to say "Greenway's S election runs
+      // from 2026. There is no basis schedule before that because there was no
+      // S corporation." Every sentence of that was false: the election runs from
+      // roughly 2015/2016, and there are about ten years of basis schedules
+      // before 2026 sitting in filed returns. What is actually true is narrower
+      // and is a statement about this software, not about the taxpayer.
       whatToDo:
-        `Greenway's S election runs from ${FIRST_S_CORP_YEAR}. There is no basis schedule before ` +
-        `that because there was no S corporation. Check the year you passed in.`,
+        `${SYSTEM_START_YEAR} is where these books start, so it is the earliest year this engine ` +
+        `computes. Greenway was already an S corporation for years before that \u2014 those years were ` +
+        `filed and their closing balances come in as evidence, not as something recomputed here. ` +
+        `Check the year you passed in.`,
       authorityIds: ["REG_1_1368_2_A_1_AAA_NOT_APPORTIONED"],
     });
   }
+
+  // books-21. The election facts are validated FIRST, because almost every
+  // rule below depends on knowing whether this is the first S year or a
+  // continuing one, and a wrong answer there is worse than no answer.
+  // No cast needed: every SElectionRefusalCode is a member of
+  // ALL_BASIS_REFUSAL_CODES, and a test asserts that containment so this stays
+  // true rather than merely being true today.
+  refusals.push(...validateSElectionFacts(input.sElection, input.fiscalYear));
 
   const cents: Array<[number, string]> = [
     [input.ordinaryIncomeCents, "ordinaryIncomeCents"],
@@ -394,16 +479,30 @@ export function validateBasisInput(input: BasisYearInput): readonly BasisRefusal
     });
   }
 
+  // books-21. THE CORRECTED GATE, AND IT NOW RUNS IN BOTH DIRECTIONS.
+  //
+  // Before: `input.fiscalYear === FIRST_S_CORP_YEAR`, where FIRST_S_CORP_YEAR
+  // was hardcoded 2026. That forced Greenway's 2026 opening AAA to zero even
+  // though Greenway had been an S corporation for about a decade by then.
+  //
+  // Now it asks the S-election module, and it polices the OPPOSITE error too.
+  // Standing rule 34: a gate that only fires one way is half a gate. The
+  // direction added here is the one that was actually shipped and the one that
+  // costs money \u2014 a zero opening AAA in a CONTINUING year.
+  const yearKind = classifySYear(input.fiscalYear, input.sElection);
+  const aaaIsAnInteger = Number.isInteger(input.beginningAaaCents);
+
   if (
-    input.fiscalYear === FIRST_S_CORP_YEAR &&
-    Number.isInteger(input.beginningAaaCents) &&
+    aaaMustOpenAtZero(input.fiscalYear, input.sElection) &&
+    aaaIsAnInteger &&
     input.beginningAaaCents !== 0
   ) {
     refusals.push({
       code: "AAA_OPENING_NOT_ZERO_IN_FIRST_YEAR",
       message:
-        `The opening AAA for ${FIRST_S_CORP_YEAR} was given as ${input.beginningAaaCents} cents, ` +
-        `but the first S year must open at exactly zero.`,
+        `The opening AAA for ${input.fiscalYear} was given as ${input.beginningAaaCents} cents, ` +
+        `but ${input.fiscalYear} is the first year of the S election and the first S year must ` +
+        `open at exactly zero.`,
       whatToDo:
         "\u00a71.1368-2(a)(1) is explicit: on the first day of the first S year the AAA balance is " +
         "zero. A non-zero opening means a prior-year balance was carried in from a year that was " +
@@ -412,9 +511,57 @@ export function validateBasisInput(input: BasisYearInput): readonly BasisRefusal
     });
   }
 
+  if (yearKind === "continuing_s_year" && aaaIsAnInteger && input.beginningAaaCents === 0) {
+    refusals.push({
+      code: "AAA_OPENING_ZERO_IN_CONTINUING_YEAR",
+      message:
+        `The opening AAA for ${input.fiscalYear} was given as zero, but the S election started in ` +
+        `${String(input.sElection.year)}, so ${input.fiscalYear} is a continuing year and nothing ` +
+        `opens at zero.`,
+      // This remedy is deliberately blunt about the consequence, because a zero
+      // here looks harmless on screen and is not.
+      whatToDo:
+        `Zero is almost certainly wrong and it is expensive in the direction nobody checks. The ` +
+        `AAA is the measure of what can be taken out of the company tax free (\u00a71368(b)(1)); ` +
+        `setting it to zero makes ordinary distributions look like they exceed it, and the excess ` +
+        `gets reported as capital gain under \u00a71368(b)(2) \u2014 tax on money that was already taxed ` +
+        `when it was earned. Get the real figure from Schedule M-2 of the ${input.fiscalYear - 1} ` +
+        `Form 1120-S. If the balance genuinely is zero because distributions have historically ` +
+        `matched income, say so in openingAaaEvidenceSource and cite the return it came from.`,
+      authorityIds: ["REG_1_1368_2_A_1_AAA_NOT_APPORTIONED"],
+    });
+  }
+
+  // Rule 11. A continuing year's opening AAA is a fact off a document. Before
+  // books-21 the first computed year needed no source at all, because it was
+  // forced to zero \u2014 the one number in the system allowed to be a plug.
+  if (
+    yearKind === "continuing_s_year" &&
+    (input.openingAaaEvidenceSource === null || input.openingAaaEvidenceSource.trim() === "")
+  ) {
+    refusals.push({
+      code: "OPENING_AAA_NOT_EVIDENCED",
+      message:
+        `${input.fiscalYear} is a continuing S year, so its opening AAA is carried in rather than ` +
+        `computed, and no source was recorded for it.`,
+      whatToDo:
+        `Name the document. For the first year these books cover that is Schedule M-2 of the ` +
+        `${input.fiscalYear - 1} Form 1120-S; after that it is the ${input.fiscalYear - 1} ` +
+        `computation from this system. An opening balance nobody can point at a piece of paper for ` +
+        `is a plug, and a plug in the AAA decides whether distributions are taxed.`,
+      authorityIds: ["REG_1_1368_2_A_1_AAA_NOT_APPORTIONED"],
+    });
+  }
+
+  // books-21. This used to be `input.fiscalYear > FIRST_S_CORP_YEAR`, i.e.
+  // "> 2026". Combined with the zero-AAA rule above firing at "=== 2026", that
+  // made 2026 the ONE year exempt from every evidence requirement in this
+  // engine: its AAA was forced to zero and it never had to say where its
+  // opening balances came from. The exemption belongs to the FIRST S YEAR,
+  // which is the only year with no prior year to carry from.
   if (
     Number.isInteger(input.fiscalYear) &&
-    input.fiscalYear > FIRST_S_CORP_YEAR &&
+    openingBalancesMustBeCarriedForward(input.fiscalYear, input.sElection) &&
     input.openingBalancesCarriedFromPriorYear !== true
   ) {
     refusals.push({
@@ -1007,6 +1154,7 @@ export function computeBasisAndAaa(input: BasisYearInput): BasisAaaResult {
     shareholders: schedules,
     aaa,
     proportionality: assessProportionality(schedules),
+    sElection: input.sElection,
   };
 }
 
@@ -1078,6 +1226,8 @@ export function carryForward(
   | "beginningOaaCents"
   | "shareholders"
   | "openingBalancesCarriedFromPriorYear"
+  | "sElection"
+  | "openingAaaEvidenceSource"
 > & {
   fiscalYear: number;
 } {
@@ -1109,5 +1259,16 @@ export function carryForward(
     // machine rather than by a caller asserting it. That is what makes the
     // PRIOR_YEAR_NOT_CARRIED gate mean something.
     openingBalancesCarriedFromPriorYear: true,
+    // books-21. The election facts travel with the chain.
+    //
+    // They are propagated rather than re-supplied because the election year is
+    // a property of the COMPANY, not of a year, and re-typing it at every link
+    // is an invitation for year seven of the chain to disagree with year six
+    // about when the company became an S corporation. Same argument as the
+    // carried balances themselves.
+    sElection: previous.sElection,
+    // The next year's opening AAA is THIS year's computed closing AAA, so the
+    // source is this computation \u2014 named precisely enough to be followed back.
+    openingAaaEvidenceSource: `carried forward from the ${previous.fiscalYear} computation in this system`,
   };
 }

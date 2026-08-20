@@ -1185,11 +1185,16 @@ export function computeIrsDepositPenalty(input: IrsDepositPenaltyInput): Penalty
     {
       code: "irs_interest_not_included",
       message:
-        "Interest is NOT included in this number. Federal interest runs at the IRC §6621 underpayment " +
-        "rate (federal short-term plus 3 points, reset every quarter) and it COMPOUNDS DAILY under " +
-        "IRC §6622. Those quarterly rates are evidenced registry values; ask for interest separately " +
-        "once the quarter's rate is loaded.",
-      authorityId: "irc-6656-deposit-penalty",
+        "Interest is NOT included in this number, and since books-21 it is computed by a different " +
+        "engine: computeInterest in interest-core.ts. Federal interest runs at the IRC §6621 " +
+        "underpayment rate (federal short-term plus 3 points, reset every quarter) and it COMPOUNDS " +
+        "DAILY under IRC §6622, so it is not a percentage that can be added to the figure above. Two " +
+        "things worth knowing while you wait for it. The penalties here are capped and the interest is " +
+        "not, so on a balance more than a year old the interest is usually the larger number. And the " +
+        "punitive §6621(c) rate — five points instead of three — cannot apply to Greenway at all, " +
+        "because §6621(c)(3)(A) restricts it to a C corporation and §1361(a)(2) says an S corporation " +
+        "is not one.",
+      authorityId: "irc-6621-a-2-underpayment-rate",
     },
     {
       code: "irs_reasonable_cause_exists",
@@ -1363,10 +1368,38 @@ export function computeIrsFilePayPenalty(input: IrsFilePayPenaltyInput): Penalty
     code: "irs_6651_60day_minimum_not_applied",
     message:
       "IRC §6651(a) also sets a minimum for a chapter 1 return more than 60 days late — the lesser of " +
-      "$435 (inflation-adjusted under §6651(j)) or 100% of the tax. The current-year adjusted figure " +
-      "is an evidenced value this engine does not hold, so the minimum is NOT applied here and this " +
-      "number may be understated for a very late income tax return. It does not affect payroll deposits.",
-    authorityId: "irc-6651-failure-to-file",
+      "the §6651(j) inflation-adjusted figure or 100% of the tax. This engine still does not APPLY that " +
+      "minimum, so the number above may be understated for a very late income tax return — but since " +
+      "books-21 the figures are on file: $450 for 2023, $485 for 2024 and $525 for 2025 and 2026, by " +
+      "the year the return was required to be FILED, not the tax year it covers. Note the $435 in the " +
+      "statute is the BASE and is correct as such, not a stale figure; §6651(j) inflates it annually, " +
+      "and using the base for 2026 would understate the floor by $90. None of this affects payroll " +
+      "deposits.",
+    authorityId: "irc-6651-j-inflation-adjustment",
+  });
+
+  // §6699 IS NOT §6651, AND FOR AN S CORPORATION IT IS THE ONE THAT BITES.
+  //
+  // books-21 measured this rather than assuming it: asked what a year-late Form
+  // 1120-S cost, this engine answered $0.00, because every penalty it knew about
+  // is a percentage of the tax shown on the return and an S corporation normally
+  // shows none. §6699 charges a flat amount per shareholder per month and never
+  // mentions the tax at all. A system that reports a real five-figure exposure as
+  // nothing does not merely fail to warn; it recommends the behaviour it exists to
+  // prevent. Hence this caveat, on every IRS assessment.
+  caveats.push({
+    code: "irs_6699_s_corp_late_filing_separate",
+    message:
+      "If the late return is a Form 1120-S, the §6651 percentages above are NOT the main exposure. " +
+      "IRC §6699 charges a flat amount per shareholder per month, up to 12 months, and makes no " +
+      "reference to how much tax is due — so a return showing nothing owed carries exactly the same " +
+      "penalty as one showing a million. With Greenway's three shareholders that is about $7,000 for a " +
+      "year even at the un-inflated statutory base, and the ownership split is irrelevant: a 5% holder " +
+      "costs exactly as much as an 85% holder. It is charged for each month or fraction thereof, so one " +
+      "day late is a full month. Use computeSection6699Penalty in interest-core.ts for that number. " +
+      "This engine does not fold it in, because it is a different penalty on a different base and " +
+      "adding the two together would hide which one is which.",
+    authorityId: "irc-6699-s-corp-failure-to-file",
   });
 
   // NOT EXACT — and unusually, it may be UNDERSTATED rather than approximate.

@@ -38,7 +38,8 @@ rule 1. The order:
 | 1 | **Financial statements** | trial balance, chart of accounts | **SHIPPED — books-17, PR #989** |
 | 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | **SHIPPED — books-18, PR #992** |
 | 3 | **Basis and AAA tracking** | the statement of stockholders' equity | **SHIPPED — books-19, PR #993** |
-| 4a | **Form 1125-A and the COGS position** | inventory + the 280E wall | **SHIPPED — books-20, PR #TBD** |
+| 4a | **Form 1125-A and the COGS position** | inventory + the 280E wall | **SHIPPED — books-20, PR #994** |
+| — | **Correction slice: the S-corporation year, §6621 interest, §6699** | nothing — it FIXES 3 and 4a | **SHIPPED — books-21** |
 | 4b | **Form 1120-S and Schedule K-1** | the statements + AAA/basis + 1125-A | **NEXT** |
 | 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
 | 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | not started |
@@ -264,6 +265,70 @@ change what §471 allows into cost of goods sold. The gap survives repeal; what
 changes is that it becomes a question of TIMING under §162 rather than of
 permanent disallowance.
 
+### Correction slice — SHIPPED (books-21)
+
+Not a roadmap item in its own right; a repair to two that had already shipped,
+plus the interest engine that Michael's rate data unblocked.
+
+**The defect.** books-19 and books-20 both hardcoded `FIRST_S_CORP_YEAR = 2026`.
+2026 is the books cutover (standing rule 10), not the year of the S election —
+Greenway elected around 2015/2016. The constant forced the 2026 opening AAA to
+zero, discarding roughly a decade of already-taxed retained earnings and turning
+tax-free distributions into reported capital gain under §1368(b)(2). The bug did
+not create audit risk; it INVENTED TAX. A second layer: the carry-forward
+evidence requirement was gated on `fiscalYear > FIRST_S_CORP_YEAR`, so 2026 — the
+only year with live data — was exempt from every evidence requirement in the
+module. A rule-12 violation nested inside a rule-11 violation.
+
+**The fix.** `s-corporation-year-core.ts` separates three facts that had been
+sharing one number: `SYSTEM_START_YEAR` (2026, the books cutover),
+`EARLIEST_PLAUSIBLE_S_ELECTION_YEAR` (1958, a typo bound) and the election year
+itself, which is EVIDENCE and has no constant. `"unknown"` is a first-class
+third answer and it refuses. Michael's words ("late 2015 - early 2016") are
+recorded as `S_ELECTION_AS_STATED_BY_OWNER` — a stated range, not a fact — and the
+engine still refuses, because two tax years give two different answers.
+
+**Three of my own planning assumptions were falsified by reading source text:**
+
+- **§6621(c) hot interest cannot apply to Greenway at all.** §6621(c)(3)(A)
+  restricts the large-corporate-underpayment rate to an underpayment "by a C
+  corporation", and §1361(a)(2) defines a C corporation as one that is not an S
+  corporation for the year. This is a real, unadvertised benefit of the election.
+  It is implemented as a REFUSAL, and it is stated as good news. It lasts exactly
+  as long as the election does.
+- **$435 is not stale.** It is the §6651(a) statutory BASE; §6651(j) inflates it.
+  The old caveat was right and my assumption about it was wrong.
+- **§6699 did not exist in this codebase.** `grep -c 6699` returned 0. Asked what
+  a year-late 1120-S cost, the penalty engine applied §6651 — a percentage of tax
+  shown — to an S corporation showing none, and answered **$0.00**. Measured, not
+  assumed. The real floor is $7,020 for three shareholders at the un-inflated
+  base. A system that reports a five-figure exposure as nothing does not fail to
+  warn; it recommends the behaviour it exists to prevent.
+
+**Also shipped:** `interest-core.ts` (§6622 daily compounding via BigInt, one
+half-up rounding at the end; quarterly re-rating that carries the balance across
+boundaries; all five §6621 rates, which are asymmetric; §6699 with its 12-month
+cap; the §6651(j) registry). `FEDERAL_SHORT_TERM_RATES` is DELIBERATELY EMPTY and
+every computation refuses — carrying a previous quarter's rate forward produces
+arithmetic that reconciles against itself and is silently wrong against the IRS.
+
+**Two holes found in existing safety nets (rule 23, fix the class):**
+
+- The books-20 authority-id tripwire matched only `[A-Z0-9_]`, so 29 of 80
+  authority ids — every lower-kebab one, including all 10 added here — were never
+  checked. It also read only the plural `authorityIds` field, excluding all 25
+  singular `authorityId` citations in `tax-penalty-core.ts`. Both closed; 105
+  citations now verified.
+- My own regression test for the 2026 defect checked the two engines the bug had
+  been REMOVED from and not the new module written to prevent it. The mutation
+  harness reintroduced `FIRST_S_CORP_YEAR` there and the mutant SURVIVED. Now
+  scans the whole accounting directory rather than a hand-written list.
+
+**Verification:** 359 files / 7,103 tests green; tsc clean; 67 quotes machine-
+verified verbatim (4 of mine were caught misquoted and corrected); mutation
+harness 58 killed / 0 survived / 0 skipped with a no-op + fatal self-check.
+§6621, §6622, §6651 and §6699 mirrored under `docs/authorities/federal/`.
+
 ### 4b. Form 1120-S and Schedule K-1
 
 Including Schedule L (balance sheet per books), M-1 (book-to-tax
@@ -399,7 +464,8 @@ exists.
 | — | `docs/authorities/` — 3,922 pages of source text + verbatim verifier | #991 |
 | books-18 | period close gate: an unanswered check is not a passed check | #992 |
 | books-19 | basis and AAA tracking; federal source text mirrored so quotes are machine-proved | #993 |
-| books-20 | Form 1125-A: cost of goods sold computed BOTH ways, with a dated election on the record | #TBD |
+| books-20 | Form 1125-A: cost of goods sold computed BOTH ways, with a dated election on the record | #994 |
+| books-21 | the S-corporation year is EVIDENCE not a constant; §6621/§6622 interest; §6699 found missing entirely | #TBD |
 | — | standing rules 40–41, learned from books-19 | #993 |
 
 ---

@@ -55,6 +55,25 @@ const TARGETS: readonly Target[] = [
   { kind: "usc", section: "481" },
   { kind: "usc", section: "280E" },
   { kind: "usc", section: "162" },
+  // books-21 \u2014 interest on underpayments and the failure-to-file minimum.
+  //
+  // These three are quoted because Michael supplied the RATES from memory and
+  // from a table, and standing rule 1 does not make an exception for the
+  // owner. The rate ADDITIONS (three points, five points, half a point) and
+  // the compounding period are written in the statute; a summary of them is
+  // not a source. \u00a76622 in particular was not mentioned to me at all, and it
+  // is the provision that turns a small balance into a large one, so it is
+  // mirrored here to be quoted rather than paraphrased.
+  { kind: "usc", section: "6621" },
+  { kind: "usc", section: "6622" },
+  { kind: "usc", section: "6651" },
+  // \u00a76699 is the penalty for filing Form 1120-S late, and it did not appear
+  // anywhere in this codebase before books-21. It is mirrored because it is the
+  // provision that actually applies to Greenway: \u00a76651 charges a percentage of
+  // the tax shown on the return, an S corporation normally shows none, so the
+  // penalty engine reported a year-late 1120-S as costing $0.00. The real floor
+  // is $195 (as adjusted) per shareholder per month.
+  { kind: "usc", section: "6699" },
 ];
 
 function urlFor(t: Target): string {

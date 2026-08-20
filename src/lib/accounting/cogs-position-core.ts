@@ -67,6 +67,10 @@
  * rewrites this file under time pressure in April.
  */
 import type { StatementRefusal } from "@/lib/accounting/financial-statements-core";
+import {
+  LAST_SUPPORTED_YEAR,
+  SYSTEM_START_YEAR,
+} from "@/lib/accounting/s-corporation-year-core";
 
 // ---------------------------------------------------------------------------
 // 1) MONEY
@@ -145,9 +149,21 @@ export const ALL_COGS_REFUSAL_CODES: readonly CogsRefusalCode[] = [
 /** Same shape as a statement refusal, narrowed to this slice's codes. */
 export type CogsRefusal = Omit<StatementRefusal, "code"> & { code: CogsRefusalCode };
 
-/** Greenway's first S-corporation year. Matches books-19. */
-export const FIRST_S_CORP_YEAR = 2026;
-export const LAST_SUPPORTED_YEAR = 2100;
+/**
+ * DEFECT CORRECTED IN books-21. This used to read:
+ *
+ *     /** Greenway's first S-corporation year. Matches books-19. *\/
+ *     export const FIRST_S_CORP_YEAR = 2026;
+ *
+ * "Matches books-19" was true and was the problem: it faithfully copied a wrong
+ * fact. Greenway has been an S corporation since roughly 2015/2016. What is
+ * actually true about 2026 is that it is where these BOOKS start.
+ *
+ * Nothing in this file needs the election year \u2014 \u00a7471 and \u00a71.61-3 apply to a
+ * cannabis reseller whatever its tax classification \u2014 so the range check now
+ * uses the honest constant and the false explanation attached to it is gone.
+ */
+export { SYSTEM_START_YEAR, LAST_SUPPORTED_YEAR };
 
 // ---------------------------------------------------------------------------
 // 3) WHO THE TAXPAYER IS UNDER §471, AND WHY IT IS NOT A JUDGMENT CALL
@@ -548,17 +564,22 @@ export function validateCogsInput(input: CogsYearInput): readonly CogsRefusal[] 
 
   if (
     !Number.isInteger(input.fiscalYear) ||
-    input.fiscalYear < FIRST_S_CORP_YEAR ||
+    input.fiscalYear < SYSTEM_START_YEAR ||
     input.fiscalYear > LAST_SUPPORTED_YEAR
   ) {
     out.push({
       code: "FISCAL_YEAR_OUT_OF_RANGE",
       message:
         `Fiscal year ${input.fiscalYear} is outside the supported range ` +
-        `${FIRST_S_CORP_YEAR}-${LAST_SUPPORTED_YEAR}.`,
+        `${SYSTEM_START_YEAR}-${LAST_SUPPORTED_YEAR}.`,
+      // books-21 rewrote this remedy. It used to say "Greenway's S election
+      // takes effect in 2026; earlier years were filed by the LLC under
+      // different rules". Both halves were false \u2014 the election is a decade
+      // older, and the earlier years were filed on Forms 1120-S under these
+      // same rules. What is true is only a statement about this software.
       whatToDo:
-        `Greenway's S election takes effect in ${FIRST_S_CORP_YEAR}; earlier years were filed by the ` +
-        `LLC under different rules and are not computed here.`,
+        `${SYSTEM_START_YEAR} is where these books start, so it is the earliest year this engine ` +
+        `computes. Earlier years were filed already and are not recomputed here.`,
       authorityIds: [],
     });
     // Everything below is year-dependent. Stop rather than emit noise.
