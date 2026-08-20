@@ -354,6 +354,239 @@ export const WA_CARES_UNCAPPED: GuidanceAuthority = {
 };
 
 // ---------------------------------------------------------------------------
+// 5b) WASHINGTON — THE 2026 PFML RATE ITSELF, AND WHY IT IS NOT A CONSTANT
+// ---------------------------------------------------------------------------
+
+/**
+ * ⭐ THE RATE THAT PROVES RATES CANNOT BE HARDCODED.
+ *
+ * PFML went from 0.92% to 1.13% in a single year — a 22.8% increase. ESD says
+ * in this same release that it recalculates the rate EVERY OCTOBER. Any system
+ * holding 0.92% in a constant under-withheld every 2026 paycheck and would only
+ * have discovered it at a quarterly reconciliation, after the money was gone.
+ */
+export const ESD_PFML_2026_RATE: GuidanceAuthority = {
+  id: "esd-pfml-2026-rate-announcement",
+  kind: "state_manual",
+  cite: "WA Employment Security Department, news release (Oct. 29, 2025) — Paid Family & Medical Leave premium rate increases to 1.13% in 2026",
+  quote:
+    "Starting Jan. 1, 2026: The premium rate will be 1.13%. The rate for 2025 is 0.92%. Employers " +
+    "will pay 28.57% of the total premium and employees will pay 71.43%. ... By law, the Employment " +
+    "Security Department recalculates the premium rate annually in October based on program usage " +
+    "and premiums collected the previous year. ... Businesses classified by Employment Security as " +
+    "having fewer than 50 employees are not required to pay the employer portion of the premium, " +
+    "unless they opt to do so. However, they must still collect the employee premium or pay " +
+    "employees' premiums on their behalf.",
+  soWhat:
+    "Three things in one release. First, your Paid Leave rate for 2026 is 1.13% of wages, and the " +
+    "employees carry 71.43% of that. Second, because Greenway has fewer than 50 people, you do not " +
+    "owe the employer 28.57% — but the agency says in plain words that you must still collect and " +
+    "send in the employee share. Third, and this is the reason the rates in this system live in a " +
+    "dated table instead of in the code: ESD resets this number every single October. It moved 22.8% " +
+    "in one year. A payroll system with 0.92% typed into it would have quietly under-withheld every " +
+    "check in 2026 and nothing would have complained.",
+  source:
+    "https://esd.wa.gov/about-us/news-release/2025/paid-family-medical-leave-premium-rate-increases-113-2026",
+};
+
+// ---------------------------------------------------------------------------
+// 5c) LATE FILING AND LATE PAYMENT — WHAT IT ACTUALLY COSTS
+// ---------------------------------------------------------------------------
+
+/**
+ * ⭐ MICHAEL ASKED FOR THIS ONE BY NAME: "i am naughty sometimes and forget to
+ * pay or file on time."
+ *
+ * Note the structure carefully. The statute states the penalties as CUMULATIVE
+ * TOTALS (5%, then 10% total, then 20% total). ESD's own web page states the
+ * same schedule as INCREMENTS (5%, an additional 5%, an additional 10%). They
+ * agree — 5, 5+5=10, 10+10=20 — but anyone implementing from one of them while
+ * remembering the other double-counts. That is a tested case in this system.
+ */
+export const RCW_50_12_220_ESD_LATE: GuidanceAuthority = {
+  id: "rcw-50-12-220-esd-late-penalty",
+  kind: "state_law",
+  cite: "RCW 50.12.220(1), (3), (4)",
+  quote:
+    "(1) If an employer fails to file a timely report as required by RCW 50.12.070, or the rules " +
+    "adopted pursuant thereto, the employer is subject to a penalty of $25 per violation, unless the " +
+    "penalty is waived by the commissioner ... (3) If an employer knowingly misrepresents to the " +
+    "employment security department the amount of his or her payroll upon which contributions under " +
+    "this title are based, the employer shall be liable to the state for up to 10 times the amount of " +
+    "the difference in contributions paid ... (4) If contributions are not paid on the date on which " +
+    "they are due and payable as prescribed by the commissioner, there shall be assessed a penalty of " +
+    "five percent of the amount of the contributions for the first month or part thereof of " +
+    "delinquency; there shall be assessed a total penalty of 10 percent of the amount of the " +
+    "contributions for the second month or part thereof of delinquency; and there shall be assessed a " +
+    "total penalty of 20 percent of the amount of the contributions for the third month or part " +
+    "thereof of delinquency.",
+  soWhat:
+    "Filing the quarterly report late is a flat $25. Paying late is 5% of the tax in month one, 10% " +
+    "total by month two, 20% total by month three. Read 'total' literally — the statute is quoting a " +
+    "running total, not three penalties stacked on each other. And 'part thereof' means one day into " +
+    "a month costs the whole month; there is no proration and no grace period. The one to genuinely " +
+    "fear is subsection (3): knowingly understating payroll is up to TEN TIMES the shortfall, which " +
+    "is why this system will not let a payroll number be adjusted without a reason attached to it.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=50.12.220",
+};
+
+export const RCW_50_24_040_ESD_INTEREST: GuidanceAuthority = {
+  id: "rcw-50-24-040-esd-interest",
+  kind: "state_law",
+  cite: "RCW 50.24.040",
+  quote:
+    "If contributions are not paid on the date on which they are due and payable as prescribed by the " +
+    "commissioner, the whole or part thereof remaining unpaid shall bear interest at the rate of one " +
+    "percent per month or fraction thereof from and after such date until payment plus accrued " +
+    "interest is received by him or her. ... Where adequate information has been furnished the " +
+    "department and the department has failed to act or has advised the employer of no liability or " +
+    "inability to decide the issue, interest may be waived.",
+  soWhat:
+    "Interest is 1% per month on top of the penalty, and 'or fraction thereof' means a single day " +
+    "late costs a full month of interest. This is charged separately from the 5/10/20% penalty, so a " +
+    "payment three months late carries 20% penalty plus 3% interest, not 20% total. The last sentence " +
+    "is worth knowing: if you gave ESD the information and ESD sat on it or told you that you owed " +
+    "nothing, the interest can be waived.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=50.24.040",
+};
+
+/**
+ * ⭐ THE MOST EXPENSIVE THING ON THIS PAGE, and it is not a penalty at all.
+ *
+ * Missing September 30 does not just cost a fine — it can raise the tax RATE for
+ * the whole following year, on every dollar of payroll. That dwarfs any late fee.
+ * Given Michael's stated habit, this is the single highest-value alarm in the
+ * payroll system.
+ */
+export const ESD_DELINQUENT_TAX_RATE: GuidanceAuthority = {
+  id: "esd-delinquent-tax-rate-sept-30",
+  kind: "state_manual",
+  cite: "WA Employment Security Department — Penalties for late or incomplete tax payments and reports",
+  quote:
+    "If your tax payment is late, we will charge you interest at a rate of 1% of total taxes due per " +
+    "month. ... First month: 5% of total taxes due or $10, whichever is more. Second month: An " +
+    "additional 5% of total taxes due or $10, whichever is more. Third month: An additional 10% of " +
+    "total taxes due or $10, whichever is more. ... We charge a $25 penalty for each late report. ... " +
+    "If you do not send us all late tax payments and reports by Sept. 30 of each year, we might also " +
+    "assign a delinquent tax rate to your account. This higher tax rate would be in addition to the " +
+    "penalties detailed on this page. ... If we approve your payment plan before Sept. 30, you will " +
+    "not receive a delinquent rate for the following year.",
+  soWhat:
+    "This is the page that turns a small problem into a large one. The fines are survivable — 5%, " +
+    "10%, 20% and a dollar a month per hundred. The DELINQUENT TAX RATE is not: miss September 30 " +
+    "with anything still outstanding and ESD can raise your unemployment rate for the entire " +
+    "following year, on your whole payroll. Notice also the floor: each monthly penalty is the " +
+    "percentage OR $10, whichever is larger, so a tiny balance still costs $10 a month. The escape " +
+    "hatch is in the last line — an APPROVED PAYMENT PLAN before September 30 prevents the rate " +
+    "increase even if you cannot pay in full. That is worth setting a calendar reminder for.",
+  source:
+    "https://esd.wa.gov/employer-requirements/unemployment-taxes/penalties-late-or-incomplete-tax-payments-and-reports",
+};
+
+export const RCW_51_48_210_LNI_LATE: GuidanceAuthority = {
+  id: "rcw-51-48-210-lni-late-penalty",
+  kind: "state_law",
+  cite: "RCW 51.48.210",
+  quote:
+    "If payment of any tax due is not received by the department by the due date, there shall be " +
+    "assessed a penalty of five percent of the amount of the tax for the first month or part thereof " +
+    "of delinquency; there shall be assessed a total penalty of ten percent of the amount of the tax " +
+    "for the second month or part thereof of delinquency; and there shall be assessed a total penalty " +
+    "of twenty percent of the amount of the tax for the third month or part thereof of delinquency. " +
+    "No penalty so added may be less than ten dollars. If a warrant is issued by the department for " +
+    "the collection of taxes, increases, and penalties, there shall be added thereto a penalty of " +
+    "five percent of the amount of the tax, but not less than five dollars nor greater than one " +
+    "hundred dollars. In addition, delinquent taxes shall bear interest at the rate of one percent of " +
+    "the delinquent amount per month or fraction thereof from and after the due date until payment, " +
+    "increases, and penalties are received by the department.",
+  soWhat:
+    "L&I runs the same 5/10/20 percent schedule as unemployment, with two differences worth " +
+    "remembering: there is a hard floor of $10 no matter how small the balance, and if it goes far " +
+    "enough for L&I to issue a warrant there is another 5% on top, bounded between $5 and $100. " +
+    "Interest is again 1% per month with 'or fraction thereof', so one day late is a full month.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=51.48.210",
+};
+
+/**
+ * ⭐ THE ONE NOBODY EXPECTS: an L&I delinquency can be turned into an
+ * INJUNCTION THAT STOPS YOU FROM OPERATING. Not a fine. A closed business.
+ */
+export const RCW_51_16_150_LNI_INJUNCTION: GuidanceAuthority = {
+  id: "rcw-51-16-150-lni-injunction",
+  kind: "state_law",
+  cite: "RCW 51.16.150",
+  quote:
+    "If any employer shall default in any payment to any fund, the sum due may be collected by action " +
+    "at law in the name of the state as plaintiff ... If such default occurs after demand, the " +
+    "director may require from the defaulting employer a bond to the state for the benefit of any " +
+    "fund ... in the penalty of double the amount of the estimated payments which will be required " +
+    "from such employer into the said funds for and during the ensuing one year ... In case of " +
+    "refusal or failure after written demand personally served to furnish such bond, the state shall " +
+    "be entitled to an injunction restraining the delinquent from prosecuting an occupation or work " +
+    "until such bond is furnished, and until all delinquent premiums, penalties, interest, and costs " +
+    "are paid, and any sale, transfer, or lease attempted to be made by such delinquent during the " +
+    "period of any of the defaults herein mentioned, of his or her works, plant, or lease thereto, " +
+    "shall be invalid until all past delinquencies are made good, and such bond furnished.",
+  soWhat:
+    "Everything else on this subject is money. This one is your doors. If an L&I default goes past a " +
+    "written demand, the State can require a bond for DOUBLE a year's estimated premiums, and if you " +
+    "do not post it a court can enjoin you from operating at all until you do. It also freezes your " +
+    "ability to sell, transfer or lease the business while you are in default — so an unpaid L&I " +
+    "balance is a title problem, not just a tax problem. This is the reason the system treats an " +
+    "overdue L&I payment as an emergency rather than a reminder.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=51.16.150",
+};
+
+/**
+ * ⭐ FEDERAL DEPOSIT PENALTIES RUN ON A DIFFERENT CLOCK ENTIRELY — DAYS, not
+ * months. This is why federal and state late-payment logic must never share a
+ * code path.
+ */
+export const IRC_6656_DEPOSIT_PENALTY: GuidanceAuthority = {
+  id: "irc-6656-deposit-penalty",
+  kind: "statute",
+  cite: "26 U.S.C. § 6656(a), (b)(1)",
+  quote:
+    "(a) In the case of any failure by any person to deposit ... on the date prescribed therefor any " +
+    "amount of tax imposed by this title ... unless it is shown that such failure is due to " +
+    "reasonable cause and not due to willful neglect, there shall be imposed upon such person a " +
+    "penalty equal to the applicable percentage of the amount of the underpayment. (b)(1)(A) ... the " +
+    "term 'applicable percentage' means — (i) 2 percent if the failure is for not more than 5 days, " +
+    "(ii) 5 percent if the failure is for more than 5 days but not more than 15 days, and (iii) 10 " +
+    "percent if the failure is for more than 15 days. (B) ... the applicable percentage shall be 15 " +
+    "percent.",
+  soWhat:
+    "The IRS counts DAYS, not months, and Washington counts months. A deposit six days late is 5% " +
+    "federally while the State is still in its first month; sixteen days late is already the full 10% " +
+    "federally. Because the two clocks disagree, this system computes them with separate code and " +
+    "never reuses one schedule for the other. The 15% tier is what happens after the IRS has sent a " +
+    "notice and you still have not paid. 'Reasonable cause and not willful neglect' is a real defence " +
+    "but it has to be argued, so the practical answer is to deposit on time.",
+  source: "https://www.law.cornell.edu/uscode/text/26/6656",
+};
+
+export const IRC_6651_FAILURE_TO_FILE: GuidanceAuthority = {
+  id: "irc-6651-failure-to-file",
+  kind: "statute",
+  cite: "26 U.S.C. § 6651(a)(1)",
+  quote:
+    "In case of failure to file any return required under authority of subchapter A of chapter 61 ... " +
+    "on the date prescribed therefor (determined with regard to any extension of time for filing), " +
+    "unless it is shown that such failure is due to reasonable cause and not due to willful neglect, " +
+    "there shall be added to the amount required to be shown as tax on such return 5 percent of the " +
+    "amount of such tax if the failure is for not more than 1 month, with an additional 5 percent for " +
+    "each additional month or fraction thereof during which such failure continues, not exceeding 25 " +
+    "percent in the aggregate.",
+  soWhat:
+    "Failing to FILE federally is 5% a month up to a 25% ceiling — and note this one is written as " +
+    "'an additional 5 percent for each additional month', which is genuinely incremental, unlike the " +
+    "Washington statutes that quote running totals. Three different structures for the same idea in " +
+    "one problem domain is exactly how a copy-pasted penalty calculation ends up wrong, so each is " +
+    "implemented separately and tested against its own words.",
+  source: "https://www.law.cornell.edu/uscode/text/26/6651",
+};
+
+// ---------------------------------------------------------------------------
 // 6) WASHINGTON — UNEMPLOYMENT INSURANCE (SUTA)
 // ---------------------------------------------------------------------------
 
@@ -701,8 +934,17 @@ export const PAYROLL_TAX_AUTHORITIES: readonly GuidanceAuthority[] = [
   IRC_3302_FUTA_CREDIT,
   // Washington
   RCW_50A_10_030_PFML,
+  ESD_PFML_2026_RATE,
   RCW_50B_04_080_WA_CARES,
   WA_CARES_UNCAPPED,
+  // late filing / late payment — penalties and interest
+  RCW_50_12_220_ESD_LATE,
+  RCW_50_24_040_ESD_INTEREST,
+  ESD_DELINQUENT_TAX_RATE,
+  RCW_51_48_210_LNI_LATE,
+  RCW_51_16_150_LNI_INJUNCTION,
+  IRC_6656_DEPOSIT_PENALTY,
+  IRC_6651_FAILURE_TO_FILE,
   ESD_SUTA_RATE_STRUCTURE,
   RCW_51_16_140_LNI_DEDUCTION,
   RCW_51_16_035_LNI_CLASSIFICATION,
