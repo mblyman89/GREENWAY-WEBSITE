@@ -37,8 +37,8 @@ rule 1. The order:
 |---|-------|----------|--------|
 | 1 | **Financial statements** | trial balance, chart of accounts | **SHIPPED — books-17, PR #989** |
 | 2 | **Period close screen** | the statements (a period may not close on statements that do not tie) | **SHIPPED — books-18, PR #992** |
-| 3 | **Basis and AAA tracking** | the statement of stockholders' equity | **NEXT** |
-| 4 | **Form 1120-S and Schedule K-1** | the statements + AAA/basis | not started |
+| 3 | **Basis and AAA tracking** | the statement of stockholders' equity | **SHIPPED — books-19, PR #993** |
+| 4 | **Form 1120-S and Schedule K-1** | the statements + AAA/basis | **NEXT** |
 | 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
 | 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | not started |
 | 7 | **WA B&O and local taxes** | the income statement's revenue lines | not started |
@@ -174,17 +174,53 @@ now permanent tests. 110 tests, 22 mutants, zero survivors.
 **Still to build on top of this engine:** the screen itself, and reuse of the
 gate for cut-over gates G1–G5.
 
-### 3. Basis and AAA tracking
+### 3. Basis and AAA tracking — SHIPPED (books-19, PR #993)
 
 Stock basis and debt basis per shareholder (IRC §1367), the Accumulated
 Adjustments Account (IRC §1368(e)(1)), OAA, and the distribution ordering rules.
-Must handle the three-shareholder reality: Michael 85%, his mother 10%
-(allocated, **not** paid), his grandfather Nicholas Mullan 5% (paid).
+Handles the three-shareholder reality: Michael 85%, his mother 10% (allocated,
+**not** paid), his grandfather Nicholas Mullan 5% (paid).
 
-**Known exposure to model, not to hide:** distributions that are not strictly
-proportionate to ownership raise a one-class-of-stock question under IRC
-§1361(b)(1)(D). This is flagged in `docs/books-roadmap-remaining.md` and must be
-surfaced by the engine, not buried.
+Shipped as `basis-aaa-core.ts` (pure engine, integer cents),
+`basis-aaa-authorities.ts` (14 verbatim authorities, all machine-verified) and
+`basis-aaa-mentor.ts` (a lesson for every exported function). 124 tests.
+
+**What the engine now enforces**
+
+- The two ordering rules are genuinely different code paths, because the law
+  makes them different. Stock basis follows §1.1367-1(f): increases, then
+  distributions, then nondeductible expenses, then losses. The AAA follows
+  §1.1368-2(a)(5), where the net negative adjustment is deferred until AFTER
+  distributions. Implementing one and reusing it for the other is the classic
+  error and would have understated the AAA.
+- A net negative adjustment is the EXCESS of reductions over increases
+  (§1368(e)(1)(C)(ii)), not the whole reduction. The first draft got this wrong
+  and it was caught on the first test run; see standing rule 38.
+- Losses suspended under §1366(d)(1) carry forward indefinitely under
+  §1366(d)(2)(A) and are pooled with the following year's losses. Loss used
+  plus loss suspended must always equal loss available — asserted directly.
+- Opening balances for any year after the first must have been produced by
+  `carryForward`, not typed in. A hand-typed opening balance produces a year
+  that foots perfectly and is still wrong.
+- A shareholder name in next year's figures that matches nobody is refused
+  rather than silently treated as zero.
+
+**The one-class-of-stock question, answered properly**
+
+The engine neither shrugs nor cries wolf. §1.1361-1(l)(1) makes the test turn on
+whether all outstanding shares confer IDENTICAL RIGHTS to distribution and
+liquidation proceeds — a question about the charter, the bylaws, state law and
+any binding distribution agreement, **not** about whether the cheques happened to
+be proportionate. The regulation's own Example 2 has one shareholder paid a full
+year after another and still finds a single class of stock. So disproportionate
+distributions are not, by themselves, a second class of stock.
+
+But the last sentence of §1.1361-1(l)(2)(i) does not let it go entirely:
+distributions that differ in amount "are to be given appropriate tax effect in
+accordance with the facts and circumstances". The gap has to be characterised as
+something — a loan from the company, additional compensation, or a gift between
+shareholders. The engine names the variance, names the test, and says what must
+be verified.
 
 ### 4. Form 1120-S and Schedule K-1
 
@@ -272,11 +308,19 @@ exists.
 3. **Twelve years of tax returns** — the permanent test corpus under standing
    rule 19. If the engine cannot reproduce a return already filed, the engine is
    wrong.
-4. **Evidence that Greenway has zero accumulated E&P** — this changes how
-   distributions are taxed. Standing rule 11 says it comes from evidence.
+4. ~~**Evidence that Greenway has zero accumulated E&P**~~ — **RESOLVED
+   (Michael, Aug 2026).** Greenway has never been a C corporation, was an S
+   corporation from formation, and has had no changes in ownership, so there is
+   no accumulated E&P and none can have arisen. The basis engine therefore takes
+   `hasAccumulatedEarningsAndProfits: false` as a stated fact rather than an
+   assumption. It remains a REQUIRED input that refuses on `null`: the day the
+   answer changes, the whole §1368(c) three-tier apparatus switches on, and
+   silence at that moment would be dangerous.
 5. **Form 2553 and the CP261 acceptance letter** — proof of the S election.
-6. **SUTA rate notice and L&I risk classification** — the payroll engine refuses
-   to compute these from memory, and will keep refusing.
+6. ~~**SUTA rate notice and L&I risk classification**~~ — **RESOLVED
+   (Michael, Aug 2026).** Both were supplied and are in the dated rate registry
+   built in books-15, so they are evidenced rows rather than constants. Michael
+   believes payroll taxes are now complete end to end.
 7. **Tax rates pending confirmation** — IRC §6621 quarterly underpayment rates,
    the DOR 2026 annual rate, and the §6651(j) 60-day minimum. Michael is
    gathering these.
@@ -311,6 +355,8 @@ exists.
 | — | standing rules 33–37, learned from books-17 | #990 |
 | — | `docs/authorities/` — 3,922 pages of source text + verbatim verifier | #991 |
 | books-18 | period close gate: an unanswered check is not a passed check | #992 |
+| books-19 | basis and AAA tracking; federal source text mirrored so quotes are machine-proved | #993 |
+| — | standing rules 40–41, learned from books-19 | #993 |
 
 ---
 

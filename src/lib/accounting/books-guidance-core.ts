@@ -65,6 +65,7 @@ import { AUDIT_HUB_AUTHORITIES_NEW } from "@/lib/inventory/audit-hub-authorities
 import { TAX_PENALTY_AUTHORITIES_NEW } from "./tax-penalty-authorities";
 import { FINANCIAL_STATEMENT_AUTHORITIES_NEW } from "./financial-statement-authorities";
 import { PERIOD_CLOSE_AUTHORITIES_NEW } from "./period-close-authorities";
+import { BASIS_AAA_AUTHORITIES_NEW } from "./basis-aaa-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -499,7 +500,8 @@ export type SourceRegistry =
   | "tax-penalty"
   | "payroll-tax"
   | "financial-statement"
-  | "period-close";
+  | "period-close"
+  | "basis-aaa";
 
 export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "vendor-bill",
@@ -514,6 +516,7 @@ export const ALL_SOURCE_REGISTRIES: readonly SourceRegistry[] = [
   "payroll-tax",
   "financial-statement",
   "period-close",
+  "basis-aaa",
 ] as const;
 
 /** Every (id, registry) pair BEFORE de-duplication, for drift analysis. */
@@ -584,6 +587,17 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // drifting copies of it.
     ...PERIOD_CLOSE_AUTHORITIES_NEW.map((a) => ({
       tag: "period-close" as const,
+      authority: a,
+    })),
+    // books-19. Stock basis, debt basis, and the AAA. These live here rather
+    // than inside the basis engine for the same reason ASC 250 does: the
+    // equity statement, the K-1 that is coming next, and the basis schedule
+    // must all cite ONE §1367 and ONE §1368, not three copies that drift
+    // apart. §1367(a) and §1368(b),(d),(e)(1)(A) were already registered by
+    // books-17 and are deliberately NOT re-declared — books-19 adds only what
+    // was genuinely missing.
+    ...BASIS_AAA_AUTHORITIES_NEW.map((a) => ({
+      tag: "basis-aaa" as const,
       authority: a,
     })),
   ];

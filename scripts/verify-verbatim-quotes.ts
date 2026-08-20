@@ -30,12 +30,27 @@ const AUTHORITY_DIR = join(process.cwd(), "docs", "authorities");
  * the `source` field's URL rather than on disk. Only claims we CAN check are
  * checked; pretending to verify the rest would be theatre.
  */
-function sourceFileFor(cite: string): string | null {
+export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string | null {
   const asc = /^FASB ASC (\d{3})-/.exec(cite);
   if (asc) {
-    const p = join(AUTHORITY_DIR, "fasb-codification", `asc-${asc[1]}.txt`);
+    const p = join(dir, "fasb-codification", `asc-${asc[1]}.txt`);
     return existsSync(p) ? p : null;
   }
+
+  // 26 CFR §1.1367-1(f)  ->  federal/cfr-1.1367-1.txt
+  const cfr = /^26 CFR §(1\.\d+-\d+)/.exec(cite);
+  if (cfr) {
+    const p = join(dir, "federal", `cfr-${cfr[1]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // 26 U.S.C. §1366(d)(1)  ->  federal/usc-1366.txt
+  const usc = /^26 U\.S\.C\. §(\d+)/.exec(cite);
+  if (usc) {
+    const p = join(dir, "federal", `usc-${usc[1]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
   return null;
 }
 
@@ -56,8 +71,44 @@ function normalise(text: string): string {
     .replace(/\[\s*(?:ARB|FAS|FIN|ASU|EITF|SOP|APB|CON)[^\]]*\]/g, " ")
     .replace(/[[\]]/g, " ")
     .replace(/\s+/g, " ")
+    // Publishers disagree about whether a dash introducing a list is hugged
+    // ("proper)- (1)") or spaced ("proper) - (1)"). That is typesetting, not
+    // law, and it is applied to BOTH sides so neither is given latitude the
+    // other lacks. No word is affected.
+    .replace(/\s*-\s*/g, " - ")
     .trim();
 }
+
+/**
+ * Split a normalised quote on its ellipses.
+ *
+ * Returns null when any segment is too short to be evidence of anything. A
+ * quote of "the" separated by "..." from "corporation" would match virtually
+ * any statute, so allowing it would turn this verifier into decoration.
+ */
+export function quoteSegments(normalisedQuote: string): string[] | null {
+  const parts = normalisedQuote
+    .split(/\s*\.\.\.\s*/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts;
+  return parts.every((p) => p.length >= MIN_SEGMENT_CHARS) ? parts : null;
+}
+
+/** Every segment appears in the source, each one after the previous. */
+export function matchesInOrder(haystack: string, segments: readonly string[]): boolean {
+  let from = 0;
+  for (const seg of segments) {
+    const at = haystack.indexOf(seg, from);
+    if (at === -1) return false;
+    from = at + seg.length;
+  }
+  return true;
+}
+
+/** Shortest passage an elided segment may be and still prove anything. */
+const MIN_SEGMENT_CHARS = 40;
 
 function main(): void {
   const checked: string[] = [];
@@ -73,21 +124,57 @@ function main(): void {
     const haystack = normalise(readFileSync(file, "utf8"));
     const needle = normalise(a.quote);
 
-    if (haystack.includes(needle)) {
-      checked.push(a.id);
-      console.log(`  VERBATIM OK   ${a.id}  (${needle.length} chars)`);
+    // A quote may skip material with an explicit ellipsis, which is how one
+    // cites §1368(b), (d) and (e)(1)(A) without reproducing (c). Each SEGMENT
+    // between ellipses must still appear verbatim, and they must appear IN
+    // ORDER. That is a real constraint: it forbids inventing words inside a
+    // segment and forbids quoting subsections out of sequence. What it will
+    // not catch is a misleading elision, so `quoteSegments` also refuses a
+    // segment short enough to match by accident.
+    const segments = quoteSegments(needle);
+    if (segments === null) {
+      failures.push(
+        `${a.id} (${a.cite}) — an elided quote segment is too short to be ` +
+          `meaningful; a "..." must join substantial passages, not fragments`,
+      );
       continue;
     }
 
+    if (matchesInOrder(haystack, segments)) {
+      checked.push(a.id);
+      const how = segments.length > 1 ? `${segments.length} segments, ` : "";
+      console.log(`  VERBATIM OK   ${a.id}  (${how}${needle.length} chars)`);
+      continue;
+    }
+
+    // Report on the SEGMENT that actually failed, not on the whole quote.
+    // Reporting "matches the first 517 characters" when segment one matched
+    // perfectly and segment three did not is a lie that costs an hour.
+    let cursor = 0;
+    let failingIndex = 0;
+    let failing = segments[0];
+    for (let i = 0; i < segments.length; i += 1) {
+      const at = haystack.indexOf(segments[i], cursor);
+      if (at === -1) {
+        failingIndex = i;
+        failing = segments[i];
+        break;
+      }
+      cursor = at + segments[i].length;
+    }
+    const where =
+      segments.length > 1 ? `segment ${failingIndex + 1} of ${segments.length}: ` : "";
+    const searchFrom = failingIndex === 0 ? 0 : cursor;
+
     // Locate the divergence so the failure is actionable rather than a shrug.
-    let detail = "no common prefix with the source at all";
-    for (let cut = needle.length - 1; cut > 20; cut -= 5) {
-      const prefix = needle.slice(0, cut);
-      const at = haystack.indexOf(prefix);
+    let detail = `${where}no common prefix with the source at all`;
+    for (let cut = failing.length - 1; cut > 20; cut -= 5) {
+      const prefix = failing.slice(0, cut);
+      const at = haystack.indexOf(prefix, searchFrom);
       if (at !== -1) {
         detail =
-          `matches the first ${cut} characters, then diverges\n` +
-          `      OURS  : ...${needle.slice(Math.max(0, cut - 50), cut + 60)}\n` +
+          `${where}matches the first ${cut} characters, then diverges\n` +
+          `      OURS  : ...${failing.slice(Math.max(0, cut - 50), cut + 60)}\n` +
           `      SOURCE: ...${haystack.slice(Math.max(0, at + cut - 50), at + cut + 60)}`;
         break;
       }
