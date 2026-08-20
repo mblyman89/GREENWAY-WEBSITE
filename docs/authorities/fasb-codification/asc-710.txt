@@ -1,0 +1,1231 @@
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   Expenses
+
+
+
+   710 Compensation—General
+   710 Compensation—General
+    10 Overall
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   710-10-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph        Action          Accounting Standards Update                                      Date
+                           710-10-25-
+                                            Amended         Accounting Standards Update No. 2016-01                          01/05/2016
+                           18
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     1/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   710-10-05-1            The Codification contains several Topics for compensation-related costs. The Topics include:
+                               a. Compensation—General
+                               b. Compensation—Nonretirement Postemployment Benefits
+                               c. Compensation—Retirement Benefits
+                               d. Compensation—Stock Compensation.
+
+   710-10-05-2            This Topic (Compensation—General) contains only the Overall Subtopic and provides guidance on
+                          general compensation-related matters that are not within the scope of the Topics noted in the
+                          preceding paragraph.
+
+   710-10-05-3            The Overall Subtopic contains the following two Subsections to segregate the guidance:
+                               a. General
+                               b. Deferred Compensation—Rabbi Trusts.
+
+   710-10-05-4            The General Subsections provide guidance on the following:
+                               a. Compensated absences
+                               b. Deferred compensation arrangements
+                               c. Lump-sum payments under union contracts.
+
+
+   > Compensated Absences
+
+   710-10-05-5            [ The General Subsections of this Subtopic provide guidance for accruing a liability for employees'
+                          rights to receive compensation for future absences when certain conditions are met, [
+                          FAS 043 Summary 8.1 ] ] [ for example, vacation benefits, future sick pay benefits, holidays, certain
+                          sabbatical leaves and similar compensated absences. [ FAS 043 Summary 8.2 ] ]
+
+
+   > Deferred Compensation Arrangements
+
+   710-10-05-6            The General Subsections of this Subtopic provide guidance on deferred compensation arrangements
+                          that are individual employment contracts and are not in substance a pension or other postretirement
+                          benefit plan as described in paragraph 715-10-15-3.
+
+
+   > Lump-Sum Payments Under Union Contracts
+
+   710-10-05-7            The General Subsections of this Subtopic provide recognition guidance for lump-sum payments
+                          received by union employees upon signing new union contracts.
+
+   Deferred Compensation—Rabbi Trusts
+   710-10-05-8            [ The Deferred Compensation—Rabbi Trusts Subsections of this Subtopic address the accounting for
+                          deferred compensation arrangements where amounts earned by an employee are invested in the
+                          stock of the employer and placed in a rabbi trust. [ EITF 97-14 ISSUE 17.1 ] ] [ Certain of those
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     2/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+                          plans allow the employee to immediately diversify into nonemployer securities or to diversify after a
+                          holding period (for example, six months); other plans do not allow for diversification. [ EITF 97-
+                          14 ISSUE 17.2.1 ] ]
+
+   710-10-05-9            [ The deferred compensation obligation of some plans may be settled in any of the following: [
+                          EITF 97-14 ISSUE 17.2.2.1 ] ]
+                               a. [ Cash, by having the trust sell the employer stock (or the diversified assets) in the open
+                               market [ EITF 97-14 ISSUE 17.2.2.2.1 ] ]
+                               b. [ Shares of the employer's stock [ EITF 97-14 ISSUE 17.2.2.2.2.1 ] ]
+                               c. [ Diversified assets. [ EITF 97-14 ISSUE 17.2.2.2.2.2.1 ] ]
+                          [ In other plans, the deferred compensation obligation may be settled only by delivery of the shares of
+                          the employer stock. [ EITF 97-14 ISSUE 17.2.2.2.2.2.2 ] ]
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   > Overall Guidance
+
+   710-10-15-1            The General Subsection of the Scope Section of the Overall Subtopic establishes the pervasive scope
+                          for the Compensation—General Topic, with specific exceptions noted in the other Subsections of this
+                          Section.
+
+
+   > Entities
+
+   710-10-15-2            The guidance in the Compensation—General Topic applies to all entities.
+
+
+   > Transactions
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     3/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   710-10-15-3            The guidance in the Compensation—General Topic applies to the following compensation or employee
+                          benefit arrangements:
+                               a. [ Compensation for future absences where employees have rights to receive compensation for
+                               future absences [ FAS 043 Summary 8.1 ] ] [ (referred to as compensated absences) [
+                               FAS 043 1 9.1.1 ] ]
+                               b. [ Sabbatical leave or other similar benefit arrangement that is unrestricted (that is, the
+                               employee is not required to perform any direct or indirect services for or on behalf of the entity
+                               during the absence) [ EITF 06-02 ISSUE 14.2.1 ] ]
+                               c. [ Lump-sum payments under union contracts (that is, not to individual employment contracts or
+                               any other situation involving compensation payments to individual employees). [ EITF 88-
+                               23 DISCUSSION 11.1 ] ]
+
+
+   710-10-15-4            The guidance in this Topic applies to the following deferred compensation or employee benefit
+                          arrangements:
+                               a. [ All forms of postemployment benefits, as defined in Subtopic 712-10, that meet the
+                               conditions in paragraph 710-10-25-1 [ FAS 043 1 9.2.1 ] ]
+                               b. Split-dollar life insurance arrangements if the arrangement is, in substance, an individual
+                               deferred compensation contract (see paragraphs 715-60-35-177 through 35-185.
+                               c. [ Other deferred compensation contracts accounted for individually. [ APB 12 6 29.2 ] ]
+
+
+   710-10-15-5            The guidance in this Topic does not apply to the following deferred compensation or employee benefit
+                          arrangements:
+                               a. [ Benefits paid to active employees other than compensated absences [ FAS 043 1 9.2.2.2 ] ]
+                               b. [ Benefits paid at retirement or provided through a pension or postretirement benefit plan
+                               including special or contractual termination benefits payable upon termination from a pension or
+                               other postretirement plan are covered by Subtopics 715-30 and 715-60. [ FAS 043 2 11 ] ]
+                               c. [ Individual deferred compensation contracts that are addressed by [ FAS 043 2 12 ] ] [
+                               Subtopics 715-30 and 715-60, if those contracts, taken together, are equivalent to a defined
+                               benefit pension plan or a defined benefit other postretirement benefit plan, respectively. [
+                               APB 12 6 29.1 ] ]
+                               d. [ Special or contractual termination benefits that are not payable from a pension or other
+                               postretirement plan are covered by Topic 712 [ FAS 043 2 13 ] ]
+                               e. [ Stock compensation plans that are addressed by Topic 718 [ FAS 043 2 14 ] ]
+                               f. [ Other postemployment benefits (see Topic 712) that do not meet the conditions in paragraph
+                               710-10-25-1 and are accounted for in accordance with Topic 450. [ FAS 043 1 9.2.2.1 ] ]
+
+
+   > Other Considerations
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     4/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   710-10-15-6            [ The guidance in the Compensation—General Topic does not address the allocation of costs of
+                          compensated absences to interim periods. [ FAS 043 2 15 ] ]
+
+   Deferred Compensation—Rabbi Trusts
+   > Overall Guidance
+
+   710-10-15-7            The Deferred Compensation—Rabbi Trusts Subsections follow the same Scope and Scope Exceptions
+                          as outlined in the General Subsection of this Subtopic, with specific transaction qualifications noted
+                          below.
+
+
+   > Transactions
+
+   710-10-15-8            The guidance in the Deferred Compensation—Rabbi Trusts Subsections addresses the accounting for
+                          deferred compensation arrangements that have the following characteristics:
+                               a. [ If amounts earned by an employee are invested in the stock of the employer and placed in a
+                               rabbi trust [ EITF 97-14 ISSUE 17.1 ] ]
+                               b. [ Where the employee elects to diversify [ EITF 97-14 ISSUE 24.2.1 ] ] [ the assets held by
+                               the rabbi trust [ EITF 97-14 ISSUE 24.1 ] ] [ into nonemployer securities. [ EITF 97-
+                               14 ISSUE 24.2.2 ] ]
+                          [ The guidance in the Deferred Compensation—Rabbi Trusts Subsections does not address the
+                          accounting for stock appreciation rights even if they are funded through a rabbi trust. [ EITF 97-
+                          14 ISSUE 19 ] ]
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Compensated Absences
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     5/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+                           [ Employee absences, such as vacation, illness, and holidays, for which it is expected that employees
+                           will be paid. [ FAS 043 1 9.1.1 ] ]
+
+
+   Full Eligibility Date
+
+
+                           [ The date at which an employee has rendered all of the service necessary to have earned the right to
+                           receive all of the benefits expected to be received by that employee (including any beneficiaries and
+                           dependents expected to receive benefits). Determination of the full eligibility date is affected by plan
+                           terms that provide incremental benefits expected to be received by or on behalf of an employee for
+                           additional years of service, unless those incremental benefits are trivial. Determination of the full
+                           eligibility date is not affected by plan terms that define when benefit payments commence or by an
+                           employee's [ FAS 106 518 871 ] ] [ current marital or dependency status. [ FAS 106 404 572.2.2 ] ]
+
+
+   Rabbi Trusts
+
+
+                           [ Rabbi trusts are grantor trusts generally set up to fund compensation for a select group of
+                           management or highly paid executives. To qualify as a rabbi trust for income tax purposes, the terms
+                           of the trust agreement must explicitly state that the assets of the trust are available to satisfy the
+                           claims of general creditors in the event of bankruptcy of the employer. [ EITF 97-14 ISSUE 18 ] ]
+
+
+   Sabbatical Leave
+
+
+                           [ A benefit in the form of a compensated absence whereby the employee is entitled to paid time off
+                           after working for an entity for a specified period of time. [ EITF 06-02 ISSUE 12.1 ] ] [ During the
+                           sabbatical, the individual continues to be a compensated employee and is not required to perform any
+                           duties for the entity. [ EITF 06-02 ISSUE 12.2 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     6/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   General
+   > Compensated Absences
+
+   710-10-25-1            [ An employer shall accrue a liability for employees' compensation for future absences if all of the
+                          following conditions are met: [ FAS 043 6 19 ] ]
+                               a. [ The employer's obligation relating to employees' rights to receive compensation for future
+                               absences is attributable to employees' services already rendered. [ FAS 043 6 20 ] ]
+                               b. [ The obligation relates to rights that vest or accumulate. [ FAS 043 6 21 ] ] [ Vested rights
+                               are those for which the employer has an obligation to make payment even if an employee
+                               terminates; thus, they are not contingent on an employee's future service. [ FAS 043 6 22 ] ] [
+                               Accumulate means that earned but unused rights to compensated absences may be carried
+                               forward to one or more periods subsequent to that in which they are earned, even though there
+                               may be a limit to the amount that can be carried forward. [ FAS 043 6 23 ] ]
+                               c. [ Payment of the compensation is probable. [ FAS 043 6 24 ] ]
+                               d. [ The amount can be reasonably estimated. [ FAS 043 6 25 ] ]
+
+
+   710-10-25-2            [ A liability for amounts to be paid as a result of employees' rights to compensated absences shall be
+                          accrued, considering anticipated forfeitures, in the year in which earned. For example, if new
+                          employees receive vested rights to two-weeks' paid vacation at the beginning of their second year of
+                          employment with no pro rata payment in the event of termination during the first year, the two-weeks'
+                          vacation shall be considered to be earned by work performed in the first year and an accrual for
+                          vacation pay shall be required for new employees during their first year of service, allowing for
+                          estimated forfeitures due to turnover. Furthermore, the definition of a liability does not limit an
+                          employer's liability for compensated absences solely to rights to compensation for those absences
+                          that eventually vest. The definition also encompasses a constructive obligation for reasonably
+                          estimable compensation for past services that, based on the employer's past practices, probably
+                          shall be paid and can be reasonably estimated. [ FAS 043 12 48 ] ]
+
+   710-10-25-3            [ Individual facts and circumstances must be considered in determining when nonvesting rights to
+                          compensated absences are earned by services rendered. [ FAS 043 12 48.1 ] ] [ The requirement to
+                          accrue a liability for nonvesting rights to compensated absences depends on whether the unused
+                          rights expire at the end of the year in which earned or accumulate and are carried forward to
+                          succeeding years, thereby increasing the benefits that would otherwise be available in those later
+                          years. If the rights expire, a liability for future absences shall not be accrued at year-end because the
+                          benefits to be paid in subsequent years would not be attributable to employee services rendered in
+                          prior years. (Jury duty and military leave benefits generally do not accumulate if unused and, unless
+                          they accumulate, a liability for those benefits shall not be accrued at year-end.) On the other hand, if
+                          unused rights do accumulate and increase the benefits otherwise available in subsequent years, a
+                          liability shall be accrued at year-end to the extent that it is probable that employees will be paid in
+                          subsequent years for the increased benefits attributable to the accumulated rights and the amount
+                          can be reasonably estimated. [ FAS 043 13 49 ] ]
+
+   · > Sabbatical Leave Benefits
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     7/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   710-10-25-4            [ The appropriate accounting for a sabbatical leave depends on the purpose of the leave. If a
+                          sabbatical leave is granted only to perform research or public service to enhance the reputation of or
+                          otherwise benefit the employer, the compensation is not attributable to services already rendered (see
+                          paragraph 710-10-25-1(a)); a liability shall not be accrued in advance of the employee's services
+                          during such leave. If the leave is granted to provide compensated unrestricted time off for past service
+                          and the other conditions for accrual are met, a liability for sabbatical leave shall be accrued. [
+                          FAS 043 18 54.2 ] ]
+
+   710-10-25-5            [ An employee's right to a compensated absence under a sabbatical or other similar benefit
+                          arrangement [ EITF 06-02 DISCUSSION 15.1 ] ] [ that requires the completion of a minimum service
+                          period and [ EITF 06-02 DISCUSSION 15.2.1 ] ] [ in which the benefit does not increase with
+                          additional years of service [ EITF 06-02 DISCUSSION 15.2.2.1 ] ] [ accumulates pursuant to
+                          paragraph 710-10-25-1(b) for arrangements in which the individual continues to be a compensated
+                          employee and is not required to perform [ EITF 06-02 DISCUSSION 15.2.2.2.1 ] ] [ any direct or
+                          indirect services for or on behalf of the entity during the absence. [ EITF 06-02 ISSUE 14.2.1 ] ] [
+                          Therefore, assuming all of the other conditions of paragraph 710-10-25-1 are met, the compensation
+                          cost associated with a sabbatical or other similar benefit arrangement shall be accrued over the
+                          requisite service period. [ EITF 06-02 DISCUSSION 15.2.2.2.2 ] ]
+
+   · > Sick Pay Benefits
+   710-10-25-6            [ The employer's actual administration of sick pay benefits shall determine the appropriate
+                          accounting. [ FAS 043 16 52 ] ] [ In accounting for compensated absences, the form of an
+                          employer's policy for compensated absences shall not prevail over actual practices. For example, if
+                          employees are customarily paid sick pay benefits even though their absences from work are not
+                          actually the result of illness or if employees are routinely allowed to take compensated terminal leave
+                          for accumulated unused sick pay benefits prior to retirement, such benefits shall not be considered
+                          sick pay benefits for purposes of applying the provisions of the following paragraph but rather shall be
+                          accounted for in accordance with paragraph 710-10-25-1. [ FAS 043 7 28 ] ]
+
+   710-10-25-7            [ Notwithstanding the conditions specified in paragraph 710-10-25-1, an employer is not required to
+                          accrue a liability for nonvesting accumulating rights to receive sick pay benefits (that is, compensation
+                          for an employee's absence due to illness). [ FAS 043 7 27 ] ]
+
+   710-10-25-8            [ This Subtopic does not prohibit an employer from accruing a liability for such nonvesting
+                          accumulating sick pay benefits, providing the criteria of paragraph 710-10-25-1 are met. [
+                          FAS 043 15 51 ] ]
+
+
+   > Deferred Compensation Arrangements
+
+   710-10-25-9            [ To the extent the terms of a contract attribute all or a portion of the expected future benefits to an
+                          individual year of the employee's service, the cost of those benefits shall be recognized in that year. [
+                          APB 12 6A 30.1.1 ] ] [ To the extent the terms of the contract attribute all or a portion of the
+                          expected future benefits to a period of service greater than one year, the cost of those benefits shall
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     8/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+                          be accrued over that period of the employee's service in a systematic and rational manner. [
+                          APB 12 6A 30.1.2.1 ] ]
+
+   710-10-25-10           [ If elements of both current and future services are present, only the portion applicable to the
+                          current services shall be accrued. Example 1 (see paragraph 710-10-55-1) illustrates this guidance. [
+                          APB 12 6A 30.2 ] ]
+
+   710-10-25-11           [ Some deferred compensation contracts provide for periodic payments to employees or their
+                          surviving spouses for life with provisions for a minimum lump-sum settlement in the event of the early
+                          death of one or all of the beneficiaries. [ APB 12 7 32.1 ] ] [ The estimated amount (see paragraph
+                          710-10-30-1) of future payments to be made under such contracts shall be accrued over the period of
+                          active employment from the time the contract is entered into. Example 2 (see paragraph 710-10-55-4)
+                          illustrates this guidance. [ APB 12 7 32.2.1 ] ]
+
+
+   > Lump-Sum Payments Under Union Contracts
+
+   710-10-25-12           [ In connection with the signing of new union contracts, union employees may agree to accept a lump-
+                          sum cash payment or payments in lieu of all or a portion of an increase in their base wage rate.
+                          Entities believe that in certain circumstances those lump-sum payments reduce or eliminate increases
+                          in base wage rates during the contract period that would otherwise be required. The specific terms of
+                          lump-sum payments vary, but ordinarily there is no requirement that the employee refund to the entity
+                          any portion of the payment if the employee terminates employment prior to the end of the contract
+                          period. Unlike an employment contract with an individual, the union contract applies to the work force,
+                          and there is a presumption that an employee who terminates generally will be replaced by another
+                          union member at the same base wage rate without an additional lump-sum payment. [ EITF 88-
+                          23 ISSUE 8 ] ]
+
+   710-10-25-13           [ All or a portion of a lump-sum payment may be deferred and appropriately amortized only when it is
+                          clear that the payment will benefit a future period in the form of a lower base wage rate than
+                          otherwise would have existed. The period of amortization shall not extend beyond the contract period.
+                          The terms and conditions of those payments may vary and the facts and circumstances surrounding
+                          the contract and the negotiations must be reviewed to determine how to account for the payment. [
+                          EITF 88-23 DISCUSSION 10 ] ]
+
+   710-10-25-14           [ This guidance relates solely to union contracts and not to individual employment contracts or any
+                          other situation involving compensation payments to individual employees. [ EITF 88-
+                          23 DISCUSSION 11.1 ] ]
+
+   Deferred Compensation—Rabbi Trusts
+   710-10-25-15           [ The following are the four types of deferred compensation arrangements involving rabbi trusts
+                          covered by this Subsection: [ EITF 97-14 DISCUSSION 25 ] ]
+                              a. [ Plan A—The plan does not permit diversification and must be settled by the delivery of a
+                              fixed number of shares of employer stock. [ EITF 97-14 DISCUSSION 26 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     9/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+                               b. [ Plan B—The plan does not permit diversification and may be settled by the delivery of cash
+                               or shares of employer stock. [ EITF 97-14 DISCUSSION 27 ] ]
+                               c. [ Plan C—The plan permits diversification; however, the employee has not diversified (the plan
+                               may be settled in cash, shares of employer stock, or diversified assets). [ EITF 97-
+                               14 DISCUSSION 28 ] ]
+                               d. [ Plan D—The plan permits diversification and the employee has diversified (the plan may be
+                               settled in cash, shares of employer stock, or diversified assets). [ EITF 97-14 DISCUSSION 29 ] ]
+
+
+   > Plan A
+
+   710-10-25-16           [ For Plan A, employer stock held by the rabbi trust shall be classified in equity in a manner similar to
+                          the manner in which treasury stock (see Subtopic 505-30) is accounted for. [ EITF 97-
+                          14 DISCUSSION 32.1 ] ] [ The deferred compensation obligation shall be classified as an equity
+                          instrument. [ EITF 97-14 DISCUSSION 32.2.2 ] ]
+
+
+   > Plans B and C
+
+   710-10-25-17           [ For Plans B and C, employer stock held by the rabbi trust shall be classified in equity in a manner
+                          similar to the manner in which treasury stock (see Subtopic 505-30) is accounted for. [ EITF 97-
+                          14 DISCUSSION 33.1 ] ] [ The deferred compensation obligation shall be classified as a liability. [
+                          EITF 97-14 DISCUSSION 33.2.2 ] ]
+
+
+   > Plan D
+
+   710-10-25-18           [ For Plan D, assets held by the rabbi trust shall be accounted for in accordance with generally
+                          accepted accounting principles (GAAP) for the particular asset (for example, if the diversified asset is
+                          an equity security, that security would be accounted for in accordance with Subtopic 321-10). [
+                          EITF 97-14 DISCUSSION 34.1 ] ] [ The deferred compensation obligation shall be classified as a
+                          liability. [ EITF 97-14 DISCUSSION 34.2.1 ] ] [ At acquisition, debt securities held by the rabbi trust
+                          may be classified as trading. [ EITF 97-14 DISCUSSION 34.2.2.2 ] ]
+
+
+
+
+   30 Initial Measurement
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 10/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+              General Note:The Initial Measurement Section provides guidance on the criteria and amounts used to
+              measure a particular item at the date of initial recognition.
+
+
+
+
+   General
+   > Deferred Compensation Arrangements
+
+   710-10-30-1            [ The amounts to be accrued periodically under paragraph 710-10-25-9 shall result in an accrued
+                          amount at the full eligibility date equal to the then present value of all of the future benefits expected
+                          to be paid. [ APB 12 6A 31.1 ] ] [ Such estimates shall be based on the life expectancy of each
+                          individual concerned (based on the most recent mortality tables available) or on the estimated cost of
+                          an annuity contract rather than on the minimum payable in the event of early death. [ APB 12 7 32.2.2
+                          ]]
+
+   710-10-30-2            [ At the end of that period the aggregate amount accrued shall equal the then present value of the
+                          benefits expected to be provided to the employee, any beneficiaries, and covered dependents in
+                          exchange for the employee's service to that date. Example 1 (see paragraph 710-10-55-1) and
+                          Example 3 (see paragraph 710-10-55-7) illustrate this guidance. [ APB 12 6A 30.1.2.2 ] ]
+
+
+
+
+   35 Subsequent Measurement
+
+              General Note:The Subsequent Measurement Section provides guidance on an entity's subsequent
+              measurement and subsequent recognition of an item. Situations that may result in subsequent changes to
+              carrying amount include impairment, credit losses, fair value adjustments, depreciation and amortization,
+              and so forth.
+
+
+
+
+   Deferred Compensation—Rabbi Trusts
+   710-10-35-1            The guidance in this Subsequent Measurement Section addresses the four plans (A to D) as outlined
+                          in paragraph 710-10-25-15.
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 11/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   > Plan A
+
+   710-10-35-2            [ Subsequent changes in the fair value of the employer's stock shall not be recognized. [ EITF 97-
+                          14 DISCUSSION 32.2.1 ] ] [ With respect to the deferred compensation obligation recognized under
+                          paragraph 710-10-25-16, changes in the fair value of the amount owed to the employee shall not be
+                          recognized. [ EITF 97-14 DISCUSSION 32.2.2 ] ]
+
+
+   > Plans B and C
+
+   710-10-35-3            [ Subsequent changes in the fair value of the employer's stock, recorded in a manner similar to
+                          treasury stock, shall not be recognized. [ EITF 97-14 DISCUSSION 33.2.1 ] ] [ The deferred
+                          compensation obligation shall be adjusted with a corresponding charge (or credit) to compensation
+                          cost, to reflect the changes in the fair value of the amount owed to the employee. [ EITF 97-
+                          14 DISCUSSION 33.2.2 ] ]
+
+
+   > Plan D
+
+   710-10-35-4            [ The deferred compensation obligation shall be adjusted, with a corresponding charge (or credit) to
+                          compensation cost, to reflect changes in the fair value of the amount owed to the employee. [ EITF 97-
+                          14 DISCUSSION 34.2.1 ] ]
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   Deferred Compensation—Rabbi Trusts
+   710-10-45-1            [ For all of the types of plans (A to D) discussed in paragraph 710-10-25-15, the accounts of the rabbi
+                          trust shall be consolidated with the accounts of the employer in the financial statements of the
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 12/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+                          employer. [ EITF 97-14 DISCUSSION 30 ] ]
+
+   710-10-45-2            [ For Plan D only, changes in the fair value of the deferred compensation obligation shall not be
+                          recorded in other comprehensive income, even if changes in the fair value of the assets held by the
+                          rabbi trust are recorded, pursuant to Subtopic 320-10, in other comprehensive income. [ EITF 97-
+                          14 DISCUSSION 34.2.2.1 ] ]
+
+   710-10-45-3            [ For all of these types of plans, employer shares held by the rabbi trust shall be treated as treasury
+                          stock for earnings per share (EPS) purposes and excluded from the denominator in the basic and
+                          diluted EPS calculations. [ EITF 97-14 DISCUSSION 35.1 ] ] [ However, the obligation under the
+                          deferred compensation arrangement shall be reflected in the denominator of the EPS computation in
+                          accordance with the provisions of Section 260-10-45. [ EITF 97-14 DISCUSSION 35.2.1 ] ]
+
+   710-10-45-4            [ In accordance with paragraph 260-10-45-13, if an obligation is required to be settled by delivery of
+                          shares of employer stock (Plan A), those shares shall be included in the calculation of basic and
+                          diluted EPS. [ EITF 97-14 DISCUSSION 35.2.2.1 ] ] [ If the obligation may be settled by delivery of
+                          cash, shares of employer stock, or diversified assets (other than Plan A), those shares shall not be
+                          reflected in basic EPS but shall be included in the calculation of diluted EPS in accordance with
+                          paragraph 260-10-45-30 and paragraphs 260-10-45-45 through 45-46. [ EITF 97-
+                          14 DISCUSSION 35.2.2.2 ] ]
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   > Compensated Absences
+
+   710-10-50-1            [ If an employer meets the conditions in paragraph 710-10-25-1(a) through (c) and does not accrue a
+                          liability because the condition in paragraph 710-10-25-1(d) is not met, that fact shall be disclosed. [
+                          FAS 043 6 26 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 13/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   > Illustrations
+
+   · > Example 1: Nonvesting Deferred Compensation Contract
+   710-10-55-1            This Example illustrates the guidance in paragraphs 710-10-25-9 and 710-10-30-1.
+
+   710-10-55-2            [ An employer's deferred compensation contract does not provide a vested benefit for employees'
+                          prior service at the date the contract is entered into. Employees must render 30 years of service to
+                          receive benefits under a deferred compensation contract. An employee has rendered 16 years of
+                          service at the date of entering into the contract. Credit is granted for that prior service in determining
+                          eligibility for the benefit to be provided. [ QA 106 4 14 ] ]
+
+   710-10-55-3            [ In this Example, the employer should accrue the total obligation under the deferred compensation
+                          contract in a systematic and rational manner over the employee's future service period to the date full
+                          eligibility for the benefits is attained, that is, over the next 14 years. If the employee is eligible to
+                          receive a portion of the benefits without regard to future service, that is, the credit for prior service
+                          results in a vested benefit, the obligation for that benefit should be fully accrued at the time the
+                          contract is entered into. [ QA 106 4 15 ] ]
+
+   · > Example 2: Attribution Period for a Deferred Compensation Contract
+   710-10-55-4            This Example illustrates the guidance in paragraph 710-10-25-11.
+
+   710-10-55-5            [ An employee becomes fully eligible for benefits under a deferred compensation contract five years
+                          after entering into the contract. The contract states, however, that if the employee dies or becomes
+                          disabled, benefits will be payable immediately. The contract is not one of a group of contracts that
+                          possess the characteristics of a pension plan. [ QA 106 5 16 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 14/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   710-10-55-6            [ In this Example, if the employee is expected to render service over the next five years, benefits
+                          should be attributed over that service period. If death or disability unexpectedly occurs during the five-
+                          year period, the benefit obligation should be remeasured and any previously unrecognized amount
+                          should be immediately recognized at the date of the event. If the employee is expected to terminate
+                          service within the next five years, an accrual is normally not required because the employee is not
+                          expected to receive benefits under the plan. However, in the rare situation that it is probable that
+                          death or disability will occur during the five-year period, the benefit should be accrued over the
+                          relevant service period. [ QA 106 5 17 ] ]
+
+   · > Example 3: Individual Deferred Compensation Contracts
+   710-10-55-7            [ This Example illustrates the guidance in paragraph 710-10-30-1. An employer may provide
+                          postretirement benefits to selected employees under individual contracts with specific terms
+                          determined on an individual-by-individual basis. That paragraph attributes those benefits to the
+                          individual employee's years of service following the terms of the contract. The following Cases
+                          illustrate the application of that paragraph for individual deferred compensation contracts: [
+                          FAS 106 413 581 ] ]
+                               a. Contract provides only prospective benefits (Case A).
+                               b. Contract provides retroactive benefits (Case B).
+
+
+   · · > Case A: Contract Provides Only Prospective Benefits
+
+   710-10-55-8            [ An entity enters into a deferred compensation contract with an employee at the date of hire. The
+                          contract provides for a payment of $150,000 upon termination of employment following a minimum 3-
+                          year service period. The contract provides for a compensation adjustment for each year of service
+                          after the third year determined by multiplying $150,000 by the entity's return on equity for the year.
+                          Also, each year after the third year of service, interest at 10 percent per year is credited on the
+                          amount due under the contract at the beginning of that year. Accordingly, a liability of $150,000 is
+                          accrued in a systematic and rational manner over the employee's first 3 years of service. Following
+                          the third year of service, the accrued liability is adjusted annually for accrued interest and the
+                          increased or decreased compensation based on the entity's return on equity for that year. At the end
+                          of the third year and each subsequent year of the employee's service, the amount accrued equals the
+                          then present value of the benefit expected to be paid in exchange for the employee's service rendered
+                          to that date. [ FAS 106 414 582 ] ]
+
+   · · > Case B: Contract Provides Retroactive Benefits
+
+   710-10-55-9            [ An entity enters into a contract with a 55-year-old employee who has worked 5 years for the entity.
+                          The contract states that in exchange for past and future services and for serving as a consultant for 2
+                          years after the employee retires, the entity will pay an annual pension of $20,000 to the employee,
+                          commencing immediately upon the employee's retirement. It is expected that the future benefits to
+                          the employer from the consulting services will be minimal. Consequently, the actuarial present value
+                          of a lifetime annuity of $20,000 that begins at the employee's expected retirement date is accrued at
+                          the date the contract is entered into because the employee is fully eligible for the pension benefit at
+                          that date. [ FAS 106 415 583 ] ]
+
+   710-10-55-10           [ If the terms of the contract described in the preceding paragraph had stated that the employee is
+                          entitled to the pension benefit only if the sum of the employee's age and years of service equal 70 or
+                          more at the date of retirement, the employee would be fully eligible for the pension benefit at age 60,
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 15/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+                          after rendering 5 more years of service. The actuarial present value of a lifetime annuity of $20,000
+                          that begins at the expected retirement date would be accrued in a systematic and rational manner
+                          over the 5-year period from the date the contract is entered into to the date the employee is fully
+                          eligible for the pension benefit. [ FAS 106 416 584 ] ]
+
+
+
+
+   60 Relationships
+
+              General Note:The Relationships Section contains links to guidance that may be helpful to, but not required
+              by, a user of the Subtopic. This Section may not be all-inclusive. The relationship items are organized
+              according to the Topic structure in the Codification.
+
+
+
+
+   General
+   > Compensation—Nonretirement Postemployment Benefits
+
+   710-10-60-1            [ For guidance on special termination benefits or contractual termination benefits, see Topic 712. [
+                          FAS 088 15 45.2.1 ] ]
+
+   710-10-60-2            [ For guidance on the determination of whether assets of a trust qualify as plan assets in the event of
+                          the employer's bankruptcy, see paragraph 715-60-55-26. [ EITF 93-03 DISCUSSION 8 ] ]
+
+   710-10-60-3            [ For guidance on whether plan assets include the assets of a rabbi trust, see paragraph 715-60-55-
+                          27. [ QA 106 36 118 ] ]
+
+
+   > Business Combinations and Reorganizations
+
+   710-10-60-4            [ For guidance on the accounting for the liability for contractual termination benefits and curtailment
+                          losses under employee benefit plans that will be triggered by the consummation of a business
+                          combination, see paragraphs 805-20-55-50 through 55-51. [ EITF 96-05 DISCUSSION 14 ] ]
+
+
+
+
+   S15 Scope and Scope Exceptions
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 16/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   > Lump-Sum Payment Under Union Contracts
+
+   710-10-S15-1           [ See paragraph 710-10-S99-1, SEC Observer Comment: Lump-Sum Payments Under Union Contracts,
+                          for SEC Staff views on the scope to which paragraph 710-10-25-13 applies. [ EITF 88-
+                          23 DISCUSSION 11.1 ] ]
+
+
+
+
+   S25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   > Lump-Sum Payment Under Union Contracts
+
+   710-10-S25-1           [ See paragraph 710-10-S99-1, SEC Observer Comment: Lump-Sum Payments Under Union Contracts,
+                          for SEC Staff views on deferral of lump-sum payments made under union contracts. [ EITF 88-
+                          23 DISCUSSION 11.2 ] ]
+
+
+
+
+   S99 SEC Materials
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 17/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+              General Note:As more fully described in About the Codification, the Codification includes selected SEC and
+              SEC Staff content for reference by public companies. The Codification does not replace or affect how the
+              SEC or SEC Staff issues or updates SEC content. SEC Staff content does not constitute Commission-
+              approved rules or interpretations of the SEC.
+
+
+
+
+   General
+   > SEC Staff Guidance
+
+   · > Comments Made by SEC Observer at Emerging Issues Task Force (EITF) Meetings
+
+   · · > SEC Observer Comment: Lump-Sum Payments Under Union Contracts
+
+   710-10-S99-1           The following is the text of SEC Observer Comment: Lump-Sum Payments Under Union Contracts.
+                               [ Deferral of a lump-sum payment under a union contract in accordance with paragraph 710-10-
+                               25-13 is appropriate only when there is no evidence whatsoever that the payment might be
+                               related to past services. [ EITF 88-23 DISCUSSION 11.2 ] ]
+
+
+
+
+   710 Compensation—General
+    908 Airlines
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 18/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+   710-908-05-1           Section not used.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   710-908-15-1           Section not used.
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   710-908-25-1           Section not used.
+
+
+
+
+   30 Initial Measurement
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 19/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+              General Note:The Initial Measurement Section provides guidance on the criteria and amounts used to
+              measure a particular item at the date of initial recognition.
+
+
+
+
+   General
+   710-908-30-1           Section not used.
+
+
+
+   710 Compensation—General
+    980 Regulated Operations
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   710-980-05-1           This Subtopic provides guidance for compensation-related costs for entities with regulated operations.
+
+
+
+
+   15 Scope and Scope Exceptions
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 20/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   > Overall Guidance
+
+   710-980-15-1           This Subtopic follows the same Scope and Scope Exceptions as outlined in the Overall Subtopic, see
+                          Section 980-10-15.
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Allowable Costs
+
+
+                          [ All costs for which revenue is intended to provide recovery. Those costs can be actual or estimated.
+                          In that context, allowable costs include interest cost and amounts provided for earnings on
+                          shareholders' investments. [ FAS 071 1 63 ] ]
+
+
+
+
+   25 Recognition
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 21/22
+ 8/20/2026, 12:19 AM                                                                                           Combine Sections - 710 Compensation—General
+
+
+
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   > Compensated Absences
+
+   710-980-25-1           [ Topic 710 specifies criteria for accrual of a liability for employees' compensation for future
+                          absences. For rate-making purposes, compensation for employees' absences may be included in
+                          allowable costs when the compensation is paid. [ FAS 071 48 194 ] ]
+
+   710-980-25-2           [ The liability, if any, shall be accrued in accordance with Topic 710 because rate actions of the
+                          regulator cannot eliminate obligations that were not imposed by the regulator (see paragraph 980-
+                          405-40-1). By including the accrued compensation in future allowable costs on an as-paid basis, the
+                          regulator provides reasonable assurance of the existence of an asset. The asset is the probable
+                          future benefit (increased revenue) that will result from the regulatory treatment of the subsequent
+                          payment of the liability (see paragraph 980-340-25-1). Accordingly, the entity also shall record the
+                          asset that results from the regulator's actions. [ FAS 071 49 195 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 22/22
+

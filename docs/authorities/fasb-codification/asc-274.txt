@@ -1,0 +1,1057 @@
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   Presentation
+
+
+
+   274 Personal Financial Statements
+    10 Overall
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   274-10-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph        Action          Accounting Standards Update                                      Date
+                           274-10-50-
+                                            Amended         Accounting Standards Update No. 2016-02                          02/25/2016
+                           2
+                           274-10-55-
+                                            Amended         Accounting Standards Update No. 2015-10                          06/12/2015
+                           11
+                           274-10-65-
+                                               Added             Accounting Standards Update No. 2015-10                     06/12/2015
+                           1
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     1/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   General
+   274-10-05-1            This Subtopic addresses personal financial statements. [ Personal financial statements are prepared
+                          for individuals either to formally organize and plan their financial affairs in general or for specific
+                          purposes, such as obtaining of credit, income tax planning, retirement planning, gift and estate
+                          planning, or public disclosure of their financial affairs. Users of personal financial statements rely on
+                          them in determining whether to grant credit, in assessing the financial activities of individuals, in
+                          assessing the financial affairs of public officials and candidates for public office, and for similar
+                          purposes. [ SOP 82-1 1 5.2.1 ] ]
+
+
+   > Basis of Presentation of Personal Financial Statements
+
+   274-10-05-2            [ The primary focus of personal financial statements is a person's assets and liabilities, and the
+                          primary users of personal financial statements normally consider estimated current value information
+                          to be more relevant for their decisions than historical cost information. Lenders require estimated
+                          current value information to assess collateral, and most personal loan applications require estimated
+                          current value information. Estimated current values are required for estate, gift, and income tax
+                          planning, and estimated current value information about assets is often required in federal and state
+                          filings of candidates for public office. [ SOP 82-1 3 7 ] ]
+
+   274-10-05-3            [ This Subtopic provides guidance on how the estimated current values of assets and the estimated
+                          current amounts of liabilities are determined and applied in the preparation and presentation of
+                          personal financial statements. [ SOP 82-1 4 8.2.2 ] ]
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   > Entities
+
+   274-10-15-1            [ The guidance in this Subtopic applies to the following entities: [ SOP 82-1 1 5.1 ] ]
+                              a. [ All individuals [ SOP 82-1 1 5.2.1 ] ]
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     2/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                               b. [ All groups of related individuals (families). [ SOP 82-1 1 5.2.2.1 ] ]
+
+
+   > Other Considerations
+
+   274-10-15-2            [ Generally accepted accounting principles other than those discussed in this Subtopic may apply to
+                          personal financial statements. For example, Topic 450 provides guidance on accounting for
+                          contingencies and Topic 850 provides guidance on related-party disclosures. [ SOP 82-1 32 84 ] ]
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Estimated Current Value
+
+                          [ For an asset, the amount at which the item could be exchanged between a buyer and seller, each of
+                          whom is well informed and willing, and neither of whom is compelled to buy or sell. [ SOP 82-
+                          1 12 21.2.1 ] ]
+
+   Net Worth
+
+                          [ The difference between total assets and total liabilities, after deducting estimated income taxes on
+                          the differences between the estimated current values of assets and the estimated current amounts of
+                          liabilities and their tax bases. [ SOP 82-1 6 12.2.2.2.2.2 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     3/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+              recognition.
+
+
+
+
+   General
+   > The Methods of Presentation
+
+   274-10-25-1            [ Assets and liabilities shall be recognized on the accrual basis of accounting. [ SOP 82-1 7 16 ] ]
+
+
+
+   35 Subsequent Measurement
+
+              General Note:The Subsequent Measurement Section provides guidance on an entity's subsequent
+              measurement and subsequent recognition of an item. Situations that may result in subsequent changes to
+              carrying amount include impairment, credit losses, fair value adjustments, depreciation and amortization,
+              and so forth.
+
+
+
+
+   General
+   274-10-35-1            [ Personal financial statements shall present assets at their estimated current values and liabilities
+                          at their estimated current amounts at the date of the financial statements. [ SOP 82-1 4 8.1 ] ]
+
+   274-10-35-2            [ Paragraph 274-10-25-1 states that assets and liabilities shall be recognized on the accrual basis of
+                          accounting. [ SOP 82-1 7 16 ] ]
+
+   274-10-35-3            [ The methods used to determine the estimated current values of assets and the estimated current
+                          amounts of liabilities shall be followed consistently from period to period unless the facts and
+                          circumstances dictate a change to different methods. [ SOP 82-1 15 25 ] ]
+
+
+   > Assets
+
+   · > Receivables
+   274-10-35-4            [ Personal financial statements shall present receivables at the discounted amounts of cash the
+                          person estimates will be collected, using appropriate interest rates at the date of the financial
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     4/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                          statements. [ SOP 82-1 16 26 ] ]
+
+   · > Marketable Securities
+   274-10-35-5            [ Marketable securities include both debt and equity securities for which market quotations are
+                          available. The estimated current values of such securities are their quoted market prices. The
+                          estimated current values of securities traded on securities exchanges are the closing prices of the
+                          securities on the date of the financial statements (valuation date) if the securities were traded on that
+                          date. If the securities were not traded on that date but published bid and asked prices are available,
+                          the estimated current values of the securities shall be within the range of those prices. [ SOP 82-
+                          1 17 27 ] ]
+
+   · > Over-the-Counter Securities
+   274-10-35-6            [ For securities traded in the over-the-counter market, quotations of bid and asked prices are available
+                          from several sources, including the financial press, various quotation publications and financial
+                          reporting services, and individual broker-dealers. For those securities, the mean of the bid prices, of
+                          the bid and asked prices, or of the prices of a representative selection of broker-dealers quoting the
+                          securities may be used as the estimated current values. [ SOP 82-1 18 28 ] ]
+
+   274-10-35-7            [ An investor may hold a large block of the equity securities of an entity. A large block of stock might
+                          not be salable at the price at which a small number of shares were recently sold or quoted. Further, a
+                          large noncontrolling interest may be difficult to sell despite isolated sales of a small number of
+                          shares. However, a controlling interest may be proportionately more valuable than noncontrolling
+                          interests that were sold. Consideration of those factors may require adjustments to the price at which
+                          the security recently sold. Moreover, restrictions on the transfer of a security may also suggest the
+                          need to adjust the recent market price in determining the estimated current value. [ SOP 82-1 19 29 ]
+                          ]
+
+   · > Options
+   274-10-35-8            [ If published prices of options are unavailable, their estimated current values shall be determined on
+                          the basis of the values of the assets subject to option, considering such factors as the exercise
+                          prices and length of the option periods. [ SOP 82-1 20 31 ] ]
+
+   · > Life Insurance
+   274-10-35-9            [ The estimated current value of an investment in life insurance is the cash value of the policy less
+                          the amount of any loans against it. [ SOP 82-1 21 32 ] ]
+
+   · > Intangible Assets
+   274-10-35-10           [ Intangible assets shall be presented at the discounted amounts of projected cash receipts and
+                          payments arising from the planned use or sale of the assets if both the amounts and timing can be
+                          reasonably estimated. For example, a record of receipts under a royalty agreement may provide
+                          sufficient information to determine its estimated current value. The cost of a purchased intangible
+                          shall be used if no other information is available. [ SOP 82-1 25 42 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     5/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   · > Future Interests and Similar Assets
+   274-10-35-11           [ Nonforfeitable rights to receive future sums that have all the following characteristics shall be
+                          presented as assets at their discounted amounts: [ SOP 82-1 26 43 ] ]
+                              a. [ The rights are for fixed or determinable amounts. [ SOP 82-1 26 44 ] ]
+                               b. [ The rights are not contingent on the holder's life expectancy or the occurrence of a particular
+                               event, such as disability or death. [ SOP 82-1 26 45 ] ]
+                               c. [ The rights do not require future performance of service by the holder. [ SOP 82-1 26 46 ] ]
+                          Paragraph 274-10-55-7 identifies nonforfeitable rights that may have the preceding characteristics.
+
+
+   > Liabilities
+
+   · > Payables and Other Liabilities
+   274-10-35-12           [ Personal financial statements shall present payables and other liabilities at the discounted amounts
+                          of cash to be paid. The discount rate shall be the rate implicit in the transaction in which the debt was
+                          incurred. If, however, the debtor is able to discharge the debt currently at a lower amount, the debt
+                          shall be presented at the lower amount. [ SOP 82-1 27 55 ] ]
+
+   · > Noncancellable Commitments
+   274-10-35-13           [ Noncancellable commitments to pay future sums that have all the following characteristics shall be
+                          presented as liabilities at their discounted amounts: [ SOP 82-1 28 57 ] ]
+                              a. [ The commitments are for fixed or determinable amounts. [ SOP 82-1 28 58 ] ]
+                              b. [ The commitments are not contingent on others' life expectancies or the occurrence of a
+                              particular event, such as disability or death. [ SOP 82-1 28 59 ] ]
+                               c. [ The commitments do not require future performance of service by others. [ SOP 82-1 28 60 ]
+                               ]
+                          [ Noncancellable commitments that may have the preceding characteristics include fixed amounts of
+                          alimony for a definite future period and charitable pledges. [ SOP 82-1 28 61 ] ]
+
+   · > Income Taxes Payable
+   274-10-35-14           [ The liability for income taxes payable shall include unpaid income taxes for completed tax years and
+                          an estimated amount for income taxes accrued for the elapsed portion of the current tax year to the
+                          date of the financial statements. That estimate shall be based on the relationship of taxable income
+                          earned to date to total estimated taxable income for the year, net of taxes withheld or paid with
+                          estimated income tax returns. [ SOP 82-1 29 62 ] ]
+
+   · > Certain Estimated Income Taxes
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     6/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   274-10-35-15           [ A provision shall be made for estimated income taxes on the differences between the estimated
+                          current values of assets and the estimated current amounts of liabilities and their tax bases,
+                          including consideration of negative tax bases of tax shelters, if any. The provision shall be computed
+                          as if the estimated current values of all assets had been realized and the estimated current amounts
+                          of all liabilities had been liquidated on the statement date, using applicable income tax laws and
+                          regulations, considering recapture provisions and available carryovers. [ SOP 82-1 30 63.1 ] ] For
+                          related implementation guidance, see paragraph 274-10-55-1.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   274-10-45-1            [ Paragraph 274-10-35-1 states that personal financial statements shall present assets at their
+                          estimated current values and liabilities at their estimated current amounts at the date of the financial
+                          statements. [ SOP 82-1 4 8.1 ] ]
+
+   274-10-45-2            [ This Subtopic does not prohibit supplemental presentation of historical cost information. [ SOP 82-
+                          1 4 FN1 9.2 ] ]
+
+
+   > Reporting Entity
+
+   274-10-45-3            [ Personal financial statements may be prepared for any of the following: [ SOP 82-1 5 10.1 ] ]
+                               a. [ An individual [ SOP 82-1 5 10.2.1 ] ]
+                               b. [ A husband and wife [ SOP 82-1 5 10.2.2.1 ] ]
+                               c. [ A family. [ SOP 82-1 5 10.2.2.2 ] ]
+
+
+   > Form of Statements
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     7/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   274-10-45-4            [ Personal financial statements consist of all of the following: [ SOP 82-1 6 11 ] ]
+                              a. [ A statement of financial condition. A statement of financial condition is the basic personal
+                              financial statement and shall present all of the following: [ SOP 82-1 6 12.1 ] ]
+
+                                     1. [ Estimated current values of assets [ SOP 82-1 6 12.2.1 ] ]
+
+                                     2. [ Estimated current amounts of liabilities [ SOP 82-1 6 12.2.2.1 ] ]
+
+                                     3. [ Estimated income taxes on the differences between the estimated current values of
+                                     assets and the estimated current amounts of liabilities and their tax bases [ SOP 82-
+                                     1 6 12.2.2.2.1 ] ]
+
+                                     4. [ Net worth at a specified date. [ SOP 82-1 6 12.2.2.2.2.1 ] ]
+                               b. [ A statement of changes in net worth. [ SOP 82-1 6 13.1 ] ] [ The presentation of a
+                               statement of changes in net worth is optional. [ SOP 82-1 6 13.2.2.2.2.2.2.2.2.2.2.2.2.2 ] ] [ A
+                               statement of changes in net worth shall present all of the following: [ SOP 82-1 6 13.1 ] ]
+
+                                     1. [ Major sources of increases in net worth, including any of the following: [ SOP 82-
+                                     1 6 13.2.2.1 ] ]
+
+                                          i. [ Income [ SOP 82-1 6 13.2.2.2.1 ] ]
+
+                                          ii. [ Increases in the estimated current values of assets [ SOP 82-1 6 13.2.2.2.2.1 ] ]
+
+                                          iii. [ Decreases in the estimated current amounts of liabilities [ SOP 82-
+                                          1 6 13.2.2.2.2.2.1 ] ]
+
+                                          iv. [ Decreases in estimated income taxes on the differences between the estimated
+                                          current values of assets and the estimated current amounts of liabilities and their tax
+                                          bases. [ SOP 82-1 6 13.2.2.2.2.2.2.1 ] ]
+
+                                     2. [ Major sources of decreases in net worth, including any of the following: [ SOP 82-
+                                     1 6 13.2.2.2.2.2.2.2.1 ] ]
+
+                                          i. [ Expenses [ SOP 82-1 6 13.2.2.2.2.2.2.2.2.1 ] ]
+
+                                          ii. [ Decreases in the estimated current values of assets [ SOP 82-
+                                          1 6 13.2.2.2.2.2.2.2.2.2.1 ] ]
+
+                                          iii. [ Increases in the estimated current amounts of liabilities [ SOP 82-
+                                          1 6 13.2.2.2.2.2.2.2.2.2.2.1 ] ]
+
+                                          iv. [ Increases in estimated income taxes on the differences between the estimated
+                                          current values of assets and the estimated current amounts of liabilities and their tax
+                                          bases. [ SOP 82-1 6 13.2.2.2.2.2.2.2.2.2.2.2.1 ] ]
+                          [ Example 1 (paragraph 274-10-55-8) illustrates financial statements prepared based on the guidance
+                          in this Subtopic. [ SOP 82-1 6 15 ] ]
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     8/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   274-10-45-5            [ The presentation of comparative financial statements of the current period and one or more prior
+                          periods may sometimes be desirable. Such a presentation is more informative than the presentation
+                          of financial statements for only one period. The presentation of comparative financial statements is
+                          optional. [ SOP 82-1 6 14 ] ]
+
+
+   > Methods of Presentation
+
+   274-10-45-6            [ Paragraph 274-10-25-1 states that assets and liabilities shall be recognized on the accrual basis of
+                          accounting. [ SOP 82-1 7 16 ] ]
+
+   274-10-45-7            [ Assets and liabilities shall be presented by order of liquidity and maturity, without classification as
+                          current and noncurrent. [ SOP 82-1 8 17 ] ]
+
+   274-10-45-8            [ If personal financial statements are prepared for one of a group of joint owners of assets, the
+                          statements shall include only the person's interest as a beneficial owner, as determined under the
+                          property laws of the state having jurisdiction. If property is held in joint tenancy, as community
+                          property, or through a similar joint ownership arrangement, the legal status of the separate equities of
+                          the parties may not be evident. In that case, the person may require legal advice to determine
+                          whether an interest in the property shall be included among the person's assets and, if so, the proper
+                          allocation of the equity in the property under the applicable state laws. [ SOP 82-1 9 18 ] ]
+
+   274-10-45-9            [ Business interests that constitute a large part of a person's total assets shall be shown separately
+                          from other investments. The estimated current value of an investment in a separate entity, such as a
+                          closely held corporation, a partnership, or a sole proprietorship, shall be shown in one amount as an
+                          investment if the entity is marketable as a going concern. Assets and liabilities of the separate entity
+                          shall not be combined with similar personal items. [ SOP 82-1 10 19 ] ]
+
+   274-10-45-10           [ The estimated current values of assets and the estimated current amounts of liabilities of limited
+                          business activities not conducted in a separate business entity, such as an investment in real estate
+                          and a related mortgage, shall be presented as separate amounts, particularly if a large portion of the
+                          liabilities may be satisfied with funds from sources unrelated to the investment. [ SOP 82-1 11 20 ] ]
+
+
+   > Closely Held Businesses
+
+   274-10-45-11           [ The net investment in a business entity (not its assets and liabilities) shall be presented in the
+                          statement of financial condition. The net investment shall be presented at its estimated current value
+                          at the date of the financial statement. [ SOP 82-1 22 33.2.1 ] ]
+
+
+   > Certain Estimated Income Taxes
+
+   274-10-45-12           [ Estimated income taxes shall be presented between liabilities and net worth in the statement of
+                          financial condition. [ SOP 82-1 30 63.2.1 ] ]
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     9/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   > Adequate Disclosure
+
+   274-10-45-13           [ Personal financial statements shall include sufficient disclosures to make the statements
+                          adequately informative. The disclosures may be made in the body of the financial statements or in the
+                          notes to financial statements. [ SOP 82-1 31 64.1 ] ]
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   274-10-50-1            [ Paragraph 274-10-45-13 states that personal financial statements shall include sufficient
+                          disclosures to make the statements adequately informative. That paragraph states that the
+                          disclosures may be made in the body of the financial statements or in the notes to financial
+                          statements. [ SOP 82-1 31 64.1 ] ]
+
+   274-10-50-2            [ Personal financial statements disclosures shall include, but are not limited to, all of the following: [
+                          SOP 82-1 31 64.2 ] ]
+                               a. [ A clear indication of the individuals covered by the financial statements [ SOP 82-1 31 65 ] ]
+                               b. [ That assets are presented at their estimated current values and liabilities are presented at
+                               their estimated current amounts [ SOP 82-1 31 66 ] ]
+                               c. Either of the following:
+
+                                     1. [ The methods used in determining the estimated current values of major assets and the
+                                     estimated current amounts of major liabilities [ SOP 82-1 31 67.1 ] ]
+
+                                     2. [ The methods used in determining the major categories of assets and liabilities. [
+                                     SOP 82-1 31 67.2.1 ] ]
+                               d. [ Changes in item (c) methods from one period to the next [ SOP 82-1 31 67.2.2.2 ] ]
+                               e. [ If assets held jointly by the person and by others are included in the statements, the nature
+                               of the joint ownership [ SOP 82-1 31 68 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 10/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                               f. [ If the person's investment portfolio is material in relation to his or her other assets and is
+                               concentrated in one or a few companies or industries, the names of the entities or industries and
+                               the estimated current values of the securities [ SOP 82-1 31 69 ] ]
+                               g. [ If the person has a material investment in a closely held business, at least the following: [
+                               SOP 82-1 31 70 ] ]
+
+                                     1. [ The name of the entity and the person's percentage of ownership [ SOP 82-1 31 71 ] ]
+
+                                     2. [ The nature of the business [ SOP 82-1 31 72 ] ]
+
+                                     3. [ Summarized financial information about assets, liabilities, and results of operations for
+                                     the most recent year based on the financial statements of the business, including
+                                     information about the basis of presentation (for example, generally accepted accounting
+                                     principles, income tax basis, or cash basis) and any significant loss contingencies. [ SOP 82-
+                                     1 31 73 ] ]
+                               h. [ Descriptions of intangible assets and their estimated useful lives [ SOP 82-1 31 74 ] ]
+                               i. [ The face amount of life insurance the individuals own [ SOP 82-1 31 75 ] ]
+                               j. [ Nonforfeitable rights that do not have the characteristics discussed in paragraph 274-10-35-
+                               11, for example, pensions based on life expectancy [ SOP 82-1 31 76 ] ]
+                               k. [ All of the following tax information: [ SOP 82-1 31 77 ] ]
+
+                                     1. [ The methods and assumptions used to compute the estimated income taxes on the
+                                     differences between the estimated current values of assets and the estimated current
+                                     amounts of liabilities and their tax bases [ SOP 82-1 31 78.1 ] ]
+
+                                     2. [ A statement that the provision will probably differ from the amounts of income taxes that
+                                     might eventually be paid because those amounts are determined by the timing and the
+                                     method of disposal, realization, or liquidation and the tax laws and regulations in effect at the
+                                     time of disposal, realization, or liquidation [ SOP 82-1 31 78.2 ] ]
+
+                                     3. [ Unused operating loss and capital loss carryforwards [ SOP 82-1 31 79 ] ]
+
+                                     4. [ Other unused deductions and credits, with their expiration periods, if applicable [
+                                     SOP 82-1 31 80 ] ]
+
+                                     5. [ The differences between the estimated current values of major assets and the estimated
+                                     current amounts of major liabilities or categories of assets and liabilities and their tax bases
+                                     [ SOP 82-1 31 81 ] ]
+
+                                     6. [ The excess or deficit of the estimated current values of major assets or categories of
+                                     assets over their tax bases. [ SOP 82-1 35 115.1 ] ]
+                               l. [ Maturities, interest rates, collateral, and other pertinent details relating to receivables and
+                               debt [ SOP 82-1 31 82 ] ]
+                               m. [ Noncancellable commitments that do not have the characteristics discussed in paragraph
+                               274-10-35-13. [ SOP 82-1 31 83 ] ]
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 11/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   > Implementation Guidance
+
+   · > Estimated Current Value
+   274-10-55-1            This implementation guidance addresses estimating current value. [ Recent transactions involving
+                          similar assets and liabilities in similar circumstances ordinarily provide a satisfactory basis for
+                          determining the estimated current value of an asset and the estimated current amount of a liability. If
+                          recent sales information is unavailable, other methods that may be used include any of the following: [
+                          SOP 82-1 13 23.1 ] ]
+                               a. [ The capitalization of past or prospective earnings [ SOP 82-1 13 23.2.1 ] ]
+                               b. [ The use of liquidation values [ SOP 82-1 13 23.2.2.1 ] ]
+                               c. [ The adjustment of historical cost based on changes in a specific price index [ SOP 82-
+                               1 13 23.2.2.2.1 ] ]
+                               d. [ The use of appraisals [ SOP 82-1 13 23.2.2.2.2.1 ] ]
+                               e. [ The use of the discounted amounts of projected cash receipts and payments. [ SOP 82-
+                               1 13 23.2.2.2.2.2 ] ]
+
+
+   274-10-55-2            [ Costs of disposal, such as commissions, shall be considered in determining the estimated current
+                          value of an asset. [ SOP 82-1 12 21.2.2.1 ] ] [ The book value or cost of a person's share of the
+                          equity of a business adjusted for appraisals of specific assets, such as real estate or equipment, is
+                          sometimes used as the estimated current value. [ SOP 82-1 23 FN4 35 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 12/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   274-10-55-3            [ In determining the estimated current values of some assets (for example, works of art, jewelry,
+                          restricted securities, investments in closely held businesses, and real estate), the person may need to
+                          consult a specialist. [ SOP 82-1 14 24 ] ]
+
+   · · > Investment in a Closely Held Business
+
+   274-10-55-4            [ There is no one generally accepted procedure for determining the estimated current value of an
+                          investment in a closely held business. Several procedures or combinations of procedures may be
+                          used to determine the estimated current value of a closely held business, including any of the
+                          following: [ SOP 82-1 23 34.1 ] ]
+                               a. [ A multiple of earnings [ SOP 82-1 23 34.2.1 ] ]
+                               b. [ Liquidation value [ SOP 82-1 23 34.2.2.1 ] ]
+                               c. [ Reproduction value [ SOP 82-1 23 34.2.2.2.1 ] ]
+                               d. [ Appraisals [ SOP 82-1 23 34.2.2.2.2.1 ] ]
+                               e. [ Discounted amounts of projected cash receipts and payments [ SOP 82-1 23 34.2.2.2.2.2.1
+                               ]]
+                               f. [ Adjustments of book value or cost of the person's share of the equity of the business. [
+                               SOP 82-1 23 34.2.2.2.2.2.2.1 ] ]
+                          [ The book value or cost of a person's share of the equity of a business adjusted for appraisals of
+                          specific assets, such as real estate or equipment, is sometimes used as the estimated current value.
+                          [ SOP 82-1 23 FN4 35 ] ]
+
+   274-10-55-5            [ The owner of an interest in a closely held business may have entered into a buy-sell agreement that
+                          specifies the amount (or the basis of determining the amount) to be received in the event of
+                          withdrawal, retirement, or sale. If such an agreement exists, it shall be considered, but it does not
+                          necessarily determine estimated current value. Whatever procedure is used, the objective shall be to
+                          approximate the estimated current value. [ SOP 82-1 23 34.2.2.2.2.2.2.2 ] ]
+
+   · · > Real Estate (Including Leaseholds)
+
+   274-10-55-6            [ Information that may be used in determining the estimated current values of investments in real
+                          estate (including leaseholds) includes any of the following: [ SOP 82-1 24 36 ] ]
+                               a. [ Sales of similar property in similar circumstances [ SOP 82-1 24 37 ] ]
+                               b. [ The discounted amounts of projected cash receipts and payments relating to the property or
+                               the net realizable value of the property, based on planned courses of action, including leaseholds
+                               whose current rental value exceeds the rent in the lease [ SOP 82-1 24 38 ] ]
+                               c. [ Appraisals based on estimates of selling prices and selling costs obtained from independent
+                               real estate agents or brokers familiar with similar properties in similar locations [ SOP 82-1 24 39
+                               ]]
+                               d. [ Appraisals used to obtain financing [ SOP 82-1 24 40 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 13/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                               e. [ Assessed value for property taxes, including consideration of the basis for such
+                               assessments and their relationship to market values in the area. [ SOP 82-1 24 41 ] ]
+
+
+   · · > Future Interests and Similar Assets
+
+   274-10-55-7            This paragraph provides implementation guidance on the application of paragraph 274-10-35-11. [
+                          Nonforfeitable rights that may have those characteristics include all of the following: [ SOP 82-1 26 47
+                          ]]
+                               a. [ Guaranteed minimum portions of pensions [ SOP 82-1 26 48 ] ]
+                               b. [ Vested interests in pension or profit sharing plans [ SOP 82-1 26 49 ] ]
+                               c. [ Deferred compensation contracts [ SOP 82-1 26 50 ] ]
+                               d. [ Beneficial interests in trusts [ SOP 82-1 26 51 ] ]
+                               e. [ Remainder interests in property subject to life estates [ SOP 82-1 26 52 ] ]
+                               f. [ Annuities [ SOP 82-1 26 53 ] ]
+                               g. [ Fixed amounts of alimony for a definite future period. [ SOP 82-1 26 54 ] ]
+
+
+   > Illustrations
+
+   · > Example 1: Illustrative Financial Statements
+   274-10-55-8            This Example illustrates financial statements prepared following the guidance in this Subtopic.
+
+   · · > Statement of Financial Condition
+
+   274-10-55-9            Illustrative statements of financial condition follow.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 14/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                                                                                                                         [ [ SOP 82-1 34 87 ] ]
+
+
+
+
+                          [ The accompanying notes to financial statements (see paragraph 274-10-55-11) are an integral part
+                          of these financial statements. [ SOP 82-1 34 88 ] ]
+
+   · · > Statements of Changes in Net Worth
+
+   274-10-55-10           Illustrative statements of changes in net worth follow.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 15/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                                                                                                           [ [ SOP 82-1 34 89 ] ]
+
+
+
+
+                          [ The accompanying notes to financial statements (see paragraph 274-10-55-11) are an integral part
+                          of these financial statements. [ SOP 82-1 34 90 ] ]
+
+   · · > Notes to Financial Statements
+
+   274-10-55-11           [ Illustrative notes to financial statements follow. [ SOP 82-1 34 91 ] ]
+                               James and Jane Person—Notes to Financial Statements
+                               [ NOTE 1. The accompanying financial statements include the assets and liabilities of James and
+                               Jane Person. Assets are stated at their estimated current values, and liabilities at their estimated
+                               current amounts. [ SOP 82-1 34 93 ] ]
+                               [ NOTE 2. The estimated current values of marketable securities are either (a) their quoted
+                               closing prices or (b) for securities not traded on the financial statement date, amounts that fall
+                               within the range of quoted bid and ask prices. [ SOP 82-1 34 94 ] ]
+
+                                     [ Marketable securities consist of the following: [ SOP 82-1 34 95 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 16/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                                                                                                                [ [ SOP 82-1 34 96 ] ]
+
+
+
+
+                               [ NOTE 3. Jane Person owns options to acquire 4,000 shares of stock of Winner Corp. at an
+                               option price of $5 per share. The option expires on June 30, 19X5. The estimated current value
+                               its published selling price. [ SOP 82-1 34 97 ] ]
+                               [ NOTE 4. The investment in Kenbruce Associates is an 8 percent interest in a real estate limited
+                               partnership. The estimated current value is determined by the projected annual cash receipts and
+                               payments capitalized at a 12 percent rate. [ SOP 82-1 34 98 ] ]
+                               [ NOTE 5. James Person owns 50 percent of the common stock of Davekar Company, Inc. a retail
+                               mail order business. The estimated current value of the investment is determined by the
+                               provisions of a shareholders' agreement, which restricts the sale of the stock and, under certain
+                               conditions, requires the entity to repurchase the stock based on a price equal to the book value
+                               of the net assets plus an agreed amount for goodwill. At December 31, 19X3, the agreed amount
+                               for goodwill was $112,500, and at December 31, 19X2, it was $100,000. [ SOP 82-1 34 99 ] ]
+
+                                     [ A condensed balance sheet of Davekar Company, Inc. prepared in conformity with generally
+                                     accepted accounting principles, is summarized below: [ SOP 82-1 34 100 ] ]
+
+
+
+
+                                                                                                [ [ SOP 82-1 34 101 ] ]
+
+
+
+
+                                     [ The sales and net income for 19X3 were $10,500,000 and $125,000 and for 19X2 were
+                                     $9,700,000 and $80,000. [ SOP 82-1 34 102 ] ]
+                               [ NOTE 6. Jane Person is the beneficiary of a remainder interest in a testamentary trust under
+                               the will of the late Joseph Jones. The amount included in the accompanying statements is her
+                               remainder interest in the estimated current value of the trust assets, discounted at 10 percent. [
+                               SOP 82-1 34 103 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 17/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                               [ NOTE 7. At December 31, 19X3 and 19X2, James Person owned a $300,000 whole life
+                               insurance policy. [ SOP 82-1 34 104 ] ]
+                               [ NOTE 8. The estimated current value of the residence is [ SOP 82-1 34 105 ] ] [ the appraised
+                               value based on an estimate of selling price, net of estimated selling costs obtained from an
+                               independent real estate agent familiar with similar properties in similar locations. [ ASU 2015-
+                               10 13 ] ]
+                               [ NOTE 9. The estimated current values of personal effects and jewelry are the appraised values
+                               of those assets, determined by an independent appraiser for insurance purposes. [ SOP 82-
+                               1 34 106 ] ]
+                               [ NOTE 10. The mortgage (collateralized by the residence) is payable in monthly installments of
+                               $815 a month, including interest at 10 percent a year through 20Y8. [ SOP 82-1 34 107 ] ]
+                               [ NOTE 11. James Person has guaranteed the payment of loans of Davekar Company, Inc., under
+                               a $500,000 line of credit. The loan balance was $300,000 at December 31, 19X3, and
+                               $400,000 at December 31, 19X2. [ SOP 82-1 34 108 ] ]
+                               [ NOTE 12. The estimated current amounts of liabilities at December 31, 19X3, and December
+                               31, 19X2, equaled their tax bases. Estimated income taxes have been provided on the excess of
+                               the estimated current values of assets over their tax bases as if the estimated current values of
+                               the assets had been realized on the statement date, using applicable tax laws and regulations.
+                               The provision will probably differ from the amounts of income taxes that eventually might be paid
+                               because those amounts are determined by the timing and the method of disposal or realization
+                               and the tax laws and regulations in effect at the time of disposal or realization. [ SOP 82-
+                               1 34 109 ] ]
+
+                                     [ The estimated current values of assets exceeded their tax bases by $850,000 at
+                                     December 31, 19X3, and by $770,300 at December 31, 19X2. The excess of estimated
+                                     current values of major assets over their tax bases are: [ SOP 82-1 34 110 ] ]
+
+
+
+                                                                                                    [ [ SOP 82-1 34 111 ] ]
+
+
+
+   · · > Example 2: Computing the Excess of Values over Tax Bases and Related Taxes
+
+   274-10-55-12           [ This Example illustrates how to compute the excess of the estimated current values of assets over
+                          their tax bases and the provision for estimated income taxes on the excess. [ SOP 82-1 35 113 ] ]
+                          This Example uses the same information as in the illustrative financial statements in Example 1 (see
+                          paragraph 274-10-55-8). [ The provision for estimated income taxes should also reflect tax
+                          consequences that result from differences between the estimated current amounts of liabilities and
+                          their tax base. [ SOP 82-1 35 114 ] ]
+
+   274-10-55-13           [ Paragraph 274-10-50-2(k)(6) requires that the excess or deficit of the estimated current values of
+                          major assets or categories of assets over their tax bases be disclosed. [ SOP 82-1 35 115.1 ] ] [
+                          That paragraph also requires that differences between the estimated current amounts of major
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 18/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+                          liabilities or categories of liabilities and their tax bases also be disclosed. [ SOP 82-1 35 FN2 116 ] ]
+                          [ Paragraph 274-10-45-12 requires that the amount of estimated income taxes be presented in the
+                          statement of financial condition between liabilities and net worth. [ SOP 82-1 30 63.2.1 ] ]
+
+   274-10-55-14           [ The assumptions and the tax basis information used in computing the excess of the estimated
+                          current values of assets over their tax bases and the estimated income taxes on the excess depend
+                          on the facts, circumstances, tax laws and regulations, and assumptions that apply to the individual or
+                          individuals for whom the financial statements are prepared. The facts, circumstances, tax laws and
+                          regulations, and assumptions used in the following are illustrative only. [ SOP 82-1 35 117 ] ]
+
+
+
+
+                                                                                                                                     [ [ SOP 82-
+
+
+
+
+                               1 35 118 ] ]
+
+
+
+
+   65 Transition and Open Effective Date
+   Information
+
+              General Note:The Transition Section contains a description of the required transition provisions and a list of
+              the related paragraphs that have been modified. This Section will retain the transition content during the
+              transition period. After the transition period, the transition content will be removed yet will be available in
+              archived versions of the Section.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 19/20
+ 8/20/2026, 12:11 AM                                                                                    Combine Sections - 274 Personal Financial Statements
+
+
+
+
+   General
+   274-10-65-1            Paragraph superseded on 07/05/2017 after the end of the transition period stated in Accounting
+                          Standards Update No. 2015-10, Technical Corrections and Improvements.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 20/20
+

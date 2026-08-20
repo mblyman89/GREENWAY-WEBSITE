@@ -1,0 +1,1829 @@
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   Revenue
+
+
+
+   610 Other Income
+   610 Other Income
+    10 Overall
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   610-10-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph        Action          Accounting Standards Update                                      Date
+                           Contract         Added           Accounting Standards Update No. 2014-09                          05/28/2014
+                           Customer            Added             Accounting Standards Update No. 2014-09                     05/28/2014
+                           Revenue             Added             Accounting Standards Update No. 2014-09                     05/28/2014
+                           610-10-05-
+                                               Amended           Accounting Standards Update No. 2016-02                     02/25/2016
+                           1
+                           610-10-05-
+                                               Added             Accounting Standards Update No. 2014-09                     05/28/2014
+                           1
+                           610-10-05-
+                                               Added             Accounting Standards Update No. 2014-09                     05/28/2014
+                           2
+                           610-10-15-
+                                               Added             Accounting Standards Update No. 2014-09                     05/28/2014
+                           1
+                           610-10-15-
+                                               Added             Accounting Standards Update No. 2014-09                     05/28/2014
+                           2
+
+
+
+
+   05 Overview and Background
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     1/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   610-10-05-1            [ The Other Income Topic specifies standards of financial accounting and reporting for income
+                          recognized that is not in a contract with a customer within the scope of Topic 606 on revenue from
+                          contracts with customers, other Topics (such as Topic 842 on leases and Topic 944 on insurance), or
+                          in accordance with other revenue or income recognition guidance. [ ASU 2014-09 147 ] ]
+
+   610-10-05-2            [ This Topic includes the following Subtopics: [ ASU 2014-09 147 ] ]
+                               a. [ Overall [ ASU 2014-09 147 ] ]
+                               b. [ Gains and Losses from the Derecognition of Nonfinancial Assets [ ASU 2014-09 147 ] ]
+                               c. [ Gains and Losses on Involuntary Conversions. [ ASU 2014-09 147 ] ]
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+   General
+   > Overall Guidance
+
+   610-10-15-1            [ The scope Section of the Overall Subtopic establishes the pervasive scope for the Other Income
+                          Topic. [ ASU 2014-09 147 ] ]
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     2/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   > Entities
+
+   610-10-15-2            [ The guidance in this Topic applies to all entities. [ ASU 2014-09 147 ] ]
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Contract
+
+
+                          [ An agreement between two or more parties that creates enforceable rights and obligations. [
+                          ASU 2014-09 5 ] ]
+
+
+   Customer
+
+
+                          [ A party that has contracted with an entity to obtain goods or services that are an output of the
+                          entity's ordinary activities in exchange for consideration. [ ASU 2014-09 9 ] ]
+
+
+   Revenue
+
+
+                          [ Inflows or other enhancements of assets of an entity or settlements of its liabilities (or a
+                          combination of both) from delivering or producing goods, rendering services, or other activities that
+                          constitute the entity's ongoing major or central operations. [ ASU 2014-09 9 ] ]
+
+
+
+
+   610 Other Income
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     3/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+      20 Gains and Losses from the Derecognition
+      of Nonfinancial Assets
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   610-20-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragrap
+                                         Action             Accounting Standards Update                                      Date
+                           h
+                           Busines
+                                         Amended            Accounting Standards Update No. 2017-01                          01/05/2017
+                           s
+                           Busines
+                                         Added              Accounting Standards Update No. 2014-09                          05/28/2014
+                           s
+                           Cash          Added              Accounting Standards Update No. 2017-05                          02/22/2017
+                           Cash
+                           Equivale      Added              Accounting Standards Update No. 2017-05                          02/22/2017
+                           nts
+                           Contract      Added              Accounting Standards Update No. 2014-09                          05/28/2014
+                           Contract
+                                         Added              Accounting Standards Update No. 2017-05                          02/22/2017
+                           Asset
+                           Contract
+                                         Added              Accounting Standards Update No. 2017-05                          02/22/2017
+                           Liability
+                           Custome
+                                         Added              Accounting Standards Update No. 2014-09                          05/28/2014
+                           r
+                           Disposal
+                                         Added              Accounting Standards Update No. 2014-09                          05/28/2014
+                           Group
+                           In
+                           Substan
+                           ce
+                                         Added              Accounting Standards Update No. 2017-05                          02/22/2017
+                           Nonfinan
+                           cial
+                           Asset
+                           Intangibl
+                                         Added              Accounting Standards Update No. 2017-05                          02/22/2017
+                           e Assets
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     4/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                           Joint
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           Venture
+                           Legal
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           Entity
+                           Noncont
+                           rolling          Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           Interest
+                           Nonprofi
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           t Activity
+                           Parent           Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           Perform
+                           ance
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           Obligatio
+                           n
+                           Revenue          Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           Subsidia
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           ry
+                           Transacti
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           on Price
+                           Variable
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           Interests
+                           610-20-
+                                            Amended              Accounting Standards Update No. 2017-05                     02/22/2017
+                           05-1
+                           610-20-
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           05-1
+                           610-20-
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           05-2
+                           610-20-
+                           15-1
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           through
+                           15-3
+                           610-20-
+                                            Amended              Accounting Standards Update No. 2017-05                     02/22/2017
+                           15-2
+                           610-20-
+                                            Amended              Accounting Standards Update No. 2017-05                     02/22/2017
+                           15-3
+                           610-20-
+                                            Amended              Accounting Standards Update No. 2016-02                     02/25/2016
+                           15-3
+                           610-20-
+                                            Added                Accounting Standards Update No. 2025-07                     09/29/2025
+                           15-3A
+                           610-20-
+                                            Amended              Maintenance Update 2021-02                                  01/19/2021
+                           15-4
+                           610-20-
+                           15-4
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           through
+                           15-10
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     5/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                           610-20-
+                                            Amended              Accounting Standards Update No. 2017-05                     02/22/2017
+                           25-1
+                           610-20-
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           25-1
+                           610-20-
+                           25-2
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           through
+                           25-7
+                           610-20-
+                                            Superseded           Accounting Standards Update No. 2017-05                     02/22/2017
+                           32-1
+                           610-20-
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           32-1
+                           610-20-
+                           32-2
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           through
+                           32-6
+                           610-20-
+                                            Superseded           Accounting Standards Update No. 2017-05                     02/22/2017
+                           40-1
+                           610-20-
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           40-1
+                           610-20-
+                                            Superseded           Accounting Standards Update No. 2017-05                     02/22/2017
+                           40-2
+                           610-20-
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           40-2
+                           610-20-
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           45-1
+                           610-20-
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           45-2
+                           610-20-
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           45-3
+                           610-20-
+                                            Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           50-1
+                           610-20-
+                           55-1
+                                            Amended              Accounting Standards Update No. 2017-05                     02/22/2017
+                           through
+                           55-4
+                           610-20-
+                           55-1
+                                            Added                Accounting Standards Update No. 2014-09                     05/28/2014
+                           through
+                           55-4
+                           610-20-          Added                Accounting Standards Update No. 2017-05                     02/22/2017
+                           55-5
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     6/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                           through
+                           55-19
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   610-20-05-1            [ This Subtopic provides guidance on the recognition of gains and losses on transfers of nonfinancial
+                          assets and in substance nonfinancial assets to counterparties that are not customers. Although the
+                          guidance in this Subtopic applies to contracts with noncustomers, it refers to revenue recognition
+                          principles in Topic 606 on revenue from contracts with customers. [ ASU 2017-05 4 ] ]
+
+   610-20-05-2            [ The term transfer in this Subtopic is used broadly and includes sales and situations in which a
+                          parent transfers ownership interests (or variable interests) in a consolidated subsidiary or other
+                          changes in facts and circumstances that result in the derecognition of nonfinancial assets or in
+                          substance nonfinancial assets that do not constitute a business. For example, an entity may lose
+                          control of nonfinancial assets or in substance nonfinancial assets because of the expiration or
+                          termination of an existing contractual arrangement, a dilution event, a government action, or upon
+                          default of a subsidiary's nonrecourse debt. An entity also may lose control of nonfinancial assets or in
+                          substance nonfinancial assets by contributing those assets to a joint venture or other noncontrolled
+                          investee. [ ASU 2017-05 4 ] ]
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     7/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   General
+   > Entities
+
+   610-20-15-1            [ The guidance in this Subtopic applies to all entities. [ ASU 2014-09 149 ] ]
+
+   > Transactions
+
+   610-20-15-2            [ Except as described in paragraph 610-20-15-4, the guidance in this Subtopic applies to gains or
+                          losses recognized upon the derecognition of nonfinancial assets and in substance nonfinancial
+                          assets. Nonfinancial assets within the scope of this Subtopic include intangible assets, land,
+                          buildings, or materials and supplies and may have a zero carrying value. In substance nonfinancial
+                          assets are described in paragraphs 610-20-15-5 through 15-8. [ ASU 2017-05 5 ] ]
+                               a. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+                               b. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+
+
+   610-20-15-3            [ The guidance in this Subtopic applies to a transfer of an ownership interest (or a variable interest) in
+                          a consolidated subsidiary (that is not a business or nonprofit activity) only if all of the assets in the
+                          subsidiary are nonfinancial assets and/or in substance nonfinancial assets. [ ASU 2017-05 5 ] ]
+                               a. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+                               b. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+                               c. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+                               d. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+                               e. Subparagraph superseded by Accounting Standards Update No. 2017-05.
+
+
+   610-20-15-3A
+                                PENDING CONTENT
+
+
+                            Transition Date:        December 16, 2026;             December 16, 2026           Transition Guidance: 606-10-
+                            65-3
+                            [ An entity shall apply the guidance in this Subtopic, including the guidance on noncash
+                            consideration in paragraphs 610-20-32-3(a)(4) and 610-20-32-4, to a contract with share-based
+                            noncash consideration (for example, shares, share options, or other equity instruments) from a
+                            counterparty for the transfer of nonfinancial assets or in substance nonfinancial assets. The
+                            guidance in other Topics (including Topic 815 on derivatives and hedging and Topic 321 on equity
+                            securities) does not apply to share-based noncash consideration from a counterparty for the
+                            transfer of nonfinancial assets or in substance nonfinancial assets unless and until the entity’s
+                            right to receive or retain the share-based noncash consideration is unconditional under this
+                            Subtopic. To assess whether the right is unconditional under this Subtopic, only the contract
+                            terms that relate to the entity’s transfer of nonfinancial assets or in substance nonfinancial
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     8/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                            assets (or a specific outcome of the entity’s transfer) within the scope of this Subtopic are
+                            evaluated. The determination of whether the right is unconditional is consistent with the guidance
+                            in paragraph 606-10-45-4, which states that a right to consideration is unconditional if only the
+                            passage of time is required before payment of that consideration is due. [ ASU 2025-07 7 ] ]
+
+
+   610-20-15-4            [ The guidance in this Subtopic does not apply to the following: [ ASU 2014-09 149 ] ]
+                              a. [ A transfer of a nonfinancial asset or an in substance nonfinancial asset in a contract with a
+                              customer, see Topic 606 on revenue from contracts with customers [ ASU 2014-09 149 ] ]
+                               b. [ A transfer of a subsidiary or group of assets that constitutes a business or nonprofit activity,
+                               see Section 810-10-40 on consolidation [ ASU 2014-09 149 ] ]
+                               c. [ Sale and leaseback transactions within the scope of Subtopic 842-40 on leases [ ASU 2014-
+                               09 149 ] ]
+                               d. [ A conveyance of oil and gas mineral rights within the scope of Subtopic 932-360 on
+                               extractive activities—oil and gas [ ASU 2014-09 149 ] ]
+                               e. [ A transaction that is entirely accounted for in accordance with Topic 860 on transfers and
+                               servicing (for example, a transfer of investments accounted for under Topic 320 on investments—
+                               debt securities, Topic 321 on investments—equity securities, Topic 323 on investments—equity
+                               method and joint ventures, Topic 325 on investments—other, Topic 815 on derivatives and
+                               hedging, and Topic 825 on financial instruments) [ ASU 2017-05 5 ] ]
+                               f. [ A transfer of nonfinancial assets that is part of the consideration in a business combination
+                               within the scope of Topic 805 on business combinations, see paragraph 805-30-30-8 [ ASU 2017-
+                               05 5 ] ]
+                               g. [ A nonmonetary transaction within the scope of Topic 845 on nonmonetary transactions [
+                               ASU 2017-05 5 ] ]
+                               h. [ A lease contract within the scope of Topic 842 on leases [ ASU 2017-05 5 ] ]
+                               i. [ An exchange of takeoff and landing slots within the scope of Subtopic 908-350 on airlines—
+                               intangibles [ ASU 2017-05 5 ] ]
+                               j. [ A contribution of cash and other assets, including a promise to give, within the scope of
+                               Subtopic 720-25 on other expenses—contributions made or within the scope of Subtopic 958-
+                               605 on not-for-profit entities—revenue recognition [ ASU 2017-05 5 ] ]
+                               k. [ A transfer of an investment in a venture that is accounted for by proportionately consolidating
+                               the assets, liabilities, revenues, and expenses of the venture as described in paragraph 810-10-
+                               45-14 [ ASU 2017-05 5 ] ]
+                               l. [ A transfer of nonfinancial assets or in substance nonfinancial assets solely between entities
+                               or persons under common control, such as between a parent and its subsidiaries or between two
+                               subsidiaries of the same parent. [ ASU 2017-05 5 ] ]
+
+
+   > In Substance Nonfinancial Assets
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                     9/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-15-5            [ An in substance nonfinancial asset is a financial asset (for example, a receivable) promised to a
+                          counterparty in a contract if substantially all of the fair value of the assets (recognized and
+                          unrecognized) that are promised to the counterparty in the contract is concentrated in nonfinancial
+                          assets. If substantially all of the fair value of the assets that are promised to a counterparty in a
+                          contract is concentrated in nonfinancial assets, then all of the financial assets promised to the
+                          counterparty in the contract are in substance nonfinancial assets. For purposes of this evaluation,
+                          when a contract includes the transfer of ownership interests in one or more consolidated subsidiaries
+                          that is not a business, an entity shall evaluate the underlying assets in those subsidiaries. [
+                          ASU 2017-05 5 ] ]
+
+   610-20-15-6            [ When a contract includes the transfer of ownership interests in one or more consolidated
+                          subsidiaries that is not a business, and substantially all of the fair value of the assets promised to a
+                          counterparty in the contract is not concentrated in nonfinancial assets, an entity shall evaluate
+                          whether substantially all of the fair value of the assets promised to the counterparty in an individual
+                          subsidiary within the contract is concentrated in nonfinancial assets. If substantially all of the fair
+                          value of the assets in an individual subsidiary is concentrated in nonfinancial assets, then the
+                          financial assets in that subsidiary are in substance nonfinancial assets. (See Case C of Example 1 in
+                          paragraphs 610-20-55-9 through 55-10.) [ ASU 2017-05 5 ] ]
+
+   610-20-15-7            [ When determining whether substantially all of the fair value of the assets promised to a
+                          counterparty in a contract (or an individual consolidated subsidiary within a contract) is concentrated
+                          in nonfinancial assets, cash or cash equivalents promised to the counterparty shall be excluded. Also,
+                          any liabilities assumed or relieved by the counterparty shall not affect the determination of whether
+                          substantially all of the fair value of the assets transferred is concentrated in nonfinancial assets. [
+                          ASU 2017-05 5 ] ]
+
+   610-20-15-8            [ If all of the assets promised to a counterparty in an individual consolidated subsidiary within a
+                          contract are not nonfinancial assets and/or in substance nonfinancial assets, an entity shall apply the
+                          guidance in paragraph 810-10-40-3A(c) or 810-10-45-21A(b)(2) to determine the guidance applicable
+                          to that subsidiary. [ ASU 2017-05 5 ] ]
+
+
+   > Contracts Partially within the Scope of Other Topics
+
+   610-20-15-9            [ If the promises to a counterparty in a contract are not all nonfinancial assets or all nonfinancial
+                          assets and in substance nonfinancial assets, a contract may be partially within the scope of this
+                          Subtopic and partially within the scope of other Topics. For example, in addition to transferring
+                          nonfinancial assets and in substance nonfinancial assets that are within the scope of this Subtopic,
+                          an entity may issue a guarantee to the counterparty that is within the scope of Topic 460 on
+                          guarantees. An entity shall apply the guidance in paragraph 606-10-15-4 to determine how to
+                          separate and measure one or more parts of a contract that are within the scope of other Topics. (See
+                          also Case A of Example 1 in paragraphs 610-20-55-2 through 55-5 and Case C of Example 1 in
+                          paragraphs 610-20-55-9 through 55-10.) [ ASU 2017-05 5 ] ]
+
+
+   > Decision Tree
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 10/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-15-10           [ The following decision tree depicts the process for evaluating whether assets promised to a
+                          counterparty in a contract (or parts of a contract) shall be derecognized within the scope of this
+                          Subtopic. The decision tree is not intended as a substitute for the guidance in this Subtopic. [
+                          ASU 2017-05 5 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 11/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                                                                                                                              [ [ ASU 2017-05 5 ]
+
+
+
+
+                               ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 12/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   20 Glossary
+
+              General Note:The Master Glossary contains all terms identified as glossary terms throughout the
+              Codification. Clicking on any term in the Master Glossary will display where the term is used. The Master
+              Glossary may contain identical terms with different definitions, some of which may not be appropriate for a
+              particular Subtopic. For any particular Subtopic, users should only use the glossary terms included in the
+              particular Subtopic Glossary Section (Section 20).
+
+
+
+
+   Business
+
+
+                          [ Paragraphs 805-10-55-3A through 55-6 and 805-10-55-8 through 55-9 define what is considered a
+                          business. [ ASU 2017-01 2 ] ]
+
+
+   Cash
+
+
+                          [ Consistent with common usage, cash includes not only currency on hand but demand deposits with
+                          banks or other financial institutions. Cash also includes other kinds of accounts that have the general
+                          characteristics of demand deposits in that the customer may deposit additional funds at any time and
+                          also effectively may withdraw funds at any time without prior notice or penalty. All charges and credits
+                          to those accounts are cash receipts or payments to both the entity owning the account and the bank
+                          holding it. For example, a bank's granting of a loan by crediting the proceeds to a customer's demand
+                          deposit account is a cash payment by the bank and a cash receipt of the customer when the entry is
+                          made. [ FAS 095 7 51 ] ]
+
+
+   Cash Equivalents
+
+
+                          [ Cash equivalents are short-term, highly liquid investments that have both of the following
+                          characteristics: [ FAS 095 8 52 ] ]
+                              a. [ Readily convertible to known amounts of cash [ FAS 095 8 53 ] ]
+                               b. [ So near their maturity that they present insignificant risk of changes in value because of
+                               changes in interest rates. [ FAS 095 8 54 ] ]
+
+                          [ Generally, only investments with original maturities of three months or less qualify under that
+                          definition. [ FAS 095 8 55 ] ] [ Original maturity means original maturity to the entity holding the
+                          investment. For example, both a three-month U.S. Treasury bill and a three-year U.S. Treasury note
+                          purchased three months from maturity qualify as cash equivalents. However, a Treasury note
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 13/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          purchased three years ago does not become a cash equivalent when its remaining maturity is three
+                          months. [ FAS 095 8 56 ] ] [ Examples of items commonly considered to be cash equivalents are
+                          Treasury bills, commercial paper, money market funds, and federal funds sold (for an entity with
+                          banking operations). [ FAS 095 9 57.1 ] ]
+
+
+   Contract
+
+
+                          [ An agreement between two or more parties that creates enforceable rights and obligations. [
+                          ASU 2014-09 5 ] ]
+
+
+   Contract Asset
+
+
+                          [ An entity's right to consideration in exchange for goods or services that the entity has transferred to
+                          a customer when that right is conditioned on something other than the passage of time (for example,
+                          the entity's future performance). [ ASU 2014-09 5 ] ]
+
+
+   Contract Liability
+
+
+                          [ An entity's obligation to transfer goods or services to a customer for which the entity has received
+                          consideration (or the amount is due) from the customer. [ ASU 2014-09 5 ] ]
+
+
+   Corporate Joint Venture
+
+
+                          [ A corporation owned and operated by a small group of entities (the joint venturers) as a separate
+                          and specific business or project for the mutual benefit of the members of the group. [ APB 18 3 44.1
+                          ] ] [ A government may also be a member of the group. [ APB 18 3 44.2.1.1 ] ] [ The purpose of a
+                          corporate joint venture frequently is to share risks and rewards in developing a new market, product or
+                          technology; to combine complementary technological knowledge; or to pool resources in developing
+                          production or other facilities. [ APB 18 3 44.2.1.2.1 ] ] [ A corporate joint venture also usually
+                          provides an arrangement under which each joint venturer may participate, directly or indirectly, in the
+                          overall management of the joint venture. [ APB 18 3 44.2.1.2.2.1 ] ] [ Joint venturers thus have an
+                          interest or relationship other than as passive investors. [ APB 18 3 44.2.1.2.2.2 ] ] [ An entity that is
+                          a subsidiary of one of the joint venturers is not a corporate joint venture. [ APB 18 3 44.2.2.1.1 ] ] [
+                          The ownership of a corporate joint venture seldom changes, and its stock is usually not traded
+                          publicly. [ APB 18 3 44.2.2.1.2 ] ] [ A noncontrolling interest held by public ownership, however, does
+                          not preclude a corporation from being a corporate joint venture. [ APB 18 3 44.2.2.2 ] ]
+
+
+   Customer
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 14/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          [ A party that has contracted with an entity to obtain goods or services that are an output of the
+                          entity's ordinary activities in exchange for consideration. [ ASU 2014-09 9 ] ]
+
+
+   Disposal Group
+
+
+                          [ A disposal group for a long-lived asset or assets to be disposed of by sale or otherwise represents
+                          assets to be disposed of together as a group in a single transaction and liabilities directly associated
+                          with those assets that will be transferred in the transaction. [ FAS 144 4 104.1.2.2.2 ] ] [ A disposal
+                          group may include a discontinued operation along with other assets and liabilities that are not part of
+                          the discontinued operation. [ ASU 2014-08 3 ] ]
+
+
+   In Substance Nonfinancial Asset
+
+
+                          [ Paragraphs 610-20-15-5 through 15-8 define an in substance nonfinancial asset. [ ASU 2017-05 3
+                          ]]
+
+
+   Intangible Assets
+
+
+                          [ Assets (not including financial assets) that lack physical substance. (The term intangible assets is
+                          used to refer to intangible assets other than goodwill.) [ FAS 142 F1 641 ] ]
+
+
+   Joint Venture
+
+
+                          [ An entity owned and operated by a small group of businesses (the joint venturers) as a separate and
+                          specific business or project for the mutual benefit of the members of the group. A government may
+                          also be a member of the group. [ EITF 01-02 DISCUSSION 35.2.1 ] ] [ The purpose of a joint venture
+                          frequently is to share risks and rewards in developing a new market, product, or technology; to
+                          combine complementary technological knowledge; or to pool resources in developing production or
+                          other facilities. [ EITF 01-02 DISCUSSION 35.2.2.1 ] ] [ A joint venture also usually provides an
+                          arrangement under which each joint venturer may participate, directly or indirectly, in the overall
+                          management of the joint venture. Joint venturers thus have an interest or relationship other than as
+                          passive investors. [ EITF 01-02 DISCUSSION 35.2.2.2.1 ] ] [ An entity that is a subsidiary of one of
+                          the joint venturers is not a joint venture. [ EITF 01-02 DISCUSSION 35.2.2.2.2.1 ] ] [ The ownership
+                          of a joint venture seldom changes, and its equity interests usually are not traded publicly. A minority
+                          public ownership, however, does not preclude an entity from being a joint venture. [ EITF 01-
+                          02 DISCUSSION 35.2.2.2.2.2 ] ] [ As distinguished from a corporate joint venture, a joint venture is
+                          not limited to corporate entities. [ EITF 01-02 DISCUSSION 35.1 ] ]
+
+
+   Legal Entity
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 15/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          [ Any legal structure used to conduct activities or to hold assets. Some examples of such structures
+                          are corporations, partnerships, limited liability companies, grantor trusts, and other trusts. [
+                          FIN 46(R) 3 63.1 ] ]
+
+
+   Noncontrolling Interest
+
+
+                          [ The portion of equity (net assets) in a subsidiary not attributable, directly or indirectly, to a parent. A
+                          noncontrolling interest is sometimes called a minority interest. [ ARB 51 B1 79.4 ] ]
+
+
+   Nonprofit Activity
+
+
+                          [ An integrated set of activities and assets that is capable of being conducted and managed for the
+                          purpose of providing benefits, other than goods or services at a profit or profit equivalent, as a
+                          fulfillment of an entity's purpose or mission (for example, goods or services to beneficiaries,
+                          customers, or members). As with a not-for-profit entity, a nonprofit activity possesses characteristics
+                          that distinguish it from a business or a for-profit business entity. [ FAS 164 3(t) 3.3.2 ] ]
+
+
+   Parent
+
+
+                          [ An entity that has a controlling financial interest in one or more subsidiaries. (Also, an entity that is
+                          the primary beneficiary of a variable interest entity.) [ ARB 51 B1 79.6 ] ]
+
+
+   Performance Obligation
+
+
+                          [ A promise in a contract with a customer to transfer to the customer either: [ ASU 2014-09 5 ] ]
+                               a. [ A good or service (or a bundle of goods or services) that is distinct [ ASU 2014-09 5 ] ]
+                               b. [ A series of distinct goods or services that are substantially the same and that have the same
+                               pattern of transfer to the customer. [ ASU 2014-09 5 ] ]
+
+
+   Revenue
+
+
+                          [ Inflows or other enhancements of assets of an entity or settlements of its liabilities (or a
+                          combination of both) from delivering or producing goods, rendering services, or other activities that
+                          constitute the entity's ongoing major or central operations. [ ASU 2014-09 9 ] ]
+
+
+   Subsidiary
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 16/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          [ An entity, including an unincorporated entity such as a partnership or trust, in which another entity,
+                          known as its parent, holds a controlling financial interest. (Also, a variable interest entity that is
+                          consolidated by a primary beneficiary.) [ ARB 51 B1 79.7 ] ]
+
+
+   Transaction Price
+
+
+                          [ The amount of consideration to which an entity expects to be entitled in exchange for transferring
+                          promised goods or services to a customer, excluding amounts collected on behalf of third parties. [
+                          ASU 2014-09 5 ] ]
+
+
+   Variable Interests
+
+
+                          [ The investments or other interests that will absorb portions of a variable interest entity's (VIE's)
+                          expected losses or receive portions of the entity's expected residual returns are called variable
+                          interests. [ FIN 46(R) 6 101.1.2.1 ] ] [ Variable interests in a VIE are contractual, ownership, or other
+                          pecuniary interests in a VIE that change with changes in the fair value of the VIE's net assets
+                          exclusive of variable interests. Equity interests with or without voting rights are considered variable
+                          interests if the legal entity is a VIE and to the extent that the investment is at risk as described in
+                          paragraph 810-10-15-14. Paragraph 810-10-25-55 explains how to determine whether a variable
+                          interest in specified assets of a legal entity is a variable interest in the entity. Paragraphs 810-10-55-
+                          16 through 55-41 describe various types of variable interests and explain in general how they may
+                          affect the determination of the primary beneficiary of a VIE. [ FIN 46(R) 2 60 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+   General
+   610-20-25-1            [ To recognize a gain or loss from the transfer of nonfinancial assets or in substance nonfinancial
+                          assets within the scope of this Subtopic, an entity shall apply the guidance in Topic 810 on
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 17/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          consolidation and in Topic 606 on revenue from contracts with customers as described in paragraphs
+                          610-20-25-2 through 25-7. [ ASU 2017-05 6 ] ]
+
+
+   > Determining Whether an Entity Has a Controlling Financial
+   Interest
+
+   610-20-25-2            [ An entity shall first evaluate whether it has (or continues to have) a controlling financial interest in
+                          the legal entity that holds the nonfinancial assets and/or in substance nonfinancial assets by applying
+                          the guidance in Topic 810 on consolidation. For example, if a parent transfers ownership interests in a
+                          consolidated subsidiary, the parent shall evaluate whether it continues to have a controlling financial
+                          interest in that subsidiary. Similarly, when an entity transfers assets directly to a counterparty (or a
+                          legal entity formed by the counterparty), the entity shall evaluate whether it has a controlling financial
+                          interest in the counterparty (or the legal entity formed by the counterparty). [ ASU 2017-05 6 ] ]
+
+   610-20-25-3            [ If an entity determines it has (or continues to have) a controlling financial interest in the legal entity
+                          that holds the nonfinancial assets or in substance nonfinancial assets, it shall not derecognize those
+                          assets and shall apply the guidance in paragraphs 810-10-45-21A through 45-24. [ ASU 2017-05 6 ]
+                          ]
+
+   610-20-25-4            [ Any nonfinancial assets or in substance nonfinancial assets transferred that are held in a legal
+                          entity in which the entity does not have (or ceases to have) a controlling financial interest shall be
+                          further evaluated in accordance with the guidance in paragraphs 610-20-25-5 through 25-7. [
+                          ASU 2017-05 6 ] ]
+
+
+   > Applying Revenue Recognition Guidance
+
+   610-20-25-5            [ After applying the guidance in paragraphs 610-20-25-2 through 25-4, an entity shall next evaluate a
+                          contract in accordance with the guidance in paragraphs 606-10-25-1 through 25-8. If a contract does
+                          not meet all of the criteria in paragraph 606-10-25-1, an entity shall not derecognize the nonfinancial
+                          assets or in substance nonfinancial assets transferred, and it shall apply the guidance in paragraph
+                          350-10-40-3 to any intangible assets and the guidance in paragraph 360-10-40-3C to any property,
+                          plant, and equipment. An entity shall follow the guidance in paragraphs 606-10-25-6 through 25-8 to
+                          determine if and when a contract subsequently meets all of the criteria in paragraph 606-10-25-1. [
+                          ASU 2017-05 6 ] ]
+
+   610-20-25-6            [ Once a contract meets all of the criteria in paragraph 606-10-25-1, an entity shall identify each
+                          distinct nonfinancial asset and distinct in substance nonfinancial asset promised to a counterparty in
+                          accordance with the guidance in paragraphs 606-10-25-19 through 25-22. An entity shall derecognize
+                          each distinct asset when it transfers control of the asset in accordance with paragraph 606-10-25-30.
+                          In some cases, control of each asset may transfer at the same time such that an entity may not need
+                          to separate and allocate consideration to each distinct nonfinancial asset and in substance
+                          nonfinancial asset. That may be the case, for example, when a parent transfers ownership interests in
+                          a consolidated subsidiary that holds nonfinancial assets (or nonfinancial assets and in substance
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 18/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          nonfinancial assets) and ceases to have a controlling financial interest in the subsidiary in
+                          accordance with Topic 810. However, control of each asset may not transfer at the same time if the
+                          parent has control of some of the assets in accordance with paragraph 606-10-25-30 (for example,
+                          through repurchase agreements). [ ASU 2017-05 6 ] ]
+
+   610-20-25-7            [ For purposes of evaluating the indicators of the transfer of control in paragraph 606-10-25-30, if an
+                          entity has (or continues to have) a noncontrolling interest in the legal entity that holds the nonfinancial
+                          assets or in substance nonfinancial assets as a result of the transaction, the entity shall evaluate the
+                          point in time at which the legal entity holding the assets obtains (or has) control (for example, by
+                          evaluating whether the legal entity can direct the use of, and obtain substantially all of the benefits
+                          from, each distinct nonfinancial asset or in substance nonfinancial asset within it). (See Case A of
+                          Example 2 in paragraphs 610-20-55-11 through 55-14.) If the entity does not have a noncontrolling
+                          interest in the legal entity that holds the nonfinancial assets or in substance nonfinancial assets as a
+                          result of the transaction, it shall evaluate the point in time at which a counterparty (or counterparties,
+                          collectively) obtains control of the assets in the legal entity (for example, by evaluating whether a
+                          counterparty [or counterparties, collectively] can direct the use of, and obtain substantially all of the
+                          benefits from, each distinct nonfinancial asset or in substance nonfinancial asset within the legal
+                          entity). [ ASU 2017-05 6 ] ]
+
+
+
+
+   32 Measurement
+
+              General Note:The Measurement Section provides guidance on both the initial and subsequent measurement.
+              Specifically, this Section provides the criteria and amounts used to measure a particular item at the date of
+              initial recognition. In addition, this Section provides guidance on an entity's subsequent measurement and
+              subsequent recognition of an item. Situations that may result in subsequent changes to carrying amount
+              include impairment, fair value adjustments, depreciation and amortization, and so forth.
+
+
+
+
+   General
+   610-20-32-1            Paragraph superseded by Accounting Standards Update No. 2017-05.
+
+   610-20-32-2            [ When an entity meets the criteria to derecognize a distinct nonfinancial asset or a distinct in
+                          substance nonfinancial asset, it shall recognize a gain or loss for the difference between the amount
+                          of consideration measured and allocated to that distinct asset in accordance with paragraphs 610-20-
+                          32-3 through 32-6 and the carrying amount of the distinct asset. The amount of consideration
+                          promised in a contract that is included in the calculation of a gain or loss includes both the
+                          transaction price and the carrying amount of liabilities assumed or relieved by a counterparty. [
+                          ASU 2017-05 7 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 19/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-32-3            [ To determine the transaction price, an entity shall apply the following paragraphs in Topic 606 on
+                          revenue from contracts with customers: [ ASU 2014-09 149 ] ]
+                               a. [ Paragraphs 606-10-32-2 through 32-27 on determining the transaction price, including all of
+                               the following: [ ASU 2014-09 149 ] ]
+
+                                     1. [ Estimating variable consideration [ ASU 2014-09 149 ] ]
+
+                                     2. [ Constraining estimates of variable consideration [ ASU 2014-09 149 ] ]
+
+                                     3. [ The existence of a significant financing component [ ASU 2014-09 149 ] ]
+
+                                     4. [ Noncash consideration [ ASU 2014-09 149 ] ]
+
+                                     5. [ Consideration payable to a customer. [ ASU 2014-09 149 ] ]
+                               b. [ Paragraphs 606-10-32-42 through 32-45 on accounting for changes in the transaction price. [
+                               ASU 2014-09 149 ] ]
+
+
+   610-20-32-4            [ If an entity transfers control of a distinct nonfinancial asset or distinct in substance nonfinancial
+                          asset in exchange for a noncontrolling interest, the entity shall consider the noncontrolling interest
+                          received from the counterparty as noncash consideration and shall measure it in accordance with the
+                          guidance in paragraphs 606-10-32-21 through 32-24. Similarly, if a parent transfers control of a
+                          distinct nonfinancial asset or in substance nonfinancial asset by transferring ownership interests in a
+                          consolidated subsidiary but retains a noncontrolling interest in its former subsidiary, the entity shall
+                          consider the noncontrolling interest retained as noncash consideration and shall measure it in
+                          accordance with the guidance in paragraphs 606-10-32-21 through 32-24. (See Case A of Example 2
+                          in paragraphs 610-20-55-11 through 55-14.) [ ASU 2017-05 7 ] ]
+
+   610-20-32-5            [ If a counterparty promises to assume or relieve a liability of an entity in exchange for a transfer of
+                          nonfinancial assets or in substance nonfinancial assets within the scope of this Subtopic, the
+                          transferring entity shall include the carrying amount of the liability in the consideration used to
+                          calculate the gain or loss. Although a liability assumed or relieved by a counterparty shall be included
+                          in the consideration used to calculate a gain or loss, an entity shall not derecognize the liability until it
+                          has been extinguished in accordance with the guidance in paragraph 405-20-40-1 (see paragraph
+                          610-20-45-3 on how to present the liability if it is extinguished before or after the entity transfers
+                          control of the nonfinancial assets or in substance nonfinancial assets). If an entity transfers control of
+                          the nonfinancial assets or in substance nonfinancial assets before a liability is extinguished, it shall
+                          apply the guidance on constraining estimates of variable consideration in paragraph 606-10-32-11 to
+                          determine the carrying amount of the liability to be included in the gain or loss calculation. [
+                          ASU 2017-05 7 ] ]
+
+   610-20-32-6            [ An entity shall allocate the consideration calculated in accordance with the guidance in paragraphs
+                          610-20-32-2 through 32-5 to each distinct nonfinancial asset or in substance nonfinancial asset by
+                          applying the guidance in paragraphs 606-10-32-28 through 32-41. [ ASU 2017-05 7 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 20/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   40 Derecognition
+
+              General Note:The Derecognition Section provides guidance on determining whether and when an entity
+              should remove an item from the financial statements. For example, the entity would derecognize an asset
+              because it no longer has rights to the asset or it would derecognize a liability because it no longer has any
+              obligation.
+
+
+
+
+   General
+   610-20-40-1            Paragraph superseded by Accounting Standards Update No. 2017-05.
+
+   610-20-40-2            Paragraph superseded by Accounting Standards Update No. 2017-05.
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   610-20-45-1            [ See paragraph 360-10-45-5 for guidance on presentation of a gain or loss recognized on the sale of
+                          a long-lived asset (disposal group). [ ASU 2014-09 149 ] ]
+
+   610-20-45-2            [ When either party to a contract has performed, an entity shall apply the guidance in paragraphs 606-
+                          10-45-1 through 45-5 to present the relationship between the entity's performance and the
+                          counterparty's payment. [ ASU 2017-05 9 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 21/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-45-3            [ If an entity meets the criteria in paragraph 405-20-40-1 to derecognize a liability assumed (or
+                          relieved) by a counterparty before transferring control of a distinct nonfinancial asset, the liability shall
+                          be derecognized but no gain or loss shall be recognized. Instead, the entity shall record a contract
+                          liability, which represents consideration received before transferring control of the asset. If an entity
+                          transfers control of a distinct nonfinancial asset before meeting the criteria to derecognize a liability
+                          assumed by a counterparty, the entity shall recognize a contract asset to the extent the carrying
+                          amount of the liability is included in the calculation of the gain or loss. [ ASU 2017-05 9 ] ]
+
+
+
+
+   50 Disclosure
+
+              General Note:The Disclosure Section provides guidance regarding the disclosure in the notes to financial
+              statements. In some cases, disclosure may relate to disclosure on the face of the financial statements.
+
+
+
+
+   General
+   610-20-50-1            [ See paragraphs 360-10-50-3 through 50-3A for guidance on disclosure of a gain or loss recognized
+                          upon the derecognition of a long-lived asset (disposal group). [ ASU 2017-05 10 ] ]
+
+
+
+
+   55 Implementation Guidance and
+   Illustrations
+
+              General Note:The Implementation Guidance and Illustrations Section contains implementation guidance and
+              illustrations that are an integral part of the Subtopic. The implementation guidance and illustrations do not
+              address all possible variations. Users must consider carefully the actual facts and circumstances in relation
+              to the requirements of the Subtopic.
+
+
+
+
+   General
+   > Illustrations
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 22/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-55-1            [ The following Examples illustrate the guidance in this Subtopic. [ ASU 2014-09 149 ] ]
+
+   · > Example 1—Scope
+
+   · · > Case A—Nonfinancial Assets, In Substance Nonfinancial Assets, and a Guarantee
+
+   610-20-55-2            [ Seller enters into a contract to transfer real estate, the related operating leases, and accounts
+                          receivable to Buyer. Seller guarantees Buyer that the cash flows of the property will be sufficient to
+                          meet all of the operating needs of the property for two years after the sale. In the event that the cash
+                          flows are not sufficient, Seller is required to make a payment in the amount of the shortfall. [
+                          ASU 2017-05 11 ] ]
+
+   610-20-55-3            [ Seller concludes that the assets promised in the contract are not a business within the scope of
+                          Topic 810 on consolidation and are not an output of Seller's ordinary activities within the scope of
+                          Topic 606 on revenue from contracts with customers. In addition, assume that Seller concludes that
+                          substantially all of the fair value of the assets promised in the contract is concentrated in nonfinancial
+                          assets (that is, substantially all of the fair value is concentrated in the real estate and in-place lease
+                          intangible assets). Therefore, the accounts receivable promised in the contract are in substance
+                          nonfinancial assets. In accordance with the guidance in this Subtopic, all of the assets in the
+                          contract, including the accounts receivable, are within the scope of this Subtopic. [ ASU 2017-05 11 ]
+                          ]
+
+   610-20-55-4            [ Seller concludes that the guarantee, which is a liability of Seller, is within the scope of Topic 460 on
+                          guarantees. Therefore, Seller would apply the guidance in paragraph 606-10-15-4 to separate and
+                          measure the guarantee as described in paragraph 610-20-15-9. [ ASU 2017-05 11 ] ]
+
+   610-20-55-5            [ Seller's conclusions would be the same if it transferred the real estate, leases, and receivables by
+                          transferring ownership interests in a consolidated subsidiary. That is, Seller would still conclude that
+                          all of the assets in the subsidiary are nonfinancial assets and in substance nonfinancial assets within
+                          the scope of this Subtopic and that the guarantee is within the scope of Topic 460. [ ASU 2017-05 11
+                          ]]
+
+   · · > Case B—Nonfinancial Assets and Financial Assets
+
+   610-20-55-6            [ Entity X enters into a contract to transfer machinery and financial assets, both of which have
+                          significant fair value. Entity X concludes that the assets promised in the contract are not a business
+                          within the scope of Topic 810 and are not an output of the entity's ordinary activities within the scope
+                          of Topic 606. Entity X also concludes that substantially all of the fair value of the assets promised in
+                          the contract is not concentrated in nonfinancial assets. Therefore, the financial assets promised in
+                          the contract are not in substance nonfinancial assets. [ ASU 2017-05 11 ] ]
+
+   610-20-55-7            [ In accordance with the guidance in paragraph 610-20-15-9, Entity X should derecognize only the
+                          machinery in accordance with this Subtopic. Entity X should apply the guidance in paragraph 606-10-
+                          15-4 to separate and measure the financial assets. [ ASU 2017-05 11 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 23/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-55-8            [ If Entity X transfers the machinery and financial assets by transferring ownership interests in a
+                          consolidated subsidiary, it would still conclude that the financial assets are not in substance
+                          nonfinancial assets. As described in paragraph 610-20-15-8, if all of the assets promised to the
+                          counterparty in an individual consolidated subsidiary within a contract are not nonfinancial assets
+                          and/or in substance nonfinancial assets, those assets should not be derecognized in accordance with
+                          this Subtopic. Instead, Entity X should apply the guidance in paragraph 810-10-40-3A(c) or 810-10-45-
+                          21A(b)(2) to determine the guidance applicable to that subsidiary. [ ASU 2017-05 11 ] ]
+
+
+   · · > Case C—One Subsidiary That Holds Nonfinancial Assets and One Subsidiary That Holds Financial
+   Assets
+
+   610-20-55-9            [ Entity A enters into a contract to transfer ownership interests in two consolidated subsidiaries to a
+                          single counterparty. Subsidiary 1 consists entirely of nonfinancial assets, and Subsidiary 2 consists
+                          entirely of financial assets. Assume that the assets in Subsidiary 1 and Subsidiary 2 have an equal
+                          amount of fair value. Entity A concludes that the transaction is not the transfer of a business within
+                          the scope of Topic 810 and that the subsidiaries are not outputs of the entity's ordinary activities
+                          within the scope of Topic 606. [ ASU 2017-05 11 ] ]
+
+   610-20-55-10           [ Entity A first considers whether substantially all of the fair value of the assets promised to the
+                          counterparty in the contract is concentrated in nonfinancial assets. Because the contract includes the
+                          transfer of ownership interests in one or more consolidated subsidiaries, Entity A evaluates the
+                          underlying assets in those subsidiaries. Entity A concludes that because both the financial assets and
+                          nonfinancial assets have an equal amount of fair value, substantially all of the fair value of the assets
+                          promised to the counterparty in the contract is not concentrated in nonfinancial assets. Entity A next
+                          considers whether substantially all of the fair value of the assets within Subsidiary 1 or Subsidiary 2
+                          is concentrated in nonfinancial assets. Because the assets transferred within Subsidiary 1 are
+                          entirely nonfinancial assets, Entity A concludes that those assets are within the scope of this
+                          Subtopic. Entity A also concludes that the financial assets in Subsidiary 2 are not in substance
+                          nonfinancial assets and, therefore, are not within the scope of this Subtopic. Entity A should apply the
+                          guidance in paragraph 606-10-15-4 to separate and measure the financial assets in Subsidiary 2 from
+                          the nonfinancial assets in Subsidiary 1 that are derecognized within the scope of this Subtopic. [
+                          ASU 2017-05 11 ] ]
+
+   · > Example 2—Transfer of Control
+
+   · · > Case A—Control Transfers under Topics 810 and 606
+
+   610-20-55-11           [ Entity A owns 100 percent of Entity B, a consolidated subsidiary. Entity B holds title to land with a
+                          carrying amount of $5 million. Entity A concludes that the land is not an output of its ordinary
+                          activities within the scope of Topic 606 and that Entity B does not meet the definition of a business
+                          within the scope of Topic 810. [ ASU 2017-05 11 ] ]
+
+   610-20-55-12           [ Entity A enters into a contract to transfer 60 percent of Entity B to Entity X for $6 million cash due at
+                          contract inception. For ease of illustration, assume that at contract inception the fair value of the 40
+                          percent interest retained by Entity A is $4 million. Because all of the assets (the land) promised to
+                          Entity X in the contract are nonfinancial assets, Entity A concludes that it should derecognize the land
+                          in accordance with this Subtopic. [ ASU 2017-05 11 ] ]
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 24/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   610-20-55-13           [ As described in paragraphs 610-20-25-2 through 25-7, Entity A first considers the guidance in Topic
+                          810 and concludes that it no longer has a controlling financial interest in Entity B or in Entity X (the
+                          buyer). Entity A then determines that the contract meets the criteria in paragraph 606-10-25-1 and
+                          that control of the land has been transferred in accordance with the guidance in paragraph 606-10-25-
+                          30. Because Entity A continues to have a noncontrolling interest in Entity B, it evaluates the point in
+                          time at which Entity B, its former subsidiary, has control of the distinct nonfinancial asset as
+                          described in paragraph 610-20-25-7. Entity A concludes that it has transferred control of the distinct
+                          nonfinancial asset because Entity B controls the distinct nonfinancial asset. When evaluating the
+                          indicators of control in paragraph 606-10-25-30, Entity A concludes the following: [ ASU 2017-05 11 ]
+                          ]
+                               a. [ It has the present right to payment. [ ASU 2017-05 11 ] ]
+                               b. [ Entity B has legal title to the land. [ ASU 2017-05 11 ] ]
+                               c. [ It does not have physical possession of the asset because it cannot restrict or prevent other
+                               entities from accessing the land. [ ASU 2017-05 11 ] ]
+                               d. [ Entity B has the significant risks and rewards of ownership. [ ASU 2017-05 11 ] ]
+                               e. [ There is no acceptance clause (assumption). [ ASU 2017-05 11 ] ]
+
+
+   610-20-55-14           [ Entity A derecognizes the land and calculates the gain or loss as the difference between the amount
+                          of consideration measured in accordance with the guidance in paragraphs 610-20-32-2 and 610-20-
+                          32-6 and the carrying amount of the land. The amount of the consideration is $10 million, which
+                          includes $6 million in cash plus $4 million for the fair value of the noncontrolling interest in Entity B.
+                          Entity A recognizes a gain of $5 million ($10 million consideration ‒ $5 million carrying amount of the
+                          assets) and presents the gain in the income statement in accordance with the guidance in paragraph
+                          360-10-45-5. In accordance with the guidance in paragraph 610-20-32-4, Entity A records the
+                          noncontrolling interest in Entity B at $4 million and subsequently accounts for that interest in
+                          accordance with other Topics. [ ASU 2017-05 11 ] ]
+
+   · · > Case B—Control Transfers under Topic 810 but Not under Topic 606
+
+   610-20-55-15           [ Assume the same facts as in Case A, except that Entity A has the right but not the obligation to
+                          repurchase the 60 percent ownership interest in Entity B that it transferred to Entity X (that is, Entity A
+                          has a call option). The call option gives Entity A the right to repurchase the 60 percent ownership
+                          interest in 2 years for $7 million. [ ASU 2017-05 11 ] ]
+
+   610-20-55-16           [ Entity A concludes that although the call option represents a variable interest in Entity B, it does not
+                          have a controlling financial interest in Entity B in accordance with the guidance in Topic 810. However,
+                          when evaluating whether control of the land has been transferred in accordance with the guidance in
+                          paragraph 606-10-25-30, Entity A considers the guidance on repurchase features in paragraphs 606-
+                          10-25-30(c) and 606-10-55-68 and concludes that it does not transfer control of the land. In addition,
+                          because the exercise price on the call option is an amount that is greater than the original selling
+                          price, the transaction is considered a financing agreement in accordance with the guidance in
+                          paragraph 606-10-55-68(b). Entity A does not derecognize the land and records a financial liability of
+                          $6 million in accordance with the guidance in paragraph 606-10-55-70. Entity A does not recognize an
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 25/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          investment for its retained 40 percent ownership interest until it derecognizes the land. [ ASU 2017-
+                          05 11 ] ]
+
+   · > Example 3—Sale of a Nonfinancial Asset for Variable Consideration
+   610-20-55-17           [ An entity sells (that is, does not out license) the rights to in-process research and development that
+                          it recently acquired in a business combination and measured at fair value of $50 million in
+                          accordance with Topic 805 on business combinations. [ ASU 2014-09 149 ] ] [ The entity concludes
+                          that the transferred in-process research and development is not a business. [ ASU 2017-05 11 ] ] [
+                          The buyer of the in-process research and development agrees to pay a nonrefundable amount of $5
+                          million at inception plus 2 percent of sales of any products derived from the in-process research and
+                          development over the next 20 years. The entity concludes that the sale of in-process research and
+                          development is not a good or service that is an output of the entity's ordinary activities. [ ASU 2014-
+                          09 149 ] ]
+
+   610-20-55-18           [ Topic 350 on goodwill and other intangibles requires the entity to apply the guidance in this Subtopic
+                          to determine the amount and timing of income to be recognized. Therefore, the entity applies the
+                          derecognition guidance in this Subtopic as follows: [ ASU 2014-09 149 ] ]
+                               a. [ The entity concludes that it does not have a controlling financial interest in the buyer. [
+                               ASU 2017-05 11 ] ]
+                               b. [ The entity concludes that the contract meets the criteria in paragraph 606-10-25-1. [
+                               ASU 2014-09 149 ] ]
+                               c. [ The entity also concludes that on the basis of the guidance in paragraph 606-10-25-30, it
+                               has transferred control of the in-process research and development asset to the buyer. This is
+                               because the buyer can use the in-process research and development's records, patents, and
+                               supporting documentation to develop potential products and the entity has relinquished all
+                               substantive rights to the in-process research and development asset. [ ASU 2014-09 149 ] ]
+                               d. [ In estimating the consideration received, the entity applies the guidance in Topic 606 on
+                               determining the transaction price, including estimating and constraining variable consideration.
+                               The entity estimates that the amount of consideration that it will receive from the sales-based
+                               royalty is $100 million over the 20-year royalty period. However, the entity cannot assert that it is
+                               probable that recognizing all of the estimated variable consideration in other income would not
+                               result in a significant reversal of that consideration. The entity reaches this conclusion on the
+                               basis of its assessment of factors in paragraph 606-10-32-12. In particular, the entity is aware
+                               that the variable consideration is highly susceptible to the actions and judgments of third parties,
+                               because it is based on the buyer completing the in-process research and development asset,
+                               obtaining regulatory approval for the output of the in-process research and development asset,
+                               and marketing and selling the output. For the same reasons, the entity also concludes that it
+                               could not include any amount, even a minimum amount, in the estimate of the consideration.
+                               Consequently, the entity concludes that the estimate of the consideration to be used in the
+                               calculation of the gain or loss upon the derecognition of the in-process research and development
+                               asset is limited to the $5 million fixed upfront payment. [ ASU 2014-09 149 ] ]
+
+
+   610-20-55-19           [ At inception of the contract, the entity recognizes a net loss of $45 million ($5 million of
+                          consideration, less the in-process research and development asset of $50 million). The entity
+                          reassesses the transaction price at each reporting period to determine whether it is probable that a
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 26/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+                          significant reversal would not occur from recognizing the estimate as other income and, if so,
+                          recognizes that amount as other income in accordance with paragraphs 606-10-32-14 and 606-10-32-
+                          42 through 32-45. [ ASU 2014-09 149 ] ]
+
+
+
+   610 Other Income
+    30 Gains and Losses on Involuntary
+    Conversions
+   00 Status
+
+              General Note:The Status Section identifies changes to this Subtopic resulting from Accounting Standards
+              Updates. The Section provides references to the affected Codification content and links to the related
+              Accounting Standards Updates. Nonsubstantive changes for items such as editorial, link and similar
+              corrections are included separately in Maintenance Updates.
+
+
+
+
+   General
+   610-30-00-1            The following table identifies the changes made to this Subtopic.
+                           Paragraph             Action        Accounting Standards Update                                   Date
+                           610-30-05-1                         Accounting Standards Update No.
+                                                 Added                                                                       05/28/2014
+                           through 05-3                        2014-09
+                                                                      Accounting Standards Update No.
+                           610-30-15-1               Added                                                                   05/28/2014
+                                                                      2014-09
+                                                                      Accounting Standards Update No.
+                           610-30-15-2               Added                                                                   05/28/2014
+                                                                      2014-09
+                           610-30-25-1                                Accounting Standards Update No.
+                                                     Added                                                                   05/28/2014
+                           through 25-4                               2014-09
+                                                                      Accounting Standards Update No.
+                           610-30-30-1               Added                                                                   05/28/2014
+                                                                      2014-09
+                           610-30-45-1               Amended          Maintenance Update 2017-19                             11/15/2017
+                                                                      Accounting Standards Update No.
+                           610-30-45-1               Added                                                                   05/28/2014
+                                                                      2014-09
+                                                                      Accounting Standards Update No.
+                           610-30-60-1               Added                                                                   05/28/2014
+                                                                      2014-09
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 27/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+   05 Overview and Background
+
+              General Note:The Overview and Background Section provides overview and background material for the
+              guidance contained in the Subtopic. It does not provide the historical background or due process. It may
+              contain certain material that users generally consider useful to understand the typical situations addressed
+              by the standards. The Section does not summarize the accounting and reporting requirements.
+
+
+
+
+   General
+   610-30-05-1            [ This Subtopic clarifies the accounting for involuntary conversions of nonmonetary assets (such as
+                          property or equipment) to monetary assets (such as insurance proceeds). Examples of such
+                          conversions are total or partial destruction or theft of insured nonmonetary assets and the
+                          condemnation of property in eminent domain proceedings. [ FIN 30 Summary 5.1 ] ]
+
+   610-30-05-2            [ The terms nonmonetary and monetary as used in this Subtopic have the same meaning as those
+                          terms have in Topic 845. [ FIN 30 1 7 ] ]
+
+   610-30-05-3            [ Although this Subtopic provides specific guidance for gains and losses resulting from involuntary
+                          conversions, the majority of other guidance for gains and losses is included in the Derecognition
+                          Section of the relevant asset or liability Topic. [ ASU 2014-09 151 ] ]
+
+
+
+
+   15 Scope and Scope Exceptions
+
+              General Note:The Scope and Scope Exceptions Section outlines the items (for example, the entities,
+              transactions, instruments, or events) to which the guidance in the Subtopic does or does not apply. In some
+              cases, the Section may contain definitional or other text to frame the scope.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 28/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+              General Note for Financial Instruments:Some of the items subject to the guidance in this Subtopic are
+              financial instruments. For guidance on matters related broadly to all financial instruments, (including the fair
+              value option, accounting for registration payment arrangements, and broad financial instrument disclosure
+              requirements), see Topic 825. See Section 825-10-15 for guidance on the scope of the Financial
+              Instruments Topic.
+
+
+
+
+   General
+   > Entities
+
+   610-30-15-1            [ The guidance in this Subtopic applies to all entities. [ ASU 2014-09 151 ] ]
+
+   > Transactions
+
+   610-30-15-2            [ The guidance in this Subtopic applies to the following events and transactions: [ ASU 2014-09 151
+                          ]]
+                              a. [ Those in which nonmonetary assets are involuntarily converted (for example, as a result of
+                               total or partial destruction, theft, seizure, or condemnation) to monetary assets that are then
+                               reinvested in other nonmonetary assets. [ APB 29 4 56.2.2 ] ]
+
+
+
+
+   25 Recognition
+
+              General Note:The Recognition Section provides guidance on the required criteria, timing, and location (within
+              the financial statements) for recording a particular item in the financial statements. Disclosure is not
+              recognition.
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 29/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+              General Note for Fair Value Option:Some of the items subject to the guidance in this Subtopic may qualify for
+              application of the Fair Value Option Subsections of Subtopic 825-10. Those Subsections (see paragraph
+              825-10-05-5) address circumstances in which entities may choose, at specified election dates, to measure
+              eligible items at fair value (the fair value option). See Section 825-10-15 for guidance on the scope of the
+              Fair Value Option Subsections of the Financial Instruments Topic.
+
+
+
+
+   General
+   610-30-25-1            [ As used in this Subtopic, the term cost refers to the cost of a nonmonetary asset or to its carrying
+                          amount, if different. [ FIN 30 1 8 ] ]
+
+   610-30-25-2            [ An involuntary conversion of a nonmonetary asset to monetary assets and the subsequent
+                          reinvestment of the monetary assets is not equivalent to an exchange transaction between an entity
+                          and another entity. [ FIN 30 10 30.2.1 ] ] [ The conversion of a nonmonetary asset to monetary
+                          assets is a monetary transaction, whether the conversion is voluntary or involuntary, and such a
+                          conversion differs from exchange transactions that involve only nonmonetary assets. [
+                          FIN 30 10 30.2.2.1 ] ] [ To the extent the cost of a nonmonetary asset differs from the amount of
+                          monetary assets received, the transaction results in the realization of a gain or loss that shall be
+                          recognized. [ FIN 30 10 30.2.2.2.1 ] ]
+
+   610-30-25-3            [ Involuntary conversions of nonmonetary assets to monetary assets are monetary transactions for
+                          which gain or loss shall be recognized even though an entity reinvests or is obligated to reinvest the
+                          monetary assets in replacement nonmonetary assets. However, [ FIN 30 2 9 ] ] [ the requirement of
+                          this Subtopic with respect to gain recognition does not apply to an involuntary conversion of a last-in,
+                          first-out (LIFO) inventory for which replacement is intended but not made by year-end and the taxpayer
+                          does not recognize gain for income tax reporting purposes. [ FIN 30 11 31.2 ] ] [ Paragraph 270-10-
+                          45-6(b) provides an exception for the liquidation of a LIFO inventory at an interim date if replacement
+                          is expected by year-end. Accordingly, that exception applies to an involuntary conversion of a LIFO
+                          inventory if replacement is expected by year-end. [ FIN 30 2 10 ] ]
+
+   610-30-25-4            [ In some cases, a nonmonetary asset may be destroyed or damaged in one accounting period, and
+                          the amount of monetary assets to be received is not determinable until a subsequent accounting
+                          period. In those cases, gain or loss shall be recognized in accordance with Topic 450. [ FIN 30 3 11 ]
+                          ]
+
+
+
+   30 Initial Measurement
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 30/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+              General Note:The Initial Measurement Section provides guidance on the criteria and amounts used to
+              measure a particular item at the date of initial recognition.
+
+
+
+
+   General
+   610-30-30-1            [ The cost of subsequently acquired nonmonetary assets shall be measured by the consideration paid
+                          and not be affected by a previous transaction. [ FIN 30 10 30.2.2.2.2 ] ]
+
+
+
+
+   45 Other Presentation Matters
+
+              General Note:The Other Presentation Matters Section provides guidance on other presentation matters not
+              addressed in the Recognition, Initial Measurement, Subsequent Measurement, and Derecognition Sections.
+              Other presentation matters may include items such as current or long-term balance sheet classification,
+              cash flow presentation, earnings per share matters, and so forth. The FASB Codification also contains
+              Presentation Topics, which provide guidance for general presentation and display items. See those Topics for
+              general guidance.
+
+
+
+
+   General
+   610-30-45-1            [ Gain or loss resulting from an involuntary conversion of a nonmonetary asset to monetary assets
+                          shall be classified in accordance with the provisions of Subtopic 220-20. [ FIN 30 4 12 ] ]
+
+
+
+
+   60 Relationships
+
+              General Note:The Relationships Section contains links to guidance that may be helpful to, but not required
+              by, a user of the Subtopic. This Section may not be all-inclusive. The relationship items are organized
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 31/32
+ 8/20/2026, 12:17 AM                                                                                                     Combine Sections - 610 Other Income
+
+
+
+
+              according to the Topic structure in the Codification.
+
+
+
+
+   General
+   > Income Taxes
+
+   610-30-60-1            [ For guidance on temporary differences resulting from involuntary conversions, see paragraph 740-
+                          10-55-66. [ FIN 30 5 13 ] ]
+
+
+
+
+ Copyright © 2026 by Financial Accounting Foundation. All rights reserved. Certain portions may include material copyrighted by American Institute of
+ Certified Public Accountants. Content copyrighted by Financial Accounting Foundation, or any third parties who have not provided specific permission, may
+ not be reproduced, stored in a retrieval system, or transmitted, in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise,
+ without the prior written permission of Financial Accounting Foundation or such applicable third party. Financial Accounting Foundation claims no copyright
+ in any portion hereof that constitutes a work of the United States Government.
+
+
+
+
+about:blank                                                                                                                                                 32/32
+
