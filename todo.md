@@ -441,6 +441,32 @@
     rule. Before appending, checksum the existing content; after appending,
     prove the original bytes are unchanged.
 
+38. **A GREEN SUITE ON THE FIRST RUN IS A SUSPECT, NOT A RESULT.** (books-18.)
+    The period-close suite passed 81 of 81 on its very first execution. That
+    felt like competence and was actually a warning: attacking it immediately
+    afterwards found SEVEN real defects in about ten minutes, the worst of which
+    had the engine reporting "Period 2026-NaN is ready to close. All 10 checks
+    pass." Tests written from the same mental model as the code inherit the
+    same blind spots, so they agree with it enthusiastically. When a new suite
+    goes green first try, do not move on — write a throwaway probe OUTSIDE the
+    harness that calls every exported function with hostile input and PRINTS the
+    answers, then read them as an auditor rather than as the author. A confident
+    wrong answer is far more dangerous than a crash, because the owner would
+    believe it.
+
+39. **A SELF-CHECK THAT RE-IMPLEMENTS THE GATE TESTS NOTHING.** (books-18.) The
+    mentor coverage gate had a test named "SELF-CHECK: the coverage gate can
+    fail" which rebuilt the gate's filtering logic inside the test and asserted
+    on the copy. It therefore proved that the COPY could fail and said nothing
+    whatsoever about the real function. Replacing the real gate's condition with
+    `if (false)` left all 110 tests passing. A self-check must CALL the exported
+    function, against an input contrived to make it fire — which usually means
+    the function needs an optional parameter (a path, a fixture) purely so a
+    test can point it at something bad. Add that parameter; it is cheaper than a
+    gate that has been quietly dead for six months. Corollary: every gate that
+    reads a collection must also refuse to pass when it reads NOTHING, because a
+    gate that inspects zero items approves everything.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
