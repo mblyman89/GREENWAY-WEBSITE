@@ -158,6 +158,238 @@
     whole point of this rule is Vercel refusing to build, and Vercel reads
     what is on MAIN, not what was on the branch.
 
+21. **THE BOOKS-SLICE METHOD IS NOW LAW (added per Michael, books-17, Aug 2026).**
+    Michael's words: *"Please add to the standing rules every single method and
+    logic that we have employed with the books slices so I can save time and
+    simply say follow the standing rules."* From here on, **"follow the standing
+    rules" means execute all of the following, in this order, without being
+    asked.** Sixteen slices produced this sequence; it is not optional and it is
+    not a menu.
+
+    a. **PLAN FIRST, IN WRITING.** Before any code, write a session plan with
+       explicit phases. Confirm by INSPECTION (not memory, not the roadmap
+       document) that the slice being built is genuinely the next one — e.g.
+       books-17 confirmed financial statements were next by proving
+       `trial-balance-core.ts` existed and no statement module did.
+    b. **RESEARCH BEFORE BUILDING.** Pull the primary sources FIRST, capture
+       them VERBATIM to `/workspace/research-books-NN/`, and only then design.
+       Never design from recollection of a rule and then go find a citation to
+       justify it — that is backwards, and it is how a wrong rule gets a
+       respectable footnote.
+    c. **THREE FILES PER SLICE, ALWAYS.** A `*-authorities.ts` (verbatim law),
+       a `*-core.ts` (pure engine, no I/O, no dates from the clock, no
+       randomness), and a `*-mentor.ts` (a lesson per exported function). Then
+       tests. A slice missing any of the three is incomplete.
+    d. **WIRE THE AUTHORITIES INTO THE GLOBAL REGISTRY** in
+       `books-guidance-core.ts` with a new `SourceRegistry` tag, and add a test
+       that FAILS if the registry is not wired. See rule 25.
+    e. **ADVERSARIAL TEST SUITE**, including the rule 19 corpus, boundary and
+       hostile inputs, property sweeps, a float sentinel, and a mutation
+       campaign. See rules 22 and 23.
+    f. **FULL BATTERY GREEN**, authorship proved by stash (rule 18), rule 20
+       commit, rule 20a `--rebase` merge, rule 13i re-verification ON MERGED
+       MAIN, and a plain-English report written for Michael.
+
+22. **TEST EVERYTHING — INCLUDING THE TESTS THEMSELVES (Michael, books-17).**
+    Rule 15 says a test must be capable of failing. Rule 22 goes further: **the
+    test suite is production code and gets audited like production code.**
+
+    a. **THE TEST IS A SUSPECT, NOT A WITNESS.** When a test fails, the FIRST
+       hypothesis is that the test is wrong, not the engine. This is not
+       humility for its own sake — it has been correct more often than not.
+       books-16 shipped with nine failures: SIX were defects in my own tests
+       (an extra ×100 in a denominator; four fixtures dated on a Sunday that
+       correctly rolled to Monday; an editorial-voice regex that flagged a
+       verbatim government quotation), TWO were a wrong assumption about where
+       a registry file lived, and only ONE was a real engine bug. A test that
+       is trusted blindly will eventually pressure someone into "fixing" a
+       correct engine, or worse, into EDITING A VERBATIM STATUTE so a regex
+       stops complaining. That is the single most dangerous failure mode in
+       this entire codebase.
+    b. **SELF-CHECK THE MUTATION HARNESS BEFORE TRUSTING IT.** A mutation
+       campaign that reports "0 survivors" because the harness never actually
+       applied a mutation is worse than no campaign — it is a false clean bill
+       of health. Every harness must first prove it can detect a mutation it
+       KNOWS about before its verdict on unknown ones means anything.
+    c. **NO VACUOUS TESTS.** A test may never derive its expected value from
+       the function under test, from a sibling function in the same module, or
+       from a constant exported by the module it is testing. Hard-code the
+       expected number, computed by hand from the authority, with the arithmetic
+       shown in a comment. books-13 shipped a test that computed its expectation
+       from the very function it was testing; it passed happily while that
+       function was broken.
+    d. **ASSERT ON THE SPECIFIC ERROR.** `expect(() => f()).toThrow()` is not a
+       test — it passes on a typo. Assert the exact code or message.
+    e. **PROVE COVERAGE MECHANICALLY, NOT BY EYE.** Coverage gates must read the
+       module's exports FROM DISK and diff them against what is tested and
+       taught, so that adding a new exported function without a lesson or a test
+       BREAKS THE BUILD. A hand-maintained checklist rots the day it is written.
+    f. **DELETE THE SCAFFOLDING.** Every temporary probe, tmp script and
+       throwaway file created during a slice is deleted before the PR, and the
+       deletion is verified.
+
+23. **TRY YOUR HARDEST TO BREAK IT, THEN FIX IT BETTER (Michael, books-17).**
+    Michael's words: *"I want you to try your hardest to break it, and to fix it
+    better."* Testing that an engine works is the easy half and the useless
+    half. **The obligation is to attack it as an adversary who wants it to be
+    wrong**, and the standard for a fix is not "the test passes now" but "this
+    entire CLASS of error is now impossible."
+
+    a. **ATTACK THE ARITHMETIC AT ITS EXTREMES.** Push past `Number.MAX_SAFE_
+       INTEGER` (2^53). Feed zero, one cent, negative, and absurd values. Every
+       money path must be provably exact in BigInt at values larger than
+       JavaScript can hold in a double.
+    b. **ATTACK THE CALENDAR.** Leap days, Feb 29, month ends, DST boundaries,
+       weekends and holidays, the last day of a quarter, the first day of the
+       year, and the day before the LINE IN THE SAND. books-16 found that four
+       of my own fixtures fell on a Sunday and rolled forward exactly as the
+       law requires — the engine was right and I nearly "fixed" it.
+    c. **ATTACK THE MONOTONICITY.** If more lateness must cost more, sweep the
+       whole domain and assert it never decreases. This is precisely how the
+       real §6651(c)(1) bug in books-16 was caught: at 50 months the offset had
+       grown without limit, making a five-YEAR delinquency cheaper than a
+       five-MONTH one and understating exposure by $2,250 on $10,000. No
+       hand-picked example would ever have found it. Sweep the domain.
+    d. **ATTACK THE ASSUMPTIONS, ESPECIALLY THE COMFORTABLE ONES.** books-16
+       assumed a payroll authorities file lived in `src/lib/accounting/`. It
+       lived in `src/lib/payroll/`, had never been merged into the global
+       registry, and 36 authority records were invisible to every lookup in the
+       system. One `grep -rln` found it. Grep before believing.
+    e. **FIX THE CLASS, NOT THE INSTANCE.** When a defect is found, ask what
+       ELSE shares its shape and fix all of it — rule 19's control-account guard
+       protected one parent account while all 21 children stayed open. Then add
+       the test that would have caught it, and verify that test fails against
+       the OLD code.
+    f. **RECORD THE HUNT, INCLUDING THE MISSES.** Every slice reports what was
+       attacked, what broke, what held, and what was tried that found nothing.
+       The misses are evidence of coverage and they stop the next session from
+       re-treading the same ground.
+
+24. **VERBATIM AUTHORITY OR NO FEATURE (Michael, books-17: "I want all the tax
+    rules baked in verbatim, I want all the relevant GAAP rules to be included
+    verbatim").** Every computational rule carries the actual text of the law,
+    regulation, standard or case that requires it — quoted exactly, never
+    paraphrased, never summarized, never tidied up.
+
+    a. **A `GuidanceAuthority` record for every rule**, with `id`, `kind`,
+       `cite`, `quote` (VERBATIM), `soWhat` (plain English) and `source` URL.
+    b. **TRUSTED HOSTS ONLY** for `source`: law.cornell.edu, ecfr.gov, irs.gov,
+       govinfo.gov, uscourts.gov, fasb.org, app.leg.wa.gov, dor.wa.gov,
+       lni.wa.gov, esd.wa.gov, lcb.wa.gov. A blog is not an authority.
+    c. **THE QUOTE IS SACRED.** It is never edited to satisfy a linter, a style
+       rule, a prose gate, or my own sense of how it should read. If a gate
+       flags a verbatim quotation, THE GATE IS WRONG AND THE GATE GETS FIXED.
+       This nearly went the other way in books-16 over ESD's own use of the word
+       "we." Verify the quote against the source document, then change the test.
+    d. **VERBATIM-INTEGRITY TESTS** must assert the quote is non-empty, of
+       plausible length, free of ellipsis-mangling, and — where the source
+       document is on hand — byte-comparable to it.
+    e. **CITE THE EFFECTIVE DATE.** A rule without a date is a rumour. Rates and
+       thresholds live in the dated rate registry (books-15), never as constants.
+
+25. **REGISTRY WIRING IS A FEATURE, NOT A FORMALITY.** An authority the lookup
+    cannot find does not exist, no matter how beautifully it is written.
+    a. Add the tag to the `SourceRegistry` union AND to `ALL_SOURCE_REGISTRIES`
+       AND to the spread inside `taggedCandidates()`. All three. Miss one and
+       the records go dark silently.
+    b. After wiring, assert the exact new record COUNT, assert zero id
+       collisions, assert the registry is still sorted and de-duplicated, and
+       assert no NEW unresolved drift appears.
+    c. Assert that every `authorityIds` reference in the engine and the mentor
+       RESOLVES. A dangling citation is a lie with a footnote.
+    d. Prove the gate is wired by BREAKING IT ON PURPOSE and watching the suite
+       go red (rule 16). A registered gate that is never invoked is decoration.
+
+26. **THE MENTOR LAYER IS MANDATORY — MICHAEL IS BEING TAUGHT, NOT JUST SERVED.**
+    Michael's words: *"I want a PhD level CPA coaching me every step of the
+    way... I love the hand holding method, it forces me to be responsible and
+    accurate and timely."* Every exported engine function carries a
+    `MentorLesson` with all five fields populated, non-trivially:
+    `plainEnglish` (what it does, no jargon), `whyItExists` (the business or
+    legal reason), `theTrap` (the specific way real people get this wrong),
+    `whatIWouldDo` (the concrete recommendation a CPA would actually give
+    Michael), and `authorityIds` (which must resolve). A coverage gate reading
+    exports from disk fails the build if any function is untaught. Michael has a
+    Master's in accounting from UW and has not opened an accounting book in
+    thirteen years: write for a smart man who is out of practice, never for an
+    accountant and never for a child.
+
+27. **REFUSE, DON'T WARN; AND NEVER, EVER PLUG.** Extends rule 14 with what
+    sixteen slices proved matters most.
+    a. When an input is missing, ambiguous, or unverifiable, the engine THROWS
+       a specific coded error naming the evidence required and the exact path to
+       supply it. It does not warn, default, estimate, or proceed.
+    b. **A REPORT THAT DOES NOT TIE MUST NOT RENDER.** If the trial balance does
+       not balance, if assets do not equal liabilities plus equity, if the cash
+       flow statement does not reconcile to the change in cash, the statement
+       REFUSES. A financial statement that quietly plugs the difference is the
+       single worst thing this system could produce, because it looks right.
+    c. Every refusal teaches: what is wrong, why it matters, what to do next.
+    d. Refusals are the product. Michael asked for the hard blocks by name.
+
+28. **EXECUTIVE POWERS (granted by Michael, books-17).** Michael's words: *"You
+    have executive powers to add value everywhere however you can whenever you
+    can... Please go above and beyond as usual."*
+    a. **ACT, DON'T ASK, ON QUALITY.** If something within the slice can be made
+       more correct, safer, better tested or better explained, DO IT — do not
+       ask permission to raise the standard.
+    b. **FIX ADJACENT DEFECTS DISCOVERED WHILE WORKING**, when the fix is small,
+       provable and in scope. Report it plainly. A discovered defect that is
+       merely mentioned is a defect that ships. (Where a fix is genuinely a
+       separate feature, rule 4 still applies: note it and file it, don't smuggle
+       it into a one-feature PR.)
+    c. **THESE POWERS DO NOT OVERRIDE RULES 1, 2, 3, 10, 11 OR 12.** Executive
+       authority is authority to do MORE work, never authority to guess, to
+       assume, to skip verification, or to decide a business fact that is
+       Michael's to decide. When the question is about HIS facts, HIS money or
+       HIS risk — stop and ask (rule 3).
+    d. **LEAVE THE CAMPSITE BETTER.** Every slice should improve something that
+       was not strictly required: a sharper test, a clearer refusal, a corrected
+       comment, a dead file removed.
+
+29. **PLAIN ENGLISH IS A DELIVERABLE, NOT A COURTESY.** Every slice ends with a
+    written report to Michael in continuous prose: what was built, what it
+    refuses and why, what broke during testing and how it was fixed, what he
+    must decide, and what comes next. No unexplained jargon. Name a rule, then
+    immediately say what it means in ordinary words. If a number would surprise
+    him, explain the number before he has to ask.
+
+30. **THE MANDATED BUILD ORDER IS NOT NEGOTIABLE (Michael, books-17: "we must
+    follow this specific order for maximum success and accuracy").** Each item
+    is assembled from the one before it, so building out of order means
+    inventing the inputs — which is guessing, which is rule 1.
+
+        1. Financial statements          <- everything downstream reads these
+        2. Period close screen           <- so the statements stay true
+        3. Basis and AAA tracking        <- reads the equity statement
+        4. Form 1120-S and Schedule K-1  <- reads the statements + AAA
+        5. Form 1040 and §199A           <- reads the K-1
+        6. 941 / 940 / W-2 / W-3         <- reads payroll + the returns
+        7. WA B&O and local taxes
+        8. Forms builder, generalized    <- generalizes the pattern from 4–7
+
+    Kept in `docs/BOOKS_ROADMAP.md`, which is the tracked source of truth and is
+    updated as each item lands. Push notifications and the calendar come AFTER
+    all eight, per Michael: *"there's no point notifying me yet if we can't use
+    it."*
+
+31. **CONTINUITY IS PART OF THE JOB.** Any commitment, blocker, owner-action or
+    deferred item must be written into a TRACKED REPO FILE, never left in a
+    conversation. Michael's words: *"stash it in the repo maybe so we don't
+    forget"* and *"I nearly forgot about all these functions."* Conversations
+    get compacted and sessions end; the repository is the only memory that
+    survives. Items owed BY Michael are listed in the roadmap so he can see them
+    in one place. Items owed BY me are listed there too, so he can hold me to
+    them.
+
+32. **NEVER OVERWRITE THIS FILE — APPEND ONLY.** `todo.md` is a TRACKED repo
+    file holding the standing rules and the full slice history. Session scratch
+    plans belong in `/workspace/todo.md`, which is NOT the repo. Rules 1–20a are
+    load-bearing history: new rules get appended with the next number and a note
+    saying which slice produced them, so the reasoning stays attached to the
+    rule. Before appending, checksum the existing content; after appending,
+    prove the original bytes are unchanged.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
