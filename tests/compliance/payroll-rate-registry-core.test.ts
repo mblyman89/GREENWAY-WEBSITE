@@ -878,6 +878,78 @@ describe("Greenway's actual 2026 rates", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // THE MINIMUM WAGE (books-26)
+  // -------------------------------------------------------------------------
+
+  it("serves the Washington minimum wage as an evidenced, dated rate", () => {
+    // $17.13 for 2026, $16.66 for 2025. Michael supplied "$17.13" without a
+    // year; L&I's page confirms it is the 2026 figure. The year is the whole
+    // point - see the 2027 test below.
+    expect(
+      mustGet(GREENWAY_RATES.lookupValue("wa_minimum_wage", "2026-06-15", "milli_cents_per_hour")),
+    ).toBe(1_713_000);
+    expect(
+      mustGet(GREENWAY_RATES.lookupValue("wa_minimum_wage", "2025-06-15", "milli_cents_per_hour")),
+    ).toBe(1_666_000);
+  });
+
+  it("puts the minimum wage in milli-cents, not cents, so a unit slip cannot pass", () => {
+    // 1_713_000 milli-cents is $17.13/hour. Read as CENTS it would be
+    // $17,130.00 an hour, and read as milli-percent it would be 1,713%. Both
+    // are plausible-looking integers, which is exactly why the unit must be
+    // stated by the caller and proven here.
+    const asCents = GREENWAY_RATES.lookupValue("wa_minimum_wage", "2026-06-15", "cents");
+    expect(asCents.ok).toBe(false);
+    const asPercent = GREENWAY_RATES.lookupValue(
+      "wa_minimum_wage",
+      "2026-06-15",
+      "milli_percent",
+    );
+    expect(asPercent.ok).toBe(false);
+  });
+
+  it("stores a minimum wage that is a whole number of cents, as the statute requires", () => {
+    // RCW 49.46.020(2)(b): the adjusted rate "shall be calculated to the
+    // nearest cent". So every minimum-wage row must divide evenly by 1000
+    // milli-cents. A remainder means somebody typed a rate in the wrong unit
+    // or invented a fraction the law does not produce.
+    const rows = GREENWAY_RATE_ROWS.filter((r) => r.key === "wa_minimum_wage");
+    expect(rows.length).toBeGreaterThanOrEqual(2); // rule 39
+    for (const r of rows) {
+      expect(r.value % 1_000, `${r.effectiveFrom} minimum wage is a fraction of a cent`).toBe(0);
+      expect(r.unit).toBe("milli_cents_per_hour");
+    }
+  });
+
+  it("REFUSES the minimum wage for 2027, because L&I announces it on September 30", () => {
+    // This is the one that matters on Michael's first payroll. RCW
+    // 49.46.020(2)(b) has L&I calculate the next figure "on each following
+    // September 30th", effective the following January 1. On 2027-01-01 that
+    // notice does not exist, so the honest answer is a refusal - NOT $17.13,
+    // which would authorise underpaying every hour of 2027.
+    const ref = mustRefuse(GREENWAY_RATES.lookup("wa_minimum_wage", "2027-01-01"));
+    expect(ref.code).toBe("rate_not_evidenced_for_date");
+    expect(ref.message).toContain("Washington minimum wage");
+  });
+
+  it("the minimum wage rises, so a later row is never smaller than an earlier one", () => {
+    // The statute increases the floor "by the rate of inflation" and has no
+    // mechanism for lowering it. A new row below its predecessor is therefore
+    // a typo, and this catches the realistic one: transposing $17.13 to $17.31
+    // is invisible, but entering 2027 as $16.13 is not.
+    const rows = [...GREENWAY_RATE_ROWS.filter((r) => r.key === "wa_minimum_wage")].sort((a, b) =>
+      a.effectiveFrom < b.effectiveFrom ? -1 : 1,
+    );
+    expect(rows.length).toBeGreaterThanOrEqual(2); // rule 39
+    for (let i = 1; i < rows.length; i++) {
+      expect(
+        rows[i]!.value,
+        `minimum wage fell from ${rows[i - 1]!.effectiveFrom} to ${rows[i]!.effectiveFrom}`,
+      ).toBeGreaterThan(rows[i - 1]!.value);
+    }
+  });
+
   it("still serves every rate on 2026-12-31, so the fix did not overshoot", () => {
     // Closing four rows is only correct if it closed them on the RIGHT DAY.
     // The day before the boundary must still answer, for all nine keys - this

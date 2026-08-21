@@ -94,7 +94,8 @@ export type PayrollRateKey =
   | "wa_suta_wage_base"
   | "lni_employee_rate"
   | "lni_employer_rate"
-  | "fica_oasdi_wage_base";
+  | "fica_oasdi_wage_base"
+  | "wa_minimum_wage";
 
 export const ALL_PAYROLL_RATE_KEYS: readonly PayrollRateKey[] = [
   "pfml_total",
@@ -106,6 +107,7 @@ export const ALL_PAYROLL_RATE_KEYS: readonly PayrollRateKey[] = [
   "lni_employee_rate",
   "lni_employer_rate",
   "fica_oasdi_wage_base",
+  "wa_minimum_wage",
 ];
 
 /**
@@ -577,5 +579,7 @@ export function describeKey(key: PayrollRateKey): string {
       return "L&I employer hourly rate";
     case "fica_oasdi_wage_base":
       return "Social Security wage base";
+    case "wa_minimum_wage":
+      return "Washington minimum wage";
   }
 }

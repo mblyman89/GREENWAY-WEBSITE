@@ -432,6 +432,44 @@ export const RCW_50B_04_080_WA_CARES: GuidanceAuthority = {
 };
 
 /**
+ * THE ACTUAL MINIMUM-WAGE DOLLARS, AND WHY THEY LIVE APART FROM THE STATUTE.
+ *
+ * RCW 49.46.020(2) is already quoted in payroll-cogs-core.ts as
+ * RCW_49_46_020_MINWAGE, and books-26 corrected that quote from a paraphrase to
+ * the real text rather than adding a second authority for the same statute
+ * (rule 25: extend, do not duplicate). What was genuinely missing was the
+ * DOLLARS: the statute describes machinery, and L&I publishes the output of it
+ * every September 30.
+ *
+ * They are two authorities because they change on completely different clocks.
+ * The statute has not moved since 2019. This one moves every single year, and
+ * the whole reason the rate registry is dated is that a figure like this needs a
+ * span attached to it.
+ */
+export const LNI_MINIMUM_WAGE_ANNOUNCEMENT: GuidanceAuthority = {
+  id: "lni-minimum-wage-announcement",
+  kind: "state_law",
+  cite: "WA Dept. of Labor & Industries, \"Minimum Wage\"",
+  quote:
+    "Washington employers must pay most employees at least the minimum wage for every hour worked. " +
+    "The 2026 minimum wage in the state of Washington is $17.13 per hour. ... The 2025 minimum wage " +
+    "in the state of Washington was $16.66 per hour. ... Some local jurisdictions have higher minimum " +
+    "wage rates and different labor rules than Washington State. ... Beginning mid-September each " +
+    "year, L&I will make a cost-of-living adjustment to the minimum wage based on the federal " +
+    "Consumer Price Index for Urban Wage Earners and Clerical Workers (CPI-W). The new minimum wage " +
+    "will be announced on Sept. 30, and take effect Jan. 1.",
+  soWhat:
+    "$17.13 is the 2026 figure, not a permanent one, and the 2027 figure does not exist yet - L&I " +
+    "announces it on September 30. That matters here because Greenway's first payroll is January 1, " +
+    "2027: the wage floor for that paycheck is a number nobody has published. The other sentence to " +
+    "notice is the one about local jurisdictions. Several Washington cities set their own higher " +
+    "floor, and using the state figure inside one of them underpays every hour. Port Orchard is not " +
+    "one of them, which is why the state rate governs Greenway - but that is a fact about Greenway's " +
+    "address, not a fact about Washington.",
+  source: "https://www.lni.wa.gov/workers-rights/wages/minimum-wage/",
+};
+
+/**
  * ⭐ THE SINGLE MOST COUNTERINTUITIVE FACT IN WASHINGTON PAYROLL, straight from
  * the agency's own employer page. Two programs, one quarterly return, two
  * different wage bases.
@@ -1042,6 +1080,7 @@ export const PAYROLL_TAX_AUTHORITIES: readonly GuidanceAuthority[] = [
   ESD_PFML_2026_RATE,
   RCW_50B_04_080_WA_CARES,
   WA_CARES_UNCAPPED,
+  LNI_MINIMUM_WAGE_ANNOUNCEMENT,
   // late filing / late payment — penalties and interest
   RCW_50_12_220_ESD_LATE,
   RCW_50_24_040_ESD_INTEREST,
