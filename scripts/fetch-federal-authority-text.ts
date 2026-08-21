@@ -28,8 +28,26 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+/**
+ * A CFR target defaults to 26 CFR part 1 subchapter A, because that is what
+ * every slice before books-25 needed. books-25 quotes two regulations that
+ * live elsewhere — the I-9 rule is in TITLE 8 (immigration) and the W-4 rule
+ * is in title 26 PART 31 (employment taxes, subchapter C) — so the title, part
+ * and subchapter are now overridable. They are optional rather than required
+ * so the twenty existing entries did not have to be rewritten to add a slice.
+ */
 type Target =
-  | { readonly kind: "cfr"; readonly section: string }
+  | {
+      readonly kind: "cfr";
+      readonly section: string;
+      readonly title?: number;
+      readonly part?: string;
+      readonly subchapter?: string;
+      /** Filename override. Title 8 §274a.2 must not collide with a title 26 §274a.2. */
+      readonly file?: string;
+      /** Citation label override, for the same reason. */
+      readonly label?: string;
+    }
   | { readonly kind: "usc"; readonly section: string };
 
 /** The sources books-19 and books-20 quote. Extend as later slices need more. */
@@ -74,13 +92,47 @@ const TARGETS: readonly Target[] = [
   // penalty engine reported a year-late 1120-S as costing $0.00. The real floor
   // is $195 (as adjusted) per shareholder per month.
   { kind: "usc", section: "6699" },
+  // books-25 — hiring paperwork: the W-4 and the I-9.
+  //
+  // Michael asked the system to teach him how to answer an employee who asks
+  // "how do I fill this out?", and to refuse rather than warn when a form is
+  // not valid. Both of those need the actual rule, not a payroll vendor's
+  // summary of it, so both are mirrored here.
+  //
+  // 26 CFR §31.3402(f)(2)-1 is the WITHHOLDING CERTIFICATE regulation: what a
+  // valid W-4 is, what an employer must do with an invalid one, and what to
+  // withhold when an employee furnishes nothing at all. Note the part number —
+  // 31, not 1 — which is why `part` and `subchapter` had to become parameters.
+  {
+    kind: "cfr",
+    section: "31.3402(f)(2)-1",
+    part: "31",
+    subchapter: "C",
+    label: "26 CFR §31.3402(f)(2)-1",
+  },
+  // 8 CFR §274a.2 is the I-9 regulation: the three-business-day deadline, the
+  // retention period, the rule that only unexpired documents count, and the
+  // limitation that makes I-9 data legally quarantined from everything else in
+  // this system.
+  {
+    kind: "cfr",
+    section: "274a.2",
+    title: 8,
+    part: "274a",
+    subchapter: "B",
+    file: "cfr-8-274a.2.txt",
+    label: "8 CFR §274a.2",
+  },
 ];
 
 function urlFor(t: Target): string {
   if (t.kind === "cfr") {
+    const title = t.title ?? 26;
+    const part = t.part ?? "1";
+    const subchapter = t.subchapter ?? "A";
     return (
-      "https://www.ecfr.gov/api/renderer/v1/content/enhanced/current/title-26" +
-      `?chapter=I&subchapter=A&part=1&section=${t.section}`
+      `https://www.ecfr.gov/api/renderer/v1/content/enhanced/current/title-${title}` +
+      `?chapter=I&subchapter=${subchapter}&part=${part}&section=${t.section}`
     );
   }
   return `https://www.law.cornell.edu/uscode/text/26/${t.section}`;
@@ -154,8 +206,10 @@ async function main(): Promise<void> {
         `SUSPICIOUSLY SHORT (${body.length} chars) for ${url} — refusing to write a stub`,
       );
     }
-    const label = t.kind === "cfr" ? `26 CFR §${t.section}` : `26 U.S.C. §${t.section}`;
-    const name = t.kind === "cfr" ? `cfr-${t.section}.txt` : `usc-${t.section}.txt`;
+    const label =
+      t.kind === "cfr" ? (t.label ?? `26 CFR §${t.section}`) : `26 U.S.C. §${t.section}`;
+    const name =
+      t.kind === "cfr" ? (t.file ?? `cfr-${t.section}.txt`) : `usc-${t.section}.txt`;
     const header =
       `SOURCE TEXT — ${label}\n` +
       `Retrieved ${stamp} from ${url}\n` +
