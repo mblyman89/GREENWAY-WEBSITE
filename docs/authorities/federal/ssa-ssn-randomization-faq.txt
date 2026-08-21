@@ -1,0 +1,63 @@
+SOURCE TEXT — SSA Social Security Number Randomization FAQ
+Retrieved 2026-08-21 from https://www.ssa.gov/employer/randomizationfaqs.html
+Work of the United States Government; not subject to copyright (17 U.S.C. §105).
+==============================================================================
+
+PROVENANCE NOTE — READ BEFORE TRUSTING THIS FILE
+------------------------------------------------
+This mirror is a PARTIAL EXTRACT, not a whole-page capture, and it was not
+produced by scripts/fetch-federal-authority-text.ts.
+
+ssa.gov sits behind an Akamai edge that returns "Access Denied" to a plain
+curl with a browser user-agent, so the usual fetch-and-diff loop cannot be run
+against it. The text below was captured on 2026-08-21 through a rendering
+scraper that executes as a real browser client. The passages reproduced here
+are the only ones this repository quotes, and each is reproduced in full and
+unedited so that scripts/verify-verbatim-quotes.ts can still prove the quoted
+strings are substrings of the source.
+
+WHY THAT MATTERS: a mirror nobody can re-fetch is a mirror nobody can re-verify.
+Treat this file as EVIDENCE OF A READING rather than as a reproducible pull. If
+these rules ever drive a refusal that costs Michael money, re-read the live page
+in a browser before defending the number. Standing rule 36 applies: do not paste
+in text from a licensed or access-controlled source, and do not pretend a failed
+fetch succeeded.
+
+------------------------------------------------------------------------------
+QUOTED PASSAGE 1 — answer to "What changes resulted from randomization?"
+------------------------------------------------------------------------------
+The SSA eliminated the geographical significance of the first three digits of
+the SSN, referred to as the area number, by no longer allocating the area
+numbers for assignment to individuals in specific states. The significance of
+the highest group number (the fourth and fifth digits of the SSN) for
+validation purposes was eliminated. Randomization also introduced previously
+unassigned area numbers for assignment excluding area numbers 000, 666 and
+900-999.
+
+------------------------------------------------------------------------------
+QUOTED PASSAGE 2 — answer to "Will SSN randomization assign group number (the
+fourth and fifth digits of the SSN) 00 or serial number (the last four digits
+of the SSN) 0000?"
+------------------------------------------------------------------------------
+SSN randomization will not assign group number 00 or serial number 0000. SSNs
+containing group number 00 or serial number 0000 will continue to be invalid.
+
+------------------------------------------------------------------------------
+QUOTED PASSAGE 3 — answer to "How will I verify a name and SSN?"
+------------------------------------------------------------------------------
+The SSA will still provide opportunities for direct SSN verification. Internet
+based verification services include:
+
+- The SSA's Social Security Number Verification Service available to employers.
+- The Department of Homeland Security's eVerify Service available to employers
+  to determine employment eligibility.
+- The SSA's Consent-Based SSN Verification Service available to enrolled
+  private companies and government agencies for a fee.
+
+------------------------------------------------------------------------------
+QUOTED PASSAGE 4 — answer to "Is the High Group List still available for
+validation?"
+------------------------------------------------------------------------------
+There are no plans to update the High Group List. The High Group List is frozen
+in time and can only be used to see the area and group numbers SSA issued prior
+to the randomization implementation date.
