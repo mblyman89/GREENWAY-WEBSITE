@@ -80,7 +80,9 @@ export default async function AuditDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ refusal?: string; refusalCode?: string }>;
 }) {
-  await requirePermission("inventory.manage");
+  // books-23: owner only. This screen shows every variance AT COST and is where
+  // an audit is approved and posted to the books.
+  await requirePermission("inventory.audit");
   const { id } = await params;
   const sp = await searchParams;
 

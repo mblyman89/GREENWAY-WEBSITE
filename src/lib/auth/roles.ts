@@ -56,6 +56,8 @@ export type Permission =
   | "loyalty.manage"
   | "customers.manage"
   | "inventory.manage"
+  | "inventory.count"
+  | "inventory.audit"
   | "reports.view"
   | "books.view"
   | "financials.view"
@@ -92,6 +94,42 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "loyalty.manage": ["owner", "admin", "manager", "staff"],
   "customers.manage": ["owner", "admin", "manager", "staff"],
   "inventory.manage": ["owner", "admin", "manager"],
+  // books-23: COUNTING the shelf, which is not the same act as managing
+  // inventory. Recording a blind physical count is floor work; deciding what a
+  // difference means, and what it costs, is not.
+  //
+  // OWNER DECISION, recorded verbatim (Michael, books-23):
+  //   "For question 3, yes any employee can count, it should be a blind count
+  //    without cost, variances, or the approve button."
+  //
+  // Why this is not simply `requireStaff()`: requireStaff() only proves somebody
+  // is logged in, which in role terms is dashboard.view -- and that includes
+  // "readonly", described in this same file as "Reporting and exports only".
+  // Handing an analyst role the ability to write counts onto the shelf record
+  // would be a widening nobody asked for. It also includes content_editor, who
+  // has no reason to be on the sales floor at all. This permission names the
+  // four roles that actually work the floor.
+  //
+  // The count sheet is structurally blind: CountSheetLine (audit-hub-store.ts)
+  // carries no cost, no variance and no system quantity, so this permission
+  // cannot leak what the count is worth even if the page tried.
+  "inventory.count": ["owner", "admin", "manager", "staff"],
+  // books-23: APPROVING an inventory audit -- the scope, the reasons, and the
+  // journal entry that posts the shrink to the books. Owner alone.
+  //
+  // OWNER DECISION, recorded verbatim (Michael, books-23):
+  //   "4, yes, I am the only one that can approve an audit and create an audit.
+  //    Anything accounting, bookkeeping, taxes, finance, should be hard gated to
+  //    me only."
+  //
+  // This is separate from inventory.manage on purpose: that grants manager, and
+  // a manager approving a write-off is a manager deciding cost of goods sold.
+  // Migration 0191 already gates inventory_audit_sessions on is_owner() and the
+  // posting RPC in 0192 raises INVENTORY_AUDIT_FORBIDDEN unless is_owner(), so
+  // this list MUST stay equal to ["owner"] alone -- otherwise the page invites
+  // someone in and the database refuses them, and the "fix" someone reaches for
+  // is loosening the DATABASE.
+  "inventory.audit": ["owner"],
   "reports.view": ["owner", "admin", "manager", "readonly"],
   // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
   // permission from "reports.view", which also grants manager and readonly.
@@ -202,6 +240,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "loyalty.manage": "Process loyalty signups",
   "customers.manage": "Manage customer & patient records",
   "inventory.manage": "Manage inventory lots, COAs & manifests",
+  "inventory.count": "Count the shelf (blind physical counts)",
+  "inventory.audit": "Approve & post inventory audits (owner only)",
   "reports.view": "View reports & exports",
   "books.view": "View the accounting books (general ledger)",
   "financials.view": "View financial reports & accounting exports",
@@ -225,6 +265,8 @@ export const ALL_PERMISSIONS: Permission[] = [
   "customers.manage",
   "medical.manage",
   "inventory.manage",
+  "inventory.count",
+  "inventory.audit",
   "menu.import",
   "menu.publish",
   "promotions.manage",

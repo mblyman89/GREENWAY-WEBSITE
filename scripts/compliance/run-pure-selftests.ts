@@ -102,6 +102,10 @@ import { __runStellarMapCoreTests } from "../../src/lib/crypto/stellar/stellar-m
 import { __runStellarSyncCoreTests } from "../../src/lib/crypto/stellar/stellar-sync-core";
 import { __runLedgerCoreTests } from "../../src/lib/accounting/ledger-core";
 import { __runCoaCoreTests } from "../../src/lib/accounting/coa-core";
+// Slice books-23: the category -> inventory-account map the posting engine has
+// needed since books-11 and never had. Registered here because it is the last
+// link between "a person counted a shelf" and "the general ledger knows".
+import { __runAuditPostingAccountsTests } from "../../src/lib/inventory/audit-posting-accounts";
 import { __runPostingCoreTests } from "../../src/lib/accounting/posting-core";
 import { __runTrialBalanceCoreTests } from "../../src/lib/accounting/trial-balance-core";
 import { __runFixedAssetsCoreTests } from "../../src/lib/accounting/fixed-assets-core";
@@ -759,6 +763,8 @@ async function main() {
   __runStellarSyncCoreTests();
   __runLedgerCoreTests();
   __runCoaCoreTests();
+  __runAuditPostingAccountsTests();
+  console.log("audit-posting-accounts self-tests: all passed");
   __runPostingCoreTests();
   __runTrialBalanceCoreTests();
   __runFixedAssetsCoreTests();

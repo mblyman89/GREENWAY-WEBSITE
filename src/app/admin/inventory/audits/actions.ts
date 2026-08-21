@@ -83,7 +83,13 @@ function requiredField(form: FormData, name: string): string {
  * BEFORE the numbers are known is what makes the result evidence.
  */
 export async function createAuditAction(form: FormData): Promise<void> {
-  const session = await requirePermission("inventory.manage");
+  // books-23, owner only. Creating an audit decides what gets counted, and the
+  // scope is the part a reviewer attacks first.
+  //   "4, yes, I am the only one that can approve an audit and create an audit.
+  //    Anything accounting, bookkeeping, taxes, finance, should be hard gated to
+  //    me only."  -- Michael, books-23
+  // inventory.manage would have included manager.
+  const session = await requirePermission("inventory.audit");
 
   const label = requiredField(form, "label");
   const scopeRationale = requiredField(form, "scopeRationale");
@@ -131,7 +137,15 @@ export async function createAuditAction(form: FormData): Promise<void> {
  * the difference is the whole point of the exercise.
  */
 export async function saveCountAction(form: FormData): Promise<void> {
-  const session = await requirePermission("inventory.manage");
+  // books-23: counting is floor work, so this is the ONE action in this file that
+  // is not owner-only.
+  //   "For question 3, yes any employee can count, it should be a blind count
+  //    without cost, variances, or the approve button."  -- Michael, books-23
+  // What a counter can do from here is bounded by the data, not by trust: the
+  // count sheet they post from carries no cost, no variance and no system
+  // quantity, and this action writes a quantity and nothing else. It cannot
+  // approve, cannot post, and cannot set a reason.
+  const session = await requirePermission("inventory.count");
 
   const sessionId = requiredField(form, "sessionId");
   const lotId = requiredField(form, "lotId");
@@ -196,7 +210,11 @@ export async function saveCountAction(form: FormData): Promise<void> {
  * empty.
  */
 export async function saveReasonAction(form: FormData): Promise<void> {
-  const session = await requirePermission("inventory.manage");
+  // books-23, owner only. This is not data entry, it is a TAX POSITION: the
+  // reason decides whether missing product is shrink or an unreported sale. A
+  // manager should not be picking that, and the comment above explains what the
+  // wrong pick costs.
+  const session = await requirePermission("inventory.audit");
 
   const sessionId = requiredField(form, "sessionId");
   const lotId = requiredField(form, "lotId");
@@ -248,7 +266,11 @@ export async function saveReasonAction(form: FormData): Promise<void> {
  * signature an auditor looks for.
  */
 export async function moveStatusAction(form: FormData): Promise<void> {
-  const session = await requirePermission("inventory.manage");
+  // books-23, owner only. This action approves scope and approves results, and
+  // `inventory_audit_sessions` is owner-only in the database (migration 0191).
+  // Gating it any wider would invite a manager into a screen the database then
+  // refuses -- and the tempting "fix" for that is loosening the DATABASE.
+  const session = await requirePermission("inventory.audit");
 
   const sessionId = requiredField(form, "sessionId");
   const to = requiredField(form, "to") as AuditSessionStatus;

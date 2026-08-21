@@ -73,7 +73,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Other Inventory", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83d\udeac", glyph: "bong", group: "Inventory" }, // custom bong SVG (non-cannabis goods) — swap to "bong-outline" for the light version
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
-  { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard
+  { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.count", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard — books-23: the counting FLOOR, staff included, so inventory.count not inventory.manage
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" }, // ♻️ disposition
 
   // MKTG & ADV: promos, content, email, creative
@@ -152,7 +152,7 @@ export const adminNav: AdminNavItem[] = [
   // accounting RPC (migration 0185). Do NOT change these to "reports.view" --
   // that permission also grants manager and readonly, who would see the links
   // and then hit a raw database refusal.
-  { label: "Inventory Auditing", href: "/admin/inventory/audits", permission: "inventory.manage", icon: "\ud83d\udd0d", group: "Accounting" }, // 🔍 blind counts, variance review, work papers — NOT /admin/audit, which is the security log
+  { label: "Inventory Auditing", href: "/admin/inventory/audits", permission: "inventory.audit", icon: "\ud83d\udd0d", group: "Accounting" }, // 🔍 blind counts, variance review, work papers — NOT /admin/audit, which is the security log
   { label: "General Journal", href: "/admin/books/journal", permission: "books.view", icon: "\u270d\ufe0f", group: "Accounting" }, // writing hand: manual entries
   { label: "Conversion", href: "/admin/books/conversion", permission: "books.view", icon: "\ud83d\udd01", group: "Accounting" }, // leaving Cultivera and Sage, 2026-11-01
   { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Accounting" }, // receipt: what survives 280E and what it takes

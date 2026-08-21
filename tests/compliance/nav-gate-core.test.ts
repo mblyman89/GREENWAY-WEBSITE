@@ -261,7 +261,14 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
     // This test pins the answer. If a NEW owner-only page appears outside the
     // menu, it fails and names it, so the decision gets made on purpose
     // instead of by omission.
-    const known = ["/admin/reports/accounting"];
+    const known = [
+      "/admin/reports/accounting",
+      // books-23: the "new audit" form. Owner-only by design and deliberately
+      // NOT a menu item -- it is reached from a button on the audit hub, which
+      // IS in the menu. Giving "start a new audit" its own top-level link would
+      // put the rarest action in the most prominent place.
+      "/admin/inventory/audits/new",
+    ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());
 
@@ -358,21 +365,35 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(leaks, `owner-tab leaks:\n${rendered.join("\n")}`).toEqual([]);
   });
 
-  it("the ONE exception is Inventory Auditing, and it explains itself", () => {
-    expect(OWNER_TAB_EXCEPTIONS).toHaveLength(1);
-    const ex = ownerTabExceptionFor("/admin/inventory/audits");
-    expect(ex).toBeTruthy();
-    expect(ex!.permission).toBe("inventory.manage");
-    // The reason must name the thing that would break, not just assert a
-    // conclusion. Rule 26's substance requirement, applied to a policy note.
-    expect(ex!.why).toContain("count sheet");
-    expect(ex!.why.length).toBeGreaterThan(120);
+  it("claims NO owner-tab exception, because none is needed any more", () => {
+    // books-23 split counting (inventory.count) from auditing (inventory.audit),
+    // so the Inventory Auditing item became owner-only like everything else in
+    // the tab and its exception was deleted. If somebody re-adds an entry here,
+    // that is a decision that needs a reason, and this test makes them notice.
+    expect(OWNER_TAB_EXCEPTIONS).toHaveLength(0);
+    expect(ownerTabExceptionFor("/admin/inventory/audits")).toBeUndefined();
   });
 
-  it("the exception is genuinely necessary: the count sheet is not owner-only", () => {
-    // If this page were ever tightened to an owner-only guard, the exception
-    // would become dead weight AND staff would lose counting. Either way,
-    // somebody should have to look at it.
+  it("every item in an owner tab is genuinely owner-only, with nothing excused", () => {
+    // The stronger statement that the empty exception list now permits: not
+    // "leaks are excused where declared" but "there is nothing to excuse".
+    const offenders: string[] = [];
+    for (const item of adminNav) {
+      if (item.group !== ACCOUNTING_GROUP && item.group !== LYMAN_GROUP) continue;
+      if (!isOwnerOnlyPermission(item.permission as "audit.view")) {
+        offenders.push(`${item.label} (${item.href}) is gated on ${item.permission}`);
+      }
+    }
+    expect(offenders, `owner-tab items that are not owner-only:\n${offenders.join("\n")}`).toEqual(
+      [],
+    );
+  });
+
+  it("counting is reachable by staff, and the count sheet is the ONLY such page", () => {
+    // The reason the exception could be deleted at all. If this page were ever
+    // tightened to owner-only, staff would silently lose counting -- so assert
+    // the permission that makes Michael's workflow possible, and assert the
+    // roles it actually reaches.
     const countPage = join(
       REPO,
       "src",
@@ -386,20 +407,53 @@ describe("N4 the Accounting and Lyman tabs", () => {
     );
     expect(existsSync(countPage), "the employee count sheet must exist").toBe(true);
     const guard = extractPageGuard(readFileSync(countPage, "utf8"));
-    expect(guardPermission(guard)).toBe("inventory.manage");
-    expect(can("manager", "inventory.manage")).toBe(true);
+    expect(guardPermission(guard)).toBe("inventory.count");
+    expect(can("staff", "inventory.count")).toBe(true);
+    expect(can("manager", "inventory.count")).toBe(true);
+    // ...and the analyst role, which exists to read reports, must NOT be able to
+    // write counts onto the shelf record.
+    expect(can("readonly", "inventory.count")).toBe(false);
+    expect(can("content_editor", "inventory.count")).toBe(false);
+
+    // Every OTHER page under the audit tree is owner-only.
+    const auditRoot = join(REPO, "src", "app", "admin", "inventory", "audits");
+    const loose: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name === "page.tsx" && full !== countPage) {
+          const p = guardPermission(extractPageGuard(readFileSync(full, "utf8")));
+          if (p !== "inventory.audit") loose.push(`${full} -> ${p}`);
+        }
+      }
+    };
+    walk(auditRoot);
+    expect(loose, `audit pages that are not owner-only:\n${loose.join("\n")}`).toEqual([]);
+    expect(isOwnerOnlyPermission("inventory.audit")).toBe(true);
   });
 
-  it("a manager sees NEITHER owner tab", () => {
+  it("a manager sees NEITHER owner tab — not one item in either", () => {
+    // STRENGTHENED in books-23. This used to allow the manager exactly one
+    // Accounting item, /admin/inventory/audits, because the audit tree had to
+    // stay open for counting. Counting now has its own permission and its own
+    // home in the Inventory group, so the allowance is gone and the statement
+    // the test makes is the stronger one: a manager sees no owner-tab item at
+    // all, and neither tab renders for them.
     const groups = groupsVisibleTo(adminNav, "manager");
     expect(groups).not.toContain(LYMAN_GROUP);
-    // Accounting is visible to a manager ONLY through the declared exception.
-    // Assert that the exception is the sole reason, so the tab cannot fill up
-    // with other things later.
+    expect(groups).not.toContain(ACCOUNTING_GROUP);
+
     const visibleAccounting = navItemsForRole(adminNav, "manager").filter(
       (i) => i.group === ACCOUNTING_GROUP,
     );
-    expect(visibleAccounting.map((i) => i.href)).toEqual(["/admin/inventory/audits"]);
+    expect(visibleAccounting.map((i) => i.href)).toEqual([]);
+
+    // ...and the manager still has the floor work they need, or this slice broke
+    // the job instead of tightening it (standing rule 34: gates run in BOTH
+    // directions).
+    expect(can("manager", "inventory.count")).toBe(true);
+    expect(can("manager", "inventory.manage")).toBe(true);
   });
 
   it("no non-owner sees any books screen or any money page", () => {
@@ -524,9 +578,18 @@ describe("N6 the top nav can actually render the new tabs", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("N7 owner-only is derived, not copied", () => {
-  it("names exactly the four owner-only permissions in use today", () => {
+  it("names exactly the five owner-only permissions in use today", () => {
+    // books-23 added inventory.audit: approving and posting an inventory audit
+    // is an accounting act, and Michael's instruction was that "anything
+    // accounting, bookkeeping, taxes, finance, should be hard gated to me only."
     expect(ownerOnlyPermissions().sort()).toEqual(
-      ["audit.view", "books.view", "finances.view", "financials.view"].sort(),
+      [
+        "audit.view",
+        "books.view",
+        "finances.view",
+        "financials.view",
+        "inventory.audit",
+      ].sort(),
     );
   });
 

@@ -65,7 +65,9 @@ function statusTone(s: AuditSessionStatus): "neutral" | "green" | "gold" | "oran
 }
 
 export default async function AuditHubPage() {
-  await requirePermission("inventory.manage");
+  // books-23: owner only. This is the audit hub -- scope, variances at cost, and
+  // the posting controls. inventory.manage would have shown it to a manager.
+  await requirePermission("inventory.audit");
 
   if (!isSupabaseServiceConfigured) {
     return (

@@ -443,7 +443,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I do a cycle count?",
-        a: "Cycle Counts lets you count a section of inventory, compare it to the system, and record adjustments — with a clear trail for compliance.",
+        a: "Cycle Counts is the counting floor: open a job the owner has approved and enter what you physically count, without seeing the system figure. Recording a count changes nothing on its own. The owner reviews every difference in Inventory Auditing and approves the correction, which is what posts to inventory and to the books.",
         href: "/admin/inventory/cycle-counts",
       },
       {

@@ -81,7 +81,9 @@ export default async function WorkPaperPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("inventory.manage");
+  // books-23: owner only. The work papers price every difference, so this is a
+  // financial document even though it lives under Inventory.
+  await requirePermission("inventory.audit");
   const { id } = await params;
   const review = await getAuditReview(id);
 

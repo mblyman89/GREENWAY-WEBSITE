@@ -123,21 +123,32 @@ export type OwnerTabException = {
   readonly why: string;
 };
 
-export const OWNER_TAB_EXCEPTIONS: readonly OwnerTabException[] = [
-  {
-    href: "/admin/inventory/audits",
-    permission: "inventory.manage",
-    why:
-      "The audit TREE is shared with the people doing the counting. " +
-      "/admin/inventory/audits/[id]/count is the employee count sheet, and " +
-      "migration 0191 grants staff write on inventory_audit_lines so they can " +
-      "fill it in. Locking the tree to the owner would break counting. What is " +
-      "owner-only is everything that decides anything: the session row itself, " +
-      "scope approval, result approval and posting to the ledger are all " +
-      "is_owner() in the database (migrations 0191 and 0192). A manager on this " +
-      "screen can look and can count. A manager cannot approve or post.",
-  },
-] as const;
+/**
+ * EMPTY, AND THAT IS THE POINT (books-23).
+ *
+ * This list used to hold one entry, for /admin/inventory/audits gated on
+ * `inventory.manage`. The reason given was that the audit tree had to stay open
+ * because the employee count sheet lived underneath it, so a manager "can look
+ * and can count".
+ *
+ * That reason stopped being true in books-23. Counting moved to its own
+ * permission, `inventory.count`, and the pages split cleanly in two:
+ *
+ *   /admin/inventory/audits/[id]/count  -> inventory.count  (owner/admin/manager/staff)
+ *   everything else under /admin/inventory/audits -> inventory.audit (owner alone)
+ *
+ * So the tab no longer needs an exception: the item in it is owner-only like
+ * every other item, and the count sheet is reached from Cycle Counts, which sits
+ * in the Inventory group where floor staff already work.
+ *
+ * The entry was DELETED rather than reworded. An allowance for a page that is no
+ * longer loose is dead weight that makes the next real exception look normal
+ * (standing rule 43). The type, the lookup and `unexpectedOwnerTabLeaks` are all
+ * kept and all still tested against synthetic fixtures in the self-tests below,
+ * so the machinery is ready if Michael ever does need to share a screen -- it is
+ * simply not being used to excuse anything today.
+ */
+export const OWNER_TAB_EXCEPTIONS: readonly OwnerTabException[] = [] as const;
 
 export function ownerTabExceptionFor(href: string): OwnerTabException | undefined {
   return OWNER_TAB_EXCEPTIONS.find((e) => e.href === href);
@@ -522,26 +533,34 @@ export function __runNavGateTests(): void {
   ok(leaks.every((l) => l.href === "/admin/oops"), "only the offender is reported");
   ok(leaks.some((l) => l.role === "manager"), "the leaking role is named");
 
-  const excepted: NavItemLike[] = [
-    ...sample,
-    {
-      label: "Inventory Auditing",
-      href: "/admin/inventory/audits",
-      permission: "inventory.manage",
-      group: "Accounting",
-    },
-  ];
+  // books-23: the real exception list is now EMPTY, so the machinery is exercised
+  // against a synthetic entry instead. Testing it through whatever happens to be
+  // in the live list would mean this logic stopped being tested the moment the
+  // list emptied -- which is exactly what just happened (standing rule 50: a
+  // module that only its own test imports is dead code wearing a green check
+  // mark; the sibling failure is a check that only passes because there is
+  // nothing left to check).
+  ok(OWNER_TAB_EXCEPTIONS.length === 0, "no owner-tab exception is claimed today");
   ok(
-    unexpectedOwnerTabLeaks(excepted).length === 0,
-    "the DECLARED exception is not reported as a leak",
-  );
-  ok(
-    ownerTabExceptionFor("/admin/inventory/audits") !== undefined,
-    "the exception is findable",
+    ownerTabExceptionFor("/admin/inventory/audits") === undefined,
+    "the retired Inventory Auditing exception is really gone",
   );
   ok(ownerTabExceptionFor("/admin/atm") === undefined, "unrelated hrefs have no exception");
+
+  const synthetic: readonly OwnerTabException[] = [
+    {
+      href: "/admin/synthetic",
+      permission: "reports.view",
+      why:
+        "Synthetic fixture used to prove the exception mechanism still works while " +
+        "the live list is empty. Not a real allowance for any real page.",
+    },
+  ];
+  const findSynthetic = (href: string) => synthetic.find((e) => e.href === href);
+  ok(findSynthetic("/admin/synthetic") !== undefined, "a declared exception is findable");
+  ok(findSynthetic("/admin/atm") === undefined, "an undeclared href is not found");
   ok(
-    (ownerTabExceptionFor("/admin/inventory/audits")?.why.length ?? 0) > 80,
+    (findSynthetic("/admin/synthetic")?.why.length ?? 0) > 80,
     "the exception explains itself at length, not with a shrug",
   );
 
