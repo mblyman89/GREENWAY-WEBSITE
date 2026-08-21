@@ -101,6 +101,44 @@ export type EmployeeFile = {
 };
 
 // ---------------------------------------------------------------------------
+// SENSITIVE-COLUMN SCRUB
+//
+// These reads use `select("*")` on purpose: it keeps them working before a
+// migration lands, because a column that does not exist yet is simply absent
+// rather than a query error. The cost of that choice is that EVERY column
+// riding on the row arrives in memory, including ones no caller should see.
+//
+// That cost went up in books-25. `employees` now carries ssn_full, and the
+// full nine digits are the single most sensitive field in the application. The
+// database gates it with a COLUMN privilege, but these reads run as the SERVICE
+// ROLE, which bypasses both RLS and column grants - so the gate that stops a
+// manager reading it does NOT stop this code path.
+//
+// There were already three near-identical inline scrubs here for the banking
+// columns, and a fourth read with none at all. Three copies of a security
+// control is three places to forget the next field; the missing fourth is the
+// proof. So this is now one named function, called by every read, and the SSN
+// joins the list.
+//
+// Callers that legitimately need the SSN (W-2 generation) must go through the
+// dedicated payroll-onboarding store, which writes an audit row BEFORE
+// returning the value.
+// ---------------------------------------------------------------------------
+const SENSITIVE_EMPLOYEE_COLUMNS = [
+  "bank_routing",
+  "bank_account_number",
+  "bank_account_type",
+  "ssn_full",
+] as const;
+
+function scrubSensitive<T>(row: T): T {
+  for (const col of SENSITIVE_EMPLOYEE_COLUMNS) {
+    delete (row as Record<string, unknown>)[col];
+  }
+  return row;
+}
+
+// ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
@@ -120,9 +158,7 @@ export async function getEmployeeFile(employeeId: string): Promise<EmployeeFile 
   if (empError || !emp) return null;
   const employee = emp as EmployeeFileRow;
   // Scrub banking columns defensively so they cannot leak past this module.
-  delete (employee as Record<string, unknown>).bank_routing;
-  delete (employee as Record<string, unknown>).bank_account_number;
-  delete (employee as Record<string, unknown>).bank_account_type;
+  scrubSensitive(employee);
 
   const migrationApplied = employee.employment_status !== undefined;
 
@@ -216,10 +252,7 @@ export async function rosterOverview(): Promise<RosterOverview> {
     .order("full_name", { ascending: true });
   if (error) return empty;
   const rows = ((emps as EmployeeFileRow[] | null) ?? []).map((e) => {
-    delete (e as Record<string, unknown>).bank_routing;
-    delete (e as Record<string, unknown>).bank_account_number;
-    delete (e as Record<string, unknown>).bank_account_type;
-    return e;
+    return scrubSensitive(e);
   });
   const migrationApplied = rows.length === 0 ? false : rows[0].employment_status !== undefined;
 
@@ -313,10 +346,7 @@ export async function listEmployeeFiles(): Promise<{ rows: EmployeeFileRow[]; mi
     .order("full_name", { ascending: true });
   if (error) return { rows: [], migrationApplied: false };
   const rows = ((data as EmployeeFileRow[] | null) ?? []).map((e) => {
-    delete (e as Record<string, unknown>).bank_routing;
-    delete (e as Record<string, unknown>).bank_account_number;
-    delete (e as Record<string, unknown>).bank_account_type;
-    return e;
+    return scrubSensitive(e);
   });
   const migrationApplied = rows.length === 0 ? true : rows[0].employment_status !== undefined;
   return { rows, migrationApplied };
@@ -458,7 +488,7 @@ export async function setEmploymentStatus(input: {
     .eq("id", input.employeeId)
     .maybeSingle();
   if (empError || !emp) return { ok: false, error: "Employee not found." };
-  const row = emp as EmployeeFileRow;
+  const row = scrubSensitive(emp as EmployeeFileRow);
   if (row.employment_status === undefined) {
     return { ok: false, error: "Apply migration 0117 first (see the banner above)." };
   }
