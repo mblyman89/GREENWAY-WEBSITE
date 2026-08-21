@@ -51,7 +51,11 @@ import {
   type OnboardingCandidate,
   type PayRecord,
 } from "@/lib/payroll/payroll-onboarding-core";
-import { buildChecklistView } from "@/lib/payroll/payroll-onboarding-ui-core";
+import {
+  buildChecklistView,
+  buildWorkedPaycheck,
+} from "@/lib/payroll/payroll-onboarding-ui-core";
+import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
 import { ALL_PAY_FREQUENCIES, type W4Record } from "@/lib/payroll/payroll-w4-core";
 
 const REPO = path.resolve(__dirname, "../..");
@@ -507,6 +511,46 @@ describe("the form does not re-implement the engine", () => {
       expect(FORM_CODE, `the form references ${forbidden} directly`).not.toContain(
         forbidden,
       );
+    }
+  });
+
+  it("PRINTS the citation behind each paycheck line, not just the arithmetic", () => {
+    // FOUND BY CHECKING THE REPORT AGAINST THE CODE (rule 47). The owner-facing
+    // write-up claimed every paycheck line shows the authority that backs it.
+    // Every line did carry an authorityId - and the screen dropped it on the
+    // floor, rendering "x 6.2%" with nothing standing behind the 6.2%.
+    //
+    // "6.2%" is a number somebody typed. "26 U.S.C. 3101(a)" is the reason it
+    // is 6.2%. This slice exists so a figure can be traced, so the trace has
+    // to reach the page.
+    expect(FORM_CODE).toContain("citeFor(line.authorityId)");
+    // And the citation must be LOOKED UP, never typed here. A hand-typed cite
+    // next to a computed number looks authoritative and drifts in silence.
+    expect(FORM_CODE).toContain("findGuidanceAuthority");
+    expect(FORM_CODE).not.toMatch(/"26 U\.S\.C\./);
+  });
+
+  it("the citations the paycheck asks for actually resolve to real authorities", () => {
+    // A lookup that returns undefined renders nothing, which is safe but
+    // useless: the promise of a traceable figure quietly stops being kept.
+    // So resolve the ids the paycheck really uses, through the real registry.
+    const view = buildWorkedPaycheck({
+      w4: COMPLETE_W4,
+      pay: COMPLETE_PAY,
+      hundredthHours: 8_000, // 80 hours, one biweekly period
+      onIsoDate: "2026-06-15", // inside the evidenced 2026 rate rows
+    });
+    const ids = [...view.employeeLines, ...view.employerLines]
+      .map((l) => l.authorityId)
+      .filter((id): id is string => typeof id === "string");
+
+    // Rule 39: no ids would make the loop below prove nothing.
+    expect(ids.length).toBeGreaterThan(3);
+    for (const id of ids) {
+      const found = findGuidanceAuthority(id);
+      expect(found, `paycheck line cites "${id}", which is in no authority registry`)
+        .toBeDefined();
+      expect(found!.cite.length).toBeGreaterThan(5);
     }
   });
 
