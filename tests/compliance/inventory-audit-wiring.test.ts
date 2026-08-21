@@ -299,13 +299,29 @@ describe("C the prose does not promise a posting that cannot happen", () => {
   });
 
   it("the screen tells the owner the entry is a DRAFT, which is what the code does", () => {
-    // Michael's Q1: "create the draft and await my approval before auto posting".
-    // The claim and the mechanism are asserted together, so neither can drift
-    // alone: the store must NOT pass autoPost, and the page must say "draft".
+    /*
+     * Michael's Q1: "create the draft and await my approval before auto posting".
+     * The claim and the mechanism are asserted together, so neither can drift
+     * alone: the store must NOT pass autoPost, and the page must SAY "draft".
+     *
+     * READ WITH COMMENTS STRIPPED, AND THIS IS THE WHOLE POINT OF THE SLICE.
+     * The first version searched the raw file, and it passed against a pre-slice
+     * tree whose only occurrence of the word was in a code comment on line 63:
+     *
+     *     * An earlier draft of this page branched on `status === "posted"` ...
+     *
+     * A comment about an earlier draft of the FILE answered a question about
+     * what the OWNER'S SCREEN says. That is defect D6 of this very slice --
+     * prose being read as the thing it describes -- reproduced inside the test
+     * written to prevent it. Only the rule-18 revert exposed it.
+     */
     const store = code(read(SRC, "lib", "inventory", "inventory-audit-store.ts"));
     expect(store).not.toMatch(/autoPost/);
-    const page = read(HUB, "[id]", "page.tsx");
-    expect(page.toLowerCase()).toMatch(/draft/);
+    const page = withoutComments(read(HUB, "[id]", "page.tsx"));
+    expect(
+      page.toLowerCase(),
+      "the owner must be told in rendered words that posting drafts an entry",
+    ).toMatch(/draft/);
   });
 });
 
@@ -472,10 +488,46 @@ describe("F no update in the audit store can silently affect zero rows", () => {
   });
 
   it("WRITE_BLOCKED reaches a human, rather than being swallowed", () => {
-    // Rule 43 again: the code has to be emitted AND surfaced.
+    /*
+     * Rule 43 again: the code has to be emitted AND surfaced.
+     *
+     * THIS TEST WAS WRONG FIRST, AND IT IS INSTRUCTIVE. It used to assert only
+     * that actions.ts mentions `result.refusal.code` and
+     * `result.refusal.message`. Both were already true BEFORE this slice -- the
+     * hub had eleven refusal surfacings on the day the silent no-op bug was
+     * filed. So a test named "WRITE_BLOCKED reaches a human" passed against a
+     * tree in which WRITE_BLOCKED did not exist at all. The rule-18 stash proof
+     * is what exposed it: the test survived a full revert of the fix.
+     *
+     * The name made a claim the assertions never checked. What has to be true is
+     * that the writes which can be BLOCKED SILENTLY under row-level security --
+     * the ones that return no error and affect no rows -- are the ones routed
+     * through a refusal the screen renders. So: follow WRITE_BLOCKED from the
+     * place it is emitted to the place it is displayed.
+     */
     const actions = read(HUB, "actions.ts");
-    expect(actions).toContain("result.refusal.code");
-    expect(actions).toContain("result.refusal.message");
+
+    // 1. The store emits it (checked in full by the test above) ...
+    expect(store).toContain('code: "WRITE_BLOCKED"');
+
+    // 2. ... from the shared helper, so it cannot be emitted from one site and
+    //    forgotten at the other three.
+    const emitAt = store.indexOf('code: "WRITE_BLOCKED"');
+    const helperAt = store.indexOf("function requireRowsWritten");
+    expect(helperAt, "requireRowsWritten must exist").toBeGreaterThan(-1);
+    expect(
+      emitAt > helperAt,
+      "WRITE_BLOCKED must be emitted from inside requireRowsWritten, not open-coded",
+    ).toBe(true);
+
+    // 3. ... and every caller of the three guarded writes hands the refusal to
+    //    `refuse(...)`, which is what puts words on the owner's screen. A store
+    //    that returns ok:false to an action that ignores it is a silent no-op
+    //    with extra steps.
+    for (const fn of ["saveCountLine", "saveLineReason", "moveSessionStatus"]) {
+      expect(store, `${fn} must be guarded`).toContain(fn);
+    }
+    expect(actions).toContain("refuse(back, result.refusal.code, result.refusal.message)");
   });
 });
 
@@ -631,8 +683,11 @@ describe("J the compliance nag is the owner's alone", () => {
   const dash = read(SRC, "app", "admin", "page.tsx");
 
   it("the calendar permission is the owner's, and nobody else's", () => {
+    expect(ALL_PERMISSIONS).toContain("compliance.calendar");
     expect(rolesForPermission("compliance.calendar")).toEqual(["owner"]);
-    // Named individually so a failure says WHO leaked in.
+    // Named individually so a failure says WHO leaked in. Note the roster check
+    // above: can() denies unknown permissions, so a loop of expect(false) would
+    // pass for a permission that was never added.
     for (const role of ["admin", "manager", "staff", "content_editor", "readonly"] as const) {
       expect(
         can(role, "compliance.calendar"),
@@ -642,9 +697,23 @@ describe("J the compliance nag is the owner's alone", () => {
   });
 
   it("the admin specifically loses it, which is the point of the change", () => {
-    // It used to ride on settings.manage. That is the permission this change is
-    // about, so assert the SEPARATION rather than just the new value: the admin
-    // keeps settings.manage and still cannot open the calendar.
+    /*
+     * It used to ride on settings.manage. That is the permission this change is
+     * about, so assert the SEPARATION rather than just the new value: the admin
+     * keeps settings.manage and still cannot open the calendar.
+     *
+     * THE EXISTENCE ASSERTION IS NOT DECORATION. `can()` answers false for a
+     * permission it has never heard of, so "the admin cannot open the calendar"
+     * is satisfied both by a correctly gated permission AND by a permission that
+     * does not exist at all. This test passed against a pre-slice tree in which
+     * `compliance.calendar` had not been invented yet -- standing rule 46, a
+     * zero nobody computed looks like a zero somebody computed. Checking the
+     * roster first is what makes the false below mean something.
+     */
+    expect(
+      ALL_PERMISSIONS,
+      "compliance.calendar must be a real permission before denying it means anything",
+    ).toContain("compliance.calendar");
     expect(can("admin", "settings.manage")).toBe(true);
     expect(can("admin", "compliance.calendar")).toBe(false);
   });
