@@ -1,0 +1,28 @@
+SOURCE TEXT - RCW 26.23.040
+Retrieved 2026-08-21 from https://app.leg.wa.gov/RCW/default.aspx?cite=26.23.040
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+
+RCW 26.23.040
+Employer reporting requirements.
+
+(1) All employers doing business in the state of Washington shall report to the Washington state support registry:
+(a) The hiring of any person who resides or works in this state to whom the employer anticipates paying earnings and who:
+(i) Has not previously been employed by the employer; or
+(ii) Was previously employed by the employer but has been separated from such employment for at least sixty consecutive days; and
+(b) The date on which the employee first performed services for pay for the employer, or, in the case of an employee described in (a)(ii) of this subsection the date on which the employee returned to perform services for pay after a layoff, furlough, separation, or leave without pay.
+The secretary of the department of social and health services may adopt rules to establish additional exemptions if needed to reduce unnecessary or burdensome reporting.
+(2) Employers shall report to the extent practicable by W-4 form, or, at the option of the employer, an equivalent form, and may mail the form by first-class mail, or may transmit it electronically, or by other means authorized by the registry which will result in timely reporting.
+(3) Employers shall submit reports within twenty days of the hiring, rehiring, or return to work of the employee, except as provided in subsection (4) of this section. The report shall contain:
+(a) The employee's name, address, social security number, and date of birth; and
+(b) The employer's name, address, and identifying number assigned under section 6109 of the internal revenue code of 1986.
+(4) In the case of an employer transmitting reports magnetically or electronically, the employer shall report those employees described in subsection (1) of this section, in two monthly transmissions, if necessary, not less than twelve days nor more than sixteen days apart.
+(5) An employer who fails to report as required under this section shall be subject to a civil penalty of:
+(a) Twenty-five dollars per month per employee; or
+(b) Five hundred dollars, if the failure to report is the result of a conspiracy between the employer and the employee not to supply the required report, or to supply a false report. All violations within a single month shall be considered a single violation for purposes of assessing the penalty. The penalty may be imposed and collected by the division of child support under RCW 74.20A.350.
+(6) The registry shall retain the information for a particular employee only if the registry is responsible for establishing, enforcing, or collecting a support debt of the employee. The registry may, however, retain information for a particular employee for as long as may be necessary to:
+(a) Transmit the information to the national directory of new hires as required under federal law; or
+(b) Provide the information to other state agencies for comparison with records or information possessed by those agencies as required by law.
+Information that is not permitted to be retained shall be promptly destroyed. Agencies that obtain information from the department of social and health services under this section shall maintain the confidentiality of the information received, except as necessary to implement the agencies' responsibilities.
+[ 2012 c 109 s 1; 1998 c 160 s 5; 1997 c 58 s 944; 1997 c 58 s 943; 1994 c 127 s 1; 1993 c 480 s 1; 1989 c 360 s 39; 1987 c 435 s 4.]

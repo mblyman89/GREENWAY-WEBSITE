@@ -68,6 +68,13 @@ import { PERIOD_CLOSE_AUTHORITIES_NEW } from "./period-close-authorities";
 import { BASIS_AAA_AUTHORITIES_NEW } from "./basis-aaa-authorities";
 import { COGS_POSITION_AUTHORITIES_NEW } from "./cogs-position-authorities";
 import { INTEREST_AUTHORITIES_NEW } from "./interest-authorities";
+// books-25. The HIRING PAPERWORK authorities: Form I-9 (8 CFR §274a.2), the
+// W-4 withholding certificate regulation (26 CFR §31.3402(f)(2)-1), and
+// Washington's twenty-day new-hire report (RCW 26.23.040). Imported HERE, in
+// the same commit that declares them, because the alternative is the bug the
+// PAYROLL_TAX_AUTHORITIES comment below records: an exported registry that
+// nothing merges is a set of citations no screen can find.
+import { PAYROLL_ONBOARDING_AUTHORITIES } from "@/lib/payroll/payroll-onboarding-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -518,6 +525,7 @@ export const ALL_SOURCE_REGISTRIES = [
   "basis-aaa",
   "cogs-position",
   "interest",
+  "payroll-onboarding",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -627,6 +635,23 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // corporation, and the first says Greenway is not one.
     ...INTEREST_AUTHORITIES_NEW.map((a) => ({
       tag: "interest" as const,
+      authority: a,
+    })),
+    // books-25. WHAT A NEW HIRE MUST FILL OUT, WHEN, AND WHAT HAPPENS WHEN
+    // THEY DO NOT. Three agencies with three different deadlines on the same
+    // hire: the I-9's three business days (immigration), the W-4 on day one
+    // (Treasury), and Washington's twenty-day registry report (Division of
+    // Child Support).
+    //
+    // Registered here rather than left in the payroll module because the
+    // hiring screen, the employee record and next year's W-2 must all cite ONE
+    // §31.3402(f)(2)-1. Note what is deliberately NOT re-declared: the no-W-4
+    // default as IRS Pub. 15-T states it, and the "exempt means income tax
+    // only" warning, both already registered by the payroll slice. This
+    // registry adds the BINDING regulation behind the first of those, which is
+    // a different document making the same point, not a second copy of it.
+    ...PAYROLL_ONBOARDING_AUTHORITIES.map((a) => ({
+      tag: "payroll-onboarding" as const,
       authority: a,
     })),
   ];
