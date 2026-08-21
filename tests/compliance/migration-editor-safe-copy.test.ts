@@ -1,0 +1,102 @@
+/**
+ * tests/compliance/migration-editor-safe-copy.test.ts
+ *
+ * A SECOND COPY OF A FILE IS A SECOND CHANCE TO BE WRONG.
+ *
+ * Michael applies migrations by hand, by pasting text into the Supabase SQL
+ * editor. 0195 is 734 lines and 334 of them are comments, which makes it
+ * fragile in transit: any client that splits the text into statements itself
+ * must simultaneously honour single-quoted strings, dollar-quoted bodies, and
+ * -- comments. 0195 contains 8 comment lines with an odd number of
+ * apostrophes, 15 comment lines containing a semicolon, and 4 dollar-quoted
+ * bodies that themselves contain '--'.
+ *
+ * So the repo also ships a comment-free copy under supabase/migrations/
+ * editor-safe/. That copy is a convenience, and every convenience of that kind
+ * is a drift risk: the day someone edits the real migration and forgets the
+ * copy, Michael pastes stale SQL and we have manufactured the exact class of
+ * silent failure he asked us to make impossible.
+ *
+ * This suite exists so that cannot happen quietly. The copy is not trusted --
+ * it is REGENERATED from the real migration here and compared byte for byte.
+ */
+import { describe, it, expect } from "vitest";
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
+import {
+  stripSqlComments,
+  transitHazards,
+} from "../../scripts/compliance/strip-comments-for-sql-editor";
+
+const MIGRATIONS = path.resolve(__dirname, "../../supabase/migrations");
+const SOURCE = path.join(MIGRATIONS, "0195_employee_payroll_setup.sql");
+const COPY = path.join(
+  MIGRATIONS,
+  "editor-safe",
+  "0195_employee_payroll_setup.EDITOR_SAFE.sql",
+);
+
+describe("the editor-safe copy cannot drift from the migration it copies", () => {
+  it("both files exist", () => {
+    expect(existsSync(SOURCE)).toBe(true);
+    expect(existsSync(COPY)).toBe(true);
+  });
+
+  it("the copy is EXACTLY what stripping the source produces", () => {
+    // Regenerated, not trusted. If someone edits 0195 and forgets the copy,
+    // this fails and names the reason.
+    const regenerated = stripSqlComments(readFileSync(SOURCE, "utf8"));
+    const onDisk = readFileSync(COPY, "utf8");
+    expect(onDisk).toBe(regenerated);
+  });
+
+  it("the copy carries no comments at all, which is its whole purpose", () => {
+    const after = transitHazards(readFileSync(COPY, "utf8"));
+    expect(after.commentLines).toBe(0);
+    expect(after.oddApostrophe).toBe(0);
+    expect(after.withSemicolon).toBe(0);
+  });
+
+  it("the SOURCE really does carry the hazards, or this copy is pointless", () => {
+    // Guard against a vacuous pass (standing rule 39): if 0195 ever stopped
+    // containing risky comments, the assertions above would hold trivially and
+    // prove nothing. Measured values at the time of writing: 334 / 8 / 15.
+    const before = transitHazards(readFileSync(SOURCE, "utf8"));
+    expect(before.commentLines).toBeGreaterThan(100);
+    expect(before.oddApostrophe).toBeGreaterThan(0);
+    expect(before.withSemicolon).toBeGreaterThan(0);
+  });
+
+  it("stripping does not remove SQL: every statement keyword survives", () => {
+    const stripped = stripSqlComments(readFileSync(SOURCE, "utf8"));
+    // Counted from the real file. These are the statements that DO the work.
+    for (const [needle, atLeast] of [
+      ["create table if not exists", 4],
+      ["alter table public.employees", 2],
+      ["enable row level security", 4],
+      ["create or replace function", 1],
+      ["do $", 3],
+    ] as [string, number][]) {
+      const found = stripped.split(needle).length - 1;
+      expect(found, `expected at least ${atLeast} of "${needle}"`).toBeGreaterThanOrEqual(
+        atLeast,
+      );
+    }
+  });
+
+  it("does NOT strip '--' that lives inside a dollar-quoted body's SQL string", () => {
+    // The lexer must not treat characters inside a literal as a comment.
+    const sample =
+      "do $x$ begin\n  raise notice 'a -- b';\n  -- real comment\nend $x$;\n";
+    const out = stripSqlComments(sample);
+    expect(out).toContain("'a -- b'");
+    expect(out).not.toContain("real comment");
+  });
+
+  it("preserves a doubled apostrophe inside a string literal", () => {
+    const sample = "select 'it''s fine'; -- gone\n";
+    const out = stripSqlComments(sample);
+    expect(out).toContain("'it''s fine'");
+    expect(out).not.toContain("gone");
+  });
+});
