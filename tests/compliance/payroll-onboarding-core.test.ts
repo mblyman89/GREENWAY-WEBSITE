@@ -524,6 +524,62 @@ describe("pay: the Sage defects that would have cost real money", () => {
     expect(r.issues.some((i) => /minimum wage/i.test(i.message))).toBe(true);
   });
 
+  it("REFUSES an hourly employee when the minimum wage at hire is unknown", () => {
+    // books-26 DEFECT. The floor check used to be guarded by
+    // `minimumWageMilliCentsAtHire !== null`, so a blank floor did not mean
+    // "unverified" - it meant the check never ran. Proven by execution before
+    // the fix: $9.00/hour returned ok=true with ZERO issues, and no test in
+    // the suite covered the null case, so the whole suite stayed green.
+    //
+    // Rule 14: an unknown floor is not a permissive floor.
+    const r = validatePay(
+      goodPay({
+        hourlyRateMilliCents: 900_000, // $9.00 - far below any WA minimum
+        minimumWageMilliCentsAtHire: null,
+      }),
+    );
+    expect(r.ok).toBe(false);
+    const issue = r.issues.find((i) => i.field === "minimumWageMilliCentsAtHire");
+    expect(issue, JSON.stringify(r.issues)).toBeDefined();
+    expect(issue!.severity).toBe("block");
+    // It must name a concrete action, which is what makes the block fair
+    // rather than merely strict.
+    expect(issue!.authorityId).toBe("lni-minimum-wage-announcement");
+    // And it must say which date it is missing, or the user cannot act.
+    expect(issue!.message).toContain(goodPay({}).hireYmd);
+  });
+
+  it("refuses an unknown floor even when the rate is obviously generous", () => {
+    // The refusal is about not KNOWING, not about the rate being low. $50/hour
+    // is legal under any Washington floor that has ever existed, and it is
+    // still refused, because "I checked and it passed" and "I could not check"
+    // are different statements and only one of them is evidence.
+    const r = validatePay(
+      goodPay({
+        hourlyRateMilliCents: 5_000_000, // $50.00
+        minimumWageMilliCentsAtHire: null,
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.issues.some((i) => i.field === "minimumWageMilliCentsAtHire")).toBe(true);
+  });
+
+  it("does not demand a minimum wage from a SALARIED employee", () => {
+    // The floor is an hourly test. Michael is the only salaried person at
+    // Greenway ("hourly for all employees, salary for me"), and blocking his
+    // own record on a field that does not apply to it would be a refusal with
+    // no legitimate action behind it - which is how a gate stops being
+    // believed. Rule 14 says block the wrong thing, not everything.
+    const r = validatePay({
+      ...goodPay({}),
+      basis: "salary",
+      hourlyRateMilliCents: null,
+      annualSalaryCents: 6_000_000, // $60,000
+      minimumWageMilliCentsAtHire: null,
+    });
+    expect(r.issues.some((i) => i.field === "minimumWageMilliCentsAtHire")).toBe(false);
+  });
+
   it("accepts a rate exactly at the minimum", () => {
     const r = validatePay(
       goodPay({

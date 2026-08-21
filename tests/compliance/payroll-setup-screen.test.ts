@@ -606,11 +606,41 @@ describe("money never becomes a float on the way in", () => {
     expect(FORM_CODE).toMatch(/if \(t === ""\) return null;/);
   });
 
-  it("does not prefill a minimum wage, because there is no verified source for one", () => {
-    // payroll-cogs-core.ts says of its own minimum-wage field "NOT
-    // hard-coded". This screen is not going to be the first place that invents
-    // a legal wage floor.
+  it("does not silently prefill a minimum wage into the saved record", () => {
+    // The input still starts empty. What CHANGED in books-26 is that the
+    // screen now knows the figure and displays it; it just refuses to type it
+    // in on the user's behalf, because the stored value is "the minimum wage
+    // AT HIRE" - a historical fact somebody should confirm, not a live lookup.
     expect(FORM_CODE).toContain('payMinimumWage: ""');
+  });
+
+  it("shows the minimum wage for the HIRE DATE, from the rate registry", () => {
+    // books-25 shipped this field blank and told the user "this system has no
+    // verified source for it". books-26 gave it one, so that sentence had to
+    // go - a help text that describes a limitation the system no longer has is
+    // just a wrong instruction (rule 47).
+    expect(FORM_CODE).not.toContain("no verified source for it");
+    expect(FORM_CODE).toContain('GREENWAY_RATES.lookupValue("wa_minimum_wage"');
+    // Keyed to the hire date the user typed, NOT to today. Backdating a hire
+    // into a prior year must surface that year's floor.
+    expect(FORM_CODE).toContain("[form.payHireYmd]");
+  });
+
+  it("asks the registry for milli-cents per hour, never an unstated unit", () => {
+    // $17.13 is 1_713_000 milli-cents, 1_713 cents and 1_713 as milli-percent.
+    // All three are plausible integers, so the unit is named at the call site
+    // and the registry refuses on a mismatch.
+    expect(FORM_CODE).toContain('"milli_cents_per_hour"');
+  });
+
+  it("renders the refusal when the state has not published a floor for that year", () => {
+    // The 2027 case, which is Michael's first payroll year. The screen must
+    // show the refusal's whatToDo rather than falling back to $17.13.
+    expect(FORM_CODE).toContain("minimumWageForHireDate.whatToDo");
+    // And it must distinguish "no date typed yet" from "date typed, no rate
+    // exists". Collapsing those two tells a user to go find a notice when all
+    // they did was leave the date blank.
+    expect(FORM_CODE).toContain("minimumWageForHireDate === null");
   });
 });
 
