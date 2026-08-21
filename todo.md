@@ -779,6 +779,55 @@
     database refusing a payroll period the IRS publishes a withholding table
     for is the database being wrong. Add the test that forbids the lazy repair.
 
+### RULE 55: A FIXTURE BROKEN IN TWO WAYS PROVES NOTHING ABOUT EITHER.
+
+    When a test drives real code with a fixture that is deliberately defective,
+    assert the EXACT set of complaints, not that a complaint exists. "It was
+    refused" passes no matter which of the six defects the code noticed, so the
+    test keeps passing after the specific thing it was written to protect stops
+    working.
+
+    Found by mutating the fixture instead of the code (rule 22). Blanking
+    signedAt on the base COMPLETE_CANDIDATE made every derived fixture broken
+    twice over -- unsigned W-4 AND the defect under test. Every "must be
+    refused" assertion still passed. 37 tests green, and the suite had quietly
+    stopped testing the hourly-rate highlight, the salary highlight, and the
+    signature check all at once. One character of fixture rot silently disarmed
+    three tests.
+
+    So a fixture-driven test needs two guards it usually does not have:
+
+      1. Pin that the BASE fixture is clean -- canSave true, zero complaints.
+         The claim "this is a complete employee" is itself a claim under test.
+      2. Assert the refusal EQUALS the one expected complaint. toContain()
+         passes for a record refused six ways; toEqual([one]) is what notices
+         that a fixture has stopped isolating its case. Proven load-bearing by
+         a mutant that rotted only a derived fixture, which nothing else caught.
+
+    A fixture is not scaffolding around the test. It is half of the assertion,
+    and it must be tested like the other half.
+
+### RULE 56: AN EXPORTED SERVER ACTION WITH NO CALLER IS A DOOR NOBODY GUARDS.
+
+    Rule 50 says a module only its own test imports is dead code. For a SERVER
+    ACTION it is worse than dead: it is a live, authenticated, network-reachable
+    endpoint that no screen exercises and no reviewer watches. Dead UI code just
+    sits there. A dead action is attack surface with a test suite vouching for
+    it.
+
+    checkSetupAction was written, gated on requireBooksAccess, tested for not
+    writing and for returning its errors -- and imported by nothing. It looked
+    thoroughly covered. The form had always recomputed the checklist locally on
+    every keystroke from the same engine, which is what makes the guidance
+    arrive as you type; the action was a second way to ask one question, kept
+    alive entirely by its own tests.
+
+    Two doors into one judgement is how two screens start disagreeing about one
+    employee -- the exact failure books-25 exists to prevent, reintroduced by
+    the file meant to prevent it. Deleted, and replaced with a standing test:
+    every action this file exports must appear in something that is not a test.
+    Then a mutant re-added a caller-less action to prove the new guard fires.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

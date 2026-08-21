@@ -47,7 +47,9 @@
 import Link from "next/link";
 
 import { Badge, Card, CardHeader, Section } from "@/components/admin/ui";
+import { EmployeePayrollSetupForm } from "@/components/admin/payroll/EmployeePayrollSetupForm";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
+import { listEmployeeSetup } from "@/lib/payroll/payroll-onboarding-store";
 import {
   ALL_W4_FILING_STATUSES,
   PAY_FREQUENCY_LABELS,
@@ -81,6 +83,26 @@ function pct(milli: number): string {
   return `${whole}.${String(frac).padStart(3, "0").replace(/0+$/, "")}%`;
 }
 
+/**
+ * Render the masked SSN from the LAST FOUR DIGITS, which is all the roster
+ * query returns.
+ *
+ * Not `maskSsn()`. That function takes a full nine-digit number and normalises
+ * it first, so handing it four digits returns "XXX-XX-????" - verified by
+ * running it, not assumed. That would have blanked out the exact four digits
+ * the mask exists to keep, which is the part that lets two employees be told
+ * apart. The full number is deliberately not available on this page: it is
+ * fetched only by revealSsnAction, which writes the audit row before it reads.
+ */
+function maskFromLastFour(lastFour: string | null): string {
+  if (lastFour === null) return "not on file";
+  const digits = lastFour.replace(/[^0-9]/g, "");
+  // Anything other than four digits is a column that is not what we think it
+  // is. Say so rather than printing a confident-looking mask around junk.
+  if (digits.length !== 4) return "XXX-XX-????";
+  return `XXX-XX-${digits}`;
+}
+
 const SEVERITY_TONE: Record<BlockerSeverity, "danger" | "orange" | "green"> = {
   refuse: "danger",
   reroute: "orange",
@@ -93,8 +115,24 @@ const SEVERITY_WORD: Record<BlockerSeverity, string> = {
   teach: "Heads up",
 };
 
-export default async function PayrollSetupPage() {
+export default async function PayrollSetupPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ employee?: string }>;
+}) {
   await requireBooksAccess();
+
+  // The roster, and which employee (if any) is being set up right now.
+  //
+  // Selecting an employee is a URL parameter rather than component state so the
+  // half-finished setup of one person cannot leak into the next. It also means
+  // the back button behaves, and a link to "set up this person" is shareable.
+  const params = (await searchParams) ?? {};
+  const { rows: roster, migrationApplied } = await listEmployeeSetup();
+  const selected = params.employee
+    ? roster.find((r) => r.employeeId === params.employee)
+    : undefined;
+  const todayYmd = new Date().toISOString().slice(0, 10);
 
   // The no-W-4 default, computed rather than described, so the page cannot
   // drift from the engine. Pub. 15-T: an employee who furnishes no W-4 is
@@ -125,6 +163,121 @@ export default async function PayrollSetupPage() {
           the answer built into the question.
         </p>
       </header>
+
+      {/* ================================================================ */}
+      {/* THE ACTUAL SETUP.                                                 */}
+      {/*                                                                   */}
+      {/* This sits ABOVE the teaching material on purpose. When books-13    */}
+      {/* built this page it could only explain payroll setup, because there */}
+      {/* was nowhere to put the answers. Now there is. Someone who arrives  */}
+      {/* holding a W-4 and an I-9 wants the boxes first; the lessons below  */}
+      {/* are still here, unchanged, for when a box raises a question.       */}
+      {/* ================================================================ */}
+      {!migrationApplied ? (
+        <Section title="Employee setup is not available yet">
+          <Card>
+            <p className="text-sm leading-relaxed text-[var(--admin-text)]">
+              Migration <code>0195_employee_payroll_setup.sql</code> has not been
+              applied to this database, so there is nowhere to store a W-4, an I-9
+              or a pay record yet. Apply it in the Supabase SQL editor and this
+              section will appear. Everything below still works &mdash; it is
+              teaching material and reads from code, not from the database.
+            </p>
+          </Card>
+        </Section>
+      ) : selected ? (
+        <Section
+          title={`Setting up ${selected.fullName}`}
+          description="Everything on one screen: the forms, what is still missing, and what will come out of the check."
+        >
+          <div className="mb-4">
+            <Link
+              href="/admin/books/payroll-setup"
+              className="text-sm font-semibold text-[var(--admin-accent)] hover:underline"
+            >
+              &larr; Back to the employee list
+            </Link>
+          </div>
+          <EmployeePayrollSetupForm
+            employeeId={selected.employeeId}
+            employeeName={selected.fullName}
+            /* Already masked before it leaves the server. The full number is
+               fetched only by revealSsnAction, which logs before it reads. */
+            maskedSsnOnFile={
+              selected.ssnLastFour ? maskFromLastFour(selected.ssnLastFour) : null
+            }
+            defaultFormYear={W4_REDESIGN_YEAR + 6}
+            todayYmd={todayYmd}
+          />
+        </Section>
+      ) : (
+        <Section
+          title="Who needs setting up"
+          description="A tick means the record exists. It does not mean payroll can run - open the employee to see what is still outstanding."
+        >
+          <Card>
+            {roster.length === 0 ? (
+              <p className="text-sm leading-relaxed text-[var(--admin-text-faint)]">
+                No employees on file yet. Add them under Staffing first; this
+                screen sets up their payroll, it does not create people.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-muted)]">
+                      <th className="py-2 pr-4 font-semibold">Employee</th>
+                      <th className="py-2 pr-4 font-semibold">SSN</th>
+                      <th className="py-2 pr-4 font-semibold">W-4</th>
+                      <th className="py-2 pr-4 font-semibold">I-9</th>
+                      <th className="py-2 pr-4 font-semibold">Pay</th>
+                      <th className="py-2 pr-4 font-semibold" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {roster.map((r) => (
+                      <tr
+                        key={r.employeeId}
+                        className="border-b border-[var(--admin-border)]/40"
+                      >
+                        <td className="py-2 pr-4 text-[var(--admin-text)]">
+                          {r.fullName}
+                        </td>
+                        <td className="py-2 pr-4 font-mono text-[var(--admin-text-faint)]">
+                          {maskFromLastFour(r.ssnLastFour)}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Badge tone={r.hasW4 ? "green" : "danger"}>
+                            {r.hasW4 ? "on file" : "missing"}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Badge tone={r.hasI9 ? "green" : "danger"}>
+                            {r.hasI9 ? "on file" : "missing"}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Badge tone={r.hasPay ? "green" : "danger"}>
+                            {r.hasPay ? "on file" : "missing"}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Link
+                            href={`/admin/books/payroll-setup?employee=${r.employeeId}`}
+                            className="text-sm font-semibold text-[var(--admin-accent)] hover:underline"
+                          >
+                            Set up
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </Section>
+      )}
 
       {/* ---------------------------------------------------------------- */}
       <Section
