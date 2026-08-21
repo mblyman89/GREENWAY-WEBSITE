@@ -865,6 +865,48 @@
        in unnoticed. If the gate is red for reasons that are not mine, say so
        out loud, fix it or file it -- never merge past it in silence.
 
+### RULE 58: A TEST THAT READS SQL AS TEXT HAS NOT RUN THE SQL.
+    Earned in books-27, from Michael's own bug report. He tried to apply
+    migration 0195 and got `ERROR: 42P01: relation "a" does not exist`. That
+    migration is covered by 545 lines of tests. All green. Not one of them could
+    have caught it, because every one of them reads the file as a STRING and
+    asserts on what it SAYS. Nothing in the repo had ever handed a migration to
+    a database.
+
+    a. **TEXT TESTS ARE DRIFT ALARMS, NOT COMPILERS.** They are worth having --
+       they catch the day someone edits a CHECK constraint out. But they cannot
+       tell you the file parses, that the statements are in a runnable order, or
+       that re-running it is safe. Claiming a migration "is tested" on the
+       strength of text assertions overstates the evidence.
+
+    b. **THE ONLY PROOF THAT SQL RUNS IS RUNNING IT.** Postgres 15 installs in
+       this sandbox in about a minute. Bootstrapping Supabase's environment
+       (auth and storage schemas, the anon/authenticated/service_role roles,
+       auth.uid(), auth.role(), auth.users, storage.buckets) takes one more.
+       There is no excuse for shipping a migration to Michael -- who applies
+       these BY HAND, one at a time, in a browser -- without having applied it
+       myself first.
+
+    c. **APPLY IT TWICE.** He runs these by hand and a hand can slip. Idempotency
+       is not a nicety, it is the difference between a retry and a support
+       incident. The second run is a separate assertion.
+
+    d. **BUILD THE PRE-STATE, NOT JUST A CLEAN DATABASE.** A migration that works
+       on an empty database can still fail on his. Apply 0001..N-1 first, then
+       the new one, so the test subject is the database he actually has.
+
+    e. **TRANSLATE THE ENGINE'S ERROR INTO THE USER'S PROBLEM.** `relation "a"
+       does not exist` sends a reader hunting for a missing table named "a".
+       The real cause is prose reaching the parser -- a comment whose `--` was
+       lost in transit. When a diagnostic can name the likely cause, it must,
+       because the literal message here is actively misleading. Related to rule
+       31: the message is part of the product.
+
+    f. **AND WHEN YOU CANNOT REPRODUCE IT, SAY SO.** I proved the file was fine
+       and narrowed the mechanism to a single comment line, but I could not
+       reproduce his client and did not pretend to. Rule 1 does not soften
+       because the user is waiting for an answer.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

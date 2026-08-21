@@ -35,3 +35,91 @@ jobs:
           src/lib/compliance src/lib/orders src/lib/reports src/lib/security
           src/lib/naming src/lib/specials src/lib/promotions src/lib/medical
           src/lib/supabase src/lib/printing
+
+  # ==========================================================================
+  # STANDING RULE 58: a test that reads SQL as text has not run the SQL.
+  #
+  # Michael applies migrations BY HAND, one at a time, in the Supabase SQL
+  # editor. 0195 carried 545 lines of green text-reading tests and still failed
+  # for him. Text assertions cannot prove a file parses, that the statements are
+  # in a runnable order, or that a re-run is safe. Only a database can.
+  #
+  # This job is separate from `compliance` on purpose: it needs a real postgres,
+  # so it must not be able to make the pure-module suite look broken, and the
+  # pure suite must not have to wait for a service container.
+  # ==========================================================================
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: greenway
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      # The migrations are written for Supabase, so they assume Supabase exists:
+      # the auth and storage schemas, the three PostgREST roles, and auth.uid().
+      # Without these the very first migration fails for a reason that has
+      # nothing to do with the change under review.
+      - name: Bootstrap the Supabase environment the migrations assume
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d greenway -v ON_ERROR_STOP=1 <<'SQL'
+          create extension if not exists pgcrypto;
+          create schema if not exists auth;
+          create schema if not exists storage;
+          do $$ begin
+            if not exists (select 1 from pg_roles where rolname='anon')
+              then create role anon nologin noinherit; end if;
+            if not exists (select 1 from pg_roles where rolname='authenticated')
+              then create role authenticated nologin noinherit; end if;
+            if not exists (select 1 from pg_roles where rolname='service_role')
+              then create role service_role nologin noinherit bypassrls; end if;
+          end $$;
+          create or replace function auth.uid() returns uuid language sql stable as
+            $f$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $f$;
+          create or replace function auth.role() returns text language sql stable as
+            $f$ select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'service_role') $f$;
+          create or replace function auth.email() returns text language sql stable as
+            $f$ select nullif(current_setting('request.jwt.claim.email', true), '') $f$;
+          create table if not exists auth.users (
+            id uuid primary key default gen_random_uuid(),
+            email text,
+            raw_user_meta_data jsonb default '{}'::jsonb,
+            created_at timestamptz default now()
+          );
+          create table if not exists storage.buckets (
+            id text primary key, name text, public boolean default false,
+            created_at timestamptz default now()
+          );
+          create table if not exists storage.objects (
+            id uuid primary key default gen_random_uuid(),
+            bucket_id text references storage.buckets(id),
+            name text, owner uuid, metadata jsonb, path_tokens text[],
+            created_at timestamptz default now()
+          );
+          alter table storage.objects enable row level security;
+          SQL
+      # Applies every migration in order, then re-applies the last one, because
+      # a migration Michael has to re-run must survive being run twice.
+      - name: Apply every migration in order, to a real database
+        env:
+          PGURL: postgres://postgres:postgres@localhost:5432/greenway
+        run: npx tsx scripts/compliance/verify-migrations-execute.ts
