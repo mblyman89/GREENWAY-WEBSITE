@@ -347,6 +347,79 @@ MUTATIONS = [
         "owner-only item sitting in a tab built for shared administration, "
         "which is how it ended up on settings.manage in the first place.",
     ),
+    # ── K) MIGRATION 0194 ───────────────────────────────────────────────────
+    (
+        "K1 leave the 0041 write-all policy in place",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "drop policy if exists cycle_counts_staff_all       on public.cycle_counts;",
+        "-- drop policy if exists cycle_counts_staff_all on public.cycle_counts;",
+        [WIRING],
+        "The retirement's whole point. 0041 granted `for all using (is_staff())`, "
+        "so any budtender's own session can INSERT, UPDATE and DELETE "
+        "cycle-count rows through the REST API with no application code "
+        "involved. Leaving it means the seal never closed.",
+    ),
+    (
+        "K2 seal the table so completely the retention record cannot be read",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "create policy cycle_counts_staff_read on public.cycle_counts\n  for select using (public.is_staff());",
+        "-- read policy removed by mutation",
+        [WIRING],
+        "Gates run in BOTH directions. WAC 314-55-083(4) requires three years of "
+        "traceability records; a record nobody can read is not retained, and the "
+        "\"Older counts\" list goes blank.",
+    ),
+    (
+        "K3 re-open writing with a for-all policy under a new name",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "create policy cycle_count_lines_staff_read on public.cycle_count_lines\n  for select using (public.is_staff());",
+        "create policy cycle_count_lines_staff_rw on public.cycle_count_lines\n  for all using (public.is_staff()) with check (public.is_staff());",
+        [WIRING],
+        "The regression that a name-only test misses: a THIRD policy, added "
+        "later, quietly restores the write. Standing rule 45 -- guard where the "
+        "bug appears next.",
+    ),
+    (
+        "K4 drop the write-grant revoke and rely on policies alone",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "revoke insert, update, delete on table public.cycle_counts      from anon, authenticated;",
+        "-- revoke removed by mutation",
+        [WIRING],
+        "RLS decides which ROWS; grants decide whether the verb may be "
+        "attempted at all. Without the revoke, any later migration that adds a "
+        "policy reopens writing on its own.",
+    ),
+    (
+        "K5 overstate the protection by revoking service_role too",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "-- `service_role` is deliberately NOT revoked here.",
+        "-- service_role is revoked as well, which locks this down completely.",
+        [WIRING],
+        "The dishonest version. It reads STRONGER and is false: the service key "
+        "bypasses RLS, and revoking its writes would break the nine readers "
+        "that still use it. Rule 44 -- an untested claim is a lie with a "
+        "citation.",
+    ),
+    (
+        "K6 drop the preflight that protects the replacement flow",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "  if to_regclass('public.inventory_audit_sessions') is null then",
+        "  if false then",
+        [WIRING],
+        "Applying 0194 to a database that never got 0191 leaves NO working way "
+        "to count stock: the old path refuses in code, the new path's tables do "
+        "not exist. Standing rule 40 -- an unreachable guard is untested.",
+    ),
+    (
+        "K7 stop the gate check from verifying the replacement survives",
+        "supabase/migrations/0194_cycle_counts_read_only.sql",
+        "         'The replacement posting function is missing, so retiring the old flow leaves no way to turn a count into a journal entry.'\n   where to_regprocedure('public.inventory_audit_post_session(uuid)') is null;",
+        "         'unused'\n   where false;",
+        [WIRING],
+        "Four checks would still pass while the store cannot turn a count into "
+        "a journal entry. The fifth is what makes the gate check a "
+        "verification rather than a formality.",
+    ),
 ]
 
 
