@@ -476,6 +476,11 @@ exists.
 | books-26 | the federal deposit schedule: Michael is SEMIWEEKLY, proved two independent ways; the engine REFUSES rather than defaulting to monthly when lookback history is absent; the 2026 Sage baseline recorded before the PDFs were deleted, and four defects found in the live books | #999 |
 | — | the compliance gate had been RED on main since books-20 — six merges landed under a failing check, and because the workflow lints before it tests, vitest never ran on any of them | #999 |
 | — | standing rule 57, learned from books-26 (a green local run is not a green gate; when CI is red, prove whose fault it is from a clean worktree; never merge past red in silence) | #999 |
+| books-27 | migration 0195 proved SOUND against a real PostgreSQL 15 rebuilt to Michael's exact pre-state; his `relation "a" does not exist` is prose reaching the parser in transit, not a defect in the file — the client that mangles it could NOT be reproduced and was NOT guessed at | #1000 |
+| — | nothing in this repo had ever EXECUTED a migration: 195 files, 545 lines of tests on 0195 alone, all of it reading SQL as text. CI now applies all 195 in order to a real postgres, then re-applies the last one for idempotency | #1000 |
+| — | the filed Q2 2026 returns overruled Sage's printouts: UI is 0.37% and EAF 0.03% (Sage's 0.64% overstates UI by 186.09/qtr), and TWO of my four reported defects were WITHDRAWN as printout artefacts | #1000 |
+| — | standing rule 58, learned from books-27 (a test that reads SQL as text has not run the SQL; apply it twice; build the pre-state; translate the engine's error into the user's problem) | #1000 |
+| — | standing rule 59, learned from books-27 (a printout is not a filing; rank the evidence before reporting a defect; a tier-3 disagreement is a question, not an accusation; retract as loudly as you accused) | #1000 |
 
 ---
 
