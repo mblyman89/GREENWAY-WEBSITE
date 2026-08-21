@@ -989,6 +989,60 @@
        defended at all, and it fails in both directions at once: swallowing real
        errors at small headcounts, crying wolf at large ones.
 
+### RULE 61: A MIGRATION THAT GRANTS PRIVILEGES BY READING THE CATALOGUE IS ORDER-DEPENDENT, AND ORDER-DEPENDENT MEANS UNTESTED UNTIL APPLIED ONCE.
+
+    Earned in books-28, from a defect that had already shipped and that every
+    text-reading test called correct. 0195 revokes SELECT on employees and
+    grants it back one column at a time, driven by a loop over
+    information_schema.columns. ssn_last_four was created SIX LINES LATER. So on
+    a first application the column did not exist when the catalogue was read and
+    received no grant -- while the comment directly above the loop asserted
+    "ssn_last_four IS granted. That is the point of having it."
+
+    Proven against a real PostgreSQL 15, four arms, so that stripping and
+    re-application could not be confused with one another:
+
+        applied ONCE   ->  set role authenticated; select ssn_last_four
+                           ERROR: permission denied for table employees
+        applied TWICE  ->  succeeds
+
+    a. **A MIGRATION WHOSE RESULT DEPENDS ON HOW MANY TIMES IT RAN IS NOT
+       IDEMPOTENT, WHATEVER `if not exists` SAYS.** Idempotence is usually
+       tested as "re-applying does not error". That is the weaker half. The
+       half that matters is that the FIRST application and the second produce
+       the same database. Here they did not, and the check that existed only
+       ever ran the file twice -- so the broken state was the one state never
+       observed.
+
+    b. **THE FIRST APPLICATION IS THE ONLY ONE MICHAEL PERFORMS.** He applies
+       these by hand, once. Every arm of every migration test must therefore
+       include a from-scratch single application, because that is the arm that
+       is actually in production.
+
+    c. **DDL THAT READS A CATALOGUE MUST RUN AFTER EVERY OBJECT IT INTENDS TO
+       SEE.** A loop over information_schema is a snapshot, not a subscription.
+       Prefer creating the object first; where that is impossible, assert the
+       expected row count inside the block and raise if it is short.
+
+    d. **COMPARE CATALOGUES, NOT DUMP TEXT, AND COUNT THE ROWS YOU COMPARED.**
+       The first equivalence probe written here returned FOUR rows because the
+       query itself had errored on a `text || "char"` cast, and it printed
+       "SEMANTICALLY IDENTICAL". A passing comparison that compared almost
+       nothing is standing rule 39 wearing a lab coat. The repaired query
+       returned 276 rows and immediately exposed the real difference. Always
+       print the row count next to the verdict.
+
+    e. **WHEN THE OWNER REPORTS A FAILURE ON TWO INDEPENDENT MACHINES, THE
+       DIAGNOSIS IS THE DEFECT.** The previous slice concluded 0195 was sound
+       and the error was mangling in transit, and said so in writing. Michael
+       then reproduced it on a MacBook and a Windows desktop. Twenty splitter
+       models were executed against a live server in this slice and NONE
+       reproduced `relation "a"`, so that mechanism remains unproven and is
+       reported as unproven -- but re-opening the question found a real,
+       separate, shipped defect. Retract at the volume of the original claim
+       (rule 59e), and never let "I already looked at that" close a question the
+       owner has re-opened with evidence.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

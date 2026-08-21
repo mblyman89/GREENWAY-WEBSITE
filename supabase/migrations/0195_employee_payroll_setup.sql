@@ -469,6 +469,33 @@ comment on column public.employees.ssn_full is
 -- ssn_last_four IS granted. That is the point of having it: ordinary screens
 -- identify a person by the last four and never touch the protected column.
 -- ───────────────────────────────────────────────────────────────────────────
+-- ORDER MATTERS HERE, AND IT WAS WRONG.
+--
+-- ssn_last_four is created BEFORE the gate block below, and that sequence is
+-- load-bearing rather than cosmetic. The gate revokes SELECT on employees and
+-- grants it back one column at a time by reading information_schema.columns.
+-- A column that does not exist when that catalogue is read receives no grant.
+--
+-- This column used to be created AFTER the gate. The result, proven against a
+-- real PostgreSQL 15 rather than argued: apply 0195 once and
+--   set role authenticated; select ssn_last_four from public.employees;
+-- returns "permission denied for table employees". Apply it a SECOND time and
+-- the same query succeeds, because by then the column existed when the loop
+-- ran. A migration whose outcome depends on how many times it has been run is
+-- not idempotent in the way that matters, and the failure lands exactly on the
+-- read path every ordinary screen uses.
+--
+-- The comment below is now true because the order makes it true.
+-- The last four are NOT a second copy of the truth. They are a derived
+-- convenience so ordinary screens can identify a person without the gated
+-- column being in the query at all. Generated, so it cannot drift.
+alter table public.employees
+  add column if not exists ssn_last_four text
+    generated always as (right(ssn_full, 4)) stored;
+
+comment on column public.employees.ssn_last_four is
+  'Derived from ssn_full, not entered. Safe for ordinary screens. Because it is GENERATED it can never disagree with the full value, which a hand-maintained duplicate eventually would.';
+
 do $ssn_col_gate$
 declare
   col text;
@@ -500,16 +527,6 @@ begin
   end loop;
 end
 $ssn_col_gate$;
-
--- The last four are NOT a second copy of the truth. They are a derived
--- convenience so ordinary screens can identify a person without the gated
--- column being in the query at all. Generated, so it cannot drift.
-alter table public.employees
-  add column if not exists ssn_last_four text
-    generated always as (right(ssn_full, 4)) stored;
-
-comment on column public.employees.ssn_last_four is
-  'Derived from ssn_full, not entered. Safe for ordinary screens. Because it is GENERATED it can never disagree with the full value, which a hand-maintained duplicate eventually would.';
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- The reveal log. Append-only: no update, no delete, for anyone.

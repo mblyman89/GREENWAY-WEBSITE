@@ -291,6 +291,39 @@ describe("the SSN: stored in full because the W-2 needs it, and gated", () => {
     expect(SQL).toContain("filters ROWS, not COLUMNS");
   });
 
+  it("creates ssn_last_four BEFORE the gate that hands out column privileges", () => {
+    // THE DEFECT THIS TEST EXISTS FOR, found by executing the file rather than
+    // reading it. The gate revokes SELECT on employees and grants it back one
+    // column at a time, driven by information_schema.columns. A column that
+    // does not exist when that catalogue is read receives no grant.
+    //
+    // ssn_last_four used to be created AFTER the gate. Against a real
+    // PostgreSQL 15: apply 0195 once, then
+    //   set role authenticated; select ssn_last_four from public.employees;
+    // returned "permission denied for table employees". Apply it a second time
+    // and the same query succeeded -- the outcome depended on how many times
+    // the migration had been run, and the breakage landed squarely on the read
+    // path every ordinary screen uses.
+    //
+    // Order is the fix, so order is what is asserted.
+    const columnAt = EXEC_SQL.indexOf("add column if not exists ssn_last_four");
+    const gateAt = EXEC_SQL.indexOf("do $ssn_col_gate$");
+
+    expect(columnAt).toBeGreaterThan(-1);
+    expect(gateAt).toBeGreaterThan(-1);
+    expect(columnAt).toBeLessThan(gateAt);
+  });
+
+  it("grants the last four rather than merely promising to", () => {
+    // The prose above the gate says ssn_last_four IS granted. The grant loop
+    // excludes only ssn_full, so the promise is kept by the exclusion list
+    // being narrow -- not by naming the column, which would rot.
+    expect(EXEC_SQL).toContain("column_name <> 'ssn_full'");
+    // ...while the UPDATE loop must also exclude it, because a GENERATED
+    // column cannot be written to at all.
+    expect(EXEC_SQL).toContain("column_name not in ('ssn_full','ssn_last_four')");
+  });
+
   it("the reveal log demands a REASON, and a blank one will not do", () => {
     expect(EXEC_SQL).toContain("reason       text not null");
     expect(EXEC_SQL).toContain("length(btrim(reason)) >= 3");
