@@ -39,10 +39,31 @@ export default async function AdminDashboardPage() {
   // W3: intake work-queue flags only for people who can act on them — every
   // queue target requires inventory.manage, so gate the fetch the same way.
   const canWorkIntake = can(session.profile.role, "inventory.manage");
+  /*
+   * books-23: THE COMPLIANCE NAG IS THE OWNER'S ALONE.
+   *
+   * Michael, verbatim: "I want it to be for me alone too, the employees should
+   * not be harassed by the system for my not making a payment or filing a
+   * report etc. I'll keep that burden for myself."
+   *
+   * The COUNT IS NOT FETCHED for anyone else, rather than fetched and then not
+   * rendered. Two reasons, and the second is the one that matters:
+   *
+   *   1. It is a database read of the owner's filing history that a budtender
+   *      has no business causing.
+   *   2. A value that exists in scope is one careless JSX edit away from being
+   *      displayed again. A value that is 0 for everyone but the owner cannot
+   *      come back by accident -- and `0` is exactly what the banner condition
+   *      below already treats as "nothing to say".
+   *
+   * This is the same shape as canWorkIntake above, deliberately: one idiom on
+   * this page instead of two.
+   */
+  const canSeeCompliance = can(session.profile.role, "compliance.calendar");
   const [snap, setup, overdueCompliance, intakeInputs] = await Promise.all([
     getCockpitSnapshot(),
     getSetupStatus(),
-    getOverdueComplianceCount(),
+    canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
     canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
   ]);
   const setupComplete = setup.completed >= setup.total;
@@ -110,8 +131,14 @@ export default async function AdminDashboardPage() {
           </div>
         )}
 
-        {/* ── S-18: overdue compliance-calendar obligations ── */}
-        {overdueCompliance > 0 && (
+        {/* ── S-18: overdue compliance-calendar obligations (books-23: owner only) ──
+            The permission is re-checked here as well as at the fetch. That is not
+            redundancy for its own sake: the fetch guard protects the QUERY and the
+            render guard protects the SCREEN, and a future edit that reinstates an
+            unconditional fetch would otherwise silently start nagging staff again.
+            The link target refuses non-owners, so showing it would advertise a
+            door that does not open. */}
+        {canSeeCompliance && overdueCompliance > 0 && (
           <Link
             href="/admin/compliance/calendar"
             className="admin-card-interactive block rounded-[var(--admin-radius-lg)] border border-red-500/40 bg-red-500/[0.08] px-5 py-4"

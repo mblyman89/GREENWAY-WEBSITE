@@ -35,7 +35,11 @@ export default async function ComplianceCalendarPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
-  await requirePermission("settings.manage");
+  // books-23: OWNER ONLY. Was settings.manage (owner + admin). Michael, verbatim:
+  // "I want it to be for me alone too, the employees should not be harassed by
+  // the system for my not making a payment or filing a report etc. I'll keep
+  // that burden for myself."
+  await requirePermission("compliance.calendar");
   const [entries, sp] = await Promise.all([getCalendarEntries(), searchParams]);
   const today = todayPacific();
   const overdue = overdueCount(entries);
