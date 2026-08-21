@@ -57,15 +57,57 @@ export type PayFrequency =
   | "monthly"
   | "quarterly"
   | "semiannually"
+  | "annually"
   | "daily";
 
 /**
- * VERBATIM from Pub. 15-T (2026) Table 3. These are not "about" numbers — the
- * whole worksheet annualizes and de-annualizes through them, so an off-by-one
- * here silently mis-withholds every paycheck of the year.
+ * VERBATIM from Pub. 15-T (2026) Table 3, PLUS the annual payroll period.
+ * These are not "about" numbers — the whole worksheet annualizes and
+ * de-annualizes through them, so an off-by-one here silently mis-withholds
+ * every paycheck of the year.
  *
  * The classic error is treating semimonthly (24) and biweekly (26) as the same
  * thing. They are not. Twice a month is 24; every two weeks is 26.
+ *
+ * WHY "annually: 1" IS HERE EVEN THOUGH TABLE 3 DOES NOT LIST IT
+ * ------------------------------------------------------------------
+ * This is a defect found in books-25 and it was a live one. Table 3 in Pub.
+ * 15-T (2026) lists exactly seven cadences — Semiannually 2, Quarterly 4,
+ * Monthly 12, Semimonthly 24, Biweekly 26, Weekly 52, Daily 260 — and
+ * "Annually" is NOT among them. This table was transcribed faithfully, so
+ * `PAY_PERIODS_PER_YEAR.annually` was `undefined`.
+ *
+ * Meanwhile Michael pays himself exactly once, at the end of the year ("I pay
+ * myself once at the end of the year"), and migration 0195 accepts a
+ * pay_frequency of 'annually' for precisely that row. The two halves of the
+ * system disagreed. The observed behaviour, run for real before this fix:
+ *
+ *     PAY_PERIODS_PER_YEAR['annually'] === undefined
+ *     computeWorksheet1A(... 'annually' ...) throws
+ *       "divideRoundHalfUp requires integers - a float reached a money path"
+ *
+ * That is a saved, legal, DB-accepted setup row that detonates with a message
+ * about floats when someone finally runs the owner's paycheck. It is exactly
+ * the kind of thing Michael means by "something can't silently fail me."
+ *
+ * THE ANNUAL PERIOD IS NOT AN INVENTION. Two independent authorities:
+ *
+ *   IRC §3401(b): "the term 'payroll period' means a period for which a
+ *   payment of wages is ordinarily made to the employee by his employer, and
+ *   the term 'miscellaneous payroll period' means a payroll period other than
+ *   a daily, weekly, biweekly, semimonthly, monthly, quarterly, semiannual,
+ *   or ANNUAL payroll period." The statute names it directly.
+ *
+ *   Pub. 15-T (2026) itself prints an "ANNUAL Payroll Period" percentage
+ *   method table, and Tables 1 and 2 both carry an "Annually" row. Only
+ *   Worksheet 1A's Table 3 omits it.
+ *
+ * And 1 is the arithmetically correct entry, not a convenient one. Line 1b is
+ * "the number of pay periods you have per year"; for an annual period that is
+ * one. Worksheet 1A then multiplies by 1 (line 1c), applies the ANNUAL
+ * percentage table, and divides by 1 — which is definitionally the same
+ * computation as the ANNUAL Payroll Period table. There is no approximation
+ * here; a proof-by-equivalence test pins it.
  */
 export const PAY_PERIODS_PER_YEAR: Record<PayFrequency, number> = {
   weekly: 52,
@@ -74,6 +116,36 @@ export const PAY_PERIODS_PER_YEAR: Record<PayFrequency, number> = {
   monthly: 12,
   quarterly: 4,
   semiannually: 2,
+  annually: 1,
+  daily: 260,
+};
+
+/**
+ * Every pay frequency, as a runtime VALUE.
+ *
+ * A TypeScript union cannot be enumerated at runtime, so without this there is
+ * no way for a test to ask "does the database accept exactly these?" - and that
+ * question going unasked is precisely how `annually` came to be storable but
+ * not computable. Derived from the keys of PAY_PERIODS_PER_YEAR rather than
+ * retyped, because a hand-maintained second list is the same defect again.
+ */
+export const ALL_PAY_FREQUENCIES: readonly PayFrequency[] = Object.keys(
+  PAY_PERIODS_PER_YEAR,
+) as PayFrequency[];
+
+/**
+ * The seven cadences Pub. 15-T Table 3 actually prints, kept separate from the
+ * map above so a test can prove the transcription is still verbatim even though
+ * the map now carries an eighth entry. Without this split, adding `annually`
+ * would have quietly widened the thing that was supposed to be a faithful copy.
+ */
+export const PUB15T_TABLE_3_PERIODS: Record<string, number> = {
+  semiannually: 2,
+  quarterly: 4,
+  monthly: 12,
+  semimonthly: 24,
+  biweekly: 26,
+  weekly: 52,
   daily: 260,
 };
 
@@ -84,6 +156,7 @@ export const PAY_FREQUENCY_LABELS: Record<PayFrequency, string> = {
   monthly: "Monthly (12 per year)",
   quarterly: "Quarterly (4 per year)",
   semiannually: "Twice a year (2 per year)",
+  annually: "Once a year (1 per year)",
   daily: "Daily (260 per year)",
 };
 

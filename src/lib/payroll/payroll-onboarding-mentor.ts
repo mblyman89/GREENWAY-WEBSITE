@@ -578,6 +578,127 @@ export const PAYROLL_ONBOARDING_LESSONS: readonly MentorLesson[] = [
       "which is a coin flip dressed as a dropdown.",
     authorityIds: [],
   },
+
+  // -------------------------------------------------------------------------
+  // THE SCREEN LAYER (payroll-onboarding-ui-core.ts)
+  //
+  // These are taught for the same reason the engine functions are. Michael's
+  // stated problem was not that he cannot do accounting - he has a Master's in
+  // it - but that "there is this huge disconnect between me and the system."
+  // A function that decides what he sees on screen is exactly the kind of thing
+  // that becomes a black box if nobody writes down what it does.
+  // -------------------------------------------------------------------------
+  {
+    fn: "buildChecklistView",
+    plainEnglish:
+      "Turns the verdict on an employee's setup into the rows you see on screen: what is done, " +
+      "what is missing, which boxes to highlight in red, and the one sentence explaining why " +
+      "the Save button will not press.",
+    whyItExists:
+      "You asked for a checklist that refuses to save until it is complete, and for a missing " +
+      "field to be highlighted so nothing can silently fail you. This is that checklist. It " +
+      "also settles WHO decides: the screen makes no judgement of its own, it renders what the " +
+      "engine already concluded.",
+    theTrap:
+      "Letting the screen decide what counts as 'done'. The moment two screens can disagree " +
+      "about whether the same employee is ready, the truth becomes whichever page you happen " +
+      "to have open - and a second screen built later would quietly get it wrong.",
+    whatIWouldDo:
+      "Read the highlighted fields top to bottom and fix them in order. If a row shows a " +
+      "deadline, that date is statutory and it is not negotiable - the I-9 one is three " +
+      "business days from the first day of work.",
+    authorityIds: [],
+  },
+  {
+    fn: "buildWorkedPaycheck",
+    plainEnglish:
+      "Computes one illustrative paycheck from the setup on screen and shows every line with " +
+      "the actual arithmetic next to it, so each figure can be checked on paper.",
+    whyItExists:
+      "You said you do not use the Sage reports because you do not fully understand what they " +
+      "are showing you. That is not an accounting problem, it is a legibility problem: Sage " +
+      "prints 'WAPFL ER 26' and gives you no way to see where it came from. This shows the " +
+      "formula beside the result. A number you can re-derive is a number you own.",
+    theTrap:
+      "Believing a total because it is bolded. The dangerous line here is L&I, which is a rate " +
+      "per HOUR WORKED, not a percentage of dollars - so on a bonus-only check with no hours " +
+      "the correct L&I withholding is nothing at all, and a percentage-based system would " +
+      "confidently take money anyway.",
+    whatIWouldDo:
+      "Nothing here is stored and no liability is created - it is a preview. Read the formula " +
+      "column, not just the amounts, and if a line says it could not be computed, that is a " +
+      "missing rate notice and not a zero.",
+    authorityIds: ["rcw-51-16-140-lni-deduction", "pub15t-2026-automated-method"],
+  },
+  {
+    fn: "formatMilliCentsAsRate",
+    plainEnglish:
+      "Prints an hourly rate that is stored as thousandths of a cent, so $0.16445 an hour shows " +
+      "as $0.16445 rather than being rounded to $0.16.",
+    whyItExists:
+      "Your L&I notice quotes five decimal places of a dollar, and whole cents physically " +
+      "cannot hold that number. Rounding it for display would make the arithmetic on screen " +
+      "stop matching the arithmetic in the answer, and then the formula you were given to " +
+      "check the number would not reproduce it.",
+    theTrap:
+      "Rounding for display and then reusing the rounded figure in a calculation. At $0.16 " +
+      "instead of $0.16445, a year of full-time hours is off by about $9 per employee - small " +
+      "enough to ignore and large enough to make a reconciliation never tie.",
+    whatIWouldDo:
+      "Treat the five-decimal rate as the real one, because L&I does. It is read straight off " +
+      "your rate notice and never derived.",
+    authorityIds: ["lni-premium-rate-formula"],
+  },
+  {
+    fn: "formatMilliPct",
+    plainEnglish: "Prints a percentage that is stored as thousandths of a percent, so 920 shows as 0.92%.",
+    whyItExists:
+      "Every Washington premium rate is stored as a whole number to keep floats out of money " +
+      "paths, which means 920 has to become '0.92%' somewhere. Doing it in one place is how the " +
+      "same rate cannot appear as 0.92% on one line and 0.9% on another.",
+    theTrap:
+      "Storing rates as decimals like 0.0092 in the first place. That is how a rate ends up a " +
+      "hundred or a thousand times too big with nothing to catch it, because every one of those " +
+      "numbers looks plausible.",
+    whatIWouldDo:
+      "Compare the printed percentage against the agency notice it came from. They are all " +
+      "dated rows with a document attached, so there is always something to compare to.",
+    authorityIds: [],
+  },
+  {
+    fn: "formatHours",
+    plainEnglish: "Prints hours that are stored as whole hundredths, so 8000 shows as 80.00 hours.",
+    whyItExists:
+      "Hours are counted in integer hundredths for the same reason money is counted in integer " +
+      "cents: 7.4 hours cannot be represented exactly in binary floating point, and L&I " +
+      "premiums are charged per hour worked, so drift in hours becomes drift in a filed premium.",
+    theTrap:
+      "Dividing by 100 in floating point to display it. That is the one operation here that can " +
+      "reintroduce the drift the integer storage exists to prevent, which is why this uses " +
+      "integer division and pads the remainder.",
+    whatIWouldDo:
+      "Check displayed hours against the timeclock total before running payroll. L&I is charged " +
+      "on hours, so an hours error is a premium error and a wage error at the same time.",
+    authorityIds: ["rcw-51-16-060-lni-hours"],
+  },
+  {
+    fn: "refusalSentence",
+    plainEnglish:
+      "Joins a refusal into one sentence: what stopped, and the single concrete thing to do " +
+      "about it.",
+    whyItExists:
+      "A refusal that only says what went wrong leaves you stuck. Every refusal in this system " +
+      "carries both halves - the problem and the fix - and this is what makes sure the fix is " +
+      "actually shown rather than dropped on the floor by whatever is rendering the message.",
+    theTrap:
+      "Showing 'calculation failed' and nothing else. That is the Sage behaviour you described " +
+      "as having no safety nets: it tells you something is wrong without telling you what to do, " +
+      "so the practical response is to ignore it.",
+    whatIWouldDo:
+      "Do the thing the second half of the sentence says. It is written to be the one action " +
+      "that unblocks the calculation, usually finding a rate notice.",
+    authorityIds: [],
+  },
 ];
 
 /** Look up the lesson for one function. */

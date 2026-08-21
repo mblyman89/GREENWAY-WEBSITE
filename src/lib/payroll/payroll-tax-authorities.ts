@@ -38,10 +38,28 @@ export const PUB15T_AUTOMATED_METHOD: GuidanceAuthority = {
   id: "pub15t-2026-automated-method",
   kind: "irs_guidance",
   cite: "IRS Pub. 15-T (2026), Introduction — Percentage Method Tables for Automated Payroll Systems",
+  // THE QUOTE STOPS HERE ON PURPOSE, AND THE REASON IS WORTH RECORDING.
+  //
+  // In the publication this passage continues: "This method works for Forms W-4
+  // for all prior, current, and future years. This method also works for any
+  // amount of wages." That continuation is real, it is on the same page, and it
+  // is the sentence that actually justifies choosing this method - so it was
+  // originally spliced on with an ellipsis.
+  //
+  // It had to come out. The worksheet box and Table 3 are printed between the
+  // two halves, in a different column, and every text extraction of the page
+  // emits that column BEFORE the opening sentence. The verifier requires
+  // elided segments to appear IN ORDER, which is the property that stops a
+  // quote being assembled out of words gathered from wherever they happen to
+  // suit - so it refused this one, correctly.
+  //
+  // The choice was to weaken the ordering check or to quote less. Quoting less
+  // is obviously right: an authority that had to disable a safeguard to pass is
+  // not an authority. The wage-bracket method's practical ceiling is explained
+  // in `soWhat` below in our own words rather than dressed up as a quotation.
   quote:
     "If you're an employer with an automated payroll system, use Worksheet 1A and the Percentage " +
-    "Method tables in this section to figure federal income tax withholding. This method works for " +
-    "Forms W-4 for all prior, current, and future years. This method also works for any amount of wages.",
+    "Method tables in this section to figure federal income tax withholding.",
   soWhat:
     "This is the method we implement, and the IRS says so in as many words. It is the only one that " +
     "works no matter how old an employee's W-4 is and no matter how large the paycheck. The other " +
@@ -60,9 +78,11 @@ export const PUB15T_WORKSHEET_1A_CLAMPS: GuidanceAuthority = {
   id: "pub15t-2026-worksheet-1a-clamps",
   kind: "irs_guidance",
   cite: "IRS Pub. 15-T (2026), Worksheet 1A, lines 1i and 3c",
+  // Both segments end on a word for the same reason as line 1g above: what looks
+  // like a full stop is the leading dot of the form's leader run.
   quote:
     "1i Subtract line 1h from line 1e. If zero or less, enter -0-. This is the Adjusted Annual Wage " +
-    "Amount. ... 3c Subtract line 3b from line 2h. If zero or less, enter -0-.",
+    "Amount ... 3c Subtract line 3b from line 2h. If zero or less, enter -0-",
   soWhat:
     "There are two separate places where the worksheet says 'if this went negative, call it zero,' " +
     "and they are at different points in the math. Collapsing them into one check at the end gives a " +
@@ -79,9 +99,15 @@ export const PUB15T_LINE_1G_STANDARD_AMOUNTS: GuidanceAuthority = {
   id: "pub15t-2026-line-1g",
   kind: "irs_guidance",
   cite: "IRS Pub. 15-T (2026), Worksheet 1A, line 1g",
+  // NO TRAILING FULL STOP, AND THAT IS NOT SLOPPINESS. On a worksheet LINE the
+  // sentence runs straight into the dot leader that carries the eye to the entry
+  // box - "$8,600 otherwise . . . . . . . 1g $" - so the period a reader assumes
+  // is there is really the first dot of the leader. Quoting it asserts a
+  // character the form does not print. The quote therefore ends on the last
+  // WORD, which is exactly as much as can be verified.
   quote:
     "If the box in Step 2 of Form W-4 is checked, enter -0-. If the box is not checked, enter $12,900 " +
-    "if the taxpayer is married filing jointly or $8,600 otherwise.",
+    "if the taxpayer is married filing jointly or $8,600 otherwise",
   soWhat:
     "This is the built-in standard deduction the withholding tables assume. It is why checking the " +
     "Step 2 box (the 'I have a second job / my spouse works' box) raises withholding — checking it " +
@@ -129,6 +155,80 @@ export const PUB15T_EXEMPT_IS_INCOME_TAX_ONLY: GuidanceAuthority = {
     "half. Payroll systems that treat 'exempt' as 'withhold nothing' create an unpaid trust-fund " +
     "liability that follows you personally under section 6672. We refuse to let 'exempt' touch FICA.",
   source: "https://www.irs.gov/pub/irs-pdf/p15t.pdf",
+};
+
+/**
+ * ⭐ THE AUTHORITY BEHIND `PAY_PERIODS_PER_YEAR.annually = 1`.
+ *
+ * Worksheet 1A's Table 3 lists seven cadences and "Annually" is not one of
+ * them, which made an annual payroll period look unsupported — while migration
+ * 0195 was accepting exactly that value for Michael's own once-a-year salary.
+ * The statute settles it: the annual payroll period is named in the definition
+ * itself. Quoted here so nobody later "cleans up" the annually row on the very
+ * reasonable-looking grounds that Table 3 does not mention it.
+ */
+export const IRC_3401B_ANNUAL_PAYROLL_PERIOD: GuidanceAuthority = {
+  id: "irc-3401b-annual-payroll-period",
+  kind: "statute",
+  cite: "26 U.S.C. §3401(b)",
+  quote:
+    "For purposes of this chapter, the term \u201cpayroll period\u201d means a period for which a payment of " +
+    "wages is ordinarily made to the employee by his employer, and the term \u201cmiscellaneous payroll " +
+    "period\u201d means a payroll period other than a daily, weekly, biweekly, semimonthly, monthly, " +
+    "quarterly, semiannual, or annual payroll period.",
+  soWhat:
+    "You pay yourself once, at the end of the year, and this is the sentence that makes that a real " +
+    "payroll period rather than something we improvised. Congress lists the annual payroll period by " +
+    "name, right alongside weekly and biweekly. That matters because the IRS worksheet we use for " +
+    "withholding has a small table that happens to leave 'Annually' out, and a reasonable person " +
+    "reading only that table would conclude your own paycheck cannot be computed. It can, and this " +
+    "is why.",
+  source: "https://www.law.cornell.edu/uscode/text/26/3401",
+};
+
+/**
+ * The other half of the annual-period proof: Pub. 15-T does not merely permit
+ * an annual period, it PRINTS a table for one. Both halves are cited because
+ * the claim is a two-part claim — the statute says the period exists, and the
+ * publication says here is how you withhold on it.
+ */
+export const PUB15T_ANNUAL_PAYROLL_PERIOD_TABLE: GuidanceAuthority = {
+  id: "pub15t-2026-annual-payroll-period",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 8 (Payroll Period)",
+  // WHY THIS QUOTE AND NOT THE TABLE HEADING.
+  //
+  // This started out quoting the two words "ANNUAL Payroll Period" - the
+  // heading Pub. 15-T prints above its annual withholding table. That was a bad
+  // citation for a reason worth writing down: two words are not evidence. They
+  // carry no rule, and the registry's own self-test rejects any quote under 40
+  // characters precisely to stop that. The self-test was right and I was wrong.
+  //
+  // The amount ROWS of that table were the other tempting choice and they are
+  // worse: they extract from the PDF with dot-leader runs that are a layout
+  // artifact, so a "verbatim" quote of one is verbatim to pdftotext rather than
+  // to the IRS.
+  //
+  // So the quote below is the actual RULE, taken from Pub. 15 section 8, which
+  // is the passage that defines what a payroll period is at all. Verified
+  // character-for-character (not merely word-for-word) against p15-2026.pdf
+  // converted with `pdftotext -layout`, left column, de-hyphenated across the
+  // line break in "payroll pe-/riod". 38 words, exact match.
+  quote:
+    "Your payroll period is a period of service for which you usually pay wages. When you have a " +
+    "regular payroll period, withhold income tax for that time period even if your employee " +
+    "doesn\u2019t work the full period.",
+  soWhat:
+    "This is the IRS's own definition of a payroll period, and notice what it turns on: the period " +
+    "you USUALLY pay wages for. Nothing about it requires a paycheck every two weeks. You pay " +
+    "yourself once at the end of the year, so your payroll period is the year, and withholding is " +
+    "figured for that period. Pub. 15-T backs it up by printing a withholding table headed 'ANNUAL " +
+    "Payroll Period' - reproduced in the 2026 publication with the same brackets our engine uses, " +
+    "which is how the $5,020.00 on your own illustration was checked by hand. The reason this " +
+    "authority exists at all is that the smaller table the automated worksheet points at (Table 3) " +
+    "leaves 'Annually' out, and reading only that table would tell you your own paycheck cannot be " +
+    "computed. It can be, it is ordinary, and this is the paragraph that says so.",
+  source: "https://www.irs.gov/pub/irs-pdf/p15.pdf",
 };
 
 export const PUB15T_ROUNDING: GuidanceAuthority = {
@@ -829,8 +929,11 @@ export const PUB15_INSUFFICIENT_FUNDS_ORDERING: GuidanceAuthority = {
     "If, by the 10th of the month after the month for which you received an employee's report on tips, " +
     "you don't have enough employee funds available to deduct the employee tax, you no longer have to " +
     "collect it. If there aren't enough funds available, withhold taxes in the following order. " +
-    "Withhold on regular wages and other compensation. Withhold social security and Medicare taxes on " +
-    "tips. Withhold income tax on tips.",
+    // THE LIST IS NUMBERED IN THE PUBLICATION. Dropping "1.", "2." and "3."
+    // made this quote unverifiable against the source text, and the numbers are
+    // not decoration here - the whole authority is about ORDER. Restored.
+    "1. Withhold on regular wages and other compensation. 2. Withhold social security and Medicare " +
+    "taxes on tips. 3. Withhold income tax on tips.",
   soWhat:
     "The IRS contemplates the situation where a paycheck cannot cover everything that is supposed to " +
     "come out of it, and its answer is an ORDER, not an overdraft. You withhold down the list until " +
@@ -923,6 +1026,8 @@ export const PAYROLL_TAX_AUTHORITIES: readonly GuidanceAuthority[] = [
   PUB15T_LINE_1G_STANDARD_AMOUNTS,
   PUB15T_NO_W4_DEFAULT,
   PUB15T_EXEMPT_IS_INCOME_TAX_ONLY,
+  IRC_3401B_ANNUAL_PAYROLL_PERIOD,
+  PUB15T_ANNUAL_PAYROLL_PERIOD_TABLE,
   PUB15T_ROUNDING,
   // FICA
   IRC_3101_EMPLOYEE_FICA,

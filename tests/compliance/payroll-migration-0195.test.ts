@@ -56,6 +56,11 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import {
+  ALL_PAY_FREQUENCIES,
+  PAY_FREQUENCY_LABELS,
+  PAY_PERIODS_PER_YEAR,
+} from "@/lib/payroll/payroll-w4-core";
 
 const MIGRATIONS_DIR = path.resolve(__dirname, "../../supabase/migrations");
 const FILENAME = "0195_employee_payroll_setup.sql";
@@ -409,5 +414,82 @@ describe("the migration teaches, per standing rule 26", () => {
   it("tells the reader how to verify it after running", () => {
     expect(SQL).toContain("gl_audit_employee_payroll_setup()");
     expect(SQL).toContain("HOW TO RUN IT");
+  });
+});
+
+// ===========================================================================
+// THE PAY-FREQUENCY GATE
+//
+// This section exists because of a REAL DEFECT that shipped past every test
+// above, and it is worth stating plainly what happened.
+//
+// 0195's CHECK constraint accepted six pay_frequency values, one of which was
+// 'annually' - deliberately, because Michael pays himself exactly once, at the
+// end of the year. The withholding engine's PayFrequency type accepted seven
+// values, and 'annually' was NOT among them, because it had been transcribed
+// faithfully from Pub. 15-T Worksheet 1A's Table 3, which genuinely omits it.
+//
+// So the database would happily store the owner's pay row, and the engine
+// would then look up `PAY_PERIODS_PER_YEAR['annually']`, get `undefined`, and
+// throw "divideRoundHalfUp requires integers - a float reached a money path"
+// when someone eventually ran that paycheck. Observed, not theorised.
+//
+// Two lists of strings, in two languages, that MUST be the same list and that
+// nothing forced to be the same list. That is the whole defect class. These
+// tests compare the SETS in both directions (standing rule 34), so the next
+// person to add a cadence to one side is told immediately about the other.
+// ===========================================================================
+describe("the pay frequencies in SQL and in TypeScript are the same set", () => {
+  /** Pull the accepted values straight out of the CHECK constraint text. */
+  function frequenciesAllowedBySql(): string[] {
+    // Match the constraint, then the quoted values inside it. Deliberately run
+    // against EXEC_SQL so a cadence merely NAMED in a comment cannot satisfy
+    // this test - the prose in this migration discusses 'annually' at length.
+    const m = /check\s*\(\s*pay_frequency\s+in\s*\(([^)]*)\)/i.exec(EXEC_SQL);
+    expect(m, "could not find the pay_frequency CHECK constraint in 0195").not.toBeNull();
+    const values = [...(m as RegExpExecArray)[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]);
+    // A regex that matched but captured nothing would make every assertion
+    // below vacuously true (rule 39).
+    expect(values.length).toBeGreaterThan(3);
+    return values.sort();
+  }
+
+  it("accepts exactly the cadences the engine can actually compute", () => {
+    const sqlSet = frequenciesAllowedBySql();
+    // Widened to string[] deliberately. The job of this test is to police the
+    // boundary between untyped SQL text and the TypeScript union, so casting
+    // the SQL side INTO PayFrequency would assume the very thing being checked
+    // and the comparison would become vacuous (rule 39).
+    const engineSet: string[] = [...ALL_PAY_FREQUENCIES].map(String).sort();
+
+    // The direction that catches the bug that shipped: SQL lets in a value the
+    // engine cannot divide by.
+    const storableButNotComputable = sqlSet.filter((f) => !engineSet.includes(f));
+    expect(
+      storableButNotComputable,
+      `0195 accepts ${JSON.stringify(storableButNotComputable)}, which PayFrequency does not. ` +
+        `The database would store it and the withholding engine would throw on it.`,
+    ).toEqual([]);
+  });
+
+  it("every cadence the engine offers has a real periods-per-year number", () => {
+    // The other direction (rule 34). A frequency in the type with no entry in
+    // the table is the `undefined` that became a float error.
+    for (const f of ALL_PAY_FREQUENCIES) {
+      const periods = PAY_PERIODS_PER_YEAR[f];
+      expect(periods, `${f} has no periods-per-year`).toBeTypeOf("number");
+      expect(Number.isInteger(periods), `${f} periods-per-year is not an integer`).toBe(true);
+      expect(periods, `${f} periods-per-year must be positive`).toBeGreaterThan(0);
+      // A label too, so a <select> can never render a raw enum at Michael.
+      expect(PAY_FREQUENCY_LABELS[f], `${f} has no human label`).toBeTruthy();
+    }
+  });
+
+  it("the CHECK constraint is what is being read, not a comment about it", () => {
+    // Proves the harness above is looking at executable SQL. If someone deletes
+    // the constraint and leaves the explanation, this must fail.
+    const stripped = frequenciesAllowedBySql();
+    expect(stripped).toContain("biweekly");
+    expect(stripped).toContain("annually");
   });
 });
