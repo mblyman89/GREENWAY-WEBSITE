@@ -123,6 +123,19 @@ const TARGETS: readonly Target[] = [
     file: "cfr-8-274a.2.txt",
     label: "8 CFR §274a.2",
   },
+  // books-25, second pass — §3401(b), the DEFINITION OF A PAYROLL PERIOD.
+  //
+  // Mirrored because of a defect this slice found and fixed. Pub. 15-T's
+  // Worksheet 1A carries a small table of pay cadences ("Table 3") that lists
+  // seven of them and does NOT list "Annually" — while migration 0195 accepts
+  // a pay_frequency of 'annually' for Michael's own once-a-year salary. The
+  // engine had transcribed Table 3 faithfully, so an annual period produced
+  // `undefined` periods per year and then threw a message about floats.
+  //
+  // The fix rests entirely on this statute naming the annual payroll period
+  // outright, so the statute belongs on disk where rule 35 can check the quote
+  // rather than in a comment asserting what it says.
+  { kind: "usc", section: "3401" },
 ];
 
 function urlFor(t: Target): string {

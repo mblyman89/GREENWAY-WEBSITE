@@ -56,6 +56,11 @@ const MIRRORED_CORPORA: ReadonlyArray<{
   { name: "26 U.S.C.", re: /^26 U\.S\.C\. §(\d+[A-Z]?)/, file: (m) => ["federal", `usc-${m[1]}.txt`] },
   { name: "Rev. Proc.", re: /^Rev\. Proc\. (\d{4})-(\d+)/, file: (m) => ["federal", `revproc-${m[1]}-${m[2]}.txt`] },
   { name: "RCW", re: /^RCW ([\d.]+)/, file: (m) => ["state-wa", `rcw-${m[1]}.txt`] },
+  {
+    name: "IRS Publication",
+    re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
+    file: (m) => ["federal", `irs-pub-${m[1]}${(m[2] ?? "").toLowerCase()}-${m[3]}.txt`],
+  },
 ];
 
 /**
@@ -184,6 +189,32 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
     return existsSync(p) ? p : null;
   }
 
+  // IRS Pub. 15 (2026), section 8   ->  federal/irs-pub-15-2026.txt
+  // IRS Pub. 15-T (2026), ...       ->  federal/irs-pub-15-t-2026.txt
+  //
+  // books-25. UNTIL NOW NO IRS PUBLICATION WAS MIRRORED AT ALL, and that was a
+  // hole rather than an omission. The publications are where the WITHHOLDING
+  // RULES live - Pub. 15-T's worksheets are what this payroll engine implements
+  // line by line - so they were the most-quoted and least-checkable sources in
+  // the codebase. Every Pub. 15/15-T quote returned null here and was reported
+  // as "no local copy to check against": a green line of output meaning nothing.
+  //
+  // Found by mutation testing, not by reading: corrupting a word inside a
+  // freshly hand-verified Pub. 15 quote ("usually pay wages" -> "normally pay
+  // wages") and running every authority suite produced 201 passed, 0 failed. A
+  // quote I had personally checked character-for-character an hour earlier was
+  // protected by absolutely nothing. Hand verification is a one-time act; a
+  // corpus entry is a standing one.
+  //
+  // The YEAR is part of the filename because these are revised annually and a
+  // 2026 quote must not be validated against a 2027 file.
+  const pub = /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/.exec(cite);
+  if (pub) {
+    const suffix = (pub[2] ?? "").toLowerCase();
+    const p = join(dir, "federal", `irs-pub-${pub[1]}${suffix}-${pub[3]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
   return null;
 }
 
@@ -196,8 +227,33 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
  * comparison. They are never included in a stored quote either, so both sides
  * are treated identically and the comparison stays honest.
  */
+/*
+ * A NOTE ON DOT LEADERS, RECORDED BECAUSE THE OBVIOUS FIX WAS THE WRONG ONE.
+ *
+ * IRS worksheets are FORMS. Every line trails a run of periods leading the eye
+ * to the entry box: "...enter -0- . . . . . . . . 1i $". Three stored quotes
+ * failed against the newly mirrored publications because of them, and the
+ * tempting fix was a normalisation step here that collapsed any run of three or
+ * more spaced periods to a single space on both sides.
+ *
+ * It worked. It was still removed, for two reasons.
+ *
+ * First, it was doing the wrong job. Those quotes failed because they ended with
+ * a full stop the form does not actually print - what looks like the end of the
+ * sentence is the FIRST DOT of the leader. The honest fix is for the quote to
+ * end on the last word, which is all that can be verified. Normalising the
+ * source instead would have papered over a quote asserting a character that is
+ * not there.
+ *
+ * Second, once the quotes were corrected the rule became dead code: deleting it
+ * changed nothing, 95 quotes verified either way. Standing rule 40 - an
+ * unreachable guard is an untested guard - so it does not get to sit here
+ * looking protective. If a future quote genuinely needs it, it can come back
+ * WITH a failing case that proves it is load-bearing.
+ */
 function normalise(text: string): string {
   return text
+    // NO DOT-LEADER RULE HERE, DELIBERATELY - see the note below.
     .replace(/\u2014/g, "-")
     .replace(/\u2019/g, "'")
     .replace(/[\u201c\u201d]/g, '"')

@@ -77,6 +77,8 @@ import {
 } from "@/lib/payroll/payroll-withholding-core";
 import {
   PAY_PERIODS_PER_YEAR,
+  PUB15T_TABLE_3_PERIODS,
+  ALL_PAY_FREQUENCIES,
   defaultW4WhenNoneFurnished,
   __runPayrollW4CoreTests,
   type PayFrequency,
@@ -124,6 +126,28 @@ describe("harness parity", () => {
   it("runs the W-4 and authority self-tests", () => {
     expect(() => __runPayrollW4CoreTests()).not.toThrow();
     expect(() => __runPayrollTaxAuthoritiesTests()).not.toThrow();
+  });
+
+  it("FAILS when an authority self-test fails, instead of just printing it", () => {
+    // THIS TEST EXISTS BECAUSE THE ONE ABOVE IS NOT ENOUGH, AND I FOUND THAT
+    // OUT THE EMBARRASSING WAY.
+    //
+    // __runPayrollTaxAuthoritiesTests() does not throw on a failed check. It
+    // COUNTS the failure, prints "payroll-tax-authorities self-test FAILED:
+    // ..." to stderr, and returns normally. So `not.toThrow()` passed while the
+    // console showed a real failure - a quote that was too short to be evidence
+    // sat in the registry and the suite reported 159 passed, 0 failed.
+    //
+    // That is precisely the silent failure this whole slice exists to prevent,
+    // sitting inside our own test harness. A gate that reports a problem to
+    // nobody is not a gate. The returned count is the thing that has to be
+    // asserted on, exactly as the withholding self-test above already does.
+    const { passed, failed } = __runPayrollTaxAuthoritiesTests();
+    expect(failed).toBe(0);
+    // Rule 39: a harness that silently ran zero checks would also report zero
+    // failures, so the pass count has to be non-trivial for this to mean
+    // anything.
+    expect(passed).toBeGreaterThan(100);
   });
 });
 
@@ -668,6 +692,54 @@ describe("Worksheet 1A", () => {
     expect(extra.line4b_withholdingCents).toBe(base.line4b_withholdingCents + 2_500);
   });
 
+  it("TABLE 3 IS STILL A VERBATIM COPY OF WHAT THE IRS PRINTS", () => {
+    // Transcribed from the 2026 Pub. 15-T PDF, Worksheet 1A, "Automated Payroll
+    // Systems", the row headed `Table 3`. Read off the converted text at line
+    // 609 of p15t-2026.txt:
+    //
+    //   Table 3   Semiannually  Quarterly  Monthly  Semimonthly  Biweekly  Weekly  Daily
+    //                    2          4        12         24          26       52     260
+    //
+    // NOTE WHAT IS NOT THERE: no "Annually". The IRS prints the annual cadence
+    // in Table 7, not Table 3. That absence is the whole reason this constant
+    // exists separately from PAY_PERIODS_PER_YEAR - the engine legitimately
+    // supports an annual period (IRC 3401(b) names it, and Michael pays himself
+    // once a year), but Table 3 must not be quietly widened to say so. A copy of
+    // a government table that grows an extra row is no longer a copy.
+    expect(PUB15T_TABLE_3_PERIODS).toEqual({
+      semiannually: 2,
+      quarterly: 4,
+      monthly: 12,
+      semimonthly: 24,
+      biweekly: 26,
+      weekly: 52,
+      daily: 260,
+    });
+    expect(Object.keys(PUB15T_TABLE_3_PERIODS)).toHaveLength(7);
+    expect(PUB15T_TABLE_3_PERIODS).not.toHaveProperty("annually");
+  });
+
+  it("every Table 3 cadence agrees with the engine's own periods-per-year", () => {
+    // The two maps must never disagree where they overlap. If they did, the
+    // withholding would be computed on a divisor the IRS table does not use -
+    // and it would still look completely ordinary on screen.
+    for (const [freq, periods] of Object.entries(PUB15T_TABLE_3_PERIODS)) {
+      expect(
+        PAY_PERIODS_PER_YEAR[freq as PayFrequency],
+        `${freq} disagrees with Pub. 15-T Table 3`,
+      ).toBe(periods);
+    }
+    // And the engine may only support MORE cadences than Table 3, never fewer.
+    for (const freq of Object.keys(PUB15T_TABLE_3_PERIODS)) {
+      expect([...ALL_PAY_FREQUENCIES].map(String)).toContain(freq);
+    }
+    // The one documented extra, stated out loud so it can never be an accident.
+    const extra = [...ALL_PAY_FREQUENCIES]
+      .map(String)
+      .filter((f) => !(f in PUB15T_TABLE_3_PERIODS));
+    expect(extra).toEqual(["annually"]);
+  });
+
   it("annualizes correctly for every pay frequency in Pub. 15-T Table 3", () => {
     const freqs: PayFrequency[] = [
       "weekly", "biweekly", "semimonthly", "monthly", "quarterly", "semiannually", "daily",
@@ -678,6 +750,86 @@ describe("Worksheet 1A", () => {
       expect(r.line1b_payPeriodsPerYear, f).toBe(periods);
       expect(r.line1c_annualWagesCents, f).toBe(100_000 * periods);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // THE ANNUAL PAYROLL PERIOD
+  //
+  // Michael pays himself once, at the end of the year. Before books-25 this
+  // engine could not do that: PAY_PERIODS_PER_YEAR had no `annually` key, so
+  // line 1b came out `undefined`, and the first money divide threw
+  // "divideRoundHalfUp requires integers - a float reached a money path".
+  // Migration 0195 had been accepting 'annually' the whole time, so the row
+  // was storable and uncomputable at once.
+  //
+  // The authority for allowing it at all is IRC 3401(b), which names the
+  // "annual payroll period" in the definition itself, plus the ANNUAL Payroll
+  // Period table Pub. 15-T actually prints. Table 3 simply omits it.
+  //
+  // These tests exist to prove the fix is CORRECT, not merely non-throwing.
+  // "It stopped crashing" is the weakest possible evidence about a paycheck.
+  // -------------------------------------------------------------------------
+  it("computes an annual payroll period instead of throwing about floats", () => {
+    const r = computeWorksheet1A({
+      w4: W4,
+      payFrequency: "annually",
+      wagesThisPeriodCents: 6_000_000, // $60,000, paid once
+    });
+    expect(r.line1b_payPeriodsPerYear).toBe(1);
+    // Annualising a once-a-year payment must be the identity, not a multiple.
+    expect(r.line1c_annualWagesCents).toBe(6_000_000);
+    expect(Number.isInteger(r.line4b_withholdingCents)).toBe(true);
+    // A real tax on $60,000 of wages, not a zero nobody computed (rule 46).
+    expect(r.line4b_withholdingCents).toBeGreaterThan(0);
+  });
+
+  it("an annual period withholds EXACTLY the annual tax, with no rounding gap", () => {
+    // The claim being proven: for one payment a year, the worksheet's
+    // multiply-by-1 / divide-by-1 round trip is arithmetically identical to
+    // reading the annual percentage table directly. If that is true, then the
+    // owner's single paycheck withholds precisely the annual liability - no
+    // per-period rounding residue, because there is only one period.
+    const annual = computeWorksheet1A({
+      w4: W4,
+      payFrequency: "annually",
+      wagesThisPeriodCents: 6_000_000,
+    });
+    // Line 2g is the tentative ANNUAL amount; line 2h divides it by periods.
+    // With one period those must agree to the cent.
+    expect(annual.line2h_tentativePerPeriodCents).toBe(annual.line2g_annualTentativeCents);
+    expect(annual.line4b_withholdingCents).toBe(annual.line3c_afterCreditsCents);
+  });
+
+  it("the same yearly wage withholds about the same whether paid once or biweekly", () => {
+    // Cross-check against a cadence that was already trusted. $60,000 a year
+    // paid once, versus the same $60,000 paid over 26 periods. The annual
+    // totals must agree within per-period rounding - if the annual path were
+    // mis-annualising (say, treating 1 as 26) this would be off by orders of
+    // magnitude, not by cents.
+    const once = computeWorksheet1A({
+      w4: W4, payFrequency: "annually", wagesThisPeriodCents: 6_000_000,
+    });
+    const biweekly = computeWorksheet1A({
+      w4: W4, payFrequency: "biweekly", wagesThisPeriodCents: 230_769, // 6,000,000 / 26
+    });
+    const onceTotal = once.line4b_withholdingCents;
+    const biweeklyTotal = biweekly.line4b_withholdingCents * 26;
+    expect(Math.abs(onceTotal - biweeklyTotal)).toBeLessThan(5_000); // under $50
+  });
+
+  it("Step 4(c) extra withholding is taken ONCE on an annual period", () => {
+    // A subtle trap: Step 4(c) is "additional tax you want withheld each pay
+    // period." With one pay period a year that is one bite, not 26. Getting
+    // this wrong would over-withhold the owner by 25x the requested amount.
+    const base = computeWorksheet1A({
+      w4: W4, payFrequency: "annually", wagesThisPeriodCents: 6_000_000,
+    });
+    const extra = computeWorksheet1A({
+      w4: { ...W4, step4cExtraPerPeriodCents: 50_000 },
+      payFrequency: "annually",
+      wagesThisPeriodCents: 6_000_000,
+    });
+    expect(extra.line4b_withholdingCents).toBe(base.line4b_withholdingCents + 50_000);
   });
 
   it("produces roughly the same ANNUAL tax regardless of pay frequency", () => {

@@ -908,21 +908,41 @@ describe("required field lists match what the engine validates", () => {
 
 // ===========================================================================
 describe("the mentor layer covers every exported function (rule 26)", () => {
-  // Reads BOTH files off disk and compares. A new export without a lesson fails
-  // here rather than shipping unexplained.
-  it("every exported function in the core has a lesson", () => {
+  /**
+   * The files the mentor layer is responsible for explaining.
+   *
+   * The UI core joined this list in books-25 because it stopped being a thin
+   * formatting shim: buildWorkedPaycheck decides which lines Michael sees and
+   * what arithmetic is printed beside them, and buildChecklistView decides what
+   * gets highlighted red. Those are exactly the "what is this screen telling
+   * me?" questions the mentor layer exists to answer, so an unexplained export
+   * in there is the same defect as an unexplained export in the engine.
+   */
+  const MENTORED_SOURCES = [
+    "payroll-onboarding-core.ts",
+    "payroll-onboarding-ui-core.ts",
+  ] as const;
+
+  function readMentoredSource(file: string): string {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
-      join(__dirname, "..", "..", "src", "lib", "payroll", "payroll-onboarding-core.ts"),
+      join(__dirname, "..", "..", "src", "lib", "payroll", file),
       "utf8",
     );
-    expect(src.length).toBeGreaterThan(10_000); // rule 39: not a vacuous read
+    // Rule 39: a read that silently returned nothing would make every
+    // assertion below vacuously true.
+    expect(src.length, `${file} looks empty`).toBeGreaterThan(5_000);
+    return src;
+  }
 
-    const exported = [...src.matchAll(/^export function ([A-Za-z0-9_]+)/gm)].map(
-      (m) => m[1],
-    );
+  function exportedFunctionsIn(src: string): string[] {
+    return [...src.matchAll(/^export function ([A-Za-z0-9_]+)/gm)].map((m) => m[1]);
+  }
+
+  it("every exported function in the core has a lesson", () => {
+    const exported = exportedFunctionsIn(readMentoredSource("payroll-onboarding-core.ts"));
     expect(exported.length).toBeGreaterThan(15);
 
     const taught = new Set(PAYROLL_ONBOARDING_LESSONS.map((l) => l.fn));
@@ -930,16 +950,28 @@ describe("the mentor layer covers every exported function (rule 26)", () => {
     expect(untaught, `exported but not taught: ${untaught.join(", ")}`).toEqual([]);
   });
 
-  it("no lesson teaches a function that does not exist", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
-    const src = readFileSync(
-      join(__dirname, "..", "..", "src", "lib", "payroll", "payroll-onboarding-core.ts"),
-      "utf8",
+  it("every exported function in the SCREEN core has a lesson too", () => {
+    const exported = exportedFunctionsIn(
+      readMentoredSource("payroll-onboarding-ui-core.ts"),
     );
+    // Guards the guard: if this file ever stops exporting functions the test
+    // above would pass by having nothing to check.
+    expect(exported.length).toBeGreaterThan(3);
+
+    const taught = new Set(PAYROLL_ONBOARDING_LESSONS.map((l) => l.fn));
+    const untaught = exported.filter((fn) => !taught.has(fn));
+    expect(
+      untaught,
+      `exported from the screen core but not taught: ${untaught.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("no lesson teaches a function that does not exist", () => {
+    // Union across every mentored file, in BOTH directions (rule 34): the two
+    // tests above catch an export with no lesson, this one catches a lesson
+    // whose function was renamed or deleted out from under it.
     const exported = new Set(
-      [...src.matchAll(/^export function ([A-Za-z0-9_]+)/gm)].map((m) => m[1]),
+      MENTORED_SOURCES.flatMap((f) => exportedFunctionsIn(readMentoredSource(f))),
     );
     const orphans = PAYROLL_ONBOARDING_LESSONS.filter((l) => !exported.has(l.fn));
     expect(orphans.map((o) => o.fn), "lessons for non-existent functions").toEqual([]);

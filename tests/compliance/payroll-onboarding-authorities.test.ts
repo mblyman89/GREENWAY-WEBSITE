@@ -303,6 +303,40 @@ describe("verify-verbatim-quotes cite mapping — the new corpora", () => {
     expect(expectedCorpusFile("WAC 314-55-087")).toBeNull();
   });
 
+  it("maps an IRS Publication citation to the mirrored publication", () => {
+    // books-25. Until this slice NO IRS publication was mirrored, which meant
+    // the withholding rules this engine implements line by line were the least
+    // verifiable sources in the repository. Both spellings resolve: the plain
+    // number and the lettered variant.
+    expect(sourceFileFor("IRS Pub. 15 (2026), section 8 (Payroll Period)", AUTHORITY_DIR)).toBe(
+      join(AUTHORITY_DIR, "federal", "irs-pub-15-2026.txt"),
+    );
+    expect(sourceFileFor("IRS Pub. 15-T (2026), 'Rounding'", AUTHORITY_DIR)).toBe(
+      join(AUTHORITY_DIR, "federal", "irs-pub-15-t-2026.txt"),
+    );
+  });
+
+  it("does NOT let Pub. 15 and Pub. 15-T resolve to the same file", () => {
+    // The whole reason the suffix is in the filename. "Pub. 15" and "Pub. 15-T"
+    // are different documents with different rules, and a pattern that dropped
+    // the "-T" would verify Pub. 15-T's worksheet quotes against Circular E and
+    // report a cheerful green line for a quote that is not in the file at all.
+    const plain = sourceFileFor("IRS Pub. 15 (2026), section 6", AUTHORITY_DIR);
+    const lettered = sourceFileFor("IRS Pub. 15-T (2026), Worksheet 1A, line 1g", AUTHORITY_DIR);
+    expect(plain).not.toBe(lettered);
+  });
+
+  it("keeps the YEAR in the publication filename", () => {
+    // These are revised every year. A 2026 quote validated against a 2027 file
+    // would be the most plausible-looking wrong answer this system could give,
+    // because the prose barely changes while the numbers change completely.
+    const got = expectedCorpusFile("IRS Pub. 15-T (2027), Worksheet 1A", AUTHORITY_DIR);
+    expect(got?.path).toBe(join(AUTHORITY_DIR, "federal", "irs-pub-15-t-2027.txt"));
+    // ...and that file does not exist, so the rule-48 guard must object rather
+    // than silently fall back to the 2026 text.
+    expect(sourceFileFor("IRS Pub. 15-T (2027), Worksheet 1A", AUTHORITY_DIR)).toBeNull();
+  });
+
   it("expectedCorpusFile and sourceFileFor agree for every mirrored authority", () => {
     // The two functions answer the same question differently on purpose:
     // sourceFileFor returns null when the file is absent, expectedCorpusFile
