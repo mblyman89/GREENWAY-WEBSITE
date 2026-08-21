@@ -1053,6 +1053,278 @@ export const RCW_49_52_060_AUTHORIZED_WITHHOLDING: GuidanceAuthority = {
 };
 
 // ---------------------------------------------------------------------------
+// 8.5) FEDERAL DEPOSIT SCHEDULE - WHEN THE WITHHELD MONEY IS ACTUALLY DUE
+// ---------------------------------------------------------------------------
+
+/*
+ * WHY THIS SECTION EXISTS, AND WHY IT IS THE MOST DANGEROUS GAP WE HAD.
+ *
+ * Everything above this line answers "how much comes out of the check." Nothing
+ * above this line answers "by WHEN must Greenway hand that money to the IRS."
+ * Those are different questions with different penalties, and the second one is
+ * the one that bites: IRC 6656 (already in this file) charges up to 15% for a
+ * LATE deposit of a PERFECTLY CALCULATED amount. You can get every paycheck
+ * exactly right and still lose 15% by depositing on the wrong Wednesday.
+ *
+ * Michael's Q2 2026 Form 941 reported $14,204.57 on line 12 and carried a
+ * POPULATED Schedule B. Per PUB15_SCHEDULE_B_REQUIRED below, only semiweekly
+ * depositors file Schedule B - so his own filing already asserts he is
+ * semiweekly. Independently, four quarters at that level is $56,818.28, which
+ * clears the $50,000 line in PUB15_LOOKBACK_PERIOD by 13.6%. Two separate
+ * proofs, same answer.
+ *
+ * That matters enormously for the January 1, 2027 cutover, because the tempting
+ * assumption is the wrong one. Greenway is NOT a new employer - the business has
+ * been running payroll for years and only the SOFTWARE is new. So the "new
+ * employers ... considered to be zero ... monthly" relief in
+ * PUB15_NEW_EMPLOYER_ZERO does NOT apply to us, and a system that quietly
+ * defaulted a fresh install to "monthly" would have been handing Michael a 15%
+ * penalty in the name of a sensible-looking default. It defaults to nothing.
+ */
+
+/**
+ * THE RULE THAT DECIDES IT. Everything else in this section is downstream of
+ * these two sentences.
+ */
+export const PUB15_LOOKBACK_PERIOD: GuidanceAuthority = {
+  id: "pub15-2026-lookback-period",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Lookback period'",
+  quote:
+    "If you're a Form 941 filer, your deposit schedule for a calendar year is determined from the " +
+    "total taxes reported on Forms 941, line 12, in a 4-quarter lookback period. The lookback " +
+    "period begins July 1 and ends June 30 as shown next in Table 1. If you reported $50,000 or " +
+    "less of taxes for the lookback period, you're a monthly schedule depositor; if you reported " +
+    "more than $50,000, you're a semiweekly schedule depositor.",
+  soWhat:
+    "Read the dates carefully, because they are the part everyone gets wrong: the lookback period " +
+    "is NOT last year. For calendar year 2027 it runs July 1, 2025 through June 30, 2026 - it " +
+    "ends eighteen months before the payroll it governs. That is deliberate on the IRS's part, so " +
+    "you always know your schedule before the year starts. Practically, it means Greenway's 2027 " +
+    "schedule was already locked in by the middle of 2026 and cannot be changed by anything that " +
+    "happens in 2027. It also means the number that matters is line 12 as ORIGINALLY FILED on " +
+    "four specific 941s, not your ledger, not your accruals, and not a corrected figure.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/**
+ * The companion that stops the lookback sum being quietly "improved" by later
+ * corrections. This one exists to make the engine refuse to be helpful.
+ */
+export const PUB15_LOOKBACK_ADJUSTMENTS: GuidanceAuthority = {
+  id: "pub15-2026-lookback-adjustments",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Adjustments and the lookback rule'",
+  quote:
+    "Adjustments made on Form 941-X, Form 943-X, Form 944-X, and Form 945-X don't affect the " +
+    "amount of tax liability for previous periods for purposes of the lookback rule.",
+  soWhat:
+    "If you amend an old quarter, the lookback total does NOT move. The IRS's own example is an " +
+    "employer who originally reported $45,000, later found a $10,000 understatement, filed a " +
+    "941-X, and STILL stayed monthly for the year - because the test reads what was originally " +
+    "reported. This is the opposite of how an accountant instinctively wants to treat a " +
+    "correction, so the engine stores the as-originally-filed line 12 for each lookback quarter " +
+    "and will not silently swap in an amended figure.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/**
+ * THE MISCONCEPTION KILLER. Michael pays biweekly on Friday; that fact has
+ * nothing to do with his deposit schedule, and the IRS says so outright.
+ */
+export const PUB15_SCHEDULE_TERMS_MEANING: GuidanceAuthority = {
+  id: "pub15-2026-schedule-terms-meaning",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Application of Monthly and Semiweekly Schedules'",
+  quote:
+    "The terms \"monthly schedule depositor\" and \"semiweekly schedule depositor\" don't refer to " +
+    "how often your business pays its employees or even how often you're required to make " +
+    "deposits. The terms identify which set of deposit rules you must follow when an employment " +
+    "tax liability arises. The deposit rules are based on the dates when wages are paid (cash " +
+    "basis), not on when tax liabilities are accrued for accounting purposes.",
+  soWhat:
+    "\"Semiweekly\" does not mean you deposit twice a week. Greenway pays every other Friday, so " +
+    "Greenway will make ONE deposit per payday - roughly 26 a year - each due the Wednesday after " +
+    "its Friday. The word describes WHICH RULEBOOK applies, not how often you write a check. The " +
+    "last sentence is the one an accountant needs to underline: deposits follow the CASH date the " +
+    "wages were paid, not the period they were earned in or accrued to. A pay period ending in " +
+    "June that pays in July is a JULY deposit obligation.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** What a "deposit period" actually is - the unit liabilities pool into. */
+export const PUB15_DEPOSIT_PERIOD: GuidanceAuthority = {
+  id: "pub15-2026-deposit-period",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Deposit period'",
+  quote:
+    "The term \"deposit period\" refers to the period during which tax liabilities are accumulated " +
+    "for each required deposit due date. For monthly schedule depositors, the deposit period is a " +
+    "calendar month. The deposit periods for semiweekly schedule depositors are Wednesday through " +
+    "Friday and Saturday through Tuesday.",
+  soWhat:
+    "The week is cut into exactly two buckets: Wednesday-Thursday-Friday, and " +
+    "Saturday-Sunday-Monday-Tuesday. Every payday falls in one of them, and everything paid in the " +
+    "same bucket is deposited together on one due date. Greenway's Friday paydays always land in " +
+    "the Wednesday-Friday bucket, which is why the answer is always 'the following Wednesday'.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** Table 2, in words: the semiweekly due-date mapping the engine encodes. */
+export const PUB15_SEMIWEEKLY_DUE_DATES: GuidanceAuthority = {
+  id: "pub15-2026-semiweekly-due-dates",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Semiweekly Deposit Schedule' (and Table 2)",
+  quote:
+    "Under the semiweekly deposit schedule, deposit employment taxes for payments made on " +
+    "Wednesday, Thursday, and/or Friday by the following Wednesday. Deposit taxes for payments " +
+    "made on Saturday, Sunday, Monday, and/or Tuesday by the following Friday.",
+  soWhat:
+    "This is the whole semiweekly calendar in two sentences, and it is what the engine turns into " +
+    "an actual date. Pay on Friday, deposit by the next Wednesday - five days later, never the " +
+    "same week. For Greenway that produces one due date per payday, 26 times a year, every one of " +
+    "them a Wednesday unless a federal holiday pushes it.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** The monthly counterpart, so the engine can explain both branches. */
+export const PUB15_MONTHLY_DUE_DATE: GuidanceAuthority = {
+  id: "pub15-2026-monthly-due-date",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Monthly Deposit Schedule'",
+  quote:
+    "Under the monthly deposit schedule, deposit employment taxes on payments made during a month " +
+    "by the 15th day of the following month.",
+  soWhat:
+    "The simpler branch: everything paid in a calendar month goes in one deposit due the 15th of " +
+    "the next month. Greenway is NOT on this schedule, but the engine still has to compute it, " +
+    "because the whole point of showing both is that Michael can see which rule he is on and what " +
+    "the other one would have said.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/**
+ * The independent proof of Michael's status, and a filing obligation in its own
+ * right: semiweekly depositors must attach Schedule B.
+ */
+export const PUB15_SCHEDULE_B_REQUIRED: GuidanceAuthority = {
+  id: "pub15-2026-schedule-b-required",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Semiweekly Deposit Schedule' (Caution)",
+  quote:
+    "Semiweekly schedule depositors must complete Schedule B (Form 941), Report of Tax Liability " +
+    "for Semiweekly Schedule Depositors, and submit it with Form 941.",
+  soWhat:
+    "Two things follow. First, it is evidence: Greenway's Q2 2026 Form 941 came with a populated " +
+    "Schedule B, and only semiweekly depositors file one - so the existing filings already say " +
+    "which schedule Michael is on, independently of any arithmetic. Second, it is a duty books-28 " +
+    "inherits: a semiweekly 941 is incomplete without Schedule B, and Schedule B is a " +
+    "day-by-day liability record, which means the daily liability has to be captured as payroll " +
+    "is run rather than reconstructed from a quarterly total at filing time.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/**
+ * THE TRAP. This relief is real, it is generous, and it does NOT apply to
+ * Greenway - which is exactly why it is recorded here rather than left out.
+ */
+export const PUB15_NEW_EMPLOYER_ZERO: GuidanceAuthority = {
+  id: "pub15-2026-new-employer-zero",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'New employers'",
+  quote:
+    "For Form 941 filers, your tax liability for any quarter in the lookback period before you " +
+    "started or acquired your business is considered to be zero. Therefore, you're a monthly " +
+    "schedule depositor for the first calendar year of your business.",
+  soWhat:
+    "A genuinely new business has no lookback history, so the law treats it as zero and starts it " +
+    "on the easy schedule. Greenway does not get this. The business has been paying employees for " +
+    "years - it is the SOFTWARE that is new on January 1, 2027, and the IRS has never cared what " +
+    "software you use. Recording the rule we DON'T qualify for is the point: it is the most " +
+    "plausible wrong answer, the one a fresh install would drift into by looking at its own empty " +
+    "tables and concluding 'no history, therefore monthly.' The engine must be told the history.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** Weekends and DC holidays move due dates. Without this the dates are wrong. */
+export const PUB15_BUSINESS_DAYS_ONLY: GuidanceAuthority = {
+  id: "pub15-2026-business-days-only",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Deposits Due on Business Days Only'",
+  quote:
+    "If a deposit is required to be made on a day that isn't a business day, the deposit is " +
+    "considered timely if it is made by the close of the next business day. A business day is any " +
+    "day other than a Saturday, Sunday, or legal holiday.",
+  soWhat:
+    "A computed due date is not a real due date until it has been walked forward off weekends and " +
+    "holidays. Note the definition is narrow on purpose: for deposits, a 'legal holiday' means a " +
+    "legal holiday in the District of Columbia - NOT a Washington State holiday. A day off in " +
+    "Olympia does not move an IRS deposit.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** The semiweekly extension, which is a floor of THREE BUSINESS DAYS. */
+export const PUB15_SEMIWEEKLY_THREE_BUSINESS_DAYS: GuidanceAuthority = {
+  id: "pub15-2026-semiweekly-three-business-days",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Deposits Due on Business Days Only'",
+  quote:
+    "Semiweekly schedule depositors have at least 3 business days following the close of the " +
+    "semiweekly period to make a deposit. If any of the 3 weekdays after the end of a semiweekly " +
+    "period is a legal holiday, you'll have an additional day for each day that is a legal holiday " +
+    "to make the required deposit.",
+  soWhat:
+    "This is a stronger guarantee than the plain next-business-day rule, and it is easy to " +
+    "under-apply. A holiday ANYWHERE in the three weekdays after the period closes pushes the due " +
+    "date out a day - even a holiday that falls BEFORE the Wednesday you were aiming at. The IRS's " +
+    "own example: pay Friday, Monday is a holiday, and the deposit normally due Wednesday may be " +
+    "made Thursday. Counting three business days is therefore the correct algorithm; nudging a " +
+    "Wednesday off holidays is not, and would silently under-count.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** The emergency brake: $100,000 in one deposit period is due the NEXT DAY. */
+export const PUB15_100K_NEXT_DAY: GuidanceAuthority = {
+  id: "pub15-2026-100k-next-day-rule",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, '$100,000 Next-Day Deposit Rule'",
+  quote:
+    "If you accumulate $100,000 or more in taxes on any day during a monthly or semiweekly " +
+    "deposit period (see Deposit period, earlier in this section), you must deposit the tax by " +
+    "the next business day, whether you're a monthly or semiweekly schedule depositor. The " +
+    "$100,000 tax liability threshold requiring a next-day deposit is determined before you " +
+    "consider any reduction of your liability for nonrefundable credits.",
+  soWhat:
+    "It overrides whatever schedule you are on, and it has a sting in the tail: a MONTHLY " +
+    "depositor who trips it becomes semiweekly on the next day and stays semiweekly for the rest " +
+    "of that year and all of the next. Greenway's biggest quarter of 2026 was $14,204.57, so this " +
+    "is nowhere near live today - but a single large event (an owner bonus, a payout) is exactly " +
+    "the shape of thing that trips it, so the engine watches for it instead of assuming Greenway " +
+    "is too small. Note 'before you consider any reduction ... for nonrefundable credits': you " +
+    "test the GROSS liability, not what you would actually wire.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+/** Two paydays, one semiweekly period, two quarters: two deposits. */
+export const PUB15_SEMIWEEKLY_SPANNING_QUARTERS: GuidanceAuthority = {
+  id: "pub15-2026-semiweekly-spanning-quarters",
+  kind: "irs_guidance",
+  cite: "IRS Pub. 15 (2026), section 11, 'Semiweekly deposit period spanning 2 quarters'",
+  quote:
+    "If you have more than 1 pay date during a semiweekly period and the pay dates fall in " +
+    "different calendar quarters, you'll need to make separate deposits for the separate " +
+    "liabilities.",
+  soWhat:
+    "The one due date can still require two separate deposits, because each 941 covers one " +
+    "quarter and money cannot be reported on two returns at once. The IRS's example is a " +
+    "Wednesday September 30 payday and a Friday October 2 payday: both deposits are due Wednesday " +
+    "October 7, but they must go separately, tagged to Q3 and Q4. Greenway's biweekly Friday " +
+    "cadence makes this rare, but 'rare' and 'never' are different, and this is the kind of edge " +
+    "that produces a mismatched 941 nobody can explain a year later.",
+  source: "https://www.irs.gov/publications/p15",
+};
+
+// ---------------------------------------------------------------------------
 // 9) THE REGISTRY
 // ---------------------------------------------------------------------------
 
@@ -1101,6 +1373,19 @@ export const PAYROLL_TAX_AUTHORITIES: readonly GuidanceAuthority[] = [
   PUB15_COLLECTING_UNDERWITHHELD,
   RCW_49_52_050_WAGE_REBATE,
   RCW_49_52_060_AUTHORIZED_WITHHOLDING,
+  // federal deposit schedule - WHEN the money is due
+  PUB15_LOOKBACK_PERIOD,
+  PUB15_LOOKBACK_ADJUSTMENTS,
+  PUB15_SCHEDULE_TERMS_MEANING,
+  PUB15_DEPOSIT_PERIOD,
+  PUB15_SEMIWEEKLY_DUE_DATES,
+  PUB15_MONTHLY_DUE_DATE,
+  PUB15_SCHEDULE_B_REQUIRED,
+  PUB15_NEW_EMPLOYER_ZERO,
+  PUB15_BUSINESS_DAYS_ONLY,
+  PUB15_SEMIWEEKLY_THREE_BUSINESS_DAYS,
+  PUB15_100K_NEXT_DAY,
+  PUB15_SEMIWEEKLY_SPANNING_QUARTERS,
   // trust fund
   IRC_7501_TRUST_FUND,
   IRC_6672_TRUST_FUND_PENALTY,
