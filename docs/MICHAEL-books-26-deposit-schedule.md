@@ -293,6 +293,61 @@ The fixtures throughout are your real filed numbers and the IRS's own worked
 examples, not figures I invented. So if this ever breaks, it means the code
 stopped agreeing with a return you have already filed with the government.
 
+## The safety net had a hole in it, and I found it by accident
+
+This one is not about payroll, but you should know about it, because for six
+rounds of work it meant less protection than you were told you had.
+
+Every time I finish a slice, I run the whole test suite on my machine, and there
+is also an automatic check that runs the same tests up on GitHub after the work
+is submitted. Two independent looks at the same question. That automatic check is
+the one that is supposed to catch me if I ever break something and do not notice.
+
+I ran my tests, saw all 7,653 of them pass, and told you it was green. Then I
+went and looked at the automatic check, and it was **red**. Not because of my
+work — it had been red on every single round since books-20. **Six rounds of
+work were accepted while that check was failing**, including the one I finished
+just before this.
+
+Here is the part that actually cost you something. The automatic check does two
+jobs in order: first it inspects the code for style problems, then it runs the
+tests. It stopped at the first job. Which means **the tests never ran up there at
+all** — not for books-20, 21, 22, 23, or 25. Every time I reported "all tests
+pass," that was true on my machine and confirmed by nothing else. The second pair
+of eyes had been closed the whole time.
+
+The cause was almost insultingly small. In two of the test files, three places
+loaded a standard tool using older syntax the project's style rules forbid. Each
+one had a comment attached meant to say "allow this here" — but the comment named
+the **wrong rule**. So it excused nothing, and then the checker also complained
+about the pointless comment. Three small spots, six complaints, and the whole
+safety net switched off.
+
+Before I touched it, I proved it was not my doing, because "it was already broken"
+is exactly what someone says when they broke it. I checked out a clean copy of the
+project as it stood *without* any of my work, ran the identical command, and got
+the identical failure and the identical error count. My work had added nothing to
+it.
+
+Then I fixed it the way twenty other files in that same folder already do it, and
+proved the fix was real rather than just quiet. Those three spots do something
+important: they read the actual program files off the disk to confirm a fact about
+them. If a read like that silently comes back empty, the test still *passes* —
+it just is not checking anything anymore. So I deliberately pointed each of the
+three at a filename that does not exist, to make sure each one would notice and
+fail. All three failed loudly, exactly as they should. Then I put them back and
+confirmed the files were byte-for-byte identical to before.
+
+**The automatic check is now green — the first time since books-20** — and I
+confirmed from its own log that the tests genuinely ran this time, all 368 files
+including the 88 new ones from this slice.
+
+I have written this down as a permanent rule for myself, number 57: a green run
+on my machine is not a green safety net, and I do not get to quietly accept a red
+one just because it was red before I arrived. Six rounds had taught this project
+that red was simply the normal colour of that light. That is precisely how a real
+break walks in without anyone noticing.
+
 ## Where this sits
 
 You now have the piece that knows *when* the money is due. The next slices build
