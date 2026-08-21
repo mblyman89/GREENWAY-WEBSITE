@@ -677,9 +677,119 @@ as `XXXXX5805` for Larry Dee — a formatting bug worth not reproducing).
 ## 12. Open questions for Michael — do not resolve by assumption
 
 1. **Salaried records.** Sage has three salaried people (Jim Becker, Michael Lyman, Theresa Becker) but the instruction for the new system was *"hourly for all employees, salary for me"*. Are Jim and Theresa still employed, and should they be salaried at cutover?
-2. **The UI rate.** ESD's portal says 0.37% for 2026; the filed return used 0.64%. Which is right, and if 0.37% is right, does he want help recovering the roughly 462 overpaid?
-3. **PFML employer share.** The under-50-employee exemption box is unchecked and he paid 222.51 for the quarter. Deliberate, or missed?
-4. **WA Cares.** 399.76 was withheld in Q2 but the return reports zero wages and zero premiums. Is it filed separately, are there exemptions on file, or is this a genuine gap?
+2. ~~**The UI rate.**~~ **ANSWERED 2026-08-21 by the filed EAMS return (section 13.1): 0.37 % is correct.** Sage's 0.64 % is stale and overstates UI by 186.09 a quarter. Nothing was overpaid to ESD; the correction is Sage-side for the rest of 2026.
+3. ~~**PFML employer share.**~~ **WITHDRAWN (section 13.2).** The filed return shows Employer Medical 0.00 and Employer Family 0.00 — the small-employer exemption is already being taken. The 222.51 came from a Sage worksheet, not from the filing.
+4. ~~**WA Cares.**~~ **WITHDRAWN (section 13.2).** The filed return reports 399.76, the correct figure. The zeros were a Sage printout artefact.
 5. **Form 940 year.** The uploaded 940 is the **2025** revision, yet its line 3 matches the 2026 yearly gross exactly. Which tax year does it actually represent?
 6. **Inactive employees.** Fifteen of 26 have zero wages in both quarters. Which should migrate to the new system at all?
 7. **The 71xxx vs 72xxx split.** Angela is coded to a different expense block than the other seven. What distinguishes her?
+
+## 13. The filed returns themselves (uploaded 2026-08-21) — questions 2, 3 and 4 ANSWERED
+
+Sections 5, 6 and 9 above were written from Sage's *printouts*. Michael then uploaded the
+**returns as actually filed with the agencies**, which are the higher authority: a Sage
+report says what Sage believes, while an EAMS confirmation page says what the State of
+Washington received and assessed. Where the two disagree, the filed return wins. Michael's
+own reading was *"sage is probably wrong, our research is recent... so our system has the
+right data i think"*, and the documents prove him right on every point.
+
+### 13.1 EAMS unemployment return, Q2 2026 — confirmation G2413C8A6HP330LL
+
+Filed 2026-07-31 for ESD account 000-073905-00-0, total due **$275.70**. The return prints
+its own rates:
+
+| item | rate the RETURN prints | amount |
+| --- | --- | --- |
+| Gross / total taxable wages | — | 68,923.45 |
+| UI tax due | **0.37 %** | 255.02 |
+| EAF tax due | **0.03 %** | 20.68 |
+| **Total** | | **275.70** |
+
+Verified mechanically: 68,923.45 × 0.0037 = 255.02 exactly; × 0.0003 = 20.68 exactly; the
+two sum to 275.70, the amount assessed. The ten employee rows sum to 68,923.45 and the hours
+to 3,558, both matching the printed totals. Ten employees; April 9, May 8, June 8.
+
+**This closes open question 2, and it reverses what section 5 recorded.** Section 5 read
+0.0064 off the Sage-generated copy of the 5208A. The FILED return says **0.37 %**, and only
+0.37 % reproduces the dollars the State actually charged. Sage's 0.64 % is stale. Had 0.64 %
+been correct the UI line would have been 441.11 rather than 255.02 — an overstatement of
+**186.09 for the quarter**. The correction belongs in Sage for the remainder of 2026, which
+is Michael's stated plan; nothing was overpaid to ESD, because ESD billed from its own rate.
+
+### 13.2 Paid Family & Medical Leave / WA Cares, Q2 2026 — customer C603353555
+
+Submission type **Original**, for April–June 2026.
+
+| item | amount |
+| --- | --- |
+| Paid Leave premiums withheld | 556.32 |
+| — Employer Medical | **0.00** |
+| — Employer Family | **0.00** |
+| — Employee Medical | 182.01 |
+| — Employee Family | 374.31 |
+| WA Cares premiums withheld | 399.75 |
+| **Total WA Cares premiums** | **399.76** |
+| Exemptions reported | 0 |
+
+**This closes open questions 3 and 4, and both were false alarms.**
+
+Question 3 asked whether the small-employer PFML exemption had been missed. The filed return
+shows **Employer Medical 0.00 and Employer Family 0.00** — the employer share is not being
+paid, which is exactly the treatment a business under fifty employees is entitled to. The
+222.51 that section 6 flagged was read from a Sage worksheet, not from the return. There is
+no ~890/yr recovery to pursue, because there was never an overpayment.
+
+Question 4 asked why 399.76 of WA Cares was withheld but reported as zero. The filed return
+reports **399.76** — the correct figure, to the cent. The zeros were an artefact of the Sage
+printout, not of the filing. Nothing is missing from the State's records.
+
+### 13.3 L&I quarterly report, Q2 2026 — confirmation 12616784
+
+Filed 2026-07-31 for L&I account 521,756-00. Account manager DESIREE VERES, 360-902-4284.
+
+| class | nature of work | gross payroll | hours | rate/hour | owed |
+| --- | --- | --- | --- | --- | --- |
+| **6403-05** | Stores: Specialty Groceries | 68,923 | 3,558 | 0.5593 | 1,989.99 |
+
+Verified: 3,558 × 0.5593 = 1,989.99 exactly. The hours tie to the EAMS return's 3,558 and the
+gross to its 68,923.45 rounded to the nearest dollar, as L&I requires. **One risk class only**
+— confirming what section 7 recorded and what books-26 assumed.
+
+### 13.4 Form 941, Q2 2026 — with Schedule B attached
+
+| line | description | amount |
+| --- | --- | --- |
+| 2 | Wages, tips, other compensation | 68,923.45 |
+| 3 | Federal income tax withheld | 3,659.35 |
+| 5a | Taxable social security wages 68,923.45 × 0.124 | 8,546.51 |
+| 5c | Taxable Medicare wages 68,923.45 × 0.029 | 1,998.78 |
+| 5e | Total social security and Medicare | 10,545.29 |
+| 6 | Total taxes before adjustments | 14,204.64 |
+| 7 | Fractions-of-cents adjustment | −0.07 |
+| 10 | Total taxes after adjustments | 14,204.57 |
+| **12** | **Total after adjustments and credits** | **14,204.57** |
+
+Every line recomputed and matched exactly. Two things follow.
+
+First, **line 2 (68,923.45) is identical to the EAMS gross and to the L&I gross.** Three
+separate agencies, three separately filed returns, one wage base. That is the cross-foot that
+makes this quarter trustworthy as a reconciliation target.
+
+Second, **line 12 is 14,204.57 — bit-for-bit the fixture the books-26 deposit-schedule engine
+was built on** (`Q2_2026_LINE12 = 1_420_457` cents). The engine's semiweekly determination was
+computed from this number before the filed return was in hand; the filed return now confirms
+the input. And the return carries **Schedule B**, which only semiweekly depositors file, so the
+determination is confirmed a second way by the government's own form.
+
+### 13.5 What section 9's defect list looks like now
+
+| # | as first written | status after reading the filed returns |
+| --- | --- | --- |
+| 1 | EAF charged at 0.64 % instead of 0.03 % | **STANDS.** The filed return proves 0.03 % is correct, so the GL's 0.64 % is wrong. |
+| 2 | UI rate conflict, 0.37 % vs 0.64 % | **RESOLVED — 0.37 % is correct.** Sage is stale. Fix in Sage for the rest of 2026. |
+| 3 | PFML small-employer exemption possibly unclaimed | **WITHDRAWN.** Employer share is 0.00 on the filed return; the exemption is being taken. |
+| 4 | WA Cares withheld but reported as 0.00 | **WITHDRAWN.** The filed return reports 399.76 correctly. |
+
+Two real, two artefacts of reading Sage instead of the filing. That distinction is the whole
+lesson: **a printout is evidence of what a program believes, and only a filed return is
+evidence of what was filed.** Where this document quotes Sage, it is now labelled as such.
