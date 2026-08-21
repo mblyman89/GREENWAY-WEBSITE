@@ -958,6 +958,31 @@ describe("K migration 0194 seals the retired cycle-count tables", () => {
     expect(lib).toContain("createSupabaseAdminClient");
     expect(lib).not.toContain("createBooksClient");
     expect(prose).toMatch(/createSupabaseAdminClient/);
+
+    /*
+     * THE COUNT IS PART OF THE CLAIM. The migration says "the nine readers"
+     * three separate times, and the owner's report repeats it. That is a
+     * number about the repository, so it has to be checked against the
+     * repository -- and it very nearly shipped wrong: grepping call SITES
+     * returns twelve, because two functions build a client twice and one
+     * RETIRED function still contains the text. Nine is the count of live
+     * functions, which is the thing the sentence actually means.
+     *
+     * Counted structurally rather than by grep, for the same reason section F
+     * counts stripped code: a number nobody recomputed is a number that drifts
+     * the first time somebody adds a reader.
+     */
+    const bodies = lib
+      .split(/(?=^(?:export )?(?:async )?function )/m)
+      .filter((b) => /^(?:export )?(?:async )?function /.test(b));
+    const live = bodies.filter(
+      (b) => b.includes("createSupabaseAdminClient()") && !b.includes("RETIRED"),
+    );
+    expect(
+      live.length,
+      "the migration and the owner's report both say NINE service-role readers",
+    ).toBe(9);
+    expect(prose).toMatch(/\bnine\b/);
   });
 
   it("it refuses to run out of order, including on the REPLACEMENT flow", () => {
