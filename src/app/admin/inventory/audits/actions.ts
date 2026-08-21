@@ -47,6 +47,8 @@ import {
   saveLineReason,
   moveSessionStatus,
 } from "@/lib/inventory/audit-hub-store";
+import { postAuditSession } from "@/lib/inventory/inventory-audit-store";
+import { inventoryAccountByCategory } from "@/lib/inventory/audit-posting-accounts";
 import type { AuditSessionStatus } from "@/lib/inventory/inventory-audit-post-core";
 
 const HUB = "/admin/inventory/audits";
@@ -296,4 +298,111 @@ export async function moveStatusAction(form: FormData): Promise<void> {
 
   revalidatePath(HUB);
   revalidatePath(back);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4) POST — the step that was missing
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Move the shelf and DRAFT the journal entry.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT WAS WRONG BEFORE THIS EXISTED
+ * ---------------------------------------------------------------------------
+ * `postAuditSession` and `previewAuditPosting` have been correct, and covered by
+ * mutation testing, since slice books-12. Nothing called them. The engine that
+ * turns a counted difference into a journal entry was complete, tested, and
+ * connected to no button in the application -- while the screen that showed an
+ * approved audit told the owner:
+ *
+ *   "the journal entry [is] handled through the posting path, which reviews the
+ *    entry with you before anything reaches the ledger"
+ *
+ * There was no posting path. An audit could be counted, reasoned, approved and
+ * signed, and the books would never hear about it. That is the same hole the old
+ * cycle-count code left, reached by a longer route.
+ *
+ * Michael, books-23:
+ *   "letting someone cycle counts process something without a way to post it to
+ *    the ledger would have been a killer. Let's make sure we correct that
+ *    properly."
+ *
+ * This action is the wire. It is deliberately thin -- every decision it needs
+ * has already been made somewhere that can be tested without a database.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS DRAFTS AND DOES NOT POST
+ * ---------------------------------------------------------------------------
+ *   "Yes I meant create the draft and await my approval before auto posting."
+ *                                                    -- Michael, books-23, Q1
+ *
+ * `postAuditSession` calls `submitJournal` WITHOUT `autoPost`, so the entry
+ * lands in drafts. Note what "post" means in each half of this system, because
+ * the two meanings sit one function call apart:
+ *
+ *   posting the AUDIT   = correcting the shelf + drafting the entry  (this action)
+ *   posting the JOURNAL = the owner approving that draft in the books
+ *
+ * The shelf move is not reversible by a second click, so it is not left pending;
+ * the accounting consequence is, so it is. That asymmetry is the whole design.
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE THE ACCOUNT NUMBERS COME FROM
+ * ---------------------------------------------------------------------------
+ * `inventoryAccountByCategory()` derives all 21 inventory accounts from the
+ * chart of accounts rather than accepting a hand-typed map. The only
+ * `accountByCategory` that existed before this slice was a two-entry test
+ * fixture, `{ flower: "20140", edible: "20150" }`, in which "edible" is not a
+ * real category slug and 20150 is not an edible account. Had that shape been
+ * copied into production, every audit would have refused ACCOUNT_UNRESOLVED for
+ * a reason nobody could see. Eighteen accounts in the old Sage file were typo'd
+ * "GRWNY" for "GRNWY"; a derived map cannot be typo'd.
+ */
+export async function postAuditAction(form: FormData): Promise<void> {
+  // Owner alone. This writes to the general ledger, and the posting RPC itself
+  // raises INVENTORY_AUDIT_FORBIDDEN unless is_owner() (migration 0192), so a
+  // wider gate here would only invite someone into a database refusal.
+  const session = await requirePermission("inventory.audit");
+
+  const sessionId = requiredField(form, "sessionId");
+  const back = `${HUB}/${sessionId}`;
+
+  if (sessionId === "") {
+    refuse(back, "MISSING_SESSION", "That audit could not be identified, so nothing was posted.");
+  }
+
+  const result = await postAuditSession(sessionId, inventoryAccountByCategory());
+  if (!result.ok) {
+    // Verbatim. A refusal here is the system declining for a reason the owner
+    // needs to read -- an unresolved account, a session that is not approved, a
+    // correction that would drive a lot negative.
+    refuse(back, result.refusal.code, result.refusal.message);
+  }
+
+  // Recorded AFTER the write, with the journal id, so the Security Log entry can
+  // be tied to the entry it produced. `warnings` is included because a posting
+  // that half-succeeded -- shelf moved, link back not written -- is exactly the
+  // event that looks like nothing happened when read later.
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "inventory_audit.post",
+    entityType: "inventory_audit_sessions",
+    entityId: sessionId,
+    after: {
+      lotsMoved: result.data.lotsMoved,
+      netCents: result.data.netCents,
+      grossCents: result.data.grossCents,
+      journalId: result.data.journalId,
+      journalNo: result.data.journalNo,
+      warnings: result.data.warnings,
+    },
+  });
+
+  revalidatePath(back);
+  revalidatePath(HUB);
+  // The books drafts list is now different, and it is a different route segment,
+  // so it needs saying explicitly or the owner sees a stale draft count.
+  revalidatePath("/admin/books/journal");
 }
