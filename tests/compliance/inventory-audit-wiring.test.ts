@@ -574,3 +574,137 @@ describe("I the menu sends people where they are actually allowed", () => {
     expect(line).toContain('group: "Inventory"');
   });
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   J) NOBODY IS NAGGED ABOUT SOMEBODY ELSE'S FILING   (Michael's Q5)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Michael, verbatim:
+
+     "For 5, I want it to be for me alone too, the employees should have not be
+      harassed by the system for my not making a payment of filing a report etc.
+      I'll keep that burden for myself."
+
+   WHAT WAS ACTUALLY WRONG. The compliance calendar was gated on
+   `settings.manage` (owner + admin) and sat in the "Admin" nav group. But the
+   red "N compliance obligations are past due" banner it feeds lives on
+   /admin/page.tsx behind `requireStaff()`, which is ALL SIX ROLES. So a
+   budtender opening the dashboard was told, in red, that the store was late
+   filing its 37% excise tax -- and the link went to a page that then refused
+   them. A nag about a duty they cannot discharge, cannot see, and were never
+   responsible for.
+
+   Two guards, tested separately, because they fail differently:
+     * the FETCH guard stops a query about the owner's filing history from being
+       run on a budtender's page load;
+     * the RENDER guard stops the card being drawn.
+   Either one alone would have fixed today's symptom. Both are asserted so that
+   removing either is a test failure rather than a silent regression.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("J the compliance nag is the owner's alone", () => {
+  const dash = read(SRC, "app", "admin", "page.tsx");
+
+  it("the calendar permission is the owner's, and nobody else's", () => {
+    expect(rolesForPermission("compliance.calendar")).toEqual(["owner"]);
+    // Named individually so a failure says WHO leaked in.
+    for (const role of ["admin", "manager", "staff", "content_editor", "readonly"] as const) {
+      expect(
+        can(role, "compliance.calendar"),
+        `${role} must not be chased about the owner's filings`,
+      ).toBe(false);
+    }
+  });
+
+  it("the admin specifically loses it, which is the point of the change", () => {
+    // It used to ride on settings.manage. That is the permission this change is
+    // about, so assert the SEPARATION rather than just the new value: the admin
+    // keeps settings.manage and still cannot open the calendar.
+    expect(can("admin", "settings.manage")).toBe(true);
+    expect(can("admin", "compliance.calendar")).toBe(false);
+  });
+
+  it("the overdue count is not even FETCHED for a non-owner", () => {
+    // A value in scope is one careless JSX edit from being rendered again.
+    const src = withoutComments(dash);
+    expect(src).toMatch(
+      /canSeeCompliance\s*\?\s*getOverdueComplianceCount\(\)\s*:\s*Promise\.resolve\(0\)/,
+    );
+    expect(src).toContain('can(session.profile.role, "compliance.calendar")');
+  });
+
+  it("there is no unconditional call left behind", () => {
+    // The mistake this catches: adding the guarded call while leaving the
+    // original in place, so the query runs for everyone anyway.
+    const src = withoutComments(dash);
+    const calls = src.match(/getOverdueComplianceCount\(\)/g) ?? [];
+    expect(calls).toHaveLength(1);
+    expect(src).not.toMatch(/^\s*getOverdueComplianceCount\(\),/m);
+  });
+
+  it("the banner is ALSO gated, so the render cannot drift from the fetch", () => {
+    const src = withoutComments(dash);
+    expect(src).toMatch(/\{canSeeCompliance\s*&&\s*overdueCompliance\s*>\s*0\s*&&/);
+  });
+
+  it("the page and the action agree, so nothing can be signed off from a refused screen", () => {
+    const page = withoutComments(read(SRC, "app", "admin", "compliance", "calendar", "page.tsx"));
+    const actions = withoutComments(
+      read(SRC, "app", "admin", "compliance", "calendar", "actions.ts"),
+    );
+    expect(page).toContain('requirePermission("compliance.calendar")');
+    expect(actions).toContain('requirePermission("compliance.calendar")');
+    // The old gate must be GONE from both, not merely joined by the new one.
+    expect(page).not.toContain('requirePermission("settings.manage")');
+    expect(actions).not.toContain('requirePermission("settings.manage")');
+  });
+
+  it("the calendar sits in the owner's own menu", () => {
+    const nav = read(SRC, "components", "admin", "admin-nav-data.ts");
+    const line = nav.split("\n").find((l) => l.includes('label: "Compliance Calendar"'));
+    expect(line).toBeTruthy();
+    expect(line!).toContain('permission: "compliance.calendar"');
+    expect(line!).toContain('group: "Lyman"');
+  });
+
+  it("the help catalogue does not send staff to a door that will not open", () => {
+    /*
+     * HelpItem has no permission field -- the catalogue is shown to everyone. So
+     * an `href` to an owner-only page is the same nag arriving by a different
+     * route: search "deadlines", get a link, get refused.
+     *
+     * Asserted structurally rather than by wording: find the entry, then require
+     * that it carries no href. A test on the sentence would pass the moment
+     * somebody reworded it while leaving the link in place.
+     */
+    const help = read(SRC, "lib", "admin", "help-content.ts");
+    const i = help.indexOf("Where are my recurring licensing deadlines?");
+    expect(i).toBeGreaterThan(-1);
+    /*
+     * SLICE THE WHOLE OBJECT, BOTH SIDES OF THE QUESTION.
+     *
+     * The first version of this test sliced FORWARD from the question text only,
+     * and a mutation that reinstated the link survived -- because `href` is a
+     * field of an object literal and may legally be written BEFORE `q`, which is
+     * exactly where the mutation put it. The assertion was guarding one side of
+     * the field it was named after.
+     *
+     * Standing rule 45: the regression test has to guard where the bug appears
+     * NEXT, not where it appeared last. So walk back to the `{` that opens this
+     * entry and read the entry entire.
+     */
+    const open = help.lastIndexOf("{", i);
+    expect(open).toBeGreaterThan(-1);
+    const entry = help.slice(open, help.indexOf("},", i));
+    // Proof the window really contains both sides: the field order in the source
+    // today is q, a -- so a window that missed the lines above `q` would still
+    // contain the question and pass the assertion below for the wrong reason.
+    expect(entry).toContain("Where are my recurring licensing deadlines?");
+    expect(entry.indexOf("{")).toBe(0);
+    expect(entry, "this help entry must not link to the owner-only calendar").not.toContain(
+      "href:",
+    );
+    // ...and it should say whose job it is, so the answer is still useful.
+    expect(entry.toLowerCase()).toMatch(/owner|michael/);
+  });
+});

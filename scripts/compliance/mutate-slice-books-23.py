@@ -275,6 +275,78 @@ MUTATIONS = [
         "exactly the people who hold the scanner -- while every permission "
         "assertion in the suite still passes.",
     ),
+    # ── J) THE COMPLIANCE NAG (Michael's Q5) ────────────────────────────────
+    (
+        "J1 nag every employee about the owner's filings again",
+        "src/app/admin/page.tsx",
+        "canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),",
+        "getOverdueComplianceCount(),",
+        [WIRING],
+        "The original defect: a budtender opening the dashboard is told in red "
+        "that the 37% excise filing is past due, and the link refuses them. "
+        "Michael's Q5 verbatim -- \"the employees should not be harassed by the "
+        "system for my not making a payment or filing a report\".",
+    ),
+    (
+        "J2 keep the fetch guard but render the banner to everyone",
+        "src/app/admin/page.tsx",
+        "{canSeeCompliance && overdueCompliance > 0 && (",
+        "{overdueCompliance > 0 && (",
+        [WIRING],
+        "Belt without braces. Harmless only while the fetch guard survives, "
+        "which is exactly the assumption that rots -- one restored "
+        "unconditional fetch and the nag is back with no test failing.",
+    ),
+    (
+        "J3 hand the calendar back to the admin",
+        "src/lib/auth/roles.ts",
+        '"compliance.calendar": ["owner"],',
+        '"compliance.calendar": ["owner", "admin"],',
+        [WIRING, NAVGATE],
+        "The widening that must be impossible to do quietly. Michael kept this "
+        "burden deliberately, and an admin marking the LIQ-1295 filed is a "
+        "record of a tax filing signed off by someone who did not make it.",
+    ),
+    (
+        "J4 leave the page on the old permission",
+        "src/app/admin/compliance/calendar/page.tsx",
+        'await requirePermission("compliance.calendar");',
+        'await requirePermission("settings.manage");',
+        [WIRING, NAVGATE],
+        "A half-done move: nav says owner-only, page still admits the admin. "
+        "The menu hides the link and a typed URL still works.",
+    ),
+    (
+        "J5 leave the sign-off action on the old permission",
+        "src/app/admin/compliance/calendar/actions.ts",
+        'const session = await requirePermission("compliance.calendar");',
+        'const session = await requirePermission("settings.manage");',
+        [WIRING],
+        "Worse than the page: an admin could mark a statutory obligation "
+        "complete on a screen they can no longer open, and the calendar would "
+        "show a filing signed off by someone with no authority to file it.",
+    ),
+    (
+        "J6 restore the help link to the owner-only calendar",
+        "src/lib/admin/help-content.ts",
+        '        q: "Where are my recurring licensing deadlines?",',
+        '        href: "/admin/compliance/calendar",\n'
+        '        q: "Where are my recurring licensing deadlines?",',
+        [WIRING],
+        "The nag by another route. The help catalogue has no permission field "
+        "and is shown to everyone, so a budtender searching \"deadlines\" is "
+        "handed a link to a page that refuses them.",
+    ),
+    (
+        "J7 move the calendar back out of the owner's menu",
+        "src/components/admin/admin-nav-data.ts",
+        'permission: "compliance.calendar", icon: "\\ud83d\\udcc5", group: "Lyman" }',
+        'permission: "compliance.calendar", icon: "\\ud83d\\udcc5", group: "Admin" }',
+        [WIRING, NAVGATE],
+        "Michael asked for it in the Lyman menu. Left in \"Admin\" it is an "
+        "owner-only item sitting in a tab built for shared administration, "
+        "which is how it ended up on settings.manage in the first place.",
+    ),
 ]
 
 
@@ -317,8 +389,41 @@ def run_tests(tests):
     return failed, out
 
 
+def preflight_clean_tree() -> bool:
+    """
+    Refuse to run when the working tree has changes that are not staged/committed
+    somewhere recoverable.
+
+    WHY THIS GUARD EXISTS. While building this harness I tested one mutation by
+    hand, then undid it with `git checkout -- <file>`. That file also carried a
+    REAL, uncommitted change of mine, and the checkout threw it away silently.
+    The mutation had "died" only because it was being tested against work that
+    then vanished; the full suite caught the loss minutes later, by which point
+    the harness had already reported a clean pass.
+
+    A harness that edits source files in place is one interrupted run away from
+    eating somebody's work. Printing the dirty files is not paranoia -- it is the
+    difference between "restored" and "restored to WHAT".
+    """
+    proc = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    dirty = [l for l in proc.stdout.splitlines() if l.strip()]
+    if dirty:
+        print("NOTE: the working tree is not clean. These files carry changes that")
+        print("      are only in your working copy. This harness restores files from")
+        print("      MEMORY, not from git, so an interrupted run leaves them as they")
+        print("      were -- but a stray `git checkout` on one of them would not.")
+        for d in dirty:
+            print(f"        {d}")
+        print()
+    return True
+
+
 def main() -> int:
     killed, survivors, skipped, crashed = [], [], [], []
+    preflight_clean_tree()
 
     print("=" * 78)
     print("MUTATION HARNESS - slice books-23 (inventory audits -> ledger)")

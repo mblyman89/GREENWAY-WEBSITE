@@ -574,9 +574,22 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/compliance/regulatory",
       },
       {
+        // books-23: the answer says WHO can open this, and the `href` is gone.
+        //
+        // HelpItem has no permission field, so this catalogue is shown to
+        // everyone. Leaving the link here sent a budtender who searched
+        // "deadlines" to a page that refuses them -- the same nagging Michael
+        // asked to be rid of, arriving by a different route.
+        //
+        // Rewording rather than adding permissions to the help system: gating
+        // help is a real feature and belongs in its own slice, not smuggled in
+        // here. Naming the owner is honest and costs nothing.
         q: "Where are my recurring licensing deadlines?",
-        a: "The Compliance calendar lists the recurring obligations — renewals, filings, and due dates — in one place so nothing is missed.",
-        href: "/admin/compliance/calendar",
+        a:
+          "The Compliance calendar lists the recurring obligations — renewals, filings, " +
+          "and due dates — in one place so nothing is missed. It lives in the owner's own " +
+          "menu and Michael keeps that burden himself, so staff are never chased for a " +
+          "filing that is not theirs to make.",
       },
     ],
   },

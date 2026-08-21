@@ -14,7 +14,10 @@ import { setPeriodDone } from "@/lib/compliance/compliance-calendar-store";
 const BASE = "/admin/compliance/calendar";
 
 export async function setPeriodDoneAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
+  // books-23: signing off a statutory obligation is the owner's own act. Gated
+  // to match the page rather than the old settings.manage, so an admin cannot
+  // mark the LIQ-1295 filed on a page they can no longer open.
+  const session = await requirePermission("compliance.calendar");
   const taskId = String(formData.get("task_id") ?? "");
   const periodKey = String(formData.get("period_key") ?? "");
   const done = String(formData.get("done") ?? "") === "1";

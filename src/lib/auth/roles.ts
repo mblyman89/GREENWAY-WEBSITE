@@ -58,6 +58,7 @@ export type Permission =
   | "inventory.manage"
   | "inventory.count"
   | "inventory.audit"
+  | "compliance.calendar"
   | "reports.view"
   | "books.view"
   | "financials.view"
@@ -178,6 +179,30 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // "fix" someone would reach for is loosening the DATABASE. Keep the page
   // gate and the database gate saying the same word: owner.
   "finances.view": ["owner"],
+  // books-23: THE COMPLIANCE CALENDAR (/admin/compliance/calendar).
+  //
+  // Michael, verbatim: "I want it to be for me alone too, the employees should
+  // not be harassed by the system for my not making a payment or filing a
+  // report etc. I'll keep that burden for myself."
+  //
+  // It used to ride on "settings.manage" (owner + admin), and the dashboard
+  // banner it feeds was shown to ALL SIX ROLES -- so a budtender saw a red
+  // "3 compliance obligations are past due" card linking to a page that would
+  // then refuse them. Nagging someone about a filing they cannot make, cannot
+  // see, and are not responsible for.
+  //
+  // A SEPARATE PERMISSION RATHER THAN "finances.view": that one is labelled
+  // "View money accounts (bank feed, ATM vault, crypto, loans)" and reusing it
+  // would make a CCTV retention spot-check and a scale calibration into
+  // "money accounts". Same reasoning that made inventory.count the right answer
+  // instead of requireStaff(): the honest gate is the narrow one, and a
+  // permission whose label misdescribes what it guards is a standing-rule-44
+  // lie waiting for the next reader.
+  //
+  // Both resolve to ["owner"] today, so this costs nothing now and keeps the
+  // two ideas separable later -- if a compliance manager is ever hired, this is
+  // the single line that changes, and it will not hand them the bank feed.
+  "compliance.calendar": ["owner"],
   "users.manage": ["owner", "admin"],
   // books-22: THE SECURITY LOG (/admin/audit, renamed from "Audit Log").
   //
@@ -246,6 +271,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "books.view": "View the accounting books (general ledger)",
   "financials.view": "View financial reports & accounting exports",
   "finances.view": "View money accounts (bank feed, ATM vault, crypto, loans)",
+  "compliance.calendar": "Track filing & compliance deadlines (owner only)",
   "users.manage": "Manage staff & roles",
   "audit.view": "Read the Security Log (who did what, and when)",
   "settings.manage": "Change settings",
@@ -280,6 +306,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "books.view",
   "financials.view",
   "finances.view",
+  "compliance.calendar",
   "staffing.manage",
   "timeclock.use",
   "sales_limit.override",

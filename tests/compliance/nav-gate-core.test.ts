@@ -340,14 +340,42 @@ describe("N4 the Accounting and Lyman tabs", () => {
     );
   });
 
-  it("Lyman holds the four money pages plus the Security Log", () => {
+  it("Lyman holds the four money pages, the Security Log and the calendar", () => {
+    /*
+     * books-23 added the Compliance Calendar here. Michael, verbatim:
+     *
+     *   "For 5, I want it to be for me alone too, the employees should have not
+     *    be harassed by the system for my not making a payment of filing a
+     *    report etc. I'll keep that burden for myself."
+     *
+     * It was in the "Admin" group on settings.manage, which is owner + admin,
+     * and the dashboard banner it feeds was shown to ALL SIX ROLES -- a
+     * budtender saw a red "past due" card linking to a page that refused them.
+     */
     const hrefs = adminNav
       .filter((i) => i.group === LYMAN_GROUP)
       .map((i) => i.href)
       .sort();
     expect(hrefs).toEqual(
-      ["/admin/atm", "/admin/audit", "/admin/crypto", "/admin/loans", "/admin/plaid"].sort(),
+      [
+        "/admin/atm",
+        "/admin/audit",
+        "/admin/compliance/calendar",
+        "/admin/crypto",
+        "/admin/loans",
+        "/admin/plaid",
+      ].sort(),
     );
+  });
+
+  it("the calendar is NOT left behind in the Admin group as well", () => {
+    // A move is a delete plus an add. Copy-pasting the line and forgetting to
+    // remove the original would show it twice -- once in a tab an admin can see
+    // -- and every permission assertion in this file would still pass, because
+    // both copies would name the same owner-only permission.
+    const calendar = adminNav.filter((i) => i.href === "/admin/compliance/calendar");
+    expect(calendar).toHaveLength(1);
+    expect(calendar[0]!.group).toBe(LYMAN_GROUP);
   });
 
   it("every Lyman item is owner-only, with no exceptions", () => {
@@ -578,19 +606,37 @@ describe("N6 the top nav can actually render the new tabs", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("N7 owner-only is derived, not copied", () => {
-  it("names exactly the five owner-only permissions in use today", () => {
-    // books-23 added inventory.audit: approving and posting an inventory audit
-    // is an accounting act, and Michael's instruction was that "anything
+  it("names exactly the six owner-only permissions in use today", () => {
+    // books-23 added TWO. `inventory.audit`: approving and posting an inventory
+    // audit is an accounting act, and Michael's instruction was that "anything
     // accounting, bookkeeping, taxes, finance, should be hard gated to me only."
+    // `compliance.calendar`: the filing deadlines, which he asked to carry
+    // alone so staff are not chased for them.
+    //
+    // compliance.calendar is deliberately NOT finances.view even though both
+    // resolve to ["owner"] today. That permission is labelled "View money
+    // accounts (bank feed, ATM vault, crypto, loans)", and a CCTV retention
+    // spot-check is not a money account. Keeping them separate is what lets a
+    // compliance manager be hired one day without handing over the bank feed.
     expect(ownerOnlyPermissions().sort()).toEqual(
       [
         "audit.view",
         "books.view",
+        "compliance.calendar",
         "finances.view",
         "financials.view",
         "inventory.audit",
       ].sort(),
     );
+  });
+
+  it("compliance.calendar and finances.view are genuinely separate permissions", () => {
+    // Standing rule 49: they return the same answer today, so test the
+    // STRUCTURE. If someone "simplifies" by aliasing one to the other, the
+    // roster test above still passes and this one does not.
+    expect(ALL_PERMISSIONS).toContain("compliance.calendar");
+    expect(ALL_PERMISSIONS).toContain("finances.view");
+    expect(ALL_PERMISSIONS.filter((x) => x === "compliance.calendar")).toHaveLength(1);
   });
 
   it("is DERIVED from the matrix, not a hardcoded list that looks the same", () => {
