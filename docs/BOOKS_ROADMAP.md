@@ -481,6 +481,14 @@ exists.
 | — | the filed Q2 2026 returns overruled Sage's printouts: UI is 0.37% and EAF 0.03% (Sage's 0.64% overstates UI by 186.09/qtr), and TWO of my four reported defects were WITHDRAWN as printout artefacts | #1000 |
 | — | standing rule 58, learned from books-27 (a test that reads SQL as text has not run the SQL; apply it twice; build the pre-state; translate the engine's error into the user's problem) | #1000 |
 | — | standing rule 59, learned from books-27 (a printout is not a filing; rank the evidence before reporting a defect; a tier-3 disagreement is a question, not an accusation; retract as loudly as you accused) | #1000 |
+| — | reports engine built from FIVE MEASURED defects in Michael's own Sage files, not from a blank page: 33 columns over 8 header lines and machine tokens (§8.9), 26 rows to describe 10 people (§8.3), a 7x26 grid of pure blank (§8.7), bare negative leave balances (§8.8) | #1002 |
+| — | `reports-presentation-core.ts` — 18-entry Sage field dictionary, suffix-aware `decodeSageToken` (strips `_C` BEFORE `_COGS`, negative-control tested), 8 layout rules each tied to a measured defect AND a citation, `comparePeriods` that REFUSES a percentage across a comparability break (ASC 205-10-45-3), suppression-with-disclosure, real empty states | #1002 |
+| — | `payroll-reconciliation-report-core.ts` — Sage's Exception Report done properly; three expectation bases because WA charges three ways, incl. the PFML TWO-STEP that is the only arithmetic reproducing the filed 556.32; rounding bound DERIVED as ceil(N/2) cents, never a tuned tolerance | #1002 |
+| — | `known-good-quarters.ts` — Q2 2026 as FILED is now an ORACLE, not a fixture: 10 employees, 14 return lines, 3 agencies, confirmation numbers; one wage base (68,923.45) cross-foots across four independent filings | #1002 |
+| — | TWO defects found by the new tests themselves: `comparePeriods` printed the self-contradicting "down 0%" and could emit negative zero ("-0%"); both fixed in the engine, not papered over in the test (rule 28b) | #1002 |
+| — | a rule-15c mutation SURVIVED — hard-coding `isExpectedRounding = true` permanently disables the rounding-vs-error control and all 40 tests still passed, because nothing had ever exercised the REFUSAL branch | #1002 |
+| — | standing rule 60, learned from books-27 (a branch that excuses a difference must be tested on the day it refuses to; tolerances/thresholds/grace periods are one object; assert on the SENTENCE not the boolean; a mutation harness needs a control mutant; derive the bound, never tune it) | #1002 |
+| — | told Michael the dated-rate registry he asked for ALREADY EXISTS (`payroll-rate-registry-core.ts`: dated rows, refuses on gaps, ceiling/overlap/share-sum checks) — the gap is the SCREEN, not the engine | #1002 |
 
 ---
 
