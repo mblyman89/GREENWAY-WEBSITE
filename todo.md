@@ -709,6 +709,76 @@
     swap in some unrelated slice, long after everyone has forgotten which writes
     were load-bearing.
 
+### RULE 52: A QUOTE VERIFIED BY HAND IS VERIFIED ONCE; A CORPUS ENTRY IS VERIFIED FOREVER.
+    Earned in books-25, and it was humbling. I downloaded Pub. 15 from irs.gov,
+    converted it, reconstructed a sentence out of a two-column layout,
+    de-hyphenated it across a line break, and compared it to the stored quote
+    character by character. Exact match, 38 words. An hour later, following rule
+    38, I corrupted one word of that same quote -- "usually pay wages" became
+    "normally pay wages" -- and ran every authority suite: 201 passed, 0 failed.
+    My careful hand verification protected exactly nothing, because no IRS
+    publication was in the mirrored corpus, so the verifier answered "no local
+    copy to check against" and printed a green line. THE RULE: hand-checking a
+    quote is how you find out whether it is right TODAY; adding its source to the
+    mirrored corpus is the only thing that keeps it right. If a quote cannot be
+    machine-checked, the honest options are to mirror the source or to record the
+    id as debt -- never to check it personally and move on, because the next
+    person to edit that string will have no idea it was ever checked. Note what
+    registering the corpus found the moment it existed: seven quotes had never
+    been verified by anything, and four of them were wrong.
+
+### RULE 53: WHEN A QUOTE WILL NOT VERIFY, SUSPECT THE QUOTE BEFORE THE VERIFIER.
+    Earned in books-25, immediately after rule 52, because registering the IRS
+    publications produced four failures at once and each one offered a tempting
+    way to make the verifier more forgiving. The temptations and what they
+    actually were: (a) two worksheet quotes ended in a full stop -- but the form
+    does not print one, what looks like a period is the FIRST DOT of the leader
+    run to the entry box, so the quote was asserting a character that is not
+    there and the fix was to end on the last word; (b) an ordering-rule quote had
+    dropped the "1." "2." "3." from a numbered list in an authority whose entire
+    subject is ORDER, so the numbers were restored rather than normalised away;
+    (c) one quote spliced two halves of a sentence that are separated by a
+    worksheet box and extract in REVERSE reading order, which the verifier's
+    in-order requirement correctly refused -- and that requirement is precisely
+    what stops a quote being assembled from words gathered wherever they suit, so
+    the quote was shortened instead. THE RULE: an authority that needs a
+    safeguard relaxed in order to pass is not an authority. Quote less. And when
+    a normalisation step DOES turn out to be justified, check afterwards whether
+    fixing the quotes made it dead code -- mine did, deleting it changed nothing,
+    and rule 40 says an unreachable guard is an untested guard.
+
+### RULE 54: A TYPE THAT IS WIDER THAN ITS COLUMN IS A SAVE THAT FAILS AT THE DATABASE.
+
+    Every value a TypeScript union admits must be a value the column accepts,
+    and every value the column accepts must be one the engine can compute. Both
+    directions, always, and each one pinned by its own test -- because the two
+    failures look nothing alike. SQL wider than the type is a row that stores
+    fine and detonates later when something divides by it. The type wider than
+    SQL is worse in the moment: the record clears every validator, the user is
+    told they are done, and the INSERT is refused by the database. That is a
+    silent failure wearing the mask of a working screen.
+
+    Migration 0195's pay_frequency CHECK listed six cadences. PayFrequency had
+    eight. validatePay() never checked the cadence at all, so 'semiannually'
+    and 'daily' passed every guard and were refused by PostgreSQL. Proven by
+    inserting all eight against a real database, not by reading the file --
+    six accepted, two rejected. Only the storable-but-not-computable direction
+    had a test; the direction that was actually broken had none.
+
+    So: do not police an enum in one place. The database CHECK is the last
+    line, not the first, and it cannot explain itself to the person it just
+    blocked -- it has no room for a reason and no way to highlight a field. The
+    engine must refuse the value first, in a sentence that says why. Write the
+    check against the SAME constant the rest of the system uses; a second
+    hand-typed list of the same values is the identical defect one layer up.
+
+    And when the two sets disagree, ask which side is RIGHT before making them
+    agree. Deleting the two cadences from the engine would also have squared
+    the sets, and would have been wrong: both are payroll periods named in
+    IRC 3401(b) and both are printed in Pub. 15-T Worksheet 1A Table 3. A
+    database refusing a payroll period the IRS publishes a withholding table
+    for is the database being wrong. Add the test that forbids the lazy repair.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

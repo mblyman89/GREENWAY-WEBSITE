@@ -60,6 +60,7 @@ import {
   ALL_PAY_FREQUENCIES,
   PAY_FREQUENCY_LABELS,
   PAY_PERIODS_PER_YEAR,
+  PUB15T_TABLE_3_PERIODS,
 } from "@/lib/payroll/payroll-w4-core";
 
 const MIGRATIONS_DIR = path.resolve(__dirname, "../../supabase/migrations");
@@ -451,6 +452,16 @@ describe("the pay frequencies in SQL and in TypeScript are the same set", () => 
     // A regex that matched but captured nothing would make every assertion
     // below vacuously true (rule 39).
     expect(values.length).toBeGreaterThan(3);
+    // And the match must have come from the MIGRATION, not from a literal
+    // someone parked in this file. A mutant that replaced the exec() target
+    // with a hand-written constraint string survived the whole suite until
+    // this line existed: every assertion downstream was then comparing the
+    // engine against a copy of itself. Checking the matched text back against
+    // EXEC_SQL ties the harness to the file on disk.
+    expect(
+      EXEC_SQL,
+      "the pay_frequency constraint being parsed is not the one in 0195",
+    ).toContain((m as RegExpExecArray)[0]);
     return values.sort();
   }
 
@@ -482,6 +493,45 @@ describe("the pay frequencies in SQL and in TypeScript are the same set", () => 
       expect(periods, `${f} periods-per-year must be positive`).toBeGreaterThan(0);
       // A label too, so a <select> can never render a raw enum at Michael.
       expect(PAY_FREQUENCY_LABELS[f], `${f} has no human label`).toBeTruthy();
+    }
+  });
+
+  it("REJECTS NOTHING THE ENGINE CAN COMPUTE - the direction nobody was checking", () => {
+    // This is the half of rule 34 that was missing, and it was not missing in
+    // theory. Run against real PostgreSQL 15 with all 195 migrations applied,
+    // inserting one employee_pay row per cadence:
+    //
+    //     ACCEPTED weekly, biweekly, semimonthly, monthly, quarterly, annually
+    //     REJECTED semiannually -> violates check constraint
+    //     REJECTED daily        -> violates check constraint
+    //
+    // Both rejected cadences pass validatePay(). So the save cleared every
+    // guard the engine has and then died at the database, which is the precise
+    // shape of failure this slice exists to abolish.
+    const sqlSet = frequenciesAllowedBySql();
+    const engineSet: string[] = [...ALL_PAY_FREQUENCIES].map(String).sort();
+
+    const computableButNotStorable = engineSet.filter((f) => !sqlSet.includes(f));
+    expect(
+      computableButNotStorable,
+      `PayFrequency allows ${JSON.stringify(computableButNotStorable)}, which 0195 refuses. ` +
+        `validatePay() would pass the record and the INSERT would then fail with ` +
+        `"violates check constraint" - a save that clears every guard and dies at the database.`,
+    ).toEqual([]);
+  });
+
+  it("the two cadences that were missing are ones the IRS prints tables for", () => {
+    // Guards against the lazy repair: deleting 'semiannually' and 'daily' from
+    // PayFrequency would also make the two sets agree, and would be wrong.
+    // Both are payroll periods named by IRC 3401(b) and both appear in
+    // Pub. 15-T Worksheet 1A Table 3, so the engine supporting them is
+    // correct and the narrow CHECK was the defect.
+    const sqlSet = frequenciesAllowedBySql();
+    for (const cadence of ["semiannually", "daily"]) {
+      expect(PUB15T_TABLE_3_PERIODS, `${cadence} is not in Table 3`).toHaveProperty(cadence);
+      expect(sqlSet, `0195 must accept ${cadence}; the IRS publishes a table for it`).toContain(
+        cadence,
+      );
     }
   });
 

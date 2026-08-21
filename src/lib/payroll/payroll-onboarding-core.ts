@@ -697,6 +697,33 @@ export function validatePay(record: PayRecord): { ok: boolean; issues: PayIssue[
     });
   }
 
+  // THE CADENCE ITSELF. Everything above validates the NUMBERS attached to a
+  // pay frequency; nothing validated the frequency. That gap was real: the
+  // engine's union had eight cadences, migration 0195's CHECK accepted six,
+  // and a record set to 'daily' cleared this function and was then refused by
+  // the database. Michael's requirement is "something can't silently fail me",
+  // and a save that passes validation and dies at the database is that failure
+  // wearing a different hat.
+  //
+  // The check is written against PAY_PERIODS_PER_YEAR rather than a list typed
+  // out here, because a hand-maintained second list of pay frequencies is the
+  // identical defect one layer up. If a cadence has no periods-per-year we
+  // cannot annualize the wage, and Pub. 15-T's every method begins by
+  // annualizing the wage -- so this is not a taste question, it is the point
+  // past which no withholding number can be computed at all.
+  if (!Object.prototype.hasOwnProperty.call(PAY_PERIODS_PER_YEAR, record.payFrequency)) {
+    issues.push({
+      field: "payFrequency",
+      severity: "block",
+      message:
+        `"${String(record.payFrequency)}" is not a pay frequency this system recognises. ` +
+        `Every withholding method in Pub. 15-T starts by turning one period's pay into a ` +
+        `yearly figure, so without a periods-per-year number there is no way to compute ` +
+        `withholding at all -- and I will not save a wage I cannot tax correctly.`,
+      authorityId: "irc-3401b-annual-payroll-period",
+    });
+  }
+
   return { ok: issues.every((i) => i.severity !== "block"), issues };
 }
 
