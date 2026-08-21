@@ -473,6 +473,9 @@ exists.
 | — | standing rules 40–41, learned from books-19 | #993 |
 | — | standing rules 48–49, learned from books-22 (a check that cannot classify its input must FAIL not skip; when right and wrong return the same value today, test the structure) | #996 |
 | — | standing rules 50–51, learned from books-23 (a module only its own test imports is dead code wearing a green check mark; a write that can be blocked without error must be counted) | TBD |
+| books-26 | the federal deposit schedule: Michael is SEMIWEEKLY, proved two independent ways; the engine REFUSES rather than defaulting to monthly when lookback history is absent; the 2026 Sage baseline recorded before the PDFs were deleted, and four defects found in the live books | #999 |
+| — | the compliance gate had been RED on main since books-20 — six merges landed under a failing check, and because the workflow lints before it tests, vitest never ran on any of them | #999 |
+| — | standing rule 57, learned from books-26 (a green local run is not a green gate; when CI is red, prove whose fault it is from a clean worktree; never merge past red in silence) | #999 |
 
 ---
 
