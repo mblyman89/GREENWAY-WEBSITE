@@ -92,6 +92,33 @@ export default async function AuditHubPage() {
     (s) => s.status !== "approved" && s.status !== "cancelled",
   );
 
+  /*
+   * WHAT MICHAEL ASKED FOR (books-23, Q2), verbatim:
+   *
+   *   "When they finish the count, it should disappear from the cycle counts
+   *    page and be redirected back to the inventory audit page where I can spot
+   *    check and approve the change... So the audit inventory page will need a
+   *    table and a way for me to open up the finished cycle counts."
+   *
+   * Two groups, because they need two different actions from him:
+   *
+   *   awaitingReview  staff have finished counting; he has to look at the
+   *                   differences and record why each one happened.
+   *   awaitingPosting approved and signed, but the shelf has not moved and the
+   *                   books have not been told. This is the group that could
+   *                   sit here forever before books-23, because the button that
+   *                   clears it did not exist.
+   *
+   * Derived from `sessions`, which is already loaded -- not a second query. A
+   * separate fetch would be a second definition of "finished" that could
+   * disagree with the table below it.
+   */
+  const awaitingReview = sessions.filter((s) => s.status === "review");
+  const awaitingPosting = sessions.filter(
+    (s) => s.status === "approved" && s.postedAt === null,
+  );
+  const needsOwner = [...awaitingReview, ...awaitingPosting];
+
   return (
     <div className="space-y-5">
       <Breadcrumbs
@@ -186,6 +213,79 @@ export default async function AuditHubPage() {
             ) : null}
           </section>
         </>
+      ) : null}
+
+      {/* ---- WAITING FOR THE OWNER ----
+           Michael's "a table and a way for me to open up the finished cycle
+           counts". Deliberately ABOVE the full list: the whole list is history,
+           this is the work. It renders only when there is something to do, so it
+           cannot become furniture that gets ignored. */}
+      {needsOwner.length > 0 ? (
+        <section className="rounded-2xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.04] p-5">
+          <h2 className="text-sm font-semibold text-white/85">Waiting for you</h2>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-white/55">
+            Counting is finished on these. Nothing here has changed inventory or the books yet
+            &mdash; a count sits still until you look at it, which is what makes it evidence rather
+            than an adjustment somebody made.
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-[0.65rem] uppercase tracking-wider text-white/40">
+                  <th className="py-2 pr-3 font-semibold">Audit</th>
+                  <th className="py-2 pr-3 font-semibold">What it needs</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Counted</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Difference</th>
+                  <th className="py-2 font-semibold" />
+                </tr>
+              </thead>
+              <tbody>
+                {needsOwner.map((s) => {
+                  const needsPosting = s.status === "approved";
+                  return (
+                    <tr key={s.id} className="border-b border-white/5 last:border-0">
+                      <td className="py-2.5 pr-3">
+                        <Link
+                          href={`/admin/inventory/audits/${s.id}`}
+                          className="font-semibold text-white hover:text-[var(--admin-accent)] hover:underline"
+                        >
+                          {s.label}
+                        </Link>
+                      </td>
+                      <td className="py-2.5 pr-3 text-white/70">
+                        {needsPosting
+                          ? "Approved \u2014 post it to correct the shelf and draft the entry"
+                          : "Review each difference and record why it happened"}
+                      </td>
+                      <td className="py-2.5 pr-3 text-right tabular-nums text-white/70">
+                        {s.countedLotCount} / {s.plannedLotCount}
+                      </td>
+                      <td className="py-2.5 pr-3 text-right tabular-nums">
+                        <span
+                          className={
+                            s.grossVarianceCents === 0
+                              ? "text-white/40"
+                              : "text-[var(--admin-gold)]"
+                          }
+                        >
+                          {formatCents(s.grossVarianceCents)}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <Link
+                          href={`/admin/inventory/audits/${s.id}`}
+                          className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+                        >
+                          {needsPosting ? "Post" : "Review"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
 
       {/* ---- THE SESSIONS ---- */}

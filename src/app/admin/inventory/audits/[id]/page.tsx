@@ -49,7 +49,7 @@ import { AuditVarianceReview } from "../AuditVarianceReview";
 import { WhyBlockedPanel } from "../WhyBlockedPanel";
 import { HubRefusal } from "../HubRefusal";
 import { MaterialityPanel, ProvesPanel } from "../AuditHubExplainer";
-import { moveStatusAction } from "../actions";
+import { moveStatusAction, postAuditAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -242,12 +242,32 @@ export default async function AuditDetailPage({
               fault. The items above have to be cleared first. Each one lists the exact steps.
             </p>
           )
-        ) : isApproved ? (
-          <p className={`mt-1 ${P}`}>
-            This result is approved and signed. The shelf correction and the journal entry are
-            handled through the posting path, which reviews the entry with you before anything
-            reaches the ledger &mdash; inventory never posts itself.
-          </p>
+        ) : isApproved && !isPosted ? (
+          <>
+            {/* books-23: this used to be a paragraph telling the owner that the
+                journal entry was "handled through the posting path". There was
+                no posting path -- postAuditSession() existed and nothing called
+                it, so an approved audit could sit here forever while the books
+                knew nothing about it. The paragraph has been replaced by the
+                button it was describing. */}
+            <p className={`mt-1 ${P}`}>
+              This result is approved and signed. Nothing has reached inventory or the books yet.
+              Posting does two things at once: it corrects the shelf, and it drafts the matching
+              journal entry for you to approve in the books. The shelf correction is final once
+              made &mdash; the accounting entry is not, because it waits for you.
+            </p>
+            <form action={postAuditAction} className="mt-4">
+              <input type="hidden" name="sessionId" value={id} />
+              <Button type="submit" variant="confirm" size="md">
+                Post this audit &mdash; correct the shelf and draft the entry
+              </Button>
+            </form>
+            <p className={`mt-2 ${P}`}>
+              You can only do this once. A second attempt is refused rather than repeated, because
+              subtracting the same missing product twice would invent a shortage that never
+              happened.
+            </p>
+          </>
         ) : (
           <p className={`mt-1 ${P}`}>
             {isPosted

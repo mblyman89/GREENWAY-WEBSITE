@@ -166,6 +166,9 @@ describe("the write path re-gates", () => {
       saveCountAction: "inventory.count",
       saveReasonAction: "inventory.audit",
       moveStatusAction: "inventory.audit",
+      // books-23: the action that closes the gap. Correcting the shelf and
+      // drafting the journal entry is the most consequential thing in this file.
+      postAuditAction: "inventory.audit",
     };
 
     const names = [...actions.matchAll(/export async function (\w+)/g)].map((m) => m[1]);
