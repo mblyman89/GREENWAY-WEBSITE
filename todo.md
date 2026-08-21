@@ -828,6 +828,43 @@
     every action this file exports must appear in something that is not a test.
     Then a mutant re-added a caller-less action to prove the new guard fires.
 
+### RULE 57: CHECK THE COLOUR OF THE GATE ON MAIN BEFORE TRUSTING THE GATE ON THE BRANCH.
+    Earned in books-26. Before opening the PR I ran the full battery locally and
+    it was green, so I reported green. Then I looked at CI: red. Not from my
+    work -- red on main, on every push since books-20. SIX merges had landed
+    under a red check, books-25 among them.
+
+    The mechanism is worth remembering because it is silent. The workflow lints
+    BEFORE it tests. eslint exited 1 on six pre-existing errors, so the job
+    stopped there and vitest never ran at all. Every "tests pass" claim on those
+    six PRs was true locally and unverified in CI. A red gate does not just fail
+    to catch the current defect; it silently stops checking everything after it.
+
+    So the rule has two halves:
+    a. **A GREEN LOCAL RUN IS NOT A GREEN GATE.** Local and CI disagree for real
+       reasons -- CI lints a scope I may not have linted, in an order that can
+       abort early. Read the actual CI conclusion, not my own terminal.
+    b. **WHEN CI IS RED, FIRST ESTABLISH WHOSE FAULT IT IS, WITH EVIDENCE, NOT
+       WITH A HUNCH.** The method that worked: check out clean origin/main into a
+       throwaway worktree, run the EXACT command from the workflow file, and
+       compare. Identical output and identical exit code proves inheritance and
+       proves my branch added nothing. That evidence is what makes it safe to
+       say "not mine" -- and equally, what would have made it undeniable if it
+       had been mine.
+
+    The inherited failure was three require() calls suppressed with a comment
+    naming the wrong eslint rule (no-var-requires, when the rule that fires is
+    no-require-imports), so each site produced two problems instead of none.
+    Fixed to the top-level-import pattern already used by twenty-odd sibling
+    files. Related to rule 16: prove the gate is WIRED. A gate that exits before
+    running the suite is not a weak gate, it is an absent one wearing a red X
+    that everyone had learned to ignore.
+
+    c. **DO NOT NORMALISE A RED CHECK.** Six merges taught the project that red
+       is the resting colour, which is how a real regression would have walked
+       in unnoticed. If the gate is red for reasons that are not mine, say so
+       out loud, fix it or file it -- never merge past it in silence.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
