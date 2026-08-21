@@ -338,9 +338,41 @@ create table if not exists public.employee_pay (
 
   -- 'biweekly' = 26 periods, which is what "every two weeks on friday" means.
   -- 'annually' exists for exactly one row: the owner, paid once at year end.
+  --
+  -- WHY ALL EIGHT, AND NOT JUST THE TWO GREENWAY USES
+  --
+  -- An earlier version of this CHECK listed six cadences. It omitted
+  -- 'semiannually' and 'daily' -- not by decision, but because nobody wrote
+  -- them down. The TypeScript union PayFrequency has eight members and
+  -- validatePay() does not check the cadence at all, so a record with
+  -- pay_frequency = 'daily' passed every layer of validation and was then
+  -- rejected HERE, by the database, with "violates check constraint". Proven
+  -- by inserting all eight against this schema: six accepted, two refused.
+  --
+  -- That is the exact failure mode this slice exists to eliminate. The message
+  -- Michael would have seen is the one writeFailed() prints -- "the checklist
+  -- has a gap worth reporting" -- which is the system correctly reporting a
+  -- gap in itself, but only AFTER the save had already failed.
+  --
+  -- The fix is to widen the CHECK, not to narrow the engine, because the two
+  -- missing cadences are not exotic: 'semiannually' and 'daily' are two of the
+  -- SEVEN payroll periods Pub. 15-T Worksheet 1A Table 3 itself prints, and
+  -- IRC 3401(b) names both ("a daily, weekly, biweekly, semimonthly, monthly,
+  -- quarterly, semiannual, or annual payroll period"). A database that refuses
+  -- a payroll period the IRS publishes a withholding table for is the
+  -- database being wrong.
+  --
+  -- Greenway will only ever use 'biweekly' (staff) and 'annually' (the owner).
+  -- This column is not where that is enforced -- a CHECK constraint cannot
+  -- explain itself to the person it just blocked. The engine's mentor layer
+  -- steers the choice with a reason attached; this constraint's only job is to
+  -- refuse a cadence NO payroll period recognises, so that the set the
+  -- database accepts and the set the engine can compute are the same set. Two
+  -- tests police that in both directions.
   pay_frequency text not null
                   check (pay_frequency in ('weekly','biweekly','semimonthly',
-                                           'monthly','quarterly','annually')),
+                                           'monthly','quarterly','semiannually',
+                                           'annually','daily')),
 
   -- Which GL role these wages land in — this is the join that keeps payroll
   -- and the ledger telling the same story. For Michael this resolves to

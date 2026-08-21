@@ -53,7 +53,11 @@ import {
   type PayRecord,
 } from "@/lib/payroll/payroll-onboarding-core";
 import { PAYROLL_ONBOARDING_LESSONS } from "@/lib/payroll/payroll-onboarding-mentor";
-import type { W4Record } from "@/lib/payroll/payroll-w4-core";
+import {
+  ALL_PAY_FREQUENCIES,
+  type PayFrequency,
+  type W4Record,
+} from "@/lib/payroll/payroll-w4-core";
 
 // ---------------------------------------------------------------------------
 // Fixtures. Deliberately VALID, so that each test breaks exactly one thing.
@@ -594,6 +598,50 @@ describe("pay: the Sage defects that would have cost real money", () => {
   it.each([0, 1, 5_000, BASIS_POINTS_FULL])("accepts a split of %s basis points", (bp) => {
     const r = validatePay(goodPay({ cogsSplitBasisPoints: bp }));
     expect(r.ok, JSON.stringify(r.issues)).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // THE CADENCE ITSELF
+  //
+  // validatePay() checked every number hanging off the pay frequency and
+  // never checked the pay frequency. Migration 0195's CHECK then refused
+  // 'semiannually' and 'daily' -- verified against real PostgreSQL, not
+  // inferred -- so those two cleared validation and failed at the INSERT.
+  // -----------------------------------------------------------------------
+  it.each(["fortnightly", "hourly", "every_other_friday", "", "annual"])(
+    "refuses the unrecognised pay frequency %s instead of letting the database do it",
+    (bogus) => {
+      const r = validatePay(goodPay({ payFrequency: bogus as PayFrequency }));
+      expect(r.ok).toBe(false);
+      const issue = r.issues.find((i) => i.field === "payFrequency");
+      expect(issue, `no payFrequency issue raised for ${JSON.stringify(bogus)}`).toBeDefined();
+      expect(issue!.severity).toBe("block");
+      // The refusal must say WHY, not just "invalid". Michael's whole
+      // complaint about Sage is being stopped without being told anything.
+      expect(issue!.message).toMatch(/Pub\. 15-T/);
+    },
+  );
+
+  it("accepts every cadence the engine declares, so the guard is not simply strict", () => {
+    // Rule 39/40: a check that refuses everything would pass the test above
+    // while making the product unusable. This is the reachability half.
+    for (const f of ALL_PAY_FREQUENCIES) {
+      const r = validatePay(goodPay({ payFrequency: f }));
+      expect(
+        r.issues.some((i) => i.field === "payFrequency"),
+        `${f} is a declared PayFrequency but validatePay rejected it`,
+      ).toBe(false);
+    }
+  });
+
+  it("refuses a frequency the database would refuse, and for a stated reason", () => {
+    // Belt and braces on the specific pair that was broken. If someone
+    // re-narrows PAY_PERIODS_PER_YEAR, this fails here rather than at a
+    // customer's INSERT.
+    for (const f of ["semiannually", "daily"] as PayFrequency[]) {
+      const r = validatePay(goodPay({ payFrequency: f }));
+      expect(r.ok, `${f} must be a savable cadence`).toBe(true);
+    }
   });
 });
 
