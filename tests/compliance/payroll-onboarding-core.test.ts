@@ -14,6 +14,9 @@
  * function that returns false.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -476,9 +479,6 @@ describe("the I-9 quarantine is structural, not a policy document", () => {
   // The engine's own signature is the real proof. If a tax function ever grows
   // an I-9 parameter, this fails.
   it("no payroll tax function takes an I-9 parameter", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(__dirname, "..", "..", "src", "lib", "payroll", "payroll-withholding-core.ts"),
       "utf8",
@@ -1028,9 +1028,6 @@ describe("the mentor layer covers every exported function (rule 26)", () => {
   ] as const;
 
   function readMentoredSource(file: string): string {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(__dirname, "..", "..", "src", "lib", "payroll", file),
       "utf8",

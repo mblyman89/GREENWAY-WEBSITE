@@ -12,6 +12,9 @@
  * Section 14 records the defect the rule 38 probe found before any of these
  * tests existed, and it exists to make sure that defect can never come back.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -1207,9 +1210,6 @@ describe("probe 2 finding D: every declared refusal code can actually fire", () 
   // and stronger property that every declared code appears somewhere in the
   // engine's own source as an emitted code.
   it("no declared code is dead", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(__dirname, "..", "..", "src", "lib", "accounting", "cogs-position-core.ts"),
       "utf8",
