@@ -9,7 +9,13 @@
  *
  * HOW TO ADD NEXT YEAR'S RATE (the whole procedure):
  *   1. Close the current row by setting `effectiveTo` to the last day it
- *      applied - usually December 31.
+ *      applied - usually December 31. "Usually" is doing real work in that
+ *      sentence: close the row on the last day the rate LEGALLY APPLIED, which
+ *      is a question about the statute, not about the calendar. WA Cares is set
+ *      biennially, so its row spans two years; everything else here is annual.
+ *      NEVER leave `effectiveTo: null` to mean "still current" - that is the
+ *      defect books-26 fixed, and it costs a wrong paycheck rather than an
+ *      error message.
  *   2. Add a new row starting the next day.
  *   3. Put the notice or news release in `documentId` and `note`.
  * If you forget step 1, the registry REFUSES to build and tells you which two
@@ -34,6 +40,17 @@ import { PayrollRateRegistry } from "@/lib/payroll/payroll-rate-registry-core";
  * move was 0.92% -> 1.13%, a 22.8% increase, which is exactly the size of error
  * a hardcoded constant would have introduced silently.
  *
+ * BECAUSE IT IS ANNUAL, EVERY PFML ROW CLOSES ON DECEMBER 31. RCW
+ * 50A.10.030(6)(a): "On or around October 20th of each year, the commissioner
+ * must calculate the total premium rate". The version taking effect 2028-01-01
+ * changes the METHOD but not the frequency - "Annually, the commissioner must
+ * set the total premium rate based on the annual report". A PFML row left
+ * open-ended would therefore hand next year's payroll THIS year's premium, and
+ * do it silently. books-26 found exactly that: all three rows below carried
+ * `effectiveTo: null`, so on 2027-01-01 - the day of Michael's first payroll -
+ * the registry served 1.13% instead of refusing. Closing them converts a wrong
+ * paycheck into a refusal that names the missing notice.
+ *
  * The employee/employer split is a share OF THE TOTAL premium, not a rate on
  * wages. Storing it as a share is what lets the total change without anyone
  * having to remember to restate the split.
@@ -57,17 +74,17 @@ const PFML_ROWS: PayrollRateRow[] = [
   {
     key: "pfml_total",
     effectiveFrom: "2026-01-01",
-    effectiveTo: null,
+    effectiveTo: "2026-12-31",
     value: 1_130, // 1.13%
     unit: "milli_percent",
     authorityId: "esd-pfml-2026-rate-announcement",
     documentId: "esd-news-release-2025-10-29",
-    note: "2026 PFML total premium 1.13% of wages, up from 0.92%. ESD announced 2025-10-29.",
+    note: "2026 PFML total premium 1.13% of wages, up from 0.92%. ESD announced 2025-10-29. Closes 2026-12-31 because RCW 50A.10.030(6)(a) resets this rate every year; the 2027 figure arrives around October 20 2026.",
   },
   {
     key: "pfml_employee_share_of_total",
     effectiveFrom: "2026-01-01",
-    effectiveTo: null,
+    effectiveTo: "2026-12-31",
     value: 71_430, // 71.43% OF THE PREMIUM, not of wages
     unit: "milli_percent",
     authorityId: "esd-pfml-2026-rate-announcement",
@@ -77,7 +94,7 @@ const PFML_ROWS: PayrollRateRow[] = [
   {
     key: "pfml_employer_share_of_total",
     effectiveFrom: "2026-01-01",
-    effectiveTo: null,
+    effectiveTo: "2026-12-31",
     value: 28_570, // 28.57% OF THE PREMIUM
     unit: "milli_percent",
     authorityId: "esd-pfml-2026-rate-announcement",
@@ -104,17 +121,31 @@ const PFML_ROWS: PayrollRateRow[] = [
  *     greater than .58 percent." That is a CEILING. The rate can go down, and
  *     the next opportunity is 2028. Verified against the agency's own employer
  *     page and FAQ, which both still state 0.58% as of 2026-08.
+ *
+ *  3. THIS IS THE ONLY ROW IN THE FILE THAT DOES NOT CLOSE ON A DECEMBER 31
+ *     OF THE CURRENT YEAR, AND THE REASON IS THE WORD "BIENNIALLY". The exact
+ *     text is: "Beginning January 1, 2026, and biennially thereafter, the
+ *     premium rate shall be set by the pension funding council at a rate no
+ *     greater than .58 percent." A biennium that BEGINS 2026-01-01 covers 2026
+ *     AND 2027, so the row legitimately reaches into Michael's first payroll
+ *     year and closes 2027-12-31. The next council setting governs 2028.
+ *
+ *     Do not "tidy" this to 2026-12-31 to match its neighbours: that would
+ *     refuse a 2027 paycheck the statute already answers, and a refusal with
+ *     no notice to go fetch is a dead end. Do not restore `effectiveTo: null`
+ *     either - that was the books-26 defect, and it silently served 0.58%
+ *     into 2028 and every year after, where NO enacted rate exists.
  */
 const WA_CARES_ROWS: PayrollRateRow[] = [
   {
     key: "wa_cares_total",
     effectiveFrom: "2023-07-01",
-    effectiveTo: null,
+    effectiveTo: "2027-12-31",
     value: 580, // 0.58%
     unit: "milli_percent",
     authorityId: "rcw-50b-04-080-wa-cares",
     documentId: "wacaresfund-employers-page-2026",
-    note: "WA Cares 0.58% of gross wages, NO wage cap, 100% employee-paid. Set by the pension funding council biennially from 2026-01-01 at no more than 0.58%; still 0.58% as of August 2026.",
+    note: "WA Cares 0.58% of gross wages, NO wage cap, 100% employee-paid. Set by the pension funding council BIENNIALLY from 2026-01-01 at no more than 0.58%, so this row covers both 2026 and 2027 and closes 2027-12-31. Still 0.58% as of August 2026 per the agency employer page. The 2028 rate needs the council's next setting.",
   },
 ];
 

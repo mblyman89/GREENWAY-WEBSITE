@@ -810,14 +810,81 @@ describe("Greenway's actual 2026 rates", () => {
     ).toBe(7_820_000);
   });
 
+  // 2027-01-01 IS MICHAEL'S FIRST PAYROLL. Every rate that resets annually must
+  // refuse on that day, because the notice that sets it has not been mailed yet.
+  //
+  // Exactly one key is allowed to answer: WA Cares is set BIENNIALLY. RCW
+  // 50B.04.080(1): "Beginning January 1, 2026, and biennially thereafter, the
+  // premium rate shall be set by the pension funding council at a rate no
+  // greater than .58 percent." A biennium beginning 2026-01-01 covers 2027 too.
+  //
+  // This list is a WHITELIST OF EXCEPTIONS, not a list of keys to check. Every
+  // other key is derived by subtraction, so a key added to the registry later
+  // is automatically REQUIRED to refuse unless someone justifies it here.
+  const BIENNIAL_KEYS_THAT_LEGITIMATELY_ANSWER_IN_2027: readonly PayrollRateKey[] = [
+    "wa_cares_total",
+  ];
+
   it("REFUSES every 2027 rate, because no 2027 notice has arrived", () => {
     // This is the behaviour Michael will actually meet, next January. It must
     // refuse loudly rather than reuse 2026 - and the message must tell him to
     // go get the notice.
-    for (const key of ["wa_suta_total", "lni_employee_rate", "fica_oasdi_wage_base"] as const) {
+    //
+    // books-26 DEFECT THIS TEST USED TO HIDE: it was named "every" but looped
+    // over three hand-picked keys out of nine. The three PFML rows carried
+    // `effectiveTo: null` and so served 2026 numbers on Michael's first
+    // payroll, silently, and this test stayed green the whole time. The fix is
+    // to iterate the registry's own key list rather than a hand-typed subset.
+    const mustRefuseKeys = ALL_PAYROLL_RATE_KEYS.filter(
+      (k) => !BIENNIAL_KEYS_THAT_LEGITIMATELY_ANSWER_IN_2027.includes(k),
+    );
+
+    // Rule 39: if the filter ever empties this list, the loop below would prove
+    // nothing while still passing.
+    expect(mustRefuseKeys.length).toBe(ALL_PAYROLL_RATE_KEYS.length - 1);
+    expect(mustRefuseKeys.length).toBeGreaterThanOrEqual(8);
+
+    for (const key of mustRefuseKeys) {
       const ref = mustRefuse(GREENWAY_RATES.lookup(key, "2027-01-01"));
-      expect(ref.code).toBe("rate_not_evidenced_for_date");
+      expect(ref.code, `${key} did not refuse on 2027-01-01`).toBe(
+        "rate_not_evidenced_for_date",
+      );
       expect(ref.whatToDo.toLowerCase()).toContain("notice");
+    }
+  });
+
+  it("lets WA Cares answer in 2027 ONLY because its rate is set biennially", () => {
+    // The exception has to be earned, not asserted. If this row ever stops
+    // covering 2027, the whitelist above is a lie and must be deleted.
+    for (const key of BIENNIAL_KEYS_THAT_LEGITIMATELY_ANSWER_IN_2027) {
+      const got = mustGet(GREENWAY_RATES.lookup(key, "2027-01-01"));
+      expect(got.value).toBe(580);
+      // And it must be the row the statute describes: one that STARTS in or
+      // before the biennium beginning 2026-01-01.
+      expect(got.effectiveFrom <= "2026-01-01").toBe(true);
+    }
+  });
+
+  it("REFUSES all nine rates in 2028, when even the biennial rate has run out", () => {
+    // The other half of "biennially". The biennium that began 2026-01-01 ends
+    // 2027-12-31, so 2028 has no enacted WA Cares rate either. The original
+    // defect served 0.58% here forever, which is the more dangerous half: a
+    // year with no rate at all looked exactly like a year with one.
+    for (const key of ALL_PAYROLL_RATE_KEYS) {
+      const ref = mustRefuse(GREENWAY_RATES.lookup(key, "2028-01-01"));
+      expect(ref.code, `${key} still answered on 2028-01-01`).toBe(
+        "rate_not_evidenced_for_date",
+      );
+    }
+  });
+
+  it("still serves every rate on 2026-12-31, so the fix did not overshoot", () => {
+    // Closing four rows is only correct if it closed them on the RIGHT DAY.
+    // The day before the boundary must still answer, for all nine keys - this
+    // is what proves the change was a boundary fix and not a blanket refusal.
+    for (const key of ALL_PAYROLL_RATE_KEYS) {
+      const got = mustGet(GREENWAY_RATES.lookup(key, "2026-12-31"));
+      expect(got.value, `${key} stopped answering inside 2026`).toBeGreaterThan(0);
     }
   });
 
