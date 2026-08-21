@@ -667,6 +667,48 @@
     the second and you talk yourself out of every real finding; assume the first
     and you rewrite working code. Check which, every time.
 
+### RULE 50: A MODULE THAT ONLY ITS OWN TEST IMPORTS IS DEAD CODE WEARING A GREEN CHECK MARK.
+    Earned in books-23, and it had been true for ELEVEN SLICES before anyone
+    noticed. `src/lib/inventory/inventory-audit-store.ts` was 767 lines of
+    working, tested inventory-audit posting engine -- it computed the shrink,
+    derived the accounts, built a balanced journal entry, and returned it. It was
+    imported by exactly one file in the repository: its own test. No page, no
+    server action, no route. Michael could complete an audit, see it marked
+    approved on his screen, and the ledger would never hear about it. The suite
+    was green the entire time, because every test that engine had was a test
+    that CALLED it directly. Tests import what they test; that is their job. So
+    "is this covered?" and "is this reachable?" are different questions, and only
+    the first one gets asked by default. THE RULE: for anything that is supposed
+    to run because a human pressed something, assert REACHABILITY separately from
+    correctness -- walk every file under the app directory and require at least
+    one non-test importer, then require that the importer is wired to a form,
+    route or handler. Write it as a sweep over the module list, not as one
+    assertion per module, because the value is in the modules nobody thought to
+    check. The corollary is about credit: a green suite tells you the code you
+    wrote works, and says nothing whatsoever about whether it runs.
+
+### RULE 51: A WRITE THAT CAN BE BLOCKED WITHOUT ERROR MUST BE COUNTED, NEVER ASSUMED.
+    Earned in books-23. Supabase has two clients in this repo and they behave
+    differently in the one way that matters: `createSupabaseAdminClient()` uses
+    the service-role key and ignores row-level security, while
+    `createBooksClient()` runs as the logged-in user and obeys it. When RLS
+    forbids an UPDATE, PostgREST does not raise. It matches zero rows and returns
+    success. So `const { error } = await sb.from(t).update(...)` with `error`
+    null means "the database did what I asked" on one client and "the database
+    silently declined" on the other, and the code cannot tell which. Three
+    status transitions in the audit hub were written that way. A count could be
+    submitted, the screen would say saved, and nothing would have changed. THE
+    RULE: every write whose visibility depends on RLS must end `.select("id")`
+    and have its row count inspected, with zero rows converted into a refusal
+    that reaches the screen. Build it as ONE helper the writes share, not a
+    check at each site (rule 23), and assert the count of writes it guards, so
+    the fourth write added next year cannot skip it. Note the interaction that
+    makes this nastier than it looks: today all nine of those functions use the
+    service-role key, so the guard cannot fire yet. That is not an argument for
+    omitting it -- it is the reason the bug will arrive as a one-line client
+    swap in some unrelated slice, long after everyone has forgotten which writes
+    were load-bearing.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →
