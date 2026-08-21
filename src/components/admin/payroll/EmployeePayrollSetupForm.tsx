@@ -93,6 +93,7 @@ import {
   type W4Record,
 } from "@/lib/payroll/payroll-w4-core";
 import { formatCentsPlain } from "@/lib/payroll/payroll-withholding-core";
+import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
 import { revealSsnAction, saveSetupAction } from "@/app/admin/books/payroll-setup/actions";
 
 // ---------------------------------------------------------------------------
@@ -1235,6 +1236,21 @@ export function EmployeePayrollSetupForm({
 }
 
 /**
+ * The citation behind a paycheck line, looked up in the shared authority
+ * registry rather than typed in here.
+ *
+ * A hand-typed citation next to a computed number is the worst of both worlds:
+ * it looks authoritative and it drifts silently the moment the rule it cites is
+ * amended. Looking it up means a wrong id renders nothing instead of rendering
+ * a lie.
+ */
+function citeFor(authorityId: string | undefined): string | null {
+  if (authorityId === undefined) return null;
+  const found = findGuidanceAuthority(authorityId);
+  return found ? found.cite : null;
+}
+
+/**
  * One side of the paycheck. Split out because employee and employer lines are
  * rendered identically but must never be added together - which is precisely
  * the mistake that makes a "total taxes" figure meaningless.
@@ -1277,6 +1293,19 @@ function PaycheckTable({
               <p className="mt-0.5 font-mono text-xs text-[var(--admin-text-faint)]">
                 {line.formula}
               </p>
+              {/*
+                THE CITATION. Every line already carried an authorityId and the
+                screen was throwing it away, so the paycheck showed arithmetic
+                with nothing standing behind it. "6.2%" is a number someone
+                typed; "26 U.S.C. 3101(a)" is the reason it is 6.2%. The point
+                of this screen is that a figure can be traced, so the trace has
+                to be on the page.
+              */}
+              {citeFor(line.authorityId) ? (
+                <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
+                  {citeFor(line.authorityId)}
+                </p>
+              ) : null}
               {line.refusal ? (
                 <p className="mt-0.5 text-xs text-[var(--admin-orange)]">{line.refusal}</p>
               ) : null}
