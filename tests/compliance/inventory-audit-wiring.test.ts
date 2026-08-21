@@ -109,6 +109,31 @@ function withoutComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
 }
 
+/**
+ * Strip SQL comments (`--` to end of line).
+ *
+ * THE SAME LESSON AS code(), IN A SECOND LANGUAGE, and it was learned the same
+ * way: a mutation that commented out
+ *
+ *     drop policy if exists cycle_counts_staff_all on public.cycle_counts;
+ *
+ * SURVIVED, because the assertion searched the raw file and found the statement
+ * sitting inside the `--` comment that disabled it. The test proved the words
+ * were present, which was never the question.
+ *
+ * That is this slice's own headline defect wearing different clothes: prose
+ * about a thing being read as the thing itself. These migrations are heavily
+ * commented on purpose -- 0194 quotes its own DDL while explaining it -- so the
+ * hazard here is not hypothetical, it is guaranteed.
+ *
+ * String literals are NOT stripped: unlike the TypeScript case, the interesting
+ * SQL identifiers are bare words, and the gate-check bodies contain quoted
+ * table names that assertions legitimately look for.
+ */
+function sqlCode(src: string): string {
+  return src.replace(/--[^\n]*/g, " ");
+}
+
 /** Every .ts/.tsx file under src, so "does anything call X" can be answered. */
 function allSourceFiles(dir: string = SRC, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -706,5 +731,203 @@ describe("J the compliance nag is the owner's alone", () => {
     );
     // ...and it should say whose job it is, so the answer is still useful.
     expect(entry.toLowerCase()).toMatch(/owner|michael/);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   K) MIGRATION 0194 — THE RETIRED TABLES ARE SEALED, AND HONEST ABOUT IT
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The application refuses to write a cycle count (section B). Migration 0194 is
+   the other half: the database stops accepting writes through an ordinary
+   logged-in session, which migration 0041 had granted with
+   `for all using (is_staff())` -- meaning any budtender's own credentials could
+   INSERT, UPDATE and DELETE cycle-count rows straight through the REST API with
+   no application code involved.
+
+   THE POINT OF TESTING THE PROSE AS WELL AS THE SQL. Every writer of these
+   tables uses the SERVICE ROLE key, which bypasses row-level security entirely.
+   So this migration is defence in depth, NOT the lock holding the door today. A
+   migration comment claiming otherwise would be standing rule 44 exactly -- a
+   guard's justifying comment is a claim about the repository, and an untested
+   claim is a lie with a citation. The tests below therefore check that the file
+   SAYS SO, because the next reader will believe whatever it says.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("K migration 0194 seals the retired cycle-count tables", () => {
+  const MIG = join(ROOT, "supabase", "migrations", "0194_cycle_counts_read_only.sql");
+  /*
+   * `sql`  = executable statements only, for "does this DDL run?"
+   * `prose` = the whole file, for "does the file EXPLAIN itself honestly?"
+   *
+   * Keeping them apart is the point. Asking a structural question of the raw
+   * file lets a commented-out statement answer it, which is exactly how the K1
+   * mutation survived its first run.
+   */
+  const prose = existsSync(MIG) ? readFileSync(MIG, "utf8") : "";
+  const sql = sqlCode(prose);
+
+  it("the migration exists", () => {
+    expect(existsSync(MIG), "supabase/migrations/0194_cycle_counts_read_only.sql").toBe(true);
+  });
+
+  it("it is the NEXT number, so it cannot be applied out of order", () => {
+    // Two developers each adding "the next" migration produce two 0194s, and
+    // whichever is applied second is silently skipped by most tooling.
+    const all = readdirSync(join(ROOT, "supabase", "migrations"))
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => f.slice(0, 4));
+    const duplicates = all.filter((n) => n === "0194");
+    expect(duplicates, "exactly one 0194 migration may exist").toHaveLength(1);
+    expect(Math.max(...all.map(Number))).toBe(194);
+  });
+
+  it("both retired tables lose their write policy and keep a read policy", () => {
+    for (const t of ["cycle_counts", "cycle_count_lines"]) {
+      /*
+       * The 0041 policy was `for all` -- it must be dropped BY NAME.
+       *
+       * Matched with a whitespace-tolerant pattern rather than an exact string:
+       * the migration aligns these four statements into columns for
+       * readability, and the first version of this assertion demanded single
+       * spaces. It failed against correct SQL. A test that breaks when someone
+       * lines up a column is testing the formatter, not the guard.
+       */
+      expect(
+        new RegExp(`drop policy if exists\\s+${t}_staff_all\\s+on public\\.${t};`).test(sql),
+        `${t}: the 0041 write-all policy must be dropped by name`,
+      ).toBe(true);
+      // ...and replaced with SELECT only.
+      expect(
+        new RegExp(
+          `create policy\\s+${t}_staff_read\\s+on public\\.${t}\\s+for select using \\(public\\.is_staff\\(\\)\\);`,
+        ).test(sql),
+        `${t}: must be replaced with a SELECT-only policy`,
+      ).toBe(true);
+    }
+  });
+
+  it("no policy in the file grants a write on a retired table", () => {
+    // Reads the file for the mistake rather than trusting the two assertions
+    // above: a THIRD policy added later, `for all` or `for insert`, would slip
+    // past a test that only checks the two names it already knows.
+    const creates = sql.match(/create policy[\s\S]*?;/g) ?? [];
+    const writers = creates.filter(
+      (c) => /cycle_count/.test(c) && !/for\s+select/i.test(c),
+    );
+    expect(writers, `these policies write to a retired table:\n${writers.join("\n")}`).toEqual(
+      [],
+    );
+  });
+
+  it("READ survives — a retention record that cannot be read is not retained", () => {
+    // Standing rule 34, gates run in BOTH directions. "Nobody can write" would
+    // also be satisfied by sealing the table completely, which would break the
+    // three-year traceability record and the "Older counts" list.
+    expect(sql).toContain("for select using (public.is_staff())");
+    expect(prose).toMatch(/314-55-083/);
+    expect(sql).not.toMatch(/drop table/i);
+    expect(sql).not.toMatch(/delete from public\.cycle_counts/i);
+  });
+
+  it("the write GRANTS are revoked for ordinary sessions, not just the policies", () => {
+    // RLS decides which rows; grants decide whether the verb may be attempted.
+    // Without the revoke, a later migration adding a policy reopens writing.
+    //
+    // WHITESPACE-TOLERANT FOR THE SAME REASON AS THE `drop policy` ASSERTIONS
+    // ABOVE. The migration pads these two lines so `from` lines up in a column,
+    // and an exact-string check therefore encodes the padding as if it were the
+    // guard. It would fail the day somebody renames a table and the column no
+    // longer needs padding -- reporting a security regression when nothing but
+    // the alignment moved. A test that cries wolf over a space gets deleted by
+    // the next person in a hurry, and then nothing checks the revoke at all.
+    for (const t of ["cycle_counts", "cycle_count_lines"]) {
+      expect(
+        new RegExp(
+          `revoke\\s+insert,\\s*update,\\s*delete\\s+on\\s+table\\s+public\\.${t}\\s+from\\s+anon,\\s*authenticated;`,
+        ).test(sql),
+        `${t}: ordinary sessions must lose the write GRANT, not just the policy`,
+      ).toBe(true);
+    }
+  });
+
+  it("it does NOT pretend to restrain the service role", () => {
+    /*
+     * The most important test in this section. Every writer of these tables uses
+     * the service-role key, which ignores RLS. A file that revoked service_role
+     * writes here would look stronger and would in fact break the nine READERS
+     * that still use that key -- while the honest statement is that the library
+     * refusal is the real lock on that path.
+     */
+    /*
+     * `[\s\S]{0,120}` RATHER THAN THE `s` (dotAll) FLAG. The repository targets
+     * ES2017 (tsconfig.json), where that flag is a compile error -- TS1501. The
+     * test still PASSED with it, because vitest's transform is more forgiving
+     * than the typechecker, so only `tsc --noEmit` caught it. Worth recording:
+     * a green suite is not a compiling repository.
+     *
+     * The bound matters too. Unbounded `[\s\S]*` would let the words
+     * "service_role" and "NOT revoked" satisfy this from opposite ends of an
+     * 18KB file, which is not a sentence -- it is a coincidence. 120 characters
+     * is about one wrapped comment line either side, so the two halves have to
+     * actually be making the same statement.
+     */
+    expect(prose).toMatch(
+      /service_role[\s\S]{0,120}NOT revoked|NOT revoked[\s\S]{0,120}service_role/i,
+    );
+    expect(prose).toMatch(/BYPASSES ROW-LEVEL SECURITY ENTIRELY|bypass(es)? RLS/i);
+    expect(prose).toMatch(/CYCLE_COUNT_APPLY_RETIRED/);
+  });
+
+  it("the honest-scope claim names the client the code actually uses", () => {
+    // Rule 44: the file asserts that every reader/writer uses the service role.
+    // That claim is checked against the source here, so it cannot rot quietly.
+    const lib = readFileSync(
+      join(SRC, "lib", "inventory", "cycle-counts.ts"),
+      "utf8",
+    );
+    expect(lib).toContain("createSupabaseAdminClient");
+    expect(lib).not.toContain("createBooksClient");
+    expect(prose).toMatch(/createSupabaseAdminClient/);
+  });
+
+  it("it refuses to run out of order, including on the REPLACEMENT flow", () => {
+    // Sealing the old path on a database that never got 0191 would leave the
+    // store with no way to count stock at all: old path refused in code, new
+    // path's tables absent.
+    expect(sql).toContain("MIGRATION_OUT_OF_ORDER");
+    expect(sql).toMatch(/inventory_audit_sessions[\s\S]{0,400}MIGRATION_OUT_OF_ORDER/);
+    expect(sql).toMatch(/to_regclass\('public\.cycle_counts'\) is null/);
+  });
+
+  it("it ships a gate check whose EMPTY result is the passing result", () => {
+    expect(sql).toContain("create or replace function public.cycle_counts_retired_gate_check()");
+    expect(prose).toMatch(/AN EMPTY RESULT IS THE PASSING RESULT/);
+  });
+
+  it("the gate check verifies the replacement still works, not only the seal", () => {
+    // Four checks could pass while the store cannot count anything. The fifth is
+    // what makes the gate check a verification rather than a formality.
+    expect(sql).toMatch(/inventory_audit_post_session\(uuid\)/);
+    expect(sql).toMatch(/relrowsecurity = false/);
+    expect(sql).toMatch(/p\.cmd <> 'SELECT'/);
+  });
+
+  it("it is idempotent, so a nervous owner may run it twice", () => {
+    // These are applied BY HAND. "Did that work?" followed by a second run is
+    // the normal human response, and it must not be punished.
+    expect(prose).toMatch(/Idempotent/i);
+    const creates = (sql.match(/create policy/g) ?? []).length;
+    const drops = (sql.match(/drop policy if exists/g) ?? []).length;
+    expect(drops).toBeGreaterThanOrEqual(creates);
+    expect(sql).toContain("create or replace function");
+  });
+
+  it("it explains WHY in money, not in jargon", () => {
+    // Standing rule 29: plain English is a deliverable. The owner has to be able
+    // to read this and know what it is for.
+    expect(prose).toMatch(/\$4,624,697\.31/);
+    expect(prose).toMatch(/understated/i);
+    expect(prose).toMatch(/280E/);
   });
 });
