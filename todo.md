@@ -946,6 +946,49 @@
        document, at the same prominence, as the two that stand. A defect list
        that only ever grows is a defect list nobody can trust.
 
+### RULE 60: A BRANCH THAT EXCUSES A DIFFERENCE MUST BE TESTED ON THE DAY IT REFUSES TO.
+    Earned in books-27, by a mutation that SURVIVED. The reconciliation report
+    decides whether a difference is harmless rounding or a real error. Forty
+    tests passed. Then the rule-15c harness replaced the whole decision with
+    `isExpectedRounding = true` -- excusing every difference of any size as
+    rounding, permanently disabling the control -- and every one of the forty
+    tests still passed. Not one of them had ever exercised the false branch.
+
+    a. **A TOLERANCE, A THRESHOLD, A GRACE PERIOD AND A MATERIALITY FLOOR ARE
+       ALL THE SAME OBJECT.** Each one decides "this difference does not
+       matter". Each one is a place where a control can be switched off without
+       breaking a single happy-path test, because the happy path is precisely
+       the case the tolerance was built to wave through. Every one of them needs
+       a test that proves it REFUSES.
+
+    b. **TEST THE REFUSAL WITH A REALISTIC CAUSE, NOT A SYNTHETIC NUMBER.** The
+       test added here does not shove a nonsense figure into the residual; it
+       simulates the hours on the return disagreeing with the hours in the
+       detail, which is a mistake a real payroll clerk makes. A refusal test
+       driven by an impossible input proves the branch executes but not that it
+       would ever fire in production. Standing rule 40 in a new suit: an
+       unreachable guard is an untested guard.
+
+    c. **ASSERT ON THE SENTENCE, NOT ONLY THE BOOLEAN.** `isExpectedRounding`
+       flipping to false is invisible to Michael. What he reads is the prose, so
+       the test asserts the report SAYS "not rounding" and names a probable
+       cause, and asserts it no longer says "rounding, not a mistake". A control
+       that fires silently has not fired.
+
+    d. **A HARNESS NEEDS A CONTROL MUTANT.** The mutation run here includes one
+       deliberate no-op that MUST survive. Without it, a harness whose test
+       command is silently broken reports fourteen kills out of fourteen and
+       reads as a triumph. If the control dies, the harness is lying about
+       everything else.
+
+    e. **THE ARITHMETIC BOUND BEATS THE TUNED CONSTANT.** Where a threshold can
+       be DERIVED, derive it. N subjects each rounding to the cent can move a
+       total by at most ceil(N/2) cents -- that is arithmetic, it scales from
+       ten employees to four hundred, and it can be defended to an examiner in
+       one sentence. A constant somebody once felt was about right cannot be
+       defended at all, and it fails in both directions at once: swallowing real
+       errors at small headcounts, crying wolf at large ones.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

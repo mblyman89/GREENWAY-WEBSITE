@@ -46,6 +46,11 @@ const MIRRORED_CORPORA: ReadonlyArray<{
   readonly file: (m: RegExpExecArray) => readonly string[];
 }> = [
   { name: "FASB ASC", re: /^FASB ASC (\d{3})-/, file: (m) => ["fasb-codification", `asc-${m[1]}.txt`] },
+  {
+    name: "FASB Concepts Statement",
+    re: /^FASB Concepts Statement No\. 8/,
+    file: () => ["fasb-concepts", "conceptual-framework.txt"],
+  },
   { name: "26 CFR part 1", re: /^26 C\.?F\.?R\.? §(1\.\d+-\d+)/, file: (m) => ["federal", `cfr-${m[1]}.txt`] },
   {
     name: "26 CFR part 31",
@@ -99,6 +104,31 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   const asc = /^FASB ASC (\d{3})-/.exec(cite);
   if (asc) {
     const p = join(dir, "fasb-codification", `asc-${asc[1]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // FASB Concepts Statement No. 8, Chapter 7, ¶PR33  ->
+  //   fasb-concepts/conceptual-framework.txt
+  //
+  // books-27. THE WHOLE OF CON 8 IS ONE MIRRORED FILE, so the chapter and
+  // paragraph pinpoints in the citation are deliberately discarded — they
+  // locate the quote for a human reader, not the file for this script.
+  //
+  // THIS BRANCH CLOSES A SILENT HOLE, and it is the same hole §280E fell
+  // through. Three CON 8 quotes have been in the registry since books-17, and
+  // `conceptual-framework.txt` has been on disk the whole time, but no pattern
+  // here matched "FASB Concepts Statement No. 8" — so all three returned null
+  // and were counted as "no local copy to check against". Three unverifiable
+  // quotes, reported as a cheerful green line, for ten slices.
+  //
+  // Found while adding the books-27 reporting authorities, because seven NEW
+  // CON 8 quotes would have inherited exactly the same free pass. Standing
+  // rule 39: a read that cannot fail is not a check. Note the payoff is
+  // immediate and retroactive — wiring this branch verifies the three old
+  // quotes for the first time, not just the new ones.
+  const con8 = /^FASB Concepts Statement No\. 8/.exec(cite);
+  if (con8) {
+    const p = join(dir, "fasb-concepts", "conceptual-framework.txt");
     return existsSync(p) ? p : null;
   }
 
@@ -254,6 +284,37 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
 function normalise(text: string): string {
   return text
     // NO DOT-LEADER RULE HERE, DELIBERATELY - see the note below.
+    //
+    // books-27: PAGE FURNITURE FROM A PDF IS NOT PART OF THE SENTENCE.
+    //
+    // The FASB Concepts corpus is a PDF text dump, and a sentence that runs
+    // across a page break has the page number physically embedded in the
+    // middle of it. CON 8 PR39 really does read, on disk:
+    //
+    //   "...more homogeneous classes of items and usually\n\n\n\n\n   151\n\f
+    //    are more useful to resource providers..."
+    //
+    // The "151" is the printed page number and the \f is the page break. A
+    // quote that omits them is CORRECT; a quote that included them would be
+    // transcribing the typesetting rather than the standard. So the page
+    // break and its number are stripped BEFORE whitespace collapses, because
+    // afterwards "151" is indistinguishable from a real number in the text.
+    //
+    // Deliberately narrow: only a run of blank lines, then digits alone on a
+    // line, then a form feed. That shape is a page footer and nothing else.
+    // A figure inside a sentence never looks like this.
+    //
+    // THIS RULE IS LOAD-BEARING AND PROVEN SO (standing rule 40, which killed
+    // the previous dot-leader rule for being dead code): deleting it makes
+    // CON8_CH7_PR39_HOMOGENEITY fail. There is a test asserting exactly that.
+    .replace(/\n\s*\n\s*\d{1,4}\s*\n?\f/g, "\n")
+    // Footnote reference markers glued to the end of a sentence: "concepts.4"
+    // is "concepts." followed by footnote 4, not a version number. Same
+    // reasoning - it is apparatus, not text. Narrow on purpose: only a single
+    // digit immediately after a full stop and immediately before a newline,
+    // which is where a footnote marker lands and where a decimal never does.
+    // Load-bearing: deleting it makes CON8_CH7_PR12_NOTE_NOT_SUBSTITUTE fail.
+    .replace(/\.\d(?=\n)/g, ".")
     .replace(/\u2014/g, "-")
     .replace(/\u2019/g, "'")
     .replace(/[\u201c\u201d]/g, '"')

@@ -75,6 +75,12 @@ import { INTEREST_AUTHORITIES_NEW } from "./interest-authorities";
 // PAYROLL_TAX_AUTHORITIES comment below records: an exported registry that
 // nothing merges is a set of citations no screen can find.
 import { PAYROLL_ONBOARDING_AUTHORITIES } from "@/lib/payroll/payroll-onboarding-authorities";
+// books-27. HOW A REPORT IS PRESENTED, as opposed to what it computes. The
+// FASB's understandability characteristic (CON 8 QC30-32), its guidance on
+// aggregation (PR13, PR35-36), and the BINDING comparative-statement rules in
+// ASC 205-10-45. Imported here in the same commit that declares them, for the
+// reason the PAYROLL_TAX_AUTHORITIES comment above records.
+import { REPORTING_AUTHORITIES_NEW } from "@/lib/reports/reporting-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -526,6 +532,7 @@ export const ALL_SOURCE_REGISTRIES = [
   "cogs-position",
   "interest",
   "payroll-onboarding",
+  "reporting",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -652,6 +659,20 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // a different document making the same point, not a second copy of it.
     ...PAYROLL_ONBOARDING_AUTHORITIES.map((a) => ({
       tag: "payroll-onboarding" as const,
+      authority: a,
+    })),
+    // books-27. THE AUTHORITY FOR LAYOUT ITSELF, which sounds like a category
+    // error until you read QC30: "classifying, characterizing, and presenting
+    // information clearly and concisely makes it understandable." Michael said
+    // he does not open his Sage reports because he cannot read them; the FASB
+    // has a name for that failure and an entire section on the cure.
+    //
+    // Registered here so a report screen can cite its own layout decisions the
+    // same way a tax screen cites §280E. Note ASC 205-10-45-1 and -45-3 are
+    // BINDING GAAP, while the CON 8 records are the FASB's reasoning and carry
+    // CONCEPTUAL_FRAMEWORK_DISCLAIMER wherever they are shown.
+    ...REPORTING_AUTHORITIES_NEW.map((a) => ({
+      tag: "reporting" as const,
       authority: a,
     })),
   ];
