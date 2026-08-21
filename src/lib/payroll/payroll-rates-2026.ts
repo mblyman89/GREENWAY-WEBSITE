@@ -241,6 +241,53 @@ const FICA_ROWS: PayrollRateRow[] = [
   },
 ];
 
+/**
+ * WASHINGTON MINIMUM WAGE - the legal floor under every hourly rate.
+ *
+ * WHY A RATE ROW AND NOT A CONSTANT. RCW 49.46.020(2)(b) has L&I recalculate
+ * this every September 30, effective the following January 1. It is therefore
+ * exactly the same shape of fact as a PFML premium: a number that is only true
+ * for a stated span of dates. books-26 moved it here so that asking for the
+ * minimum wage on a date we have no announcement for REFUSES, instead of
+ * handing back last year's floor and quietly authorising an underpayment.
+ *
+ * WHY MILLI-CENTS PER HOUR. The statute says the adjusted rate "shall be
+ * calculated to the nearest cent", so the legal figure is always whole cents
+ * and $17.13 is exact. The unit is milli-cents anyway, to match the L&I rows
+ * above and the `minimumWageMilliCentsAtHire` field the employee record already
+ * stores. One unit for every per-hour figure in the system beats two units and
+ * a conversion nobody remembers to do.
+ *
+ * PORT ORCHARD IS NOT A LOCAL-MINIMUM-WAGE CITY. Seattle, SeaTac, Tukwila,
+ * Renton, Burien, Everett and Bellingham set their own higher floors. Greenway
+ * is in Port Orchard (Kitsap County), which is not on that list, so the state
+ * figure is the operative one. That is a fact about Greenway's address rather
+ * than about Washington, so it is recorded here where the rate lives, and it is
+ * the first thing to re-check if Greenway ever opens a second location.
+ */
+const MINIMUM_WAGE_ROWS: PayrollRateRow[] = [
+  {
+    key: "wa_minimum_wage",
+    effectiveFrom: "2025-01-01",
+    effectiveTo: "2025-12-31",
+    value: 1_666_000, // $16.66/hr
+    unit: "milli_cents_per_hour",
+    authorityId: "lni-minimum-wage-announcement",
+    documentId: "lni-2025-minimum-wage-announcement",
+    note: "2025 Washington minimum wage $16.66/hour. Kept on file because a rate paid in 2025 has to be tested against the floor that applied in 2025, not against today's.",
+  },
+  {
+    key: "wa_minimum_wage",
+    effectiveFrom: "2026-01-01",
+    effectiveTo: "2026-12-31",
+    value: 1_713_000, // $17.13/hr
+    unit: "milli_cents_per_hour",
+    authorityId: "lni-minimum-wage-announcement",
+    documentId: "lni-2026-minimum-wage-announcement",
+    note: "2026 Washington minimum wage $17.13/hour, up from $16.66. Closes 2026-12-31: RCW 49.46.020(2)(b) has L&I announce the next figure on September 30 2026, effective 2027-01-01. Until that notice exists this system refuses rather than reusing $17.13.",
+  },
+];
+
 /** Every rate Greenway uses, as dated evidenced rows. */
 export const GREENWAY_RATE_ROWS: readonly PayrollRateRow[] = [
   ...PFML_ROWS,
@@ -248,6 +295,7 @@ export const GREENWAY_RATE_ROWS: readonly PayrollRateRow[] = [
   ...WA_SUTA_ROWS,
   ...LNI_ROWS,
   ...FICA_ROWS,
+  ...MINIMUM_WAGE_ROWS,
 ];
 
 /**

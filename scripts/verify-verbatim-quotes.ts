@@ -353,7 +353,11 @@ export const KNOWN_UNMIRRORED_AUTHORITY_IDS: readonly string[] = [
   "REG_1_6001_1_RECORDS",
   "REG_1_6662_3_B_1_NEGLIGENCE",
   // Washington — wages, paid leave, long-term care
-  "RCW_49_46_020_MINWAGE",
+  // books-26 PAID THIS DEBT: RCW_49_46_020_MINWAGE used to sit here, and while
+  // it did, its quote was a paraphrase nobody could catch. The statute is now
+  // mirrored at docs/authorities/state-wa/rcw-49.46.020.txt and the quote is
+  // verified verbatim on every run. This is what paying down the list looks
+  // like - each removal turns an honest "cannot check" into a real check.
   "rcw-49-52-050-wage-rebate",
   "rcw-49-52-060-authorized-withholding",
   "rcw-50a-10-030-pfml",

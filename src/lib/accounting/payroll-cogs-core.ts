@@ -429,18 +429,37 @@ export const PAYROLL_AUTHORITIES: readonly PayrollAuthority[] = [
   {
     id: "RCW_49_46_020_MINWAGE",
     kind: "state_law",
-    cite: "RCW 49.46.020",
+    // books-26: THIS QUOTE USED TO BE A PARAPHRASE. It read "the state minimum
+    // hourly wage rate shall be increased by the rate of inflation as
+    // calculated under this subsection", which is a fair summary and appears
+    // nowhere in the statute. It survived because the RCW text was not mirrored
+    // locally, so scripts/verify-verbatim-quotes.ts had nothing to check it
+    // against and the id sat in KNOWN_UNMIRRORED_AUTHORITY_IDS. Mirroring
+    // docs/authorities/state-wa/rcw-49.46.020.txt failed the check in
+    // milliseconds. Rule 24: the quote is sacred, and a citation nobody can
+    // check is a citation nobody should trust.
+    cite: "RCW 49.46.020(2)",
     quote:
-      "Beginning January 1, 2021, and each following January 1st, the state minimum hourly wage rate shall be " +
-      "increased by the rate of inflation as calculated under this subsection... The department shall " +
-      "calculate an adjusted minimum wage rate to maintain employee purchasing power by increasing the " +
-      "current year's minimum wage rate by the rate of inflation.",
+      "(2)(a) Beginning on January 1, 2021, and each following January 1st as set forth under (b) of " +
+      "this subsection, every employer shall pay to each of his or her employees who has reached the " +
+      "age of eighteen years wages at a rate of not less than the amount established under (b) of " +
+      "this subsection. (b) On September 30, 2020, and on each following September 30th, the " +
+      "department of labor and industries shall calculate an adjusted minimum wage rate to maintain " +
+      "employee purchasing power by increasing the current year's minimum wage rate by the rate of " +
+      "inflation. The adjusted minimum wage rate shall be calculated to the nearest cent using the " +
+      "consumer price index for urban wage earners and clerical workers, CPI-W, or a successor index, " +
+      "for the twelve months prior to each September 1st as calculated by the United States " +
+      "department of labor. Each adjusted minimum wage rate calculated under this subsection (2)(b) " +
+      "takes effect on the following January 1st.",
     soWhat:
       "Washington's minimum wage moves every January and it is one of the highest in the country. This file " +
       "does not hard-code the number — a hard-coded wage floor silently goes stale and then quietly approves " +
       "an illegal rate. Instead the check asks for the effective rate as an input and refuses if none is " +
-      "supplied.",
-    source: "RCW 49.46.020, Minimum hourly wage.",
+      "supplied. Two phrases in the statute do real work: the new figure is only calculated on " +
+      "September 30, so in January of a year with no announcement the honest answer is a refusal; and " +
+      "it is 'calculated to the nearest cent', so the legal floor is always whole cents and a " +
+      "fraction of a cent in a stored minimum wage means a unit was typed wrong.",
+    source: "https://app.leg.wa.gov/RCW/default.aspx?cite=49.46.020",
   },
   {
     // WAC 314-55-083 is "Security and traceability requirements". Quoted here
