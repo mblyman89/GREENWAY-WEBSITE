@@ -94,6 +94,7 @@ import {
 } from "@/lib/payroll/payroll-w4-core";
 import { formatCentsPlain } from "@/lib/payroll/payroll-withholding-core";
 import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
+import { GREENWAY_RATES } from "@/lib/payroll/payroll-rates-2026";
 import { revealSsnAction, saveSetupAction } from "@/app/admin/books/payroll-setup/actions";
 
 // ---------------------------------------------------------------------------
@@ -428,6 +429,32 @@ export function EmployeePayrollSetupForm({
   }
 
   const laborRole = LABOR_ROLES.find((r) => r.code === form.payLaborRoleCode);
+
+  /**
+   * THE MINIMUM WAGE FOR THE HIRE DATE, FROM EVIDENCE.
+   *
+   * books-25 shipped this field blank and said so in the help text, on the
+   * grounds that there was no verified source for a legal wage floor. books-26
+   * gave it one: wa_minimum_wage is a dated row in the rate registry, sourced
+   * to L&I's published figure.
+   *
+   * It is still not silently prefilled into the input. The stored figure is
+   * "the minimum wage AT HIRE", a historical fact that must not drift when the
+   * floor rises, so the person setting up the employee confirms it. What the
+   * screen does now is TELL THEM WHAT IT IS, and refuse to invent one for a
+   * date the state has not published yet.
+   *
+   * The lookup is deliberately keyed to the hire date the user typed, not to
+   * today. Backdating a hire to a prior year must produce that year's floor.
+   */
+  const minimumWageForHireDate = useMemo(() => {
+    const ymd = form.payHireYmd.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+    const found = GREENWAY_RATES.lookupValue("wa_minimum_wage", ymd, "milli_cents_per_hour");
+    return found.ok
+      ? { ok: true as const, milliCents: found.value }
+      : { ok: false as const, whatToDo: found.refusal.whatToDo };
+  }, [form.payHireYmd]);
 
   return (
     <div className="space-y-6">
@@ -1025,12 +1052,29 @@ export function EmployeePayrollSetupForm({
             <Field
               label="Washington minimum wage on the hire date"
               error={problemFor("pay.minimumWageMilliCentsAtHire")}
-              help="Look this up and type it in - it is not prefilled, because this system has no verified source for it and will not guess at a legal floor. Recorded rather than derived, so a later increase cannot make a lawful past rate look unlawful."
+              help="Recorded rather than derived, so a later increase cannot make a lawful past rate look unlawful. The figure for the hire date is shown below when the state has published one."
             >
               <Input
                 value={form.payMinimumWage}
                 onChange={(e) => set("payMinimumWage", e.target.value)}
               />
+              {minimumWageForHireDate === null ? (
+                <p className="mt-1 text-xs text-[var(--admin-muted)]">
+                  Enter the hire date above and the minimum wage that applied on it will
+                  appear here.
+                </p>
+              ) : minimumWageForHireDate.ok ? (
+                <p className="mt-1 text-xs text-[var(--admin-muted)]">
+                  Washington minimum wage on {form.payHireYmd} was{" "}
+                  <strong>{formatCentsPlain(Math.round(minimumWageForHireDate.milliCents / 1_000))}</strong>{" "}
+                  an hour (RCW 49.46.020(2), rate published by L&I).{" "}
+                  {form.payMinimumWage.trim() === "" ? "Type it in to confirm it." : null}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-[var(--admin-danger)]">
+                  {minimumWageForHireDate.whatToDo}
+                </p>
+              )}
             </Field>
           </div>
 

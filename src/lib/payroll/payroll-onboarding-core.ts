@@ -611,10 +611,29 @@ export function validatePay(record: PayRecord): { ok: boolean; issues: PayIssue[
             "An hourly rate of zero or less is not a rate. If this person is unpaid they do not " +
             "belong on a payroll; if they are paid, I need the number.",
         });
-      } else if (
-        record.minimumWageMilliCentsAtHire !== null &&
-        record.hourlyRateMilliCents < record.minimumWageMilliCentsAtHire
-      ) {
+      } else if (record.minimumWageMilliCentsAtHire === null) {
+        // books-26. THIS BRANCH USED TO NOT EXIST, and its absence was the
+        // whole defect: the floor check hung off `!== null`, so a blank
+        // minimum wage did not mean "unverified", it meant NO CHECK RAN.
+        // Verified by execution before it was fixed - $9.00/hour returned
+        // ok=true with zero issues.
+        //
+        // Rule 14: when a rule could be a warning or a refusal, choose
+        // refusal. An unknown floor is not a permissive floor. The number is
+        // available - GREENWAY_RATES holds wa_minimum_wage as a dated row - so
+        // there is a concrete action to name, which is what makes blocking
+        // fair rather than merely strict.
+        issues.push({
+          field: "minimumWageMilliCentsAtHire",
+          severity: "block",
+          message:
+            `I do not have the Washington minimum wage that applied on ${record.hireYmd}, so I ` +
+            `cannot tell whether this rate is legal. An unknown floor is not the same as no ` +
+            `floor: without it, any rate at all would save clean, including one below the legal ` +
+            `minimum.`,
+          authorityId: "lni-minimum-wage-announcement",
+        });
+      } else if (record.hourlyRateMilliCents < record.minimumWageMilliCentsAtHire) {
         issues.push({
           field: "hourlyRateMilliCents",
           severity: "block",
