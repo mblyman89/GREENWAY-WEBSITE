@@ -29,6 +29,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { can } from "@/lib/auth/roles";
 
 const ROOT = process.cwd();
 const HUB_DIR = join(ROOT, "src", "app", "admin", "inventory", "audits");
@@ -66,7 +67,9 @@ describe("the auditing hub is reachable", () => {
     );
     expect(nav).toContain('href: "/admin/inventory/audits"');
     expect(nav).toContain('group: "Inventory"');
-    expect(nav).toContain('permission: "inventory.manage"');
+    // books-23: the hub is owner-only (inventory.audit). Counting moved to
+    // Cycle Counts, which is gated on inventory.count.
+    expect(nav).toContain('permission: "inventory.audit"');
   });
 
   it("the hub does NOT squat on /admin/audit, which is the security log", () => {
@@ -86,11 +89,46 @@ describe("the auditing hub is reachable", () => {
 });
 
 describe("every page is gated", () => {
-  it("each route calls requirePermission before doing anything", () => {
+  it("each route calls requirePermission with the RIGHT permission", () => {
+    // books-23: this used to accept one permission for all five routes. That
+    // could not express the split the owner asked for -- "any employee can
+    // count", but "I am the only one that can approve an audit" -- so each route
+    // now names the gate it is supposed to have. Asserting merely that SOME gate
+    // exists would let the count sheet be tightened to owner-only (silently
+    // breaking counting) or the posting screen be loosened to staff, and this
+    // test would pass either way.
+    const EXPECTED: Record<(typeof PAGES)[number], string> = {
+      "page.tsx": "inventory.audit",
+      "new/page.tsx": "inventory.audit",
+      "[id]/page.tsx": "inventory.audit",
+      "[id]/count/page.tsx": "inventory.count",
+      "[id]/export/page.tsx": "inventory.audit",
+    };
     for (const p of PAGES) {
       const src = code(read(p));
-      expect(src, `${p} does not gate`).toContain('requirePermission("inventory.manage")');
+      expect(src, `${p} does not gate`).toContain(
+        `requirePermission("${EXPECTED[p]}")`,
+      );
+      // ...and does not ALSO carry the other gate, which would make the real
+      // one ambiguous.
+      const other =
+        EXPECTED[p] === "inventory.audit" ? "inventory.count" : "inventory.audit";
+      expect(src, `${p} carries two different gates`).not.toContain(
+        `requirePermission("${other}")`,
+      );
     }
+  });
+
+  it("the count sheet is the ONLY route in the hub a non-manager can open", () => {
+    // The whole point of the split, stated as a fact about roles rather than
+    // about strings. Runs in both directions (standing rule 34).
+    expect(can("staff", "inventory.count")).toBe(true);
+    expect(can("staff", "inventory.audit")).toBe(false);
+    expect(can("manager", "inventory.audit")).toBe(false);
+    expect(can("admin", "inventory.audit")).toBe(false);
+    expect(can("owner", "inventory.audit")).toBe(true);
+    // readonly is an analyst role; it must not be able to write a count.
+    expect(can("readonly", "inventory.count")).toBe(false);
   });
 
   it("no page uses requireBooksAccess, which is the wrong gate here", () => {
@@ -114,19 +152,49 @@ describe("every page is gated", () => {
 describe("the write path re-gates", () => {
   const actions = code(read("actions.ts"));
 
-  it("every exported server action calls requirePermission itself", () => {
+  it("every exported server action calls requirePermission with the RIGHT one", () => {
     // A server action is a public HTTP endpoint. The page rendering a button
     // behind a permission check does NOT protect the action behind it.
+    //
+    // books-23: saveCountAction is the one action a budtender may reach. Every
+    // other action in this file decides something -- what to count, what a
+    // difference means, whether it is approved -- and is owner-only. Naming the
+    // expected gate per action is what makes "the counter cannot approve"
+    // testable rather than merely intended.
+    const ACTION_GATE: Record<string, string> = {
+      createAuditAction: "inventory.audit",
+      saveCountAction: "inventory.count",
+      saveReasonAction: "inventory.audit",
+      moveStatusAction: "inventory.audit",
+    };
+
     const names = [...actions.matchAll(/export async function (\w+)/g)].map((m) => m[1]);
     expect(names.length).toBeGreaterThan(0);
+
+    // Every action must be listed above. A new action added without a decision
+    // about who may call it fails here instead of defaulting to whatever the
+    // author pasted.
+    const unlisted = names.filter((n) => !(n in ACTION_GATE));
+    expect(
+      unlisted,
+      `server actions with no declared permission: ${unlisted.join(", ")}`,
+    ).toEqual([]);
 
     // Split the file at each export so each body is checked in isolation
     // rather than trusting one gate somewhere in the file to cover all of them.
     const bodies = actions.split(/export async function /).slice(1);
     expect(bodies.length).toBe(names.length);
-    for (const b of bodies) {
-      expect(b).toContain('requirePermission("inventory.manage")');
+    for (let i = 0; i < bodies.length; i++) {
+      const name = names[i];
+      const want = ACTION_GATE[name];
+      expect(bodies[i], `${name} must gate on ${want}`).toContain(
+        `requirePermission("${want}")`,
+      );
     }
+
+    // Exactly one action is reachable by staff, and it is the counting one.
+    const staffReachable = names.filter((n) => can("staff", ACTION_GATE[n] as "inventory.count"));
+    expect(staffReachable).toEqual(["saveCountAction"]);
   });
 
   it("the approver is taken from the session, never from the form", () => {

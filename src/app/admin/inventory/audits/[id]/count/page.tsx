@@ -44,7 +44,15 @@ export default async function CountPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ refusal?: string; refusalCode?: string }>;
 }) {
-  await requirePermission("inventory.manage");
+  // books-23: the COUNT SHEET is floor work, so it is gated on inventory.count
+  // (owner, admin, manager, staff) and not on inventory.manage, which stops at
+  // manager and made the owner's "any employee can count" impossible.
+  //
+  // This page is safe to open this wide because of the SHAPE of what it loads:
+  // getCountSheet returns CountSheetLine, which carries no cost, no variance and
+  // no system quantity. The count is blind because the expected number is not in
+  // the object, not because a component chose not to render it.
+  await requirePermission("inventory.count");
   const { id } = await params;
   const sp = await searchParams;
 

@@ -142,6 +142,55 @@ function refused<T>(err: unknown): AuditStoreResult<T> {
   return { ok: false, refusal: explainHubRefusal(err) };
 }
 
+/**
+ * A BLOCKED WRITE IS NOT AN ERROR. IT IS A SUCCESS THAT DID NOTHING.
+ *
+ * Every function in this file writes through `createBooksClient()`, which is
+ * Michael's own session with row-level security switched ON. That is the correct
+ * client to use here. It also has a property that is easy to forget:
+ *
+ *   When RLS forbids an UPDATE, PostgreSQL does not raise. The statement matches
+ *   zero rows and returns success.
+ *
+ * So `const { error } = await supabase.from(X).update(...)` followed by
+ * `if (error) return refused(error)` reports SUCCESS for a write that was
+ * refused. The audit would show a status change that never happened, the screen
+ * would move to the next step, and the database would still hold the old row.
+ * For a status like "approved" that is the difference between "the owner signed
+ * this" and "nobody signed this and the system said they did".
+ *
+ * `.select("id")` turns the write into a statement that RETURNS the rows it
+ * touched, so the count can be checked. This helper is the check, written once:
+ * a per-call-site `if (rows.length === 0)` would be four chances to forget, and
+ * standing rule 23 says fix the class rather than the instance.
+ *
+ * The refusal deliberately does NOT say "permission denied". Zero rows can also
+ * mean the row was deleted or the id was wrong, and a message that names one
+ * cause it cannot prove is a guess. It names the outcome, which is certain:
+ * nothing changed.
+ */
+function requireRowsWritten<T>(
+  rows: unknown,
+  what: string,
+  data: T,
+): AuditStoreResult<T> {
+  const n = Array.isArray(rows) ? rows.length : 0;
+  if (n === 0) {
+    return {
+      ok: false,
+      refusal: {
+        code: "WRITE_BLOCKED",
+        message:
+          `Nothing was saved. The database accepted the request to ${what} but changed no rows, ` +
+          `which happens when the record is not yours to change, or is no longer there. ` +
+          `Nothing has been altered, so it is safe to reload and try again — and if this keeps ` +
+          `happening, the audit itself needs looking at rather than the button.`,
+      },
+    };
+  }
+  return { ok: true, data };
+}
+
 /** The columns that describe a session on a list or a header. Defined once. */
 export const SESSION_COLUMNS = [
   "id",
@@ -265,8 +314,36 @@ function toCountLine(r: LineRow): AuditCountLine {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function listAuditSessions(
-  opts: { limit?: number; status?: AuditSessionStatus } = {},
+  opts: {
+    limit?: number;
+    status?: AuditSessionStatus;
+    /**
+     * Restrict to a SET of statuses (slice books-23).
+     *
+     * Added rather than writing a second list function, because a second list
+     * function is a second column list and a second mapper, and those drift
+     * (standing rule 25: extend, do not duplicate). `statuses` and `status`
+     * compose: passing both narrows by both, which is why the `.eq` is applied
+     * after the `.in` instead of either one replacing the other.
+     *
+     * This is what makes the employee work queue safe BY QUERY rather than by
+     * filtering in the page. A page-level filter shows the browser rows it then
+     * hides; this never fetches them. The distinction matters because the count
+     * queue must never carry a session the owner has not approved the scope of,
+     * nor one that has finished counting and is under review.
+     */
+    statuses?: readonly AuditSessionStatus[];
+  } = {},
 ): Promise<AuditStoreResult<AuditSessionSummary[]>> {
+  // An EMPTY statuses array means "no statuses are acceptable", and the honest
+  // answer to that is an empty list. Letting it fall through would build a query
+  // with no `.in()` at all and return EVERYTHING -- the exact inversion of what
+  // was asked for, and the kind of bug that opens a queue rather than closing
+  // it. Answered before the query is built so it cannot be reasoned about wrong.
+  if (opts.statuses && opts.statuses.length === 0) {
+    return { ok: true, data: [] };
+  }
+
   const supabase = await createBooksClient();
   let q = supabase
     .from("inventory_audit_sessions")
@@ -274,12 +351,33 @@ export async function listAuditSessions(
     .order("created_at", { ascending: false })
     .limit(Math.min(Math.max(opts.limit ?? 50, 1), 200));
 
+  if (opts.statuses) q = q.in("status", opts.statuses as string[]);
   if (opts.status) q = q.eq("status", opts.status);
 
   const { data, error } = await q;
   if (error) return refused(error);
   return { ok: true, data: ((data ?? []) as unknown as SessionRow[]).map(toSummary) };
 }
+
+/**
+ * The statuses an employee is allowed to see in the counting queue.
+ *
+ * `scope_approved` -- the owner said count this, nobody has started.
+ * `counting`       -- somebody has started; anyone may continue.
+ *
+ * Deliberately NOT `draft` (the owner has not agreed to the scope, so showing
+ * it invites counting work that may be thrown away), NOT `review` or `approved`
+ * (the count is finished; reopening it would let a counter change a number the
+ * owner is currently reading, which is the audit-trail equivalent of editing a
+ * signed document), and NOT `cancelled`.
+ *
+ * Exported as data, not buried in a page, so the test can assert the set rather
+ * than re-deriving it -- and so there is exactly one place to change it.
+ */
+export const COUNT_QUEUE_STATUSES: readonly AuditSessionStatus[] = [
+  "scope_approved",
+  "counting",
+] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 2) THE PLANNING SCREEN — propose a scope from live stock
@@ -416,10 +514,18 @@ export async function createAuditSession(input: {
   if (lErr) {
     // The session exists but has no lines. Rather than leave that wreckage
     // lying around to be picked up later as a mystery, cancel it — and say so.
+    //
+    // This one write is deliberately NOT routed through requireRowsWritten. It is
+    // best-effort cleanup on a path that is already failing, and the caller is
+    // about to be told about `lErr`, which is the real problem. Reporting
+    // "the cleanup did not change any rows" instead of the error that caused the
+    // cleanup would bury the cause. `.select("id")` is still asked for so the
+    // outcome is visible to anyone reading a query log.
     await supabase
       .from("inventory_audit_sessions")
       .update({ status: "cancelled" })
-      .eq("id", sessionId);
+      .eq("id", sessionId)
+      .select("id");
     return refused(lErr);
   }
 
@@ -732,14 +838,19 @@ export async function saveCountLine(input: {
       ? patch
       : { ...patch, reason_code: input.reasonCode ?? null, reason_note: input.reasonNote ?? null };
 
-  const { error } = await supabase
+  const { data: wrote, error } = await supabase
     .from("inventory_audit_lines")
     .update(withReason)
     .eq("session_id", input.sessionId)
-    .eq("lot_id", input.lotId);
+    .eq("lot_id", input.lotId)
+    .select("id");
   if (error) return refused(error);
 
-  return { ok: true, data: { recorded: isRecount ? "recount" : "count" } };
+  // A count that silently saved nothing is worse than one that failed loudly:
+  // the counter moves on believing the number is recorded.
+  return requireRowsWritten(wrote, "record this count", {
+    recorded: (isRecount ? "recount" : "count") as "recount" | "count",
+  });
 }
 
 /** Record WHY a line differs, without touching the quantity. */
@@ -750,13 +861,16 @@ export async function saveLineReason(input: {
   reasonNote: string | null;
 }): Promise<AuditStoreResult<null>> {
   const supabase = await createBooksClient();
-  const { error } = await supabase
+  const { data: wrote, error } = await supabase
     .from("inventory_audit_lines")
     .update({ reason_code: input.reasonCode, reason_note: input.reasonNote })
     .eq("session_id", input.sessionId)
-    .eq("lot_id", input.lotId);
+    .eq("lot_id", input.lotId)
+    .select("id");
   if (error) return refused(error);
-  return { ok: true, data: null };
+  // The reason is the tax position. An unsaved reason that reports success is
+  // how a write-off ends up with no explanation behind it.
+  return requireRowsWritten(wrote, "record this reason", null);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -831,13 +945,21 @@ export async function moveSessionStatus(input: {
     patch.result_approved_by = input.approvedBy;
   }
 
-  const { error } = await supabase
+  const { data: wrote, error } = await supabase
     .from("inventory_audit_sessions")
     .update(patch)
-    .eq("id", input.sessionId);
+    .eq("id", input.sessionId)
+    .select("id");
   if (error) return refused(error);
 
-  return { ok: true, data: { status: input.to } };
+  // THE MOST IMPORTANT ONE. `inventory_audit_sessions` is owner-only under
+  // migration 0191 (`inventory_audit_sessions_owner_all` using is_owner()), so a
+  // non-owner reaching this line gets zero rows and no error. Without this check
+  // the function would report that an audit had been approved by someone the
+  // database refused to let approve it.
+  return requireRowsWritten(wrote, `move this audit to ${input.to}`, {
+    status: input.to,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -71,7 +71,8 @@ export default async function NewAuditPage({
 }: {
   searchParams: Promise<{ refusal?: string; refusalCode?: string; all?: string }>;
 }) {
-  await requirePermission("inventory.manage");
+  // books-23: owner only. Choosing what to count is the owner's decision.
+  await requirePermission("inventory.audit");
   const sp = await searchParams;
 
   // `includeOnlyDue: false` widens the net to everything active. It is opt-in

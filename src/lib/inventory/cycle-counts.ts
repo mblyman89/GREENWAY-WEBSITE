@@ -12,8 +12,11 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-// GW-012: atomic lot quantity writes.
-import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
+// NOTE: `applyLotDelta` (GW-012, atomic lot quantity writes) is deliberately
+// NOT imported any more. This file no longer moves inventory at all — see
+// applyCycleCount below. Leaving the import would make re-adding a shelf write
+// a one-line change; removing it means anyone doing that has to add an import
+// first, which is a visible act in a diff rather than an invisible one.
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 
 export type CycleCountStatus = "open" | "applied" | "cancelled";
@@ -311,58 +314,61 @@ export async function bumpLineCount(
 }
 
 /**
- * Create a new cycle-count session and snapshot the current system on-hand for
- * the selected lots (or all active lots if none specified). Blind: counted_qty
- * stays null until the employee enters it.
+ * RETIRED (slice books-23). Creating a standalone cycle count now refuses.
+ *
+ * WHY THIS IS REFUSED IN THE LIBRARY AND NOT JUST IN THE USER INTERFACE
+ *
+ * The two buttons that used to call this (`createCycleCountAction` and
+ * `createOverdueCycleCountAction`) were removed from the counting screen in this
+ * same slice. Deleting a button does NOT remove the capability: in Next.js an
+ * exported `"use server"` function keeps a stable action id and stays reachable
+ * by an HTTP POST after its button is gone. So the button removal is cosmetic
+ * and this refusal is the actual change.
+ *
+ * It also has to live here rather than in a database policy for the same reason
+ * `applyCycleCount` did: the line below this comment used to call
+ * `createSupabaseAdminClient()`, which authenticates with the service-role key.
+ * Under that key `auth.uid()` is null and row-level security is bypassed
+ * entirely, so no policy on `cycle_counts` can stop this function. A refusal in
+ * the function body is the only lock that is actually in the path.
+ *
+ * WHY A COUNT MAY NO LONGER START HERE
+ *
+ * The owner's workflow is: the system proposes what it thinks should be counted,
+ * the OWNER approves that scope, and only then does the job reach the counting
+ * floor. A session created straight from the counting screen skips the approval
+ * step, which means product could be recounted and written off without the owner
+ * ever having agreed the count should happen. Scope now starts in Inventory
+ * Auditing, where approving it is a deliberate act by the one person allowed to
+ * make it.
+ *
+ * The signature is preserved on purpose. Narrowing it would turn a refusal that
+ * every existing caller receives at run time into a compile error, and a compile
+ * error can be made to go away by deleting the call — which is the one outcome
+ * that must not be quiet.
+ *
+ * The original body that snapshotted on-hand for the selected lots was deleted
+ * rather than parked in a helper below. A copy of a retired write path sitting in
+ * the same file is an invitation to paste it back, and it would have kept this
+ * file importing the service-role client for a purpose that no longer exists. Git
+ * history has the old shape if it is ever needed.
  */
 export async function createCycleCount(
   input: { label: string; scopeNote?: string | null; lotIds?: string[] | null },
   actorId: string | null,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-
-  // Resolve which lots to include.
-  let lotQuery = admin.from("inventory_lots").select("id, on_hand_qty").eq("status", "active");
-  if (input.lotIds && input.lotIds.length > 0) {
-    lotQuery = admin.from("inventory_lots").select("id, on_hand_qty").in("id", input.lotIds);
-  }
-  const { data: lots, error: lotErr } = await lotQuery;
-  if (lotErr) return { ok: false, error: lotErr.message };
-  const lotRows = (lots as { id: string; on_hand_qty: number }[] | null) ?? [];
-  if (lotRows.length === 0) {
-    return { ok: false, error: "No matching lots to count." };
-  }
-
-  const { data: session, error: insErr } = await admin
-    .from("cycle_counts")
-    .insert({
-      label: input.label.trim() || "Cycle count",
-      scope_note: input.scopeNote ?? null,
-      status: "open",
-      line_count: lotRows.length,
-      variance_count: 0,
-      opened_by: actorId,
-    })
-    .select("id")
-    .single();
-  if (insErr || !session) return { ok: false, error: insErr?.message ?? "Could not create session." };
-
-  const countId = (session as { id: string }).id;
-  const lines = lotRows.map((l) => ({
-    count_id: countId,
-    lot_id: l.id,
-    system_qty: l.on_hand_qty ?? 0,
-    counted_qty: null,
-    variance_qty: null,
-    applied: false,
-  }));
-  const { error: lineErr } = await admin.from("cycle_count_lines").insert(lines);
-  if (lineErr) return { ok: false, error: lineErr.message };
-
-  return { ok: true, id: countId };
+  void input;
+  void actorId;
+  return {
+    ok: false,
+    error:
+      "CYCLE_COUNT_CREATE_RETIRED: counts no longer start on this screen, on purpose. " +
+      "A count that begins here skips your approval, which means product could be " +
+      "recounted and written off without you ever agreeing the count should happen. " +
+      "Start it in Inventory Auditing instead: the system proposes what it thinks is " +
+      "worth counting, you approve the scope, and the job then appears on this screen " +
+      "for staff to count. Nothing has been created and nothing has been changed.",
+  };
 }
 
 /** Record a blind physical count for one line; computes the variance. */
@@ -416,83 +422,97 @@ async function refreshVarianceCount(countId: string): Promise<void> {
 }
 
 /**
- * Apply a session: for every line with a non-zero variance that has been
- * counted and not yet applied, write an inventory_adjustments row (reason
- * 'count', qty_delta = variance) and bump the lot's on-hand. Idempotent —
- * already-applied lines are skipped, and re-running an applied session is a
- * no-op. Returns how many adjustments were posted.
+ * REFUSED. This function used to move inventory and never told the books.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHAT IT USED TO DO, AND WHY THAT WAS THE WORST BUG IN THE SYSTEM
+ * ───────────────────────────────────────────────────────────────────────────
+ * For every counted line with a non-zero variance it inserted an
+ * `inventory_adjustments` row, moved `inventory_lots.on_hand_qty` via
+ * `applyLotDelta`, marked the line applied, and set the session to 'applied'.
+ *
+ * It never wrote a journal. There was no journal to write to: migration 0041
+ * gave `cycle_counts` no general-ledger column of any kind, and this file never
+ * imported `submitJournal`. So product VALUE left the shelf and the general
+ * ledger never heard about it. Inventory on the balance sheet stayed too high
+ * forever, cost of goods sold stayed too low, and taxable income was overstated
+ * by the difference — permanently, and invisibly, because nothing anywhere
+ * compared the two.
+ *
+ * That is not an abstract risk. It is the exact mechanism that produced
+ * "20009 LAZY INVENTORY ENTRY" holding +4,624,697.31 in the Sage file — 105.4%
+ * of a hole that 8 of 11 inventory accounts were carrying as impossible CREDIT
+ * balances. A count that corrects the shelf without correcting the books does
+ * not fix a discrepancy; it MOVES the discrepancy somewhere nobody is looking.
+ *
+ * It was also unguarded in a way nothing else in this system is. It ran on
+ * `createSupabaseAdminClient()` — the service-role key — which carries no `sub`
+ * claim, so `auth.uid()` is NULL inside the database and Row Level Security is
+ * bypassed entirely (see books-client.ts for the full write-up of that class of
+ * bug). No database policy could stop it. The only thing between an admin
+ * manager and a permanent, unrecorded inventory write-off was one line of
+ * application code, `requirePermission("inventory.manage")`, which GRANTS the
+ * manager role. And it had zero test coverage.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY IT REFUSES INSTEAD OF BEING DELETED
+ * ───────────────────────────────────────────────────────────────────────────
+ * Deleting the export would be a compile error at every call site, which sounds
+ * like the safer option and is not. A compile error gets "fixed", and the
+ * fastest fix available to whoever hits it is to paste the old body back in.
+ * A function that is still here and REFUSES, with the reason attached, cannot
+ * be repaired by accident — and the refusal is testable, which a deleted
+ * function is not (standing rule 43: a refusal code no path emits is
+ * decoration; this one is emitted on every call).
+ *
+ * This is the innermost of three layers, and it is THE GUARANTEE. The button is
+ * gone from the page and the server action refuses too, but those are the outer
+ * two: a page can be re-added and a server action can be called directly. The
+ * database cannot help here, for the service-key reason above. So the lock has
+ * to live in this function, and it does.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHAT REPLACES IT
+ * ───────────────────────────────────────────────────────────────────────────
+ * The inventory audit path, which was built correctly in books-10/11/12 and
+ * was simply never wired to a button:
+ *
+ *   owner scopes an audit  →  staff count it blind  →  owner reviews every
+ *   variance and records a reason  →  owner approves  →  the shelf moves and a
+ *   journal entry is DRAFTED for the owner to post.
+ *
+ * Every step of that is gated in the DATABASE on `is_owner()` (migrations 0191
+ * and 0192), not merely in a page. The shelf move and the CCRS adjustment row
+ * happen inside one atomic function, so they cannot half-succeed.
+ *
+ * The historical `cycle_counts` rows are NOT deleted and are still readable.
+ * WAC 314-55-087(2)(c) requires these records be keepable for years, and a
+ * record of what was counted in 2023 does not become false because the process
+ * that produced it was wrong. It stays, as history.
  */
 export async function applyCycleCount(
   countId: string,
   actorId: string | null,
 ): Promise<{ ok: true; applied: number } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
+  // The parameters are read so that this refusal cannot be mistaken for an
+  // unfinished stub, and so no linter "helpfully" removes them from the
+  // signature — the signature is what keeps every caller compiling.
+  void countId;
+  void actorId;
 
-  const session = await getCycleCount(countId);
-  if (!session) return { ok: false, error: "Session not found." };
-  if (session.status === "cancelled") {
-    return { ok: false, error: "Cancelled sessions cannot be applied." };
-  }
-
-  const { data: lineData } = await admin
-    .from("cycle_count_lines")
-    .select("id, lot_id, system_qty, counted_qty, variance_qty, note, applied")
-    .eq("count_id", countId);
-  const lines = (lineData as CycleCountLine[] | null) ?? [];
-
-  let applied = 0;
-  for (const line of lines) {
-    if (line.applied) continue;
-    if (line.counted_qty == null) continue; // never counted
-    const variance = Number(line.variance_qty ?? 0);
-    if (variance === 0) {
-      // Nothing to post, but mark counted lines applied so they're final.
-      await admin.from("cycle_count_lines").update({ applied: true }).eq("id", line.id);
-      continue;
-    }
-
-    // Post the variance as a 'count' adjustment and bump on-hand.
-    const { data: lot } = await admin
-      .from("inventory_lots")
-      .select("on_hand_qty")
-      .eq("id", line.lot_id)
-      .maybeSingle();
-    if (!lot) continue;
-
-    const { error: adjErr } = await admin.from("inventory_adjustments").insert({
-      lot_id: line.lot_id,
-      qty_delta: variance,
-      reason: "count",
-      note: line.note ?? `Cycle count: ${session.label}`,
-      actor_id: actorId,
-    });
-    if (adjErr) return { ok: false, error: adjErr.message };
-
-    const current = Number((lot as { on_hand_qty: number }).on_hand_qty) || 0;
-    // GW-012: atomic delta — a register sale landing between our read and
-    // this write can no longer be silently overwritten by the count.
-    await applyLotDelta(admin, {
-      lotId: line.lot_id,
-      delta: variance,
-      clamp: true,
-      actorId,
-      autoStatus: false, // counts adjust quantity only, never lifecycle
-      fallbackAbsolute: { onHandQty: current + variance, updatedBy: actorId },
-    });
-
-    await admin.from("cycle_count_lines").update({ applied: true }).eq("id", line.id);
-    applied += 1;
-  }
-
-  await admin
-    .from("cycle_counts")
-    .update({ status: "applied", applied_by: actorId, applied_at: new Date().toISOString() })
-    .eq("id", countId);
-
-  return { ok: true, applied };
+  return {
+    ok: false,
+    error:
+      "CYCLE_COUNT_APPLY_RETIRED: applying a cycle count directly has been turned off, " +
+      "on purpose. It corrected the shelf but never wrote anything to the general ledger, " +
+      "so the value of the missing product stayed on the balance sheet forever and cost of " +
+      "goods sold was understated by the same amount. That is how the old Sage file " +
+      "accumulated a $4,624,697.31 inventory plug that nobody ever decided to make. " +
+      "Nothing has been changed. Use Inventory Auditing instead: the owner approves what " +
+      "to count, staff count it blind, the owner reviews every difference and records why, " +
+      "and only then does the shelf move — with a matching journal entry drafted for the " +
+      "owner to approve. Any counts already recorded here are safe and still readable.",
+  };
 }
 
 /** Cancel an open session (no adjustments posted). */

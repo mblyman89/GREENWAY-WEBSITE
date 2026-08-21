@@ -25,7 +25,8 @@ import {
 } from "@/lib/inventory/cycle-count-sheet-core";
 import {
   recordLineCountAction,
-  applyCycleCountAction,
+  // applyCycleCountAction is deliberately not imported. It refuses now, and an
+  // import kept "just in case" would make restoring the button a one-line change.
   cancelCycleCountAction,
 } from "../actions";
 
@@ -149,11 +150,13 @@ export default async function CycleCountDetailPage({
         action={
           isOpen ? (
             <div className="flex gap-2">
-              <form action={applyCycleCountAction.bind(null, id)}>
-                <Button type="submit" disabled={counted === 0}>
-                  Apply variances
-                </Button>
-              </form>
+              {/* The "Apply variances" button that used to sit here was removed in
+                  slice books-23. It corrected the shelf without writing a journal
+                  entry, so the value of missing product stayed on the balance
+                  sheet and cost of goods sold was understated by the same amount.
+                  Correcting inventory now happens in Inventory Auditing, where the
+                  shelf move and the journal entry are approved together. Cancel
+                  stays: closing a count you are not going to finish is safe. */}
               <form action={cancelCycleCountAction.bind(null, id)}>
                 <Button type="submit" variant="neutral">
                   Cancel
@@ -172,7 +175,8 @@ export default async function CycleCountDetailPage({
       {sp.ok ? (
         <div className="rounded-xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
           {sp.ok === "applied"
-            ? "Variances applied — on-hand corrected and adjustments posted."
+            ? "Counts saved. Nothing has been corrected or posted from this screen — " +
+              "inventory corrections happen in Inventory Auditing."
             : "Count recorded."}
         </div>
       ) : null}
@@ -197,8 +201,9 @@ export default async function CycleCountDetailPage({
           id="cycle-count-blind"
           title="Blind count"
           steps={[
-            "Count the physical quantity of each lot and enter it. The system figure is hidden until you apply.",
-            "Once every lot is counted, click Apply variances to post corrections.",
+            "Count the physical quantity of each lot and enter it. The system figure stays hidden while you count.",
+            "This screen records what you counted. It does not change on-hand and it does not post anything.",
+            "Corrections are made in Inventory Auditing, where the owner reviews every difference first.",
             "Cancelling discards the session without changing on-hand.",
           ]}
         />
@@ -274,8 +279,9 @@ export default async function CycleCountDetailPage({
             </div>
           ) : (
             <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
-              No recount flags — counted lines are within tolerance. Applying posts each non-zero
-              variance as a documented Reconciliation adjustment.
+              No recount flags — counted lines are within tolerance. Nothing posts from this
+              screen; a difference becomes a documented adjustment only when it is approved in
+              Inventory Auditing.
             </p>
           )}
         </section>
@@ -383,12 +389,15 @@ export default async function CycleCountDetailPage({
       </section>
 
       <p className="text-xs text-[var(--admin-text-faint)]">
-        Variance corrections post as <code className="text-[var(--admin-text-muted)]">count</code> inventory adjustments, which export to
-        the{" "}
+        This screen records counts only. A counted difference reaches the{" "}
         <Link href="/admin/reports/compliance" className="text-[var(--admin-accent)] hover:underline">
           CCRS InventoryAdjustment.csv
+        </Link>{" "}
+        when it is approved and posted in{" "}
+        <Link href="/admin/inventory/audits" className="text-[var(--admin-accent)] hover:underline">
+          Inventory Auditing
         </Link>
-        .
+        , which writes the shelf correction and the journal entry together.
       </p>
     </div>
   );
