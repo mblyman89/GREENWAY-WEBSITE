@@ -1043,6 +1043,78 @@
        (rule 59e), and never let "I already looked at that" close a question the
        owner has re-opened with evidence.
 
+### RULE 62: BUILD FOR THE SLICE AFTER NEXT. A FIELD ADDED LATER IS A MIGRATION, A BACKFILL, AND A CONVERSATION ABOUT WHY IT WAS MISSING.
+
+    Michael's instruction, verbatim: "I want to make sure we are building
+    forward thinking so everything downstream from this info page will flow
+    into all the reports and forms. Please begin mindful of this when
+    building."
+
+    a. **ENUMERATE THE CONSUMERS BEFORE DESIGNING THE PRODUCER.** Before a
+       table that feeds forms is designed, list every form it will feed and
+       every field each form needs, from the ACTUAL form or its authoritative
+       instructions -- not from memory of what a form "usually" asks. A company
+       record built for W-2 alone will be reopened by the 941, and again by the
+       5208, and each reopening is a migration Michael has to apply by hand.
+
+    b. **A FIELD THAT ONLY ONE FORM NEEDS IS STILL A FIELD.** The cost of
+       carrying an unused column is near zero. The cost of discovering in
+       December that the establishment name for ESD was never captured is a
+       filing season.
+
+    c. **SHAPE DATA THE WAY THE AUTHORITY SHAPES IT, NOT THE WAY THIS SCREEN
+       SHOWS IT.** If the form wants a 9-digit EIN with no dash, store 9 digits
+       and format on the way out. Storing the display form makes every
+       downstream consumer re-parse it, and one of them will do it wrong.
+
+    d. **NEVER LET A DOWNSTREAM CONSUMER INVENT A DEFAULT FOR MISSING UPSTREAM
+       DATA.** A form builder that substitutes a blank, a zero, or "N/A" for an
+       absent legal name has manufactured a filing. It must REFUSE and name the
+       field, in Michael's language, pointing at the screen that fixes it.
+
+    e. **WRITE DOWN THE INTENDED CONSUMERS IN THE CODE.** Each field records
+       which forms and reports read it. That list is the specification the next
+       slice is held to, and it makes an orphaned field visible.
+
+### RULE 63: ONE PLATFORM, ONE LEDGER. EVERY SUBSYSTEM IS A FEEDER TO THE BOOKS, NOT AN ISLAND.
+
+    Michael's instruction, verbatim: "it is important to remember that the
+    entire pos has been built and that we need to connect the pos to the books
+    properly... The entire platform should be connected end to end so it can
+    track my life in its entirety."
+
+    The feeders, all of which already exist in this repo and none of which may
+    be rebuilt (rule 25): POS sales, time clock, payroll, ACH/NACHA, bank
+    feeds, ATM, loans/mortgages, investments, crypto, vendor payables, excise
+    and inventory.
+
+    a. **A NEW ENGINE MUST NAME ITS UPSTREAM AND ITS DOWNSTREAM BEFORE IT IS
+       WRITTEN.** Payroll's upstream is the TIME CLOCK, not a typed number; its
+       downstream is the GL and the ACH file. An engine that cannot name both
+       ends is being built as an island and will be rebuilt.
+
+    b. **SEARCH FOR THE FEEDER BEFORE BUILDING ONE.** I twice reported that no
+       pay-run engine existed while src/lib/payroll held seventeen modules.
+       Grep for the capability, list what is on disk, and report the inventory
+       BEFORE proposing to build. Under-reporting his own system wastes his
+       money and insults the work already paid for.
+
+    c. **END TO END MEANS AUTOMATIC WITH APPROVAL GATES, NOT AUTOMATIC WITHOUT
+       THEM.** He asked for "simple validation steps for me to approve
+       everything". The pipeline computes and proposes; a human APPROVES; only
+       then does money move or a period close. Auto-posting without an approval
+       step is not the goal, and neither is retyping.
+
+    d. **THE HANDOFF IS WHERE THE DEFECT LIVES.** Hours-to-gross, gross-to-net,
+       net-to-ACH, ACH-to-GL, GL-to-form: every boundary needs a test that the
+       total leaving one stage equals the total entering the next, in integer
+       minor units, with the variance PRINTED and not merely asserted.
+
+    e. **"IT TRACKS MY LIFE" INCLUDES THE PERSONAL SIDE, SO ENTITY TAGGING IS
+       NOT OPTIONAL.** Business and personal share this platform. Every feeder
+       must record which entity a transaction belongs to, or the S-corp return
+       and his personal return cannot both be right.
+
 ## RESEARCH PHASE (Michael's directive — NO BUILDING until this is done)
 - [x] R-1: Update standing rules in todo.md (drift severity + stop-and-talk)
 - [x] R-2: Walk the repo file tree; ACCOUNTING SURFACE INVENTORY written →

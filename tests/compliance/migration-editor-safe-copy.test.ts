@@ -21,7 +21,7 @@
  * it is REGENERATED from the real migration here and compared byte for byte.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
   stripSqlComments,
@@ -184,5 +184,102 @@ describe("the editor-safe copy carries NO transit hazard", () => {
     // and eventually ignored.
     const h = transitHazards("do $x$ begin raise notice 'a; b'; end $x$;\n");
     expect(h.semicolonInString).toBe(0);
+  });
+});
+
+/**
+ * books-31. EVERY editor-safe pair, discovered rather than listed.
+ *
+ * WHY THIS BLOCK EXISTS. Everything above names 0195 in a constant. That was
+ * right when 0195 was the only migration with an editor-safe copy, and it
+ * became wrong the moment 0196 shipped with one: a hardcoded suite passes
+ * cheerfully while a brand-new copy drifts, which is precisely the silent
+ * failure the file's own header says it exists to prevent.
+ *
+ * So this walks the editor-safe DIRECTORY instead. Adding a copy automatically
+ * puts it under test; forgetting to regenerate one fails here by name. Nothing
+ * has to be remembered.
+ *
+ * Standing rule 25: this EXTENDS the suite rather than starting a second file
+ * that would slowly disagree with this one.
+ */
+describe("every editor-safe copy in the directory, discovered not listed", () => {
+  const EDITOR_SAFE_DIR = path.join(MIGRATIONS, "editor-safe");
+  const SUFFIX = ".EDITOR_SAFE.sql";
+
+  /** Each copy paired with the migration it claims to be a copy OF. */
+  function pairs(): Array<{ copy: string; source: string; base: string }> {
+    return readdirSync(EDITOR_SAFE_DIR)
+      .filter((f) => f.endsWith(SUFFIX))
+      .sort()
+      .map((f) => {
+        const base = f.slice(0, -SUFFIX.length);
+        return {
+          base,
+          copy: path.join(EDITOR_SAFE_DIR, f),
+          source: path.join(MIGRATIONS, `${base}.sql`),
+        };
+      });
+  }
+
+  it("finds at least the two pairs known to exist (rule 39: no vacuous pass)", () => {
+    // A directory walk that finds nothing would make every test below pass
+    // without asserting anything. Measured at the time of writing: 0195 and
+    // 0196. The floor is 2, not 1, because 1 would still pass if 0196's copy
+    // were deleted.
+    const found = pairs().map((p) => p.base);
+    expect(found.length).toBeGreaterThanOrEqual(2);
+    expect(found).toContain("0195_employee_payroll_setup");
+    expect(found).toContain("0196_company_profile");
+  });
+
+  it("every copy has a real migration behind it", () => {
+    for (const p of pairs()) {
+      expect(existsSync(p.source), `${p.base}: no migration at ${p.source}`).toBe(true);
+    }
+  });
+
+  it("every copy is EXACTLY what stripping its source produces", () => {
+    for (const p of pairs()) {
+      const regenerated = stripSqlComments(readFileSync(p.source, "utf8"));
+      const onDisk = readFileSync(p.copy, "utf8");
+      expect(
+        onDisk,
+        `${p.base}: the editor-safe copy has drifted from the migration. ` +
+          `Regenerate it - Michael pastes this file by hand and stale SQL is a silent failure.`,
+      ).toBe(regenerated);
+    }
+  });
+
+  it("every copy has ZERO of all six transit hazards", () => {
+    for (const p of pairs()) {
+      const h = transitHazards(readFileSync(p.copy, "utf8"));
+      expect(h.commentLines, `${p.base}: commentLines`).toBe(0);
+      expect(h.oddApostrophe, `${p.base}: oddApostrophe`).toBe(0);
+      expect(h.withSemicolon, `${p.base}: withSemicolon`).toBe(0);
+      // The three that the first 0195 fix missed entirely, and that cost
+      // Michael two failed attempts in the Supabase editor.
+      expect(h.bareRelationWord, `${p.base}: bareRelationWord`).toBe(0);
+      expect(h.nonAscii, `${p.base}: nonAscii`).toBe(0);
+      expect(h.semicolonInString, `${p.base}: semicolonInString`).toBe(0);
+    }
+  });
+
+  it("every copy is substantial, so none is an empty placeholder", () => {
+    for (const p of pairs()) {
+      expect(readFileSync(p.copy, "utf8").length, `${p.base} is suspiciously small`).toBeGreaterThan(
+        2_000,
+      );
+    }
+  });
+
+  it("every SOURCE really does carry hazards, or its copy is pointless", () => {
+    // The other half of rule 39. If a migration had no risky comments, its
+    // editor-safe copy would be identical to it and the assertions above would
+    // hold trivially.
+    for (const p of pairs()) {
+      const before = transitHazards(readFileSync(p.source, "utf8"));
+      expect(before.commentLines, `${p.base}: source has no comments to strip`).toBeGreaterThan(50);
+    }
   });
 });

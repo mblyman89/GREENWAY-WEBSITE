@@ -66,6 +66,30 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
     file: (m) => ["federal", `irs-pub-${m[1]}${(m[2] ?? "").toLowerCase()}-${m[3]}.txt`],
   },
+  // books-31. THE FORM INSTRUCTIONS, which are a different document from the
+  // Publication and say different things. Pub. 15 tells an employer what an EIN
+  // IS; the Instructions for Form 941 tell it which BOX the EIN goes in and what
+  // happens when the box is wrong. The company-information screen is built
+  // entirely out of the second kind of statement, so the second kind of document
+  // had to be mirrored.
+  //
+  // TWO SHAPES, ONE RULE, because the IRS itself uses two. Annual forms carry a
+  // tax year on the cover ("2026 General Instructions for Forms W-2 and W-3",
+  // "2025 Instructions for Form 940"); quarterly ones carry a revision date
+  // ("Instructions for Form 941 (Rev. March 2026)"). Both are reduced to a
+  // single YEAR in the filename, and the citation must state it.
+  //
+  // THE YEAR IS LOAD-BEARING AND IT IS NOT ALWAYS THE CURRENT ONE. At the time
+  // this shipped, W-2/W-3 and 941 were on their 2026 editions but Form 940 had
+  // only its 2025 edition published - 940 is annual and revised late in the
+  // year. Citing "IRS Instructions for Form 940 (2026)" would resolve to a file
+  // that does not exist and fail loudly, which is the correct outcome and the
+  // reason the year is not defaulted.
+  {
+    name: "IRS Form Instructions",
+    re: /^IRS Instructions for Forms? ([\w-]+(?: and [\w-]+)?) \((\d{4})\)/,
+    file: (m) => ["federal", `irs-instructions-${m[1].replace(/ and /g, "-").toLowerCase()}-${m[2]}.txt`],
+  },
   // books-28. COSO's own free Executive Summary. ONE mirrored file, so the
   // section pinpoint in the citation is deliberately discarded - it locates the
   // passage for a human reader, not the file for this script.
@@ -311,6 +335,39 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   if (pub) {
     const suffix = (pub[2] ?? "").toLowerCase();
     const p = join(dir, "federal", `irs-pub-${pub[1]}${suffix}-${pub[3]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // IRS Instructions for Form 941 (2026), 'Employer identification number (EIN)'
+  //   ->  federal/irs-instructions-941-2026.txt
+  // IRS Instructions for Forms W-2 and W-3 (2026), 'Box b - Employer ...'
+  //   ->  federal/irs-instructions-w-2-w-3-2026.txt
+  //
+  // books-31. The company-information slice cites the FORM INSTRUCTIONS rather
+  // than the Publications, because the question that screen answers - "what
+  // exactly goes in this box, and what breaks if it is wrong" - is only
+  // answered there. Pub. 15 says an EIN is nine digits; the Instructions for
+  // Form 941 say the return will be REJECTED if the EIN does not match, which
+  // is the sentence that justifies making the field required.
+  //
+  // "Forms W-2 and W-3" collapses to "w-2-w-3": the substitution replaces the
+  // word " and " WITH A HYPHEN, so the conjunction disappears rather than being
+  // spelled out. The filename is derived mechanically from the citation, so
+  // there is no second place to keep in sync and no chance of a citation that
+  // reads correctly but resolves to nothing.
+  //
+  // I GOT THIS WRONG IN THE FIRST DRAFT AND THE GATE CAUGHT ME. The comment
+  // here originally asserted the result was "w-2-and-w-3", the mirrored file was
+  // named to match the comment, and six W-2/W-3 quotes failed with "no file was
+  // found at ./docs/authorities/federal/irs-instructions-w-2-w-3-2026.txt".
+  // Recorded rather than quietly corrected, because it is a clean demonstration
+  // of standing rule 48 earning its keep: the check could not classify its
+  // input, so it FAILED instead of skipping. Had it skipped, six quotes would
+  // have shipped unverified behind a green line.
+  const formIns = /^IRS Instructions for Forms? ([\w-]+(?: and [\w-]+)?) \((\d{4})\)/.exec(cite);
+  if (formIns) {
+    const slug = formIns[1].replace(/ and /g, "-").toLowerCase();
+    const p = join(dir, "federal", `irs-instructions-${slug}-${formIns[2]}.txt`);
     return existsSync(p) ? p : null;
   }
 

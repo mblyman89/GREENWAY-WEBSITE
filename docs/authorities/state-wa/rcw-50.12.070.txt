@@ -1,0 +1,105 @@
+SOURCE TEXT - RCW 50.12.070
+Retrieved 2026-08-22 from https://app.leg.wa.gov/RCW/default.aspx?cite=50.12.070
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+
+RCW 50.12.070
+
+Employing unit records, reports, and registration—Unified business identifier account number records—Penalty for failure to keep records.
+
+(1)(a) Each employing unit shall keep true and accurate work records, containing such information as the commissioner may prescribe. Such records shall be open to inspection and be subject to being copied by the commissioner or his or her authorized representatives at any reasonable time and as often as may be necessary. The commissioner may require from any employing unit any sworn or unsworn reports with respect to persons employed by it, which he or she deems necessary for the effective administration of this title.
+
+(b) An employer who contracts with another person or entity for work subject to chapter 18.27 or 19.28 RCW shall obtain and preserve a record of the unified business identifier account number for and compensation paid to the person or entity performing the work. In addition to the penalty in subsection (3) of this section, failure to obtain or maintain the record is subject to RCW 39.06.010.
+
+(2)(a)(i) Each employer shall register with the department and obtain an employment security account number. Each employer shall make periodic reports at such intervals as the commissioner may by regulation prescribe, setting forth the remuneration paid for employment to workers in its employ, the full names and social security numbers of all such workers, the standard occupational classification or job title of each worker, and the total hours worked by each worker and such other information as the commissioner may by regulation prescribe. Reporting the standard occupational classification or job title of each worker is optional for employers until October 1, 2022.
+
+(ii) A federally recognized tribe may elect to report the standard occupational classifications or job titles of workers. If a federally recognized tribe elects to report standard occupational classifications or job titles, it retains the option to opt out of reporting at any time for any reason it deems necessary. The department shall adopt rules to implement this subsection (2)(a)(ii).
+
+(b) If the employing unit fails or has failed to report the number of hours in a reporting period for which a worker worked, such number will be computed by the commissioner and given the same force and effect as if it had been reported by the employing unit. In computing the number of such hours worked, the total wages for the reporting period, as reported by the employing unit, shall be divided by the dollar amount of the state's minimum wage in effect for such reporting period and the quotient, disregarding any remainder, shall be credited to the worker: PROVIDED, That although the computation so made will not be subject to appeal by the employing unit, monetary entitlement may be redetermined upon request if the department is provided with credible evidence of the actual hours worked. Benefits paid using computed hours are not considered an overpayment and are not subject to collections when the correction of computed hours results in an invalid or reduced claim; however:
+
+(i) A contribution paying employer who fails to report the number of hours worked will have its experience rating account charged for all benefits paid that are based on hours computed under this subsection; and
+
+(ii) An employer who reimburses the trust fund for benefits paid to workers and fails to report the number of hours worked shall reimburse the trust fund for all benefits paid that are based on hours computed under this subsection.
+
+(3) Any employer who fails to keep and preserve records required by this section shall be subject to a penalty determined by the commissioner but not to exceed two hundred fifty dollars or two hundred percent of the quarterly tax for each offense, whichever is greater.
+
+[ 2023 c 256 s 1; 2020 c 334 s 2; 2013 c 250 s 1; 2009 c 432 s 11; 2008 c 120 s 7; 2007 c 146 s 1; 1997 c 54 s 2; 1983 1st ex.s. c 23 s 8; 1977 ex.s. c 33 s 3; 1975 1st ex.s. c 228 s 2; 1945 c 35 s 46; Rem. Supp. 1945 s 9998-184. Prior: 1943 c 127 s 8; 1939 c 214 s 9; 1937 c 162 s 11.]
+
+Notes:
+
+Findings—Intent—2020 c 334: "(1) The legislature finds that:
+
+(a) Information collected by the employment security department from employers for the purposes of unemployment insurance requirements includes certain information, such as the employee's wages and hours worked. However, the information does not provide sufficient detail to allow for identification of the occupation of an employee; and
+
+(b) Accurate occupational employment data would be useful in a number of ways. Job seekers use occupational employment and wage data for career planning and to assess occupational-based job opportunities within various industries and geographic areas in the state. Economists and researchers also rely on occupational employment and wage statistics to determine the composition of employment and the scope of business investment in their communities. Economic development professionals utilize employment data to identify the occupational assets of the state's labor markets to assist them in their efforts to attract businesses to their communities. Occupational and wage data are utilized for program planning, evaluating the effectiveness of training programs, and guiding students on their career pathways.
+
+(2) The legislature further finds that:
+
+(a) Without occupational data, the state is limited in its ability to successfully evaluate the effectiveness of job training programs;
+
+(b) Other states recognize the importance of gathering this data and have begun to require employers to identify each employee's occupation; and
+
+(c) Washington's future of work task force recommended adding an "occupation" field to the quarterly employer reporting forms collected by the employment security department to allow for more accurate occupational trend analyses, and more effective evaluation of education and training programs and whether or not they lead to particular occupations.
+
+(3) Therefore, the legislature intends to require that employers include standard occupational classifications or job titles of workers in their quarterly unemployment insurance reports." [ 2020 c 334 s 1.]
+
+Effective date—2020 c 334: "This act takes effect October 1, 2021." [ 2020 c 334 s 5.]
+
+Conflict with federal requirements—2013 c 250: "If any part of this act is found to be in conflict with federal requirements that are a prescribed condition to the allocation of federal funds to the state or the eligibility of employers in this state for federal unemployment tax credits, the conflicting part of this act is inoperative solely to the extent of the conflict, and the finding or determination does not affect the operation of the remainder of this act. Rules adopted under this act must meet federal requirements that are a necessary condition to the receipt of federal funds by the state or the granting of federal unemployment tax credits to employers in this state." [ 2013 c 250 s 5.]
+
+Effective date—2013 c 250: "This act takes effect December 29, 2013." [ 2013 c 250 s 7.]
+
+Effective date—2009 c 432 s 11: "Section 11 of this act takes effect October 1, 2009." [ 2009 c 432 s 14.]
+
+Report—2009 c 432: See RCW 18.27.800.
+
+Conflict with federal requirements—Severability—2008 c 120: See notes following RCW 18.27.030.
+
+Conflict with federal requirements—Severability—2007 c 146: See notes following RCW 50.04.080.
+
+Conflict with federal requirements—Effective dates—Construction—1983 1st ex.s. c 23: See notes following RCW 50.04.073.
+
+Effective dates—Construction—1977 ex.s. c 33: See notes following RCW 50.04.030.
+
+Effective date—1975 1st ex.s. c 228: See note following RCW 50.04.355.
+
+Legislative questions or comments
+
+Call the Legislative Hotline
+
+1-800-562-6000
+
+TTY for deaf/hard of hearing: 1-800-833-6388
+
+Learn more about the Legislative Hotline
+
+Studies, audits, and reports
+
+Performance audits
+
+Actuarial reporting
+
+Transportation studies and reports
+
+Reports from outside organizations
+
+Investigation reports
+
+Accessibility
+
+Jobs
+
+Public records requests
+
+Site help
+
+Contact us
+
+Email updates (GovDelivery)
+
+Disclaimer
+
+Privacy Notice
+
+Copyright 2025. All Rights Reserved.
