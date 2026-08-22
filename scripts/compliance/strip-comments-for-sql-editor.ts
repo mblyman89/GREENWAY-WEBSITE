@@ -132,18 +132,104 @@ function tidy(text: string): string {
     .replace(/\n{3,}/g, "\n\n");
 }
 
-/** The hazards that make a file manglable by a statement-splitting client. */
+/**
+ * The hazards that make a file manglable by a statement-splitting client.
+ *
+ * WHY THE LAST THREE EXIST, AND WHY THEY ARE NOT PARANOIA. Michael ran the
+ * COMMENT-FREE copy of 0195 in the Supabase SQL editor and got the SAME
+ * `42P01: relation "a" does not exist`. Stripping comments therefore did not
+ * remove every hazard, so "no comments" was never the right finish line.
+ *
+ * Applied to a real PostgreSQL 15 behind a real 0001-0194 pre-state, the file
+ * applies with exit 0 on a FIRST application. The SQL is valid. So whatever
+ * mangles it does so IN TRANSIT, and the only defence available to us is to
+ * leave nothing in the file that a mangled read can turn into a valid-looking
+ * bare identifier.
+ *
+ * - `bareRelationWord` counts prose inside STRING LITERALS that reads as
+ *   `<relation-keyword> <single-letter-word>` - e.g. the phrase "select this
+ *   into a list view". If a client loses quote tracking anywhere before it,
+ *   `into a list view` parses as a reference to a relation named `a`. That is
+ *   character-for-character Michael's error, and in 0195 there was EXACTLY ONE
+ *   such site in the whole file.
+ * - `nonAscii` counts characters above U+007F. An em dash that survives one
+ *   encoding hop and not the next can terminate a literal early, which is the
+ *   cheapest way to lose quote tracking in the first place.
+ * - `semicolonInString` counts `;` inside string literals. A splitter that
+ *   ignores quotes cuts there, and every following fragment is garbage.
+ */
 export function transitHazards(sql: string): {
   commentLines: number;
   oddApostrophe: number;
   withSemicolon: number;
+  bareRelationWord: number;
+  nonAscii: number;
+  semicolonInString: number;
 } {
   const lines = sql.split("\n");
   const comments = lines.filter((l) => l.trimStart().startsWith("--"));
+
+  // Walk the text tracking single-quoted strings and dollar-quoted bodies, so
+  // "inside a literal" is decided by the lexer and not by a regex guess.
+  let i = 0;
+  const n = sql.length;
+  let inString = false;
+  let dollarTag: string | null = null;
+  let semicolonInString = 0;
+  let literalText = "";
+
+  while (i < n) {
+    const c = sql[i];
+    if (dollarTag !== null) {
+      if (sql.startsWith(dollarTag, i)) {
+        i += dollarTag.length;
+        dollarTag = null;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+    if (inString) {
+      if (c === "'") {
+        if (sql[i + 1] === "'") {
+          literalText += "''";
+          i += 2;
+          continue;
+        }
+        inString = false;
+        literalText += "\n";
+        i += 1;
+        continue;
+      }
+      if (c === ";") semicolonInString += 1;
+      literalText += c;
+      i += 1;
+      continue;
+    }
+    if (c === "'") {
+      inString = true;
+      i += 1;
+      continue;
+    }
+    const tagMatch = DOLLAR_TAG.exec(sql.slice(i));
+    if (tagMatch) {
+      dollarTag = tagMatch[0];
+      i += dollarTag.length;
+      continue;
+    }
+    i += 1;
+  }
+
+  const bare = literalText.match(/\b(?:from|into|join|update|table)\s+[a-z]\b/gi) ?? [];
+  const wide = sql.match(/[^\u0000-\u007F]/g) ?? [];
+
   return {
     commentLines: comments.length,
     oddApostrophe: comments.filter((l) => (l.match(/'/g) ?? []).length % 2 === 1).length,
     withSemicolon: comments.filter((l) => l.includes(";")).length,
+    bareRelationWord: bare.length,
+    nonAscii: wide.length,
+    semicolonInString,
   };
 }
 
