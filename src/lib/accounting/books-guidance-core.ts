@@ -90,6 +90,7 @@ import { INTERNAL_CONTROL_AUTHORITIES } from "./internal-control-authorities";
 import { TIMESHEET_AUTHORITIES, type TimesheetAuthority } from "@/lib/payroll/timesheet-authorities";
 import { SICK_LEAVE_AUTHORITIES, type SickLeaveAuthority } from "@/lib/payroll/sick-leave-authorities";
 import { GARNISHMENT_AUTHORITIES, type GarnishmentAuthority } from "@/lib/payroll/garnishment-authorities";
+import { YTD_AUTHORITIES, type YtdAuthority } from "@/lib/payroll/ytd-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -535,6 +536,22 @@ function fromSickLeave(a: SickLeaveAuthority): GuidanceAuthority {
 function fromGarnishment(a: GarnishmentAuthority): GuidanceAuthority {
   return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
+
+/**
+ * books-34. Year-to-date accumulation. Same adapter, same reason.
+ *
+ * `YtdAuthority["kind"]` is the NARROWEST union in this file: the single member
+ * `"irs_guidance"`. That is deliberate and it is not laziness. Every sentence
+ * behind the accumulator table comes from the IRS General Instructions for
+ * Forms W-2 and W-3 - a publication, which is persuasive and official but is
+ * NOT law and cannot be relied on as authority against the IRS. Widening that
+ * union later would force whoever does it to look at this conversion and think
+ * about the weight badge the screen will render, which is exactly the moment
+ * the thinking needs to happen.
+ */
+function fromYtd(a: YtdAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
 /**
  * GateAuthority carries no `kind` field at all, so one has to be derived. It
  * is derived FROM THE CITATION ITSELF rather than hand-assigned, because a
@@ -635,6 +652,14 @@ export const ALL_SOURCE_REGISTRIES = [
   // disposable earnings, and capped by rules (15 U.S.C. 1673, RCW 6.27.150)
   // that no tax authority in this codebase has anything to say about.
   "garnishment",
+  // books-34. Year-to-date accumulation. Its own tag rather than folded into
+  // "payroll-tax" because these authorities answer a question no per-period
+  // tax rule can answer: what has ALREADY been paid this calendar year. The
+  // wage base, the Additional Medicare threshold and every SSA rejection rule
+  // are ANNUAL tests, and a pay run that only knows about itself cannot see
+  // them. Tagging them separately keeps the distinction on screen between
+  // "this is the rate" and "this is the running total the rate stops at".
+  "ytd",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -692,6 +717,18 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...GARNISHMENT_AUTHORITIES.map((a) => ({
       tag: "garnishment" as const,
       authority: fromGarnishment(a),
+    })),
+    // books-34. The year-to-date authorities: the $184,500 social security
+    // ceiling, Medicare's deliberate ABSENCE of one, the $200,000 Additional
+    // Medicare threshold that the employer does not match, the SSA's own
+    // rejection conditions (which are the CHECK constraints on the accumulator
+    // table, written by SSA rather than invented here), and the IRS's worked
+    // example that serves as the engine's test oracle. Merged here so the pay
+    // run, the stub and the W-2 builder all cite one record when they explain
+    // why social security withholding stopped mid-year.
+    ...YTD_AUTHORITIES.map((a) => ({
+      tag: "ytd" as const,
+      authority: fromYtd(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation
