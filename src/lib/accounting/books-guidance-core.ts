@@ -92,6 +92,10 @@ import { SICK_LEAVE_AUTHORITIES, type SickLeaveAuthority } from "@/lib/payroll/s
 import { GARNISHMENT_AUTHORITIES, type GarnishmentAuthority } from "@/lib/payroll/garnishment-authorities";
 import { YTD_AUTHORITIES, type YtdAuthority } from "@/lib/payroll/ytd-authorities";
 import { NET_PAY_AUTHORITIES, type NetPayAuthority } from "@/lib/payroll/net-pay-authorities";
+import {
+  WAGE_ORDER_ENTRY_AUTHORITIES,
+  type WageOrderEntryAuthority,
+} from "@/lib/payroll/wage-order-entry-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -579,6 +583,25 @@ function fromNetPay(a: NetPayAuthority): GuidanceAuthority {
 }
 
 /**
+ * books-38. Wage order ENTRY - the duties that attach to receiving the paper,
+ * as distinct from the arithmetic of applying it.
+ *
+ * `WageOrderEntryAuthority["kind"]` is the two-member union
+ * `"statute" | "state_law"`, and that narrowness is meaningful rather than
+ * incidental: every sentence in that registry is primary law. There is no
+ * agency guidance in it, no publication, no fact sheet. That is because the
+ * questions it answers - how long do I have, what happens if I ignore this,
+ * when do I stop, what may I not do to the employee - are all answered by
+ * statutes that carry their own penalties, and none of them is a matter of
+ * interpretation on which an agency's view would add anything. If a future
+ * slice widens this union, the weight badge on the screen changes meaning and
+ * whoever widens it should be made to look at this comment first.
+ */
+function fromWageOrderEntry(a: WageOrderEntryAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
+
+/**
  * books-34. Year-to-date accumulation. Same adapter, same reason.
  *
  * `YtdAuthority["kind"]` is the NARROWEST union in this file: the single member
@@ -712,6 +735,18 @@ export const ALL_SOURCE_REGISTRIES = [
   // these separately keeps the sequence visible as its own subject, because the
   // sequence is the part people get wrong.
   "net-pay",
+  // books-38. Wage order ENTRY. Deliberately NOT folded into "garnishment",
+  // because the garnishment tag answers "how much comes out" and every
+  // sentence under this one answers a question the arithmetic cannot reach:
+  // how many days do I have to answer, what happens to Greenway if I ignore
+  // the envelope, when does a creditor lien EXPIRE (sixty days - support
+  // orders never do), which order wins when two land on the same person, and
+  // what may I never do to an employee whose wages are attached. The
+  // penalties here are asymmetric in a way the ceilings are not: ignoring a
+  // writ can produce a default judgment against Greenway for somebody else's
+  // entire debt, while over-withholding produces a wage claim. Keeping the
+  // duties visible as their own subject is the point.
+  "wage-order-entry",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -795,6 +830,20 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...NET_PAY_AUTHORITIES.map((a) => ({
       tag: "net-pay" as const,
       authority: fromNetPay(a),
+    })),
+    // books-38. The wage-order ENTRY authorities: the twenty-day sworn-affidavit
+    // answer duty, the five-working-day remittance clock, the two ways an
+    // employer becomes liable for an employee's debt (100% of the support debt
+    // under RCW 26.18.110(6), or a default judgment for the FULL creditor claim
+    // under RCW 6.27.200 - and failing merely to ANSWER triggers both), the
+    // sixty-day expiry that makes a creditor lien different in kind from a
+    // support order, the statutory priority that makes arrival order
+    // irrelevant, the capped processing fee, and the two anti-retaliation
+    // provisions - one of which carries a prison term. Merged here for the
+    // standing reason: a citation must mean the same thing on every screen.
+    ...WAGE_ORDER_ENTRY_AUTHORITIES.map((a) => ({
+      tag: "wage-order-entry" as const,
+      authority: fromWageOrderEntry(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation

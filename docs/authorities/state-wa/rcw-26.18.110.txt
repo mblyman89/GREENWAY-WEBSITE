@@ -1,0 +1,43 @@
+SOURCE TEXT - RCW 26.18.110
+Retrieved 2026-08-22 from https://app.leg.wa.gov/RCW/default.aspx?cite=26.18.110
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+
+RCW 26.18.110
+Wage assignment order or income withholding order-Employer's answer, duties,
+and liability-Priorities.
+
+(1) An employer upon whom service of a wage assignment order or income withholding order has been made shall answer the order by sworn affidavit within twenty days after the date of service. The answer shall state whether the obligor is employed by or receives earnings or other remuneration from the employer, whether the employer will honor the wage assignment order or income withholding order, and whether there are either multiple child support or maintenance attachments, or both, against the obligor.
+
+(2) If the employer possesses any earnings or remuneration due and owing to the obligor, the earnings subject to the wage assignment order or income withholding order shall be withheld immediately upon receipt of the wage assignment order or income withholding order. The withheld earnings shall be delivered to the Washington state support registry or, if the wage assignment order is to satisfy a duty of maintenance, to the addressee specified in the assignment within five working days of each regular pay interval.
+
+(3) The employer shall continue to withhold the ordered amounts from nonexempt earnings or remuneration of the obligor until notified by:
+
+(a) The court that the wage assignment has been modified or terminated; or
+
+(b) In the case of an income withholding order, the Washington state support registry that the accrued child support or maintenance debt has been paid. The employer shall promptly notify the addressee specified in the assignment when the employee is no longer employed. If the employer no longer employs the employee, the wage assignment order shall remain in effect for one year after the employee has left the employment or the employer has been in possession of any earnings or remuneration owed to the employee, whichever is later. The employer shall continue to hold the wage assignment order during that period. If the employee returns to the employer's employment during the one-year period the employer shall immediately begin to withhold the employee's earnings or remuneration according to the terms of the wage assignment order. If the employee has not returned within one year, the wage assignment shall cease to have effect at the expiration of the one-year period, unless the employer continues to owe remuneration for employment to the obligor.
+
+(4) The employer may deduct a processing fee from the remainder of the employee's earnings after withholding under the wage assignment order or income withholding order, even if the remainder is exempt under RCW 26.18.090. The processing fee may not exceed (a) ten dollars for the first disbursement made by the employer to the Washington state support registry; and (b) one dollar for each subsequent disbursement to the clerk.
+
+(5) An income withholding order for support for a dependent child entered under this chapter shall have priority over any other wage assignment or garnishment, except for another wage assignment or garnishment for child support, or order to withhold and deliver under chapter 74.20A RCW. An order for wage assignment for spousal maintenance entered under this chapter shall have priority over any other wage assignment or garnishment, except for a wage assignment, garnishment, or order to withhold and deliver under chapter 74.20A RCW for support of a dependent child, and except for another wage assignment or garnishment for maintenance.
+
+(6) An employer who fails to withhold earnings as required by a wage assignment order or income withholding order issued under this chapter may be held liable to the obligee for one hundred percent of the support or maintenance debt, or the amount of support or maintenance moneys that should have been withheld from the employee's earnings whichever is the lesser amount, if the employer:
+
+(a) Fails or refuses, after being served with a wage assignment order or income withholding order, to deduct and promptly remit from the unpaid earnings the amounts of money required in the order;
+
+(b) Fails or refuses to submit an answer to the notice of wage assignment or income withholding after being served; or
+
+(c) Is unwilling to comply with the other requirements of this section.
+
+Liability may be established in superior court. Awards in superior court shall include costs, interest under RCW 19.52.020 and 4.56.110, and reasonable attorneys' fees.
+
+(7) No employer who complies with a wage assignment order or income withholding order issued under this chapter may be liable to the employee for wrongful withholding.
+
+(8) No employer may discharge, discipline, or refuse to hire an employee because of the entry or service of a wage assignment or income withholding order issued and executed under this chapter. If an employer discharges, disciplines, or refuses to hire an employee in violation of this section, the employee or person shall have a cause of action against the employer. The employer shall be liable for double the amount of damages suffered as a result of the violation and for costs and reasonable attorneys' fees, and shall be subject to a civil penalty of not more than two thousand five hundred dollars for each violation. The employer may also be ordered to hire, rehire, or reinstate the aggrieved individual.
+
+(9) For wage assignments or income withholding payable to the Washington state support registry, an employer may combine amounts withheld from various employees into a single payment to the Washington state support registry, if the payment includes a listing of the amounts attributable to each employee and other information as required by the registry.
+
+(10) An employer shall deliver a copy of the wage assignment order or income withholding order to the obligor as soon as is reasonably possible.
+
+[ 2021 c 35 s 9; 2008 c 6 s 1034; 1998 c 77 s 2; 1994 c 230 s 5; 1993 c 426 s 9; 1991 c 367 s 21; 1989 c 416 s 11; 1987 c 435 s 21; 1984 c 260 s 11.]
