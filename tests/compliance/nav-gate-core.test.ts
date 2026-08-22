@@ -319,11 +319,29 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the eleven books screens plus Inventory Auditing", () => {
-    // books-31 added Company Information; books-32 added Timesheets & Overtime.
-    // This assertion is an exact list on purpose: it fails when a screen is
-    // added AND when one silently vanishes, and it caught both new entries the
-    // moment the nav registry changed.
+  it("Accounting holds the twelve books screens plus Inventory Auditing", () => {
+    /*
+     * books-31 added Company Information; books-32 added Timesheets & Overtime;
+     * books-35 added Sick Leave Approvals. This assertion is an exact list on
+     * purpose: it fails when a screen is added AND when one silently vanishes,
+     * and it has now caught all three the moment the nav registry changed.
+     *
+     * BOOKS-35 NOTE - WHY THIS LIST WAS EXTENDED RATHER THAN LOOSENED.
+     *
+     * The obvious "fix" when this went red was to relax the assertion to a
+     * `toContain`, which would never fail again for any reason. That would have
+     * destroyed the half of this gate that matters most: the half that notices a
+     * screen DISAPPEARING. A vanished accounting screen produces no error
+     * anywhere - the page still exists and still works, it is simply unreachable
+     * - which is standing rule 50 exactly. So the list grew by one line, and the
+     * count in the test's own title grew with it, because a title that says
+     * "eleven" above a list of twelve is the next reader's wrong assumption.
+     *
+     * /admin/books/leave is Michael's "option 1": a sick-leave request must be
+     * APPROVED before it can appear on a timesheet. It sits in Accounting rather
+     * than Staffing because approving it moves a balance, creates a wage payable
+     * and ends up in box 1 of a W-2. Its gate is tests/compliance/leave-inbox-screen.test.ts.
+     */
     const hrefs = adminNav
       .filter((i) => i.group === ACCOUNTING_GROUP)
       .map((i) => i.href)
@@ -336,6 +354,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/bills",
         "/admin/books/conversion",
         "/admin/books/journal",
+        "/admin/books/leave",
         "/admin/books/ledger",
         "/admin/books/payroll",
         "/admin/books/payroll-setup",
