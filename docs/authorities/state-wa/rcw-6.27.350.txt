@@ -1,0 +1,21 @@
+SOURCE TEXT - RCW 6.27.350
+Retrieved 2026-08-22 from https://app.leg.wa.gov/RCW/default.aspx?cite=6.27.350
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+
+RCW 6.27.350
+Continuing lien on earnings-When lien becomes effective-Termination-Second
+answer.
+
+(1) Where the garnishee's answer to a garnishment for a continuing lien reflects that the defendant is employed by the garnishee, the judgment or balance due thereon as reflected on the writ of garnishment shall become a lien on earnings due at the time of the effective date of the writ, as defined in this subsection, to the extent that they are not exempt from garnishment, and such lien shall continue as to subsequent nonexempt earnings until the total subject to the lien equals the amount stated on the writ of garnishment or until the expiration of the employer's payroll period ending on or before sixty days after the effective date of the writ, whichever occurs first, except that such lien on subsequent earnings shall terminate sooner if the employment relationship is terminated or if the underlying judgment is vacated, modified, or satisfied in full or if the writ is dismissed. The "effective date" of a writ is the date of service of the writ if there is no previously served writ; otherwise, it is the date of termination of a previously served writ or writs.
+
+(2) At the time of the expected termination of the lien, the plaintiff shall mail to the garnishee one copy of the answer form prescribed in RCW 6.27.340. The plaintiff shall replace the text of section I of the answer form with a statement in substantially the following form: "ANSWER SECTION II OF THIS FORM WITH RESPECT TO THE TOTAL AMOUNT OF EARNINGS WITHHELD UNDER THIS GARNISHMENT, INCLUDING THE AMOUNT, IF ANY, STATED IN YOUR FIRST ANSWER, AND WITHIN TWENTY DAYS AFTER YOU RECEIVE THESE FORMS, MAIL OR DELIVER THEM AS DIRECTED IN THE WRIT."
+
+Nonexempt amount due and owing stated in first answer $ . . .
+Nonexempt amount accrued since first answer $ . . .
+TOTAL AMOUNT WITHHELD $. . . .
+
+(3) Within twenty days of receipt of the second answer form the garnishee shall file a second answer, either in the form as provided in subsection (2) of this section, stating the total amount held subject to the garnishment, or otherwise containing the information required in subsection (2) of this section and a calculation indicating the total amount due and owing from the garnishee defendant to the defendant, the defendant's total earnings, allowable deductions, disposable earnings, exempt earnings, deductions for superior liens such as child support, and net earnings withheld under the writ.
+
+[ 2012 c 159 s 14; 2003 c 222 s 14; 1997 c 296 s 7; 1988 c 231 s 35; 1987 c 442 s 1034; 1970 ex.s. c 61 s 7. Formerly RCW 7.33.370.]
