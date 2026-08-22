@@ -86,7 +86,7 @@ describe("the migration list is ordered the way the database will see it", () =>
     // one-element list, "it is sorted" would be true and meaningless.
     const listed = migrationFilesInOrder(MIGRATIONS_DIR);
     expect(listed[0]).toMatch(/^0001_/);
-    // books-33 made 0198 the last file. Asserted as the CURRENT highest rather
+    // books-34 made 0199 the last file. Asserted as the CURRENT highest rather
     // than a moving target, because the point of this test is that the list
     // really is sorted numerically and really does end where the directory
     // ends - a vacuous version of it would prove nothing about the ordering.
@@ -100,7 +100,14 @@ describe("the migration list is ordered the way the database will see it", () =>
     // the directory at that point: 198 files, every one zero-padded to four
     // digits, `ls | sort -c` clean, so the string sort this module relies on is
     // still identical to a numeric sort. Only then was the number advanced.
-    expect(listed[listed.length - 1]).toMatch(/^0198_/);
+    //
+    // IT FIRED AGAIN ON 0199 (books-34, the year-to-date accumulators) AND WAS
+    // HONOURED THE SAME WAY. Re-verified before touching this line: 199 files,
+    // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0 so every name is still
+    // zero-padded to four digits, and `ls [0-9]*.sql | sort -c` exits clean so
+    // the on-disk order and the string sort still agree. Only then was 0198
+    // changed to 0199.
+    expect(listed[listed.length - 1]).toMatch(/^0199_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
