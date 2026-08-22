@@ -62,6 +62,27 @@ The AICPA file carries its own:
 > any part of this work, please email copyright-permissions@aicpa-cima.com with
 > your request.
 
+The COSO Executive Summary carries its own, and it is the strictest of the
+three. Quoted verbatim from page 2 of the PDF:
+
+> ©2013 All Rights Reserved. No part of this publication may be reproduced,
+> redistributed, transmitted or displayed in any form or by any means without
+> written permission. For information regarding licensing and reprint
+> permissions please contact the American Institute of Certified Public
+> Accountants, licensing and permissions agent for COSO copyrighted materials.
+> Direct all inquiries to copyright@aicpa.org or to AICPA, Attn: Manager, Rights
+> and Permissions, 220 Leigh Farm Rd., Durham, NC 27707. Telephone inquiries may
+> be directed to 888-777-7077.
+
+**The two Green Book files are the exception: they are not copyrighted at all.**
+They are works of the United States Government prepared by the Government
+Accountability Office, and under 17 U.S.C. §105 no copyright subsists in them.
+They may be quoted and reproduced freely. They are also the reason the internal
+control registry is usable: where COSO's own text is licensed and must be
+quoted sparingly, the Green Book adapts the same five components and seventeen
+principles into public-domain language, so a citation that would be awkward to
+quote from COSO can be quoted at length from GAO instead.
+
 **Practical consequences, stated plainly:**
 
 - **This repository must stay private.** Publishing it publishes this material.
@@ -81,7 +102,11 @@ docs/authorities/
 ├── fasb-codification/   ASC topics, one file per topic
 ├── fasb-concepts/       conceptual framework, CON 8 ch.5, SOP 82-1
 ├── aicpa/               SSARS (AR-C sections)
-└── MANIFEST.tsv         provenance for every file
+├── coso/                COSO Internal Control framework, Executive Summary
+├── green-book/          GAO Standards for Internal Control (2014 and 2025)
+├── federal/             U.S. Code, CFR, IRS publications
+├── state-wa/            Revised Code of Washington
+└── MANIFEST.tsv         provenance for every PDF-derived file
 ```
 
 `MANIFEST.tsv` records, for each text file: the PDF it came from, that PDF's
@@ -103,6 +128,14 @@ document, not merely one with the same name.
 | Other | ASC 274 (personal financial statements), 842 (leases), 850 (related parties) |
 | Concepts | conceptual framework, CON 8 ch.5 recognition and derecognition, SOP 82-1 |
 | Attestation | AICPA SSARS, AR-C sections |
+| Internal control | COSO *Internal Control — Integrated Framework* Executive Summary (2013); GAO *Standards for Internal Control in the Federal Government* — the "Green Book" — both the 2014 (GAO-14-704G) and 2025 (GAO-25-107721) editions |
+
+Both Green Book editions are kept deliberately, not by accident. Several
+principles were reworded between 2014 and 2025, so an authority record has to
+say which edition it is quoting and be checked against *that* edition's file.
+A test in `tests/compliance/internal-control-authorities.test.ts` proves this is
+load-bearing by confirming the 2014 wording of Principle 8 does not appear in
+the 2025 text, and the reverse.
 
 Several of these are well beyond current scope — ASC 842 leases, ASC 715
 retirement benefits — and are here because Michael gathered broadly for future
@@ -111,6 +144,8 @@ the authority is already on disk and quotable.
 
 ## Reproducing the extraction
 
+For the FASB and AICPA files:
+
 ```bash
 pdftotext -layout <source>.pdf <name>.txt
 ```
@@ -118,6 +153,53 @@ pdftotext -layout <source>.pdf <name>.txt
 `-layout` preserves column structure, which matters because the Codification
 puts paragraph numbers in a left-hand gutter. Without it the numbers detach from
 their text and the files stop being searchable by paragraph.
+
+For the COSO and Green Book files, `-layout` is **wrong** and `-raw` is required:
+
+```bash
+pdftotext -raw <source>.pdf <name>.txt
+```
+
+These documents set their principle headings as wide, centred display type.
+`-layout` tries to preserve that visual arrangement and in doing so splits a
+single sentence across margin columns, which corrupts the sentence and makes it
+impossible to quote verbatim. `-raw` emits text in reading order and leaves the
+sentences intact. This was found the hard way, by a quote failing verification.
+
+Downloading them needs one extra step, because gao.gov and coso.org sit behind
+Akamai and return HTTP 403 with a ~400-byte HTML stub to a plain `curl`. Sending
+browser-shaped headers gets the real PDF:
+
+```bash
+curl -A '<a current Safari user-agent>' \
+     -H 'Referer: https://www.gao.gov/products/gao-25-107721' \
+     -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' \
+     -H 'Sec-Fetch-Site: same-origin' --compressed -L \
+     -o gao-25-107721.pdf https://www.gao.gov/assets/gao-25-107721.pdf
+```
+
+**Always run `file` on the result.** A 403 stub is still written to disk with a
+`.pdf` name and will silently produce an empty text file.
+
+### The one transformation applied to a source text
+
+The COSO file is the only text in this directory that has been altered after
+extraction, and the alteration is recorded here because an unrecorded edit to a
+source document would make every quote drawn from it untrustworthy.
+
+The COSO PDF is justified, so it hyphenates words at line ends: the extracted
+text contained `manage-\nment` rather than `management`. That broke the quote of
+COSO's own definition of internal control. All 64 occurrences of the
+`word-\nword` pattern in the file were listed and inspected individually; every
+one was typesetting hyphenation and not one was a real compound word broken at
+its own hyphen. They were rejoined, with the count asserted at 64 before and 0
+after, so the transformation cannot silently do more or less than intended.
+
+The Green Book files were deliberately **not** treated this way. Their hyphen
+breaks are the opposite case — real compounds like `third-party` and
+`quasi-governmental` — and rejoining them would corrupt the text rather than
+repair it. A test asserts those compounds survive intact, which is what keeps
+the COSO fix from ever being generalised into a rule that damages other files.
 
 ## A note on what these texts are and are not
 

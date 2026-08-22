@@ -81,6 +81,8 @@ import { PAYROLL_ONBOARDING_AUTHORITIES } from "@/lib/payroll/payroll-onboarding
 // ASC 205-10-45. Imported here in the same commit that declares them, for the
 // reason the PAYROLL_TAX_AUTHORITIES comment above records.
 import { REPORTING_AUTHORITIES_NEW } from "@/lib/reports/reporting-authorities";
+// books-28. See the file header there for why COSO can be quoted at all.
+import { INTERNAL_CONTROL_AUTHORITIES } from "./internal-control-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -113,7 +115,8 @@ export type GuidanceAuthorityKind =
   | "state_law"
   | "state_manual"
   | "legislative_history"
-  | "auditing_standard";
+  | "auditing_standard"
+  | "internal_control_framework";
 
 export const ALL_GUIDANCE_AUTHORITY_KINDS: readonly GuidanceAuthorityKind[] = [
   "statute",
@@ -125,6 +128,7 @@ export const ALL_GUIDANCE_AUTHORITY_KINDS: readonly GuidanceAuthorityKind[] = [
   "state_manual",
   "legislative_history",
   "auditing_standard",
+  "internal_control_framework",
 ] as const;
 
 /** Human labels. Used by the UI so a badge never shows a raw enum. */
@@ -138,6 +142,7 @@ export const GUIDANCE_KIND_LABELS: Record<GuidanceAuthorityKind, string> = {
   state_manual: "State manual",
   legislative_history: "Legislative history",
   auditing_standard: "Auditing standard",
+  internal_control_framework: "Internal control framework",
 };
 
 /**
@@ -158,6 +163,7 @@ export const GUIDANCE_KIND_WEIGHT: Record<GuidanceAuthorityKind, 1 | 2 | 3> = {
   state_manual: 1,
   legislative_history: 1,
   auditing_standard: 1,
+  internal_control_framework: 1,
 };
 
 /** Plain-English explanation of each weight. Shown, not just stored. */
@@ -533,6 +539,7 @@ export const ALL_SOURCE_REGISTRIES = [
   "interest",
   "payroll-onboarding",
   "reporting",
+  "internal-control",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -545,6 +552,14 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...BANK_AUTHORITIES.map((a) => ({ tag: "bank" as const, authority: fromBank(a) })),
     ...GATE_AUTHORITIES.map((a) => ({ tag: "gate" as const, authority: fromGate(a) })),
     ...GUIDANCE_AUTHORITIES_NEW.map((a) => ({ tag: "new" as const, authority: a })),
+    // books-28. COSO's own free Executive Summary plus the public-domain GAO
+    // Green Book that adopts it, merged HERE for the same reason as every other
+    // leaf registry: a citation must mean one thing on every screen. Michael
+    // asked for "verbatim coso"; these are the words, machine-checked.
+    ...INTERNAL_CONTROL_AUTHORITIES.map((a) => ({
+      tag: "internal-control" as const,
+      authority: a,
+    })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation
     // must mean the same thing on every screen, which is the entire reason
