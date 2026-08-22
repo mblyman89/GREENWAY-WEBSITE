@@ -22,7 +22,7 @@
  * was renamed or dropped reads as reassurance while covering nothing, and it is
  * the more dangerous of the two failures because the count still looks right.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { assertQuotedLessonsResolve } from "@/lib/payroll/mentor-quote-gate";
@@ -36,6 +36,7 @@ import {
   taughtGarnishmentFieldNames,
 } from "@/lib/payroll/garnishment-mentor";
 import { migrationColumnTypesStrict } from "@/lib/payroll/migration-columns";
+import { WAGE_ORDER_ENTRY_AUTHORITIES } from "@/lib/payroll/wage-order-entry-authorities";
 
 const MIGRATION_0198 = join(
   "supabase",
@@ -98,14 +99,73 @@ export const GARNISHMENT_STRUCTURAL_COLUMNS: readonly string[] = [
  */
 export const GARNISHMENT_STRUCTURAL_TYPES: readonly string[] = ["uuid", "timestamptz"];
 
+/**
+ * EVERY migration that touches wage_orders, discovered rather than listed.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * THE HOLE THIS CLOSES, FOUND IN books-38
+ * ─────────────────────────────────────────────────────────────────────────
+ * Until now this gate read exactly one file, 0198, because that is where
+ * wage_orders was created. That was true and it was fragile, and books-38
+ * proved it: migration 0201 added `wage_orders.served_date` — the column the
+ * twenty-day answer deadline of RCW 26.18.110(1) and the sixty-day continuing
+ * lien of RCW 6.27.350(1) are BOTH measured from — and this gate could not see
+ * it. Measured, not assumed: `garnishmentMigrationColumnNames()` returned 23
+ * names and `includes("wage_orders.served_date")` was false.
+ *
+ * So the most consequential date in the whole garnishment story could have
+ * shipped with no lesson beside it while the coverage gate reported that every
+ * column was taught. That is standing rule 50 exactly — dead code wearing a
+ * green check — and the failure mode is the dangerous one, because the count
+ * still looks right.
+ *
+ * Pinning a second filename would fix today and re-break at 0207. So the fix
+ * is to the CLASS (rule 23): walk the migrations directory and read every file
+ * that mentions the table. A future ALTER lands under the mentor automatically
+ * and an untaught column fails here by name, with nothing to remember.
+ */
+function migrationsTouchingGarnishmentTables(): readonly string[] {
+  const dir = join(process.cwd(), "supabase", "migrations");
+  return readdirSync(dir)
+    .filter((f) => /^\d{4}_[a-z0-9_]+\.sql$/.test(f))
+    .sort()
+    .map((f) => join(dir, f))
+    .filter((p) => {
+      const sql = readFileSync(p, "utf8");
+      return GARNISHMENT_TABLES.some((t) => sql.includes(t));
+    });
+}
+
+/**
+ * @param sourcePath when given, read ONLY this file. The broken-input tests
+ *        rely on being able to point the gate at a fragment; scanning the real
+ *        directory in that case would drown the fragment in real columns.
+ */
 export function garnishmentMigrationColumnTypes(
   sourcePath?: string,
 ): Readonly<Record<string, string>> {
-  const p = sourcePath ?? join(process.cwd(), MIGRATION_0198);
-  const all = migrationColumnTypesStrict(p);
+  const paths =
+    sourcePath !== undefined ? [sourcePath] : migrationsTouchingGarnishmentTables();
+
   const mine: Record<string, string> = {};
-  for (const [k, v] of Object.entries(all)) {
-    if (GARNISHMENT_TABLES.some((t) => k.startsWith(`${t}.`))) mine[k] = v;
+  for (const p of paths) {
+    for (const [k, v] of Object.entries(migrationColumnTypesStrict(p))) {
+      // Later migrations win: an ALTER ... TYPE is the current truth.
+      if (GARNISHMENT_TABLES.some((t) => k.startsWith(`${t}.`))) mine[k] = v;
+    }
+  }
+
+  // Rule 39. A directory walk that matched nothing would make every coverage
+  // assertion below vacuously true, which is the failure this whole file
+  // exists to prevent. wage_orders had 23 columns at 0198 and 24 at 0201.
+  if (sourcePath === undefined && Object.keys(mine).length < 20) {
+    throw new Error(
+      `garnishmentMigrationColumnTypes read only ${Object.keys(mine).length} ` +
+        `wage_orders columns from ${paths.length} migration(s). That is too few ` +
+        `to be real, so every coverage gate built on it would approve ` +
+        `everything. Check that the migrations directory is readable and that ` +
+        `the table has not been renamed.`,
+    );
   }
   return mine;
 }
@@ -258,8 +318,35 @@ export function assertNoDuplicateGarnishmentFieldLessons(): void {
  * AUTHORITIES
  * ════════════════════════════════════════════════════════════════════════ */
 
+/**
+ * Every authority a garnishment lesson is allowed to cite.
+ *
+ * books-38. This used to be `GARNISHMENT_AUTHORITIES` alone, which was right
+ * while there was one registry. Garnishment then split into two acts with two
+ * bodies of law behind them, and they are genuinely different subjects:
+ *
+ *   GARNISHMENT_AUTHORITIES          — the MATH of withholding. How much may
+ *                                      be taken: the CCPA caps, disposable
+ *                                      earnings, the Washington exemptions.
+ *   WAGE_ORDER_ENTRY_AUTHORITIES     — the ACT of receiving an order. The duty
+ *                                      to answer, the employer's own liability
+ *                                      for ignoring it, the processing fee,
+ *                                      anti-retaliation, when it expires.
+ *
+ * The `served_date` lesson needs the second set, because that column exists to
+ * answer a question about deadlines rather than about dollars. Merging the two
+ * here — rather than loosening the check, or copying the ids into a second
+ * list that would quietly disagree — keeps the guarantee intact: a citation
+ * still has to point at a real, mirrored authority, and there is exactly one
+ * place that decides what "real" means.
+ */
+const CITABLE_AUTHORITY_IDS: readonly string[] = [
+  ...GARNISHMENT_AUTHORITIES.map((a) => a.id),
+  ...WAGE_ORDER_ENTRY_AUTHORITIES.map((a) => a.id),
+];
+
 export function assertEveryCitedGarnishmentAuthorityExists(): void {
-  const known = new Set(GARNISHMENT_AUTHORITIES.map((a) => a.id));
+  const known = new Set(CITABLE_AUTHORITY_IDS);
   if (known.size === 0) {
     throw new Error(
       "GARNISHMENT AUTHORITY GATE BROKEN: the authority registry is empty, so every citation " +

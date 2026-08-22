@@ -326,13 +326,51 @@ export function readMigrationColumns(sourcePath: string): MigrationParse {
   let createTable = "";
   let depth = 0;
 
-  for (const rawLine of text.split("\n")) {
+  const rawLines = text.split("\n");
+
+  for (let i = 0; i < rawLines.length; i += 1) {
     // Strip trailing line comments BEFORE any structural reading. A `--`
     // comment can legitimately contain parentheses, and counting those would
     // desynchronise depth tracking for the remainder of the file — after
     // which every subsequent column is read at the wrong nesting level.
-    const line = rawLine.replace(/--.*$/, "").trim();
+    let line = rawLines[i].replace(/--.*$/, "").trim();
     if (line === "") continue;
+
+    /**
+     * ─────────────────────────────────────────────────────────────────────
+     * AN `ALTER TABLE` MAY WRAP, AND books-38 PROVED IT SILENTLY VANISHES
+     * ─────────────────────────────────────────────────────────────────────
+     * Outside a create-table body this parser read one physical line at a
+     * time, so a perfectly ordinary formatting choice —
+     *
+     *     alter table public.wage_orders
+     *       add column if not exists served_date date;
+     *
+     * — matched nothing at all. Not misparsed. DROPPED, without landing in
+     * `unrecognised`, so no caller could discover the loss.
+     *
+     * That is how migration 0201 added `wage_orders.served_date` and the
+     * garnishment mentor's coverage gate went on reporting that every column
+     * was taught. Measured, not inferred: parsing 0201 returned `{}`, and the
+     * gate saw 23 columns instead of 24. The missing one is the date the
+     * twenty-day answer deadline in RCW 26.18.110(1) and the sixty-day
+     * continuing lien in RCW 6.27.350(1) are both measured from.
+     *
+     * A statement is a statement whether or not it fits on one line, so the
+     * fix is to read to the semicolon and classify the whole thing. Bounded
+     * by MAX_JOIN so a file missing a terminator cannot swallow the rest of
+     * itself.
+     */
+    if (createTable === "" && /^alter table\b/i.test(line) && !line.includes(";")) {
+      const MAX_JOIN = 12;
+      for (let j = i + 1; j < rawLines.length && j <= i + MAX_JOIN; j += 1) {
+        const next = rawLines[j].replace(/--.*$/, "").trim();
+        if (next === "") continue;
+        line = `${line} ${next}`;
+        i = j;
+        if (next.includes(";")) break;
+      }
+    }
 
     if (createTable === "") {
       // `if not exists` is consumed by a NON-optional-looking alternation
@@ -356,6 +394,31 @@ export function readMigrationColumns(sourcePath: string): MigrationParse {
             line,
           });
         }
+        continue;
+      }
+
+      /**
+       * An `add column` this parser could NOT read must be reported, never
+       * skipped.
+       *
+       * This is the other half of the books-38 defect. The wrapped statement
+       * above did not merely fail to parse — it failed INVISIBLY, because the
+       * only way a caller learns about trouble is `unrecognised`, and nothing
+       * was ever pushed there. A parser that loses a column quietly is worse
+       * than one that throws, because every coverage gate downstream keeps
+       * reporting success over a column it never saw (standing rule 50).
+       *
+       * So: if the text says `add column` and the reader above did not claim
+       * it, that is a defect in the reader and it says so out loud.
+       */
+      if (/\badd column\b/i.test(line)) {
+        const table = line.match(/^alter table (?:if exists )?(?:public\.)?([a-z_][a-z0-9_]*)/i);
+        unrecognised.push({
+          table: table?.[1] ?? "?",
+          column: "?",
+          rawType: "unreadable add-column statement",
+          line,
+        });
         continue;
       }
 
