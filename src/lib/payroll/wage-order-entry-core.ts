@@ -845,6 +845,43 @@ export const WAGE_ORDER_CONSTRAINT_PARITY: readonly {
   },
 ] as const;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE EMPLOYEE PICKER'S SHAPE
+ *
+ * WHY THIS LIVES HERE AND NOT IN THE STORE OR THE FORM
+ *
+ * Two modules need to agree on it: the server store that reads employees out
+ * of the table, and the client form that renders them in a dropdown. It was
+ * originally declared in BOTH, which is standing rule 25's exact failure mode
+ * - the day a field is added to one copy, the other keeps compiling and the
+ * two quietly mean different things.
+ *
+ * It cannot live in the store, because the store is `import "server-only"` and
+ * the form is `"use client"`; importing it would drag the Supabase admin
+ * client into the browser bundle (rule 65b). It cannot live in the form,
+ * because then a server module would import a `"use client"` module to get a
+ * type. This file is pure, node-free and already imported by both sides, so
+ * this is the one place the definition can sit without either problem.
+ *
+ * `active` is on here deliberately. See `listEmployeesForOrderEntry` for why a
+ * former employee must still be selectable rather than filtered away.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export type EmployeeChoice = {
+  readonly id: string;
+  readonly name: string;
+  /**
+   * False when the employee has been marked inactive in Staffing.
+   *
+   * NOT a reason to hide them. RCW 26.18.110(1) requires the answer to state
+   * "whether the obligor is employed by ... the employer" - which means an
+   * order served naming somebody who has left still has to be answered, and
+   * answered with a NO. The screen's job is to make that answer easy to give
+   * correctly, not to pretend the person never existed.
+   */
+  readonly active: boolean;
+};
+
 /**
  * Every refusal code, for the coverage gate.
  *

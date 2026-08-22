@@ -132,6 +132,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 import {
   validateWageOrderDraft,
+  type EmployeeChoice,
   type ValidatedWageOrder,
   type WageOrderDraft,
   type WageOrderRefusal,
@@ -355,6 +356,127 @@ export async function activeCaseNumbersFor(
 
   const rows = (data ?? []) as unknown as CaseRow[];
   return { ok: true, caseNumbers: rows.map((r) => r.case_number) };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * §3b  THE EMPLOYEE PICKER
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+// Re-exported, NOT redeclared. The definition lives in the pure entry core
+// because the client form needs the same shape and cannot import this module
+// (it is server-only). A second declaration here compiled fine and was exactly
+// the drift standing rule 25 exists to prevent.
+// (imported at the top of this file, alongside the validator)
+export type { EmployeeChoice };
+
+/**
+ * Just enough about each employee to choose one. Nothing else.
+ *
+ * WHY THIS DOES NOT REUSE `payroll-onboarding-store.listEmployeeSetup()`
+ *
+ * That function is the right shape and the wrong data. It reads
+ * `ssn_last_four` and joins W-4, I-9 and pay records, because the setup screen
+ * needs to show what is missing. This screen needs a name and an id to put in
+ * a dropdown.
+ *
+ * Reusing it would pull partial Social Security numbers into a component whose
+ * job is entering court orders, for no reason at all. Standing rule 25 says
+ * extend rather than duplicate, and this is the case the rule does not cover:
+ * two callers wanting genuinely different data from the same table. The
+ * columns are named explicitly rather than selected with `*` for the same
+ * reason — naming them means an SSN cannot arrive here by accident, which is a
+ * stronger guarantee than remembering not to display it.
+ *
+ * A read failure returns a FAILURE, not an empty list. An empty dropdown says
+ * "this employer has no employees", which is a different and untrue statement,
+ * and it would leave Michael staring at a form he cannot use with no idea why.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY INACTIVE EMPLOYEES ARE LISTED RATHER THAN FILTERED OUT
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ * `employees.active` exists (migration 0037) and the obvious thing to write is
+ * `.eq("active", true)`. That obvious thing is a legal defect, so it is worth
+ * recording why it is absent before somebody adds it as a tidy-up.
+ *
+ * RCW 26.18.110(1), mirrored verbatim in `wage-order-entry-authorities.ts`,
+ * requires the employer's sworn answer to state
+ *
+ *     "whether the obligor is employed by or receives earnings or other
+ *      remuneration from the employer"
+ *
+ * The statute plainly contemplates the answer being NO. Service does not
+ * depend on the person still working here - a support registry works from
+ * records that lag, and an order naming somebody who left in March will land
+ * in June. The duty to ANSWER attaches on service either way, and RCW
+ * 6.27.200 lets a court enter judgment against GREENWAY for the whole
+ * underlying debt if the writ goes unanswered.
+ *
+ * If this query filtered on `active`, the name on the paper would simply not
+ * be in the dropdown. The most likely reading of that is "we have no such
+ * employee, so this does not concern us" - which is the precise belief that
+ * ends in a default judgment. Worse, there is a final-paycheck case: someone
+ * marked inactive who still has earned, unpaid wages sitting in the next run.
+ * Those wages ARE subject to the order.
+ *
+ * So every employee is listed, and the ones no longer employed are labelled as
+ * such at the point of choosing. Michael can still see the name, still record
+ * the order, and still answer the writ - and the label tells him the answer to
+ * the "is this person employed" question is probably no. Showing him the fact
+ * is strictly better than hiding the row and letting him infer the wrong thing
+ * from an absence (standing rule 39: an empty result and a filtered result
+ * look identical and mean opposite things).
+ */
+export async function listEmployeesForOrderEntry(): Promise<
+  { ok: true; employees: readonly EmployeeChoice[] } | WageOrderWriteFailure
+> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, code: "NOT_CONFIGURED", message: NOT_CONFIGURED };
+  }
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("employees")
+    .select("id, full_name, active")
+    // Currently-employed names sort first, because they are the overwhelming
+    // majority of orders. This is ORDERING, not filtering - every former
+    // employee is still in the list, further down.
+    .order("active", { ascending: false })
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    return {
+      ok: false,
+      code: "READ_FAILED",
+      message:
+        `The list of employees could not be read, so there is nobody to attach an order to: ` +
+        `${error.message}. This is a problem reading the records - it does NOT mean there are ` +
+        `no employees. Nothing was changed. Note that the deadline to answer a court order runs ` +
+        `regardless of whether this screen is working, so if one has been served, answer it on ` +
+        `paper in the meantime.`,
+    };
+  }
+
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    full_name: string | null;
+    active: boolean | null;
+  }[];
+  return {
+    ok: true,
+    employees: rows.map((r) => ({
+      id: r.id,
+      // A missing name is shown as such rather than hidden. An employee with no
+      // name on file still has wages, and can still have an order against them.
+      name: r.full_name ?? "(no name on file)",
+      // A null `active` is treated as ACTIVE, not inactive. The column is
+      // `not null default true` in migration 0037 so null should be
+      // impossible, but if one ever appears the safe reading is "still
+      // employed": that keeps the name unlabelled and makes Michael check the
+      // paper, whereas guessing "former employee" would put a false statement
+      // next to a name he is about to swear an answer about.
+      active: r.active !== false,
+    })),
+  };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

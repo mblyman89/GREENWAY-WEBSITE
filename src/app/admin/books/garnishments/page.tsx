@@ -56,15 +56,25 @@
 
 import { Card, CardHeader } from "@/components/admin/ui";
 import { GarnishmentWorkbench } from "@/components/admin/books/GarnishmentWorkbench";
+import { WageOrderEntryForm } from "@/components/admin/books/WageOrderEntryForm";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { loadGarnishmentBoard } from "@/lib/payroll/garnishment-store";
+import { listEmployeesForOrderEntry } from "@/lib/payroll/wage-order-write-store";
+import { createWageOrderAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function GarnishmentsPage() {
   await requireBooksAccess();
 
-  const board = await loadGarnishmentBoard();
+  // Both reads happen together. The entry form is useful even when the board
+  // fails to load - a court order that has been served has to be recorded
+  // whether or not the list is rendering - so a failure in one does not
+  // suppress the other.
+  const [board, employees] = await Promise.all([
+    loadGarnishmentBoard(),
+    listEmployeesForOrderEntry(),
+  ]);
 
   return (
     <div className="space-y-6 p-6">
@@ -86,6 +96,30 @@ export default async function GarnishmentsPage() {
           and mean opposite things - and one of them means a live court order is
           being ignored. This is the same shape as the leave inbox for exactly
           the same reason (standing rule 39: guard the vacuous read). */}
+      {/* ══ ENTERING A NEW ORDER ═══════════════════════════════════════════
+          Placed ABOVE the list deliberately. Until books-38 there was no way
+          to enter an order at all, and the first thing Michael needs to do on
+          this screen is put the paperwork in. Once orders exist, the list is
+          what he comes back for - but a court order has a deadline attached to
+          it and the entry path should never be something to scroll for.
+
+          Rule 25: this EXTENDS the existing garnishments page. It is not a new
+          /admin/books/garnishments/new route. Entering an order and seeing the
+          orders that exist are the same job, and splitting them across two
+          screens is how a duplicate gets entered - you cannot see the order is
+          already there from the page where you are typing it in. */}
+      {!employees.ok ? (
+        <Card>
+          <CardHeader title="A new order cannot be entered right now" />
+          <p className="text-sm text-[var(--admin-danger)]">{employees.message}</p>
+        </Card>
+      ) : (
+        <WageOrderEntryForm
+          employees={employees.employees}
+          onSubmit={createWageOrderAction}
+        />
+      )}
+
       {!board.ok ? (
         <Card>
           <CardHeader title="This screen could not load its data" />
