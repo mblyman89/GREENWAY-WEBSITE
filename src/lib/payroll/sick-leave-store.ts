@@ -68,6 +68,7 @@ import {
   type SickLeaveBalance,
   type SickLeaveLedgerEntry,
   type SickLeavePolicy,
+  type SickLeavePurpose,
   type SickLeaveRefusal,
   type SickLeaveRefusalCode,
   type SickLeaveRequestFacts,
@@ -767,5 +768,223 @@ export async function decideRequest(args: {
       "name and the time recorded against it. The hours have been deducted from their balance " +
       "and will appear on the timesheet for that pay period as paid sick time - which does not " +
       "count toward overtime, because those hours were paid but not worked.",
+  };
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+ * ASKING — the employee half, added in books-35 phase F
+ *
+ * WHY THIS LIVES HERE AND NOT IN A SECOND STORE FILE (standing rule 25)
+ *
+ * It is the same table, the same units and the same purpose vocabulary as the
+ * inbox above. A second module would duplicate the row shape and the two copies
+ * would drift the first time a column changed.
+ *
+ * THE ASYMMETRY THAT MAKES THIS FUNCTION NECESSARY, quoted from migration 0198:
+ *
+ *   "employees.staff_id is nullable 'for floor-only staff who just clock in at
+ *    a shared station'. Most of Greenway's employees have no back-office login
+ *    at all. If requesting sick leave required is_owner(), or even required a
+ *    staff profile, then the people the statute is written to protect would be
+ *    structurally unable to ask. The request would have to travel by text
+ *    message to Michael, which is precisely the undocumented channel this
+ *    migration exists to replace."
+ *
+ * Hence the RLS split: `sick_leave_requests` is the ONLY table in 0198 an
+ * authenticated session may INSERT. Deciding one, and every ledger entry, stays
+ * owner-only.
+ *
+ * WHAT THIS FUNCTION DELIBERATELY DOES NOT DO
+ *
+ * It does not review the request, does not consult the balance, and does not
+ * refuse a request the engine would refuse. That is not an oversight, it is the
+ * point. WAC 296-128-630(1) gives the EMPLOYEE the choice to request; the
+ * employer's answer comes later and is recorded with a name against it. A pad
+ * that silently swallowed "you do not have enough hours" would be an
+ * undocumented denial by a machine, with no decision, no decider and no record
+ * — the exact thing option 1 exists to prevent. Everything that can go wrong is
+ * therefore shown to Michael in the inbox, where refusing has a name attached.
+ * ═════════════════════════════════════════════════════════════════════════════ */
+
+/** The five purposes migration 0198's CHECK constraint allows. */
+export const SICK_LEAVE_PURPOSES: readonly SickLeavePurpose[] = [
+  "own_health",
+  "family_care",
+  "closure",
+  "immigration",
+  "domestic_violence",
+];
+
+export type SubmittedRequest = {
+  readonly ok: true;
+  readonly employeeName: string;
+  readonly leaveDate: string;
+  readonly minutes: number;
+  readonly message: string;
+};
+
+/**
+ * Record one day of requested sick leave, submitted by the employee at the
+ * clock under their PIN.
+ *
+ * ONE DAY PER ROW, matching `decideRequest` and matching migration 0198, so a
+ * three-day absence can be approved for two days and denied for the third.
+ *
+ * THE DUPLICATE CHECK IS NOT POLITENESS. Without it, tapping the button twice
+ * on a phone with a slow connection creates two pending rows for the same day.
+ * Michael then approves both, and `planDraw` spends the minutes twice — a real
+ * balance loss for the employee, caused by a double-tap. The index added in
+ * migration 0200 stops the LEDGER double-spending within one request; nothing
+ * stops two separate requests, so it is checked here.
+ */
+export async function submitLeaveRequest(args: {
+  readonly employeeId: string;
+  readonly leaveDate: string;
+  readonly minutes: number;
+  readonly purpose: string;
+  readonly noticeKind: string;
+  readonly employeeNote: string | null;
+}): Promise<SubmittedRequest | StoreFailure> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, code: "NOT_CONFIGURED", message: NOT_CONFIGURED };
+  }
+
+  // VALIDATED AGAINST THE ENGINE'S OWN UNION, not a list retyped here. A
+  // purpose the database CHECK rejects would otherwise surface to an employee
+  // as a raw Postgres constraint error, which is Michael's exact complaint
+  // about Sage: stopped without being told why.
+  if (!SICK_LEAVE_PURPOSES.includes(args.purpose as SickLeavePurpose)) {
+    return {
+      ok: false,
+      code: "REFUSED",
+      message:
+        "That is not one of the reasons paid sick leave can be used for, so nothing was saved. " +
+        "Pick one of the options on the screen.",
+    };
+  }
+
+  if (args.noticeKind !== "foreseeable" && args.noticeKind !== "unforeseeable") {
+    return {
+      ok: false,
+      code: "REFUSED",
+      message:
+        "The form did not say whether this was planned ahead or came up suddenly, so nothing " +
+        "was saved. Please choose one.",
+    };
+  }
+
+  // NEVER GUESS A DATE (rule 62d). An unparseable date silently becoming
+  // "today" would file the request against the wrong day, and the employee
+  // would be marked absent on the day they actually asked for.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.leaveDate)) {
+    return {
+      ok: false,
+      code: "REFUSED",
+      message: "That date could not be read, so nothing was saved. Please choose the day again.",
+    };
+  }
+
+  if (!Number.isInteger(args.minutes) || args.minutes <= 0) {
+    return {
+      ok: false,
+      code: "REFUSED",
+      message:
+        "The amount of time asked for has to be a positive number of minutes, so nothing was " +
+        "saved. Choose how much of the day you need.",
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  const { data: empData, error: empErr } = await admin
+    .from("employees")
+    .select("id, full_name, hire_date")
+    .eq("id", args.employeeId)
+    .maybeSingle();
+  if (empErr) {
+    return {
+      ok: false,
+      code: "READ_FAILED",
+      message: `Could not read your employee record: ${empErr.message}. Nothing was saved.`,
+    };
+  }
+  const emp = (empData ?? null) as unknown as EmployeeRow | null;
+  if (!emp) {
+    return {
+      ok: false,
+      code: "NOT_FOUND",
+      message:
+        "That employee record could not be found, so nothing was saved. Ask Michael to check " +
+        "your record on the staffing screen.",
+    };
+  }
+
+  const { data: dupData, error: dupErr } = await admin
+    .from("sick_leave_requests")
+    .select("id, status")
+    .eq("employee_id", args.employeeId)
+    .eq("leave_date", args.leaveDate)
+    .in("status", ["pending", "approved"]);
+  if (dupErr) {
+    return {
+      ok: false,
+      code: "READ_FAILED",
+      message: `Could not check your existing requests: ${dupErr.message}. Nothing was saved.`,
+    };
+  }
+  if ((dupData ?? []).length > 0) {
+    const existing = (dupData ?? [])[0] as unknown as { status: string };
+    return {
+      ok: false,
+      code: "REFUSED",
+      message:
+        existing.status === "approved"
+          ? `Your sick leave for ${args.leaveDate} has already been approved, so there is nothing ` +
+            "more to ask for. Nothing was saved."
+          : `You have already asked for sick leave on ${args.leaveDate} and it is still waiting ` +
+            "for a decision. Nothing was saved, so you have not lost anything - the first " +
+            "request still stands.",
+    };
+  }
+
+  const note = (args.employeeNote ?? "").trim();
+
+  const { error: insErr } = await admin.from("sick_leave_requests").insert({
+    employee_id: args.employeeId,
+    leave_date: args.leaveDate,
+    minutes_requested: args.minutes,
+    purpose: args.purpose,
+    notice_kind: args.noticeKind,
+    status: "pending",
+    employee_note: note.length > 0 ? note : null,
+    // requested_by_staff_id is left NULL on purpose: most floor staff have no
+    // staff profile, and 0037 makes employees.staff_id nullable for exactly
+    // that reason. Writing the employee id into a STAFF column would be a
+    // foreign key pointing at the wrong table.
+    requested_at: new Date().toISOString(),
+  });
+  if (insErr) {
+    return {
+      ok: false,
+      code: "WRITE_FAILED",
+      message:
+        `Your request could not be saved: ${insErr.message}. Nothing was saved, so please tell ` +
+        "Michael directly rather than assuming he has seen it.",
+    };
+  }
+
+  return {
+    ok: true,
+    // `employees.full_name` is nullable, and the compiler caught this rather
+    // than letting a `null` reach the confirmation banner as the word "null".
+    // Same fallback wording as the inbox above, so the two screens cannot
+    // disagree about what a nameless record looks like.
+    employeeName: emp.full_name ?? "(no name on file)",
+    leaveDate: args.leaveDate,
+    minutes: args.minutes,
+    message:
+      `Your request for ${args.leaveDate} has been sent to Michael and is waiting for a ` +
+      "decision. You will not see it on your timesheet until he approves it. Nothing has been " +
+      "taken off your balance yet.",
   };
 }
