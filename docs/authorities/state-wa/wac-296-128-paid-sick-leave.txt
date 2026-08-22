@@ -1,0 +1,106 @@
+SOURCE TEXT - WAC 296-128 (paid sick leave rules, selected sections)
+Retrieved 2026-08-22 from https://app.leg.wa.gov/WAC/default.aspx?cite=296-128
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+Sections mirrored: 296-128-620, 296-128-630, 296-128-650, 296-128-660, 296-128-670, 296-128-680, 296-128-755
+==============================================================================
+
+WAC 296-128-620
+Paid sick leave accrual.
+(1) Employees accrue paid sick leave for all hours worked. An employee must accrue at least one hour of paid sick leave for every forty hours worked as an employee. Employers may provide employees with a more generous paid sick leave accrual rate.
+(2) Paid sick leave for employees who are employed on or before January 1, 2018, will accrue for all hours worked beginning on January 1, 2018. Employees hired after January 1, 2018, begin accruing paid sick leave upon the commencement of his or her employment.
+(3) Employers are not required to allow employees to accrue paid sick leave for hours paid when not working. For example, employers are not required to allow employees to accrue paid sick leave during vacation, paid time off, or while using paid sick leave.
+(4) Employers must allow employees to carry over at least forty hours of accrued, unused paid sick leave to the following year. If an employee carries over forty hours of unused paid sick leave to the following year, accrual of paid sick leave in the subsequent year would be in addition to the forty hours accrued in the previous year and carried over.
+(5) Employers may cap carryover of accrued, unused paid sick leave to the following year at forty hours. Employers may allow for a more generous carryover of accrued, unused paid sick leave to the following year.
+(6) "Year," for purposes of this section, means calendar year, fiscal year, benefit year, employment year, or any other fixed consecutive twelve-month period established by an employer policy or a collective bargaining agreement, and used in the ordinary course of the employer's business for the purpose of calculating wages and benefits. Unless otherwise established by the employer, the default definition of "year" is calendar year.
+[Statutory Authority: RCW 49.46.810. WSR 17-21-092, § 296-128-620, filed 10/17/17, effective 1/1/18.]
+
+==============================================================================
+
+WAC 296-128-630
+Paid sick leave usage.
+(1) An employee is entitled to use paid sick leave for the authorized purposes outlined in RCW 49.46.210 (1)(b) and (c). This right means an employee has the choice about whether or not to use accrued, unused paid sick leave when a qualified purpose occurs and an employer may not require an employee to use accrued, unused paid sick leave if the employee does not choose to request to use paid sick leave.
+(2) An employee is entitled to use accrued, unused paid sick leave beginning on the 90th calendar day after the commencement of their employment. Employers may allow employees to use accrued, unused paid sick leave prior to the 90th calendar day after the commencement of their employment.
+(3) Beginning on the 90th calendar day after the commencement of their employment, employers must make accrued paid sick leave available to employees for use in a manner consistent with the employer's established payment interval or leave records management system, not to exceed one month after the date of accrual.
+(4) Unless a greater increment is approved by a variance as provided by WAC 296-128-640, employers must allow employees to use paid sick leave in increments consistent with the employer's payroll system and practices, not to exceed one hour. For example, if an employer's normal practice is to track increments of work for the purposes of compensation in 15-minute increments, then an employer must allow employees to use paid sick leave in 15-minute increments.
+(5) Paid sick leave pay may be paid to construction workers covered by a collective bargaining agreement before the usage of the leave under the terms of a collective bargaining agreement if an employer meets the requirements of RCW 49.46.180 and any applicable rules.
+[Statutory Authority: Chapter 49.46 RCW. WSR 23-24-044, § 296-128-630, filed 11/30/23, effective 1/1/24. Statutory Authority: RCW 49.46.810. WSR 17-21-092, § 296-128-630, filed 10/17/17, effective 1/1/18.]
+
+==============================================================================
+
+WAC 296-128-650
+Reasonable notice.
+(1) An employer may require employees to give reasonable notice of an absence from work for the use of paid sick leave for an authorized purpose under RCW 49.46.210 (1)(b). Employers may require employees to comply with the employer's notification policies, as long as such policies do not interfere with an employee's lawful use of paid sick leave.
+(a) If the need for paid sick leave is foreseeable, the employer may require advance notice from the employee. Unless the employer allows less advance notice, the employee must provide notice at least ten days, or as early as practicable, in advance of the use of paid sick leave.
+(b) If the need for paid sick leave is unforeseeable, the employer may require notice from the employee. The employee must provide notice to the employer as soon as possible before the required start of their shift, unless it is not practicable to do so. In the event it is impracticable for an employee to provide notice to their employer, a person on the employee's behalf may provide notice to the employer.
+(2) If an employer requires employees to give reasonable notice of an absence from work for the use of paid sick leave for an authorized purpose under the Domestic Violence Leave Act, chapter 49.76 RCW, any such reasonable notice requirements must comply with the provisions outlined in WAC 296-135-060.
+(3) Employers must have a written policy or a collective bargaining agreement outlining any requirements of an employee to give reasonable notice for the use of paid sick leave, and must make notification of such policy or agreement, prior to requiring an employee to provide reasonable notice. An employer must make this information readily available to all employees. If an employer does not require an employee to give reasonable notice for the use of paid sick leave, a written policy is not required.
+[Statutory Authority: RCW 49.46.810. WSR 17-21-092, § 296-128-650, filed 10/17/17, effective 1/1/18.]
+
+==============================================================================
+
+WAC 296-128-660
+Verification for absences exceeding three days.
+(1) For absences exceeding three days, an employer may require verification that an employee's use of paid sick leave is for an authorized purpose under RCW 49.46.210 (1)(b) and (c).
+(2) If an employer requires verification for the use of paid sick leave under RCW 49.46.210 (1)(b) and (c), the employer must have a written policy or a collective bargaining agreement outlining any such requirements. The employer must notify the employee of such policy or agreement, including the employee's right to assert that the verification requirement results in an unreasonable burden or expense on the employee, prior to requiring the employee to provide verification. An employer must make this information readily available to all employees.
+(3) If an employer requires an employee to provide verification from a health care provider identifying the need for use of paid sick leave for an authorized purpose under RCW 49.46.210 (1)(b) and (c), the employer must not require that the information provided explain the nature of the condition. If the employer obtains any health information about an employee or an employee's family member, the employer must treat such information in a confidential manner consistent with applicable privacy laws.
+(4) Employer-required verification may not result in an unreasonable burden or expense on the employee.
+(a) If an employer requires verification, and the employee anticipates that the requirement will result in an unreasonable burden or expense, the employee must be allowed to provide an oral or written explanation to their employer which asserts:
+(i) That the employee's use of paid sick leave was for an authorized purpose under RCW 49.46.210 (1)(b) or (c); and
+(ii) How the employer's verification requirement creates an unreasonable burden or expense on the employee.
+(b) The employer must consider the employee's explanation. Within 10 calendar days of the employee providing an explanation to their employer about the existence of an unreasonable burden or expense, the employer must make a reasonable effort to identify and provide alternatives for the employee to meet the employer's verification requirement in a manner which does not result in an unreasonable burden or expense on the employee. A reasonable effort by the employer to identify and provide alternatives could include, but is not limited to:
+(i) Accepting the oral or written explanation provided by the employee, as outlined in (a)(i) and (ii) of this subsection, as a form of verification which meets the employer's verification requirement; or
+(ii) Mitigating the employee's out-of-pocket expenses associated with obtaining medical verification.
+(c) If after the employer considers the employee's explanation, the employer and employee disagree that the employer's verification requirement results in an unreasonable burden or expense on the employee:
+(i) The employer and employee may consult with the department regarding the verification requirement; and
+(ii) The employee may file a complaint with the department.
+(5) If an employer requires verification that the use of paid sick leave is for an authorized purpose under RCW 49.46.210 (1)(b), verification must be provided to the employer within a reasonable time period during or after the leave. For employee use of paid sick leave under RCW 49.46.210 (1)(b), "reasonable time period" is a period of time defined by a written policy or a collective bargaining agreement, but may not be less than 10 calendar days following the first day upon which the employee uses paid sick leave.
+(6) For employee use of paid sick leave under RCW 49.46.210 (1)(b)(iv), an employee may submit, and the employer must accept:
+(a) Documentation that the employee or the employee's family member is involved in a qualifying immigration proceeding from any of the following persons from whom the employee or employee's family member sought assistance in addressing the proceeding: An advocate for immigrants or refugees, an attorney, a member of the clergy, or other professional. The provision of documentation under this subsection does not waive or diminish the confidential or privileged nature of communications between an employee or an employee's family member and one or more of the individuals described in this subsection pursuant to RCW 5.60.060 or other applicable law; or
+(b) An employee's written statement that the employee or the employee's family member is involved in a qualifying immigration proceeding and that the leave taken was for one of the purposes described in RCW 49.46.210 (1)(b)(iv).
+The documentation or written statement must not disclose any personally identifiable information about a person's immigration status or underlying immigration protection.
+(7) If an employer requires verification that the use of paid sick leave is for an authorized purpose under the Domestic Violence Leave Act, chapter 49.76 RCW, any such verification requirements must comply with the provisions outlined in WAC 296-135-070.
+(8) For use of paid sick leave for purposes authorized under federal, state, or other local laws that permit employers to make medical inquiries, an employer may require verification from an employee that complies with such certification requirements.
+[Statutory Authority: Chapters 49.46 and 49.76 RCW. WSR 25-24-086, s 296-128-660, filed 12/2/25, effective 1/2/26. Statutory Authority: RCW 49.46.810. WSR 17-21-092, § 296-128-660, filed 10/17/17, effective 1/1/18.]
+
+==============================================================================
+
+WAC 296-128-670
+Rate of pay for use of paid sick leave.
+(1) For each hour of paid sick leave used, an employee must be paid the greater of the minimum hourly wage rate established by RCW 49.46.020 or their normal hourly compensation.
+(2) For each hour of paid sick leave paid out to a construction worker following separation, the construction worker must be paid the greater of the minimum hourly wage rate established by RCW 49.46.020 or their normal hourly compensation.
+(3) An employer must calculate an employee's normal hourly compensation using a reasonable calculation based on the hourly rate that an employee would have earned for the time during which the employee used paid sick leave. Examples of reasonable calculations to determine normal hourly compensation include, but are not limited to:
+(a) For an employee paid partially or wholly on a commission basis, dividing the total earnings by the total hours worked in the full pay periods in the prior 90 days of employment;
+(b) For an employee paid partially or wholly on a piece rate basis, dividing the total earnings by the total hours worked in the most recent workweek in which the employee performed identical or substantially similar work to the work they would have performed had they not used paid sick leave;
+(c) For a nonexempt employee paid a salary, dividing the annual salary by 52 to determine the weekly salary, and then dividing the weekly salary by the employee's normal scheduled hours of work;
+(d) For an employee whose hourly rate of pay fluctuates:
+(i) Where the employer can identify the hourly rates of pay for which the employee was scheduled to work, a calculation equal to the scheduled hourly rates of pay the employee would have earned during the period in which paid sick leave is used;
+(ii) Where the employer cannot identify the hourly rates of pay for which the employee would have earned if the employee worked, a calculation based on the employee's average hourly rate of pay in the current or preceding 30 days, whichever yields the higher hourly rate.
+(4) For employees who are scheduled to work a shift of indeterminate length (e.g., a shift that is defined by business needs rather than a specific number of hours), the rate of pay may be calculated by multiplying the employee's normal hourly compensation by the total hours worked by a replacement employee in the same shift, or similarly situated employees who worked that same or similar shift. If there is no replacement employee to compare to, the employer may use the average number of hours the employee using the paid sick leave typically works during a similar shift.
+(5) Construction workers covered by a collective bargaining agreement who are paid before the usage of the leave under the terms of a collective bargaining agreement should be paid their normal hourly compensation. Unless addressed in a collective bargaining agreement, the payment should reflect a reasonable calculation of the normal hourly compensation based on the date of payment.
+(6) An employer must apply a consistent methodology when calculating the normal hourly compensation of similarly situated employees.
+[Statutory Authority: Chapter 49.46 RCW. WSR 23-24-044, § 296-128-670, filed 11/30/23, effective 1/1/24. Statutory Authority: RCW 49.46.810. WSR 17-21-092, § 296-128-670, filed 10/17/17, effective 1/1/18.]
+
+==============================================================================
+
+WAC 296-128-680
+Payment of paid sick leave.
+(1) Unless verification for absences exceeding three days is required by an employer, the employer must pay paid sick leave to an employee no later than the payday for the pay period in which the paid sick leave was used by the employee. If verification is required by the employer, paid sick leave must be paid to the employee no later than the payday for the pay period during which verification is provided to the employer by the employee.
+(2) The employer must pay the balance of accrued and unused paid sick leave to a construction worker under RCW 49.46.210 (1)(l) (effective January 1, 2024), at the end of the established pay period, pursuant to RCW 49.48.010(2), following the construction worker's separation.
+(3) Payment of paid sick leave at the normal hourly compensation to construction workers covered by a collective bargaining agreement may occur before usage, as authorized by RCW 49.46.180 and applicable rules.
+[Statutory Authority: Chapter 49.46 RCW. WSR 23-24-044, § 296-128-680, filed 11/30/23, effective 1/1/24. Statutory Authority: RCW 49.46.810. WSR 17-21-092, § 296-128-680, filed 10/17/17, effective 1/1/18.]
+
+==============================================================================
+
+WAC 296-128-755
+Employer notification and reporting to employees.
+(1) Employers must notify each employee of their entitlement to paid sick leave, the rate at which the employee will accrue paid sick leave, the authorized purposes under which paid sick leave may be used, the employer's intention to use a PTO program to meet requirements under RCW 49.46.210 (if applicable), and that retaliation by the employer for the employee's lawful use of paid sick leave and other rights provided under chapter 49.46 RCW, and all applicable rules, is prohibited.
+(a) Employers must provide such notification in written or electronic form, and must make this information readily available to all employees.
+(b) For employees hired on or after January 1, 2018, employers must notify each employee of such rights no later than the commencement of their employment. For existing employees as of January 1, 2018, the employer must notify each employee no later than March 1, 2018.
+(c) The department shall, in consultation with employee and employer representatives, develop sample notification policies that meet the department's standard for compliance with these rules. The department shall make such sample notification policies available on the department's website.
+(2) Not less than monthly, employers must provide each employee with written or electronic notification detailing the amount of paid sick leave accrued, the amount of paid sick leave paid before usage to construction workers covered by a collective bargaining agreement as permissible under RCW 49.46.180, the paid sick leave reductions since the last notification, and any unused paid sick leave available for use by the employee. Employers may satisfy the notification requirements by providing this information in regular payroll statements.
+(a) Employers are not required to provide monthly notification to an employee if the employee has no hours worked since the last notification.
+(b) If an employer chooses to frontload paid sick leave to an employee in advance of accrual:
+(i) The employer must make written or electronic notification to an employee no later than the end of the period for which the frontloaded paid sick leave was intended to cover, establishing that the amount of paid sick leave frontloaded to the employee was at least equal to the accrual rate under RCW 49.46.210 (1)(a); and
+(ii) The employer is not relieved of their obligation to provide notification, not less than monthly, of the paid sick leave available for use by the employee.
+[Statutory Authority: Chapter 49.46 RCW. WSR 23-24-044, § 296-128-755, filed 11/30/23, effective 1/1/24.]
