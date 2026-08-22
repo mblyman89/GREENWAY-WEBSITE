@@ -31,6 +31,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { migrationColumnTypesStrict } from "@/lib/payroll/migration-columns";
 import { YTD_AUTHORITIES } from "@/lib/payroll/ytd-authorities";
 import {
   YTD_FIELD_LESSONS,
@@ -161,70 +162,34 @@ export function assertStructuralExemptionsAreJustified(
 /**
  * Every column migration 0199 introduces, qualified as `table.column`.
  *
- * Two shapes have to be read, because the migration does two different things:
- * it ADDS columns to `payroll_run_lines`, and it CREATES
- * `payroll_ytd_accumulators` outright.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE PARSER THAT USED TO LIVE HERE HAD A HOLE, AND books-35 FOUND IT.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * It matched a column by requiring its type to be one of eight it knew:
  *
- * THE CREATE TABLE BODY IS PARSED BY PAREN DEPTH, not by line shape. The body
- * contains multi-line `check (...)` constraints whose continuation lines look
- * exactly like column definitions - `oasdi_wages_cents between 0 and ...` reads
- * as a name followed by a type to any regex. Tracking depth means only lines at
- * the top level of the body can be columns, which is the actual rule SQL uses.
+ *     /^([a-z_]+)\s+(uuid|bigint|integer|text|boolean|timestamptz|numeric|date)\b/i
+ *
+ * A line whose type was the ninth was not reported, not counted and not
+ * refused. It was SKIPPED. Every coverage gate downstream then asked "is every
+ * column taught?" of a list that was quietly short, and answered yes.
+ *
+ * Migration 0199 escaped only by luck — it contains no such type. Migration
+ * 0198 next door lost FIVE columns, all `smallint`, among them
+ * `wage_orders.priority`, which decides which garnishment gets paid first, and
+ * the three `sick_leave_policy` knobs the sick-leave engine refuses on.
+ *
+ * Standing rule 23 says fix the class. So the parsing now lives in
+ * `src/lib/payroll/migration-columns.ts`, shared by every mentor's gates, and
+ * an unrecognised type REFUSES by name instead of skipping (standing rule 48 —
+ * a check that cannot classify its input must say so). This function is kept
+ * as the 0199-shaped front door so existing callers and tests read the same,
+ * but the reading itself is no longer duplicated here (standing rule 25).
  */
 export function migrationColumnTypes(
   sourcePath?: string,
 ): Readonly<Record<string, string>> {
   const p = sourcePath ?? join(process.cwd(), MIGRATION_0199);
-  const text = readFileSync(p, "utf8");
-
-  const types: Record<string, string> = {};
-  let createTable = "";
-  let depth = 0;
-
-  for (const rawLine of text.split("\n")) {
-    // Strip trailing line comments before any structural reading. A `--`
-    // comment can legitimately contain parentheses, and counting those would
-    // desynchronise the depth tracking for the rest of the file.
-    const line = rawLine.replace(/--.*$/, "").trim();
-    if (line === "") continue;
-
-    if (createTable === "") {
-      const alter = line.match(
-        /^alter table (?:if exists )?(?:public\.)?([a-z_]+)\s+add column if not exists ([a-z_]+)\s+([a-z]+)/i,
-      );
-      if (alter) {
-        types[`${alter[1]}.${alter[2]}`] = alter[3].toLowerCase();
-        continue;
-      }
-
-      const create = line.match(
-        /^create table (?:if not exists )?(?:public\.)?([a-z_]+)\s*\(/i,
-      );
-      if (create) {
-        createTable = create[1];
-        depth = 1; // the paren that opened the body
-        continue;
-      }
-      continue;
-    }
-
-    // Inside a create-table body. Read the column BEFORE updating depth, so a
-    // single-line definition that opens and closes its own parens - such as
-    // `tax_year integer not null check (tax_year between 2020 and 2100),` -
-    // is still seen at top level.
-    if (depth === 1) {
-      const col = line.match(/^([a-z_]+)\s+(uuid|bigint|integer|text|boolean|timestamptz|numeric|date)\b/i);
-      if (col) types[`${createTable}.${col[1]}`] = col[2].toLowerCase();
-    }
-
-    for (const ch of line) {
-      if (ch === "(") depth += 1;
-      else if (ch === ")") depth -= 1;
-    }
-    if (depth <= 0) createTable = "";
-  }
-
-  return types;
+  return migrationColumnTypesStrict(p);
 }
 
 export function migrationColumnNames(sourcePath?: string): readonly string[] {
