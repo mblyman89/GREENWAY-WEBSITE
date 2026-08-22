@@ -222,15 +222,17 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
       });
   }
 
-  it("finds at least the two pairs known to exist (rule 39: no vacuous pass)", () => {
+  it("finds at least the three pairs known to exist (rule 39: no vacuous pass)", () => {
     // A directory walk that finds nothing would make every test below pass
-    // without asserting anything. Measured at the time of writing: 0195 and
-    // 0196. The floor is 2, not 1, because 1 would still pass if 0196's copy
-    // were deleted.
+    // without asserting anything. Measured at the time of writing: 0195, 0196
+    // and 0197. The floor rises with each new copy on purpose - a floor of 1
+    // would still pass after two of the three copies were deleted, which is
+    // exactly the silent hole this block exists to close.
     const found = pairs().map((p) => p.base);
-    expect(found.length).toBeGreaterThanOrEqual(2);
+    expect(found.length).toBeGreaterThanOrEqual(3);
     expect(found).toContain("0195_employee_payroll_setup");
     expect(found).toContain("0196_company_profile");
+    expect(found).toContain("0197_timesheet_workweek");
   });
 
   it("every copy has a real migration behind it", () => {

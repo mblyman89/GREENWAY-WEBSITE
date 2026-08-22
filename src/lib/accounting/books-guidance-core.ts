@@ -84,6 +84,10 @@ import { REPORTING_AUTHORITIES_NEW } from "@/lib/reports/reporting-authorities";
 // books-28. See the file header there for why COSO can be quoted at all.
 import { COMPANY_IDENTITY_AUTHORITIES, type CompanyIdentityAuthority } from "./company-identity-authorities";
 import { INTERNAL_CONTROL_AUTHORITIES } from "./internal-control-authorities";
+// books-32. The timesheet slice: the workweek rule, the regular rate and the
+// Washington overtime statute. Imported in the same commit that declares it so
+// the registry can never contain a record no screen can resolve.
+import { TIMESHEET_AUTHORITIES, type TimesheetAuthority } from "@/lib/payroll/timesheet-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -489,6 +493,22 @@ function fromCompanyIdentity(a: CompanyIdentityAuthority): GuidanceAuthority {
   return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
 /**
+ * books-32. The timesheet registry, adapted for exactly the reason documented
+ * on `fromCompanyIdentity` above: `TimesheetAuthority` declares its own shape
+ * (this file imports that one, so the reverse import would be circular), and
+ * passing it through a function that RETURNS `GuidanceAuthority` is what forces
+ * tsc to notice if the two shapes ever drift apart.
+ *
+ * The narrow `kind` union over there is the point. `TimesheetAuthority.kind` is
+ * `"regulation" | "state_law"` - a strict subset of `GuidanceAuthorityKind`. If
+ * someone later adds a timesheet authority tagged with a kind this registry
+ * does not know, the build stops HERE, at the boundary, instead of rendering a
+ * blank weight badge next to a citation on a payroll screen.
+ */
+function fromTimesheet(a: TimesheetAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
+/**
  * GateAuthority carries no `kind` field at all, so one has to be derived. It
  * is derived FROM THE CITATION ITSELF rather than hand-assigned, because a
  * hand-assigned list is exactly the kind of thing that rots when someone adds
@@ -568,6 +588,13 @@ export const ALL_SOURCE_REGISTRIES = [
   // place that needs the whole set, and every downstream form builder resolves
   // its identity fields through it.
   "company-identity",
+  // books-32. The timesheet slice. Its own tag rather than folded into
+  // "payroll" because these authorities answer the question that comes BEFORE
+  // any tax question: how many hours are payable, and how many of them are
+  // overtime. Get this wrong and every downstream number - gross, withholding,
+  // 941, W-2, the L&I hours report - is wrong by the same amount, in the same
+  // direction, every period.
+  "timesheet",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -597,6 +624,16 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...COMPANY_IDENTITY_AUTHORITIES.map((a) => ({
       tag: "company-identity" as const,
       authority: fromCompanyIdentity(a),
+    })),
+    // books-32. The workweek authorities. 29 CFR 778.104 is the sentence that
+    // forbids averaging hours across two weeks, which is the single defect a
+    // biweekly employer is most likely to ship and least likely to notice.
+    // Merged here so that when the pay-run screen, the timesheet approval
+    // screen and (later) the L&I quarterly hours report each cite 778.104,
+    // they are all reading one record rather than three copies of it.
+    ...TIMESHEET_AUTHORITIES.map((a) => ({
+      tag: "timesheet" as const,
+      authority: fromTimesheet(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation

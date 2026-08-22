@@ -1,0 +1,27 @@
+SOURCE TEXT - 29 CFR Part 778 (selected sections)
+Retrieved 2026-08-22 from https://www.ecfr.gov/current/title-29/part-778
+Code of Federal Regulations. Edicts of government are not copyrightable;
+see Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+
+Sections mirrored: 778.104, 778.105, 778.109, 778.110
+==============================================================================
+
+§ 778.104 Each workweek stands alone.
+The Act takes a single workweek as its standard and does not permit averaging of hours over 2 or more weeks. Thus, if an employee works 30 hours one week and 50 hours the next, he must receive overtime compensation for the overtime hours worked beyond the applicable maximum in the second week, even though the average number of hours worked in the 2 weeks is 40. This is true regardless of whether the employee works on a standard or swing-shift schedule and regardless of whether he is paid on a daily, weekly, biweekly, monthly or other basis. The rule is also applicable to pieceworkers and employees paid on a commission basis. It is therefore necessary to determine the hours worked and the compensation earned by pieceworkers and commission employees on a weekly basis.
+
+==============================================================================
+
+§ 778.105 Determining the workweek.
+An employee's workweek is a fixed and regularly recurring period of 168 hours—seven consecutive 24-hour periods. It need not coincide with the calendar week but may begin on any day and at any hour of the day. For purposes of computing pay due under the Fair Labor Standards Act, a single workweek may be established for a plant or other establishment as a whole or different workweeks may be established for different employees or groups of employees. Once the beginning time of an employee's workweek is established, it remains fixed regardless of the schedule of hours worked by him. The beginning of the workweek may be changed if the change is intended to be permanent and is not designed to evade the overtime requirements of the Act. The proper method of computing overtime pay in a period in which a change in the time of commencement of the workweek is made, is discussed in §§ 778.301 and 778.302.
+
+==============================================================================
+
+§ 778.109 The regular rate is an hourly rate.
+The “regular rate” under the Act is a rate per hour. The Act does not require employers to compensate employees on an hourly rate basis; their earnings may be determined on a piece-rate, salary, commission, or other basis, but in such case the overtime compensation due to employees must be computed on the basis of the hourly rate derived therefrom and, therefore, it is necessary to compute the regular hourly rate of such employees during each workweek, with certain statutory exceptions discussed in §§ 778.400 through 778.421. The regular hourly rate of pay of an employee is determined by dividing his total remuneration for employment (except statutory exclusions) in any workweek by the total number of hours actually worked by him in that workweek for which such compensation was paid. The following sections give some examples of the proper method of determining the regular rate of pay in particular instances: (The maximum hours standard used in these examples is 40 hours in a workweek).
+
+==============================================================================
+
+§ 778.110 Hourly rate employee.
+(a) Earnings at hourly rate exclusively.  If the employee is employed solely on the basis of a single hourly rate, the hourly rate is the “regular rate.” For overtime hours of work the employee must be paid, in addition to the straight time hourly earnings, a sum determined by multiplying one-half the hourly rate by the number of hours worked in excess of 40 in the week. Thus a $12 hourly rate will bring, for an employee who works 46 hours, a total weekly wage of $588 (46 hours at $12 plus 6 at $6). In other words, the employee is entitled to be paid an amount equal to $12 an hour for 40 hours and $18 an hour for the 6 hours of overtime, or a total of $588.
+(b) Hourly rate and bonus.  If the employee receives, in addition to the earnings computed at the $12 hourly rate, a production bonus of $46 for the week, the regular hourly rate of pay is $13 an hour (46 hours at $12 yields $552; the addition of the $46 bonus makes a total of $598; this total divided by 46 hours yields a regular rate of $13). The employee is then entitled to be paid a total wage of $637 for 46 hours (46 hours at $13 plus 6 hours at $6.50, or 40 hours at $13 plus 6 hours at $19.50).
+[76 FR 18857, Apr. 5, 2011]
