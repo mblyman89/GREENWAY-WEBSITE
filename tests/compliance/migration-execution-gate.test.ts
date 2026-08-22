@@ -86,16 +86,21 @@ describe("the migration list is ordered the way the database will see it", () =>
     // one-element list, "it is sorted" would be true and meaningless.
     const listed = migrationFilesInOrder(MIGRATIONS_DIR);
     expect(listed[0]).toMatch(/^0001_/);
-    // books-32 made 0197 the last file. Asserted as the CURRENT highest rather
+    // books-33 made 0198 the last file. Asserted as the CURRENT highest rather
     // than a moving target, because the point of this test is that the list
     // really is sorted numerically and really does end where the directory
     // ends - a vacuous version of it would prove nothing about the ordering.
     //
     // This assertion is SUPPOSED to fail every time a migration is added. That
     // is not friction, it is the tripwire doing its job: it forces whoever adds
-    // 0198 to look at this file and confirm the ordering guarantee still holds
+    // 0199 to look at this file and confirm the ordering guarantee still holds
     // rather than letting the highest-numbered migration drift unwatched.
-    expect(listed[listed.length - 1]).toMatch(/^0197_/);
+    //
+    // IT FIRED ON 0198 AND IT WAS HONOURED, not silenced. Re-verified against
+    // the directory at that point: 198 files, every one zero-padded to four
+    // digits, `ls | sort -c` clean, so the string sort this module relies on is
+    // still identical to a numeric sort. Only then was the number advanced.
+    expect(listed[listed.length - 1]).toMatch(/^0198_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
