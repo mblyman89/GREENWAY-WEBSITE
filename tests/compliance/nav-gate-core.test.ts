@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the fourteen books screens plus Inventory Auditing", () => {
+  it("Accounting holds the sixteen books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -363,6 +363,22 @@ describe("N4 the Accounting and Lyman tabs", () => {
      * stand", and merging them would produce one screen that does neither well
      * while making the inbox too long to get read. Its gate is
      * tests/compliance/generosity-board.test.ts.
+     *
+     * BOOKS-37 ADDS /admin/books/net-pay AND /admin/books/ytd, making sixteen.
+     *
+     * Same rule 50 story as garnishments, twice over. `net-pay-core.ts` and its
+     * mentor layer, and `ytd-mentor.ts` at 1,052 lines, were all tested, all
+     * green and reachable from nowhere. They are a matched pair rather than one
+     * screen because they answer different questions: net pay is "how is ONE
+     * cheque built, in the order the statute sets", and year-to-date is "where
+     * does everybody stand for the year". The second is not a report of the
+     * first - it is an INPUT to it, because whether Social Security comes out
+     * of this Friday's cheque depends on what has already been paid. Before
+     * books-37 the only non-test caller passed ZERO_YTD, so the wage ceiling
+     * could never engage at all.
+     *
+     * Extended, not loosened, for the reason spelled out above: this list is
+     * the only thing that notices a screen going dark.
      */
     const hrefs = adminNav
       .filter((i) => i.group === ACCOUNTING_GROUP)
@@ -379,11 +395,13 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/journal",
         "/admin/books/leave",
         "/admin/books/ledger",
+        "/admin/books/net-pay",
         "/admin/books/payroll",
         "/admin/books/payroll-setup",
         "/admin/books/sick-leave-balances",
         "/admin/books/timesheets",
         "/admin/books/trial-balance",
+        "/admin/books/ytd",
         "/admin/inventory/audits",
       ].sort(),
     );

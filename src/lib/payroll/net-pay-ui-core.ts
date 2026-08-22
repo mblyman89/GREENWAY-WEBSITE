@@ -82,15 +82,22 @@ import {
   type VoluntaryDeduction,
 } from "@/lib/payroll/net-pay-core";
 import { GREENWAY_LNI_RISK_CLASS_CODE } from "@/lib/payroll/payroll-onboarding-ui-core";
-import type { RateLookup } from "@/lib/payroll/payroll-rate-registry-core";
+import {
+  ALL_PAYROLL_RATE_KEYS,
+  describeKey,
+  type PayrollRateKey,
+  type RateLookup,
+} from "@/lib/payroll/payroll-rate-registry-core";
 import { GREENWAY_RATES } from "@/lib/payroll/payroll-rates-2026";
 import type { W4Record } from "@/lib/payroll/payroll-w4-core";
 import {
   PAY_PERIODS_PER_YEAR,
+  defaultW4WhenNoneFurnished,
   validateW4,
   type PayFrequency,
 } from "@/lib/payroll/payroll-w4-core";
 import {
+  ZERO_YTD,
   computePaycheckTaxes,
   formatCentsPlain,
   type PaycheckTaxes,
@@ -651,6 +658,248 @@ export function garnishmentSummary(g: MultiOrderResult | null): string {
     );
   }
   return base;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * 6) CAN THE FIRST PAYROLL ACTUALLY RUN?
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * MICHAEL'S FIRST PAYROLL IS 1 JANUARY 2027, AND TODAY IT CANNOT BE COMPUTED.
+ *
+ * This is not a prediction. It was found by running `buildNetPayWorkedExample`
+ * against that exact date, which returned `ok: false` with seven rates missing:
+ * PFML total, PFML employer share, SUTA, both L&I rates, the Washington minimum
+ * wage and the federal minimum wage. Every one of those rows deliberately
+ * closes on 2026-12-31, because the agency that sets it had not yet published
+ * the 2027 figure when the row was written.
+ *
+ * That is the registry behaving CORRECTLY. RCW 49.46.020(2)(b) has L&I announce
+ * the next minimum wage on 30 September; ESD issues a new SUTA rate notice each
+ * December; the L&I rate notice arrives in December too. Refusing beats reusing
+ * 2026's numbers, because a paycheque computed on a stale rate adds up perfectly
+ * and is still wrong against the State — and against the employee.
+ *
+ * But "correct" and "safe" are not the same thing. If nobody notices until the
+ * morning of the first payroll, the first payroll does not run. The date is
+ * fixed, the notices arrive on somebody else's schedule, and the gap between
+ * those two facts is exactly where a cutover fails.
+ *
+ * So the check is a FUNCTION OF A DATE rather than a fact recorded about one.
+ * It iterates `ALL_PAYROLL_RATE_KEYS`, so a twelfth rate added next year is
+ * covered the day it is added and cannot be silently forgotten here (standing
+ * rule 50: the alternative is a hand-typed list wearing a green check).
+ */
+export type RateReadiness = {
+  readonly key: PayrollRateKey;
+  /** The rate in Michael's words, from the registry's own describeKey. */
+  readonly label: string;
+  readonly onFile: boolean;
+  /** Present only when `onFile` is false: what is missing and what to do. */
+  readonly why: string | null;
+  readonly whatToDo: string | null;
+};
+
+export type PayDateReadiness = {
+  readonly payDateIso: string;
+  /** True only when EVERY rate is on file. Not a score, not a percentage. */
+  readonly canRun: boolean;
+  readonly rates: readonly RateReadiness[];
+  readonly missingCount: number;
+  /** One sentence Michael can act on. Never blank, never a bare count. */
+  readonly summary: string;
+};
+
+/**
+ * Which rates are on file for a pay date, and therefore whether it can run.
+ *
+ * PURE and total: no clock, no I/O, no throw. The date is an argument because a
+ * function that read `new Date()` would answer a different question every day
+ * and could not be tested (standing rule 15).
+ */
+export function payDateReadiness(payDateIso: string): PayDateReadiness {
+  const rates: RateReadiness[] = ALL_PAYROLL_RATE_KEYS.map((key) => {
+    const hit = GREENWAY_RATES.lookup(key, payDateIso);
+    return {
+      key,
+      label: describeKey(key),
+      onFile: hit.ok,
+      why: hit.ok ? null : hit.refusal.message,
+      whatToDo: hit.ok ? null : hit.refusal.whatToDo,
+    };
+  });
+
+  const missing = rates.filter((r) => !r.onFile);
+  const canRun = missing.length === 0;
+
+  // The summary NAMES the missing rates rather than counting them. "7 rates
+  // missing" tells Michael he has a problem; naming them tells him which four
+  // agencies to chase, which is the difference between a warning and an action.
+  const summary = canRun
+    ? `Every rate a paycheque needs is on file for ${payDateIso}. This pay date can be computed today.`
+    : `${missing.length} of ${rates.length} rates have no evidenced row covering ${payDateIso}: ` +
+      `${missing.map((m) => m.label).join(", ")}. Until each one is on file with the notice it ` +
+      `came from, no paycheque dated ${payDateIso} can be calculated — the system refuses rather ` +
+      `than reusing the prior year's figure.`;
+
+  return { payDateIso, canRun, rates, missingCount: missing.length, summary };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * 7) THE ILLUSTRATION, DERIVED RATHER THAN TYPED
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * WHY THIS SCREEN SHOWS AN ILLUSTRATION AND SAYS SO IN SO MANY WORDS.
+ *
+ * There is no real cheque to show yet, and there are two independent reasons —
+ * both verified, neither assumed:
+ *
+ *   1. Michael's first payroll is 1 January 2027. Today is 2026. There are no
+ *      pay runs, so there is nothing to display.
+ *   2. Even after the first run, `payroll_run_lines` stores ONE `taxes_cents`
+ *      column. Disposable earnings under 15 U.S.C. 1672(b) are gross less the
+ *      amounts REQUIRED BY LAW to be withheld, and a single lump cannot say
+ *      whether a voluntary health premium is hiding inside it. Reading that
+ *      column and calling the answer "disposable earnings" would reintroduce
+ *      the exact over/under-garnishment defect this slice exists to prevent.
+ *
+ * The dishonest option is to fill a screen with plausible numbers. The number
+ * $2,740.80 looks like evidence and is nothing of the kind — it is a number
+ * somebody typed. So the illustration below TYPES NOTHING it can derive:
+ *
+ *   hourly rate  = the Washington minimum wage row for that date, from the
+ *                  registry, with the L&I announcement behind it
+ *   hours        = 80, which is 2 × the 40-hour FLSA workweek, and the same 2
+ *                  that `workweeksInPeriod` passes to 29 CFR 870.10(c)(2)
+ *   gross        = rate × hours, computed, not asserted
+ *
+ * The only genuinely chosen inputs are the shape of the example — full-time,
+ * biweekly, one child-support order — and those are choices about WHAT TO
+ * TEACH, not claims about Michael's payroll. They are labelled as such on the
+ * screen rather than left for him to infer.
+ */
+export type IllustrationShape = "no_orders" | "child_support";
+
+export type IllustrationScenario = {
+  readonly scenario: NetPayScenario;
+  /**
+   * Exactly where every figure came from, for the screen to print verbatim.
+   * A worked example whose inputs are unexplained teaches the wrong lesson.
+   */
+  readonly provenance: string;
+  /** Null when the minimum wage for this date is not on file. */
+  readonly hourlyRateMilliCents: number | null;
+};
+
+/** Two 40-hour FLSA workweeks. Named because 80 on its own is a magic number. */
+const ILLUSTRATION_HOURS_PER_PERIOD = 80;
+const ILLUSTRATION_WORKWEEKS = 2;
+
+/**
+ * Build the illustration for a pay date, deriving the pay rate from evidence.
+ *
+ * PURE and total. When the minimum wage row for the date is missing the gross
+ * comes back as zero AND `hourlyRateMilliCents` is null — the caller must not
+ * paper over that, and `payDateReadiness` will already be saying so loudly.
+ */
+export function buildIllustrationScenario(
+  payDateIso: string,
+  shape: IllustrationShape,
+): IllustrationScenario {
+  const wageLookup = GREENWAY_RATES.lookupValue(
+    "wa_minimum_wage",
+    payDateIso,
+    "milli_cents_per_hour",
+  );
+  const hourlyRateMilliCents = wageLookup.ok ? wageLookup.value : null;
+
+  // Milli-cents per hour × hours ÷ 1000 = cents. Integer arithmetic throughout;
+  // no floating point ever touches money in this codebase.
+  const grossWagesCents =
+    hourlyRateMilliCents === null
+      ? 0
+      : Math.round((hourlyRateMilliCents * ILLUSTRATION_HOURS_PER_PERIOD) / 1000);
+
+  /*
+   * A SIGNED W-4 AT THE PUB. 15-T DEFAULT.
+   *
+   * `defaultW4WhenNoneFurnished` is the IRS's own no-W-4 treatment — single,
+   * nothing claimed in Steps 2, 3 or 4 — so the elections are not invented
+   * either. The signature date is added because `validateW4` BLOCKS an unsigned
+   * form, and correctly: a W-4 is signed under penalty of perjury, so an
+   * unsigned one is a draft. Verified by running it, not by reading it.
+   */
+  const w4: W4Record = {
+    ...defaultW4WhenNoneFurnished("illustration-employee", 2026),
+    signedAt: "2026-11-02",
+  };
+
+  /*
+   * THE CHILD-SUPPORT ORDER, WITH BOTH DETERMINING FACTS SUPPLIED.
+   *
+   * Michael asked specifically about child support. `garnishment-core` REFUSES
+   * a support order when `arrearsOverTwelveWeeks` or `supportsSecondFamily` is
+   * null, because those two facts pick the row of the 15 U.S.C. 1673(b)(2)
+   * matrix — 50, 55, 60 or 65 percent — and guessing picks a ceiling that is
+   * wrong in one direction or the other. Both are stated here so the example
+   * demonstrates the arithmetic; on a real order they come off the paperwork.
+   */
+  const orders: readonly WageOrder[] =
+    shape === "child_support"
+      ? [
+          {
+            id: "illustration-order",
+            employeeId: "illustration-employee",
+            orderKind: "child_support",
+            caseNumber: "ILLUSTRATION — NOT A REAL CASE",
+            amountCents: null,
+            percentOfDisposableBasisPoints: 2500,
+            arrearsOverTwelveWeeks: false,
+            supportsSecondFamily: true,
+            priority: 1,
+          },
+        ]
+      : [];
+
+  const rateSentence =
+    hourlyRateMilliCents === null
+      ? `The Washington minimum wage for ${payDateIso} is not on file, so this illustration has no pay rate to work from and shows a refusal instead of a cheque.`
+      : `The pay rate is the Washington minimum wage in force on ${payDateIso}, read from the rate registry with the L&I announcement behind it — not a figure typed into this page. ` +
+        `${formatCentsPlain(Math.round(hourlyRateMilliCents / 1000))} per hour × ${ILLUSTRATION_HOURS_PER_PERIOD} hours ` +
+        `(two 40-hour workweeks) = ${formatCentsPlain(grossWagesCents)} gross.`;
+
+  const shapeSentence =
+    shape === "child_support"
+      ? "One child-support order is attached at 25% of disposable earnings, with no arrears over twelve weeks and a second family supported — the two facts that pick the ceiling under 15 U.S.C. 1673(b)(2). The case number is not a real case."
+      : "No court or agency orders are attached, so net pay and after-tax pay are the same figure here.";
+
+  return {
+    hourlyRateMilliCents,
+    provenance:
+      `This is a worked ILLUSTRATION, not a record of a cheque anybody was paid. ` +
+      `${rateSentence} ${shapeSentence} ` +
+      `Year-to-date starts at zero, so the Social Security wage cap does not engage — on a real ` +
+      `cheque the year-to-date store supplies that figure and the cap can engage mid-year. ` +
+      `Every amount below was produced by the same engines a real pay run uses; nothing on the ` +
+      `screen is a stored number.`,
+    scenario: {
+      employeeName:
+        shape === "child_support"
+          ? "Illustration — full-time, one support order"
+          : "Illustration — full-time, no orders",
+      payDateIso,
+      grossWagesCents,
+      // L&I is charged per HOUR worked, in hundredths of an hour.
+      hundredthHours: ILLUSTRATION_HOURS_PER_PERIOD * 100,
+      payFrequency: "biweekly",
+      w4,
+      ytd: ZERO_YTD,
+      orders,
+      voluntaryDeductions: [],
+      workweeksInPeriod: ILLUSTRATION_WORKWEEKS,
+    },
+  };
 }
 
 /** Re-exported so a screen never has to reach past this module for the engine. */
