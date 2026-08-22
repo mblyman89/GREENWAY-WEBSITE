@@ -72,6 +72,40 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^29 C\.?F\.?R\.? §778\.\d+/,
     file: () => ["federal", "29-cfr-778-overtime.txt"],
   },
+  // books-33. 29 CFR part 870 implements the CCPA garnishment restrictions.
+  // Same one-file-per-part shape as 778 above, because 870.10's subsections are
+  // read together: (a) the statutory ceiling, (b) the weekly worked examples,
+  // (c) the conversion to a longer pay period - which is the one that matters
+  // at Greenway, since a biweekly cheque doubles the protected floor.
+  {
+    name: "29 CFR part 870",
+    re: /^29 C\.?F\.?R\.? §870\.\d+/,
+    file: () => ["federal", "29-cfr-870-garnishment.txt"],
+  },
+  // books-33. Title 15 chapter 41 subchapter II is the Consumer Credit
+  // Protection Act. Unlike title 26, these are mirrored one file per SECTION
+  // (1672 definitions, 1673 restrictions), so the section number is captured.
+  {
+    name: "15 U.S.C.",
+    re: /^15 U\.?S\.?C\.? §(\d+[a-z]?)/,
+    file: (m) => ["federal", `usc-15-${m[1]}.txt`],
+  },
+  // books-33. The Washington Administrative Code. Mirrored one file per
+  // CHAPTER-AND-TOPIC rather than per section, because the paid sick leave
+  // rules are only intelligible together: -620 accrual, -630 usage, -650
+  // notice, -660 verification, -670 rate of pay, -680 payment, -755
+  // notification. A citation names a section; the file holds the set.
+  //
+  // The mapping is explicit rather than derived from the section number,
+  // because "which mirrored file holds WAC 296-128-620" is a fact about how we
+  // chose to store it, not something a regex can infer. An unmapped WAC
+  // citation therefore falls through to null and is reported as unmirrored
+  // rather than being silently skipped - see expectedCorpusFile.
+  {
+    name: "WAC 296-128 paid sick leave",
+    re: /^WAC 296-128-(6[2-8]0|755)/,
+    file: () => ["state-wa", "wac-296-128-paid-sick-leave.txt"],
+  },
   {
     name: "IRS Publication",
     re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
@@ -333,6 +367,51 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   // a paraphrase, so the regulation is mirrored and the quote is checked.
   if (/^29 C\.?F\.?R\.? §778\.\d+/.test(cite)) {
     const p = join(dir, "federal", "29-cfr-778-overtime.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  // 29 CFR §870.10  ->  federal/29-cfr-870-garnishment.txt
+  //
+  // books-33. §870.10(c)(2) is the sentence that converts the weekly protected
+  // floor to a biweekly one. Greenway pays biweekly, so an engine that skipped
+  // it would over-garnish every cheque by a consistent amount forever - and
+  // the regulation's own printed dollar figures are frozen at the 1991 $4.25
+  // wage, so anybody working from memory of "$127.50" would be badly wrong.
+  // Mirrored and checked for exactly that reason.
+  if (/^29 C\.?F\.?R\.? §870\.\d+/.test(cite)) {
+    const p = join(dir, "federal", "29-cfr-870-garnishment.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  // 15 U.S.C. §1673(a)  ->  federal/usc-15-1673.txt
+  //
+  // books-33. The CCPA. Note the FILENAME CARRIES THE TITLE NUMBER - usc-15-
+  // rather than usc- - to keep title 15 unambiguous against the title 26
+  // sections mirrored as usc-<section>.txt. §1673 and §1366 would otherwise be
+  // indistinguishable filenames, and the paragraph pinpoint in the citation is
+  // deliberately discarded because one mirrored file holds the whole section.
+  const usc15 = /^15 U\.?S\.?C\.? §(\d+[a-z]?)/.exec(cite);
+  if (usc15) {
+    const p = join(dir, "federal", `usc-15-${usc15[1]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // WAC 296-128-620(1)  ->  state-wa/wac-296-128-paid-sick-leave.txt
+  //
+  // books-33. Mirrored one file per TOPIC, not per section: the paid sick leave
+  // rules are read together and splitting them into seven files would make the
+  // corpus harder to verify against, not easier.
+  //
+  // THE RANGE IS DELIBERATELY NARROW. It matches only the sections actually in
+  // that mirrored file (-620 through -680, plus -755). A citation to some other
+  // WAC 296-128 section - say -640 variances, which we have NOT mirrored -
+  // falls through to null and is reported as unmirrored debt. That is the
+  // correct outcome: pretending the sick-leave file covers it would make the
+  // checker look in the wrong place, fail to find the quote, and report a drift
+  // that does not exist. Standing rule 48 - a check that cannot classify its
+  // input has to say so rather than guess.
+  if (/^WAC 296-128-(6[2-8]0|755)/.test(cite)) {
+    const p = join(dir, "state-wa", "wac-296-128-paid-sick-leave.txt");
     return existsSync(p) ? p : null;
   }
 

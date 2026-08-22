@@ -23,17 +23,21 @@ import { join } from "node:path";
 import {
   COMPANY_FIELD_LESSONS,
   COMPANY_SCREEN_LESSONS,
-  CORE_FUNCTION_COVERAGE,
   assertEveryCitedAuthorityExists,
   assertEveryFieldIsTaught,
   assertEveryFormCanBeExplained,
-  assertEveryExportedFunctionIsTaught,
   assertNoLessonForUnknownField,
   explainFormNeeds,
-  exportedCoreFunctionNames,
   taughtFieldNames,
   unusedAuthorityIds,
 } from "@/lib/accounting/company-identity-mentor";
+// books-33 moved the two disk-reading gates into this sibling so the mentor
+// stays browser-safe. Both are still called below, unchanged.
+import {
+  CORE_FUNCTION_COVERAGE,
+  assertEveryExportedFunctionIsTaught,
+  exportedCoreFunctionNames,
+} from "@/lib/accounting/company-identity-mentor-gates";
 import { COMPANY_FIELDS, COMPANY_FORMS, FORM_TITLES } from "@/lib/accounting/company-identity-core";
 import { COMPANY_IDENTITY_AUTHORITIES } from "@/lib/accounting/company-identity-authorities";
 

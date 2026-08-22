@@ -1614,3 +1614,46 @@ building the matcher twice.
     tree against the remote BEFORE continuing -- `git status`, `git log`, and an
     `ls` of the slice's own files. Assuming continuity is how recovered work
     silently ships incomplete.
+
+65. GREEN CI THAT NEVER RAN THE FAILING COMMAND.
+    For several slices EVERY Vercel deployment -- preview and production --
+    failed, and this repository's CI was green for every one of them. Michael
+    could not see any new work on his own site. The error was:
+
+        the chunking context (unknown) does not support external modules
+        (request: node:fs)
+
+    Two `"use client"` components imported their mentor modules for lesson
+    text. Those mentors also held the rule-26 coverage gates, which call
+    `readFileSync`. A client component's whole import graph gets bundled for a
+    browser; a browser has no filesystem; Turbopack refused.
+
+    Every check we owned passed the entire time. 8252 tests, `tsc --noEmit`,
+    scoped eslint, migrations against real Postgres. Not one of them runs
+    `next build`, and `next build` was the only thing that was broken. This is
+    rule 50 in its most convincing costume: it is not one dead check, it is a
+    WALL of live checks that all look somewhere else.
+
+    So the rule has two halves.
+
+    65a. CI MUST RUN THE COMMAND THE HOST RUNS. If production is built by
+    `next build`, CI runs `next build`. A test suite is not a proxy for a
+    bundler, a type-checker is not a proxy for a bundler, and "it compiles
+    locally" is not a proxy for anything. Any command a deployment depends on
+    that CI does not execute is an unmonitored surface, and it will break
+    quietly and stay broken.
+
+    65b. KEEP NODE-ONLY CODE OUT OF ANYTHING A CLIENT COMPONENT CAN REACH.
+    Mentor modules hold two different kinds of thing: lesson DATA, which is
+    pure and belongs in the browser, and coverage GATES, which read the engine
+    off disk and must never go near it. They now live in separate files --
+    `x-mentor.ts` and `x-mentor-gates.ts` -- and the gates are imported by
+    tests only. `tests/compliance/client-bundle-purity.test.ts` walks the
+    client import graph and fails, naming the exact chain, if the two ever mix
+    again. Fixing the instance is not fixing the class (rule 64a).
+
+    Corollary, learned while proving the guard: when a mutation campaign pipes
+    a test runner through `cat -v | sed`, `$?` is the exit of the LAST stage,
+    which is always 0. Three real kills were reported as "SURVIVED" by a
+    harness that was measuring the wrong thing. Capture the runner's own exit
+    code before piping, or the campaign grades itself on nothing.

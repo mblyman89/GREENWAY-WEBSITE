@@ -24,6 +24,15 @@ import {
   TIMESHEET_SCREEN_LESSONS,
   TIMESHEET_REFUSAL_LESSONS,
   TIMESHEET_SETUP_STEPS,
+  evaluateTimesheetSetup,
+  describeWorkweek,
+  taughtFieldNames,
+  type TimesheetSetupFacts,
+} from "@/lib/payroll/timesheet-mentor";
+// books-33 moved the disk-reading gates into this sibling module so that the
+// mentor stays browser-safe; see the header of timesheet-mentor-gates.ts. The
+// gates are unchanged and this file still calls every one of them.
+import {
   CORE_FUNCTION_COVERAGE,
   assertEveryFieldIsTaught,
   assertNoLessonForUnknownField,
@@ -35,11 +44,7 @@ import {
   exportedCoreFunctionNames,
   migrationFieldNames,
   unusedAuthorityIds,
-  evaluateTimesheetSetup,
-  describeWorkweek,
-  taughtFieldNames,
-  type TimesheetSetupFacts,
-} from "@/lib/payroll/timesheet-mentor";
+} from "@/lib/payroll/timesheet-mentor-gates";
 
 // A temp file whose contents we control, for proving a gate can fail.
 function tempSource(contents: string, name = "probe.ts"): string {

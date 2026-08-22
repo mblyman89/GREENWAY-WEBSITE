@@ -123,3 +123,52 @@ jobs:
         env:
           PGURL: postgres://postgres:postgres@localhost:5432/greenway
         run: npx tsx scripts/compliance/verify-migrations-execute.ts
+
+  # ==========================================================================
+  # STANDING RULE 65: if a build system can catch it, CI must catch it first.
+  #
+  # WHY THIS JOB EXISTS. For several slices every Vercel deployment - preview
+  # AND production - failed with:
+  #
+  #     the chunking context (unknown) does not support external modules
+  #     (request: node:fs)
+  #
+  # and this workflow was GREEN for every one of them. The compliance job runs
+  # vitest, the pure self-tests and a scoped lint. The migrations job runs SQL
+  # against a real Postgres. Neither has ever run `next build`, which is the
+  # only thing that bundles client components - so the one surface that was
+  # broken was the one surface nothing looked at. Michael could not see any new
+  # work on his own site and nothing here said why.
+  #
+  # A tests/compliance/client-bundle-purity.test.ts guard now catches the
+  # specific node:fs class of defect in milliseconds. This job is the backstop
+  # for everything that guard cannot model, which is most of what a bundler
+  # does. Green CI must mean the site actually builds.
+  # ==========================================================================
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      # The same command Vercel runs. NODE_OPTIONS mirrors the headroom a
+      # Vercel build machine has (8 GB); the GitHub runner has 16 GB, so this
+      # is deliberately generous rather than tight - an OOM here would be a
+      # false red that teaches everyone to ignore the job.
+      - name: next build (the command Vercel runs)
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        # NO Supabase placeholders here on purpose. It is tempting to add
+        # NEXT_PUBLIC_* stand-ins "just in case", but a local `next build` in
+        # this repo compiles with none of them set, so adding them would be
+        # inventing a default nobody proved was needed (rule 62d) - and a fake
+        # URL that silences a real "you forgot to configure this" error is
+        # exactly the kind of helpfulness that hides a defect. If this job ever
+        # fails for a missing variable, the fix is to read the error and add
+        # the ONE variable it names.
+        run: npm run build
