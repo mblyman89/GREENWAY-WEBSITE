@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the twelve books screens plus Inventory Auditing", () => {
+  it("Accounting holds the thirteen books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -341,6 +341,20 @@ describe("N4 the Accounting and Lyman tabs", () => {
      * APPROVED before it can appear on a timesheet. It sits in Accounting rather
      * than Staffing because approving it moves a balance, creates a wage payable
      * and ends up in box 1 of a W-2. Its gate is tests/compliance/leave-inbox-screen.test.ts.
+     *
+     * BOOKS-36 ADDS /admin/books/garnishments, AND WHY THAT LINE IS THE POINT.
+     *
+     * The phase A audit looked for teaching that no screen imports and found
+     * that `garnishment-core`, `garnishment-authorities` and `garnishment-mentor`
+     * - roughly 2,500 lines, fully tested, implementing the entire CCPA support
+     * matrix Michael asked about by name - were reachable from nowhere. There
+     * was no nav entry because there was no page. Nothing was red. Every test
+     * passed. That is standing rule 50, and THIS assertion is the thing that
+     * would have caught the reverse mistake: if the page is ever unlinked from
+     * the nav, the code goes dark again and this line goes red.
+     *
+     * So the list grows to thirteen, and once again it is EXTENDED, not
+     * loosened to a `toContain`. Its gate is tests/compliance/garnishment-screen.test.ts.
      */
     const hrefs = adminNav
       .filter((i) => i.group === ACCOUNTING_GROUP)
@@ -353,6 +367,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/bank",
         "/admin/books/bills",
         "/admin/books/conversion",
+        "/admin/books/garnishments",
         "/admin/books/journal",
         "/admin/books/leave",
         "/admin/books/ledger",
