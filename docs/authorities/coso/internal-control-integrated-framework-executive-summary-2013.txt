@@ -1,0 +1,587 @@
+Internal Control — Integrated Framework
+Executive Summary
+Committee of Sponsoring Organizations of the Treadway Commission
+May 2013
+ISBN 978-1-93735-239-4
+©2013 All Rights Reserved. No part of this publication may be reproduced, redistributed, transmitted or displayed in
+any form or by any means without written permission. For information regarding licensing and reprint permissions please
+contact the American Institute of Certified Public Accountants, licensing and permissions agent for COSO copyrighted
+materials. Direct all inquiries to copyright@aicpa.org or to AICPA, Attn: Manager, Rights and Permissions, 220 Leigh
+Farm Rd., Durham, NC 27707. Telephone inquiries may be directed to 888-777-7077.
+Internal Control — Integrated Framework
+Executive Summary
+Committee of Sponsoring Organizations of the Treadway Commission
+C o m m i t t e e o f S p o n s o r i n g O r g a n i z a t i o n s o f t h e T r e a d w a y C o m m i s s i o n
+May 2013
+This project was commissioned by COSO, which is dedicated to providing thought leadership through the development of comprehensive frameworks and guidance on internal
+control, enterprise risk management, and fraud deterrence designed to improve organizational performance and oversight and to reduce the extent of fraud in organizations.
+COSO is a private sector initiative, jointly sponsored and funded by:
+•
+• American Accounting Association (AAA)
+•
+• American Institute of Certified Public Accountants (AICPA)
+•
+• Financial Executives International (FEI)
+•
+• Institute of Management Accountants (IMA)
+•
+• The Institute of Internal Auditors (IIA)
+Committee of Sponsoring Organizations of
+the Treadway Commission
+Board Members
+David L. Landsittel
+COSO Chair
+Mark S. Beasley
+Douglas F. Prawitt
+American Accounting Association
+Richard F. Chambers
+The Institute of Internal Auditors
+Charles E. Landes
+American Institute of Certified
+Public Accountants
+Marie N. Hollein
+Financial Executives International
+Sandra Richtermeyer
+Jeffrey C. Thomson
+Institute of Management
+Accountants
+PwC—Author
+Principal Contributors
+Miles E.A. Everson
+Engagement Leader
+New York, USA
+Stephen E. Soske
+Project Lead Partner
+Boston, USA
+Frank J. Martens
+Project Lead Director
+Vancouver, Canada
+Cara M. Beston
+Partner
+San Jose, USA
+Charles E. Harris
+Partner
+Florham Park, USA
+J. Aaron Garcia
+Director
+San Diego, USA
+Catherine I. Jourdan
+Director
+Paris, France
+Jay A. Posklensky
+Director
+Florham Park, USA
+Sallie Jo Perraglia
+Manager
+New York, USA
+Advisory Council
+Sponsoring Organizations Representatives
+Audrey A. Gramling
+Bellarmine University
+Fr. Raymond J. Treece
+Endowed Chair
+Steven E. Jameson
+Community Trust Bank
+Executive Vice President and Chief
+Internal Audit & Risk Officer
+J. Stephen McNally
+Campbell Soup Company
+Finance Director/Controller
+Ray Purcell
+Pfizer
+Director of Financial Controls
+William D. Schneider Sr.
+AT&T
+Director of Accounting
+Members at Large
+Jennifer Burns
+Deloitte
+Partner
+James DeLoach
+Protiviti
+Managing Director
+Trent Gazzaway
+Grant Thornton
+Partner
+Cees Klumper
+The Global Fund to Fight AIDS,
+Tuberculosis and Malaria
+Chief Risk Officer
+Thomas Montminy
+PwC
+Partner
+Alan Paulus
+Ernst & Young LLP
+Partner
+Thomas Ray
+Baruch College
+Dr. Larry E. Rittenberg
+University of Wisconsin
+Emeritus Professor of Accounting
+Chair Emeritus COSO
+Sharon Todd
+KPMG
+Partner
+Kenneth L. Vander Wal
+ISACA
+International President
+2011–2012
+Regulatory Observers and Other Observers
+James Dalkin
+Government Accountability Office
+Director in the Financial
+Management and
+Assurance Team
+Harrison E. Greene Jr.
+Federal Deposit Insurance
+Corporation
+Assistant Chief Accountant
+Christian Peo
+Securities and Exchange
+Commission
+Professional Accounting Fellow
+(Through June 2012)
+Amy Steele
+Securities and Exchange
+Commission
+Associate Chief Accountant
+(Commencing July 2012)
+Vincent Tophoff
+International Federation
+of Accountants
+Senior Technical Manager
+Keith Wilson
+Public Company Accounting
+Oversight Board
+Deputy Chief Auditor
+Foreword
+In 1992 the Committee of Sponsoring Organizations of the Treadway Commission
+(COSO) released its Internal Control—Integrated Framework (the original framework).
+The original framework has gained broad acceptance and is widely used around the
+world. It is recognized as a leading framework for designing, implementing, and conducting internal control and assessing the effectiveness of internal control.
+In the twenty years since the inception of the original framework, business and operating environments have changed dramatically, becoming increasingly complex, technologically driven, and global. At the same time, stakeholders are more engaged, seeking
+greater transparency and accountability for the integrity of systems of internal control
+that support business decisions and governance of the organization.
+COSO is pleased to present the updated Internal Control—Integrated Framework
+(Framework). COSO believes the Framework will enable organizations to effectively
+and efficiently develop and maintain systems of internal control that can enhance the
+likelihood of achieving the entity’s objectives and adapt to changes in the business and
+operating environments.
+The experienced reader will find much that is familiar in the Framework, which builds
+on what has proven useful in the original version. It retains the core definition of internal
+control and the five components of internal control. The requirement to consider the
+five components to assess the effectiveness of a system of internal control remains
+unchanged fundamentally. Also, the Framework continues to emphasize the importance
+of management judgment in designing, implementing, and conducting internal control,
+and in assessing the effectiveness of a system of internal control.
+At the same time, the Framework includes enhancements and clarifications that are
+intended to ease use and application. One of the more significant enhancements is the
+formalization of fundamental concepts that were introduced in the original framework. In
+the updated Framework, these concepts are now principles, which are associated with
+the five components, and which provide clarity for the user in designing and implementing systems of internal control and for understanding requirements for effective internal
+control.
+The Framework has been enhanced by expanding the financial reporting category of
+objectives to include other important forms of reporting, such as non-financial and
+internal reporting. Also, the Framework reflects considerations of many changes in the
+business and operating environments over the past several decades, including:
+•
+• Expectations for governance oversight
+•
+• Globalization of markets and operations
+•
+• Changes and greater complexities of business
+•
+• Demands and complexities in laws, rules, regulations, and standards
+•
+• Expectations for competencies and accountabilities
+•
+• Use of, and reliance on, evolving technologies
+•
+• Expectations relating to preventing and detecting fraud
+Internal Control — Integrated Framework • May 2013 i
+Internal Control—Integrated Framework
+This Executive Summary, provides a high-level overview intended for the board of
+directors, chief executive officer, and other senior management. The Framework and
+Appendices publication sets out the Framework, defining internal control, describing
+requirements for effective internal control including components and relevant principles,
+and providing direction for all levels of management to use in designing, implementing,
+and conducting internal control and in assessing its effectiveness. Appendices within
+the Framework and Appendices provide additional reference, but are not considered a
+part of the Framework. The Illustrative Tools for Assessing Effectiveness of a System of
+Internal Control, provides templates and scenarios that may be useful in applying the
+Framework.
+In addition to the Framework, Internal Control over External Financial Reporting: A
+Compendium of Approaches and Examples has been published concurrently to provide
+practical approaches and examples that illustrate how the components and principles
+set forth in the Framework can be applied in preparing external financial statements.
+COSO previously issued Guidance on Monitoring Internal Control Systems to help organizations understand and apply monitoring activities within a system of internal control.
+While this guidance was prepared to assist in applying the original framework, COSO
+believes this guidance has similar applicability to the updated Framework.
+COSO may, in the future, issue other documents to provide assistance in applying the
+Framework. However, neither the Internal Control over External Financial Reporting: A
+Compendium of Approaches and Examples, Guidance on Monitoring Internal Control
+Systems, nor any other past or future guidance takes precedence over the Framework.
+Among other publications published by COSO is the Enterprise Risk Management—
+Integrated Framework (ERM Framework). The ERM Framework and the Framework
+are intended to be complementary, and neither supersedes the other. Yet, while these
+frameworks are distinct and provide a different focus, they do overlap. The ERM
+Framework encompasses internal control, with several portions of the text of the original
+Internal Control–Integrated Framework reproduced. Consequently, the ERM Framework
+remains viable and suitable for designing, implementing, conducting, and assessing
+enterprise risk management.
+Finally, COSO would like to thank PwC and the Advisory Council for their contributions in developing the Framework and related documents. Their full consideration of
+input provided by many stakeholders and their insight were instrumental in ensuring
+that the core strengths of the original framework have been preserved, clarified, and
+strengthened.
+David L. Landsittel
+COSO Chair
+Internal Control — Integrated Framework • May 2013
+ii
+Executive Summary
+Internal control helps entities achieve important objectives and sustain and improve
+performance. COSO’s Internal Control—Integrated Framework (Framework) enables
+organizations to effectively and efficiently develop systems of internal control that adapt
+to changing business and operating environments, mitigate risks to acceptable levels,
+and support sound decision making and governance of the organization.
+Designing and implementing an effective system of internal control can be challenging;
+operating that system effectively and efficiently every day can be daunting. New and
+rapidly changing business models, greater use and dependence on technology, increasing regulatory requirements and scrutiny, globalization, and other challenges demand
+any system of internal control to be agile in adapting to changes in business, operating
+and regulatory environments.
+An effective system of internal control demands more than rigorous adherence to policies and procedures: it requires the use of judgment. Management and boards of directors1
+use judgment to determine how much control is enough. Management and other
+personnel use judgment every day to select, develop, and deploy controls across the
+entity. Management and internal auditors, among other personnel, apply judgment as
+they monitor and assess the effectiveness of the system of internal control.
+The Framework assists management, boards of directors, external stakeholders, and
+others interacting with the entity in their respective duties regarding internal control
+without being overly prescriptive. It does so by providing both understanding of what
+constitutes a system of internal control and insight into when internal control is being
+applied effectively.
+For management and boards of directors, the Framework provides:
+•
+• A means to apply internal control to any type of entity, regardless of industry
+or legal structure, at the levels of entity, operating unit, or function
+•
+• A principles-based approach that provides flexibility and allows for judgment
+in designing, implementing, and conducting internal control—principles that
+can be applied at the entity, operating, and functional levels
+•
+• Requirements for an effective system of internal control by considering how
+components and principles are present and functioning and how components
+operate together
+•
+• A means to identify and analyze risks, and to develop and manage appropriate responses to risks within acceptable levels and with a greater focus on
+anti-fraud measures
+1 The Framework uses the term “board of directors,” which encompasses the governing body, including
+board, board of trustees, general partners, owner, or supervisory board.
+Internal Control — Integrated Framework • May 2013 1
+Internal Control—Integrated Framework
+•
+• An opportunity to expand the application of internal control beyond financial
+reporting to other forms of reporting, operations, and compliance objectives
+•
+• An opportunity to eliminate ineffective, redundant, or inefficient controls
+that provide minimal value in reducing risks to the achievement of the
+entity’s objectives
+For external stakeholders of an entity and others that interact with the entity, application
+of this Framework provides:
+•
+• Greater confidence in the board of directors’ oversight of internal
+control systems
+•
+• Greater confidence regarding the achievement of entity objectives
+•
+• Greater confidence in the organization’s ability to identify, analyze, and
+respond to risk and changes in the business and operating environments
+•
+• Greater understanding of the requirement of an effective system of
+internal control
+•
+• Greater understanding that through the use of judgment, management may be
+able to eliminate ineffective, redundant, or inefficient controls
+Internal control is not a serial process but a dynamic and integrated process. The
+Framework applies to all entities: large, mid-size, small, for-profit and not-for-profit,
+and government bodies. However, each organization may choose to implement internal
+control differently. For instance, a smaller entity’s system of internal control may be less
+formal and less structured, yet still have effective internal control.
+The remainder of this Executive Summary provides an overview of internal control,
+including a definition, categories of objective, description of the requisite components
+and associated principles, and requirement of an effective system of internal control.
+It also includes a discussion of limitations—the reasons why no system of internal
+control can be perfect. Finally, it offers considerations on how various parties may use
+the Framework.
+Internal Control — Integrated Framework • May 2013
+2
+Executive Summary
+Defining Internal Control
+Internal control is defined as follows:
+Internal control is a process, effected by an entity’s board of directors, management, and other personnel, designed to provide reasonable assurance regarding
+the achievement of objectives relating to operations, reporting, and compliance.
+This definition reflects certain fundamental concepts. Internal control is:
+•
+• Geared to the achievement of objectives in one or more categories—operations, reporting, and compliance
+•
+• A process consisting of ongoing tasks and activities—a means to an end, not
+an end in itself
+•
+• Effected by people—not merely about policy and procedure manuals,
+systems, and forms, but about people and the actions they take at every level
+of an organization to affect internal control
+•
+• Able to provide reasonable assurance—but not absolute assurance, to an
+entity’s senior management and board of directors
+•
+• Adaptable to the entity structure—flexible in application for the entire entity or
+for a particular subsidiary, division, operating unit, or business process
+This definition is intentionally broad. It captures important concepts that are fundamental to how organizations design, implement, and conduct internal control, providing a
+basis for application across organizations that operate in different entity structures,
+industries, and geographic regions.
+Objectives
+The Framework provides for three categories of objectives, which allow organizations to
+focus on differing aspects of internal control:
+•
+• Operations Objectives—These pertain to effectiveness and efficiency of the
+entity’s operations, including operational and financial performance goals, and
+safeguarding assets against loss.
+•
+• Reporting Objectives—These pertain to internal and external financial and
+non-financial reporting and may encompass reliability, timeliness, transparency, or other terms as set forth by regulators, recognized standard setters, or
+the entity’s policies.
+•
+• Compliance Objectives—These pertain to adherence to laws and regulations
+to which the entity is subject.
+Internal Control — Integrated Framework • May 2013 3
+Internal Control—Integrated Framework
+Components of Internal Control
+Internal control consists of five integrated components.
+Control Environment
+The control environment is the set of standards, processes, and structures that provide
+the basis for carrying out internal control across the organization. The board of directors
+and senior management establish the tone at the top regarding the importance of internal control including expected standards of conduct. Management reinforces expectations at the various levels of the organization. The control environment comprises the
+integrity and ethical values of the organization; the parameters enabling the board of
+directors to carry out its governance oversight responsibilities; the organizational structure and assignment of authority and responsibility; the process for attracting, developing, and retaining competent individuals; and the rigor around performance measures,
+incentives, and rewards to drive accountability for performance. The resulting control
+environment has a pervasive impact on the overall system of internal control.
+Risk Assessment
+Every entity faces a variety of risks from external and internal sources. Risk is defined as
+the possibility that an event will occur and adversely affect the achievement of objectives. Risk assessment involves a dynamic and iterative process for identifying and
+assessing risks to the achievement of objectives. Risks to the achievement of these
+objectives from across the entity are considered relative to established risk tolerances.
+Thus, risk assessment forms the basis for determining how risks will be managed.
+A precondition to risk assessment is the establishment of objectives, linked at different
+levels of the entity. Management specifies objectives within categories relating to operations, reporting, and compliance with sufficient clarity to be able to identify and analyze
+risks to those objectives. Management also considers the suitability of the objectives for
+the entity. Risk assessment also requires management to consider the impact of possible changes in the external environment and within its own business model that may
+render internal control ineffective.
+Control Activities
+Control activities are the actions established through policies and procedures that help
+ensure that management’s directives to mitigate risks to the achievement of objectives
+are carried out. Control activities are performed at all levels of the entity, at various
+stages within business processes, and over the technology environment. They may be
+preventive or detective in nature and may encompass a range of manual and automated
+activities such as authorizations and approvals, verifications, reconciliations, and business performance reviews. Segregation of duties is typically built into the selection and
+development of control activities. Where segregation of duties is not practical, management selects and develops alternative control activities.
+Internal Control — Integrated Framework • May 2013
+4
+Executive Summary
+Information and Communication
+Information is necessary for the entity to carry out internal control responsibilities to
+support the achievement of its objectives. Management obtains or generates and uses
+relevant and quality information from both internal and external sources to support the
+functioning of other components of internal control. Communication is the continual,
+iterative process of providing, sharing, and obtaining necessary information. Internal
+communication is the means by which information is disseminated throughout the organization, flowing up, down, and across the entity. It enables personnel to receive a clear
+message from senior management that control responsibilities must be taken seriously.
+External communication is twofold: it enables inbound communication of relevant external information, and it provides information to external parties in response to requirements and expectations.
+Monitoring Activities
+Ongoing evaluations, separate evaluations, or some combination of the two are used
+to ascertain whether each of the five components of internal control, including controls
+to effect the principles within each component, is present and functioning. Ongoing
+evaluations, built into business processes at different levels of the entity, provide timely
+information. Separate evaluations, conducted periodically, will vary in scope and frequency depending on assessment of risks, effectiveness of ongoing evaluations, and
+other management considerations. Findings are evaluated against criteria established
+by regulators, recognized standard-setting bodies or management and the board of
+directors, and deficiencies are communicated to management and the board of directors as appropriate.
+Internal Control — Integrated Framework • May 2013 5
+Internal Control—Integrated Framework
+Relationship of Objectives and Components
+A direct relationship exists between objectives, which are what an entity strives to
+achieve, components, which represent what
+is required to achieve the objectives, and the
+organizational structure of the entity (the operating units, legal entities, and other). The relationship can be depicted in the form of a cube.
+•
+• The three categories of objectives—operations, reporting, and compliance—are
+represented by the columns.
+•
+• The five components are represented by
+the rows.
+•
+• An entity’s organizational structure is represented by the third dimension.
+Components and Principles
+The Framework sets out seventeen principles representing the fundamental concepts
+associated with each component. Because these principles are drawn directly from the
+components, an entity can achieve effective internal control by applying all principles.
+All principles apply to operations, reporting, and compliance objectives. The principles
+supporting the components of internal control are listed below.
+Control Environment
+1. The organization2
+demonstrates a commitment to integrity and ethical values.
+2. The board of directors demonstrates independence from management and exercises oversight of the development and performance of internal control.
+3. Management establishes, with board oversight, structures, reporting lines, and
+appropriate authorities and responsibilities in the pursuit of objectives.
+4. The organization demonstrates a commitment to attract, develop, and retain competent individuals in alignment with objectives.
+5. The organization holds individuals accountable for their internal control responsibilities in the pursuit of objectives.
+2 For purposes of the Framework, the term “organization” is used to collectively capture the board, management, and other personnel, as reflected in the definition of internal control.
+Internal Control — Integrated Framework • May 2013
+6
+Executive Summary
+Risk Assessment
+6. The organization specifies objectives with sufficient clarity to enable the identification and assessment of risks relating to objectives.
+7. The organization identifies risks to the achievement of its objectives across
+the entity and analyzes risks as a basis for determining how the risks should
+be managed.
+8. The organization considers the potential for fraud in assessing risks to the achievement of objectives.
+9. The organization identifies and assesses changes that could significantly impact the
+system of internal control.
+Control Activities
+10. The organization selects and develops control activities that contribute to the mitigation of risks to the achievement of objectives to acceptable levels.
+11. The organization selects and develops general control activities over technology to
+support the achievement of objectives.
+12. The organization deploys control activities through policies that establish what is
+expected and procedures that put policies into action.
+Information and Communication
+13. The organization obtains or generates and uses relevant, quality information to
+support the functioning of internal control.
+14. The organization internally communicates information, including objectives and
+responsibilities for internal control, necessary to support the functioning of internal
+control.
+15. The organization communicates with external parties regarding matters affecting
+the functioning of internal control.
+Monitoring Activities
+16. The organization selects, develops, and performs ongoing and/or separate
+evaluations to ascertain whether the components of internal control are present
+and functioning.
+17. The organization evaluates and communicates internal control deficiencies in a
+timely manner to those parties responsible for taking corrective action, including
+senior management and the board of directors, as appropriate.
+Internal Control — Integrated Framework • May 2013 7
+Internal Control—Integrated Framework
+Effective Internal Control
+The Framework sets forth the requirements for an effective system of internal control.
+An effective system provides reasonable assurance regarding achievement of an
+entity’s objectives. An effective system of internal control reduces, to an acceptable
+level, the risk of not achieving an entity objective and may relate to one, two, or all three
+categories of objectives. It requires that:
+•
+• Each of the five components and relevant principles is present and functioning. “Present” refers to the determination that the components and relevant
+principles exist in the design and implementation of the system of internal
+control to achieve specified objectives. “Functioning” refers to the determination that the components and relevant principles continue to exist in the
+operations and conduct of the system of internal control to achieve specified
+objectives.
+•
+• The five components operate together in an integrated manner. “Operating together” refers to the determination that all five components collectively
+reduce, to an acceptable level, the risk of not achieving an objective. Components should not be considered discretely; instead, they operate together
+as an integrated system. Components are interdependent with a multitude of
+interrelationships and linkages among them, particularly the manner in which
+principles interact within and across components.
+When a major deficiency exists with respect to the presence and functioning of a component or relevant principle, or with respect to the components operating together in an
+integrated manner, the organization cannot conclude that it has met the requirements
+for an effective system of internal control.
+When a system of internal control is determined to be effective, senior management and
+the board of directors have reasonable assurance, relative to the application within the
+entity structure, that the organization:
+•
+• Achieves effective and efficient operations when external events are considered unlikely to have a significant impact on the achievement of objectives or
+where the organization can reasonably predict the nature and timing of external events and mitigate the impact to an acceptable level
+•
+• Understands the extent to which operations are managed effectively and
+efficiently when external events may have a significant impact on the
+achievement of objectives or where the organization can reasonably predict
+the nature and timing of external events and mitigate the impact to an
+acceptable level
+•
+• Prepares reports in conformity with applicable rules, regulations, and standards or with the entity’s specified reporting objectives
+•
+• Complies with applicable laws, rules, regulations, and external standards
+The Framework requires judgment in designing, implementing, and conducting internal control and assessing its effectiveness. The use of judgment, within the boundaries established by laws, rules, regulations, and standards, enhances management’s
+ability to make better decisions about internal control, but cannot guarantee perfect
+outcomes.
+Internal Control — Integrated Framework • May 2013
+8
+Executive Summary
+Limitations
+The Framework recognizes that while internal control provides reasonable assurance
+of achieving the entity’s objectives, limitations do exist. Internal control cannot prevent
+bad judgment or decisions, or external events that can cause an organization to fail to
+achieve its operational goals. In other words, even an effective system of internal control
+can experience a failure. Limitations may result from the:
+•
+• Suitability of objectives established as a precondition to internal control
+•
+• Reality that human judgment in decision making can be faulty and subject
+to bias
+•
+• Breakdowns that can occur because of human failures such as simple errors
+•
+• Ability of management to override internal control
+•
+• Ability of management, other personnel, and/or third parties to circumvent
+controls through collusion
+•
+• External events beyond the organization’s control
+These limitations preclude the board and management from having absolute assurance
+of the achievement of the entity’s objectives—that is, internal control provides reasonable but not absolute assurance. Notwithstanding these inherent limitations, management should be aware of them when selecting, developing, and deploying controls that
+minimize, to the extent practical, these limitations.
+Using the Internal Control—Integrated Framework
+How this report can be used depends on the roles of the interested parties:
+•
+• The Board of Directors—The board should discuss with senior management
+the state of the entity’s system of internal control and provide oversight as
+needed. Senior management is accountable for internal control and to the
+board of directors, and the board needs to establish its policies and expectations of how members should provide oversight of the entity’s internal control.
+The board should be apprised of the risks to the achievement of the entity’s
+objectives, the assessments of internal control deficiencies, the management
+actions deployed to mitigate such risks and deficiencies, and how management assesses the effectiveness of the entity’s system of internal control. The
+board should challenge management and ask the tough questions, as necessary, and seek input and support from internal auditors, external auditors, and
+others. Sub-committees of the board often can assist the board by addressing some of these oversight activities.
+•
+• Senior Management—Senior management should assess the entity’s system
+of internal control in relation to the Framework, focusing on how the organization applies the seventeen principles in support of the components of internal
+control. Where management has applied the 1992 edition of the framework, it
+should first review the updates made to this version (as noted in Appendix F
+of the Framework), and consider implications of those updates to the entity’s
+Internal Control — Integrated Framework • May 2013 9
+Internal Control—Integrated Framework
+system of internal control. Management may consider using the Illustrative
+Tools as part of this initial comparison and as an ongoing evaluation of the
+overall effectiveness of the entity’s system of internal control.
+•
+• Other Management and Personnel—Managers and other personnel should
+review the changes made to this version and assess implications of those
+changes on the entity’s system of internal control. In addition, they should
+consider how they are conducting their responsibilities in light of the Framework and discuss with more senior personnel ideas for strengthening internal
+control. More specifically, they should consider how existing controls affect
+the relevant principles within the five components of internal control.
+•
+• Internal Auditors—Internal auditors should review their internal audit plans
+and how they applied the 1992 edition of the framework. Internal auditors also
+should review in detail the changes made to this version and consider possible implications of those changes on audit plans, evaluations, and any reporting on the entity’s system of internal control.
+•
+• Independent Auditors—In some jurisdictions, an independant auditor is
+engaged to audit or examine the effectiveness of the client’s internal control
+over financial reporting in addition to auditing the entity’s financial statements.
+Auditors can assess the entity’s system of internal control in relation to the
+Framework, focusing on how the organization has selected, developed, and
+deployed controls that affect the principles within the components of internal control. Auditors, similar to management, may use the Illustrative Tools
+as part of this evaluation of the overall effectiveness of the entity’s system of
+internal control.
+•
+• Other Professional Organizations—Other professional organizations providing
+guidance on operations, reporting, and compliance may consider their standards and guidance in comparison to the Framework. To the extent diversity in
+concepts and terminology is eliminated, all parties benefit.
+•
+• Educators—With the presumption that the Framework attains broad acceptance, its concepts and terms should find their way into university curricula.
+Internal Control — Integrated Framework • May 2013
+10
+

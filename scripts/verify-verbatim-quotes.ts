@@ -66,7 +66,40 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
     file: (m) => ["federal", `irs-pub-${m[1]}${(m[2] ?? "").toLowerCase()}-${m[3]}.txt`],
   },
+  // books-28. COSO's own free Executive Summary. ONE mirrored file, so the
+  // section pinpoint in the citation is deliberately discarded - it locates the
+  // passage for a human reader, not the file for this script.
+  {
+    name: "COSO Internal Control - Integrated Framework",
+    re: /^COSO, Internal Control - Integrated Framework/,
+    file: () => ["coso", "internal-control-integrated-framework-executive-summary-2013.txt"],
+  },
+  // books-28. The GAO Green Book. The report number is captured because there
+  // are TWO editions on disk and they do NOT say the same thing - the 2025
+  // edition supersedes 2014 and rewords several principles. A citation must
+  // resolve to the edition it actually quoted, or the verbatim check would
+  // silently pass a 2014 quote against 2025 text.
+  {
+    name: "GAO Green Book",
+    re: /^GAO-(\d{2})-(\d+[A-Za-z]?), Standards for Internal Control/,
+    file: (m) => ["green-book", `gao-${m[1]}-${m[2].toLowerCase()}-green-book-${GREEN_BOOK_YEAR[m[1]] ?? "unknown"}.txt`],
+  },
 ];
+
+/**
+ * Report-number prefix to the year in the mirrored filename.
+ *
+ * A lookup rather than arithmetic on purpose. GAO's own numbering gives the
+ * FISCAL year of the report number, and the filename records the PUBLICATION
+ * year as printed on the cover; for these two documents they coincide, but
+ * deriving one from the other would be an assumption this table makes explicit
+ * instead. An unknown prefix produces a filename that does not exist, which
+ * fails loudly rather than resolving to the wrong edition.
+ */
+const GREEN_BOOK_YEAR: Record<string, string> = {
+  "14": "2014",
+  "25": "2025",
+};
 
 /**
  * What file SHOULD hold this citation, if it belongs to a corpus we mirror.
@@ -129,6 +162,42 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   const con8 = /^FASB Concepts Statement No\. 8/.exec(cite);
   if (con8) {
     const p = join(dir, "fasb-concepts", "conceptual-framework.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  // COSO, Internal Control - Integrated Framework, Executive Summary (May 2013)
+  //   ->  coso/internal-control-integrated-framework-executive-summary-2013.txt
+  //
+  // books-28. Michael asked for "verbatim coso". The complete 2013 Framework is
+  // sold by the AICPA and there is no lawful free copy, but COSO publishes the
+  // Executive Summary free on coso.org and it contains the definition, the five
+  // components and ALL SEVENTEEN PRINCIPLES in COSO's own words. That is what is
+  // mirrored, and this branch is what makes those quotes checkable rather than
+  // merely typed carefully.
+  const coso = /^COSO, Internal Control - Integrated Framework/.exec(cite);
+  if (coso) {
+    const p = join(dir, "coso", "internal-control-integrated-framework-executive-summary-2013.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  // GAO-25-107721, Standards for Internal Control in the Federal Government
+  //   ->  green-book/gao-25-107721-green-book-2025.txt
+  //
+  // books-28. The Green Book is a work of the U.S. Government (17 U.S.C. 105),
+  // so unlike the COSO Framework it can be mirrored in full - and it states in
+  // its own text that its components and principles come from COSO. That is the
+  // "other free way to cite coso" Michael asked me to find.
+  //
+  // THE EDITION IS PART OF THE FILENAME AND THAT IS LOAD-BEARING. Both the 2014
+  // and 2025 editions are on disk; 2025 supersedes 2014 and rewords principles.
+  // Resolving every Green Book citation to a single file would let a 2014 quote
+  // be "verified" against 2025 text, which is exactly the kind of quiet pass
+  // rule 39 forbids.
+  const greenBook = /^GAO-(\d{2})-(\d+[A-Za-z]?), Standards for Internal Control/.exec(cite);
+  if (greenBook) {
+    const year = GREEN_BOOK_YEAR[greenBook[1]];
+    if (!year) return null;
+    const p = join(dir, "green-book", `gao-${greenBook[1]}-${greenBook[2].toLowerCase()}-green-book-${year}.txt`);
     return existsSync(p) ? p : null;
   }
 
