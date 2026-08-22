@@ -20,6 +20,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { harvestQuotedLessonTitles } from "@/lib/payroll/mentor-quote-gate";
+
 import { GARNISHMENT_AUTHORITIES } from "@/lib/payroll/garnishment-authorities";
 import {
   GARNISHMENT_FIELD_LESSONS,
@@ -30,6 +32,7 @@ import {
 } from "@/lib/payroll/garnishment-mentor";
 import {
   GARNISHMENT_CORE_FUNCTION_COVERAGE,
+  assertEveryQuotedGarnishmentLessonExists,
   GARNISHMENT_STRUCTURAL_COLUMNS,
   GARNISHMENT_STRUCTURAL_TYPES,
   assertEveryCitedGarnishmentAuthorityExists,
@@ -456,6 +459,63 @@ describe("every exported engine function is explained somewhere", () => {
     for (const [fn, why] of Object.entries(GARNISHMENT_CORE_FUNCTION_COVERAGE)) {
       expect(why.length, `${fn} explanation is too thin`).toBeGreaterThan(80);
       expect(why, `${fn} does not name a lesson`).toMatch(/lesson/i);
+    }
+  });
+
+  /*
+   * books-36, standing rule 23. The check above is satisfied by any entry
+   * containing the word "lesson", including one that quotes a lesson which has
+   * been deleted. That hole was found by mutation in the sick-leave module —
+   * removing a quoted lesson left the whole suite green — and this map quotes
+   * five lesson titles with exactly the same exposure. Same defect, same fix,
+   * one shared implementation.
+   */
+  it("every lesson title the coverage map quotes actually exists", () => {
+    expect(() => assertEveryQuotedGarnishmentLessonExists()).not.toThrow();
+  });
+
+  it("GATE IS WIRED: deleting a quoted lesson fails the gate", () => {
+    const withoutIt = GARNISHMENT_SCREEN_LESSONS.map((l) => l.topic).filter(
+      (t) => !t.startsWith("Disposable earnings is not take-home pay"),
+    );
+    expect(
+      withoutIt.length,
+      "the lesson this test removes does not exist, so the test proves nothing",
+    ).toBe(GARNISHMENT_SCREEN_LESSONS.length - 1);
+    expect(() => assertEveryQuotedGarnishmentLessonExists(withoutIt)).toThrow(/DO NOT EXIST/);
+    expect(() => assertEveryQuotedGarnishmentLessonExists(withoutIt)).toThrow(/Disposable/);
+  });
+
+  it("GATE IS WIRED: retitling the support-cap lesson fails it too", () => {
+    // The likelier real mistake: somebody improves a title and never looks at
+    // the coverage map quoting the old one. Child support is the highest-stakes
+    // lesson in this module, so it is the one pinned here by name.
+    const retitled = GARNISHMENT_SCREEN_LESSONS.map((l) =>
+      l.topic.startsWith("Support orders are not held to twenty-five percent")
+        ? "Support orders have their own ceiling"
+        : l.topic,
+    );
+    expect(() => assertEveryQuotedGarnishmentLessonExists(retitled)).toThrow(/Support orders/);
+  });
+
+  it("GATE IS WIRED: an empty lesson list reports itself broken, not clean", () => {
+    expect(() => assertEveryQuotedGarnishmentLessonExists([])).toThrow(/GATE BROKEN/);
+  });
+
+  it("the harvest is non-trivial, not a regex that silently stopped matching", () => {
+    // Standing rule 39: if the extractor matches nothing, every assertion
+    // above passes vacuously and the gate is decoration.
+    const titles = harvestQuotedLessonTitles(
+      "src/lib/payroll/garnishment-mentor-gates.ts",
+      "GARNISHMENT_CORE_FUNCTION_COVERAGE",
+      "GARNISHMENT",
+    );
+    expect(titles.length, "no quoted lesson titles harvested").toBeGreaterThanOrEqual(5);
+    const known = GARNISHMENT_SCREEN_LESSONS.map((l) => l.topic);
+    for (const t of titles) {
+      expect(known.some((k) => k.startsWith(t)), `harvested title resolves to nothing: ${t}`).toBe(
+        true,
+      );
     }
   });
 });

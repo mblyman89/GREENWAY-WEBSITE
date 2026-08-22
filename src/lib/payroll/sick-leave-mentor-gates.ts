@@ -32,6 +32,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { assertQuotedLessonsResolve } from "@/lib/payroll/mentor-quote-gate";
+
 import { migrationColumnTypesStrict } from "@/lib/payroll/migration-columns";
 import { SICK_LEAVE_AUTHORITIES } from "@/lib/payroll/sick-leave-authorities";
 import {
@@ -48,6 +50,13 @@ const MIGRATION_0198 = join(
   "0198_sick_leave_and_garnishments.sql",
 );
 const SICK_CORE = join("src", "lib", "payroll", "sick-leave-core.ts");
+/**
+ * This file, read from disk. books-36: `assertEveryQuotedSickLessonExists`
+ * inspects the SOURCE TEXT of the coverage map rather than the object, because
+ * the thing being checked is the prose inside the strings, and prose is not
+ * reachable from the runtime value in any structured way.
+ */
+const SICK_GATES_SELF = join("src", "lib", "payroll", "sick-leave-mentor-gates.ts");
 
 /** The three tables this mentor is responsible for. */
 const SICK_TABLES = ["sick_leave_policy", "sick_leave_requests", "sick_leave_ledger"];
@@ -403,7 +412,50 @@ export const SICK_CORE_FUNCTION_COVERAGE: Readonly<Record<string, string>> = {
     "Taught by the screen lesson on the monthly notification — the obligation most small " +
     "employers have never heard of, satisfied by building the sentence from the ledger and " +
     "putting it on the pay stub.",
+  /* books-36: the generosity board's two engine functions. */
+  generosityLineFor:
+    "Taught by the screen lesson 'A negative balance is a finding, not a rounding problem', " +
+    "which explains why this function reports a below-zero bucket by name instead of clamping " +
+    "it, and by the two-buckets lesson explaining why awarded and earned minutes are counted " +
+    "separately in the first place.",
+  summariseGenerosity:
+    "Taught by the screen lesson 'Measuring generosity: three honest answers to one question', " +
+    "which explains why given, used and outstanding are all returned and labelled rather than " +
+    "one of them being picked and called generosity.",
 };
+
+/**
+ * Every lesson title the coverage map QUOTES must be a lesson that EXISTS.
+ *
+ * books-36. Found by mutation, not by reading. Deleting the screen lesson
+ * "A negative balance is a finding, not a rounding problem" left the whole
+ * suite green, because `assertEverySickFunctionIsTaught` only checks that a
+ * coverage ENTRY exists and `each explanation names where the teaching
+ * actually lives` only checks the word "lesson" appears in it. Between them
+ * they let the map keep pointing confidently at teaching that had been
+ * deleted — a citation with nothing behind it, which is the exact failure
+ * mode `assertEveryCitedSickAuthorityExists` was written to prevent for
+ * authorities, reproduced one layer up for lessons.
+ *
+ * The convention the map already follows is that a quoted title in
+ * 'single quotes' is a screen-lesson topic. Titles are quoted by PREFIX in
+ * places — "The greater of" stands in for "The greater of — three words that
+ * only matter on the day they matter" — so a quoted span matches if any real
+ * topic STARTS WITH it. That is deliberately the loosest rule that still
+ * catches a deleted lesson, because tightening it to equality would fail on
+ * correct entries and the fix for that is always to weaken the gate.
+ *
+ * Spans containing a newline are skipped: those are apostrophes inside prose
+ * ("Michael's"), not quoted titles.
+ */
+export function assertEveryQuotedSickLessonExists(topicsOverride?: readonly string[]): void {
+  assertQuotedLessonsResolve({
+    gatesSourcePath: SICK_GATES_SELF,
+    mapName: "SICK_CORE_FUNCTION_COVERAGE",
+    topics: topicsOverride ?? SICK_LEAVE_SCREEN_LESSONS.map((l) => l.topic),
+    label: "SICK",
+  });
+}
 
 export function sickExportedFunctionNames(sourcePath?: string): readonly string[] {
   const p = sourcePath ?? join(process.cwd(), SICK_CORE);
