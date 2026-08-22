@@ -88,6 +88,8 @@ import { INTERNAL_CONTROL_AUTHORITIES } from "./internal-control-authorities";
 // Washington overtime statute. Imported in the same commit that declares it so
 // the registry can never contain a record no screen can resolve.
 import { TIMESHEET_AUTHORITIES, type TimesheetAuthority } from "@/lib/payroll/timesheet-authorities";
+import { SICK_LEAVE_AUTHORITIES, type SickLeaveAuthority } from "@/lib/payroll/sick-leave-authorities";
+import { GARNISHMENT_AUTHORITIES, type GarnishmentAuthority } from "@/lib/payroll/garnishment-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -508,6 +510,31 @@ function fromCompanyIdentity(a: CompanyIdentityAuthority): GuidanceAuthority {
 function fromTimesheet(a: TimesheetAuthority): GuidanceAuthority {
   return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
+
+/**
+ * books-33. Sick leave, same adapter pattern and same reason as `fromTimesheet`
+ * directly above: the leaf module owns its own narrow `kind` union, this file
+ * imports that one, and the conversion function is what makes tsc compare the
+ * two shapes on every build.
+ *
+ * There is a SECOND reason these two registries had to be merged here, and it
+ * is the one that actually matters. scripts/verify-verbatim-quotes.ts walks
+ * GUIDANCE_AUTHORITIES and nothing else. An authority module that exports
+ * beautiful verbatim quotes and is never merged into this registry is NOT
+ * checked against its mirrored source - it is 27 unverified quotes wearing the
+ * green check of a run that never looked at them. Standing rule 50. Registering
+ * them here is what puts them under the rule-24 microscope, and the proof that
+ * it worked is the verified count in that script's output going UP by exactly
+ * the number of authorities added.
+ */
+function fromSickLeave(a: SickLeaveAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
+
+/** books-33. Garnishments and support orders. Same pattern as `fromSickLeave`. */
+function fromGarnishment(a: GarnishmentAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
 /**
  * GateAuthority carries no `kind` field at all, so one has to be derived. It
  * is derived FROM THE CITATION ITSELF rather than hand-assigned, because a
@@ -595,6 +622,19 @@ export const ALL_SOURCE_REGISTRIES = [
   // 941, W-2, the L&I hours report - is wrong by the same amount, in the same
   // direction, every period.
   "timesheet",
+  // books-33. Paid sick leave. Its own tag rather than folded into "timesheet"
+  // because sick hours and worked hours are legally DIFFERENT things that
+  // happen to be measured in the same unit: 29 CFR 778.218(a) says paid leave
+  // is not hours worked, which is why sick time never creates overtime. Two
+  // tags keeps that distinction visible on screen instead of blurring the one
+  // line an employer is most likely to get wrong.
+  "sick-leave",
+  // books-33. Garnishments, child support and other wage orders. Separate from
+  // "payroll-tax" because a garnishment is not a tax: it is a third party's
+  // claim on money that is already the employee's, computed AFTER tax on
+  // disposable earnings, and capped by rules (15 U.S.C. 1673, RCW 6.27.150)
+  // that no tax authority in this codebase has anything to say about.
+  "garnishment",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -634,6 +674,24 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...TIMESHEET_AUTHORITIES.map((a) => ({
       tag: "timesheet" as const,
       authority: fromTimesheet(a),
+    })),
+    // books-33. The paid sick leave authorities. WAC 296-128-620 through -760
+    // plus the one federal sentence that governs the interaction everybody gets
+    // wrong: 29 CFR 778.218(a), paid leave is not hours worked. Merged here so
+    // that the employee's request screen, the owner's approval screen and the
+    // pay run all cite the same record when they explain why 44 paid hours
+    // produced no overtime.
+    ...SICK_LEAVE_AUTHORITIES.map((a) => ({
+      tag: "sick-leave" as const,
+      authority: fromSickLeave(a),
+    })),
+    // books-33. The wage-order authorities. The federal cap (15 U.S.C. 1673 and
+    // its worked examples in 29 CFR part 870) and the Washington exemption that
+    // is MORE protective for consumer debt (RCW 6.27.150), which is the whole
+    // reason the engine computes both and takes the smaller garnishment.
+    ...GARNISHMENT_AUTHORITIES.map((a) => ({
+      tag: "garnishment" as const,
+      authority: fromGarnishment(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation
