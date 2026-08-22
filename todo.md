@@ -1578,3 +1578,39 @@ building the matcher twice.
 
 ## Owner outstanding
 - Provide Wells Fargo loan details when found.
+
+### RULE 64: A GATE THAT PROVES A FAILURE IS *DETECTED* HAS NOT PROVED IT IS *EXPLAINED*. AND UNPUSHED WORK DOES NOT EXIST.
+
+    Two findings from books-32, both earned the hard way.
+
+    64a. DETECTION IS NOT EXPLANATION.
+    The books-32 page reads three things and reports any read failure in plain
+    language. The gate asserted `!settings.ok`, `!periodsRes.ok` and
+    `!progressRes.ok` all appeared -- proving each read was TESTED. Mutant W15b
+    changed `!settings.ok ? settings.message` to `? null` and SURVIVED: the
+    failure was still detected, the branch still taken, and the explanation
+    thrown away. The screen went blank.
+
+    A blank screen where guidance should be is the exact Sage behaviour Michael
+    hired us to end: stopped, with no reason given. So: whenever a gate proves a
+    failure is noticed, it must ALSO pin the branch to the specific message that
+    failure produces. Detection and explanation are two assertions, never one.
+    W15c/W15d proved the class closed, not just the instance (see rule 43).
+
+    64b. UNPUSHED WORK DOES NOT EXIST.
+    The sandbox rolled back mid-slice. `.git` was destroyed along with a commit
+    that had been made but never pushed, two test files, the nav edit, the nav
+    gate edit, node_modules and the whole scratch Postgres. What SURVIVED was
+    only what happened to be untouched on disk; what was recoverable was only
+    what was on the remote.
+
+    The commit ceremony is not the finish line. PUSH IS. A slice is not banked
+    until `git push` has returned. Push the branch as soon as the first commit
+    on it exists, and push again after every commit, even mid-slice, even when
+    the work is not ready for a PR. A branch on the remote costs nothing and is
+    the only thing that survives the machine.
+
+    Corollary: after ANY unexplained environment failure, verify the working
+    tree against the remote BEFORE continuing -- `git status`, `git log`, and an
+    `ls` of the slice's own files. Assuming continuity is how recovered work
+    silently ships incomplete.
