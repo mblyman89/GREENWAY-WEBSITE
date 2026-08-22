@@ -565,7 +565,11 @@ export const SICK_LEAVE_FIELD_LESSONS: readonly FieldLesson[] = [
     theTrap:
       "Drawing the same request twice — approving, drawing, then re-running the draw. A unique " +
       "index, `sick_leave_ledger_one_usage_per_request`, makes the second attempt fail rather " +
-      "than double-charging the employee's balance.",
+      "than double-charging the employee's balance. That index is keyed on the request AND the " +
+      "bucket, not the request alone, because one approved day can legitimately produce two " +
+      "rows when the draw runs out of earned hours and finishes in awarded ones. Keyed on the " +
+      "request alone — which is how it originally shipped — the second row of an ordinary split " +
+      "was rejected and the approval could not be recorded at all.",
     howToBeSure:
       "WAC 296-128-630(1): an employer 'may not require an employee to use accrued, unused paid " +
       "sick leave if the employee does not choose to request to use paid sick leave.'",
