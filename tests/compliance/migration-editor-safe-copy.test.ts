@@ -222,18 +222,24 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
       });
   }
 
-  it("finds at least the four pairs known to exist (rule 39: no vacuous pass)", () => {
+  it("finds at least the five pairs known to exist (rule 39: no vacuous pass)", () => {
     // A directory walk that finds nothing would make every test below pass
     // without asserting anything. Measured at the time of writing: 0195, 0196,
-    // 0197 and 0198. The floor rises with each new copy on purpose - a floor of
-    // 1 would still pass after three of the four copies were deleted, which is
-    // exactly the silent hole this block exists to close.
+    // 0197, 0198 and 0199. The floor rises with each new copy on purpose - a
+    // floor of 1 would still pass after four of the five copies were deleted,
+    // which is exactly the silent hole this block exists to close.
     const found = pairs().map((p) => p.base);
-    expect(found.length).toBeGreaterThanOrEqual(4);
+    expect(found.length).toBeGreaterThanOrEqual(5);
     expect(found).toContain("0195_employee_payroll_setup");
     expect(found).toContain("0196_company_profile");
     expect(found).toContain("0197_timesheet_workweek");
     expect(found).toContain("0198_sick_leave_and_garnishments");
+    // books-34. The year-to-date accumulators. Generating this copy caught a
+    // real hazard the four before it did not have: two semicolons inside
+    // `comment on` prose, which a splitter that does not track quotes would
+    // have cut the statement at. The prose was rewritten rather than the
+    // hazard counted as acceptable.
+    expect(found).toContain("0199_payroll_ytd_accumulators");
   });
 
   it("every copy has a real migration behind it", () => {
