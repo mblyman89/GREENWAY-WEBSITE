@@ -316,3 +316,85 @@ describe("the parser reports honestly when there is nothing to read", () => {
     expect(Object.keys(migrationColumnTypesStrict(M0199)).length).toBeGreaterThan(30);
   });
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * A STATEMENT THAT WRAPS IS STILL A STATEMENT   (books-38)
+ *
+ * THE DEFECT. Outside a create-table body this parser read ONE PHYSICAL LINE
+ * at a time. So the most ordinary formatting choice in the repo —
+ *
+ *     alter table public.wage_orders
+ *       add column if not exists served_date date;
+ *
+ * — matched nothing. Not misparsed: DROPPED, and dropped without landing in
+ * `unrecognised`, so no caller could find out. Every existing test passed,
+ * because every ALTER they used happened to fit on one line.
+ *
+ * WHAT IT COST. Migration 0201 added `wage_orders.served_date`, the date the
+ * twenty-day answer deadline of RCW 26.18.110(1) and the sixty-day continuing
+ * lien of RCW 6.27.350(1) are BOTH measured from. Parsing 0201 returned `{}`,
+ * so the garnishment mentor's coverage gate reported that every column was
+ * taught while the most deadline-critical column in the table had no lesson
+ * at all. Standing rule 50: dead code wearing a green check.
+ *
+ * These tests fail against the old parser. That is what makes them worth
+ * having — verified by reverting the fix and watching the first two go red.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("an alter-table that wraps across lines is still read", () => {
+  it("reads a wrapped add-column, which the line-at-a-time parser lost", () => {
+    const p = tempSource(
+      "wrapped.sql",
+      "alter table public.wage_orders\n  add column if not exists served_date date;\n",
+    );
+    const { columns, unrecognised } = readMigrationColumns(p);
+    expect(columns["wage_orders.served_date"]).toBe("date");
+    expect(unrecognised).toHaveLength(0);
+  });
+
+  it("reads the REAL migration 0201, which is where this was found", () => {
+    // Not a synthetic echo of the fix. The actual shipped file.
+    const cols = migrationColumnTypesStrict(
+      join(MIGRATIONS, "0201_wage_orders_served_date.sql"),
+    );
+    expect(cols["wage_orders.served_date"]).toBe("date");
+  });
+
+  it("still reads a single-line add-column exactly as before", () => {
+    // The fix must not be paid for by breaking the shape that already worked.
+    const p = tempSource(
+      "oneline.sql",
+      "alter table public.employees add column if not exists nickname text;\n",
+    );
+    expect(readMigrationColumns(p).columns["employees.nickname"]).toBe("text");
+  });
+
+  it("tolerates a comment line in the middle of the wrapped statement", () => {
+    const p = tempSource(
+      "commented.sql",
+      "alter table public.wage_orders\n  -- see RCW 26.18.110(1)\n  add column if not exists served_date date;\n",
+    );
+    expect(readMigrationColumns(p).columns["wage_orders.served_date"]).toBe("date");
+  });
+
+  it("REPORTS an add-column it cannot read, instead of dropping it in silence", () => {
+    // The other half of the defect, and the more important half. A parser that
+    // loses a column quietly is worse than one that throws, because the gates
+    // downstream keep reporting success over a column they never saw.
+    const p = tempSource(
+      "unreadable.sql",
+      "alter table public.wage_orders add column served_date wat_type_9000;\n",
+    );
+    const { unrecognised } = readMigrationColumns(p);
+    expect(unrecognised.length).toBeGreaterThan(0);
+    expect(unrecognised.some((u) => u.table === "wage_orders")).toBe(true);
+  });
+
+  it("does not run away to the end of a file that is missing a semicolon", () => {
+    // The join is bounded. An unterminated statement must not swallow the rest
+    // of the migration and turn one defect into a parse of nothing.
+    const tail = Array.from({ length: 40 }, (_, i) => `select ${i};`).join("\n");
+    const p = tempSource("noterm.sql", `alter table public.t\n  add column x\n${tail}\n`);
+    expect(() => readMigrationColumns(p)).not.toThrow();
+  });
+});

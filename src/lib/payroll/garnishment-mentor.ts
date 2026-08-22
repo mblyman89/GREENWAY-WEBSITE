@@ -152,6 +152,50 @@ export const GARNISHMENT_FIELD_LESSONS: readonly FieldLesson[] = [
     authorityIds: ["rcw-6-27-150-general"],
   },
   {
+    /**
+     * books-38. The single most consequential date in this table, and until
+     * migration 0201 it had nowhere to live. Read the lesson beside
+     * `order_date` first: these two are neighbours that get confused, and the
+     * confusion is expensive in both directions.
+     */
+    field: "wage_orders.served_date",
+    whatItIs:
+      "The date the order or writ was handed to GREENWAY. Not the date the judge signed it - " +
+      "that is order_date, directly above - and not the date you typed it in here. It is the day " +
+      "the paper legally arrived at the company.",
+    whereItIsUsed:
+      "It drives the two clocks that decide whether Greenway is in trouble. The answer deadline " +
+      "on a support order runs twenty days from this date. The sixty-day life of a creditor writ " +
+      "is measured from this date, because the statute defines the writ's 'effective date' as the " +
+      "date of service. The garnishment board sorts by it, so the order closest to its deadline " +
+      "sits at the top of the screen.",
+    whyItMatters:
+      "Everything Greenway can be punished for is measured from this day rather than from the " +
+      "signature. Use the signature date by mistake and the arithmetic is confidently wrong in " +
+      "whichever direction happens to hurt: on an order that took three weeks to arrive the " +
+      "screen declares the answer already overdue the morning you open the envelope, and on one " +
+      "that arrived quickly it shows a deadline LATER than the real one while you read it and " +
+      "relax. The second is the one that costs money, because nothing looks wrong.",
+    theTrap:
+      "Leaving it until later because the withholding maths does not need it. The maths does not, " +
+      "and the deadlines do. Missing the ANSWER on a support order is its own separate route to " +
+      "liability for the entire support debt - withholding every cent correctly does not cure a " +
+      "missing answer. On a creditor writ, not answering in time lets the court enter judgment " +
+      "against Greenway for the full amount the employee owes. Not the slice that should have " +
+      "been withheld from a paycheck: the whole of somebody else's debt, against the company.",
+    howToBeSure:
+      "Read it off the evidence of delivery, never off the order itself: the process server's " +
+      "return, the certified-mail card, the date stamp on the envelope, or the received stamp if " +
+      "someone at the shop applied one. If nobody can establish it, the system will not guess a " +
+      "date for you and neither should you - it is the number two statutes measure from. Find " +
+      "the envelope.",
+    authorityIds: [
+      "wage-order-rcw-26-18-110-answer",
+      "wage-order-rcw-6-27-350-sixty-days",
+      "wage-order-rcw-6-27-200-default",
+    ],
+  },
+  {
     field: "wage_orders.payee_name",
     whatItIs:
       "Who the cheque is actually made out to. Very often this is NOT the person owed the money.",

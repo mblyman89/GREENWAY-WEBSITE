@@ -92,7 +92,24 @@ create table if not exists public.wage_orders (
 
 describe("the wage order schema is read from disk, not remembered", () => {
   it("finds the whole wage_orders table", () => {
-    expect(garnishmentMigrationColumnNames().length).toBe(23);
+    // 23 at 0198. 24 from books-38, which added `served_date` in migration
+    // 0201 — the date service was made on Greenway, which the twenty-day
+    // answer deadline of RCW 26.18.110(1) and the sixty-day continuing lien of
+    // RCW 6.27.350(1) are both measured from.
+    //
+    // THIS NUMBER MOVING IS THE POINT. When it changed, it exposed two real
+    // defects rather than one:
+    //
+    //   1. this gate read only 0198, so a column added by any later ALTER was
+    //      invisible to it. It now walks every migration mentioning the table.
+    //   2. the column parser read one physical line at a time outside a
+    //      create-table body, so `alter table public.wage_orders` followed by
+    //      `add column ... served_date date;` on the next line matched nothing
+    //      AND was never reported as unreadable. Parsing 0201 returned {}.
+    //
+    // Both are fixed, and the second now pushes an `unrecognised` entry rather
+    // than dropping the statement in silence.
+    expect(garnishmentMigrationColumnNames().length).toBe(24);
   });
 
   it("does not pick up the sick leave tables, which have their own mentor", () => {
@@ -202,11 +219,15 @@ describe("every wage order column that holds a decision is taught", () => {
     expect(() => assertEveryGarnishmentFieldIsTaught()).not.toThrow();
   });
 
-  it("teaches all eighteen non-structural columns", () => {
+  it("teaches all nineteen non-structural columns", () => {
     const cols = garnishmentMigrationColumnNames();
     const structural = new Set(GARNISHMENT_STRUCTURAL_COLUMNS);
     const mustTeach = cols.filter((c) => !structural.has(c));
-    expect(mustTeach.length).toBe(18);
+    // 18 -> 19 with books-38's `served_date`. It is emphatically not
+    // structural: it is a fact somebody has to read off a delivery receipt,
+    // and getting it wrong misstates a legal deadline in whichever direction
+    // happens to hurt.
+    expect(mustTeach.length).toBe(19);
     const taught = new Set(taughtGarnishmentFieldNames());
     for (const c of mustTeach) expect(taught.has(c), `${c} has no lesson`).toBe(true);
   });
