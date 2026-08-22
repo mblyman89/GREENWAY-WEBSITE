@@ -85,7 +85,7 @@ create index if not exists employee_w4_employee_idx
   on public.employee_w4 (employee_id, form_year desc);
 
 comment on table public.employee_w4 is
-  'Federal Form W-4 on file for an employee. Integer cents only. Exactly one row may be is_current per employee; the redesign-shape CHECK makes a 2020+ form with allowances (or a pre-2020 form with Step 3/4 dollars) unrepresentable.';
+  'Federal Form W-4 on file for an employee. Integer cents only. Exactly one row may be is_current per employee. The redesign-shape CHECK makes a 2020+ form with allowances (or a pre-2020 form with Step 3/4 dollars) unrepresentable.';
 
 create table if not exists public.employee_i9 (
   id            uuid primary key default gen_random_uuid(),
@@ -135,7 +135,7 @@ create index if not exists employee_i9_retention_idx
   on public.employee_i9 (retain_until) where retain_until is not null;
 
 comment on table public.employee_i9 is
-  'QUARANTINED. Form I-9 verification record. 8 CFR 274a.2(b)(4) limits use of this data: it must never inform a pay, scheduling, or hiring decision. Do not join this table to employee_pay; the application layer throws if I-9 data reaches a pay computation.';
+  'QUARANTINED. Form I-9 verification record. 8 CFR 274a.2(b)(4) limits use of this data: it must never inform a pay, scheduling, or hiring decision. Do not join this table to employee_pay. The application layer throws if I-9 data reaches a pay computation.';
 
 comment on column public.employee_i9.citizenship_status is
   'Recorded to complete the form only. Using this column in any pay or employment decision is a 8 CFR 274a.2(b)(4) violation.';
@@ -206,7 +206,7 @@ alter table public.employees
     check (ssn_full is null or ssn_full ~ '^[0-9]{9}$');
 
 comment on column public.employees.ssn_full is
-  'FULL nine digits, no dashes. Protected by a COLUMN-LEVEL revoke (see below), not by RLS. Never select this into a list view. Every reveal to a human must first write a row to employee_ssn_reveals — if that insert fails, the reveal must fail.';
+  'FULL nine digits, no dashes. Protected by a COLUMN-LEVEL revoke (see below), not by RLS. Never select this column for any list view. Every reveal to a human must first write a row to employee_ssn_reveals. If that insert fails, the reveal must fail.';
 
 alter table public.employees
   add column if not exists ssn_last_four text
@@ -368,7 +368,7 @@ as $$select
     'SSN_COLUMN_READABLE'::text,
     format('role %s holds SELECT on employees.ssn_full. RLS cannot fix this - '
            'the roster row is legitimately visible, so the SSN must be gated by '
-           'a COLUMN privilege. Revoke it; ssn_last_four is what screens should '
+           'a COLUMN privilege. Revoke it. ssn_last_four is what screens should '
            'read.', g.grantee)::text
   from information_schema.column_privileges g
   where g.table_schema = 'public'

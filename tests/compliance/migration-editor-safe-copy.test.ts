@@ -100,3 +100,89 @@ describe("the editor-safe copy cannot drift from the migration it copies", () =>
     expect(out).not.toContain("gone");
   });
 });
+
+/**
+ * RULE 40. These guard the SECOND round of this defect, and they exist because
+ * removing comments was NOT enough: Michael ran the comment-free copy and got
+ * the SAME `42P01: relation "a" does not exist`.
+ *
+ * The editor-safe file applies with exit 0 on a FIRST application against a
+ * real PostgreSQL 15 behind a real 0001-0194 pre-state, and its catalogue was
+ * compared row for row against the commented original (491 rows vs 491,
+ * identical). So the SQL is valid and the mangling happens IN TRANSIT. The only
+ * defence we control is to leave nothing in the shipped file that a mangled
+ * read can turn into a valid-looking bare identifier.
+ */
+describe("the editor-safe copy carries NO transit hazard", () => {
+  const EDITOR_SAFE = path.join(
+    process.cwd(),
+    "supabase/migrations/editor-safe/0195_employee_payroll_setup.EDITOR_SAFE.sql",
+  );
+
+  it("reads a real, non-empty file (rule 39: no vacuous pass)", () => {
+    const text = readFileSync(EDITOR_SAFE, "utf8");
+    expect(text.length).toBeGreaterThan(5_000);
+    expect(text).toContain("employee_ssn_reveals");
+  });
+
+  it("has ZERO of every transit hazard", () => {
+    const h = transitHazards(readFileSync(EDITOR_SAFE, "utf8"));
+    expect(h.commentLines).toBe(0);
+    expect(h.oddApostrophe).toBe(0);
+    expect(h.withSemicolon).toBe(0);
+    // The three that the first fix missed entirely.
+    expect(h.bareRelationWord).toBe(0);
+    expect(h.nonAscii).toBe(0);
+    expect(h.semicolonInString).toBe(0);
+  });
+
+  it("contains no character above U+007F anywhere", () => {
+    const text = readFileSync(EDITOR_SAFE, "utf8");
+    const wide = text.match(/[^\u0000-\u007F]/g) ?? [];
+    expect(wide, `found ${wide.length} non-ASCII: ${JSON.stringify(wide.slice(0, 5))}`).toEqual(
+      [],
+    );
+  });
+
+  it("never puts a single-letter word after a relation keyword", () => {
+    // "select this into a list view" parses as relation "a" the moment a client
+    // loses quote tracking. That phrase WAS in this file, and it was the only
+    // site in it that could produce Michael's exact error.
+    const text = readFileSync(EDITOR_SAFE, "utf8");
+    const hits = text.match(/\b(?:from|into|join|update|table)\s+[a-z]\b/gi) ?? [];
+    expect(hits, `bare relation words: ${JSON.stringify(hits)}`).toEqual([]);
+  });
+
+  it("DETECTS the hazard it is meant to detect (rule 16: prove the gate fires)", () => {
+    // Control: the exact prose that broke Michael's run must be flagged.
+    const broken = transitHazards(
+      "comment on column t.c is 'Never select this into a list view.';\n",
+    );
+    expect(broken.bareRelationWord).toBe(1);
+
+    const emDash = transitHazards("comment on column t.c is 'a \u2014 b';\n");
+    expect(emDash.nonAscii).toBe(1);
+
+    const semi = transitHazards("comment on column t.c is 'do this; then that';\n");
+    expect(semi.semicolonInString).toBe(1);
+
+    // And a clean file must NOT be flagged, so the check discriminates.
+    const clean = transitHazards("comment on column t.c is 'Never select this column.';\n");
+    expect(clean.bareRelationWord).toBe(0);
+    expect(clean.nonAscii).toBe(0);
+    expect(clean.semicolonInString).toBe(0);
+  });
+
+  it("does not count a semicolon that is genuinely between statements", () => {
+    const h = transitHazards("select 1;\nselect 2;\n");
+    expect(h.semicolonInString).toBe(0);
+  });
+
+  it("ignores hazards inside a dollar-quoted body, which is opaque to splitters", () => {
+    // A $tag$ body is not a single-quoted literal, so a ';' in it is not the
+    // hazard this check is about. Miscounting here would make the gate noisy
+    // and eventually ignored.
+    const h = transitHazards("do $x$ begin raise notice 'a; b'; end $x$;\n");
+    expect(h.semicolonInString).toBe(0);
+  });
+});
