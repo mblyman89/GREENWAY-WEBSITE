@@ -135,6 +135,37 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^IRS Instructions for Forms? ([\w-]+(?: and [\w-]+)?) \((\d{4})\)/,
     file: (m) => ["federal", `irs-instructions-${m[1].replace(/ and /g, "-").toLowerCase()}-${m[2]}.txt`],
   },
+  // books-37. DOL WAGE AND HOUR DIVISION FACT SHEETS, and a caught defect worth
+  // writing down.
+  //
+  // The net-pay slice mirrored Fact Sheet #30 and added two authorities quoting
+  // it, then wired them into the registry and watched the verified count. Six
+  // authorities went in; the count rose by FOUR. The two fact-sheet quotes had
+  // resolved to null and were reported as "no local copy to check against"
+  // while the mirrored file sat on disk the entire time - a green line of
+  // output that meant nothing, which is the precise failure this script's own
+  // comments keep describing. The count is watched on purpose for exactly this.
+  //
+  // THE NUMBER IS CAPTURED, NOT HARD-CODED TO 30. Standing rule 23 - fix the
+  // class, not the instance. WHD publishes well over a hundred of these and the
+  // next slice will want #16 (deductions from wages) among others; a branch
+  // that only knew about #30 would have to be rewritten every time, and the
+  // rewrite is what gets forgotten. Any fact sheet whose file is not yet on
+  // disk resolves to a path that does not exist, which the caller reports as
+  // unmirrored debt rather than skipping silently.
+  //
+  // THE YEAR IS NOT IN THE FILENAME, DELIBERATELY, and the reason differs from
+  // the IRS publications above. WHD revises a fact sheet in place and the
+  // number identifies the document across revisions; the DATE is recorded in
+  // the mirrored file's own header and stated in the `cite`, so a revision that
+  // changes the wording breaks the verbatim match loudly instead of quietly
+  // resolving to a stale edition. That is the protection the IRS year-in-
+  // filename buys there, obtained a different way here.
+  {
+    name: "DOL WHD Fact Sheet",
+    re: /^U\.S\. DOL, Wage and Hour Division, Fact Sheet #(\d+[A-Z]?)\b/,
+    file: (m) => ["federal", `dol-whd-fact-sheet-${m[1].toLowerCase()}.txt`],
+  },
   // books-28. COSO's own free Executive Summary. ONE mirrored file, so the
   // section pinpoint in the citation is deliberately discarded - it locates the
   // passage for a human reader, not the file for this script.
@@ -231,6 +262,21 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   const con8 = /^FASB Concepts Statement No\. 8/.exec(cite);
   if (con8) {
     const p = join(dir, "fasb-concepts", "conceptual-framework.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  // U.S. DOL, Wage and Hour Division, Fact Sheet #30 (Dec. 2024)
+  //   ->  federal/dol-whd-fact-sheet-30.txt
+  //
+  // books-37. The mirror of the MIRRORED_CORPORA entry above; see the long note
+  // there for why the fact-sheet number is captured rather than hard-coded and
+  // why the date stays out of the filename. Added because the two DOL quotes
+  // behind the disposable-earnings base were being reported as unverifiable
+  // while their source sat on disk - caught by the verified count rising by
+  // four when six authorities had been registered.
+  const whdFs = /^U\.S\. DOL, Wage and Hour Division, Fact Sheet #(\d+[A-Z]?)\b/.exec(cite);
+  if (whdFs) {
+    const p = join(dir, "federal", `dol-whd-fact-sheet-${whdFs[1].toLowerCase()}.txt`);
     return existsSync(p) ? p : null;
   }
 
@@ -648,8 +694,13 @@ export const KNOWN_UNMIRRORED_AUTHORITY_IDS: readonly string[] = [
   // mirrored at docs/authorities/state-wa/rcw-49.46.020.txt and the quote is
   // verified verbatim on every run. This is what paying down the list looks
   // like - each removal turns an honest "cannot check" into a real check.
-  "rcw-49-52-050-wage-rebate",
-  "rcw-49-52-060-authorized-withholding",
+  // "rcw-49-52-050-wage-rebate" and "rcw-49-52-060-authorized-withholding"
+  // WERE HERE. books-37 mirrored both sections, because net-pay-core.ts turns
+  // RCW 49.52.060 into an operative rule: a voluntary deduction with no written
+  // authorisation on file is REFUSED, not warned about. A rule that stops a
+  // paycheque may not rest on a quote nobody is checking. Mirroring them
+  // immediately caught a reassembled quote on 49.52.050 that had been sitting
+  // unverified - see the note on RCW_49_52_050_WAGE_REBATE.
   "rcw-50a-10-030-pfml",
   "rcw-50b-04-080-wa-cares",
   // Washington — unemployment insurance

@@ -1013,12 +1013,29 @@ export const RCW_49_52_050_WAGE_REBATE: GuidanceAuthority = {
   id: "rcw-49-52-050-wage-rebate",
   kind: "state_law",
   cite: "RCW 49.52.050",
+  // books-37 MIRRORED THE SOURCE AND THE GATE IMMEDIATELY FAILED THIS QUOTE.
+  // It elided nine words out of the opening clause ("whether said employer be
+  // in private business or an elected public official") and then jumped from
+  // subsection (2) to the closing line, skipping (3), (4) and (5). Neither
+  // ellipsis joined substantial passages, which is what
+  // verify-verbatim-quotes.ts refuses - the first one dropped a phrase short
+  // enough that eliding it served no purpose except to hide that the quote had
+  // been reassembled by hand. Now quoted in full and verified character for
+  // character. Subsection (4) earns its place: failing to record a deduction
+  // openly in the books is its own offence.
   quote:
-    "Any employer or officer, vice principal or agent of any employer ... who (1) Shall collect or " +
-    "receive from any employee a rebate of any part of wages theretofore paid by such employer to such " +
-    "employee; or (2) Wilfully and with intent to deprive the employee of any part of his or her wages, " +
-    "shall pay any employee a lower wage than the wage such employer is obligated to pay such employee " +
-    "by any statute, ordinance, or contract ... Shall be guilty of a misdemeanor.",
+    "Any employer or officer, vice principal or agent of any employer, whether said employer be in " +
+    "private business or an elected public official, who (1) Shall collect or receive from any " +
+    "employee a rebate of any part of wages theretofore paid by such employer to such employee; or " +
+    "(2) Wilfully and with intent to deprive the employee of any part of his or her wages, shall pay " +
+    "any employee a lower wage than the wage such employer is obligated to pay such employee by any " +
+    "statute, ordinance, or contract; or (3) Shall wilfully make or cause another to make any false " +
+    "entry in any employer's books or records purporting to show the payment of more wages to an " +
+    "employee than such employee received; or (4) Being an employer or a person charged with the duty " +
+    "of keeping any employer's books or records shall wilfully fail or cause another to fail to show " +
+    "openly and clearly in due course in such employer's books and records any rebate of or deduction " +
+    "from any employee's wages; or (5) Shall wilfully receive or accept from any employee any false " +
+    "receipt for wages; Shall be guilty of a misdemeanor.",
   soWhat:
     "Washington does not treat taking money out of somebody's wages as a civil matter you can settle " +
     "later. Paying an employee less than you owe them, on purpose, is a crime in this state — and note " +

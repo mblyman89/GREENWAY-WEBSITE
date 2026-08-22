@@ -418,7 +418,15 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
       // Industrial insurance (L&I)
       "rcw-51-16-035-lni-classification",
       "rcw-51-16-060-lni-hours",
-      "rcw-51-16-140-lni-deduction",
+      // books-37 PAID THIS ONE OFF. "rcw-51-16-140-lni-deduction" used to sit
+      // here. The net-pay slice needed RCW 51.16.140(1)'s "shall deduct" to
+      // prove the L&I employee premium belongs in the required-by-law bucket
+      // that garnishments are measured against, and a load-bearing conclusion
+      // like that is not allowed to rest on an unverified quote - so the
+      // section was mirrored to state-wa/rcw-51.16.140.txt and the id removed
+      // from the debt list. This list is a ledger, not a constant: it shrinks
+      // when debt is paid, and the shrink has to be recorded deliberately here
+      // rather than discovered by a test going red.
       "rcw-51-16-150-lni-injunction",
       "rcw-51-32-073-supplemental-pension-split",
       "rcw-51-32-090-stay-at-work-split",
@@ -428,10 +436,15 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
       (id) => id.startsWith("rcw-5") || id.startsWith("irc-33") || id.startsWith("irc-31"),
     );
     expect([...actual].sort()).toEqual([...expectedPayrollDebt].sort());
-    // Stated plainly for the record: seventeen payroll authorities are quoted
+    // Stated plainly for the record: SIXTEEN payroll authorities are quoted
     // from a URL rather than from mirrored text. Their quotes may be perfect —
     // §280E's were — but "may be" is what rule 35 exists to replace.
-    expect(actual.length).toBe(17);
+    //
+    // Was seventeen until books-37 mirrored RCW 51.16.140. The count is
+    // asserted separately from the list on purpose: the list catches a
+    // SUBSTITUTION (one id quietly swapped for another leaves the length
+    // unchanged), and the count catches a silent ADDITION to the debt pile.
+    expect(actual.length).toBe(16);
   });
 });
 
