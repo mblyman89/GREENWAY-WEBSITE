@@ -1657,3 +1657,53 @@ building the matcher twice.
     which is always 0. Three real kills were reported as "SURVIVED" by a
     harness that was measuring the wrong thing. Capture the runner's own exit
     code before piping, or the campaign grades itself on nothing.
+
+66. A DOCUMENT MAKES CHECKABLE CLAIMS, SO CHECK THEM.
+
+    books-38 shipped an "enterprise gap report" -- a document Michael will
+    plan around. It asserts things like "there is no W-2 module", "these
+    eleven modules are unreachable", "the pay screen saves a manually-typed
+    net pay figure". Every one of those was true when I ran the search, and
+    every one of them stops being true the moment somebody does the work.
+
+    A gap report that quietly goes stale is WORSE than no gap report. No
+    report and he asks. A stale report and he plans around a gap that closed,
+    or worse, skips a gap that opened. The document is not commentary; it is
+    an input to his decisions, and it decays silently by default.
+
+    So: any factual claim about the codebase that appears in an owner document
+    gets re-derived by a compliance test. Not the prose -- the CLAIM. If the
+    report says a module is unreachable, the test greps the import graph. When
+    that test fails, the correct response is usually to CELEBRATE and edit the
+    document, because a failure means a gap got closed.
+
+    66a. NAMING IS NOT THE CLAIM. The first version of this gate asserted only
+    that the report still NAMED the nine modules it called unreachable. A
+    mutation renamed one of them in the report and the suite stayed green --
+    but worse, a module could have BECOME reachable and nothing would have
+    noticed, because the test never looked at the import graph at all. It
+    checked that a string was present. Assert the substance, in both
+    directions: the thing still exists, the report still names it, and the
+    property the report attributes to it still holds.
+
+    66b. A QUOTE IN A DOCUMENT IS CHECKED IN BOTH DIRECTIONS. It must be in
+    the mirrored authority (or the test can be satisfied by text I invented
+    and pasted into the report) and it must be in the document (or the
+    document can quietly drop it). One direction alone is theatre. Fragments,
+    not whole quotes, so quoting the relevant half of a subsection stays
+    legal -- but character-for-character fragments, because the failure mode
+    is a paraphrase creeping in during transcription, not wholesale invention.
+
+    66c. WHEN A GATE AND A DOCUMENT DISAGREE, THE DOCUMENT USUALLY WINS.
+    Two phase-H failures were my own assertion inventing wording the report
+    never used ("cheque" for "paycheque"). The document is the artefact the
+    owner reads; the test exists to serve it. Correct the test to the
+    document -- UNLESS the document is the thing that is wrong, as when its
+    heading had drifted from the exact field label on screen. Then fix the
+    document, because he reads the guide sitting next to the form.
+
+    66d. A GUARD THAT CAN PASS ON A DELETED FILE IS NOT A GUARD. The
+    reachability probe finds zero importers for a module that no longer
+    exists, and reports it as "finished, unreachable work". Assert existence
+    first. Same family as rule 39: every probe needs a companion test proving
+    it can return a positive, or the whole block passes on nothing.
