@@ -2,10 +2,12 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { onTheClock } from "@/lib/staffing/store";
 import { formatMinutes, punchMinutes } from "@/lib/staffing/time";
-import { pacificParts } from "@/lib/reports/timezone";
+import { pacificParts, pacificToday } from "@/lib/reports/timezone";
 import { PhonePinPad } from "@/components/admin/staffing/PhonePinPad";
+import { SickLeaveRequestPad } from "@/components/admin/staffing/SickLeaveRequestPad";
 import { BackLink } from "@/components/admin/ux";
 import { clockByPinPhoneAction } from "../actions";
+import { submitSickLeaveRequestAction } from "../leave-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,21 @@ export default async function PhoneClockPage({
       )}
 
       <PhonePinPad action={clockByPinPhoneAction} />
+
+      {/*
+        THE SICK-LEAVE REQUEST PAD (books-35, Michael's "option 1").
+        It sits on the clock page because that is the one screen every employee
+        already opens, including the floor staff who have no back-office login
+        at all - migration 0198 puts the request table's INSERT policy on
+        `auth.role() = 'authenticated'` rather than `is_owner()` for exactly
+        this reason. `pacificToday()` is computed on the SERVER: a phone with a
+        wrong clock, or one set to a different timezone, would otherwise
+        default the request to the wrong calendar day.
+      */}
+      <SickLeaveRequestPad
+        submitAction={submitSickLeaveRequestAction}
+        todayPacific={pacificToday()}
+      />
 
       {clockedIn.length > 0 && (
         <div className="mt-8 rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4">
