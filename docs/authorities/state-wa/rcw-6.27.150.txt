@@ -1,0 +1,22 @@
+SOURCE TEXT - RCW 6.27.150
+Retrieved 2026-08-22 from https://app.leg.wa.gov/RCW/default.aspx?cite=6.27.150
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+
+RCW 6.27.150
+Exemption of earnings—Amount.
+(1) Except as provided in subsections (2) and (3) of this section, if the garnishee is an employer owing the defendant earnings, then for each week of such earnings, an amount shall be exempt from garnishment which is the greatest of the following:
+(a) Thirty-five times the federal minimum hourly wage in effect at the time the earnings are payable; or
+(b) Seventy-five percent of the disposable earnings of the defendant.
+(2) In the case of a garnishment based on a court order for spousal maintenance, other than a mandatory wage assignment order pursuant to chapter 26.18 RCW, or a mandatory assignment of retirement benefits pursuant to chapter 41.50 RCW, the exemption shall be fifty percent of the disposable earnings of the defendant.
+(3) In the case of a garnishment based on a judgment or other order for the collection of private student loan debt, for each week of such earnings, an amount shall be exempt from garnishment which is the greater of the following:
+(a) Fifty times the minimum hourly wage of the highest minimum wage law in the state at the time the earnings are payable; or
+(b) Eighty-five percent of the disposable earnings of the defendant.
+(4) In the case of a garnishment based on a judgment or other order for the collection of consumer debt, for each week of such earnings, an amount shall be exempt from garnishment which is the greater of the following:
+(a) Thirty-five times the state minimum hourly wage; or
+(b) Eighty percent of the disposable earnings of the defendant.
+(5) The exemptions stated in this section shall apply whether such earnings are paid, or are to be paid, weekly, monthly, or at other intervals, and whether earnings are due the defendant for one week, a portion thereof, or for a longer period.
+(6) Unless directed otherwise by the court, the garnishee shall determine and deduct exempt amounts under this section as directed in the writ of garnishment and answer, and shall pay these amounts to the defendant.
+(7) No money due or earned as earnings as defined in RCW 6.27.010 shall be exempt from garnishment under the provisions of RCW 6.15.010, as now or hereafter amended.
+[ 2021 c 35 s 3; 2019 c 371 s 7; 2018 c 199 s 207; 2012 c 159 s 9; 1991 c 365 s 26; 1987 c 442 s 1015; 1981 c 193 s 6; 1971 c 6 s 1; 1970 ex.s. c 61 s 3; 1969 ex.s. c 264 s 28. Formerly RCW 7.33.280.]
