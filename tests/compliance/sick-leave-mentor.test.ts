@@ -34,6 +34,7 @@ import {
   SICK_STRUCTURAL_TYPES,
   assertEveryCitedSickAuthorityExists,
   assertEverySickFieldIsTaught,
+  assertEveryQuotedSickLessonExists,
   assertEverySickFunctionIsTaught,
   assertEverySickRefusalCodeIsTaught,
   assertNoDuplicateSickFieldLessons,
@@ -355,9 +356,19 @@ describe("every refusal the engine can emit is explained", () => {
 describe("every exported engine function is explained somewhere", () => {
   it("reads the exports from disk", () => {
     const fns = sickExportedFunctionNames();
-    expect(fns.length).toBe(13);
+    /*
+     * books-36: thirteen -> fifteen. The generosity board added
+     * `generosityLineFor` and `summariseGenerosity` to the engine. This count
+     * is deliberately EXACT rather than a >= floor: an exact count is what
+     * makes somebody come back here and consciously decide the new export is
+     * taught, which is the whole point of the rule-26 gate. It was doing its
+     * job when it caught these two.
+     */
+    expect(fns.length).toBe(15);
     expect(fns).toContain("reviewRequest");
     expect(fns).toContain("splitWeekWithSickLeave");
+    expect(fns).toContain("generosityLineFor");
+    expect(fns).toContain("summariseGenerosity");
   });
 
   it("passes against the real engine", () => {
@@ -389,6 +400,73 @@ describe("every exported engine function is explained somewhere", () => {
       expect(why.length, `${fn} explanation is too thin`).toBeGreaterThan(80);
       expect(why, `${fn} explanation does not point at a lesson`).toMatch(/lesson/i);
     }
+  });
+
+  /*
+   * books-36. The two tests above were both green while the lesson one of the
+   * entries NAMED had been deleted. Found by mutation, not by reading: the
+   * entry existed, it was long enough, and it contained the word "lesson", so
+   * every existing check was satisfied by a map pointing at nothing.
+   *
+   * That is standing rule 64a — detection is not explanation — inverted: an
+   * explanation that cannot be found is not an explanation. The gate below is
+   * the lesson-level twin of assertEveryCitedSickAuthorityExists.
+   */
+  it("passes against the real coverage map", () => {
+    expect(() => assertEveryQuotedSickLessonExists()).not.toThrow();
+  });
+
+  it("GATE IS WIRED: deleting a lesson the coverage map quotes fails the gate", () => {
+    /*
+     * The real lesson list, minus the one lesson the coverage map quotes for
+     * `generosityLineFor`. This is exactly the mutation that escaped every
+     * other check in this file, replayed as a permanent test.
+     */
+    const withoutIt = SICK_LEAVE_SCREEN_LESSONS.map((l) => l.topic).filter(
+      (t) => !t.startsWith("A negative balance is a finding"),
+    );
+    expect(
+      withoutIt.length,
+      "the lesson this test removes does not exist, so the test proves nothing",
+    ).toBe(SICK_LEAVE_SCREEN_LESSONS.length - 1);
+
+    expect(() => assertEveryQuotedSickLessonExists(withoutIt)).toThrow(/DO NOT EXIST/);
+    expect(() => assertEveryQuotedSickLessonExists(withoutIt)).toThrow(/A negative balance/);
+  });
+
+  it("GATE IS WIRED: RETITLING a lesson fails it too, not just deleting one", () => {
+    // The likelier real-world mistake: somebody improves a lesson title and
+    // never thinks to look at the coverage map that quotes the old one.
+    const retitled = SICK_LEAVE_SCREEN_LESSONS.map((l) =>
+      l.topic.startsWith("Measuring generosity") ? "How generous have I been?" : l.topic,
+    );
+    expect(() => assertEveryQuotedSickLessonExists(retitled)).toThrow(/Measuring generosity/);
+  });
+
+  it("GATE IS WIRED: an empty lesson list reports itself broken, not clean", () => {
+    // Standing rule 39: a gate handed nothing must complain, not pass.
+    expect(() => assertEveryQuotedSickLessonExists([])).toThrow(/GATE BROKEN/);
+  });
+
+  it("the gate is checking a real number of quoted titles, not zero", () => {
+    /*
+     * Rule 39 again, one level up. If the regex that harvests quoted titles
+     * ever stops matching, every assertion above passes vacuously. Prove the
+     * harvest is non-trivial by giving the gate a topic list that satisfies
+     * NOTHING and confirming it reports several dangling titles at once.
+     */
+    let message = "";
+    try {
+      assertEveryQuotedSickLessonExists(["nothing will ever start with this"]);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message, "the gate did not throw for an entirely wrong lesson list").toMatch(
+      /DO NOT EXIST/,
+    );
+    expect(message.split(" | ").length, "suspiciously few quoted titles harvested").toBeGreaterThan(
+      3,
+    );
   });
 });
 

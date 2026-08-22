@@ -76,8 +76,36 @@ const actionCode = stripComments(actionSrc);
 const clockCode = stripComments(clockSrc);
 const storeCode = stripComments(storeSrc);
 
-/** Only the phase-F addition, so phase E's code cannot satisfy these tests. */
-const submitFn = storeCode.slice(storeCode.indexOf("export async function submitLeaveRequest"));
+/**
+ * Only the phase-F addition, so phase E's code cannot satisfy these tests.
+ *
+ * BOOKS-36 FIX - WHY THIS SLICE NOW HAS AN END AS WELL AS A START.
+ *
+ * The original version was `storeCode.slice(indexOf(start))` - from the start
+ * of `submitLeaveRequest` to the END OF THE FILE. That was correct only by
+ * accident: `submitLeaveRequest` happened to be the last export in the module.
+ *
+ * books-36 appended `loadGenerosityBoard` after it, and this slice silently
+ * grew to include the new function. The negative assertion "the pad never
+ * touches sick_leave_ledger" then went red - not because the pad had changed,
+ * but because the SLICE had. The pad is untouched and still correct.
+ *
+ * That is standing rule 23: fix the CLASS, not the instance. The lazy repair
+ * would have been to delete the ledger assertion, which is one of the most
+ * valuable in the file - it is the thing proving a clock-side pad cannot write
+ * to a leave balance. Instead the slice is bounded at the next top-level
+ * export, so appending to this store can never again change what these tests
+ * are reading. Any future function added between them would be caught by the
+ * length guard below rather than silently absorbed.
+ */
+function sliceExport(src: string, name: string): string {
+  const start = src.indexOf(`export async function ${name}`);
+  if (start === -1) return "";
+  const next = src.indexOf("\nexport ", start + 10);
+  return next === -1 ? src.slice(start) : src.slice(start, next);
+}
+
+const submitFn = sliceExport(storeCode, "submitLeaveRequest");
 
 /* ═════════════════════════════════════════════════════════════════════════════
  * 0) THE STRIPPER AND THE SLICES (standing rule 39: guard the vacuous read)
@@ -93,6 +121,25 @@ describe("the sources really were read and stripped (rule 39)", () => {
     expect(padCode).toContain("export function SickLeaveRequestPad");
     expect(actionCode).toContain("export async function submitSickLeaveRequestAction");
     expect(submitFn).toContain("export async function submitLeaveRequest");
+  });
+
+  it("the submitLeaveRequest slice STOPS at the next export (books-36)", () => {
+    /*
+     * The guard on the bug books-36 exposed. `submitFn` used to run to the end
+     * of the file, so anything appended to the store leaked into every
+     * assertion below - including the negative ones, which would then fail for
+     * a reason that had nothing to do with the pad.
+     *
+     * These two assertions are opposites on purpose: the slice must contain
+     * this function and must NOT contain its neighbours.
+     */
+    expect(submitFn).toContain("export async function submitLeaveRequest");
+    expect(
+      submitFn,
+      "the submitLeaveRequest slice has swallowed a later export again - bound it, " +
+        "do not weaken the assertions that depend on it",
+    ).not.toContain("export async function loadGenerosityBoard");
+    expect(submitFn).not.toContain("export async function loadLeaveInbox");
   });
 
   it("removes phrases that exist only inside comments", () => {

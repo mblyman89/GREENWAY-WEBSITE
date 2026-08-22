@@ -62,8 +62,12 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 import {
   computeBalance,
+  generosityLineFor,
   planDraw,
   reviewRequest,
+  summariseGenerosity,
+  STATUTORY_ACCRUAL_HUNDREDTH_MINUTES_PER_HOUR,
+  type GenerositySummary,
   type RequestReview,
   type SickLeaveBalance,
   type SickLeaveLedgerEntry,
@@ -986,5 +990,153 @@ export async function submitLeaveRequest(args: {
       `Your request for ${args.leaveDate} has been sent to Michael and is waiting for a ` +
       "decision. You will not see it on your timesheet until he approves it. Nothing has been " +
       "taken off your balance yet.",
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE GENEROSITY BOARD - "I want to keep track of how generous I am being"
+ *
+ * Michael, verbatim:
+ *
+ *   "I use the legally required minimum, it's easier that way, I give extra on
+ *    demand, I don't want to try and figure out a complex formula to accumulate
+ *    sick time. I just need a smart and easy to use tool that tracks their sick
+ *    time, including if it goes negative. I want to keep track of how generous
+ *    I am being."
+ *
+ * WHY THIS READS EVERY LEDGER ROW AND NOT A STORED BALANCE
+ *
+ * There is no balance column anywhere in 0198, on purpose. A stored balance is
+ * a number that can drift from the rows that are supposed to explain it, and
+ * when it drifts there is no way to tell which one is wrong. Recomputing from
+ * the ledger every time means the balance and its explanation cannot disagree.
+ *
+ * At Greenway's size this is a few hundred rows. If it ever became slow the
+ * answer would be a materialised view that is REBUILT from the ledger, never a
+ * counter that is incremented alongside it.
+ *
+ * WHY INACTIVE EMPLOYEES ARE EXCLUDED FROM THE BOARD BUT NOT FROM HISTORY
+ *
+ * The board answers "what am I carrying right now", so it lists active staff.
+ * But `totalAwardedEverMinutes` is a historical question - "how generous have I
+ * been" - and excluding leavers would quietly shrink the answer every time
+ * somebody left. So the roll-up sums the lines it was given, and this function
+ * hands it active staff only, with the limitation stated on the screen rather
+ * than hidden here. Standing rule 64a.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+export type GenerosityBoard = {
+  readonly ok: true;
+  readonly summary: GenerositySummary;
+  /**
+   * True when the policy on file accrues at exactly the statutory floor, which
+   * is what Michael said he wants. Null when no policy has been set, because
+   * "not answered" is not "yes" (standing rule 62d).
+   */
+  readonly accruesAtStatutoryFloor: boolean | null;
+  readonly policyNote: string;
+};
+
+export async function loadGenerosityBoard(): Promise<GenerosityBoard | StoreFailure> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, code: "NOT_CONFIGURED", message: NOT_CONFIGURED };
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  const { data: empData, error: empErr } = await admin
+    .from("employees")
+    .select("id, full_name")
+    .eq("active", true)
+    .order("full_name", { ascending: true });
+
+  if (empErr) {
+    return {
+      ok: false,
+      code: "READ_FAILED",
+      message: `Could not read the employee list: ${empErr.message}`,
+    };
+  }
+
+  const employees = (empData ?? []) as unknown as { id: string; full_name: string | null }[];
+
+  // One read for every ledger row belonging to those employees, rather than one
+  // read per employee. A per-employee loop would be N round trips and would
+  // also make a partial failure look like a zero balance for somebody.
+  const ids = employees.map((e) => e.id);
+  const byEmployee = new Map<string, LedgerRow[]>();
+
+  if (ids.length > 0) {
+    const { data: ledgerData, error: ledgerErr } = await admin
+      .from("sick_leave_ledger")
+      .select("id, employee_id, entry_kind, minutes, drawn_from, entry_date")
+      .in("employee_id", ids);
+
+    if (ledgerErr) {
+      return {
+        ok: false,
+        code: "READ_FAILED",
+        message:
+          `Could not read the sick leave ledger: ${ledgerErr.message}. No balances are ` +
+          `shown, because a partly-read ledger would show balances that are too low.`,
+      };
+    }
+
+    for (const row of (ledgerData ?? []) as unknown as (LedgerRow & {
+      employee_id: string;
+    })[]) {
+      const list = byEmployee.get(row.employee_id);
+      if (list) list.push(row);
+      else byEmployee.set(row.employee_id, [row]);
+    }
+  }
+
+  const lines = employees.map((e) =>
+    generosityLineFor({
+      employeeId: e.id,
+      employeeName: e.full_name ?? "(no name on file)",
+      entries: (byEmployee.get(e.id) ?? []).map(toLedgerEntry),
+    }),
+  );
+
+  // The policy read is separate and NON-FATAL. Michael asked to be told whether
+  // he is on the statutory floor; not knowing that is a missing note on an
+  // otherwise correct board, not a reason to refuse to show him his balances.
+  let accruesAtStatutoryFloor: boolean | null = null;
+  let policyNote =
+    "The accrual rate could not be read, so this screen cannot confirm which rate is in force.";
+
+  const { data: policyData, error: policyErr } = await admin
+    .from("sick_leave_policy")
+    .select("accrual_hundredth_minutes_per_hour")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!policyErr && policyData) {
+    const rate = (policyData as unknown as { accrual_hundredth_minutes_per_hour: number | null })
+      .accrual_hundredth_minutes_per_hour;
+    if (rate === null) {
+      policyNote =
+        "No accrual rate has been set yet, so nothing is accruing. Set it to the legal minimum " +
+        "of one hour per forty hours worked.";
+    } else if (rate === STATUTORY_ACCRUAL_HUNDREDTH_MINUTES_PER_HOUR) {
+      accruesAtStatutoryFloor = true;
+      policyNote =
+        "You are accruing at exactly the legal minimum - one hour of paid sick leave for every " +
+        "forty hours worked, RCW 49.46.210(1)(a). Everything above that shows up below as a gift.";
+    } else {
+      accruesAtStatutoryFloor = false;
+      policyNote =
+        `Your accrual rate is set above the legal minimum. That extra accrues automatically for ` +
+        `everyone and is NOT counted as a gift below, because the gift column only counts leave ` +
+        `you granted by hand. It also carries over at year end like earned leave does.`;
+    }
+  }
+
+  return {
+    ok: true,
+    summary: summariseGenerosity(lines),
+    accruesAtStatutoryFloor,
+    policyNote,
   };
 }

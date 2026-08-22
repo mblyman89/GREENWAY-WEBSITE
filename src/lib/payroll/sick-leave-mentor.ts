@@ -859,6 +859,57 @@ export const SICK_LEAVE_SCREEN_LESSONS: readonly ScreenLesson[] = [
       "answer, because every one of them is a qualified purpose.",
     authorityIds: ["wac-296-128-630-employee-chooses", "wac-296-128-660-no-burden"],
   },
+  /*
+   * books-36. The two lessons below are the teaching behind the generosity
+   * board, and they exist because standing rule 26 says an exported engine
+   * function that nobody has explained has not shipped. `generosityLineFor`
+   * and `summariseGenerosity` are the two new exports; these are their
+   * lessons, and SICK_CORE_FUNCTION_COVERAGE points at them by name.
+   */
+  {
+    topic: "Measuring generosity: three honest answers to one question",
+    plainEnglish:
+      "You asked to see how generous you have been. That sounds like one number and it is " +
+      "actually three, and they are all correct at the same time. GIVEN is every minute you " +
+      "have ever awarded, cumulatively, whether or not anybody spent it. USED is how much of " +
+      "that gift people actually took. OUTSTANDING is what is still sitting in their gifted " +
+      "buckets waiting to be spent. Given minus used does not always equal outstanding either, " +
+      "because a gift can lapse at year end. The board shows all three side by side and labels " +
+      "them, rather than picking one and calling it 'generosity'.",
+    whyItMatters:
+      "Each of the three answers a different real question. GIVEN is the one that tells you what " +
+      "kind of employer you have been over the years, and it is the only figure that never goes " +
+      "down. USED tells you what the gesture was actually worth to the person receiving it, " +
+      "which is often far less than you gave. OUTSTANDING is the one with money attached today: " +
+      "it is leave you are still carrying, and if you ever choose to cash unused leave out when " +
+      "somebody resigns, that is the column you would be writing the cheque against. Washington " +
+      "does not require you to pay out unused sick leave and does not require you to carry " +
+      "gifted hours into next year, so OUTSTANDING is a liability you have taken on voluntarily " +
+      "and can see before it surprises you. Reporting only one of the three would quietly answer " +
+      "a question you did not ask.",
+    authorityIds: ["wac-296-128-620-carryover-cap", "wac-296-128-620-accrual"],
+  },
+  {
+    topic: "A negative balance is a finding, not a rounding problem",
+    plainEnglish:
+      "If somebody's sick leave balance is below zero, this screen shows it below zero, in red, " +
+      "with the minus sign intact. It does not show you a tidy 0.00. A balance cannot go negative " +
+      "by accruing and it cannot go negative by taking leave the system approved, because the " +
+      "approval step refuses leave the employee has not got. So a negative number means a " +
+      "correction, a forfeit or a payout was entered for more than the person actually had, and " +
+      "the screen names which bucket went under and by how much.",
+    whyItMatters:
+      "The single character `Math.max(0, ...)` would make this screen look calmer and would " +
+      "permanently hide an error inside a wage record. That is the version of this bug that gets " +
+      "found by an L&I investigator rather than by you, because a clamped zero looks identical to " +
+      "a correct zero and nobody has any reason to check it. There is a second trap underneath " +
+      "it: forfeits and payouts cannot name a bucket at all — the database constraint on the " +
+      "ledger allows `drawn_from` only on usage rows — so an oversized payout is charged to the " +
+      "STATUTORY bucket, which is the conservative direction but is also exactly how earned " +
+      "leave goes below zero without anybody touching earned leave. Showing the negative is how " +
+      "you find out the same week instead of the same audit.",
+    authorityIds: ["wac-296-128-755-notification", "wac-296-128-680-payment"],
+  },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════

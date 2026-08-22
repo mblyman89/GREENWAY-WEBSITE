@@ -25,6 +25,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { assertQuotedLessonsResolve } from "@/lib/payroll/mentor-quote-gate";
+
 import { GARNISHMENT_AUTHORITIES } from "@/lib/payroll/garnishment-authorities";
 import {
   GARNISHMENT_FIELD_LESSONS,
@@ -41,6 +43,8 @@ const MIGRATION_0198 = join(
   "0198_sick_leave_and_garnishments.sql",
 );
 const GARNISHMENT_CORE = join("src", "lib", "payroll", "garnishment-core.ts");
+/** This file, read from disk. See assertEveryQuotedGarnishmentLessonExists. */
+const GARNISHMENT_GATES_SELF = join("src", "lib", "payroll", "garnishment-mentor-gates.ts");
 
 /**
  * The one table this mentor is responsible for.
@@ -394,6 +398,31 @@ export const GARNISHMENT_CORE_FUNCTION_COVERAGE: Readonly<Record<string, string>
  *
  * Same reasoning as the refusal codes: read the file, do not trust a list.
  */
+/**
+ * Every lesson title GARNISHMENT_CORE_FUNCTION_COVERAGE quotes must exist.
+ *
+ * books-36, standing rule 23: fix the CLASS, not the instance. The identical
+ * hole was found by mutation in the sick-leave coverage map — deleting a
+ * quoted lesson left the suite green while the map went on telling readers
+ * where teaching lived that had been deleted. This map quotes five lesson
+ * titles and had exactly the same exposure, so it gets the same gate. The
+ * shared implementation lives in mentor-quote-gate.ts rather than being
+ * copied, so a fix here is a fix everywhere (standing rule 25).
+ *
+ * `topicsOverride` exists so a test can hand this a deliberately broken lesson
+ * list and prove the gate BITES (standing rule 16).
+ */
+export function assertEveryQuotedGarnishmentLessonExists(
+  topicsOverride?: readonly string[],
+): void {
+  assertQuotedLessonsResolve({
+    gatesSourcePath: GARNISHMENT_GATES_SELF,
+    mapName: "GARNISHMENT_CORE_FUNCTION_COVERAGE",
+    topics: topicsOverride ?? GARNISHMENT_SCREEN_LESSONS.map((l) => l.topic),
+    label: "GARNISHMENT",
+  });
+}
+
 export function garnishmentExportedFunctionNames(sourcePath?: string): readonly string[] {
   const p = sourcePath ?? join(process.cwd(), GARNISHMENT_CORE);
   const text = readFileSync(p, "utf8");

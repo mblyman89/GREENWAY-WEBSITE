@@ -1101,3 +1101,220 @@ export function monthlyNotificationText(args: {
     `Questions about any of these numbers go to Michael.`
   );
 }
+
+// ===========================================================================
+// 14) THE GENEROSITY LEDGER - Michael's explicit ask, in his own words
+//
+// He said, verbatim:
+//
+//   "I use the legally required minimum, it's easier that way, I give extra on
+//    demand, I don't want to try and figure out a complex formula to accumulate
+//    sick time. I just need a smart and easy to use tool that tracks their sick
+//    time, including if it goes negative. I want to keep track of how generous
+//    I am being."
+//
+// That is three separate requirements, and they are easy to blur together:
+//
+//   (a) ACCRUE AT THE FLOOR. One hour per forty worked, RCW 49.46.210(1)(a).
+//       No custom formula. Section 5 already does this; nothing here changes it.
+//   (b) GIVE EXTRA AD HOC, and have the extra recorded as extra rather than
+//       disappearing into the earned balance. Section 8 (`planAward`) already
+//       does this, and section 6 already keeps the two buckets apart.
+//   (c) TOTAL UP THE GENEROSITY so he can see what he has given away, and
+//       SHOW A NEGATIVE BALANCE if one ever occurs.
+//
+// (a) and (b) existed. (c) did not, and this section is (c).
+//
+// WHY A NEGATIVE BALANCE IS POSSIBLE AT ALL
+//
+// It should not be. `reviewRequest` refuses leave the employee has not got, and
+// the draw order in section 7 spends earned hours before gifted ones. But a
+// balance is a SUM OF A LEDGER, and a ledger can be corrected. A `correction`
+// row may be negative (0198 permits it deliberately, so a mistake can be undone
+// honestly rather than by deleting history), a `forfeit` can be recorded, and a
+// payout can be entered for an amount somebody mistyped.
+//
+// Note also that a forfeit and a payout carry NO bucket - 0198's
+// `sick_leave_ledger_draw_only_on_usage` constraint permits `drawn_from` on
+// usage rows only - so section 6 charges both to the statutory bucket. An
+// oversized payout therefore drives EARNED leave negative, which is precisely
+// the case this section has to surface rather than round away.
+//
+// So the honest engineering position is: a negative balance means SOMETHING
+// WENT WRONG, and Michael must be told, loudly, rather than shown a clamped
+// zero that hides it. `Math.max(0, total)` would be one character of "tidying"
+// that permanently conceals an error in a wage record. This section therefore
+// reports negativity as a first-class fact with the bucket named.
+//
+// WHY GENEROSITY IS MEASURED GROSS, NET AND OUTSTANDING
+//
+// "How generous have I been" has three defensible answers and they differ:
+//
+//   GROSS      - every minute ever awarded. What he has given, cumulatively.
+//   USED       - awarded minutes the employee actually spent. What the gift
+//                was worth to them in practice.
+//   OUTSTANDING- awarded minutes still sitting in the bucket. What he is still
+//                carrying. NOTE this is a real liability if he ever chooses to
+//                cash it out, though the law does NOT require him to.
+//
+// Reporting only one of the three would answer a different question from the
+// one he asked, so all three are returned and named. Standing rule 64a:
+// detection is not explanation.
+// ===========================================================================
+
+/** What one employee's leave looks like, generosity included. */
+export type GenerosityLine = {
+  readonly employeeId: string;
+  readonly employeeName: string;
+  /** Hours the law made him give, still on the books. */
+  readonly statutoryMinutes: number;
+  /** Gifted hours still on the books. */
+  readonly awardedMinutes: number;
+  readonly totalMinutes: number;
+  /** Every minute ever awarded to this person, spent or not. */
+  readonly awardedEverMinutes: number;
+  /** Awarded minutes this person has actually used. */
+  readonly awardedUsedMinutes: number;
+  /**
+   * True when any bucket is below zero. Reported, never clamped: a negative
+   * balance is a signal that a correction or payout needs looking at.
+   */
+  readonly isNegative: boolean;
+  /** Which bucket(s) went negative, in plain English. Empty when none did. */
+  readonly negativeExplanation: string;
+};
+
+export type GenerositySummary = {
+  readonly lines: readonly GenerosityLine[];
+  /** Every minute ever awarded, across everybody. */
+  readonly totalAwardedEverMinutes: number;
+  /** Awarded minutes that have actually been used, across everybody. */
+  readonly totalAwardedUsedMinutes: number;
+  /** Awarded minutes still on the books, across everybody. */
+  readonly totalAwardedOutstandingMinutes: number;
+  /** Statutory minutes still on the books, across everybody. */
+  readonly totalStatutoryOutstandingMinutes: number;
+  /** How many people are carrying a negative balance. Should be zero. */
+  readonly negativeCount: number;
+  /** One sentence Michael can read without opening anything. */
+  readonly explanation: string;
+};
+
+/**
+ * Roll one employee's ledger into a generosity line.
+ *
+ * Deliberately reuses `computeBalance` rather than re-summing, so there is
+ * exactly one definition of "what the balance is" in this codebase (standing
+ * rule 25). If the bucket rules ever change, they change in one place and this
+ * follows automatically.
+ */
+export function generosityLineFor(args: {
+  readonly employeeId: string;
+  readonly employeeName: string;
+  readonly entries: readonly SickLeaveLedgerEntry[];
+}): GenerosityLine {
+  const balance = computeBalance(args.entries);
+
+  let awardedEver = 0;
+  let awardedUsed = 0;
+  for (const e of args.entries) {
+    if (!Number.isFinite(e.minutes) || e.minutes === 0) continue;
+    if (e.entryKind === "award") {
+      awardedEver += e.minutes;
+    } else if (e.drawnFrom === "awarded" && e.minutes < 0) {
+      /*
+       * USAGE ROWS ONLY, and that is not a simplification - it is what the
+       * database permits. 0198 carries
+       *
+       *   check ((entry_kind = 'usage') = (drawn_from is not null))
+       *
+       * so a forfeit, a payout or a correction CANNOT name a bucket. The test
+       * is written against `drawnFrom` rather than against `entryKind ===
+       * "usage"` anyway, because if that constraint is ever relaxed to let a
+       * payout draw from the gifted bucket, this line starts counting it
+       * correctly with no edit. Matching on the kind would silently under-count
+       * from the day the constraint changed.
+       *
+       * The consequence today: a forfeit or payout has no bucket, so
+       * `computeBalance` charges it to STATUTORY. That is the conservative
+       * direction - it never overstates what has been given away - and it is
+       * section 6's documented behaviour, not an accident here.
+       */
+      awardedUsed += Math.abs(e.minutes);
+    }
+  }
+
+  const negatives: string[] = [];
+  if (balance.statutoryMinutes < 0) {
+    negatives.push(
+      `earned leave is ${minutesLabel(Math.abs(balance.statutoryMinutes))} below zero`,
+    );
+  }
+  if (balance.awardedMinutes < 0) {
+    negatives.push(
+      `gifted leave is ${minutesLabel(Math.abs(balance.awardedMinutes))} below zero`,
+    );
+  }
+
+  return {
+    employeeId: args.employeeId,
+    employeeName: args.employeeName,
+    statutoryMinutes: balance.statutoryMinutes,
+    awardedMinutes: balance.awardedMinutes,
+    totalMinutes: balance.totalMinutes,
+    awardedEverMinutes: awardedEver,
+    awardedUsedMinutes: awardedUsed,
+    isNegative: negatives.length > 0,
+    negativeExplanation:
+      negatives.length === 0
+        ? ""
+        : `${args.employeeName}: ${negatives.join(" and ")}. A balance cannot go below zero ` +
+          `by accruing or by taking approved leave, so this came from a correction, a ` +
+          `forfeit or a payout. Somebody should look at this employee's ledger before the ` +
+          `next pay run.`,
+  };
+}
+
+/**
+ * Roll every employee up into the answer to "how generous have I been".
+ *
+ * The explanation sentence is built here rather than in the screen so that the
+ * number and the words describing it can never disagree - the same reason the
+ * garnishment engine carries its own explanations.
+ */
+export function summariseGenerosity(
+  lines: readonly GenerosityLine[],
+): GenerositySummary {
+  let ever = 0;
+  let used = 0;
+  let outstanding = 0;
+  let statutory = 0;
+  let negatives = 0;
+
+  for (const l of lines) {
+    ever += l.awardedEverMinutes;
+    used += l.awardedUsedMinutes;
+    outstanding += l.awardedMinutes;
+    statutory += l.statutoryMinutes;
+    if (l.isNegative) negatives += 1;
+  }
+
+  const explanation =
+    ever === 0
+      ? "You have not given any sick leave beyond what the law requires. Everyone's balance is what they earned at one hour per forty hours worked."
+      : `You have given ${minutesLabel(ever)} of sick leave on top of what the law ` +
+        `required. ${minutesLabel(used)} of that has been used, and ` +
+        `${minutesLabel(outstanding)} is still sitting in people's gifted balances. ` +
+        `Gifted hours are spent only after earned hours run out, and you are not ` +
+        `required to carry them over at year end or pay them out when someone leaves.`;
+
+  return {
+    lines,
+    totalAwardedEverMinutes: ever,
+    totalAwardedUsedMinutes: used,
+    totalAwardedOutstandingMinutes: outstanding,
+    totalStatutoryOutstandingMinutes: statutory,
+    negativeCount: negatives,
+    explanation,
+  };
+}

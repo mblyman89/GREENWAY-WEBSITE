@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the thirteen books screens plus Inventory Auditing", () => {
+  it("Accounting holds the fourteen books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -355,6 +355,14 @@ describe("N4 the Accounting and Lyman tabs", () => {
      *
      * So the list grows to thirteen, and once again it is EXTENDED, not
      * loosened to a `toContain`. Its gate is tests/compliance/garnishment-screen.test.ts.
+     *
+     * BOOKS-36 ALSO ADDS /admin/books/sick-leave-balances, making fourteen.
+     * Michael: "I want to keep track of how generous I am being." It is a
+     * SEPARATE screen from /admin/books/leave on purpose - the inbox answers
+     * "what is being asked of me today", this answers "where does everybody
+     * stand", and merging them would produce one screen that does neither well
+     * while making the inbox too long to get read. Its gate is
+     * tests/compliance/generosity-board.test.ts.
      */
     const hrefs = adminNav
       .filter((i) => i.group === ACCOUNTING_GROUP)
@@ -373,6 +381,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/ledger",
         "/admin/books/payroll",
         "/admin/books/payroll-setup",
+        "/admin/books/sick-leave-balances",
         "/admin/books/timesheets",
         "/admin/books/trial-balance",
         "/admin/inventory/audits",
