@@ -107,7 +107,15 @@ describe("the migration list is ordered the way the database will see it", () =>
     // zero-padded to four digits, and `ls [0-9]*.sql | sort -c` exits clean so
     // the on-disk order and the string sort still agree. Only then was 0198
     // changed to 0199.
-    expect(listed[listed.length - 1]).toMatch(/^0199_/);
+    //
+    // IT FIRED A THIRD TIME ON 0200 (books-35, the repair to the one-usage-per-
+    // request index) AND WAS HONOURED, NOT SILENCED. Re-verified against the
+    // directory before this line was touched: 200 files;
+    // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so every name is
+    // still zero-padded to four digits; and `ls [0-9]*.sql | sort -c` exits
+    // clean, so the on-disk order and the string sort this module relies on are
+    // still the same order. Only then was 0199 advanced to 0200.
+    expect(listed[listed.length - 1]).toMatch(/^0200_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
