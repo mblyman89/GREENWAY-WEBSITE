@@ -115,7 +115,21 @@ describe("the migration list is ordered the way the database will see it", () =>
     // still zero-padded to four digits; and `ls [0-9]*.sql | sort -c` exits
     // clean, so the on-disk order and the string sort this module relies on are
     // still the same order. Only then was 0199 advanced to 0200.
-    expect(listed[listed.length - 1]).toMatch(/^0200_/);
+    //
+    // IT FIRED A FOURTH TIME ON 0201 (books-38, the served_date column that the
+    // twenty-day answer deadline and the sixty-day continuing lien are both
+    // measured from) AND WAS HONOURED, NOT SILENCED. Re-verified against the
+    // directory before this line was touched: 201 files;
+    // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so every name is
+    // still zero-padded to four digits; and `ls [0-9]*.sql | sort -c` exits
+    // clean, so the on-disk order and the string sort this module relies on
+    // are still the same order.
+    //
+    // 0201 was additionally EXECUTED, not merely read: all 201 migrations were
+    // applied in order to a real PostgreSQL 15.18 with exit 0, and each of the
+    // four branches of its conditional NOT NULL block was driven and observed.
+    // Only then was 0200 advanced to 0201.
+    expect(listed[listed.length - 1]).toMatch(/^0201_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
