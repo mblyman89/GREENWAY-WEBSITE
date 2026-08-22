@@ -159,6 +159,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Accounting" }, // receipt: what survives 280E and what it takes
   { label: "Payroll & COGS", href: "/admin/books/payroll", permission: "books.view", icon: "\ud83d\udc77", group: "Accounting" }, // construction worker: which labor may be inventoried (books-04)
   { label: "Payroll Setup (W-4)", href: "/admin/books/payroll-setup", permission: "books.view", icon: "\ud83e\uddfe", group: "Accounting" }, // W-4 -> withholding, and the mentoring blockers (books-13)
+  { label: "Timesheets & Overtime", href: "/admin/books/timesheets", permission: "books.view", icon: "\u23f1\ufe0f", group: "Accounting" }, // stopwatch: punches -> payable hours, overtime per WORKWEEK not per pay period (books-32)
   { label: "Bank & Reconcile", href: "/admin/books/bank", permission: "books.view", icon: "\ud83c\udfe6", group: "Accounting" }, // bank: matching the feed to the books, and the two silent errors (books-05)
   { label: "Trial Balance", href: "/admin/books/trial-balance", permission: "books.view", icon: "\u2696\ufe0f", group: "Accounting" }, // scales: debits = credits
   { label: "General Ledger", href: "/admin/books/ledger", permission: "books.view", icon: "\ud83d\udcd2", group: "Accounting" }, // ledger book

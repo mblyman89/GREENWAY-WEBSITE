@@ -61,6 +61,17 @@ const MIRRORED_CORPORA: ReadonlyArray<{
   { name: "26 U.S.C.", re: /^26 U\.S\.C\. §(\d+[A-Z]?)/, file: (m) => ["federal", `usc-${m[1]}.txt`] },
   { name: "Rev. Proc.", re: /^Rev\. Proc\. (\d{4})-(\d+)/, file: (m) => ["federal", `revproc-${m[1]}-${m[2]}.txt`] },
   { name: "RCW", re: /^RCW ([\d.]+)/, file: (m) => ["state-wa", `rcw-${m[1]}.txt`] },
+  // books-32. 29 CFR part 778 is the FLSA overtime regulation, and it is the
+  // reason the timesheet engine computes overtime per WORKWEEK rather than per
+  // pay period. Every section we rely on lives in one mirrored file, because
+  // they are read together: 778.104 (each workweek stands alone), 778.105 (the
+  // workweek is a fixed 168 hours), 778.109 (the regular rate is an hourly
+  // rate), 778.110 (the hourly-rate employee's overtime arithmetic).
+  {
+    name: "29 CFR part 778",
+    re: /^29 C\.?F\.?R\.? §778\.\d+/,
+    file: () => ["federal", "29-cfr-778-overtime.txt"],
+  },
   {
     name: "IRS Publication",
     re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
@@ -309,6 +320,19 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   const rcw = /^RCW ([\d.]+)/.exec(cite);
   if (rcw) {
     const p = join(dir, "state-wa", `rcw-${rcw[1]}.txt`);
+    return existsSync(p) ? p : null;
+  }
+
+  // 29 CFR §778.104  ->  federal/29-cfr-778-overtime.txt
+  //
+  // books-32. The single most consequential sentence in the timesheet engine is
+  // §778.104's "does not permit averaging of hours over 2 or more weeks". A
+  // biweekly employer who sums 80 hours and pays overtime past 80 underpays
+  // every employee who worked 45 hours then 35, and that is a wage claim rather
+  // than a rounding difference. A rule that expensive is not allowed to rest on
+  // a paraphrase, so the regulation is mirrored and the quote is checked.
+  if (/^29 C\.?F\.?R\.? §778\.\d+/.test(cite)) {
+    const p = join(dir, "federal", "29-cfr-778-overtime.txt");
     return existsSync(p) ? p : null;
   }
 
