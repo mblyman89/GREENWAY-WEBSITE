@@ -1,0 +1,1823 @@
+Instructions for Form 941
+(Rev. March 2026)
+Employer’s QUARTERLY Federal Tax Return
+Section references are to the Internal Revenue Code
+unless otherwise noted.
+Future Developments
+For the latest information about developments related to
+Form 941 and its instructions, such as legislation enacted
+after they were published, go to IRS.gov/Form941.
+What’s New
+Social security and Medicare taxes for 2026. The
+social security tax rate is 6.2% each for the employee and
+employer. The social security wage base limit is $184,500.
+The Medicare tax rate is 1.45% each for the employee
+and employer, unchanged from 2025. There is no wage
+base limit for Medicare tax.
+Social security and Medicare taxes apply to the wages
+of household workers you pay $3,000 or more in cash
+wages in 2026. Social security and Medicare taxes apply
+to election workers who are paid $2,500 or more in cash
+or an equivalent form of compensation in 2026.
+Aggregate return filers must identify themselves.
+Aggregate return filers must use the new Aggregate
+Return Filers Only section on Form 941 to identify whether
+they’re filing an aggregate return as a section 3504 agent,
+certified professional employer organization (CPEO), or
+other third party. For more information about these types
+of aggregate return filers, see Certification program for
+professional employer organizations (PEOs) and
+Aggregate Form 941 filers, later. For more information
+about completing this new section on Form 941, see
+Aggregate Return Filers Only, later.
+Direct deposit of Form 941 refund is now available.
+Executive Order (EO) 14247, Modernizing Payments To
+and From America’s Bank Account, issued on March 25,
+2025, promotes operational efficiency by mandating the
+transition to electronic payments for all federal
+disbursements. Accordingly, the IRS will now issue Form
+941 tax refunds by direct deposit. Direct deposit is a fast,
+simple, safe, and secure way to have your refund
+deposited automatically to your checking or savings
+account. Instead of a direct deposit refund, you can still
+choose to have your Form 941 overpayment applied to
+your next return by checking the appropriate box on
+line 15b. For more information, see the instructions for
+line 15b and Direct Deposit, later.
+Make balance due payments electronically. EO 14247
+also promotes operational efficiency by mandating the
+transition to electronic payments for all payments made to
+the federal government. Therefore, pay your balance due
+on Form 941 electronically. There are several easy, safe,
+and secure ways to pay your balance due electronically.
+For more information, see the instructions for line 14, later.
+Form 941 return transcripts are now available elec-
+tronically. You can now access your Form 941 return
+transcript for tax years 2023 and later using your IRS
+business tax account. For more information, go to
+IRS.gov/BusinessTranscript. To access your IRS business
+tax account, go to IRS.gov/BusinessAccount.
+Withholding on qualified tips. For tax years beginning
+after 2024 and ending before 2029, P.L. 119-21,
+commonly known as the One Big Beautiful Bill Act, allows
+employees and self-employed individuals to deduct up to
+$25,000 of qualified tips received in occupations that
+customarily and regularly received tips on or before
+December 31, 2024, on their income tax returns. Qualified
+tips are cash tips, which include voluntary cash or charged
+tips received from customers or, in the case of employees,
+through tip-sharing arrangements. Mandatory service
+charges added to the bill are not qualified tips. Employers
+must use an employee’s updated Form W-4, Employee’s
+Withholding Certificate, if one is submitted by the
+employee, and the federal income tax withholding
+procedures in Pub. 15-T, Federal Income Tax Withholding
+Methods, to allow the employee to account for their
+expected deduction and receive more money in each
+paycheck instead of waiting until filing their income tax
+return to receive the full benefit of this deduction. Tips are
+still generally subject to both the employer share and
+employee share of social security tax and Medicare tax if
+the tips received are $20 or more per month.
+Employers and other payers must file information
+returns (for example, Forms W-2, 1099-MISC, and
+1099-NEC) with the Social Security Administration (SSA)
+or IRS, as applicable, and furnish statements to tip
+recipients showing cash tips received and the Treasury
+Tipped Occupation Code(s) of the tip recipient. However,
+the IRS has provided transition relief to employers and
+payers for the tax year 2025 reporting requirements. For
+more information, see Notice 2025-62, 2025-48 I.R.B.
+740, available at IRS.gov/irb/2025-48_IRB#NOT-2025-62.
+Withholding on qualified overtime compensation.
+For tax years beginning after 2024 and ending before
+2029, P.L. 119-21 allows individuals (employees and other
+workers not treated as employees) to deduct up to
+$12,500 ($25,000 if married filing jointly) of qualified
+overtime compensation on their income tax returns.
+Qualified overtime is compensation that exceeds the
+regular rate of pay (such as the “half” portion of
+time-and-a-half compensation) that is required to be paid
+to an individual under section 7 of the Fair Labor
+Standards Act (FLSA) of 1938. The FLSA provides that
+employers must generally pay covered, nonexempt
+employees at least one-and-a-half times their regular rate
+of pay for hours worked over 40 hours per week. For more
+information about overtime compensation, go to dol.gov/
+agencies/whd/overtime. Employers must use an
+Instructions for Form 941 (Rev. 3-2026) Catalog Number 14625L
+Dec 4, 2025 Department of the Treasury Internal Revenue Service www.irs.gov
+employee’s updated Form W-4, if one is submitted by the
+employee, and the federal income tax withholding
+procedures in Pub. 15-T to allow the employee to account
+for their expected deduction and receive more money in
+each paycheck instead of waiting until filing their income
+tax return to receive the full benefit of this deduction.
+Overtime compensation is still generally subject to both
+the employer share and employee share of social security
+tax and Medicare tax.
+Employers and other payers must file information
+returns (for example, Forms W-2, 1099-MISC, and
+1099-NEC) with the SSA or IRS, as applicable, and
+furnish statements to overtime recipients showing
+qualified overtime compensation paid during the year.
+However, the IRS has provided transition relief to
+employers and payers for the tax year 2025 reporting
+requirements. For more information, see Notice 2025-62.
+Reminders
+Caution: Use the March 2026 revision of Form 941 to
+report taxes for the first quarter of 2026; don’t use an
+earlier revision to report taxes for 2026. At this time, the
+IRS expects the March 2026 revision of Form 941 and
+these instructions to also be used for the second, third,
+and fourth quarters of 2026. If changes in law require
+additional changes to Form 941, the form and/or these
+instructions may be revised. Prior revisions of Form 941
+are available at IRS.gov/Form941 (select the link for “All
+Form 941 revisions” under “Other items you may find
+useful”).
+References applicable to other forms. Unless
+otherwise noted, references throughout these instructions
+to Form W-2 include Forms W-2AS, W-2CM, W-2GU,
+W-2VI, and 499R-2/W-2PR; references to Form W-2c
+include Form 499R-2c/W-2cPR; references to Form W-3
+include Form W-3SS and Form W-3 (PR); and references
+to Form W-3c include Form W-3C (PR).
+Electronic filing of Form 941-X. You can file Form
+941-X, Adjusted Employer’s QUARTERLY Federal Tax
+Return or Claim for Refund, electronically using
+Modernized e-File (MeF). For more information on
+electronic filing, go to IRS.gov/EmploymentEfile.
+The COVID-19 related credit for qualified sick and
+family leave wages is limited to leave taken after
+March 31, 2020, and before October 1, 2021, and may
+no longer be claimed on Form 941. Generally, the
+credit for qualified sick and family leave wages, as
+enacted under the Families First Coronavirus Response
+Act (FFCRA) and amended and extended by the
+COVID-related Tax Relief Act of 2020, for leave taken after
+March 31, 2020, and before April 1, 2021, and the credit
+for qualified sick and family leave wages under sections
+3131, 3132, and 3133 of the Internal Revenue Code, as
+enacted under the American Rescue Plan Act of 2021 (the
+ARP), for leave taken after March 31, 2021, and before
+October 1, 2021, have expired. However, employers that
+pay qualified sick and family leave wages in 2026 for leave
+taken after March 31, 2020, and before October 1, 2021,
+are eligible to claim a credit for qualified sick and family
+leave wages in 2026. Effective for tax periods beginning
+after 2023, the lines used to claim the credit for qualified
+sick and family leave wages have been removed from
+Form 941 because it would be extremely rare for an
+employer to pay wages after 2023 for qualified sick and
+family leave taken after March 31, 2020, and before
+October 1, 2021. Instead, if you’re eligible to claim the
+credit for qualified sick and family leave wages because
+you paid the wages in 2026 for an earlier applicable leave
+period, file Form 941-X, after filing Form 941, to claim the
+credit for qualified sick and family leave wages paid in
+2026. Filing a Form 941-X before filing a Form 941 for the
+quarter may result in errors or delays in processing your
+Form 941-X.
+Qualified small business payroll tax credit for in-
+creasing research activities. For tax years beginning
+before 2023, a qualified small business may elect to claim
+up to $250,000 of its credit for increasing research
+activities as a payroll tax credit. The Inflation Reduction
+Act of 2022 (the IRA) increases the election amount to
+$500,000 for tax years beginning after 2022. The payroll
+tax credit election must be made on or before the due date
+of the originally filed income tax return (including
+extensions). The portion of the credit used against payroll
+taxes is allowed in the first calendar quarter beginning
+after the date that the qualified small business filed its
+income tax return. The election and determination of the
+credit amount that will be used against the employer’s
+payroll taxes are made on Form 6765, Credit for
+Increasing Research Activities. The amount from Form
+6765 must then be reported on Form 8974, Qualified
+Small Business Payroll Tax Credit for Increasing Research
+Activities.
+Starting in the first quarter of 2023, the payroll tax credit
+is first used to reduce the employer share of social
+security tax up to $250,000 per quarter and any remaining
+credit reduces the employer share of Medicare tax for the
+quarter. Any remaining credit, after reducing the employer
+share of social security tax and the employer share of
+Medicare tax, is then carried forward to the next quarter.
+Form 8974 is used to determine the amount of the credit
+that can be used in the current quarter. The amount from
+Form 8974, line 12 or, if applicable, line 17, is reported on
+line 11. For more information about the payroll tax credit,
+go to IRS.gov/ResearchPayrollTC. Also see Adjusting tax
+liability for the qualified small business payroll tax credit for
+increasing research activities (line 11), later.
+Forms 941-SS and 941-PR discontinued after 2023.
+Form 941-SS, Employer’s QUARTERLY Federal Tax
+Return—American Samoa, Guam, the Commonwealth of
+the Northern Mariana Islands, and the U.S. Virgin Islands;
+and Form 941-PR, Planilla para la Declaración Federal
+TRIMESTRAL del Patrono, were discontinued after the
+fourth quarter of 2023. Instead, employers in the U.S.
+territories file Form 941 or, if you prefer your form and
+instructions in Spanish, you can file Form 941 (sp).
+Pubs. 51, 80, and 179 discontinued after 2023. Pub.
+51, Agricultural Employer’s Tax Guide; Pub. 80, Federal
+Tax Guide for Employers in the U.S. Virgin Islands, Guam,
+American Samoa, and the Commonwealth of the Northern
+Mariana Islands; and Pub. 179, Guía Contributiva Federal
+para Patronos Puertorriqueños, were discontinued for tax
+years beginning after 2023. Instead, information specific
+to agricultural employers and employers in the U.S.
+2 Instructions for Form 941 (Rev. 3-2026)
+territories is included in Pub. 15, Employer’s Tax Guide. If
+you prefer Pub. 15 in Spanish, see Pub. 15 (sp).
+Forms in Spanish. Many forms and instructions
+discussed in these instructions have Spanish-language
+versions available for employers and employees. Some
+examples include Form 941 (sp), Form 944 (sp), Form
+SS-4 (sp), Form W-4 (sp), and Form W-9 (sp). Although
+these instructions don’t reference Spanish-language
+forms and instructions in each instance that one is
+available, you can see Pub. 15 (sp) and go to IRS.gov/
+SpanishForms to determine if a Spanish-language version
+is available.
+2026 withholding tables. The federal income tax
+withholding tables are included in Pub. 15-T.
+Certification program for professional employer or-
+ganizations (PEOs). The Stephen Beck, Jr., Achieving a
+Better Life Experience (ABLE) Act of 2014 required the
+IRS to establish a voluntary certification program for
+PEOs. PEOs handle various payroll administration and tax
+reporting responsibilities for their business clients and are
+typically paid a fee based on payroll costs. To become and
+remain certified under the certification program, certified
+professional employer organizations (CPEOs) must meet
+various requirements described in sections 3511 and
+7705 and related published guidance. Certification as a
+CPEO may affect the employment tax liabilities of both the
+CPEO and its customers. A CPEO is generally treated for
+employment tax purposes as the employer of any
+individual who performs services for a customer of the
+CPEO and is covered by a contract described in section
+7705(e)(2) between the CPEO and the customer (CPEO
+contract), but only for wages and other compensation paid
+to the individual by the CPEO. To become a CPEO, the
+organization must apply through the IRS Online
+Registration System. For more information or to apply to
+become a CPEO, go to IRS.gov/CPEO.
+CPEOs must generally file Form 941 and Schedule R
+(Form 941), Allocation Schedule for Aggregate Form 941
+Filers, electronically. For more information about a CPEO’s
+requirement to file electronically, see Rev. Proc. 2023-18,
+2023-13 I.R.B. 605, available at IRS.gov/irb/
+2023-13_IRB#REV-PROC-2023-18.
+Outsourcing payroll duties. Generally, as an employer,
+you’re responsible to ensure that tax returns are filed and
+deposits and payments are made, even if you contract
+with a third party to perform these acts. You remain
+responsible if the third party fails to perform any required
+action. Before you choose to outsource any of your payroll
+and related tax duties (that is, withholding, reporting, and
+paying over social security, Medicare, FUTA, and income
+taxes) to a third-party payer, such as a payroll service
+provider or reporting agent, go to IRS.gov/
+OutsourcingPayrollDuties for helpful information on this
+topic. If a CPEO pays wages and other compensation to
+an individual performing services for you, and the services
+are covered by a CPEO contract, then the CPEO is
+generally treated for employment tax purposes as the
+employer, but only for wages and other compensation
+paid to the individual by the CPEO. However, with respect
+to certain employees covered by a CPEO contract, you
+may also be treated as an employer of the employees
+and, consequently, may also be liable for federal
+employment taxes imposed on wages and other
+compensation paid by the CPEO to such employees. For
+more information on the different types of third-party payer
+arrangements, see section 16 of Pub. 15.
+Aggregate Form 941 filers. Approved section 3504
+agents and CPEOs must complete and file Schedule R
+(Form 941) when filing an aggregate Form 941. Aggregate
+Forms 941 are filed by agents approved by the IRS under
+section 3504. To request approval to act as an agent for
+an employer, the agent files Form 2678 with the IRS
+unless you’re a state or local government agency acting
+as an agent under the special procedures provided in Rev.
+Proc. 2013-39, 2013-52 I.R.B. 830, available at
+IRS.gov/irb/2013-52_IRB#RP-2013-39. Aggregate Forms
+941 are also filed by CPEOs approved by the IRS under
+section 7705. To become a CPEO, the organization must
+apply through the IRS Online Registration System at
+IRS.gov/CPEO. CPEOs file Form 8973, Certified
+Professional Employer Organization/Customer Reporting
+Agreement, to notify the IRS that they started or ended a
+service contract with a customer. CPEOs must generally
+file Form 941 and Schedule R (Form 941) electronically.
+For more information about a CPEO’s requirement to file
+electronically, see Rev. Proc. 2023-18.
+Other third-party payers that file aggregate Forms 941,
+such as non-certified PEOs, must complete and file
+Schedule R (Form 941) if they have clients that are
+claiming the qualified small business payroll tax credit for
+increasing research activities.
+If both an employer and a section 3504 authorized
+agent (or CPEO or other third-party payer) paid wages to
+an employee during a quarter, both the employer and the
+section 3504 authorized agent (or CPEO or other
+third-party payer, if applicable) should file Form 941
+reporting the wages each entity paid to the employee
+during the applicable quarter and issue Forms W-2
+reporting the wages each entity paid to the employee
+during the year.
+Work opportunity tax credit for qualified tax-exempt
+organizations hiring qualified veterans. Qualified
+tax-exempt organizations that hire eligible unemployed
+veterans may be able to claim the work opportunity tax
+credit against their payroll tax liability using Form 5884-C.
+For more information, go to IRS.gov/WOTC.
+Correcting a previously filed Form 941. If you discover
+an error on a previously filed Form 941, or if you otherwise
+need to amend a previously filed Form 941, make the
+correction using Form 941-X. Form 941-X is filed
+separately from Form 941. You can file Form 941-X
+electronically. For more information, see the Instructions
+for Form 941-X, section 13 of Pub. 15, or go to IRS.gov/
+CorrectingEmploymentTaxes.
+Federal tax deposits must be made by electronic
+funds transfer (EFT). You must use EFT to make all
+federal tax deposits. An EFT can be made using the
+Electronic Federal Tax Payment System (EFTPS), IRS
+Direct Pay, or your IRS business tax account. If you don’t
+want to use one of these methods, you can arrange for
+your tax professional, financial institution, payroll service,
+or other third party to make electronic deposits on your
+Instructions for Form 941 (Rev. 3-2026) 3
+behalf. Also, you may arrange for your financial institution
+to initiate a same-day wire payment on your behalf.
+EFTPS is a free service provided by the Department of the
+Treasury. Payments made using IRS Direct Pay or through
+your IRS business tax account are also free. Services
+provided by your tax professional, financial institution,
+payroll service, or other third party may have a fee.
+For more information on depositing taxes, see section
+11 of Pub. 15. For more information about IRS Direct Pay,
+go to IRS.gov/DirectPay. For more information about
+making a payment through your IRS business tax account,
+go to IRS.gov/BusinessAccount. For more information
+about EFTPS or to enroll in EFTPS, go to EFTPS.gov or
+call one of the following numbers.
+• 800-555-4477.
+• 800-244-4829 (Spanish).
+• 303-967-5916 (toll call).
+To contact EFTPS using Telecommunications Relay
+Services (TRS) for people who are deaf, hard of hearing,
+or have a speech disability, dial 711 and then provide the
+TRS assistant the 800-555-4477 number above or
+800-733-4829. Additional information about EFTPS is also
+available in Pub. 966.
+Caution: EFTPS accepts same day payments of $1
+million or less if the payment is submitted before 3:00 p.m.
+Eastern time on a business day. If your payment is more
+than $1 million, you must submit the deposit by 8:00 p.m.
+Eastern time the day before the date the deposit is due.
+Same-day wire payment option. If you fail to submit a
+timely deposit transaction on EFTPS, you can still make
+your deposit on time by using the Federal Tax Collection
+Service (FTCS) to make a same-day wire payment. To use
+the same-day wire payment method, you will need to
+make arrangements with your financial institution ahead of
+time. Check with your financial institution regarding
+availability, deadlines, and costs. Your financial institution
+may charge you a fee for payments made this way. To
+learn more about the information you will need to give your
+financial institution to make a same-day wire payment, go
+to IRS.gov/SameDayWire.
+Timeliness of federal tax deposits. If a deposit is
+required to be made on a day that isn’t a business day, the
+deposit is considered timely if it is made by the close of
+the next business day. A business day is any day other
+than a Saturday, Sunday, or legal holiday. The term “legal
+holiday” for deposit purposes includes only those legal
+holidays in the District of Columbia. Legal holidays in the
+District of Columbia are provided in section 11 of Pub. 15.
+Electronic filing and payment. Businesses can enjoy
+the benefits of filing tax returns and paying their federal
+taxes electronically. Whether you rely on a tax
+professional or handle your own taxes, the IRS offers you
+convenient and secure programs to make filing and paying
+easier. Spend less time worrying about taxes and more
+time running your business. Use e-file and electronic
+payment options to your benefit.
+• For e-file, go to IRS.gov/EmploymentEfile for additional
+information. A fee may be charged to file electronically.
+• For electronic payment options, see the instructions for
+line 14, later, and go to IRS.gov/Pay.
+• For electronic filing of Forms W-2, Wage and Tax
+Statement, go to SSA.gov/employer. You may be required
+to file Forms W-2 electronically. For details, see the
+General Instructions for Forms W-2 and W-3. The SSA’s
+Business Services Online (BSO) is an independent
+program from the Government of Puerto Rico electronic
+filing system. Employers in Puerto Rico must go to
+Hacienda.pr.gov for additional information.
+Caution: If you’re filing your tax return or paying your
+federal taxes electronically, a valid employer identification
+number (EIN) is required at the time the return is filed or
+the payment is made. If a valid EIN isn’t provided, the
+return or payment won’t be processed. This may result in
+penalties. See Employer identification number (EIN), later,
+for information about applying for an EIN.
+Electronic funds withdrawal (EFW). If you file Form
+941 electronically, you can e-file and use EFW to pay the
+balance due in a single step using tax preparation
+software or through a tax professional. However, don’t use
+EFW to make federal tax deposits. For more information
+on paying your taxes using EFW, go to IRS.gov/EFW.
+Credit or debit card payments. You can pay the
+balance due shown on Form 941 by credit or debit card.
+Your payment will be processed by a payment processor
+who will charge a processing fee. Don’t use a credit or
+debit card to make federal tax deposits. For more
+information on paying your taxes with a credit or debit
+card, go to IRS.gov/PayByCard.
+Online payment agreement. You may be eligible to
+apply for an installment agreement online if you can’t pay
+the full amount of tax you owe when you file your return.
+For more information, see What if you can’t pay in full,
+later.
+Paid preparers. If you use a paid preparer to complete
+Form 941, the paid preparer must complete and sign the
+paid preparer’s section of the form.
+Where can you get telephone help? For answers to
+your questions about completing Form 941 or tax deposit
+rules, you can call the IRS at 800-829-4933 or
+800-829-4059 (TDD/TTY for persons who are deaf, hard
+of hearing, or have a speech disability), Monday–Friday
+from 7:00 a.m. to 7:00 p.m. local time (Alaska and Hawaii
+follow Pacific time).
+Photographs of missing children. The IRS is a proud
+partner with the National Center for Missing & Exploited
+Children® (NCMEC). Photographs of missing children
+selected by the Center may appear in instructions on
+pages that would otherwise be blank. You can help bring
+these children home by looking at the photographs and
+calling 1-800-THE-LOST (1-800-843-5678) if you
+recognize a child.
+General Instructions:
+Purpose of Form 941
+These instructions tell you who must file Form 941, how to
+complete it line by line, and when and where to file it.
+If you want more in-depth information about payroll tax
+topics relating to Form 941, see Pub. 15 or go to IRS.gov/
+EmploymentTaxes.
+4 Instructions for Form 941 (Rev. 3-2026)
+Caution: References to federal income tax withholding
+don’t apply to employers in American Samoa, Guam, the
+Commonwealth of the Northern Mariana Islands (CNMI),
+the U.S. Virgin Islands (USVI), and Puerto Rico, unless
+you have employees who are subject to U.S. income tax
+withholding. Contact your local tax department for
+information about income tax withholding.
+Federal law requires you, as an employer, to withhold
+certain taxes from your employees’ pay. Each time you
+pay wages, you must withhold—or take out of your
+employees’ pay—certain amounts for federal income tax,
+social security tax, and Medicare tax. You must also
+withhold Additional Medicare Tax from wages you pay to
+an employee in excess of $200,000 in a calendar year.
+Under the withholding system, taxes withheld from your
+employees are credited to your employees in payment of
+their tax liabilities.
+Federal law also requires you to pay any liability for the
+employer share of social security and Medicare taxes.
+This share of social security and Medicare taxes isn’t
+withheld from employees.
+Who Must File Form 941?
+If you pay wages subject to federal income tax withholding
+or social security and Medicare taxes, you must file Form
+941 quarterly to report the following amounts.
+• Wages you’ve paid.
+• Tips your employees reported to you.
+• Federal income tax you withheld.
+• Both the employer and the employee share of social
+security and Medicare taxes.
+• Additional Medicare Tax withheld from employees.
+• Current quarter’s adjustments to social security and
+Medicare taxes for fractions of cents, sick pay, tips, and
+group-term life insurance.
+• Qualified small business payroll tax credit for increasing
+research activities.
+Don’t use Form 941 to report backup withholding or
+income tax withholding on nonpayroll payments such as
+pensions, annuities, and gambling winnings. Report these
+types of withholding on Form 945, Annual Return of
+Withheld Federal Income Tax. Also, don’t use Form 941 to
+report unemployment taxes. Report unemployment taxes
+on Form 940, Employer’s Annual Federal Unemployment
+(FUTA) Tax Return.
+After you file your first Form 941, you must file a return
+for each quarter, even if you have no taxes to report,
+unless you filed a final return or one of the exceptions
+listed next applies.
+Exceptions
+Special rules apply to some employers.
+• If you received notification to file Form 944, Employer’s
+ANNUAL Federal Tax Return, you must file Form 944
+annually; don’t file Form 941 quarterly.
+• Seasonal employers don’t have to file a Form 941 for
+quarters in which they have no tax liability because they
+have paid no wages. To tell the IRS that you won’t file a
+return for one or more quarters during the year, check the
+box on line 18 every quarter you file Form 941. See
+section 12 of Pub. 15 for more information.
+• Employers of household employees don’t usually file
+Form 941. See Pub. 926 and Schedule H (Form 1040) for
+more information.
+• Employers of farm employees don’t file Form 941 for
+wages paid for agricultural labor. See Form 943 and Pub.
+15 for more information.
+If none of these exceptions apply and you haven’t filed
+a final return, you must file Form 941 each quarter even if
+you didn’t pay wages during the quarter. Use IRS e-file, if
+possible.
+Requesting To File Forms 941 Instead of Form
+944, or Requesting To File Form 944 Instead of
+Forms 941
+Requesting to file Forms 941 instead of Form 944.
+Employers that would otherwise be required to file Form
+944 may contact the IRS to request to file quarterly Forms
+941 instead of annual Form 944. To request to file
+quarterly Forms 941 to report your social security and
+Medicare taxes for the 2026 calendar year, you must
+either call the IRS at 800-829-4933 between January 1,
+2026, and April 1, 2026, or send a written request
+postmarked between January 1, 2026, and March 16,
+2026. After you contact the IRS, the IRS will send you a
+written notice that your filing requirement has been
+changed to Forms 941. You must receive written notice
+from the IRS to file Forms 941 instead of Form 944 before
+you may file these forms. If you don’t receive this notice,
+you must file Form 944 for calendar year 2026.
+Requesting to file Form 944 instead of Forms 941. If
+you’re required to file Forms 941 but believe your
+employment taxes for calendar year 2026 will be $1,000
+or less, you may request to file Form 944 instead of Forms
+941 by calling the IRS at 800-829-4933 between January
+1, 2026, and April 1, 2026, or sending a written request
+postmarked between January 1, 2026, and March 16,
+2026. After you contact the IRS, the IRS will send you a
+written notice that your filing requirement has been
+changed to Form 944. You must receive written notice
+from the IRS to file Form 944 instead of Forms 941 before
+you may file this form. If you don’t receive this notice, you
+must file Forms 941 for calendar year 2026.
+Where to send written requests. Written requests
+should be sent to:
+Department of the Treasury Department of the Treasury
+Internal Revenue Service or Internal Revenue Service
+Ogden, UT 84201-0038 Cincinnati, OH 45999-0038
+If you would mail your return filed without a payment to
+Ogden, as shown under Where Should You File, later,
+send your request to the Ogden address shown above. If
+you would mail your return filed without a payment to
+Kansas City, send your request to the address for
+Cincinnati shown above. For more information about these
+procedures, see Rev. Proc. 2009-51, 2009-45 I.R.B. 625,
+available at IRS.gov/irb/2009-45_IRB#RP-2009-51.
+Instructions for Form 941 (Rev. 3-2026) 5
+What if You Reorganize or Close Your Business?
+If You Sell or Transfer Your Business...
+If you sell or transfer your business during the quarter, you
+and the new owner must each file a Form 941 for the
+quarter in which the transfer occurred. Report only the
+wages you paid.
+When two businesses merge, the continuing firm must
+file a return for the quarter in which the change took place
+and the other firm should file a final return.
+Changing from one form of business to another—such
+as from a sole proprietorship to a partnership or
+corporation—is considered a transfer. If a transfer occurs,
+you may need a new EIN. See Pub. 1635 and section 1 of
+Pub. 15 for more information.
+Attach a statement to your return with:
+• The new owner’s name (or the new name of the
+business);
+• Whether the business is now a sole proprietorship,
+partnership, or corporation;
+• The kind of change that occurred (a sale or transfer);
+• The date of the change; and
+• The name of the person keeping the payroll records and
+the address where those records will be kept.
+If Your Business Has Closed...
+If you permanently go out of business or stop paying
+wages to your employees, you must file a final return. To
+tell the IRS that Form 941 for a particular quarter is your
+final return, check the box on line 17 and enter the final
+date you paid wages. Also attach a statement to your
+return showing the name of the person keeping the payroll
+records and the address where those records will be kept.
+See Terminating a business in the General Instructions
+for Forms W-2 and W-3 for information about earlier dates
+for the expedited furnishing and filing of Forms W-2 when
+a final Form 941 is filed.
+If you participated in a statutory merger or
+consolidation, or qualify for predecessor-successor status
+due to an acquisition, you should generally file
+Schedule D (Form 941), Report of Discrepancies Caused
+by Acquisitions, Statutory Mergers, or Consolidations. See
+the Instructions for Schedule D (Form 941) to determine
+whether you should file Schedule D (Form 941) and when
+you should file it.
+When Must You File?
+File your initial Form 941 for the quarter in which you first
+paid wages that are subject to social security and
+Medicare taxes or subject to federal income tax
+withholding. See the table titled When To File Form 941,
+later.
+Then, you must file for every quarter after that—every 3
+months—even if you have no taxes to report, unless you’re
+a seasonal employer or are filing your final return. See
+Seasonal employers and If Your Business Has Closed,
+earlier.
+File Form 941 only once for each quarter. If you filed
+electronically, don’t file a paper Form 941. For more
+information about filing Form 941 electronically, see
+Electronic filing and payment, earlier.
+Your Form 941 is due by the last day of the month that
+follows the end of the quarter.
+When To File Form 941
+The quarter includes... Quarter ends
+Form 941
+is due
+1. January, February, March March 31 April 30
+2. April, May, June June 30 July 31
+3. July, August, September September 30 October 31
+4. October, November, December December 31 January 31
+For example, you must generally report wages you pay
+during the 1st quarter—which is January through
+March—by April 30. If you made timely deposits in full
+payment of your taxes for the quarter, you may file by the
+10th day of the 2nd month that follows the end of the
+quarter. For example, you may file Form 941 by May 10 if
+you made timely deposits in full payment of your taxes for
+the 1st quarter.
+If we receive Form 941 after the due date, we will treat
+Form 941 as filed on time if the envelope containing Form
+941 is properly addressed, contains sufficient postage,
+and is postmarked by the U.S. Postal Service (USPS) on
+or before the due date, or sent by an IRS-designated
+private delivery service (PDS) on or before the due date. If
+you don’t follow these guidelines, we will generally
+consider Form 941 filed when it is actually received. For
+more information about PDSs, see Where Should You
+File, later.
+If any due date for filing falls on a Saturday, Sunday, or
+legal holiday, you may file your return on the next business
+day.
+How Should You Complete Form 941?
+Type or print your EIN, name, and address in the spaces
+provided. Also enter your name and EIN on the top of
+page 2. Don’t use your social security number (SSN) or
+individual taxpayer identification number (ITIN). Generally,
+enter the business (legal) name you used when you
+applied for your EIN. For example, if you’re a sole
+proprietor, enter “Haleigh Smith” on the “Name” line and
+“Haleigh’s Cycles” on the “Trade name” line. Leave the
+“Trade name” line blank if it is the same as your “Name.”
+If you use a tax preparer to fill out Form 941, make sure
+the preparer shows your business name exactly as it
+appeared when you applied for your EIN.
+Employer identification number (EIN). To make sure
+businesses comply with federal tax laws, the IRS monitors
+tax filings and payments by using a numerical system to
+identify taxpayers. A unique nine-digit EIN is assigned to
+all corporations, partnerships, and some sole proprietors.
+A business needing an EIN must apply for a number and
+use it throughout the life of the business on all tax returns,
+payments, and reports.
+Your business should have only one EIN. If you have
+more than one and aren’t sure which one to use, write to
+6 Instructions for Form 941 (Rev. 3-2026)
+the IRS office where you file your returns (using the
+Without a payment address under Where Should You File,
+later) or call the IRS at 800-829-4933.
+If you don’t have an EIN, you may apply for one online
+by going to IRS.gov/EIN. You may also apply for an EIN by
+faxing or mailing Form SS-4 to the IRS. If the principal
+business was created or organized outside of the United
+States or U.S. territories, you may also apply for an EIN by
+calling 267-941-1099 (toll call). If you haven’t received
+your EIN by the due date of Form 941, file a paper return
+and write “Applied For” and the date you applied in this
+entry space.
+Caution: If you’re filing your tax return electronically, a
+valid EIN is required at the time the return is filed. If a valid
+EIN isn’t provided, the return won’t be accepted. This may
+result in penalties.
+Always be sure the EIN on the form you file exactly
+matches the EIN the IRS assigned to your business. Don’t
+use your SSN or ITIN on forms that ask for an EIN. If you
+used an EIN (including a prior owner’s EIN) on Form 941
+that is different from the EIN reported on Form W-3, see
+Box h—Other EIN used this year in the General
+Instructions for Forms W-2 and W-3. On Form W-3 (PR),
+“Other EIN used this year” is reported in box f. Filing a
+Form 941 with an incorrect EIN or using another
+business’s EIN may result in penalties and delays in
+processing your return.
+If you change your business name, business ad-
+dress, or responsible party... Notify the IRS
+immediately if you change your business name, business
+address, or responsible party.
+• Write to the IRS office where you file your returns (using
+the Without a payment address under Where Should You
+File, later) to notify the IRS of any business name change.
+See Pub.1635 to see if you need to apply for a new EIN.
+• Complete and mail Form 8822-B to notify the IRS of a
+business address or responsible party change. Don’t mail
+Form 8822-B with your Form 941. For a definition of
+“responsible party,” see the Instructions for Form SS-4.
+Check the Box for the Quarter
+Under “Report for this Quarter of 2026” at the top of Form
+941, check the appropriate box of the quarter for which
+you’re filing. Make sure the quarter checked is the same
+as shown on any attached Schedule B (Form 941), Report
+of Tax Liability for Semiweekly Schedule Depositors, and,
+if applicable, Schedule R (Form 941).
+Aggregate Return Filers Only
+If you’re filing an aggregate Form 941, check the
+appropriate box to identify yourself. An aggregate Form
+941 is a return that combines amounts from multiple
+clients or customers (employers) onto a single Form 941.
+Section 3504 Agent. Check this box if you’re a section
+3504 agent filing an aggregate Form 941. You must attach
+Schedule R (Form 941) to your aggregate Form 941. For
+more information about section 3504 agents, see
+Aggregate Form 941 filers, earlier, and section 16 of Pub.
+15.
+Certified Professional Employer Organization
+(CPEO). Check this box if you’re a CPEO filing an
+aggregate Form 941 on behalf of your customers. You
+must attach Schedule R (Form 941) to your aggregate
+Form 941. For more information about CPEOs, see
+Certification program for professional employer
+organizations (PEOs), earlier, and section 16 of Pub. 15.
+Other Third Party. If you’re filing an aggregate Form 941
+but you’re not a section 3504 agent or a CPEO, you must
+check this box. For example, a non-certified PEO filing an
+aggregate Form 941 must check this box.
+Completing and Filing Form 941
+Make entries on Form 941 as follows to enable accurate
+scanning and processing.
+• Use 10-point Courier font (if possible) for all entries if
+you’re typing or using a computer to complete your form.
+Portable Document Format (PDF) forms on IRS.gov have
+fillable fields with acceptable font specifications.
+• Don’t enter dollar signs and decimal points. Commas
+are optional. Enter dollars to the left of the preprinted
+decimal point and cents to the right of it. Don’t round
+entries to whole dollars. Always show an amount for cents,
+even if it is zero.
+• Leave blank any data field (except lines 1, 2, and 12)
+with a value of zero.
+• Enter negative amounts using a minus sign (if possible).
+Otherwise, use parentheses.
+• Enter your name and EIN on all pages.
+• Enter your name, EIN, “Form 941,” and the tax year and
+quarter on all attachments.
+• Staple multiple sheets in the upper-left corner when
+filing.
+Complete both pages. You must complete both pages
+of Form 941 and sign on page 2. Failure to do so may
+delay processing of your return.
+Required Notice to Employees About the Earned
+Income Credit (EIC)
+To notify employees about the EIC, you must give the
+employees, except for employees in American Samoa,
+Guam, Puerto Rico, the CNMI, and the USVI, one of the
+following items.
+• Form W-2 which has the required information about the
+EIC on the back of Copy B.
+• A substitute Form W-2 with the same EIC information
+on the back of the employee’s copy that is on Copy B of
+the IRS Form W-2.
+• Notice 797, Possible Federal Tax Refund Due to the
+Earned Income Credit (EIC).
+• Your written statement with the same wording as
+Notice 797.
+For more information, see section 10 of Pub. 15, Pub.
+596, and IRS.gov/EIC.
+Reconciling Forms 941 With Form W-3
+The IRS matches amounts reported on your four quarterly
+Forms 941 with Form W-2 amounts totaled on your yearly
+Form W-3, Transmittal of Wage and Tax Statements. If the
+amounts don’t agree, you may be contacted by the IRS or
+the Social Security Administration (SSA). The following
+amounts are reconciled.
+• Federal income tax withholding.
+• Social security wages.
+Instructions for Form 941 (Rev. 3-2026) 7
+• Social security tips.
+• Medicare wages and tips.
+For more information, see section 12 of Pub. 15 and the
+Instructions for Schedule D (Form 941).
+Where Should You File?
+You’re encouraged to file Form 941 electronically. Go to
+IRS.gov/EmploymentEfile for more information on
+electronic filing. If you file a paper return, where you file
+depends on whether you include a payment with Form
+941. Mail your return to the address listed for your location
+in the table that follows.
+PDSs can’t deliver to P.O. boxes. You must use the
+USPS to mail an item to a P.O. box address. Go to
+IRS.gov/PDS for the current list of PDSs. For the IRS
+mailing address to use if you’re using a PDS, go to
+IRS.gov/PDSstreetAddresses. Select the mailing address
+listed on the webpage that is in the same state as the
+address to which you would mail returns filed without a
+payment, as shown next.
+Mailing Addresses for Form 941
+If you’re in... Without a
+payment...
+With a
+payment...
+Connecticut, Delaware, District of
+Columbia, Georgia, Illinois,
+Indiana, Kentucky, Maine,
+Maryland, Massachusetts,
+Michigan, New Hampshire, New
+Jersey, New York, North Carolina,
+Ohio, Pennsylvania, Rhode
+Island, South Carolina,
+Tennessee, Vermont, Virginia,
+West Virginia, Wisconsin
+Department of
+the Treasury
+Internal
+Revenue
+Service
+Kansas City,
+MO 64999-0005
+Internal
+Revenue
+Service
+P.O. Box 932100
+Louisville, KY
+40293-2100
+Alabama, Alaska, Arizona,
+Arkansas, California, Colorado,
+Florida, Hawaii, Idaho, Iowa,
+Kansas, Louisiana, Minnesota,
+Mississippi, Missouri, Montana,
+Nebraska, Nevada, New Mexico,
+North Dakota, Oklahoma,
+Oregon, South Dakota, Texas,
+Utah, Washington, Wyoming
+Department of
+the Treasury
+Internal
+Revenue
+Service
+Ogden, UT
+84201-0005
+Internal
+Revenue
+Service
+P.O. Box 932100
+Louisville, KY
+40293-2100
+No legal residence or principal
+place of business in any state,
+including employers in American
+Samoa, Guam, the CNMI, the
+USVI, and Puerto Rico
+Internal
+Revenue
+Service
+P.O. Box
+409101
+Ogden, UT
+84409
+Internal
+Revenue
+Service
+P.O. Box 932100
+Louisville, KY
+40293-2100
+Special filing address for
+exempt organizations; federal,
+state, and local governmental
+entities; and Indian tribal
+governmental entities, regardless
+of location
+Department of
+the Treasury
+Internal
+Revenue
+Service
+Ogden, UT
+84201-0005
+Internal
+Revenue
+Service
+P.O. Box 932100
+Louisville, KY
+40293-2100
+Caution: Your filing address may have changed from that
+used to file your employment tax return in prior years.
+Don’t send Form 941 or any payments to the SSA.
+Depositing Your Taxes
+Caution: You must deposit all depository taxes
+electronically by EFT. For more information, see Federal
+tax deposits must be made by electronic funds transfer
+(EFT) under Reminders, earlier.
+Must You Deposit Your Taxes?
+You may have to deposit the federal income taxes you
+withheld and both the employer and employee social
+security taxes and Medicare taxes.
+• If your total taxes after adjustments and
+nonrefundable credits (line 12) are less than $2,500
+for the current quarter or the prior quarter, and you
+didn’t incur a $100,000 next-day deposit obligation
+during the current quarter. You don’t have to make a
+deposit. To avoid a penalty, you must pay any amount due
+in full with a timely filed return or you must deposit any
+amount you owe by the due date of the return. For more
+information on paying with a timely filed return, see the
+instructions for line 14, later. If you’re not sure your total
+tax liability for the current quarter will be less than $2,500
+(and your liability for the prior quarter wasn’t less than
+$2,500), make deposits using the semiweekly or monthly
+rules so you won’t be subject to failure-to-deposit (FTD)
+penalties.
+• If your total taxes after adjustments and
+nonrefundable credits (line 12) are $2,500 or more
+for the current quarter and the prior quarter. You must
+make deposits according to your deposit schedule. See
+section 11 of Pub. 15 for information about payments
+made under the accuracy of deposits rule and for rules
+about federal tax deposits.
+When Must You Deposit Your Taxes?
+Determine if You’re a Monthly or Semiweekly
+Schedule Depositor for the Quarter
+The IRS uses two different sets of deposit rules to
+determine when businesses must deposit their social
+security, Medicare, and withheld federal income taxes.
+These schedules tell you when a deposit is due after you
+have a payday.
+Your deposit schedule isn’t determined by how often
+you pay your employees. Your deposit schedule depends
+on the total tax liability you reported on Form 941 during
+the previous 4-quarter lookback period (July 1 of the
+second preceding calendar year through June 30 of the
+preceding calendar year). See section 11 of Pub. 15 for
+details. If you filed Form 944 in either 2024 or 2025, your
+lookback period is the 2024 calendar year.
+Before the beginning of each calendar year, determine
+which type of deposit schedule you must use.
+• If you reported $50,000 or less in taxes during the
+lookback period, you’re a monthly schedule depositor.
+• If you reported more than $50,000 of taxes during the
+lookback period, you’re a semiweekly schedule
+depositor.
+Caution: If you’re a monthly schedule depositor and
+accumulate a $100,000 tax liability on any day during the
+deposit period, you become a semiweekly schedule
+8 Instructions for Form 941 (Rev. 3-2026)
+depositor on the next day and remain so for at least the
+rest of the calendar year and for the following calendar
+year. See $100,000 Next-Day Deposit Rule in section 11
+of Pub. 15 for more information. The $100,000 tax liability
+threshold requiring a next-day deposit is determined
+before you consider any reduction of your liability for
+nonrefundable credits.
+What About Penalties and Interest?
+Avoiding Penalties and Interest
+You can avoid paying penalties and interest if you do all of
+the following.
+• Deposit or pay your taxes when they are due.
+• File your fully completed Form 941 on time.
+• Report your tax liability accurately.
+• Submit valid checks for tax payments.
+• Furnish accurate Forms W-2 to employees.
+• File Form W-3 and Copy A of Forms W-2 with the SSA
+on time and accurately.
+Penalties and interest are charged on taxes paid late
+and returns filed late at a rate set by law. See sections 11
+and 12 of Pub. 15 for details.
+Use Form 843 to request abatement of assessed
+penalties or interest. Don’t request abatement of
+assessed penalties or interest on Form 941 or 941-X.
+If you receive a notice about a penalty after you file this
+return, reply to the notice with an explanation and we will
+determine if you meet reasonable-cause criteria. Don’t
+attach an explanation when you file your return.
+Caution: If federal income, social security, and Medicare
+taxes that must be withheld (that is, trust fund taxes) aren’t
+withheld or aren’t deposited or paid to the United States
+Treasury, the trust fund recovery penalty may apply. The
+penalty is 100% of the unpaid trust fund tax. If these
+unpaid taxes can’t be immediately collected from the
+employer or business, the trust fund recovery penalty may
+be imposed on all persons who are determined by the IRS
+to be responsible for collecting, accounting for, or paying
+over these taxes, and who acted willfully in not doing so.
+For more information, see section 11 of Pub. 15. The trust
+fund recovery penalty won’t apply to any amount of trust
+fund taxes an employer holds back in anticipation of any
+credits to which they’re entitled.
+Adjustment of Tax on Tips
+If, by the 10th of the month after the month you received
+an employee’s report on tips, you don’t have enough
+employee funds available to withhold the employee share
+of social security and Medicare taxes, you no longer have
+to collect it. Report the entire amount of these tips on
+line 5b (Taxable social security tips), line 5c (Taxable
+Medicare wages and tips), and, if the withholding
+threshold is met, line 5d (Taxable wages and tips subject
+to Additional Medicare Tax withholding). Include as a
+negative adjustment on line 9 the total uncollected
+employee share of the social security and Medicare taxes.
+Specific Instructions:
+Part 1: Answer These Questions for
+This Quarter
+1. Number of Employees Who Received Wages,
+Tips, or Other Compensation
+Enter the number of employees on your payroll for the pay
+period including March 12, June 12, September 12, or
+December 12, for the quarter indicated at the top of Form
+941. Don’t include:
+• Household employees,
+• Employees in nonpay status for the pay period,
+• Farm employees,
+• Pensioners, or
+• Active members of the U.S. Armed Forces.
+Caution: Employers in American Samoa, Guam, the
+CNMI, the USVI, and Puerto Rico must skip lines 2 and 3,
+unless you have employees who are subject to U.S.
+income tax withholding.
+2. Wages, Tips, and Other Compensation
+Enter amounts on line 2 that would also be included in
+box 1 of your employees’ Forms W-2. See Box 1—Wages,
+tips, other compensation in the General Instructions for
+Forms W-2 and W-3 for details. Include sick pay paid by
+your agent. Also include sick pay paid by a third party that
+isn’t your agent (for example, an insurance company) if
+you were given timely notice of the payments and the third
+party transferred liability for the employer’s taxes to you.
+If you’re a third-party payer of sick pay and not an agent
+of the employer, don’t include sick pay that you paid to
+policyholders’ employees here if you gave the
+policyholders timely notice of the payments. See section 6
+of Pub. 15-A, Employer's Supplemental Tax Guide, for
+more information about sick pay reporting and the
+procedures for transferring the liability to the employer.
+3. Federal Income Tax Withheld From Wages,
+Tips, and Other Compensation
+Enter the federal income tax you withheld (or were
+required to withhold) from your employees on this
+quarter’s wages, tips, taxable fringe benefits, and
+supplemental unemployment compensation benefits.
+Don’t include any income tax withheld by a third-party
+payer of sick pay even if you reported it on Forms W-2.
+You will reconcile this difference on Form W-3. Also
+include here any excise taxes you were required to
+withhold on golden parachute payments (section 4999).
+For information on the employment tax treatment of fringe
+benefits, see Pub. 15-B, Employer’s Tax Guide to Fringe
+Benefits. For information about supplemental
+unemployment compensation benefits and golden
+parachute payments, see section 5 of Pub. 15-A.
+If you’re a third-party payer of sick pay, enter the federal
+income tax you withheld (or were required to withhold) on
+third-party sick pay here.
+Instructions for Form 941 (Rev. 3-2026) 9
+4. If No Wages, Tips, and Other Compensation
+Are Subject to Social Security or Medicare Tax...
+If no wages, tips, and other compensation on line 2 are
+subject to social security or Medicare tax, check the box
+on line 4. If this question doesn’t apply to you, leave the
+box blank. For more information about exempt wages, see
+section 15 of Pub. 15. For religious exemptions, see
+section 4 of Pub. 15-A.
+Caution: If you’re a governmental employer, wages you
+pay aren’t automatically exempt from social security and
+Medicare taxes. Your employees may be covered by law
+or by a voluntary Section 218 Agreement with the SSA.
+For more information, see Pub. 963, Federal-State
+Reference Guide.
+5a–5e. Taxable Social Security and Medicare
+Wages and Tips
+5a. Taxable social security wages. Enter the total
+wages, sick pay, and taxable fringe benefits subject to
+social security tax you paid to your employees during the
+quarter. For this purpose, sick pay includes payments
+made by an insurance company to your employees for
+which you received timely notice from the insurance
+company. See section 6 of Pub. 15-A for more information
+about sick pay reporting. See the instructions for line 8,
+later, for an adjustment that you may need to make on
+Form 941 for sick pay.
+Enter the amount before payroll deductions. Don’t
+include tips on this line. For information on types of wages
+subject to social security tax, see section 5 of Pub. 15.
+For 2026, the rate of social security tax on taxable
+wages is 6.2% (0.062) each for the employer and
+employee. Stop paying social security tax on and entering
+an employee’s wages on line 5a when the employee’s
+taxable wages and tips reach $184,500 for the year.
+However, continue to withhold income and Medicare taxes
+for the whole year on all wages and tips, even when the
+social security wage base limit of $184,500 has been
+reached.
+line 5a (column 1)
+x 0.124
+line 5a (column 2)
+5b. Taxable social security tips. Enter all tips your
+employees reported to you during the quarter until the
+total of the tips and taxable wages, including wages
+reported on line 5a, for an employee reaches $184,500 for
+the year. Include all tips your employee reported to you
+even if you were unable to withhold the employee tax of
+6.2%. You will reduce your total taxes by the amount of
+any uncollected employee share of social security and
+Medicare taxes on tips later on line 9; see Current
+quarter’s adjustments for tips and group-term life
+insurance, later. Don’t include service charges on line 5b.
+For details about the difference between tips and service
+charges, see Rev. Rul. 2012-18, 2012-26 I.R.B. 1032,
+available at IRS.gov/irb/2012-26_IRB#RR-2012-18.
+Your employee must report cash tips to you by the 10th
+day of the month after the month the tips are received.
+Cash tips include tips paid by cash, check, debit card, and
+credit card. The report should include charged tips (for
+example, credit and debit card charges) you paid over to
+the employee for charge customers, tips the employee
+received directly from customers, and tips received from
+other employees under any tip-sharing arrangement. Both
+directly and indirectly tipped employees must report tips to
+you. No report is required for months when tips are less
+than $20. Employees may submit a written statement or
+electronic tip record.
+Don’t include allocated tips (described in section 6 of
+Pub. 15) on this line. Instead, report them on Form 8027.
+Allocated tips aren’t reportable on Form 941 and aren’t
+subject to withholding of federal income, social security, or
+Medicare tax.
+line 5b (column 1)
+x 0.124
+line 5b (column 2)
+5c. Taxable Medicare wages & tips. Enter all wages,
+tips, sick pay, and taxable fringe benefits that are subject
+to Medicare tax. Unlike social security wages, there is no
+limit on the amount of wages subject to Medicare tax.
+The rate of Medicare tax is 1.45% (0.0145) each for the
+employer and employee. Include all tips your employees
+reported during the quarter, even if you were unable to
+withhold the employee tax of 1.45%.
+line 5c (column 1)
+x 0.029
+line 5c (column 2)
+For more information on tips, see section 6 of Pub. 15.
+See the instructions for line 8, later, for an adjustment that
+you may need to make on Form 941 for sick pay.
+5d. Taxable wages & tips subject to Additional Medi-
+care Tax withholding. Enter all wages, tips, sick pay,
+and taxable fringe benefits that are subject to Additional
+Medicare Tax withholding. You’re required to begin
+withholding Additional Medicare Tax in the pay period in
+which you pay wages in excess of $200,000 to an
+employee and continue to withhold it each pay period until
+the end of the calendar year. Additional Medicare Tax is
+only imposed on the employee. There is no employer
+share of Additional Medicare Tax. All wages that are
+subject to Medicare tax are subject to Additional Medicare
+Tax withholding if paid in excess of the $200,000
+withholding threshold.
+For more information on what wages are subject to
+Medicare tax, see section 15 of Pub. 15. For more
+information on Additional Medicare Tax, go to IRS.gov/
+ADMTfaqs. See the instructions for line 8, later, for an
+adjustment that you may need to make on Form 941 for
+sick pay.
+Once wages and tips exceed the $200,000 withholding
+threshold, include all tips your employees reported during
+the quarter, even if you were unable to withhold the
+employee tax of 0.9%.
+10 Instructions for Form 941 (Rev. 3-2026)
+line 5d (column 1)
+x 0.009
+line 5d (column 2)
+5e. Total social security and Medicare taxes. Add the
+column 2 amounts on lines 5a–5d. Enter the result on
+line 5e.
+5f. Section 3121(q) Notice and Demand—Tax
+Due on Unreported Tips
+Enter the tax due from your Section 3121(q) Notice and
+Demand on line 5f. The IRS issues a Section 3121(q)
+Notice and Demand to advise an employer of the amount
+of tips received by employees who failed to report or
+underreported tips to the employer. An employer isn’t
+liable for the employer share of the social security and
+Medicare taxes on unreported tips until notice and
+demand for the taxes is made to the employer by the IRS
+in a Section 3121(q) Notice and Demand. The tax due
+may have been determined from tips reported to the IRS
+on employees’ Forms 4137, Social Security and Medicare
+Tax on Unreported Tip Income, or other tips that weren’t
+reported to their employer as determined by the IRS
+during an examination. For additional information, see
+Rev. Rul. 2012-18.
+Deposit the tax within the time period required under
+your deposit schedule to avoid any possible deposit
+penalty. The tax is treated as accumulated by the
+employer on the “Date of Notice and Demand” as printed
+on the Section 3121(q) Notice and Demand. The
+employer must include this amount on the appropriate line
+of the record of federal tax liability (Part 2 of Form 941 for
+a monthly schedule depositor or Schedule B (Form 941)
+for a semiweekly schedule depositor).
+6. Total Taxes Before Adjustments
+Add the total federal income tax withheld from wages, tips,
+and other compensation (line 3); the total social security
+and Medicare taxes before adjustments (line 5e); and any
+tax due under a Section 3121(q) Notice and Demand
+(line 5f). Enter the result on line 6.
+7–9. Tax Adjustments
+Enter tax amounts on lines 7–9 that result from
+current-quarter adjustments. Use a minus sign (if
+possible) to show an adjustment that decreases the total
+taxes shown on line 6 instead of parentheses. Doing so
+enhances the accuracy of our scanning software. For
+example, enter “-10.59” instead of “(10.59).” However, if
+your software only allows for parentheses in entering
+negative amounts, you may use them.
+Current quarter’s adjustments. In certain cases, you
+must adjust the amounts you entered as social security
+and Medicare taxes in column 2 of lines 5a–5d to figure
+your correct tax liability for this quarter’s Form 941. See
+section 13 of Pub. 15.
+7. Current quarter’s adjustment for fractions of
+cents. Enter adjustments for fractions of cents (due to
+rounding) relating to the employee share of social security
+and Medicare taxes withheld. The employee share of
+amounts shown in column 2 of lines 5a–5d may differ
+slightly from amounts actually withheld from employees’
+pay due to the rounding of social security and Medicare
+taxes based on statutory rates. This adjustment may be a
+positive or a negative adjustment.
+8. Current quarter’s adjustment for sick pay. If your
+third-party payer of sick pay that isn’t your agent (for
+example, an insurance company) transfers the liability for
+the employer share of the social security and Medicare
+taxes to you, enter a negative adjustment on line 8 for the
+employee share of social security and Medicare taxes that
+were withheld and deposited by your third-party sick pay
+payer on the sick pay. If you’re the third-party sick pay
+payer and you transferred the liability for the employer
+share of the social security and Medicare taxes to the
+employer, enter a negative adjustment on line 8 for any
+employer share of these taxes required to be paid by the
+employer. The sick pay should be included on line 5a,
+line 5c, and, if the withholding threshold is met, line 5d.
+No adjustment is reported on line 8 for sick pay that is
+paid through a third party as an employer’s agent. An
+employer’s agent bears no insurance risk and is
+reimbursed on a cost-plus-fee basis for payment of sick
+pay and similar amounts. If an employer uses an agent to
+pay sick pay, the employer reports the wages on line 5a,
+line 5c, and, if the withholding threshold is met, line 5d,
+unless the employer has an agency agreement with the
+third-party payer that requires the third-party payer to do
+the collecting, reporting, and/or paying or depositing
+employment taxes on the sick pay. See section 6 of Pub.
+15-A for more information about sick pay reporting.
+9. Current quarter’s adjustments for tips and
+group-term life insurance. Enter a negative adjustment
+for:
+• Any uncollected employee share of social security and
+Medicare taxes on tips, and
+• The uncollected employee share of social security and
+Medicare taxes on group-term life insurance premiums
+paid for former employees.
+See the General Instructions for Forms W-2 and W-3
+for information on how to report the uncollected employee
+share of social security and Medicare taxes on tips and
+group-term life insurance on Form W-2.
+Prior quarter’s adjustments. If you need to correct any
+adjustment reported on a previously filed Form 941,
+complete and file Form 941-X. Form 941-X is an adjusted
+return or claim for refund and is filed separately from Form
+941. See section 13 of Pub. 15.
+10. Total Taxes After Adjustments
+Combine the amounts shown on lines 6–9 and enter the
+result on line 10.
+11. Qualified Small Business Payroll Tax Credit
+for Increasing Research Activities
+Enter the amount of the credit from Form 8974, line 12 or,
+if applicable, line 17. If you enter an amount on line 11,
+you must attach Form 8974.
+Instructions for Form 941 (Rev. 3-2026) 11
+12. Total Taxes After Adjustments and
+Nonrefundable Credits
+Subtract line 11 from line 10 and enter the result on
+line 12. The amount entered on line 12 can’t be less than
+zero.
+• If line 12 is less than $2,500 or line 12 on the prior
+quarterly return was less than $2,500, and you didn’t
+incur a $100,000 next-day deposit obligation during
+the current quarter. You may pay the amount with Form
+941 or you may deposit the amount. To avoid a penalty,
+you must pay any amount you owe in full with a timely filed
+return or you must deposit any amount you owe before the
+due date of the return. For more information on paying
+with a timely filed return, see the instructions for line 14,
+later.
+• If line 12 is $2,500 or more and line 12 on the prior
+quarterly return was $2,500 or more, or if you
+incurred a $100,000 next-day deposit obligation
+during the current quarter. You must make required
+deposits according to your deposit schedule. The amount
+shown on line 12 must equal the “Total liability for quarter”
+shown on line 16 or the “Total liability for the quarter”
+shown on Schedule B (Form 941). For more information,
+see the line 16 instructions, later.
+For more information and rules about federal tax
+deposits, see Depositing Your Taxes, earlier, and section
+11 of Pub. 15.
+Caution: If you’re a semiweekly schedule depositor, you
+must complete Schedule B (Form 941). If you fail to
+complete and submit Schedule B (Form 941), the IRS may
+assess deposit penalties based on available information.
+13. Total Deposits for This Quarter
+Enter your deposits for this quarter, including any
+overpayment from a prior quarter that you applied to this
+return. Also include in the amount shown any
+overpayment that you applied from filing Form 941-X,
+941-X (PR), or 944-X in the current quarter.
+14. Balance Due
+If line 12 is more than line 13, enter the difference on
+line 14. Otherwise, see the instructions for line 15a, later.
+Never make an entry on both lines 14 and 15a.
+You don’t have to pay if line 14 is under $1. Generally,
+you should have a balance due only if your total taxes after
+adjustments and nonrefundable credits (line 12) for the
+current quarter or prior quarter are less than $2,500, and
+you didn’t incur a $100,000 next-day deposit obligation
+during the current quarter. However, see section 11 of
+Pub. 15 for information about payments made under the
+accuracy of deposits rule.
+If you were required to make federal tax deposits, pay
+the amount shown on line 14 by EFT. If you weren’t
+required to make federal tax deposits (see Must You
+Deposit Your Taxes, earlier) or you’re a monthly schedule
+depositor making a payment under the accuracy of
+deposits rule, you may pay the amount shown on line 14
+by EFT, credit card, debit card, check, money order, or
+EFW. For more information on electronic payment options,
+go to IRS.gov/Pay.
+Caution: If you’re required to make deposits and instead
+pay the taxes with Form 941, you may be subject to a
+penalty. See Must You Deposit Your Taxes, earlier.
+If you pay by EFT, credit card, or debit card, file your
+return using the Without a payment address under Where
+Should You File, earlier, and don’t file Form 941-V,
+Payment Voucher.
+If you pay by check or money order, make it payable to
+“United States Treasury.” Enter your EIN, “Form 941,” and
+the tax period (“1st Quarter 2026,” “2nd Quarter 2026,”
+“3rd Quarter 2026,” or “4th Quarter 2026”) on your check
+or money order. Complete Form 941-V and enclose it with
+Form 941.
+If line 12 is $2,500 or more on both your prior- and
+current-quarter Forms 941, and you’ve deposited all taxes
+when due, the balance due on line 14 should be zero.
+What if you can’t pay in full? If you can’t pay the full
+amount of tax you owe, you can apply for an installment
+agreement online. You can apply for an installment
+agreement online if:
+• You can’t pay the full amount shown on line 14,
+• The total amount you owe is $25,000 or less, and
+• You can pay the liability in full in 24 months.
+To apply using the Online Payment Agreement
+Application, go to IRS.gov/OPA.
+Under an installment agreement, you can pay what you
+owe in monthly installments. There are certain conditions
+you must meet to enter into and maintain an installment
+agreement, such as paying the liability within 24 months,
+and making all required deposits and timely filing tax
+returns during the length of the agreement.
+If your installment agreement is accepted, you will be
+charged a fee and you will be subject to penalties and
+interest on the amount of tax not paid by the due date of
+the return.
+15a. Overpayment
+If line 13 is more than line 12, enter the difference on
+line 15a.
+Never make an entry on both lines 14 and 15a.
+15b. Choose to have your overpayment applied to
+your next return or refunded. If you deposited more
+than the correct amount for the quarter, you can choose to
+have the IRS either refund the overpayment or apply it to
+your next return. Check only one box on line 15b. If you
+don’t check either box or if you check both boxes, we will
+generally apply the overpayment to your next return.
+Regardless of any boxes you check or don’t check on
+line 15b, we may apply your overpayment to any past due
+tax account that is shown in our records under your EIN. If
+you check the box to have your overpayment refunded but
+you don’t complete lines 15c–15e for direct deposit, your
+refund may be delayed.
+If line 15a is under $1, we will send a refund or apply it
+to your next return only if you ask us in writing to do so.
+Direct Deposit
+The benefits of a direct deposit include a faster refund, the
+added security of a paperless payment, and the savings of
+12 Instructions for Form 941 (Rev. 3-2026)
+tax dollars associated with the reduced processing costs.
+To have your refund direct deposited, you must complete
+lines 15c–15e.
+15c. Routing number. The routing number must be nine
+digits. The first two digits must be 01 through 12 or 21
+through 32. Verify that your financial institution will accept
+a direct deposit.
+Ask your financial institution for the correct routing
+number to enter on line 15c if:
+• The routing number on a deposit slip is different from
+the routing number on your checks,
+• Your deposit is to a savings account that doesn’t allow
+you to write checks, or
+• Your checks state they’re payable through a financial
+institution different from the one at which you have your
+checking account.
+15d. Type of account. Check the appropriate box for the
+type of account. Don’t check more than one box. You must
+check the correct box to ensure your deposit is accepted.
+If you’re unsure which box to check for the account you
+wish the deposit to be applied to, consult your financial
+institution.
+15e. Account number. The account number can be up
+to 17 characters (both numbers and letters). Include
+hyphens but omit spaces and special symbols. Enter the
+number from left to right and leave any unused boxes
+blank.
+If the direct deposit to your account is different from the
+amount you expected, you’ll receive an explanation in the
+mail about 2 weeks after your refund is deposited.
+Reasons Your Direct Deposit Request Will Be
+Rejected
+If any of the following apply, your direct deposit request
+will be rejected and a check will be sent instead.
+• The name on your account doesn’t match the name on
+the refund, and your financial institution won't allow a
+refund to be deposited unless the name on the refund
+matches the name on the account.
+• Your business is a corporation and the receiving
+financial institution is a foreign bank or a foreign branch of
+a U.S. bank.
+• You haven’t given a valid account number.
+• Any numbers or letters on lines 15c–15e are crossed
+out or whited out.
+Caution: The IRS isn’t responsible for a lost refund if you
+enter the wrong account information. Check with your
+financial institution to get the correct routing and account
+numbers and to make sure your direct deposit will be
+accepted.
+Part 2: Tell Us About Your Deposit
+Schedule and Tax Liability for This
+Quarter
+16. Tax Liability for the Quarter
+Check one of the boxes on line 16. Follow the instructions
+for each box to determine if you need to enter your
+monthly tax liability on Form 941 or your daily tax liability
+on Schedule B (Form 941).
+Caution: The amounts entered on line 16 are a summary
+of your monthly tax liability, not a summary of deposits you
+made. If you don’t properly report your liabilities when
+required or if you’re a semiweekly schedule depositor and
+enter your liabilities on line 16 instead of on Schedule B
+(Form 941), you may be assessed an “averaged” FTD
+penalty. See Deposit Penalties in section 11 of Pub. 15 for
+more information.
+De minimis exception. If line 12 is less than $2,500 or
+line 12 on the prior quarterly return was less than $2,500,
+and you didn’t incur a $100,000 next-day deposit
+obligation during the current quarter, check the first box on
+line 16 and go to Part 3.
+If you meet the de minimis exception based on the prior
+quarter and line 12 for the current quarter is $100,000 or
+more, you must provide a record of your federal tax
+liability. If you’re a monthly schedule depositor, complete
+the deposit schedule on line 16. If you’re a semiweekly
+schedule depositor, attach Schedule B (Form 941).
+Monthly schedule depositor. If you reported $50,000 or
+less in taxes during the lookback period, you’re a monthly
+schedule depositor unless the $100,000 Next-Day
+Deposit Rule discussed in section 11 of Pub. 15 applies.
+Check the second box on line 16 and enter your tax
+liability for each month in the quarter. Enter your tax
+liabilities in the month that corresponds to the dates you
+paid wages to your employees, not the date payroll
+liabilities were accrued or deposits were made. Add the
+amounts for each month. Enter the result in the “Total
+liability for quarter” box.
+Note that your total tax liability for the quarter must
+equal your total taxes shown on line 12. If it doesn’t, your
+tax deposits and payments may not be counted as timely.
+Don’t change your tax liability on line 16 by adjustments
+reported on any Forms 941-X.
+You’re a monthly schedule depositor for the calendar
+year if the amount of your Form 941 taxes reported for the
+lookback period is $50,000 or less. The lookback period is
+the 4 consecutive quarters ending on June 30 of the prior
+year. For 2026, the lookback period begins July 1, 2024,
+and ends June 30, 2025. For details on the deposit rules,
+see section 11 of Pub. 15. If you filed Form 944 in either
+2024 or 2025, your lookback period is the 2024 calendar
+year.
+Reporting adjustments from lines 7–9 on line 16. If
+your net adjustment during a month is negative and it
+exceeds your total tax liability for the month, don’t enter a
+negative amount for the month. Instead, enter “-0-” for the
+month and carry over the unused portion of the
+adjustment to the next month.
+Semiweekly schedule depositor. If you reported more
+than $50,000 of taxes for the lookback period, you’re a
+semiweekly schedule depositor. Check the third box on
+line 16.
+You must complete Schedule B (Form 941) and submit
+it with your Form 941. Don’t file Schedule B (Form 941)
+with your Form 941 if you’re a monthly schedule depositor.
+Instructions for Form 941 (Rev. 3-2026) 13
+Don’t change your tax liability on Schedule B (Form
+941) by adjustments reported on any Forms 941-X.
+Adjusting tax liability for the qualified small business
+payroll tax credit for increasing research activities
+(line 11). Monthly schedule depositors and semiweekly
+schedule depositors must account for the qualified small
+business payroll tax credit for increasing research
+activities (line 11) when reporting their tax liabilities on
+line 16 or Schedule B (Form 941). The total tax liability for
+the quarter must equal the amount reported on line 12.
+Failure to account for the qualified small business payroll
+tax credit for increasing research activities on line 16 or
+Schedule B (Form 941) may cause line 16 or Schedule B
+(Form 941) to report more than the total tax liability
+reported on line 12. Don’t reduce your monthly tax liability
+reported on line 16 or your daily tax liability reported on
+Schedule B (Form 941) below zero.
+Beginning with the first quarter of 2023, the qualified
+small business payroll tax credit for increasing research
+activities is first used to reduce the employer share of
+social security tax (up to $250,000) for the quarter and any
+remaining credit is then used to reduce the employer
+share of Medicare tax for the quarter until it reaches zero.
+In completing line 16 or Schedule B (Form 941), you take
+into account the payroll tax credit against the liability for
+the employer share of social security tax starting with the
+first payroll payment of the quarter that includes payments
+of wages subject to social security tax to your employees
+until you use up to $250,000 of credit against the
+employer share of social security tax and you then take
+into account any remaining payroll tax credit against the
+liability for the employer share of Medicare tax starting
+with the first payroll payment of the quarter that includes
+payments of wages subject to Medicare tax to employees.
+Consistent with the entries on line 16 or Schedule B (Form
+941), the payroll tax credit should be taken into account in
+making deposits of employment tax. If any payroll tax
+credit is remaining at the end of the quarter that hasn’t
+been used completely because it exceeds $250,000 of
+the employer share of social security tax and the employer
+share of Medicare tax for the quarter, the excess credit
+may be carried forward to the succeeding quarter and
+allowed as a payroll tax credit for the succeeding quarter.
+The payroll tax credit may not be taken as a credit against
+income tax withholding, the employee share of social
+security tax, or the employee share of Medicare tax. Also,
+the remaining payroll tax credit may not be carried back
+and taken as a credit against wages paid from preceding
+quarters.
+Example. Rose Co. is an employer with a calendar tax
+year that filed its timely 2025 income tax return on April
+15, 2026. Rose Co. elected to take the qualified small
+business payroll tax credit for increasing research
+activities on Form 6765. The third quarter of 2026 is the
+first quarter that begins after Rose Co. filed the income tax
+return making the payroll tax credit election. Therefore, the
+payroll tax credit applies against Rose Co.’s share of
+social security tax (up to $250,000) and Medicare tax on
+wages paid to employees in the third quarter of 2026.
+Rose Co. is a semiweekly schedule depositor. Rose Co.
+completes Schedule B (Form 941) by reducing the
+amount of liability entered for the first payroll payment in
+the third quarter of 2026 that includes wages subject to
+social security tax by the lesser of (1) its share of social
+security tax (up to $250,000) on the wages, or (2) the
+available payroll tax credit. If the payroll tax credit elected
+is more than Rose Co.’s share of social security tax on the
+first payroll payment of the quarter, the excess payroll tax
+credit would be carried forward to succeeding payroll
+payments in the third quarter until it is used against up to
+$250,000 of Rose Co.’s share of social security tax for the
+quarter. If the amount of the payroll tax credit exceeds
+Rose Co.’s share of social security tax (up to $250,000) on
+wages paid to its employees in the third quarter, any
+remaining credit is used against Rose Co.’s share of
+Medicare tax on the first payroll payment of the quarter
+and then the excess payroll tax credit would be carried
+forward to succeeding payroll payments in the third
+quarter until it is used against Rose Co.’s share of
+Medicare tax for the quarter. If Rose Co. still has credit
+remaining after reducing its share of social security tax (up
+to $250,000) and Medicare tax for the third quarter, the
+remainder would be treated as a payroll tax credit against
+its share of social security tax (up to $250,000) and
+Medicare tax on wages paid in the fourth quarter. If the
+amount of the payroll tax credit remaining exceeded Rose
+Co.’s share of social security tax (up to $250,000) and
+Medicare tax on wages paid in the fourth quarter, it could
+be carried forward and treated as a payroll tax credit for
+the first quarter of 2027.
+Part 3: Tell Us About Your Business
+In Part 3, answer only those questions that apply to your
+business. If the questions don’t apply, leave them blank
+and go to Part 4.
+17. If Your Business Has Closed...
+If you go out of business or stop paying wages, you must
+file a final return. To tell the IRS that a particular Form 941
+is your final return, check the box on line 17 and enter the
+final date you paid wages in the space provided. For
+additional filing requirements, including information about
+attaching a statement to your final return, see If Your
+Business Has Closed, earlier.
+18. If You’re a Seasonal Employer...
+If you hire employees seasonally—such as for summer or
+winter only—check the box on line 18. Checking the box
+tells the IRS not to expect four Forms 941 from you
+throughout the year because you haven’t paid wages
+regularly.
+Generally, we won’t ask about unfiled returns if at least
+one taxable return is filed each year. However, you must
+check the box on line 18 on every Form 941 you file.
+Otherwise, the IRS will expect a return to be filed for each
+quarter.
+Also, when you complete Form 941, be sure to check
+the box on the top of the form that corresponds to the
+quarter reported.
+14 Instructions for Form 941 (Rev. 3-2026)
+Part 4: May We Speak With Your
+Third-Party Designee?
+If you want to allow an employee, a paid tax preparer, or
+another person to discuss your Form 941 with the IRS,
+check the “Yes” box in Part 4. Enter the name, phone
+number, and five-digit personal identification number
+(PIN) of the specific person to speak with—not the name
+of the firm that prepared your tax return. The designee
+may choose any five numbers as their PIN.
+By checking “Yes,” you authorize the IRS to talk to the
+person you named (your designee) about any questions
+we may have while we process your return. You also
+authorize your designee to do all of the following.
+• Give us any information that is missing from your return.
+• Call us for information about processing your return.
+• Respond to certain IRS notices that you’ve shared with
+your designee about math errors and return preparation.
+The IRS won’t send notices to your designee.
+You’re not authorizing your designee to bind you to
+anything (including additional tax liability) or to otherwise
+represent you before the IRS. If you want to expand your
+designee’s authorization, see Pub. 947.
+The authorization will automatically expire 1 year from
+the due date (without regard to extensions) for filing your
+Form 941. If you or your designee wants to terminate the
+authorization, write to the IRS office for your location using
+the Without a payment address under Where Should You
+File, earlier.
+Part 5: Sign Here (Approved Roles)
+Complete all information and sign Form 941. The following
+persons are authorized to sign the return for each type of
+business entity.
+• Sole proprietorship—The individual who owns the
+business.
+• Corporation (including a limited liability company
+(LLC) treated as a corporation)—The president, the
+vice president, or another principal officer duly authorized
+to sign.
+• Partnership (including an LLC treated as a
+partnership) or unincorporated organization—A
+responsible and duly authorized partner, member, or
+officer having knowledge of its affairs.
+• Single-member LLC treated as a disregarded entity
+for federal income tax purposes—The owner of the
+LLC or a principal officer duly authorized to sign.
+• Trust or estate—The fiduciary.
+Form 941 may be signed by a duly authorized agent of
+the taxpayer if a valid power of attorney has been filed.
+Alternative signature method. Corporate officers or
+duly authorized agents may sign Form 941 by rubber
+stamp, mechanical device, or computer software program.
+For details and required documentation, see Rev. Proc.
+2005-39, 2005-28 I.R.B. 82, available at IRS.gov/irb/
+2005-28_IRB#RP-2005-39.
+Paid Preparer Use Only
+A paid preparer must sign Form 941 and provide the
+information in the Paid Preparer Use Only section of Part 5
+if the preparer was paid to prepare Form 941 and isn’t an
+employee of the filing entity. Paid preparers must sign
+paper returns with a manual signature. The preparer must
+give you a copy of the return in addition to the copy to be
+filed with the IRS.
+If you’re a paid preparer, enter your Preparer Tax
+Identification Number (PTIN) in the space provided.
+Include your complete address. If you work for a firm,
+enter the firm’s name and the EIN of the firm. You can
+apply for a PTIN online or by filing Form W-12. For more
+information about applying for a PTIN online, go to
+IRS.gov/PTIN. You can’t use your PTIN in place of the EIN
+of the tax preparation firm.
+Generally, don’t complete this section if you’re filing the
+return as a reporting agent and have a valid Form 8655 on
+file with the IRS. However, a reporting agent must
+complete this section if the reporting agent offered legal
+advice, for example, advising the client on determining
+whether its workers are employees or independent
+contractors for federal tax purposes.
+How To Get Forms, Instructions, and
+Publications
+You can view, download, or print most of the forms,
+instructions, and publications you may need at IRS.gov/
+Forms. Otherwise, you can go to IRS.gov/OrderForms to
+place an order and have them mailed to you. The IRS will
+process your order for forms and publications as soon as
+possible. Don’t resubmit requests you’ve already sent us.
+You can get forms and publications faster online.
+Instructions for Form 941 (Rev. 3-2026) 15
+Privacy Act and Paperwork Reduction Act Notice. We ask for the information on these forms to carry out the
+Internal Revenue laws of the United States. You’re required to give us the information. We need it to ensure that you’re
+complying with these laws and to allow us to figure and collect the right amount of tax. Section 6011 requires you to
+provide the requested information if the tax is applicable to you. Section 6109 requires you to provide your identification
+number. You’re not required to provide the information requested on a form that is subject to the Paperwork Reduction
+Act unless the form displays a valid OMB control number. Books or records relating to a form or its instructions must be
+retained as long as their contents may become material in the administration of any Internal Revenue law. Generally, tax
+returns and return information are confidential, as required by section 6103. However, section 6103 allows or requires the
+IRS to disclose or give the information shown on your tax return to others as described in the Code. For example, we may
+disclose your tax information to the Department of Justice for civil and criminal litigation, and to cities, states, the District
+of Columbia, and U.S. commonwealths and territories for use in administering their tax laws. We may also disclose this
+information to other countries under a tax treaty, to federal and state agencies to enforce federal nontax criminal laws, or
+to federal law enforcement and intelligence agencies to combat terrorism.
+Estimates of taxpayer burden. These estimates include forms in the Form 941 series, including attachments; Forms
+CT-1, CT-2, SS-8, W-2, W-3, 940, 945, 2032, 2678, 8027, 8027-T, 8453-EMP, 8850, 8879-EMP, 8922, 8952, and 8974,
+and their schedules; and all the forms employers attach to employment-related tax returns and related wage statements
+to employees.
+The following tables show burden estimates based on current statutory requirements as of October 1, 2025, for
+employers filing employment tax reporting forms and wage statement forms. Time spent and out-of-pocket costs are
+presented separately. Time burden is the time spent to comply with employer reporting responsibilities, including
+recordkeeping, preparing and submitting forms, and preparing and providing wage statements to employees.
+Out-of-pocket costs include any expenses incurred to comply with employer reporting responsibilities. The amount of
+taxes paid isn’t included in reporting burden.
+The time and money burdens reported below include all associated forms and schedules, across all tax return
+preparation methods and employer reporting. They are national averages and don’t necessarily reflect a “typical”
+employer’s reporting burden. Most employers experience lower than average burden, with burden varying considerably
+by the number of Forms W-2 that an employer files. For instance, the estimated average burden for an employer who
+issues four Forms W-2 is 63.6 hours (15.9 hours x 4) and $2,480 ($620 x 4). The estimated average burden for a large
+employer who issues 2,000 Forms W-2 is 800 hours (2,000 x 0.4) and $40,000 (2,000 x $20).
+Annual Average Burden
+Type of filer Total time (hours) Recordkeeping time
+(hours)
+Time spent on W-2
+activities (hours)
+All other time
+(hours)
+Out-of-pocket costs Total monetized
+burden*
+Filers with Form 941 62 18 4 40 $2,760 $4,890
+Filers with Form 943 54 15 6 33 $970 $2,030
+Filers with Form 944 24 4 3 18 $420 $710
+* Total monetized burden = monetized hours + out-of-pocket costs.
+Annual Average Burden per Employee by Number of Forms W-2 Filed
+Number of Forms W-2 filed Total time (hours) Out-of-pocket costs Total monetized burden*
+All Employers 11 $440 $760
+1 to 5 15.9 $620 $1,070
+6 to 10 5.9 $280 $480
+11 to 25 4.4 $200 $350
+26 to 50 3.5 $130 $250
+51 to 100 2.6 $100 $190
+101 to 250 1.8 $90 $160
+251 to 500 1.2 $70 $120
+501 to 1,000 0.7 $50 $80
+Over 1,000 0.4 $20 $30
+* Total monetized burden = monetized hours + out-of-pocket costs.
+Annual Average Burden per Employee by Primary Form Filed
+Primary form filed Total time (hours) Out-of-pocket costs Total monetized burden*
+Form 941 10.9 $440 $770
+Form 943 19.1 $300 $630
+Form 944 11.4 $220 $360
+* Total monetized burden = monetized hours + out-of-pocket costs.
+16 Instructions for Form 941 (Rev. 3-2026)
+Comments. If you have comments concerning the accuracy of these time estimates or suggestions for making Form
+941 simpler, we would be happy to hear from you. You can send us comments from IRS.gov/FormComments. Or you can
+send your comments to Internal Revenue Service, Tax Forms and Publications Division, 1111 Constitution Ave. NW,
+IR-6526, Washington, DC 20224. Don’t send Form 941 to this address. Instead, see Where Should You File, earlier.
+Instructions for Form 941 (Rev. 3-2026) 17

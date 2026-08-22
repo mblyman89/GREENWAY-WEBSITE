@@ -82,6 +82,7 @@ import { PAYROLL_ONBOARDING_AUTHORITIES } from "@/lib/payroll/payroll-onboarding
 // reason the PAYROLL_TAX_AUTHORITIES comment above records.
 import { REPORTING_AUTHORITIES_NEW } from "@/lib/reports/reporting-authorities";
 // books-28. See the file header there for why COSO can be quoted at all.
+import { COMPANY_IDENTITY_AUTHORITIES, type CompanyIdentityAuthority } from "./company-identity-authorities";
 import { INTERNAL_CONTROL_AUTHORITIES } from "./internal-control-authorities";
 
 // ---------------------------------------------------------------------------
@@ -468,6 +469,26 @@ function fromBank(a: BankAuthority): GuidanceAuthority {
   return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
 }
 /**
+ * books-31. The company-identity registry.
+ *
+ * THIS FUNCTION EXISTS TO FAIL TO COMPILE. `CompanyIdentityAuthority` is
+ * declared structurally in its own module rather than importing
+ * `GuidanceAuthority` from here, because THIS file imports THAT one and the
+ * reverse import would be circular. That leaves a real risk: two independently
+ * declared shapes that drift apart, with the drift discovered by a runtime
+ * `undefined` on a screen.
+ *
+ * Passing the value through a function whose return type is `GuidanceAuthority`
+ * closes it. If `CompanyIdentityAuthority` ever narrows its `kind` union to
+ * something `GuidanceAuthorityKind` does not contain, or drops a field, `tsc`
+ * stops the build here rather than letting the screen render a citation with a
+ * hole in it. Standing rule 42: prefer a gate that cannot be forgotten over a
+ * discipline that can.
+ */
+function fromCompanyIdentity(a: CompanyIdentityAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
+/**
  * GateAuthority carries no `kind` field at all, so one has to be derived. It
  * is derived FROM THE CITATION ITSELF rather than hand-assigned, because a
  * hand-assigned list is exactly the kind of thing that rots when someone adds
@@ -540,6 +561,13 @@ export const ALL_SOURCE_REGISTRIES = [
   "payroll-onboarding",
   "reporting",
   "internal-control",
+  // books-31. The company-information slice. Kept as its own tag rather than
+  // folded into "payroll-tax" because these authorities answer a different
+  // question: not "how much tax" but "whose return is this, and which box does
+  // each identifier belong in". The company-information screen is the only
+  // place that needs the whole set, and every downstream form builder resolves
+  // its identity fields through it.
+  "company-identity",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -559,6 +587,16 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...INTERNAL_CONTROL_AUTHORITIES.map((a) => ({
       tag: "internal-control" as const,
       authority: a,
+    })),
+    // books-31. The identity authorities: the sentences that say which box an
+    // EIN, a legal name, a trade name, an ESD account number or a signer's
+    // title belongs in, and what happens when the box is wrong. Merged here for
+    // the standing reason - a citation must mean one thing on every screen -
+    // and because the 941, 940, W-2, W-3 and Form 5208 builders will all cite
+    // these same records rather than restating them.
+    ...COMPANY_IDENTITY_AUTHORITIES.map((a) => ({
+      tag: "company-identity" as const,
+      authority: fromCompanyIdentity(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation

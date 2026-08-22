@@ -89,11 +89,21 @@ describe("0195 exists and is numbered cleanly", () => {
     expect(files).toEqual([FILENAME]);
   });
 
-  it("is the HIGHEST migration, so nothing was written around it", () => {
+  it("is followed only by migrations that came after it, never numbered around it", () => {
+    // books-31 added 0196, so 0195 is no longer the highest and this assertion
+    // was rewritten rather than deleted. What it actually guards is that nobody
+    // slipped a file in with a LOWER number than 0195 after 0195 shipped -
+    // which would change the order the database applies things in and silently
+    // invalidate every "0195 ran before this" assumption downstream.
     const numbers = readdirSync(MIGRATIONS_DIR)
       .filter((f) => /^\d{4}_.*\.sql$/.test(f))
       .map((f) => Number(f.slice(0, 4)));
-    expect(Math.max(...numbers)).toBe(195);
+    expect(numbers.length).toBeGreaterThan(100);
+    expect(numbers).toContain(195);
+    // 0195 is either the highest or followed by strictly higher numbers, with
+    // no gaps that would suggest a file was renamed out from under it.
+    const above = numbers.filter((n) => n > 195).sort((a, b) => a - b);
+    expect(above).toEqual(Array.from({ length: above.length }, (_, i) => 196 + i));
   });
 
   it("the comment-stripper actually stripped something, or these tests lie", () => {

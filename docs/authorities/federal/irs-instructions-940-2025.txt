@@ -1,0 +1,1688 @@
+2025
+Instructions for Form 940
+Employer’s Annual Federal Unemployment (FUTA) Tax Return
+Section references are to the Internal Revenue Code
+unless otherwise noted.
+Future Developments
+For the latest information about developments related to
+Form 940 and its instructions, such as legislation enacted
+after they were published, go to IRS.gov/Form940.
+What’s New
+Aggregate return filers must identify themselves.
+Aggregate return filers must use the new Aggregate
+Return Filers Only section on Form 940 to identify whether
+they’re filing an aggregate return as a section 3504 agent,
+certified professional employer organization (CPEO), or
+other third party. For more information about these types
+of aggregate return filers, see Certification program for
+professional employer organizations (PEOs) and
+Aggregate Form 940 filers, later. For more information
+about completing this new section on Form 940, see
+Aggregate Return Filers Only, later.
+Direct deposit of Form 940 refund is now available.
+Executive Order (EO) 14247, Modernizing Payments To
+and From America’s Bank Account, issued on March 25,
+2025, promotes operational efficiency by mandating the
+transition to electronic payments for all federal
+disbursements. Accordingly, the IRS will now issue Form
+940 tax refunds by direct deposit. Direct deposit is a fast,
+simple, safe, and secure way to have your refund
+deposited automatically to your checking or savings
+account. Instead of a direct deposit refund, you can still
+choose to have your Form 940 overpayment applied to
+your next return by checking the appropriate box on
+line 15b. For more information, see the instructions for
+line 15b and Direct Deposit, later.
+Make balance due payments electronically. EO 14247
+also promotes operational efficiency by mandating the
+transition to electronic payments for all payments made to
+the federal government. Therefore, pay your balance due
+on Form 940 electronically. There are several easy, safe,
+and secure ways to pay your balance due electronically.
+For more information, see the instructions for line 14, later.
+Form 940 return transcripts are now available elec-
+tronically. You can now access your Form 940 return
+transcript for tax years 2023 and later using your IRS
+business tax account. For more information, go to
+IRS.gov/BusinessTranscript. To access your IRS business
+tax account, go to IRS.gov/BusinessAccount.
+Credit reduction state. A state that hasn’t repaid money
+it borrowed from the federal government to pay
+unemployment benefits is called a credit reduction state.
+The U.S. Department of Labor determines these states. If
+an employer pays wages that are subject to the
+unemployment tax laws of a credit reduction state, that
+employer must pay additional federal unemployment tax
+when filing its Form 940.
+For 2025, there are credit reduction states. If you paid
+any wages that are subject to the unemployment
+compensation laws of a credit reduction state, your credit
+against federal unemployment tax will be reduced based
+on the credit reduction rate for that credit reduction state.
+Use Schedule A (Form 940) to figure the credit reduction.
+For more information, see the Schedule A (Form 940)
+instructions or go to IRS.gov.
+Reminders
+Electronically filing an amended Form 940. The IRS
+offers filing an amended Form 940 as part of Modernized
+e-File (MeF). For more information on electronic filing, go
+to IRS.gov/EmploymentEfile.
+Form 940 (sp) available in Spanish. All employers,
+including employers in Puerto Rico and the U.S. Virgin
+Islands, have the option to file Form 940 (sp).
+Moving expense and bicycle commuting reimburse-
+ments are subject to FUTA tax. The Tax Cuts and Jobs
+Act (P.L. 115-97) suspends the exclusion for qualified
+moving expense reimbursements from your employee’s
+income under section 132 and the deduction from the
+employee’s income under section 217, as well as the
+exclusion for qualified bicycle commuting reimbursements
+from your employee’s income under section 132,
+beginning after 2017 and before 2026. Therefore, moving
+expense and bicycle commuting reimbursements aren’t
+exempt from FUTA tax during this period. Don’t include
+moving expense or bicycle commuting reimbursements on
+Form 940, line 4. P.L. 119-21, commonly known as the
+One Big Beautiful Bill Act, permanently eliminates these
+exclusions after tax year 2025 and will be discussed in
+more detail in the 2026 Instructions for Form 940. For
+more information about fringe benefits, see Pub. 15-B.
+Certification program for professional employer or-
+ganizations (PEOs). The Stephen Beck, Jr., Achieving a
+Better Life Experience (ABLE) Act of 2014 required the
+IRS to establish a voluntary certification program for
+PEOs. PEOs handle various payroll administration and tax
+reporting responsibilities for their business clients and are
+typically paid a fee based on payroll costs. To become and
+remain certified under the certification program, CPEOs
+must meet various requirements described in sections
+3511 and 7705 and related published guidance.
+Certification as a CPEO may affect the employment tax
+liabilities of both the CPEO and its customers. A CPEO is
+generally treated for employment tax purposes as the
+employer of any individual who performs services for a
+customer of the CPEO and is covered by a contract
+Instructions for Form 940 (2025) Catalog Number 13660I
+Nov 18, 2025 Department of the Treasury Internal Revenue Service www.irs.gov
+described in section 7705(e)(2) between the CPEO and
+the customer (CPEO contract), but only for wages and
+other compensation paid to the individual by the CPEO. To
+become a CPEO, the organization must apply through the
+IRS Online Registration System. For more information or
+to apply to become a CPEO, go to IRS.gov/CPEO.
+For wages paid to a work site employee, a CPEO is
+eligible for the credit for state unemployment tax paid to a
+state unemployment fund, whether the CPEO or a
+customer of the CPEO made the contribution. In addition,
+a CPEO is allowed the additional credit if the CPEO is
+permitted, under state law, to collect and remit
+contributions to the state unemployment fund with respect
+to a work site employee. For more information on the
+credit, see Credit for State Unemployment Tax Paid to a
+State Unemployment Fund, later.
+CPEOs must generally file Form 940 and Schedule R
+(Form 940), Allocation Schedule for Aggregate Form 940
+Filers, electronically. For more information about a CPEO’s
+requirement to file electronically, see Rev. Proc. 2023-18,
+2023-13 I.R.B. 605, available at IRS.gov/irb/
+2023-13_IRB#REV-PROC-2023-18.
+Outsourcing payroll duties. Generally, as an employer,
+you’re responsible to ensure that tax returns are filed and
+deposits and payments are made, even if you contract
+with a third party to perform these acts. You remain
+responsible if the third party fails to perform any required
+action. Before you choose to outsource any of your payroll
+and related tax duties (that is, withholding, reporting, and
+paying over social security, Medicare, FUTA, and income
+taxes) to a third-party payer, such as a payroll service
+provider or reporting agent, go to IRS.gov/
+OutsourcingPayrollDuties for helpful information on this
+topic. If a CPEO pays wages and other compensation to
+an individual performing services for you, and the services
+are covered by a CPEO contract, then the CPEO is
+generally treated for employment tax purposes as the
+employer, but only for wages and other compensation
+paid to the individual by the CPEO. However, with respect
+to certain employees covered by a CPEO contract, you
+may also be treated as an employer of the employees
+and, consequently, may also be liable for federal
+employment taxes imposed on wages and other
+compensation paid by the CPEO to such employees. For
+more information on the different types of third-party payer
+arrangements, see section 16 of Pub. 15, Employer’s Tax
+Guide.
+Aggregate Form 940 filers. Approved section 3504
+agents and CPEOs must complete Schedule R (Form
+940) when filing an aggregate Form 940. Aggregate
+Forms 940 are filed by agents of home care service
+recipients approved by the IRS under section 3504. To
+request approval to act as an agent for an employer, the
+agent files Form 2678 with the IRS unless you’re a state or
+local government agency acting as an agent under the
+special procedures provided in Rev. Proc. 2013-39,
+2013-52 I.R.B. 830, available at IRS.gov/irb/
+2013-52_IRB#RP-2013-39.
+Aggregate Forms 940 are also filed by CPEOs
+approved by the IRS under section 7705. CPEOs file Form
+8973, Certified Professional Employer Organization/
+Customer Reporting Agreement, to notify the IRS that they
+started or ended a service contract with a customer.
+CPEOs must generally file Form 940 and Schedule R
+(Form 940) electronically. For more information about a
+CPEO’s requirement to file electronically, see Rev. Proc.
+2023-18.
+If you’re filing an aggregate Form 940, you must identify
+yourself on Form 940. For more information, see
+Aggregate Return Filers Only, later.
+If you change your business name, business ad-
+dress, or responsible party. Notify the IRS immediately
+if you change your business name, business address, or
+responsible party.
+• Write to the IRS office where you file your returns (using
+the Without a payment address under Where Do You File,
+later) to notify the IRS of any business name change. See
+Pub. 1635 to see if you need to apply for a new employer
+identification number (EIN).
+• Complete and mail Form 8822-B to notify the IRS of a
+business address or responsible party change. Don’t mail
+Form 8822-B with your Form 940. For a definition of
+“responsible party,” see the Instructions for Form SS-4.
+Federal tax deposits must be made by electronic
+funds transfer (EFT). You must use EFT to make all
+federal tax deposits. An EFT can be made using the
+Electronic Federal Tax Payment System (EFTPS), IRS
+Direct Pay, or your IRS business tax account. If you don’t
+want to use one of these methods, you can arrange for
+your tax professional, financial institution, payroll service,
+or other trusted third party to make electronic deposits on
+your behalf. Also, you may arrange for your financial
+institution to initiate a same-day wire payment on your
+behalf. EFTPS is a free service provided by the
+Department of the Treasury. Payments made using IRS
+Direct Pay or through your IRS business tax account are
+also free. Services provided by your tax professional,
+financial institution, payroll service, or other third party
+may have a fee.
+For more information on making federal tax deposits,
+see section 11 of Pub. 15. To get more information about
+EFTPS or to enroll in EFTPS, go to EFTPS.gov, or call
+800-555-4477 or 800-244-4829 (Spanish). To contact
+EFTPS using Telecommunications Relay Services (TRS)
+for people who are deaf, hard of hearing, or have a speech
+disability, dial 711 and then provide the TRS assistant the
+800-555-4477 number above or 800-733-4829. Additional
+information about EFTPS is also available in Pub. 966. For
+more information about IRS Direct Pay, go to IRS.gov/
+DirectPay. For more information about making a payment
+through your IRS business tax account, go to IRS.gov/
+BusinessAccount.
+Electronic filing and payment. Businesses can enjoy
+the benefits of filing tax returns and paying their federal
+taxes electronically. Whether you rely on a tax
+professional or handle your own taxes, the IRS offers you
+convenient and secure programs to make filing and paying
+easier. Spend less time worrying about taxes and more
+time running your business. Use e-file and electronic
+payment options to your benefit.
+• For e-file, go to IRS.gov/EmploymentEfile for additional
+information. A fee may be charged to file electronically.
+2 Instructions for Form 940 (2025)
+• For electronic payment options, see the instructions for
+line 14, later, and go to IRS.gov/Pay.
+Electronic funds withdrawal (EFW). If you file Form
+940 electronically, you can e-file and use EFW to pay the
+balance due in a single step using tax preparation
+software or through a tax professional. However, don’t use
+EFW to make federal tax deposits. For more information
+on paying your taxes using EFW, go to IRS.gov/EFW.
+Credit or debit card payments. You may pay your FUTA
+tax shown on line 14 using a credit or debit card. Your
+payment will be processed by a payment processor who
+will charge a processing fee. Don’t use a credit or debit
+card to pay taxes that are required to be deposited (see
+When Must You Deposit Your FUTA Tax, later). For more
+information on paying your taxes with a credit or debit
+card, go to IRS.gov/PayByCard.
+Online payment agreement. You may be eligible to
+apply for an installment agreement online if you can’t pay
+the full amount of tax you owe when you file your return.
+For more information, see What if you can't pay in full,
+later.
+Disregarded entities and qualified subchapter S sub-
+sidiaries (QSubs). Business entities that are
+disregarded as separate from their owner, including
+QSubs, are required to withhold and pay employment
+taxes and file employment tax returns using the name and
+EIN of the disregarded entity. For more information, see
+Disregarded entities, later.
+State unemployment information. When you
+registered as an employer with your state, the state
+assigned you a state reporting number. If you don’t have a
+state unemployment account and state experience tax
+rate, or if you have questions about your state account,
+you must contact your state unemployment agency. For a
+list of state unemployment agencies, go to the U.S.
+Department of Labor’s website at oui.doleta.gov/
+unemploy/agencies.asp.
+Paid preparers. If you use a paid preparer to complete
+Form 940, the paid preparer must complete and sign the
+paid preparer’s section of the form.
+Photographs of missing children. The IRS is a proud
+partner with the National Center for Missing & Exploited
+Children® (NCMEC). Photographs of missing children
+selected by the Center may appear in instructions on
+pages that would otherwise be blank. You can help bring
+these children home by looking at the photographs and
+calling 1-800-THE-LOST (1-800-843-5678) if you
+recognize a child.
+How Can You Get More Help?
+If you want more information about this form, see Pub. 15,
+go to IRS.gov, or call the Business and Specialty Tax Line
+toll free at 800-829-4933 or 800-829-4059 (TDD/TTY for
+persons who are deaf, hard of hearing, or have a speech
+disability), Monday–Friday from 7:00 a.m. to 7:00 p.m.
+local time (Alaska and Hawaii follow Pacific time;
+employers in Puerto Rico receive service from 8:00 a.m.
+to 8:00 p.m. local time).
+For a list of related employment tax topics, go to
+IRS.gov/EmploymentTaxes. You can order forms,
+instructions, and publications at IRS.gov/OrderForms.
+General Instructions
+What’s the Purpose of Form 940?
+These instructions tell you who must file the form, how to
+fill it out line by line, and when and where to file it.
+Use Form 940 to report your annual Federal
+Unemployment Tax Act (FUTA) tax. Together with state
+unemployment tax systems, the FUTA tax provides funds
+for paying unemployment compensation to workers who
+have lost their jobs. Most employers pay both a federal
+and a state unemployment tax. Only employers pay FUTA
+tax. Don’t collect or deduct FUTA tax from your
+employees’ wages.
+The FUTA tax applies to the first $7,000 you pay to
+each employee during a calendar year after subtracting
+any payments exempt from FUTA tax.
+Who Must File Form 940?
+Except as noted below, if you answer “Yes” to either one of
+these questions, you must file Form 940.
+• Did you pay wages of $1,500 or more to employees in
+any calendar quarter during 2024 or 2025?
+• Did you have one or more employees for at least some
+part of a day in any 20 or more different weeks in 2024 or
+20 or more different weeks in 2025? Count all full-time,
+part-time, and temporary employees. However, if your
+business is a partnership, don’t count its partners.
+If your business was sold or transferred during the year,
+each employer who answered “Yes” to at least one
+question above must file Form 940. However, don’t
+include any wages paid by the predecessor employer on
+your Form 940 unless you’re a successor employer. For
+details, see Successor employer under Type of Return,
+later.
+If you’re not liable for FUTA tax for 2025 because you
+made no payments to employees in 2025, check box c in
+the top right corner of the form. Then, go to Part 7, sign
+the form, and file it with the IRS.
+If you won’t be liable for filing Form 940 in the future
+because your business has closed or because you
+stopped paying wages, check box d in the top right corner
+of the form. For more information, see Final: Business
+closed or stopped paying wages under Type of Return,
+later.
+For Employers of Household Employees...
+If you’re a household employer, you must pay FUTA tax on
+wages that you paid to your household employees only if
+you paid cash wages of $1,000 or more in any calendar
+quarter in 2024 or 2025.
+A household employee performs household work in a:
+• Private home,
+• Local college club, or
+• Local chapter of a college fraternity or sorority.
+Instructions for Form 940 (2025) 3
+Generally, employers of household employees must file
+Schedule H (Form 1040) instead of Form 940.
+However, if you have other employees in addition to
+household employees, you can choose to include the
+FUTA taxes for your household employees on Form 940
+instead of filing Schedule H (Form 1040). If you choose to
+include household employees on your Form 940, you
+must also file Form 941, Employer’s QUARTERLY Federal
+Tax Return; Form 943, Employer’s Annual Federal Tax
+Return for Agricultural Employees; or Form 944,
+Employer’s ANNUAL Federal Tax Return, to report social
+security, Medicare, and any withheld federal income taxes
+for your household employees. See Pub. 926 for more
+information.
+For Agricultural Employers...
+File Form 940 if you answer “Yes” to either of these
+questions.
+• Did you pay cash wages of $20,000 or more to
+farmworkers during any calendar quarter in 2024 or 2025?
+• Did you employ 10 or more farmworkers during some
+part of the day (whether or not at the same time) during
+any 20 or more different weeks in 2024 or 20 or more
+different weeks in 2025?
+Count wages you paid to aliens who were admitted to
+the United States on a temporary basis to perform
+farmwork (workers with H-2A visas). However, wages paid
+to H-2A visa workers aren’t subject to FUTA tax. See Pub.
+15 for more information.
+For Indian Tribal Governments...
+Services rendered by employees of a federally recognized
+Indian tribal government employer (including any
+subdivision, subsidiary, or business enterprise wholly
+owned by the tribe) are exempt from FUTA tax and no
+Form 940 is required. However, the tribe must have
+participated in the state unemployment system for the full
+year and be in compliance with applicable state
+unemployment law. For more information, see section
+3309(d).
+For Tax-Exempt Organizations...
+Religious, educational, scientific, charitable, and other
+organizations described in section 501(c)(3) and exempt
+from tax under section 501(a) generally aren’t subject to
+FUTA tax. However, a section 501(c)(3) organization is
+subject to FUTA tax when paying wages to employees on
+behalf of a non-section 501(c)(3) organization (for
+example, a section 501(c)(3) organization paying wages to
+employees of a related non-section 501(c)(3)
+organization, a section 501(c)(3) organization that is a
+section 3504 agent paying wages on behalf of a
+non-section 501(c)(3) organization, a section 501(c)(3)
+organization that is a common paymaster paying wages
+on behalf of a non-section 501(c)(3) organization, etc.).
+For State or Local Government Employers...
+Services rendered by employees of a state, or a political
+subdivision or instrumentality of the state, are exempt from
+FUTA tax and no Form 940 is required.
+When Must You File Form 940?
+The due date for filing Form 940 for 2025 is February 2,
+2026. However, if you deposited all your FUTA tax when it
+was due, you may file Form 940 by February 10, 2026.
+If we receive Form 940 after the due date, we will treat
+Form 940 as filed on time if the envelope containing Form
+940 is properly addressed, contains sufficient postage,
+and is postmarked by the U.S. Postal Service (USPS) on
+or before the due date, or sent by an IRS-designated
+private delivery service (PDS) on or before the due date.
+However, if you don’t follow these guidelines, we will
+generally consider Form 940 filed when it is actually
+received. For more information about PDSs, see Where
+Do You File, later.
+If any due date for filing falls on a Saturday, Sunday, or
+legal holiday, you may file your return on the next business
+day.
+Where Do You File?
+You’re encouraged to file Form 940 electronically. Go to
+IRS.gov/EmploymentEfile for more information on
+electronic filing. If you file a paper return, where you file
+depends on whether you include a payment with Form
+940. Mail your return to the address listed for your location
+in the table that follows.
+PDSs can’t deliver to P.O. boxes. You must use the
+USPS to mail an item to a P.O. box address. Go to
+IRS.gov/PDS for the current list of PDSs. For the IRS
+mailing address to use if you’re using a PDS, go to
+IRS.gov/PDSstreetAddresses. Select the mailing address
+listed on the webpage that is in the same state as the
+address to which you would mail returns filed without a
+payment, as shown in the table that follows.
+Mailing Addresses for Form 940
+If you’re in... Without a
+payment...
+With a
+payment...
+Connecticut, Delaware, District of
+Columbia, Georgia, Illinois,
+Indiana, Kentucky, Maine,
+Maryland, Massachusetts,
+Michigan, New Hampshire, New
+Jersey, New York, North Carolina,
+Ohio, Pennsylvania, Rhode
+Island, South Carolina,
+Tennessee, Vermont, Virginia,
+West Virginia, Wisconsin
+Department of
+the Treasury
+Internal
+Revenue
+Service
+Kansas City,
+MO 64999-0046
+Internal
+Revenue
+Service
+P.O. Box 932000
+Louisville, KY
+40293-2000
+Alabama, Alaska, Arizona,
+Arkansas, California, Colorado,
+Florida, Hawaii, Idaho, Iowa,
+Kansas, Louisiana, Minnesota,
+Mississippi, Missouri, Montana,
+Nebraska, Nevada, New Mexico,
+North Dakota, Oklahoma,
+Oregon, South Dakota, Texas,
+Utah, Washington, Wyoming
+Department of
+the Treasury
+Internal
+Revenue
+Service
+Ogden, UT
+84201-0046
+Internal
+Revenue
+Service
+P.O. Box 932000
+Louisville, KY
+40293-2000
+4 Instructions for Form 940 (2025)
+If you’re in... Without a
+payment...
+With a
+payment...
+Puerto Rico, U.S. Virgin Islands Internal
+Revenue
+Service
+P.O. Box
+409101
+Ogden, UT
+84409
+Internal
+Revenue
+Service
+P.O. Box 932000
+Louisville, KY
+40293-2000
+If the location of your legal
+residence, principal place of
+business, office, or agency is not
+listed
+Internal
+Revenue
+Service
+P.O. Box
+409101
+Ogden, UT
+84409
+Internal
+Revenue
+Service
+P.O. Box 932000
+Louisville, KY
+40293-2000
+EXCEPTION for tax-exempt
+organizations; federal, state, and
+local governments; and Indian
+tribal governments, regardless of
+your location
+Department of
+the Treasury
+Internal
+Revenue
+Service
+Ogden, UT
+84201-0046
+Internal
+Revenue
+Service
+P.O. Box 932000
+Louisville, KY
+40293-2000
+Caution: Your filing address may have changed from that
+used to file your employment tax return in prior years.
+Credit for State Unemployment Tax
+Paid to a State Unemployment Fund
+Generally, you get a credit for amounts you pay to a state
+(including the District of Columbia, Puerto Rico, and the
+U.S. Virgin Islands) unemployment fund by February 2,
+2026 (or February 10, 2026, if that is your Form 940 due
+date). Your FUTA tax may be higher if you don’t pay the
+state unemployment tax timely by February 2, 2026 (or
+February 10, 2026, if that is your Form 940 due date). This
+is true regardless of whether state law defers the payment
+of taxes due until after this date. If you didn’t pay all state
+unemployment tax by the due date of Form 940, see the
+line 10 instructions. For wages paid to a work site
+employee, a CPEO is eligible for the credit whether the
+CPEO or a customer of the CPEO made the contribution
+with respect to a work site employee.
+State unemployment taxes are sometimes called
+contributions. These contributions are payments that a
+state requires an employer to make to its unemployment
+fund for the payment of unemployment benefits. They
+don’t include:
+• Any payments deducted or deductible from your
+employees’ pay;
+• Penalties, interest, or special administrative taxes; and
+• Voluntary amounts you paid to get a lower assigned
+state experience rate.
+Additional credit. You may receive an additional credit if
+you have a state experience rate lower than 5.4% (0.054).
+This applies even if your rate varies during the year. This
+additional credit is the difference between your actual
+state unemployment tax payments and the amount you
+would have been required to pay at 5.4%. For wages paid
+to a work site employee, the CPEO is allowed the
+additional credit if the CPEO is allowed, under state law, to
+collect and remit contributions to the state unemployment
+fund with respect to a work site employee.
+Special credit for successor employers. You may be
+eligible for a credit based on the state unemployment
+taxes paid by a predecessor. You may claim this credit if
+you’re a successor employer who acquired a business in
+2025 from a predecessor who wasn’t an employer for
+FUTA purposes and, therefore, wasn’t required to file
+Form 940 for 2025. See section 3302(e). You can include
+amounts paid by the predecessor on the
+Worksheet—Line 10 as if you paid them. For details on
+successor employers, see Successor employer under
+Type of Return, later. If the predecessor was required to
+file Form 940, see the line 5 instructions.
+When Must You Deposit Your FUTA
+Tax?
+Although Form 940 covers a calendar year, you may have
+to deposit your FUTA tax before you file your return. If your
+FUTA tax is more than $500 for the calendar year, you
+must deposit at least one quarterly payment.
+You must determine when to deposit your tax based on
+the amount of your quarterly tax liability. If your FUTA tax is
+$500 or less in a quarter, carry it over to the next quarter.
+Continue carrying your tax liability over until your
+cumulative tax is more than $500. At that point, you must
+deposit your tax for the quarter. Deposit your FUTA tax by
+the last day of the month after the end of the quarter. If
+your tax for the next quarter is $500 or less, you’re not
+required to deposit your tax again until the cumulative
+amount is more than $500.
+Fourth quarter liabilities. If your FUTA tax for the fourth
+quarter (plus any undeposited amounts from earlier
+quarters) is more than $500, deposit the entire amount by
+February 2, 2026. If it is $500 or less, you can either
+deposit the amount or pay it with your Form 940 by
+February 2, 2026.
+In years when there are credit reduction states,
+you must include liabilities owed for credit reduction
+with your fourth quarter deposit.
+When To Deposit Your FUTA Tax
+If your undeposited FUTA tax
+is more than $500 on...1
+Deposit your tax by...2
+March 31 April 30
+June 30 July 31
+September 30 October 31
+December 31 January 31
+1
+Also, see the instructions for line 16.
+2
+If any deposit due date falls on a Saturday, Sunday, or legal holiday, you may
+deposit on the next business day. See Timeliness of federal tax deposits, later.
+How Do You Figure Your FUTA Tax
+Liability for Each Quarter?
+You owe FUTA tax on the first $7,000 you pay to each
+employee during the calendar year after subtracting any
+payments exempt from FUTA tax. The FUTA tax is 6.0%
+(0.060) for 2025. Most employers receive a maximum
+Instructions for Form 940 (2025) 5
+credit of up to 5.4% (0.054) against this FUTA tax. Every
+quarter, you must figure how much of the first $7,000 of
+each employee’s annual wages you paid during that
+quarter.
+Figure Your Tax Liability
+Before you can figure the amount to deposit, figure your
+FUTA tax liability for the quarter. To figure your tax liability,
+add the first $7,000 of each employee’s annual wages you
+paid during the quarter for FUTA wages paid and multiply
+that amount by 0.006.
+The tax rates are based on your receiving the maximum
+credit against FUTA taxes. You’re entitled to the maximum
+credit if you paid all state unemployment tax by the due
+date of your Form 940 or if you weren’t required to pay
+state unemployment tax during the calendar year due to
+your state experience rate.
+Example. During the first quarter, you had three
+employees: Mary Smith, George Jones, and Jane Moore.
+You paid $11,000 to Mary, $2,000 to George, and $4,000
+to Jane. None of the payments made were exempt from
+FUTA tax.
+To figure your liability for the first quarter, add the first $7,000 of each
+employee’s wages subject to FUTA tax:
+$7,000 Mary’s wages subject to FUTA tax
+2,000 George’s wages subject to FUTA tax
++ 4,000 Jane’s wages subject to FUTA tax
+$13,000 Total wages subject to FUTA tax for the first quarter
+$13,000 Total wages subject to FUTA tax for the first quarter
+x 0.006 Tax rate (based on maximum credit of 5.4%)
+$78 Your liability for the first quarter
+In this example, you don’t have to make a deposit because your liability is
+$500 or less for the first quarter. However, you must carry this liability over
+to the second quarter.
+If any wages subject to FUTA tax aren’t subject to state
+unemployment tax, you may be liable for FUTA tax at the
+maximum rate of 6.0%. For instance, in certain states,
+wages paid to corporate officers, certain payments of sick
+pay by unions, and certain fringe benefits are excluded
+from state unemployment tax.
+Example. Mary Smith and George Jones are
+corporate officers whose wages are excluded from state
+unemployment tax in your state. Jane Moore’s wages
+aren’t excluded from state unemployment tax. During the
+first quarter, you paid $11,000 to Mary, $2,000 to George,
+and $4,000 to Jane.
+$ 9,000 Total FUTA wages for Mary and George in first quarter
+x 0.060 Tax rate
+$540 Your liability for the first quarter for Mary and George
+$4,000 Total FUTA wages subject to state unemployment tax
+x 0.006 Tax rate (based on maximum credit of 5.4%)
+$24 Your liability for the first quarter for Jane
+$540 Your liability for the first quarter for Mary and George
++ 24 Your liability for the first quarter for Jane
+$564 Your liability for the first quarter for Mary, George, and Jane
+In this example, you must deposit $564 by April 30 because your liability
+for the first quarter is more than $500.
+How Must You Deposit Your FUTA
+Tax?
+You Must Deposit Your FUTA Tax Using EFT
+You must use EFT to make all federal tax deposits. An
+EFT can be made using EFTPS, IRS Direct Pay, or your
+IRS business tax account. If you don’t want to use one of
+these methods, you can arrange for your tax professional,
+financial institution, payroll service, or other trusted third
+party to make electronic deposits on your behalf. Also, you
+may arrange for your financial institution to initiate a
+same-day wire payment on your behalf. EFTPS is a free
+service provided by the Department of the Treasury.
+Payments made using IRS Direct Pay or through your IRS
+business tax account are also free. Services provided by
+your tax professional, financial institution, payroll service,
+or other third party may have a fee.
+For more information on making federal tax deposits,
+see Pub. 966. To get more information about EFTPS or to
+enroll in EFTPS, go to EFTPS.gov or call one of the
+numbers provided under Federal tax deposits must be
+made by electronic funds transfer (EFT), earlier.
+If your business is new, the IRS will automatically
+pre-enroll you in EFTPS when you apply for an EIN. Follow
+the instructions on your EIN package to activate your
+enrollment. For more information about IRS Direct Pay, go
+to IRS.gov/DirectPay. For more information about making
+a payment through your IRS business tax account, go to
+IRS.gov/BusinessAccount.
+Caution: EFTPS accepts same day payments of $1
+million or less if the payment is submitted before 3:00 p.m.
+Eastern time on a business day. If your payment is more
+than $1 million, you must submit the deposit by 8:00 p.m.
+Eastern time the day before the date the deposit is due.
+Same-day wire payment option. If you fail to submit a
+timely deposit transaction on EFTPS, you can still make
+your deposit on time by using the Federal Tax Collection
+Service (FTCS) to make a same-day wire payment. To use
+the same-day wire payment method, you will need to
+make arrangements with your financial institution ahead of
+time. Check with your financial institution regarding
+availability, deadlines, and costs. Your financial institution
+may charge you a fee for payments made this way. To
+learn more about the information you will need to give your
+financial institution to make a same-day wire payment, go
+to IRS.gov/SameDayWire.
+6 Instructions for Form 940 (2025)
+Timeliness of federal tax deposits. If a deposit is
+required to be made on a day that isn’t a business day, the
+deposit is considered timely if it is made by the close of
+the next business day. A business day is any day other
+than a Saturday, Sunday, or legal holiday. The term “legal
+holiday” for deposit purposes includes only those legal
+holidays in the District of Columbia. Legal holidays in the
+District of Columbia are provided in section 11 of Pub. 15.
+How Can You Avoid Penalties and
+Interest?
+You can avoid paying penalties and interest if you do all of
+the following.
+• Deposit and pay your tax when it is due.
+• File your fully completed Form 940 accurately and on
+time.
+• Attach Schedule R (Form 940) if required.
+• Ensure your tax payments are honored by your financial
+institution.
+Penalties and interest are charged on taxes paid late
+and returns filed late at a rate set by law. See sections 11
+and 12 of Pub. 15 for details.
+Use Form 843 to request abatement of assessed
+penalties or interest. Don’t request abatement of
+assessed penalties or interest on Form 940.
+If you receive a notice about a penalty after you file this
+return, reply to the notice with an explanation and we will
+determine if you meet reasonable-cause criteria. Don’t
+attach an explanation when you file your return.
+Can You Amend a Return?
+You use the 2025 Form 940 to amend a return that you
+previously filed for 2025. If you’re amending a return for a
+previous year, use that previous year’s Form 940. The IRS
+offers filing an amended Form 940 as part of Modernized
+e-File (MeF). For more information on electronic filing, go
+to IRS.gov/EmploymentEfile.
+You’re encouraged to file an amended Form 940
+electronically, but you may still file a paper return to amend
+a Form 940. Follow the steps below to amend your return.
+• Check the amended return box in the top right corner of
+Form 940, page 1, box a.
+• Fill in all the amounts that should have been on the
+original form.
+• Sign the form.
+• Attach an explanation, including an attachment in MeF
+if filing the amended return electronically, telling us why
+you’re amending your return. For example, tell us if you’re
+filing to claim credit for tax paid to your state
+unemployment fund after the due date of Form 940.
+• Unless filing the amended return electronically, file the
+amended return using the Without a payment address
+(even if a payment is included) under Where Do You File,
+earlier.
+• If you file an amended return for an aggregate Form
+940, be sure to attach Schedule R (Form 940). Complete
+Schedule R (Form 940) only for employers who have
+adjustments on the amended Form 940.
+Completing Your Form 940
+Follow These Guidelines To Correctly Fill Out
+the Form
+Make entries on Form 940 as follows to enable accurate
+scanning and processing.
+• Make sure your business name and EIN are on every
+page of the form and any attachments.
+• If you type or use a computer to fill out your form, use a
+12-point Courier font, if possible. Portable Document
+Format (PDF) forms on IRS.gov have fillable fields with
+acceptable font specifications.
+• Don’t enter dollar signs and decimal points. Commas
+are optional. Enter dollars to the left of the preprinted
+decimal point and cents to the right of it.
+• You may choose to round your amounts to the nearest
+dollar, instead of reporting cents on this form. If you
+choose to round, you must round all entries. To round,
+drop the amounts under 50 cents and increase the
+amounts from 50 to 99 cents to the next dollar. For
+example, $1.49 becomes $1.00 and $2.50 becomes
+$3.00. If you use two or more amounts to figure an entry
+on the form, use cents to figure the answer and round the
+answer only.
+• If you have a line with the value of zero, leave it blank.
+Employer Identification Number (EIN),
+Name, Trade Name, and Address
+Enter Your Business Information at the Top of
+the Form
+Enter your EIN, name, and address in the spaces
+provided. You must enter your name and EIN here and on
+page 2. Enter the business (legal) name that you used
+when you applied for your EIN on Form SS-4. For
+example, if you’re a sole proprietor, enter “Ronald Smith”
+on the Name line and “Ron’s Cycles” on the Trade Name
+line. Leave the Trade Name line blank if it is the same as
+your Name.
+If you pay a tax preparer to fill out Form 940, make sure
+the preparer shows your business name exactly as it
+appeared when you applied for your EIN.
+Employer identification number (EIN). To make sure
+that businesses comply with federal tax laws, the IRS
+monitors tax filings and payments by using a numerical
+system to identify taxpayers. A unique nine-digit EIN is
+assigned to all corporations, all partnerships, and some
+sole proprietors. Businesses needing an EIN must apply
+for a number and use it throughout the life of the business
+on all tax returns, payments, and reports.
+Your business should have only one EIN. If you have
+more than one and aren’t sure which one to use, write to
+the IRS office where you file your returns (using the
+Without a payment address under Where Do You File,
+earlier) or call the IRS at 800-829-4933 (toll free). If you’re
+outside the United States, call 267-941-1000 (toll call).
+If you don’t have an EIN, you may apply for one online
+by going to IRS.gov/EIN. You may also apply for an EIN by
+faxing or mailing Form SS-4 or SS-4 (sp) to the IRS. If the
+principal business was created or organized outside the
+United States or U.S. territories, you may also apply for an
+Instructions for Form 940 (2025) 7
+EIN by calling 267-941-1099 (toll call). If you haven’t
+received your EIN by the due date of Form 940, write
+“Applied For” and the date you applied in the space shown
+for the number.
+Caution: If you’re filing your tax return electronically, a
+valid EIN is required at the time the return is filed. If a valid
+EIN isn’t provided, the return won’t be accepted. This may
+result in penalties.
+Always be sure the EIN on the form you file exactly
+matches the EIN that the IRS assigned to your business.
+Don’t use a social security number (SSN) or an individual
+taxpayer identification number (ITIN) on forms that ask for
+an EIN. Filing a Form 940 with an incorrect EIN or using
+the EIN of another’s business may result in penalties and
+delays in processing your return.
+Disregarded entities. A disregarded entity is required to
+file Form 940 using its name and EIN, not the name and
+EIN of its owner. An entity that has a single owner and is
+disregarded as separate from its owner for federal income
+tax purposes is treated as a separate entity for purposes
+of payment and reporting federal employment taxes. If the
+entity doesn’t currently have an EIN, it must apply for one
+using one of the methods under Employer identification
+number (EIN), earlier. Disregarded entities include
+single-owner limited liability companies (LLCs) that
+haven’t elected to be taxed as a corporation for federal
+income tax purposes, QSubs, and certain foreign entities
+treated as disregarded entities for U.S. income tax
+purposes. Although a disregarded entity is treated as a
+separate entity for employment tax purposes, it isn’t
+subject to FUTA tax if it is owned by a tax-exempt
+organization under section 501(c)(3) and isn’t required to
+file Form 940. For more information, see Disregarded
+entities and qualified subchapter S subsidiaries in the
+Introduction section of Pub. 15.
+Tell Us if You Change Your Business Name,
+Business Address, or Responsible Party
+Notify the IRS immediately if you change your business
+name, business address, or responsible party.
+Name change. Write to the IRS office where you filed
+your return (using the Without a payment address under
+Where Do You File, earlier) to notify the IRS of any name
+change. See Pub. 1635 to see if you also need to apply for
+a new EIN.
+Address or responsible party change. Complete and
+mail Form 8822-B to notify the IRS of an address or
+responsible party change. Don’t mail Form 8822-B with
+your Form 940. For a definition of "responsible party," see
+the Instructions for Form SS-4.
+Type of Return
+Review the box at the top of the form. If any line applies to
+you, check the appropriate box to tell us which type of
+return you’re filing. You may check more than one box.
+Amended. If this is an amended return that you’re filing to
+correct a return that you previously filed, check box a.
+Successor employer. Check box b if you’re a successor
+employer and:
+• You’re reporting wages paid before you acquired the
+business by a predecessor who was required to file a
+Form 940 because the predecessor was an employer for
+FUTA tax purposes, or
+• You’re claiming a special credit for state unemployment
+tax paid before you acquired the business by a
+predecessor who wasn’t required to file a Form 940
+because the predecessor wasn’t an employer for FUTA
+tax purposes.
+A successor employer is an employer who:
+• Acquires substantially all the property used in a trade or
+business of another person (predecessor) or used in a
+separate unit of a trade or business of a predecessor; and
+• Immediately after the acquisition, employs one or more
+people who were employed by the predecessor.
+No payments to employees in 2025. If you’re not liable
+for FUTA tax for 2025 because you made no payments to
+employees in 2025, check box c. Then, go to Part 7, sign
+the form, and file it with the IRS.
+Final: Business closed or stopped paying wages. If
+this is a final return because you went out of business or
+stopped paying wages and you won’t be liable for filing
+Form 940 in the future, check box d. Complete all
+applicable lines on the form, sign it in Part 7, and file it with
+the IRS. Also attach a statement to your return showing
+the name of the person keeping the payroll records and
+the address where those records will be kept.
+Aggregate Return Filers Only
+If you’re filing an aggregate Form 940, check the
+appropriate box to identify yourself. An aggregate Form
+940 is a return that combines amounts from multiple
+clients or customers (employers) onto a single Form 940.
+Section 3504 Agent. Check this box if you’re a section
+3504 agent filing an aggregate Form 940 as an agent of
+home care service recipients. You must attach Schedule R
+(Form 940) to your aggregate Form 940. For more
+information about section 3504 agents, see Aggregate
+Form 940 filers, earlier, and section 16 of Pub. 15.
+Certified Professional Employer Organization
+(CPEO). Check this box if you’re a CPEO filing an
+aggregate Form 940 on behalf of your customers. You
+must attach Schedule R (Form 940) to your aggregate
+Form 940. For more information about CPEOs, see
+Certification program for professional employer
+organizations (PEOs), earlier, and section 16 of Pub.15.
+Other Third Party. If you’re filing an aggregate Form 940
+but you’re not a section 3504 agent or a CPEO, you must
+check this box. For example, a non-certified PEO filing an
+aggregate Form 940 must check this box.
+Specific Instructions
+Part 1: Tell Us About Your Return
+1. If You Were Required To Pay Your State
+Unemployment Tax In...
+Caution: You must complete line 1a or 1b even if you
+weren’t required to pay any state unemployment tax
+because your state unemployment tax rate(s) was zero.
+8 Instructions for Form 940 (2025)
+You may leave lines 1a and 1b blank only if all of the
+wages you paid to all employees in all states were
+excluded from state unemployment tax. If you leave lines
+1a and 1b blank, and line 7 is more than zero, you must
+complete line 9 because all of the taxable FUTA wages
+you paid were excluded from state unemployment tax.
+Identify the state(s) where you were required to pay
+state unemployment taxes.
+1a. One state only. Enter the two-letter USPS
+abbreviation for the state where you were required to pay
+your state unemployment tax on line 1a. For a list of state
+abbreviations, see the Schedule A (Form 940) instructions
+or go to the website for the U.S. Postal Service at
+USPS.com.
+1b. More than one state (you’re a multi-state employ-
+er). Check the box on line 1b. Then, fill out Schedule A
+(Form 940) and attach it to your Form 940.
+2. If You Paid Wages in a State That Is Subject to
+Credit Reduction
+A state that hasn’t repaid money it borrowed from the
+federal government to pay unemployment benefits is
+called a credit reduction state. The U.S. Department of
+Labor determines which states are credit reduction states.
+If you paid wages that are subject to the unemployment
+tax laws of a credit reduction state, you may have to pay
+more FUTA tax when filing your Form 940.
+For tax year 2025, there are credit reduction states. If
+you paid wages subject to the unemployment tax laws of
+these states, check the box on line 2 and fill out
+Schedule A (Form 940). See the instructions for line 9
+before completing Schedule A (Form 940).
+Part 2: Determine Your FUTA Tax
+Before Adjustments
+If any line in Part 2 doesn’t apply, leave it blank.
+3. Total Payments to All Employees
+Report the total payments you made during the calendar
+year on line 3. Include payments for the services of all
+employees, even if the payments aren’t taxable for FUTA.
+Your method of payment doesn’t determine whether
+payments are wages. You may have paid wages hourly,
+daily, weekly, monthly, or yearly. You may have paid wages
+for piecework or as a percentage of profits. Include the
+following.
+• Compensation, such as the following.
+—Salaries, wages, commissions, fees, bonuses,
+vacation allowances, and amounts you paid to
+full-time, part-time, or temporary employees.
+• Fringe benefits, such as the following.
+—Sick pay (including third-party sick pay if liability is
+transferred to the employer). For details on sick pay,
+see Pub. 15-A, Employer’s Supplemental Tax Guide.
+—The value of goods, lodging, food, clothing, and
+non-cash fringe benefits.
+—Section 125 (cafeteria) plan benefits.
+• Retirement/Pension, such as the following.
+—Employer contributions to a 401(k) plan, payments
+to an Archer MSA, payments under adoption
+assistance programs, and contributions to SIMPLE
+retirement accounts (including elective salary
+reduction contributions).
+—Amounts deferred under a non-qualified deferred
+compensation plan.
+• Other payments, such as the following.
+—Tips of $20 or more in a month that your employees
+reported to you.
+—Payments made by a predecessor employer to the
+employees of a business you acquired.
+—Payments to nonemployees who are treated as your
+employees by the state unemployment tax agency.
+Caution: Wages may be subject to FUTA tax even if
+they’re excluded from your state’s unemployment tax.
+For details on wages and other compensation, see
+section 5 of Pub. 15-A.
+Example
+You had three employees. You paid $44,000 to Joan
+Rose, $8,000 to Sara Blue, and $16,000 to John Green.
+$44,000 Amount paid to Joan
+8,000 Amount paid to Sara
++ 16,000 Amount paid to John
+$68,000 Total payments to employees. You would enter this
+amount on line 3.
+4. Payments Exempt From FUTA Tax
+If you enter an amount on line 4, check the appropriate
+box or boxes on lines 4a through 4e to show the types of
+payments exempt from FUTA tax. You only report a
+payment as exempt from FUTA tax on line 4 if you
+included the payment on line 3.
+Some payments are exempt from FUTA tax because
+the payments aren’t included in the definition of wages or
+the services aren’t included in the definition of
+employment. Payments exempt from FUTA tax may
+include the following.
+• Fringe benefits, such as the following.
+—The value of certain meals and lodging.
+—Contributions to accident or health plans for
+employees, including certain employer payments to a
+health savings account or an Archer MSA.
+—Payments for benefits excluded under section 125
+(cafeteria) plans.
+• Group-term life insurance. For information about
+group-term life insurance and other payments for fringe
+benefits that may be exempt from FUTA tax, see Pub.
+15-B.
+• Retirement/Pension, such as employer contributions
+to a qualified plan, including a SIMPLE retirement account
+(other than elective salary reduction contributions) and a
+401(k) plan.
+• Dependent care, such as payments (up to $5,000 per
+employee, $2,500 if married filing separately) for a
+qualifying person’s care that allows your employees to
+work and that would be excludable by the employee under
+section 129.
+Instructions for Form 940 (2025) 9
+• Other payments, such as the following.
+—All non-cash payments and certain cash payments
+for agricultural labor, and all payments to H-2A visa
+workers. See For Agricultural Employers, earlier, or
+Pub. 15.
+—Payments made under a workers’ compensation law
+because of a work-related injury or sickness. See
+section 6 of Pub. 15-A.
+—Payments for domestic services if you didn’t pay
+cash wages of $1,000 or more (for all domestic
+employees) in any calendar quarter in 2024 or 2025,
+or if you file Schedule H (Form 1040). See For
+Employers of Household Employees, earlier, or Pub.
+926.
+—Payments for services provided to you by your
+parent, spouse, or child under the age of 21. See
+section 3 of Pub. 15.
+—Payments for certain fishing activities. See Pub. 334,
+Tax Guide for Small Business.
+—Payments to certain statutory employees. See
+section 1 of Pub. 15-A.
+—Payments to nonemployees who are treated as your
+employees by the state unemployment tax agency.
+See section 3306 and its related regulations for more
+information about FUTA taxation of retirement plan
+contributions, dependent care payments, and other
+payments.
+For more information on payments exempt from FUTA
+tax, see section 15 of Pub. 15.
+Example
+You had three employees. You paid $44,000 to Joan
+Rose, including $2,000 in health insurance benefits. You
+paid $8,000 to Sara Blue, including $500 in retirement
+benefits. You paid $16,000 to John Green, including
+$2,000 in health and retirement benefits.
+$ 2,000 Health insurance benefits for Joan
+500 Retirement benefits for Sara
++ 2,000 Health and retirement benefits for John
+$4,500 Total payments exempt from FUTA tax. You would enter
+this amount on line 4 and check boxes 4a and 4c.
+5. Total of Payments Made to Each Employee in
+Excess of $7,000
+Only the first $7,000 you paid to each employee in a
+calendar year, after subtracting any payments exempt
+from FUTA tax, is subject to FUTA tax. This $7,000 is
+called the FUTA wage base.
+Enter on line 5 the total of the payments over the FUTA
+wage base you paid to each employee during 2025 after
+subtracting any payments exempt from FUTA tax
+shown on line 4.
+Following Our Example
+You had three employees. You paid $44,000 to Joan Rose, $8,000 to
+Sara Blue, and $16,000 to John Green, including a total of $4,500 in
+payments exempt from FUTA tax for all three employees. To
+determine the total payments made to each employee in excess of the
+FUTA wage base, the payments exempt from FUTA tax and the FUTA
+wage base must be subtracted from total payments. These amounts
+are shown in parentheses.
+Employees Joan Sara John
+Total payments to employees $44,000 $8,000 $16,000
+Payments exempt from FUTA tax (2,000) (500) (2,000)
+FUTA wage base (7,000) (7,000) (7,000)
+$35,000 $ 500 $ 7,000
+Total of payments made to each employee in excess of
+the FUTA wage base. You would enter this amount on
+line 5.
+$42,500
+If you’re a successor employer... When you figure the
+payments made to each employee in excess of the FUTA
+wage base, you may include the payments that the
+predecessor made to the employees who continue to
+work for you only if the predecessor was an employer for
+FUTA tax purposes resulting in the predecessor being
+required to file Form 940.
+Example for Successor Employers
+During the calendar year, the predecessor employer paid $5,000 to Susan
+Jones. You acquired the predecessor’s business. After the acquisition, you
+employed Susan and paid Susan an additional $3,000 in wages. None of
+the amounts paid to Susan were payments exempt from FUTA tax.
+$5,000 Wages paid by predecessor employer
++ 3,000 Wages paid by you
+$8,000 Total payments to Susan. You would include this amount on
+line 3.
+$8,000 Total payments to Susan
+– 7,000 FUTA wage base
+$1,000 Payments made to Susan in excess of the FUTA wage base
+$1,000 Payments made to Susan in excess of the FUTA wage base
++ 5,000 Taxable FUTA wages paid by predecessor employer
+$6,000 You would include this amount on line 5.
+6. Subtotal
+To figure your subtotal, add the amounts on lines 4 and 5
+and enter the result on line 6.
+line 4
++ line 5
+line 6
+7. Total Taxable FUTA Wages
+To figure your total taxable FUTA wages, subtract line 6
+from line 3 and enter the result on line 7.
+line 3
+− line 6
+line 7
+10 Instructions for Form 940 (2025)
+8. FUTA Tax Before Adjustments
+To figure your total FUTA tax before adjustments, multiply
+line 7 by 0.006 and then enter the result on line 8.
+line 7
+x 0.006
+line 8
+Part 3: Determine Your Adjustments
+If any line in Part 3 doesn’t apply, leave it blank.
+9. If ALL of the Taxable FUTA Wages You Paid
+Were Excluded From State Unemployment Tax...
+Caution: Line 9 doesn’t apply to FUTA wages on which
+you paid no state unemployment tax only because the
+state assigned you a tax rate of 0%.
+If all of the taxable FUTA wages you paid were
+excluded from state unemployment tax, multiply line 7 by
+0.054 and enter the result on line 9.
+line 7
+x 0.054
+line 9
+If you weren’t required to pay state unemployment tax
+because all of the wages you paid were excluded from
+state unemployment tax, you must pay FUTA tax at the
+6.0% (0.060) rate. For example, if your state
+unemployment tax law excludes wages paid to corporate
+officers or employees in specific occupations, and the only
+wages you paid were to corporate officers or employees in
+those specific occupations, you must pay FUTA tax on
+those wages at the full FUTA rate of 6.0% (0.060). When
+you figured the FUTA tax before adjustments on line 8, it
+was based on the maximum allowable credit (5.4%) for
+state unemployment tax payments. Because you didn’t
+pay state unemployment tax, you don’t have a credit and
+must figure this adjustment.
+If line 9 applies to you, lines 10 and 11 don’t apply to
+you. Therefore, leave lines 10 and 11 blank. Don’t fill out
+the worksheet in these instructions. Complete Schedule A
+(Form 940) only if you’re a multi-state employer.
+10. If SOME of the Taxable FUTA Wages You Paid
+Were Excluded From State Unemployment Tax,
+or You Paid Any State Unemployment Tax Late...
+You must fill out the worksheet, later, if:
+• Some of the taxable FUTA wages you paid were
+excluded from state unemployment tax, or
+• Any of your payments of state unemployment tax were
+late.
+The worksheet takes you step by step through the process
+of figuring your credit. At the end of the worksheet, you’ll
+find an example of how to use it. Don’t complete the
+worksheet if line 9 applied to you (see the instructions for
+line 9, earlier).
+Before you can properly fill out the worksheet, you
+will need to gather the following information.
+• Taxable FUTA wages (Form 940, line 7).
+• Taxable state unemployment wages (state and federal
+wage bases may differ).
+• The experience rates assigned to you by the states
+where you paid wages.
+• The amount of state unemployment taxes you paid on
+time. “On time” means that you paid the state
+unemployment taxes by the due date for filing Form 940.
+• The amount of state unemployment taxes you paid late.
+“Late” means after the due date for filing Form 940.
+Caution: Don’t include any penalties, interest, or
+unemployment taxes deducted from your employees’ pay
+in the amount of state unemployment taxes. Also, don’t
+include as state unemployment taxes any special
+administrative taxes or voluntary contributions you paid to
+get a lower assigned experience rate or any surcharges,
+excise taxes, or employment and training taxes. These
+items are generally listed as separate items on the state’s
+quarterly wage report.
+For line 3 of the worksheet, the following apply.
+• If any of the experience rates assigned to you were less
+than 5.4% for any part of the calendar year, you must list
+each assigned experience rate separately on the
+worksheet.
+• If you were assigned six or more experience rates that
+were less than 5.4% for any part of the calendar year, you
+must use another sheet to figure the additional credits and
+then include those additional credits in your line 3 total.
+After you complete the worksheet, enter the amount
+from line 7 of the worksheet on Form 940, line 10. Don’t
+attach the worksheet to your Form 940. Keep it with
+your records.
+Instructions for Form 940 (2025) 11
+Worksheet—Line 10
+Keep for Your Records
+Read the Example on the next page before completing this worksheet.
+Use this worksheet to figure your credit if:
+Some of the wages you paid were excluded from state unemployment tax, OR
+You paid any state unemployment tax late.
+For this worksheet, don’t round your figures.
+Before you begin:
+Before you can properly fill out this worksheet, you must gather the following information.
+■ Taxable FUTA wages (Form 940, line 7).
+■ Taxable state unemployment wages.
+■ The experience rates assigned to you by the states where you paid wages.
+■ The amount of state unemployment taxes you paid on time. “On time” means that you paid the state unemployment taxes by the due date for filing Form 940.
+Include any state unemployment taxes you paid on nonemployees who were treated as employees by your state unemployment agency.
+■ The amount of state unemployment taxes you paid late. “Late” means after the due date for filing Form 940.
+1. Maximum allowable credit — Enter Form 940, line 7
+(Form 940, line 7 x 0.054 = line 1).
+. x 0.054 on line 1 1. .
+2. Credit for timely state unemployment tax payments — How much did you pay on time? 2. .
+• If line 2 is equal to or more than line 1, STOP here. You’ve completed the worksheet. Leave Form 940, line 10, blank.
+• If line 2 is less than line 1, continue this worksheet.
+3. Additional credit — Were ALL of your assigned experience rates 5.4% or more?
+• If yes, enter zero on line 3. Then, go to line 4 of this worksheet.
+• If no, fill out the computations below. List ONLY THOSE STATES for which your assigned experience rate for any part of the
+calendar year was less than 5.4%.
+State Computation rate
+The difference between 5.4%
+(0.054) and your assigned
+experience rate (0.054 – .XXX
+(assigned experience rate) =
+computation rate)
+Taxable state
+unemployment wages at
+assigned experience rate
+Additional credit
+1. . x . = .
+2. . x . = .
+3. . x . = .
+4. . x . = .
+5. . x . = .
+If you need more lines, use another sheet and include those
+additional credits in the total.
+Total .
+Enter the total on line 3.
+3. .
+4. Subtotal (line 2 + line 3 = line 4) 4. .
+• If line 4 is equal to or more than line 1, STOP here. You’ve completed the worksheet. Leave Form 940, line 10, blank.
+• If line 4 is less than line 1, continue this worksheet.
+5. Credit for paying state unemployment taxes late:
+5a. What is your remaining allowable credit? (line 1 – line 4 = line 5a) 5a. .
+5b. How much state unemployment tax did you pay late? 5b. .
+5c. Which is smaller, line 5a or line 5b? Enter the smaller number here. 5c. .
+5d. Your allowable credit for paying state unemployment taxes late (line 5c x 0.900 = line 5d) 5d. .
+6. Your FUTA credit (line 4 + line 5d = line 6) 6. .
+• If line 6 is equal to or more than line 1, STOP here. You’ve completed the worksheet. Leave Form 940, line 10, blank.
+• If line 6 is less than line 1, continue this worksheet.
+7. Your adjustment (line 1 – line 6 = line 7) Enter line 7 from this worksheet on
+Form 940, line 10.
+7. .
+Don’t attach this worksheet to your Form 940. Keep it for your records.
+12 Instructions for Form 940 (2025)
+Example for Using the Worksheet
+Jill Brown and Tom White are corporate officers whose wages are
+excluded from state unemployment tax in your state. Jack Davis’s wages
+aren’t excluded from state unemployment tax. During 2025, you paid
+$44,000 to Jill, $22,000 to Tom, and $16,000 to Jack. Your state’s wage
+base is $8,000. You paid some state unemployment tax on time, some
+late, and some remains unpaid.
+Here are the records:
+Total taxable FUTA wages (Form 940, line 7) . . . . . . . $21,000.00
+Taxable state unemployment wages . . . . . . . . . . . . $ 8,000.00
+Experience rate for 2025 . . . . . . . . . . . . . . . . . . . 0.041 (4.1%)
+State unemployment tax paid on time . . . . . . . . . . . . $100.00
+State unemployment tax paid late . . . . . . . . . . . . . . $78.00
+State unemployment tax not paid . . . . . . . . . . . . . . $150.00
+1. Maximum allowable credit
+$21,000.00 (Form 940, line 7)
+x 0.054 (maximum credit rate)
+$1,134.00 1. $1,134.00
+2. Credit for timely state unemployment tax
+payments
+2. $100.00
+3. Additional credit
+0.054 (maximum credit rate) $8,000
+– 0.041 (your experience rate) x 0.013
+0.013 (your computation rate) $104.00 3. $104.00
+4. Subtotal (line 2 + line 3)
+$100.00
++ 104.00
+$204.00 4. $204.00
+5. Credit for paying state unemployment taxes late
+5a. Remaining allowable credit (line 1 – line 4)
+$1,134.00
+– 204.00
+$930.00 5a. $930.00
+5b. State unemployment tax paid late 5b. $78.00
+5c. Which is smaller, line 5a or line 5b? 5c. $78.00
+5d. Allowable credit (for paying
+late)
+$78.00
+x 0.900
+$70.20 5d. $70.20
+6. Your FUTA credit (line 4 + line 5d)
+$204.00
++ 70.20
+$274.20 6. $274.20
+7. Your adjustment (line 1 – line 6)
+$1,134.00
+– 274.20
+$859.80 7. $859.80
+You would enter line 7 from this worksheet
+on Form 940, line 10.
+11. If Credit Reduction Applies...
+If you paid FUTA taxable wages that were also subject to
+state unemployment taxes in any states that are subject to
+credit reduction, enter the total amount from Schedule A
+(Form 940) on Form 940, line 11. However, if you entered
+an amount on line 9 because all the FUTA taxable wages
+you paid were excluded from state unemployment tax,
+skip line 11 and go to line 12.
+Part 4: Determine Your FUTA Tax and
+Balance Due or Overpayment
+If any line in Part 4 doesn’t apply, leave it blank.
+12. Total FUTA Tax After Adjustments
+Add the amounts shown on lines 8, 9, 10, and 11, and
+enter the result on line 12.
+line 8
+line 9
+line 10
++ line 11
+line 12
+Caution: If line 9 is greater than zero, lines 10 and 11
+must be zero because they don’t apply.
+13. FUTA Tax Deposited for the Year
+Enter the amount of FUTA tax that you deposited for the
+year, including any overpayment that you applied from a
+prior year.
+14. Balance Due
+If line 13 is less than line 12, enter the difference on
+line 14.
+line 12
+– line 13
+line 14
+If line 14 is:
+• More than $500, you must deposit your tax—see When
+Must You Deposit Your FUTA Tax, earlier;
+• $500 or less, you can deposit your tax, pay your tax by
+EFT, pay your tax with a credit card or debit card, pay your
+tax by EFW if filing electronically, or pay your tax by check
+or money order with your return—for more information on
+electronic payment options, go to IRS.gov/Pay; or
+• Less than $1, you don’t have to pay it.
+Caution: If you don’t deposit as required and pay any
+balance due with Form 940, you may be subject to a
+penalty.
+If you pay by EFT, credit card, or debit card, file your
+return using the Without a payment address under Where
+Do You File, earlier. Don’t file Form 940-V, Payment
+Voucher.
+Instructions for Form 940 (2025) 13
+What if you can’t pay in full? If you can’t pay the full
+amount of tax you owe, you can apply for an installment
+agreement online. You can apply for an installment
+agreement online if:
+• You can’t pay the full amount shown on line 14,
+• The total amount you owe is $25,000 or less, and
+• You can pay the liability in full in 24 months.
+To apply using the Online Payment Agreement
+Application, go to IRS.gov/OPA.
+Under an installment agreement, you can pay what you
+owe in monthly installments. There are certain conditions
+you must meet to enter into and maintain an installment
+agreement, such as paying the liability within 24 months,
+and making all required deposits and timely filing tax
+returns during the length of the agreement.
+If your installment agreement is accepted, you will be
+charged a fee and you will be subject to penalties and
+interest on the amount of tax not paid by the due date of
+the return.
+15a. Overpayment
+If line 13 is more than line 12, enter the difference on
+line 15a.
+line 13
+– line 12
+line 15a
+15b. Choose to have your overpayment applied to
+your next return or refunded. If you deposited more
+than the FUTA tax due for the year, you may choose to
+have us either:
+• Apply the overpayment to your next return, or
+• Send you a refund (complete lines 15c–15e for direct
+deposit).
+Check the appropriate box on line 15b to tell us which
+option you select. Check only one box on line 15b. If you
+don’t check either box or if you check both boxes, we will
+generally apply the overpayment to your next return.
+Regardless of any box you check or don’t check, we may
+apply your overpayment to any past due tax account that
+is shown in our records under your EIN. If you check the
+box to have your overpayment refunded but you don’t
+complete lines 15c–15e for direct deposit, your refund
+may be delayed.
+If line 15a is less than $1, we will send you a refund or
+apply it to your next return only if you ask for it in writing.
+Direct Deposit
+The benefits of a direct deposit include a faster refund, the
+added security of a paperless payment, and the savings of
+tax dollars associated with the reduced processing costs.
+To have your refund direct deposited, you must complete
+lines 15c–15e.
+15c. Routing number. The routing number must be nine
+digits. The first two digits must be 01 through 12 or 21
+through 32. Verify that your financial institution will accept
+a direct deposit.
+Ask your financial institution for the correct routing
+number to enter on line 15c if:
+• The routing number on a deposit slip is different from
+the routing number on your checks,
+• Your deposit is to a savings account that doesn’t allow
+you to write checks, or
+• Your checks state they’re payable through a financial
+institution different from the one at which you have your
+checking account.
+15d. Type of account. Check the appropriate box for the
+type of account. Don’t check more than one box. You must
+check the correct box to ensure your deposit is accepted.
+If you’re unsure which box to check for the account you
+wish the deposit to be applied to, consult your financial
+institution.
+15e. Account number. The account number can be up
+to 17 characters (both numbers and letters). Include
+hyphens but omit spaces and special symbols. Enter the
+number from left to right and leave any unused boxes
+blank.
+If the direct deposit to your account is different from the
+amount you expected, you’ll receive an explanation in the
+mail about 2 weeks after your refund is deposited.
+Reasons Your Direct Deposit Request Will Be
+Rejected
+If any of the following apply, your direct deposit request
+will be rejected and a check will be sent instead.
+• The name on your account doesn’t match the name on
+the refund, and your financial institution won’t allow a
+refund to be deposited unless the name on the refund
+matches the name on the account.
+• Your business is a corporation and the receiving
+financial institution is a foreign bank or a foreign branch of
+a U.S. bank.
+• Any numbers or letters on lines 15c–15e are crossed
+out or whited out.
+Caution: The IRS isn’t responsible for a lost refund if you
+enter the wrong account information. Check with your
+financial institution to get the correct routing and account
+numbers and to make sure your direct deposit will be
+accepted.
+Part 5: Report Your FUTA Tax Liability
+by Quarter Only if Line 12 Is More
+Than $500
+Fill out Part 5 only if line 12 is more than $500. If line 12 is
+$500 or less, leave Part 5 blank and go to Part 6.
+16. Report the Amount of Your FUTA Tax
+Liability for Each Quarter
+Enter the amount of your FUTA tax liability for each
+quarter on lines 16a–16d. Don’t enter the amount you
+deposited. If you had no liability for a quarter, leave the
+line blank.
+16a. 1st
+quarter (January 1 to March 31)
+16b. 2nd
+quarter (April 1 to June 30)
+16c. 3rd
+quarter (July 1 to September 30)
+14 Instructions for Form 940 (2025)
+16d. 4th
+quarter (October 1 to December 31)
+To figure your FUTA tax liability for the fourth quarter,
+complete Form 940 through line 12. Then, copy the
+amount from line 12 onto line 17. Lastly, subtract the sum
+of lines 16a through 16c from line 17 and enter the result
+on line 16d.
+Example
+You paid wages on March 28 and your FUTA tax on those wages was
+$200. You weren’t required to make a deposit for the 1st quarter
+because your accumulated FUTA tax was $500 or less. You paid
+additional wages on June 28 and your FUTA tax on those wages was
+$400. Because your accumulated FUTA tax for the 1st and 2nd
+quarters exceeded $500, you were required to make a deposit of $600
+by July 31.
+You would enter $200 on line 16a because your liability for the 1st
+quarter was $200. You would also enter $400 on line 16b to show your
+2nd
+quarter liability.
+Tip: In years when there are credit reduction states, you
+must include liabilities owed for credit reduction with your
+fourth quarter deposit. You may deposit the anticipated
+extra liability throughout the year, but it isn’t due until the
+due date for the deposit for the fourth quarter, and the
+associated liability should be recorded as being incurred
+in the fourth quarter.
+17. Total Tax Liability for the Year
+Your total tax liability for the year must equal line 12. Copy
+the amount from line 12 onto line 17.
+Part 6: May We Speak With Your
+Third-Party Designee?
+If you want to allow an employee, your paid tax preparer,
+or another person to discuss your Form 940 with the IRS,
+check the “Yes” box. Then, enter the name and phone
+number of the person you choose as your designee. Be
+sure to give us the specific name of a person—not the
+name of the firm that prepared your tax return.
+Have your designee select a five-digit personal
+identification number (PIN) that they must use as
+identification when talking to the IRS about your form.
+By checking “Yes,” you authorize us to talk to your
+designee about any questions that we may have while we
+process your return. Your authorization applies only to this
+form, for this year; it doesn’t apply to other forms or other
+tax years.
+You’re authorizing your designee to:
+• Give us any information that is missing from your return,
+• Ask us for information about processing your return,
+and
+• Respond to certain IRS notices that you have shared
+with your designee about math errors and in preparing
+your return. We won’t send notices to your designee.
+You’re not authorizing your designee to bind you to
+anything (including additional tax liability) or to otherwise
+represent you before the IRS. If you want to expand your
+designee’s authorization, see Pub. 947.
+The authorization will automatically expire 1 year after
+the due date for filing your Form 940 (regardless of
+extensions). If you or your designee wants to end the
+authorization before it expires, write to the IRS office for
+your location using the Without a payment address under
+Where Do You File, earlier.
+Part 7: Sign Here (Approved Roles)
+You MUST Fill Out Both Pages of This Form and
+SIGN It
+Failure to sign will delay the processing of your return.
+On page 2, in Part 7, sign and print your name and title.
+Then, enter the date and the best daytime telephone
+number, including area code, where we can reach you if
+we have any questions.
+Who Must Sign Form 940?
+The following persons are authorized to sign the return for
+each type of business entity.
+• Sole proprietorship—The individual who owns the
+business.
+• Partnership (including an LLC treated as a
+partnership) or unincorporated organization—A
+responsible and duly authorized partner, member, or
+officer having knowledge of its affairs.
+• Corporation (including an LLC treated as a
+corporation)—The president, the vice president, or
+another principal officer duly authorized to sign.
+• Single-member LLC treated as a disregarded entity
+for federal income tax purposes—The owner of the
+LLC or a principal officer duly authorized to sign.
+• Trust or estate—The fiduciary.
+Form 940 may also be signed by a duly authorized
+agent of the taxpayer if a valid power of attorney or
+reporting agent authorization (Form 8655) has been filed.
+Alternative signature method. Corporate officers or
+duly authorized agents may sign Form 940 by rubber
+stamp, mechanical device, or computer software program.
+For details and required documentation, see Rev. Proc.
+2005-39, 2005-28 I.R.B. 82, available at IRS.gov/irb/
+2005-28_IRB#RP-2005-39.
+Paid preparers. A paid preparer must sign Form 940 and
+provide the information in the Paid Preparer Use Only
+section of Part 7 if the preparer was paid to prepare Form
+940 and isn’t an employee of the filing entity. Paid
+preparers must sign paper returns with a manual
+signature. The preparer must give you a copy of the return
+in addition to the copy to be filed with the IRS.
+If you’re a paid preparer, enter your Preparer Tax
+Identification Number (PTIN) in the space provided.
+Include your complete address. If you work for a firm,
+enter the firm’s name and the EIN of the firm. You can
+apply for a PTIN online or by filing Form W-12. For more
+information about applying for a PTIN online, go to
+IRS.gov/PTIN. You can’t use your PTIN in place of the EIN
+of the tax preparation firm.
+Generally, don’t complete the Paid Preparer Use Only
+section if you’re filing the return as a reporting agent and
+have a valid Form 8655 on file with the IRS. However, a
+reporting agent must complete this section if the reporting
+Instructions for Form 940 (2025) 15
+agent offered legal advice, for example, by advising the
+client on determining whether its workers are employees
+or independent contractors for federal tax purposes.
+Privacy Act and Paperwork Reduction Act Notice. We
+ask for the information on Form 940 to carry out the
+Internal Revenue laws of the United States. We need it to
+figure and collect the right amount of tax. Subtitle C,
+Employment Taxes, of the Internal Revenue Code
+imposes unemployment tax under the Federal
+Unemployment Tax Act. Form 940 is used to determine
+the amount of the taxes that you owe. Section 6011
+requires you to provide the requested information if the tax
+is applicable to you. Section 6109 requires you to provide
+your identification number. If you fail to provide this
+information in a timely manner, or provide false or
+fraudulent information, you may be subject to penalties.
+You’re not required to provide the information requested
+on a form that is subject to the Paperwork Reduction Act
+unless the form displays a valid OMB control number.
+Books or records relating to a form or its instructions must
+be retained as long as their contents may become
+material in the administration of any Internal Revenue law.
+Generally, tax returns and return information are
+confidential, as required by section 6103. However,
+section 6103 allows or requires the IRS to disclose or give
+the information shown on your tax return to others as
+described in the Code. For example, we may disclose your
+tax information to the Department of Justice for civil and
+criminal litigation, and to cities, states, the District of
+Columbia, and U.S. commonwealths and territories to
+administer their tax laws. We may also disclose this
+information to other countries under a tax treaty, to federal
+and state agencies to enforce federal nontax criminal
+laws, or to federal law enforcement and intelligence
+agencies to combat terrorism.
+The time needed to complete and file Form 940 will
+vary depending on individual circumstances. The
+estimated burden for employers filing Form 940 is
+approved under OMB control number 1545-0029 and is
+included in the estimates shown in the instructions for their
+employment tax return.
+16 Instructions for Form 940 (2025)

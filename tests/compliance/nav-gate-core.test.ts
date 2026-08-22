@@ -319,7 +319,10 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the nine books screens plus Inventory Auditing", () => {
+  it("Accounting holds the ten books screens plus Inventory Auditing", () => {
+    // books-31 added Company Information. This assertion is an exact list on
+    // purpose: it fails when a screen is added AND when one silently vanishes,
+    // and it caught the new entry the moment the nav registry changed.
     const hrefs = adminNav
       .filter((i) => i.group === ACCOUNTING_GROUP)
       .map((i) => i.href)
@@ -327,6 +330,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(hrefs).toEqual(
       [
         "/admin/books/accounts",
+        "/admin/books/company",
         "/admin/books/bank",
         "/admin/books/bills",
         "/admin/books/conversion",

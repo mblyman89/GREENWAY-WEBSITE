@@ -153,6 +153,7 @@ export const adminNav: AdminNavItem[] = [
   // that permission also grants manager and readonly, who would see the links
   // and then hit a raw database refusal.
   { label: "Inventory Auditing", href: "/admin/inventory/audits", permission: "inventory.audit", icon: "\ud83d\udd0d", group: "Accounting" }, // 🔍 blind counts, variance review, work papers — NOT /admin/audit, which is the security log
+  { label: "Company Information", href: "/admin/books/company", permission: "books.view", icon: "\ud83c\udfe2", group: "Accounting" }, // office building: the one row every form reads - EIN, legal name, signer, state accounts (books-31)
   { label: "General Journal", href: "/admin/books/journal", permission: "books.view", icon: "\u270d\ufe0f", group: "Accounting" }, // writing hand: manual entries
   { label: "Conversion", href: "/admin/books/conversion", permission: "books.view", icon: "\ud83d\udd01", group: "Accounting" }, // leaving Cultivera and Sage, 2026-11-01
   { label: "Bills & 280E", href: "/admin/books/bills", permission: "books.view", icon: "\ud83e\uddfe", group: "Accounting" }, // receipt: what survives 280E and what it takes
