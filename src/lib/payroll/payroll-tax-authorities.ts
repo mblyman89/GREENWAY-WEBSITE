@@ -470,6 +470,56 @@ export const LNI_MINIMUM_WAGE_ANNOUNCEMENT: GuidanceAuthority = {
 };
 
 /**
+ * THE FEDERAL MINIMUM WAGE — the other floor, and the one that was missing.
+ *
+ * WHY IT IS HERE AND NOT WITH THE WASHINGTON FIGURE ABOVE. They are different
+ * numbers under different statutes, doing different jobs, on different clocks.
+ * L&I recalculates Washington's every September 30 by CPI-W. The federal wage
+ * has not moved since July 2009 because it moves only by act of Congress.
+ * Filing them as one authority would imply a relationship that does not exist.
+ *
+ * WHY A PAYROLL SYSTEM IN WASHINGTON NEEDS THE FEDERAL FIGURE AT ALL — which is
+ * the interesting part, because Washington's is more than twice as high and
+ * therefore always governs what an employee must be PAID. It is not used for
+ * pay. It is used for GARNISHMENT, and garnishment runs two independent tests:
+ *
+ *   15 U.S.C. 1673(a)(2) — protects 30 × the FEDERAL minimum wage per workweek
+ *   RCW 6.27.150         — protects 35 × the STATE minimum wage per workweek
+ *
+ * The employee keeps whichever protection is greater, so both must be computed
+ * and neither may be assumed. At $7.25 the federal floor is $217.50 a week;
+ * Washington's, at $17.13 × 35, is $599.55. Washington will nearly always bind
+ * — but "nearly always" is a fact the software has to DEMONSTRATE by running
+ * both tests, not one it may take for granted.
+ *
+ * HOW THE GAP WAS FOUND, in books-37: by running a real creditor order through
+ * the assembled net-pay chain rather than by reading code. Every order refused,
+ * because the registry had no federal row. `garnishment-core.ts` — the whole of
+ * books-36, fully tested — could not compute a single withholding for want of
+ * this one number. Correct code that can never execute is standing rule 50 in
+ * its most expensive form, and no unit test could have caught it: each half was
+ * green in isolation.
+ *
+ * ON WEIGHT, STATED HONESTLY. The wage is fixed by 29 U.S.C. 206(a)(1), which
+ * this repository has not mirrored. What IS mirrored, and re-verified verbatim
+ * on every commit, is DOL Fact Sheet #30 — the enforcing division's own
+ * publication, which states the figure three times, once as a section heading.
+ * So this is the agency's published statement of a figure set elsewhere:
+ * `agency_guidance`, not `statute`. Mirroring 29 U.S.C. 206 would upgrade it,
+ * and that is recorded as follow-up work rather than quietly assumed done.
+ */
+export const FEDERAL_MINIMUM_WAGE_FS30: GuidanceAuthority = {
+  id: "federal-minimum-wage-fs30",
+  kind: "agency_guidance",
+  cite: "U.S. DOL, Wage and Hour Division, Fact Sheet #30 (Dec. 2024)",
+  quote:
+    "The wage garnishment provisions of the CCPA set the maximum amount that may be garnished in any workweek or pay period, regardless of the number of garnishment orders received by the employer. For ordinary garnishments (i.e., those not for support, bankruptcy, or any state or federal tax), the weekly amount may not exceed the lesser of two figures: 25% of the employee's disposable earnings, or the amount by which an employee's disposable earnings are greater than 30 times the federal minimum wage (currently $7.25 an hour).",
+  soWhat:
+    "This is the number the garnishment calculator was stuck waiting for, and without it not one order could be computed. Thirty times $7.25 is $217.50 protected per workweek, so $435.00 on your biweekly cheques, before an ordinary creditor may take anything. Washington protects thirty-five times the STATE minimum wage instead, which is far more, and the employee always keeps the better of the two - so both get calculated and the calculator tells you which one actually bound. Notice the word 'currently' in the quote: that is exactly why the rate is filed with dates on it rather than as a constant, and why a paycheck dated after the row expires will stop and ask for a fresh source instead of assuming nothing changed.",
+  source: "https://www.dol.gov/agencies/whd/fact-sheets/30-cppa",
+};
+
+/**
  * ⭐ THE SINGLE MOST COUNTERINTUITIVE FACT IN WASHINGTON PAYROLL, straight from
  * the agency's own employer page. Two programs, one quarterly return, two
  * different wage bases.
@@ -1370,6 +1420,7 @@ export const PAYROLL_TAX_AUTHORITIES: readonly GuidanceAuthority[] = [
   RCW_50B_04_080_WA_CARES,
   WA_CARES_UNCAPPED,
   LNI_MINIMUM_WAGE_ANNOUNCEMENT,
+  FEDERAL_MINIMUM_WAGE_FS30,
   // late filing / late payment — penalties and interest
   RCW_50_12_220_ESD_LATE,
   RCW_50_24_040_ESD_INTEREST,

@@ -122,8 +122,28 @@ export type PaycheckFacts = {
   readonly grossCents: number;
   /**
    * Amounts REQUIRED BY LAW to be withheld, in cents: federal income tax,
-   * social security, medicare, and in Washington the employee share of PFML
-   * and WA Cares. NOTHING ELSE.
+   * social security, medicare, and in Washington the employee share of PFML,
+   * WA Cares, and the L&I medical-aid premium. NOTHING ELSE.
+   *
+   * ⚠ DO NOT ASSEMBLE THIS FIGURE BY HAND. `requiredByLawFor()` in
+   * `net-pay-core.ts` is the single answer to "what counts", and it takes the
+   * whole computed `PaycheckTaxes` rather than a pre-summed number precisely so
+   * no caller gets to decide the membership question for itself.
+   *
+   * THE L&I LINE WAS MISSING HERE UNTIL books-37, and this comment was the
+   * thing that said so. It read "the employee share of PFML and WA Cares.
+   * NOTHING ELSE", which omitted the L&I medical-aid half that RCW 51.16.140(1)
+   * commands the employer to deduct ("shall deduct", with subsection (2) making
+   * a wrong deduction a gross misdemeanor). An amount a statute compels on pain
+   * of criminal liability is the paradigm case of an amount "required by law to
+   * be withheld" under 15 U.S.C. 1672(b).
+   *
+   * The direction of the error is what makes it worth this many words: leaving
+   * L&I out INFLATES disposable earnings, so a creditor garnishment takes 25%
+   * of a number that is too big. It over-withholds, permanently, from someone
+   * already being garnished, and it is invisible on a stub showing only the
+   * final figure. The full reasoning and the DOL Fact Sheet #30 support are in
+   * the `net-pay-core.ts` header.
    */
   readonly requiredByLawWithheldCents: number;
   /**

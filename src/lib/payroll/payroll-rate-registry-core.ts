@@ -95,7 +95,22 @@ export type PayrollRateKey =
   | "lni_employee_rate"
   | "lni_employer_rate"
   | "fica_oasdi_wage_base"
-  | "wa_minimum_wage";
+  | "wa_minimum_wage"
+  /**
+   * The FEDERAL minimum hourly wage. Distinct from `wa_minimum_wage`, and the
+   * two are never interchangeable.
+   *
+   * WHY BOTH EXIST. 15 U.S.C. 1673(a)(2) measures the federal garnishment floor
+   * against thirty times the FEDERAL wage; RCW 6.27.150 measures Washington's
+   * against thirty-five times the STATE wage. Washington's is more than double
+   * the federal one, so the state floor almost always binds at Greenway — but
+   * "almost always" is not a rule the software may assume, so both are supplied
+   * and the garnishment engine decides which governs.
+   *
+   * Added in books-37 after running the assembled net-pay chain and watching
+   * every garnishment refuse for want of this single number.
+   */
+  | "federal_minimum_wage";
 
 export const ALL_PAYROLL_RATE_KEYS: readonly PayrollRateKey[] = [
   "pfml_total",
@@ -108,6 +123,7 @@ export const ALL_PAYROLL_RATE_KEYS: readonly PayrollRateKey[] = [
   "lni_employer_rate",
   "fica_oasdi_wage_base",
   "wa_minimum_wage",
+  "federal_minimum_wage",
 ];
 
 /**
@@ -581,5 +597,11 @@ export function describeKey(key: PayrollRateKey): string {
       return "Social Security wage base";
     case "wa_minimum_wage":
       return "Washington minimum wage";
+    case "federal_minimum_wage":
+      // Said as "federal", explicitly, because the refusal message this feeds
+      // is read next to the Washington one and the two floors are different
+      // statutes with different multipliers. "Minimum wage" alone would leave
+      // Michael guessing which of the two is missing.
+      return "federal minimum wage";
   }
 }

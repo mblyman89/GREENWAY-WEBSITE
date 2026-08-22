@@ -288,6 +288,87 @@ const MINIMUM_WAGE_ROWS: PayrollRateRow[] = [
   },
 ];
 
+/**
+ * THE FEDERAL MINIMUM WAGE — a different number, for a different statute.
+ *
+ * WHY THIS ROW WAS ADDED IN books-37. Not from a code review. From running the
+ * assembled net-pay chain against a real creditor order and watching it refuse:
+ *
+ *   "I cannot cap this garnishment, because the federal ceiling is measured
+ *    against thirty times the federal minimum hourly wage and no federal figure
+ *    is on file for this pay date."
+ *
+ * That refusal was correct, and it meant `garnishment-core.ts` — the entire
+ * books-36 slice, the full CCPA support matrix, all of it tested — could not
+ * compute one order for want of a single missing input. The arithmetic was
+ * never the problem. The registry was.
+ *
+ * WHY IT IS NOT THE STATE FIGURE. 15 U.S.C. 1673(a)(2) protects thirty times
+ * the FEDERAL wage; RCW 6.27.150 protects thirty-five times the STATE wage. At
+ * $7.25 versus $17.13 the state floor is far higher and will govern nearly
+ * every Greenway cheque — but the engine has to run BOTH tests to know that,
+ * and substituting the state figure for the federal one would silently change
+ * which law is being applied.
+ *
+ * WHERE THE NUMBER COMES FROM. DOL Wage and Hour Division Fact Sheet #30
+ * (December 2024), mirrored in this repository and verified character-for-
+ * character on every commit, which states it three times, including as a
+ * section heading: "MAXIMUM GARNISHMENT OF DISPOSABLE EARNINGS (GENERALLY)
+ * BASED ON CURRENT FEDERAL MINIMUM WAGE OF $7.25 PER HOUR". Not recalled —
+ * quoted, from a source already under the verbatim gate.
+ *
+ * WHY THE ROW CLOSES INSTEAD OF RUNNING FOREVER. $7.25 has stood since July
+ * 2009 and it is genuinely tempting to write `effectiveTo: null`. That is the
+ * reasoning that produces a stale rate on the day it finally moves, and a stale
+ * federal floor is not neutral: it UNDER-protects the employee and lets a
+ * creditor take more than the law allows.
+ *
+ * WHERE THE ROW CLOSES, AND A FIRST ATTEMPT THAT THE SUITE REJECTED. My first
+ * version ended this row on 2026-08-22 — the day the fact sheet was retrieved —
+ * reasoning that a row should not outlive its evidence. A test caught it:
+ * "still serves every rate on 2026-12-31, so the fix did not overshoot", which
+ * requires every key to answer on the last day of 2026. It was right and the
+ * instinct behind my date was wrong, for two reasons worth writing down.
+ *
+ * First, a retrieval date is a fact about ME, not about the law. Nothing
+ * happened to the federal minimum wage on 2026-08-22; I merely read a document
+ * that day. Encoding it as a legal boundary would make the system refuse a
+ * September cheque because of when a file was downloaded, which is a refusal
+ * Michael could not act on — there would be no notice to go and fetch.
+ *
+ * Second, it breaks the convention this file's own procedure states: close a
+ * row "on the last day the rate LEGALLY APPLIED, which is a question about the
+ * statute, not about the calendar". The federal wage changes only by act of
+ * Congress, and none is in force. So the honest boundary is the end of the
+ * period we have actually checked — the calendar year — which lines this row up
+ * with every other row here and turns the annual rate review into one job
+ * instead of two.
+ *
+ * The row therefore ends 2026-12-31. A 2027 cheque refuses and names the
+ * missing figure, which is the same behaviour as every other rate in this file
+ * and the same reason: a refusal costs five minutes, an over-garnishment costs
+ * an employee money they were entitled to keep.
+ *
+ * FOLLOW-UP RECORDED HONESTLY: the wage itself is set by 29 U.S.C. 206(a)(1),
+ * which this repository has NOT mirrored. We are relying on the enforcing
+ * agency's published statement of a figure fixed elsewhere. Mirroring the
+ * statute would upgrade this from agency guidance to primary law.
+ */
+const FEDERAL_MINIMUM_WAGE_ROWS: PayrollRateRow[] = [
+  {
+    key: "federal_minimum_wage",
+    effectiveFrom: "2009-07-24",
+    // Closed at the year boundary, like every other row in this file. NOT at
+    // the document's retrieval date - see the header for why that was wrong.
+    effectiveTo: "2026-12-31",
+    value: 725_000, // $7.25/hr, in milli-cents per hour
+    unit: "milli_cents_per_hour",
+    authorityId: "federal-minimum-wage-fs30",
+    documentId: "dol-whd-fact-sheet-30",
+    note: "Federal minimum wage $7.25/hour, in force since 2009-07-24 and quoted verbatim from DOL Fact Sheet #30 (December 2024), mirrored at docs/authorities/federal/dol-whd-fact-sheet-30.txt and re-verified character-for-character on every commit. Used ONLY for the 15 U.S.C. 1673(a)(2) garnishment floor - thirty times this figure per workweek. Washington's own floor under RCW 6.27.150 is thirty-five times the state minimum wage and is far higher, so it normally governs; both are computed and the engine reports which one bound. Closed 2026-12-31 like every other row here: the wage moves only by act of Congress and none is pending, but a rate left open-ended is how a stale figure reaches a real paycheck, and a stale federal floor lets a creditor take more than the law allows.",
+  },
+];
+
 /** Every rate Greenway uses, as dated evidenced rows. */
 export const GREENWAY_RATE_ROWS: readonly PayrollRateRow[] = [
   ...PFML_ROWS,
@@ -296,6 +377,7 @@ export const GREENWAY_RATE_ROWS: readonly PayrollRateRow[] = [
   ...LNI_ROWS,
   ...FICA_ROWS,
   ...MINIMUM_WAGE_ROWS,
+  ...FEDERAL_MINIMUM_WAGE_ROWS,
 ];
 
 /**
