@@ -91,6 +91,7 @@ import { TIMESHEET_AUTHORITIES, type TimesheetAuthority } from "@/lib/payroll/ti
 import { SICK_LEAVE_AUTHORITIES, type SickLeaveAuthority } from "@/lib/payroll/sick-leave-authorities";
 import { GARNISHMENT_AUTHORITIES, type GarnishmentAuthority } from "@/lib/payroll/garnishment-authorities";
 import { YTD_AUTHORITIES, type YtdAuthority } from "@/lib/payroll/ytd-authorities";
+import { NET_PAY_AUTHORITIES, type NetPayAuthority } from "@/lib/payroll/net-pay-authorities";
 
 // ---------------------------------------------------------------------------
 // 1) THE UNIFIED SHAPE
@@ -119,6 +120,21 @@ export type GuidanceAuthorityKind =
   | "regulation"
   | "case"
   | "irs_guidance"
+  /**
+   * A published position of a federal agency that is NOT the IRS - a DOL Wage
+   * and Hour fact sheet, for instance.
+   *
+   * ADDED IN books-37, AND WHY IT HAD TO BE. The net-pay slice needed to quote
+   * DOL WHD Fact Sheet #30, and the first attempt reused `irs_guidance` on the
+   * theory that the weight was identical (persuasive, not binding) so the tag
+   * was close enough. It was not close enough. `GUIDANCE_KIND_LABELS` renders
+   * that tag as the words "IRS guidance", so the screen would have told Michael
+   * a Department of Labor document came from the IRS. A citation he cannot
+   * trust to name its own author is worse than no citation, because he would
+   * repeat it to somebody. The weight was right and the attribution was false,
+   * and attribution is the whole point of an authority panel.
+   */
+  | "agency_guidance"
   | "gaap"
   | "state_law"
   | "state_manual"
@@ -131,6 +147,7 @@ export const ALL_GUIDANCE_AUTHORITY_KINDS: readonly GuidanceAuthorityKind[] = [
   "regulation",
   "case",
   "irs_guidance",
+  "agency_guidance",
   "gaap",
   "state_law",
   "state_manual",
@@ -145,6 +162,9 @@ export const GUIDANCE_KIND_LABELS: Record<GuidanceAuthorityKind, string> = {
   regulation: "Regulation",
   case: "Court decision",
   irs_guidance: "IRS guidance",
+  // Deliberately generic. The specific agency is named in full in every
+  // record's `cite`, so the badge classifies and the citation attributes.
+  agency_guidance: "Agency guidance",
   gaap: "GAAP",
   state_law: "Washington rule",
   state_manual: "State manual",
@@ -168,6 +188,10 @@ export const GUIDANCE_KIND_WEIGHT: Record<GuidanceAuthorityKind, 1 | 2 | 3> = {
   case: 2,
   gaap: 2,
   irs_guidance: 1,
+  // Persuasive only, and the documents say so themselves - DOL Fact Sheet #30
+  // states in its own footer that its contents "do not have the force and
+  // effect of law". Same rank as IRS guidance because the status is the same.
+  agency_guidance: 1,
   state_manual: 1,
   legislative_history: 1,
   auditing_standard: 1,
@@ -538,6 +562,23 @@ function fromGarnishment(a: GarnishmentAuthority): GuidanceAuthority {
 }
 
 /**
+ * books-37. Net pay: the ORDER of operations on a cheque, and the base the
+ * garnishment limits are measured against. Same adapter, same reason.
+ *
+ * This one is worth a sentence of its own because of what registering it
+ * actually bought. `NetPayAuthority["kind"]` includes `agency_guidance`, a
+ * member that did not exist in `GuidanceAuthorityKind` until this slice added
+ * it - the leaf module had been tagging two DOL fact sheets `irs_guidance`,
+ * which the label table renders as the words "IRS guidance". Passing the leaf
+ * type through THIS function is what surfaced the mismatch, because tsc has to
+ * prove the narrow union fits the wide one. An authority panel that misnames
+ * the agency behind a quote is worse than one that shows no badge at all.
+ */
+function fromNetPay(a: NetPayAuthority): GuidanceAuthority {
+  return { id: a.id, kind: a.kind, cite: a.cite, quote: a.quote, soWhat: a.soWhat, source: a.source };
+}
+
+/**
  * books-34. Year-to-date accumulation. Same adapter, same reason.
  *
  * `YtdAuthority["kind"]` is the NARROWEST union in this file: the single member
@@ -660,6 +701,17 @@ export const ALL_SOURCE_REGISTRIES = [
   // them. Tagging them separately keeps the distinction on screen between
   // "this is the rate" and "this is the running total the rate stops at".
   "ytd",
+  // books-37. Net pay. Its own tag rather than folded into "garnishment" or
+  // "payroll-tax" because it answers the question neither of those registries
+  // was ever asked: in what ORDER do the deductions come off, and which of them
+  // shrink the base the next one is measured against. Both other engines can be
+  // individually correct and the cheque still wrong, and that is not a
+  // hypothetical - the seam between them was unbuilt until this slice, and the
+  // required-by-law bucket that garnishment measures against was silently
+  // missing the L&I employee premium that RCW 51.16.140(1) COMPELS. Tagging
+  // these separately keeps the sequence visible as its own subject, because the
+  // sequence is the part people get wrong.
+  "net-pay",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -729,6 +781,20 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...YTD_AUTHORITIES.map((a) => ({
       tag: "ytd" as const,
       authority: fromYtd(a),
+    })),
+    // books-37. The net-pay authorities: the statutory definition of
+    // "disposable earnings" that every garnishment cap is a percentage of, the
+    // enforcing agency's own list of what counts as "required by law" (and its
+    // mirror-image list of what does NOT, which is where health insurance and
+    // retirement live), the Washington section that COMPELS the L&I employee
+    // deduction on pain of a gross misdemeanor, and the two sentences that make
+    // any other deduction lawful or criminal in this state. Merged here for the
+    // standing reason and for one specific one: the pay-run screen, the stub
+    // and the garnishment screen all have to agree on the ORDER, and they will
+    // now cite the same six records when they explain it.
+    ...NET_PAY_AUTHORITIES.map((a) => ({
+      tag: "net-pay" as const,
+      authority: fromNetPay(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation
