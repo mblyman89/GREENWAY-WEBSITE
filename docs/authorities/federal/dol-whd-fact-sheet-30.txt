@@ -1,0 +1,121 @@
+SOURCE TEXT - U.S. Department of Labor, Wage and Hour Division
+Fact Sheet #30: Wage Garnishment Protections of the Consumer Credit
+Protection Act (CCPA). Dated December 2024.
+Retrieved 2026-08-22 from https://www.dol.gov/agencies/whd/fact-sheets/30-cppa
+A work of the United States Government. Under 17 U.S.C. 105, copyright
+protection is not available for any work of the United States Government.
+==============================================================================
+
+NOTE ON THE STATUS OF THIS DOCUMENT, IN ITS OWN WORDS. The fact sheet closes
+with the following disclaimer, mirrored here verbatim so that its weight is
+never overstated:
+
+  "This publication is for general information and is not to be considered in
+  the same light as official statements of position contained in the
+  regulations."
+
+  "The contents of this document do not have the force and effect of law and
+  are not meant to bind the public in any way. This document is intended only
+  to provide clarity to the public regarding existing requirements under the
+  law or agency policies."
+
+It is mirrored because it is the enforcing agency's own published explanation
+of a statutory term - 15 U.S.C. 1672(b) "amounts required by law to be
+withheld" - that the statute itself does not enumerate. It is used as
+interpretive guidance from the agency with enforcement authority, never as the
+operative rule. The operative rule is the statute and 29 CFR 870.
+
+==============================================================================
+
+Fact Sheet #30: Wage Garnishment Protections of the Consumer Credit Protection Act (CCPA)
+
+December 2024
+
+This fact sheet provides general information concerning the CCPA's limits on the amount that employers may withhold from a person's earnings in response to a garnishment order, and the CCPA's protection from termination because of garnishment for any single debt.
+
+Wage Garnishments
+
+A wage garnishment is any legal or equitable procedure through which some portion of a person's earnings is required to be withheld for the payment of a debt. Most garnishments are made by court order. Other types of legal or equitable procedures for garnishment include IRS or state tax collection agency levies for unpaid taxes and federal agency administrative garnishments for non-tax debts owed to the federal government.
+
+Wage garnishments do not include voluntary wage assignments - that is, situations in which employees voluntarily agree that their employers may turn over some specified amount of their earnings to a creditor or creditors.
+
+Limitations on Wage Garnishments
+
+The CCPA limits the amount of an individual's earnings that may be garnished and protects an employee from being fired if pay is garnished for only one debt. The U.S. Department of Labor's Wage and Hour Division administers the wage garnishment provisions of the CCPA, which apply in all 50 states, the District of Columbia, and all U.S. territories and possessions. The wage garnishment provisions of the CCPA protect everyone who receives personal earnings.
+
+The Wage and Hour Division has authority to enforce against employers the limits on the amount that may be garnished and the protections from termination because of garnishment for any single debt. Questions relating to other garnishment issues should be directed to the court or agency initiating the garnishment action. For example, questions regarding the priority given to certain garnishments over others are not matters covered by the wage garnishment provisions of the CCPA and may be referred to the court or agency initiating the action. The CCPA contains no provisions controlling the priorities of garnishments, which are determined by state or other federal laws. However, in no event may the amount of any individual's disposable earnings that may be garnished exceed the percentages specified in the CCPA (see below for more information).
+
+Limitations on the Amount of Earnings that may be Garnished (General)
+
+The amount of pay subject to garnishment is based on an employee's "disposable earnings," which is the amount of earnings left after legally required deductions are made. Examples of such deductions include federal, state, and local taxes, and the employee's share of Social Security, Medicare and State Unemployment Insurance tax. It also includes withholdings for employee retirement systems required by law.
+
+Deductions not required by law - such as those for voluntary wage assignments, union dues, health and life insurance, contributions to charitable causes, purchases of savings bonds, retirement plan contributions (except those required by law) and payments to employers for payroll advances or purchases of merchandise - usually may not be subtracted from gross earnings when calculating disposable earnings under the CCPA.
+
+The wage garnishment provisions of the CCPA set the maximum amount that may be garnished in any workweek or pay period, regardless of the number of garnishment orders received by the employer. For ordinary garnishments (i.e., those not for support, bankruptcy, or any state or federal tax), the weekly amount may not exceed the lesser of two figures: 25% of the employee's disposable earnings, or the amount by which an employee's disposable earnings are greater than 30 times the federal minimum wage (currently $7.25 an hour).
+
+Therefore, if the pay period is weekly and disposable earnings are $217.50 ($7.25 x 30) or less, there can be no garnishment. If disposable earnings are more than $217.50 but less than $290 ($7.25 x 40), the amount above $217.50 can be garnished. If disposable earnings are $290 or more, a maximum of 25% can be garnished. When pay periods cover more than one week, multiples of the weekly restrictions must be used to calculate the maximum amounts that may be garnished. The table and examples at the end of this fact sheet illustrate these amounts.
+
+MAXIMUM GARNISHMENT OF DISPOSABLE EARNINGS (GENERALLY) BASED ON CURRENT FEDERAL MINIMUM WAGE OF $7.25 PER HOUR
+
+Weekly: $217.50 or less: NONE. More than $217.50 but less than $290.00: Amount ABOVE $217.50. $290.00 or more: MAXIMUM 25%.
+Biweekly: $435.00 or less: NONE. More than $435.00 but less than $580.00: Amount ABOVE $435.00. $580.00 or more: MAXIMUM 25%.
+Semimonthly: $471.25 or less: NONE. More than $471.25 but less than $628.33: Amount ABOVE $471.25. $628.33 or more: MAXIMUM 25%.
+Monthly: $942.50 or less: NONE. More than $942.50 but less than $1256.66: Amount ABOVE $942.50. $1256.66 or more: MAXIMUM 25%.
+
+As discussed below, these limitations do not apply to certain bankruptcy court orders, or to garnishments to recover debts due for state or federal taxes, and different limitations apply to garnishments pursuant to court orders for child support or alimony.
+
+Limitations on the Amount of Earnings That May be Garnished for Child Support and Alimony
+
+The wage garnishment provisions of the CCPA also limit the amount of earnings that may be garnished pursuant to court orders for child support or alimony. The garnishment law allows up to 50% of a worker's disposable earnings to be garnished for these purposes if the worker is supporting another spouse or child, or up to 60% if the worker is not. An additional 5% may be garnished for support payments more than l2 weeks in arrears.
+
+Definition of Earnings
+
+The CCPA defines earnings as compensation paid or payable for personal services, including wages, salaries, commissions, bonuses, and periodic payments from a pension or retirement program. Payments from an employment-based disability plan are also earnings.
+
+Earnings may include payments received in lump sums, including:
+
+- commissions;
+- discretionary and nondiscretionary bonuses;
+- productivity or performance bonuses;
+- profit sharing;
+- referral and sign-on bonuses;
+- moving or relocation incentive payments;
+- attendance, safety, and cash service awards;
+- retroactive merit increases;
+- payment for working during a holiday;
+- workers' compensation payments for wage replacement, whether paid periodically or in a lump sum;
+- termination pay (e.g., payment of last wages, as well as any outstanding accrued benefits);
+- severance pay; and,
+- back and front pay payments from insurance settlements.
+
+In determining whether certain lump-sum payments are earnings under the CCPA, the central inquiry is whether the employer paid the amount in question for the employee's services. If the lump-sum payment is made in exchange for personal services rendered, then like payments received periodically, it will be subject to the CCPA's garnishment limitations. Conversely, lump-sum payments that are unrelated to personal services rendered are not earnings under the CCPA. Similarly, payments and reimbursements to employees pursuant to an employer-provided educational assistance program under IRS Code 127 do not constitute earnings for purposes of the CCPA's limitations on wage garnishment.
+
+For employees who receive tips, the cash wages paid directly by the employer and the amount of any tip credit claimed by the employer under federal or state law are earnings for the purposes of the wage garnishment law. Tips received in excess of the tip credit amount or in excess of the wages paid directly by the employer (if no tip credit is claimed or allowed) are not earnings for purposes of the CCPA.
+
+Exceptions to Limitations on Wage Garnishments
+
+The wage garnishment law specifies that its limitations on the amount of earnings that may be garnished do not apply to certain bankruptcy court orders, or to debts due for federal or state taxes.
+
+If a state wage garnishment law differs from the wage garnishment provisions of the CCPA, the law resulting in the lower amount of earnings being garnished must be observed.
+
+Non-Tax Debts Owed to Federal Agencies
+
+The Debt Collection Improvement Act authorizes federal agencies or collection agencies under contract with them to garnish up to 15% of disposable earnings to repay defaulted debts owed to the U.S. government. As of December 20, 2018, the Higher Education Act authorizes the Department of Education's guaranty agencies to garnish up to 15% of disposable earnings to repay defaulted federal student loans. Such withholding is also subject to the wage garnishment provisions of the CCPA, but not state garnishment laws. Unless the total of all garnishments exceeds the CCPA's limits on garnishment, questions regarding such garnishments should be referred to the agency initiating the withholding action.
+
+EXAMPLES OF AMOUNTS SUBJECT TO GARNISHMENT
+
+The following examples illustrate the statutory tests for determining the amounts subject to garnishment, based on the current federal minimum wage of $7.25 per hour.
+
+1. An employee's gross earnings in a particular week are $263. After deductions required by law, the disposable earnings are $233.00. In this week, $15.50 may be garnished, because only the amount over $217.50 may be garnished where the disposable earnings are less than $290.
+
+2. An employee receives a bonus in a particular workweek of $402. After deductions required by law, the disposable earnings are $368. In this week, 25% of the disposable earnings may be garnished. ($368 x 25% = $92).
+
+3. An employee paid every other week has disposable earnings of $500 for the first week and $80 for the second week of the pay period, for a total of $580. In a biweekly pay period, when disposable earnings are at or above $580 for the pay period, 25% may be garnished; $145.00 (25% x $580) may be garnished. It does not matter that the disposable earnings in the second week are less than $217.50.
+
+4. An employee on a $400 weekly draw against commissions has disposable earnings each week of $300. Commissions are paid monthly and result in $1,800 in disposable earnings for July after already-paid weekly draws are subtracted and deductions required by law are made. Each draw and the monthly commission payment are separately subject to the law's limitation. Thus, 25% of each week's disposable earnings from the draw ($75 in this example) may be garnished. Additionally, 25% of the disposable earnings from the commission payment may be garnished, or $450 ($1,800 x 25% = $450).
+
+5. An employee who has disposable earnings of $370 a week has $140 withheld per week pursuant to court orders for child support. The CCPA allows up to 50% or 60% of disposable earnings to be garnished for this purpose. A garnishment order for the collection of a defaulted consumer debt is also served on the employer. If there were no garnishment orders (with priority) for child support, the CCPA's general limitations would apply to the garnishment for the defaulted consumer debt, and a maximum of $92.50 (25% x $370) would be garnished per week. However, the existing garnishment for child support means in this example that no additional garnishment for the defaulted consumer debt may be made because the amount already garnished is more than the amount (25%) that may be generally garnished. Additional amounts could be garnished to collect child support, delinquent federal or state taxes, or certain bankruptcy court ordered payments.
+
+Protections against Discharge when Wages are Garnished
+
+The CCPA prohibits an employer from firing an employee whose earnings are subject to garnishment for any one debt, regardless of the number of levies made or proceedings brought to collect that one debt.

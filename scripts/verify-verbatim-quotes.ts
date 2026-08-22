@@ -659,7 +659,13 @@ export const KNOWN_UNMIRRORED_AUTHORITY_IDS: readonly string[] = [
   // Washington — industrial insurance (L&I)
   "rcw-51-16-035-lni-classification",
   "rcw-51-16-060-lni-hours",
-  "rcw-51-16-140-lni-deduction",
+  // "rcw-51-16-140-lni-deduction" WAS HERE. books-37 mirrored the section to
+  // docs/authorities/state-wa/rcw-51.16.140.txt and the quote now verifies
+  // character for character, so the entry was deleted rather than left as a
+  // standing exemption. It had to be: books-37 turns RCW 51.16.140(1) into an
+  // operative rule (the L&I employee premium is "required by law to be
+  // withheld" and therefore reduces disposable earnings for garnishment), and
+  // an operative rule may not rest on a quote nobody is checking.
   "rcw-51-16-150-lni-injunction",
   "rcw-51-32-073-supplemental-pension-split",
   "rcw-51-32-090-stay-at-work-split",
