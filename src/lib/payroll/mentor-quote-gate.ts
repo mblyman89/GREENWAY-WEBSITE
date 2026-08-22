@@ -107,6 +107,60 @@ export function harvestQuotedLessonTitles(
 }
 
 /**
+ * THE EXPORTED FUNCTIONS OF AN ENGINE MODULE, read from its source on disk.
+ *
+ * books-37. WHY THIS MOVED HERE, AND THE BUG IT CARRIED.
+ *
+ * Eleven mentor-gate modules each had their own private copy of this scrape,
+ * and all eleven copies used the same pattern:
+ *
+ *   /^export function ([A-Za-z0-9_]+)/gm
+ *
+ * That pattern cannot see `export async function`. It never mattered, because
+ * every engine it had ever been pointed at was pure and synchronous - checked,
+ * not assumed: nine core modules, zero async exports between them. `ytd-store.ts`
+ * is the first engine in this codebase that talks to the database, so it is the
+ * first whose exports are ALL async. Pointing the old pattern at it returns an
+ * empty list, and an empty list is the worst possible result: the rule-26
+ * coverage gate would have read zero functions, found zero of them untaught,
+ * and reported full coverage over a 700-line module that teaches nothing.
+ * Standing rule 39 - a gate that parses nothing approves everything - and
+ * standing rule 50, dead code wearing a green check.
+ *
+ * The instance fix was to add `(?:async )?` in one new file. The CLASS fix,
+ * which is what standing rule 23 requires, is one implementation here that all
+ * of them can call, so the next person who writes an async engine inherits a
+ * gate that works instead of a gate that lies. The eleven existing copies are
+ * left in place for now and are provably equivalent on their own inputs; this
+ * is the seam new modules are built against, and migrating them is tracked
+ * work rather than a silent rewrite of eleven passing gates in a slice about
+ * net pay.
+ *
+ * WHY IT THROWS ON AN EMPTY RESULT rather than returning `[]`. Every caller
+ * would have to remember to check, and the whole point is that the failure is
+ * silent. Making the scrape itself refuse means a mistyped path or a renamed
+ * module fails loudly at the gate instead of quietly approving everything.
+ */
+export function exportedFunctionNames(
+  absoluteSourcePath: string,
+  label: string,
+): readonly string[] {
+  const text = readFileSync(absoluteSourcePath, "utf8");
+  const names = [
+    ...text.matchAll(/^export (?:async )?function ([A-Za-z0-9_]+)/gm),
+  ].map((m) => m[1]);
+  if (names.length === 0) {
+    throw new Error(
+      `${label} FUNCTION GATE BROKEN: read no exported functions from ${absoluteSourcePath}. ` +
+        `Either the path is wrong or the module exports its functions in a form this scrape does ` +
+        `not recognise (an exported arrow const, for instance). Both are silent failures: a gate ` +
+        `that parses nothing finds nothing untaught and reports full coverage (standing rule 39).`,
+    );
+  }
+  return names;
+}
+
+/**
  * Every lesson title a coverage map quotes must resolve to a real lesson.
  */
 export function assertQuotedLessonsResolve(args: QuotedLessonGateArgs): void {
