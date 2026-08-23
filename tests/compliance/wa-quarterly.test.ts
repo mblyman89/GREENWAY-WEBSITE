@@ -148,6 +148,35 @@ function filedCents(id: string): number {
   return f.filedAmountCents;
 }
 
+/**
+ * Build a quarter from ONE hypothetical subject at the real 2026 rates.
+ *
+ * For tests that need a wage or hour figure Greenway did not happen to have.
+ * The oracle proves the engine is right for one real quarter; it cannot prove
+ * the METHOD is right for every quarter, and the method is what ships.
+ */
+function builtOneSubject(over: { wagesCents: number; hours: number }): WaQuarterReturn {
+  const r = buildWaQuarter({
+    quarter: { year: 2026, quarter: 2 },
+    subjects: [
+      {
+        subjectId: "probe",
+        displayName: "Probe Subject",
+        wagesCents: over.wagesCents,
+        esdTaxableWagesCents: over.wagesCents,
+        pfmlTaxableWagesCents: over.wagesCents,
+        hours: over.hours,
+      },
+    ],
+    rates: Q2_2026_RATES,
+    pfml: { employerOwesEmployerShare: false, determinedAverageHeadcount: 10 },
+  });
+  if (!r.ok) {
+    throw new Error(`probe quarter refused: ${r.refusals.map((x) => x.code).join(", ")}`);
+  }
+  return r.value;
+}
+
 function builtFiledQuarter(): WaQuarterReturn {
   const r = buildWaQuarter(filedQuarterRequest());
   if (!r.ok) {
@@ -267,10 +296,109 @@ describe("wa-quarterly: per-fund rounding is the difference between right and wr
     // ...which is exactly why the order is pinned rather than left to taste.
   });
 
+  /**
+   * WHY THIS TEST EXISTS, AND WHY IT DOES NOT USE GREENWAY'S OWN WAGES.
+   *
+   * The mutation battery (scripts/compliance/mutate-slice-books-41.py) broke
+   * the engine so PFML rounded its intermediate, and the suite STAYED GREEN.
+   * The test above did not catch it, because at Greenway's actual Q2 2026
+   * wages the two methods happen to agree. The oracle proves the engine is
+   * right for one quarter; it cannot prove the METHOD is right for every
+   * quarter, and the method is what ships.
+   *
+   * So this searches for a wage figure where the two methods genuinely
+   * diverge, and pins it. Michael will hit one of these eventually - it is
+   * roughly a coin toss each quarter whether the intermediate lands near a
+   * half cent - and when he does, the difference is a real filing error.
+   */
+  it("double-rounding PFML is DETECTABLY wrong, at a wage figure that proves it", () => {
+    // Found by probing wage figures until the two methods disagreed. Not
+    // invented: re-derived here so the reader can see it is real.
+    const taxable = 128_451;
+    const exact = exactMilliPct(taxable, 1_130);
+
+    const roundedOnce = Math.round((exact * 71_430) / 100_000);
+    const roundedTwice = Math.round((Math.round(exact) * 71_430) / 100_000);
+
+    expect(roundedOnce).toBe(1_037);
+    expect(roundedTwice).toBe(1_036);
+    expect(roundedOnce).not.toBe(roundedTwice);
+
+    // And the ENGINE must take the correct path for that same figure. This is
+    // the half that actually guards the shipped code: the arithmetic above
+    // only demonstrates the two methods differ.
+    const built = builtOneSubject({ wagesCents: taxable, hours: 100 });
+    expect(waLineOf(built, "pfml-employee")!.amountCents).toBe(roundedOnce);
+  });
+
   it("L&I is charged on hours and refuses fractional or negative hours", () => {
     expect(hourlyPremiumCents(3_558, 55_930)).toBe(filedCents("lni-premium"));
     expect(() => hourlyPremiumCents(10.5, 55_930)).toThrow();
     expect(() => hourlyPremiumCents(-1, 55_930)).toThrow();
+  });
+
+  /**
+   * The same lesson as the PFML test above, on the L&I side, and found the
+   * same way: a mutation replaced the combined-rate calculation with the sum
+   * of the two rounded halves and the suite stayed green.
+   *
+   * L&I bills ONE combined hourly rate. The employee/employer split exists so
+   * Michael knows what he may lawfully deduct (RCW 51.16.140(1) - he may
+   * deduct the employee half and not a penny more), but the PREMIUM is the
+   * combined rate times hours. Adding two rounded halves is not the same
+   * arithmetic and does not always give the same answer.
+   */
+  it("the L&I total comes from the COMBINED rate, not from summing rounded halves", () => {
+    const employeeRate = 16_445; // milli-cents per hour
+    const employerRate = 39_485;
+
+    // One hour is enough to show it. 0.16445 + 0.39485 = 0.5593 of a cent...
+    const combined = hourlyPremiumCents(1, employeeRate + employerRate);
+    const summed = hourlyPremiumCents(1, employeeRate) + hourlyPremiumCents(1, employerRate);
+    expect(combined).toBe(56);
+    expect(summed).toBe(55);
+    expect(combined).not.toBe(summed);
+
+    // The engine must use the combined figure.
+    const built = builtOneSubject({ wagesCents: 100_000, hours: 1 });
+    expect(waLineOf(built, "lni-premium")!.amountCents).toBe(combined);
+
+    // At Greenway's real quarter the two agree, which is exactly why this
+    // needed its own test rather than relying on the filed-return oracle.
+    expect(hourlyPremiumCents(3_558, employeeRate + employerRate)).toBe(
+      hourlyPremiumCents(3_558, employeeRate) + hourlyPremiumCents(3_558, employerRate),
+    );
+  });
+
+  /**
+   * A genuine half-to-even ("banker's") rounding is a real risk, because it
+   * is what accountants are often taught and what several libraries default
+   * to. It is NOT what RCW 50.24.010 says.
+   *
+   * Note carefully what this test does NOT claim. JavaScript's `Math.round`
+   * is round-half-UP for positive numbers, so it agrees with the statute
+   * everywhere this engine uses it. I originally wrote a mutation asserting
+   * otherwise; it survived, and it survived because my claim was wrong, not
+   * because the tests were weak. The real hazard is half-to-EVEN, so that is
+   * what is pinned.
+   */
+  it("half-to-even rounding would give a different, wrong answer", () => {
+    const halfToEven = (x: number) => {
+      const floor = Math.floor(x);
+      const diff = x - floor;
+      if (diff > 0.5) return floor + 1;
+      if (diff < 0.5) return floor;
+      return floor % 2 === 0 ? floor : floor + 1;
+    };
+    // The statute rounds a half-cent UP regardless of what precedes it.
+    expect(statutoryRoundCents(100.5)).toBe(101);
+    expect(halfToEven(100.5)).toBe(100);
+    expect(statutoryRoundCents(100.5)).not.toBe(halfToEven(100.5));
+
+    // And Math.round agrees with the statute for positives, which is why it
+    // is a safe idiom elsewhere in the file.
+    expect(Math.round(100.5)).toBe(statutoryRoundCents(100.5));
+    expect(Math.round(2.5)).toBe(statutoryRoundCents(2.5));
   });
 });
 
