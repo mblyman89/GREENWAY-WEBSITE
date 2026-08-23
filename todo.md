@@ -1707,3 +1707,157 @@ building the matcher twice.
     exists, and reports it as "finished, unreachable work". Assert existence
     first. Same family as rule 39: every probe needs a companion test proving
     it can return a positive, or the whole block passes on nothing.
+
+67. A FIELD THAT IS RENDERED AS A LINK MUST BE A LINK. books-43 set
+    `GuidanceAuthority.source` to the repo-relative path of the mirrored
+    corpus for all 28 W-2 authorities. That field is rendered as
+    `href={a.source}` under the words "Read the original". Twenty-eight dead
+    links, and NOTHING in the repo could have caught it: the verbatim
+    verifier routes on `.cite` and never reads `.source`, and the only
+    registry-wide assertion on the field is that it is non-empty -- which a
+    repo path gloriously is.
+
+    67a. TWO FACTS SHARING ONE FIELD IS THE DEFECT. "Where the mirrored copy
+    lives" and "where the reader goes to read it" are different facts. They
+    were sharing `source` because both are strings and both are about
+    provenance. Give them different names -- `_SOURCE_PATH` for the verifier,
+    `_SOURCE_URL` for the reader -- and the compiler stops being indifferent.
+
+    67b. IT WAS FOUND BY LOOKING AT THE NEIGHBOURS, NOT BY A TEST. Six
+    BORROWED authorities quote the same IRS document and link to irs.gov.
+    They render in the same panel as the 28. Half the citations to one
+    document would have worked and half would not. When a new module sits
+    beside an old one, DIFF THE SHAPES: consistency with a working neighbour
+    is a cheaper oracle than any assertion, and it is available before the
+    code runs.
+
+68. A FILTER AGAINST A LIST OF NAMES FAILS SILENTLY BY DESIGN.
+    `REGISTRY.filter(a => IDS.includes(a.id))` returns a SHORTER ARRAY when a
+    name is wrong. Not an error, not a warning -- one fewer element.
+    books-43 listed `iw2w3-2026-employer-contact-person`, which does not
+    exist; the real id is `iw2w3-2026-w3-contact-person`. Forty authorities
+    were returned where forty-one were intended and every check stayed green.
+
+    68a. A REUSED ID THAT DOES NOT EXIST IS INDISTINGUISHABLE FROM ONE THAT
+    WAS NEVER LISTED. So the test cannot assert that the function "returns
+    something". It must assert that EVERY id in the borrow list RESOLVES, and
+    it must assert the COUNT (own + borrowed), so a silent shortening has two
+    independent ways to go red.
+
+    68b. THE ROOT CAUSE WAS WRITING AN ID FROM MEMORY OF WHAT THE AUTHORITY
+    IS ABOUT. The id was recalled as the concept ("employer contact person")
+    rather than read from the file. Ids are opaque strings; grep for them,
+    never recall them. This is rule 1 in a new costume.
+
+69. AN UNCITED LESSON IS NOT AUTOMATICALLY A DEFECT. A gate asserting every
+    mentor lesson carries an `authorityIds` entry failed on sixteen of
+    thirty-three onboarding lessons -- and THE MODULE WAS RIGHT. The sixteen
+    are formatters, validators and view builders; there is no statute
+    governing how to render a percentage. The seventeen that cite are exactly
+    the ones with law behind them.
+
+    69a. FORCING A CITATION ONTO A FORMATTER PRODUCES A DECORATIVE ONE, and a
+    decorative citation is worse than none, because it teaches the reader
+    that the badge means nothing. Assert instead that no id is EMPTY (a blank
+    id is a broken link; an empty list is an honest silence), and name the
+    lessons that DO rest on law so losing their citations is a red line.
+
+70. A DOCUMENTATION GATE MUST BE TAMPERED WITH LIKE ANY OTHER GATE. Two of
+    the twelve roadmap tampers in books-43 were NOT CAUGHT on the first run.
+    Both holes were the same shape.
+
+    70a. VERIFYING THE TEST AGAINST ITSELF. The line-count check compared
+    `lineCount(file)` to a number held IN THE TEST, so editing the figure in
+    the DOCUMENT changed nothing the gate could see. Rule 66b in a new place:
+    check both directions -- the figure matches the tree AND the document
+    actually prints it.
+
+    70b. A KEYWORD THAT APPEARS TWICE IS NOT A GATE. Asserting the phrase
+    "routing bug" was satisfied by the second occurrence after the first was
+    vandalised. Assert the CLAIM, not a word: here, the order of operations
+    (fix the router BEFORE fetching, or the fetched text lands under a
+    filename nothing looks for).
+
+    70c. A TAMPER THAT DOES NOT ATTACK WHAT THE GATE CLAIMS PROVES NOTHING
+    ABOUT THE GATE. The first RCW tamper replaced only the first of two
+    occurrences while the assertion targeted a different sentence, so
+    "NOT CAUGHT" was a defect in the CAMPAIGN, not in the gate. When a tamper
+    survives, establish which of the two is wrong before changing either.
+
+    70d. COMPARE AGAINST THE BACKUP, NOT AGAINST HEAD. A tamper script that
+    verifies restoration with `git diff --quiet` reports the slice's own
+    uncommitted work as "NOT RESTORED". The oracle for "did I put it back" is
+    the copy taken before the tamper.
+
+71. THE HOUSE CONVENTION LIVES IN THE NEIGHBOURS, NOT IN YOUR MEMORY OF IT.
+    books-43's closing slice planned to DELETE its mutation campaign as a
+    "throwaway" once it scored 13/13. That plan was wrong, and the thing that
+    corrected it was thirty seconds of `ls scripts/`: this repo has
+    `prove-ytd-mentor-gates.sh`, `prove-ytd-core-gates.sh`,
+    `prove-ytd-quote-gate.sh`, `prove-0199-ordering.sh`,
+    `prove-migration-columns.sh` and `mutate-mentors.sh`, all COMMITTED, all
+    named `prove-*`. Mutation campaigns are a permanent artifact here, because
+    the campaign is the only evidence the gate ever bit, and a gate's kill rate
+    decays as the thing it guards is edited. Deleting it would have thrown away
+    the proof and left the next reader unable to re-run it.
+    THE RULE: before deciding an artifact is disposable, LIST ITS SIBLINGS. If
+    six files with the same shape are tracked in git, the shape is tracked. This
+    is the same move as rule 67 - the defect was found by diffing against
+    neighbours - and it generalises: conventions are discoverable from the tree
+    in seconds and are never worth recalling from memory. Corollary: adopt the
+    sibling's NAME too. `tamper-roadmap-gate.sh` sorted away from the five
+    `prove-*` scripts doing the identical job, which is how a convention erodes
+    - one reasonable-looking exception at a time.
+
+72. A MUTATION THAT NEVER APPLIED ACCUSES AN INNOCENT GATE.
+    The books-43 roadmap campaign reported NOT CAUGHT on "owner doc contradicts
+    the agreed order" and the gate was blameless. The heading being attacked
+    contains `→` (three UTF-8 bytes); the pattern matched each arrow with a
+    single `.`; perl reads files as bytes, so it could not match, the
+    substitution silently did nothing, and perl exited 0. The document was never
+    mutated. The suite stayed green because THERE WAS NOTHING WRONG WITH THE
+    DOCUMENT. Attempt two added `-CSD` - which decodes perl's I/O streams but
+    NOT the literal inside the one-liner - and failed silently again, also
+    exiting 0. Two rounds of a false accusation, and the visible output was
+    identical to a real hole in the gate.
+    THE RULE: a mutation harness must VERIFY THE MUTANT EXISTS before it
+    interprets the suite's colour. `cmp` the file against its backup; if nothing
+    changed, report NO-OP and count it separately from NOT CAUGHT, because the
+    two demand opposite responses - a no-op means fix the CAMPAIGN, a not-caught
+    means fix the SUBJECT. Reporting them in one bucket sends the reader to
+    debug the wrong file, which is worse than staying silent. This is rule 70c
+    sharpened: rule 70c said a tamper that does not attack the claim proves
+    nothing; 72 says a tamper that does not RUN proves nothing AND lies about
+    who is at fault. Also: `[ $? -eq 0 ]` is not evidence a substitution
+    matched, and when a character set is in your way, route around it (`[^\n]*`)
+    rather than negotiating with encoding flags.
+
+72a. ENCODING BUGS IN TEST SCAFFOLDING FAIL TOWARD FALSE CONFIDENCE. Note the
+    direction of the error above. A byte/character mismatch in a MUTATION is
+    invisible and makes the suite look weaker than it is; the same mismatch in
+    an ASSERTION would make the suite look STRONGER than it is - a `toContain`
+    against a mis-encoded needle can never match, so its negation always
+    passes. When comparing text containing anything outside ASCII (`→`, `§`,
+    `—`, curly quotes), assert the comparison finds something before trusting
+    that it did not.
+
+73. TWO DOCUMENTS DESCRIBING ONE PLAN IS HOW A PLAN FORKS IN HALF.
+    books-43 recorded the agreed slice order twice on purpose:
+    `docs/BOOKS_ROADMAP.md` for whoever implements it, and
+    `docs/MICHAEL-books-43-the-plan-from-here.md` in plain English for Michael,
+    who asked "I don't want to miss something and drift from what's important."
+    Recording it twice is right - the implementer's terse table is not a
+    document an owner can plan from. But the roadmap gets edited during a slice
+    and the owner's copy does not, so six weeks later they disagree about the
+    order while both still look authoritative, and there is no way to tell which
+    one is stale.
+    THE RULE: when a fact is deliberately duplicated across documents, gate the
+    DUPLICATE, and re-derive it from the CODE in both places rather than
+    comparing the documents to each other. Two documents agreeing on a wrong
+    number is the likely failure - the second is written by copying the first -
+    and a document-to-document comparison is blind to exactly that case. What
+    must NOT be gated is the argument, the analogies and the coaching: that is
+    judgement (rule 66c), it has to stay editable, and a silent control in the
+    campaign is what proves it still is. Check the ORDER by position and the
+    heading separately from the table, because a correct table under a heading
+    that says something else is read as the heading.
