@@ -343,10 +343,41 @@ describe("the gap report's claims about the code are still true", () => {
     { file: "src/lib/accounting/period-close-mentor.ts", slug: "period-close-mentor" },
     { file: "src/lib/accounting/s-corporation-year-mentor.ts", slug: "s-corporation-year-mentor" },
     { file: "src/lib/accounting/tax-penalty-mentor.ts", slug: "tax-penalty-mentor" },
-    // The report separately calls these ENGINES unreachable, in the sections on
-    // financial statements and period close. Same claim, same exposure.
-    { file: "src/lib/accounting/financial-statements-core.ts", slug: "financial-statements-core" },
+    // The report separately calls this ENGINE unreachable, in the section on
+    // period close. Same claim, same exposure.
     { file: "src/lib/accounting/period-close-core.ts", slug: "period-close-core" },
+  ];
+
+  /**
+   * MODULES THE GAP REPORT ONCE CALLED UNREACHABLE THAT HAVE SINCE BEEN WIRED.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * WHY THIS LIST EXISTS INSTEAD OF A DELETED LINE
+   * ─────────────────────────────────────────────────────────────────────────
+   * When `financial-statements-core` was wired to a screen in books-42, the
+   * assertion below went red — exactly as it was designed to. The cheap
+   * response was to delete its entry from UNREACHABLE_MODULES and move on.
+   *
+   * That would have thrown away the finding. A gap that has been closed is
+   * worth MORE protection than one that is still open, because closing it is
+   * recent and reversible: someone refactoring a page can remove the last
+   * import without noticing, and the engine would slide straight back into
+   * being 1,600 tested, invisible lines. Nothing would go red, because the only
+   * thing that had been watching was the list this entry was deleted from.
+   *
+   * So the entry MOVED rather than vanished, and the assertion INVERTED. This
+   * list claims the opposite of the one above: these modules must be reachable,
+   * and the day one stops being reachable is the day this file says so.
+   *
+   * Standing rule 12 — never silently plug a hole — read in the other
+   * direction. Do not silently un-plug one either.
+   */
+  const NOW_REACHABLE_MODULES: readonly { file: string; slug: string; wiredIn: string }[] = [
+    {
+      file: "src/lib/accounting/financial-statements-core.ts",
+      slug: "financial-statements-core",
+      wiredIn: "books-42, at /admin/books/financial-statements",
+    },
   ];
 
   /**
@@ -407,6 +438,37 @@ describe("the gap report's claims about the code are still true", () => {
           `gap report's claim that it is buried is out of date. Update the report.`,
       ).toEqual([]);
     }
+  });
+
+  it("claim: the gaps the report recorded as CLOSED are still closed", () => {
+    // The inverse assertion. See the note on NOW_REACHABLE_MODULES: a gap that
+    // was closed last week is the easiest one in the system to reopen by
+    // accident, because everybody has stopped looking at it.
+    for (const m of NOW_REACHABLE_MODULES) {
+      expect(
+        existsSync(join(ROOT, m.file)),
+        `${m.file} no longer exists, yet the report records it as wired`,
+      ).toBe(true);
+
+      const hits = importedFromUi(m.slug);
+      expect(
+        hits.length,
+        `${m.slug} was wired in ${m.wiredIn} and is now imported by NOTHING in src/app or ` +
+          `src/components. It has gone back to being finished, tested and invisible — which is ` +
+          `standing rule 50, and is precisely the state books-42 existed to end. Restore the ` +
+          `import, or if the screen was removed on purpose, move this entry back to ` +
+          `UNREACHABLE_MODULES and say so in the gap report.`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("the gap report records the financial statements gap as CLOSED, not as open", () => {
+    // Rule 66: an owner document that describes a gap which no longer exists
+    // is worse than one that omits it — Michael would go looking for work that
+    // is already done, and would distrust the rest of the list when he found
+    // it finished.
+    expect(gap).toMatch(/CLOSED/);
+    expect(gap).toMatch(/books-42/);
   });
 
   it("the reachability probe is not vacuous — it finds a module that IS wired", () => {

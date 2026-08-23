@@ -141,13 +141,31 @@ You said the 2027 figures are a few weeks out. When the notices arrive, each one
 
 # PART THREE — Accounting beyond payroll
 
-## 3.1 Financial statements exist as an engine with no screen
+## 3.1 Financial statements exist as an engine with no screen — **CLOSED in books-42**
 
-`financial-statements-core.ts` exists. `financial-statement-authorities.ts` exists. A search for anything in `src/app` or `src/components` importing them returns **nothing**.
+**What this section said when it was written, and it was true:** `financial-statements-core.ts` exists, `financial-statement-authorities.ts` exists, and a search for anything in `src/app` or `src/components` importing them returned **nothing**. There was a trial balance screen and no income statement, no balance sheet, no statement of cash flows, no statement of shareholder equity.
 
-There is a trial balance screen. There is no income statement, no balance sheet, no statement of cash flows, no statement of shareholder equity.
+**What changed.** Books-42 built the screen. It lives at **Accounting → Financial Statements** (`/admin/books/financial-statements`), and the income statement and balance sheet now render from your own ledger, with the §280E wall drawn across the income statement as a line rather than described in a footnote.
 
-For an S-corp this is not cosmetic. You need a balance sheet for Schedule L, and you need retained earnings and distributions tracked properly for Schedule M-2 and the AAA. The engine for that (`basis-aaa-core.ts`) also exists, also unreachable.
+I want to be straight with you about two things, because "we built the screen" would be a tidier sentence than the truth.
+
+**First, only two of the four render today, and that is on purpose.** The statement of cash flows needs an operating/investing/financing split that nothing in this system computes yet. The statement of shareholder equity needs three documents I do not have: Form 2553 with the CP261 acceptance letter (to establish whether the company carries accumulated earnings and profits from any period before the S election), the prior year's Schedule M-2 line 8 (the beginning AAA), and Form 7203 for each of the three shareholders (beginning stock basis). Those two statements appear on the screen as **blocked**, in gold, each naming the exact document that unblocks it and where to get it. They are not rendered against assumed defaults. A balance sheet built on "assume there is no accumulated E&P" is not a draft — it is a false statement that ties perfectly, and it is the kind of thing that gets handed to a lender.
+
+**Second, wiring it found a real defect in the engine, and the defect was worse than the missing screen.** `buildIncomeStatement` accepts a list of account codes carrying the cannabis excise, and it filtered that list against *every* row of the trial balance rather than only the profit-and-loss rows. Your chart has no income- or expense-typed excise account at all: the 37% lives in `32000 Cannabis Excise Tax Payable — TRUST`, which is a **liability**, because RCW 69.50.535(4) makes that money the state's from the moment the customer hands it over.
+
+So the single most natural thing anyone would ever do — pass the account with "excise" in its name as the excise account — was tested against a perfectly balanced trial balance and produced this:
+
+| | |
+|---|---|
+| Gross sales | $10,000.00 |
+| Net sales | **$13,200.00** — net sales exceeded gross sales |
+| Net income | $6,000.00, where the truth was $2,300.00 |
+
+and **nothing refused**. A liability carries a credit balance, so subtracting it added. The same $3,700 also stayed in current liabilities, so one number was counted twice in opposite directions — and the balance sheet still tied. The engine's own 132 tests never caught it because they use the fictional codes `4900` and `6900`, which are income and expense types. The engine had never been shown a chart of accounts like yours.
+
+There is now a guard that runs *before* the engine is called and refuses any role code that is not a profit-and-loss account, and a test that proves the engine really does produce that wrong answer without it.
+
+**Still open from this section:** you need a balance sheet for Schedule L, and retained earnings and distributions tracked properly for Schedule M-2 and the AAA. The engine for that (`basis-aaa-core.ts`) exists and is **still unreachable**.
 
 ## 3.2 Period close is built and not wired
 
@@ -184,14 +202,18 @@ This is standing rule 50 at scale — code that passes its tests and cannot be r
 
 The nine modules above teach. These two *compute*, and they are equally unreachable:
 
-| Module | Lines | Computes | Blocks |
-|---|---|---|---|
-| `financial-statements-core` | 1,600 | Income statement, balance sheet, cash flows, equity | Schedule L, Schedule M-2 |
-| `period-close-core` | 868 | Month/quarter lock against back-dated entries | The control that keeps a reported quarter from changing after you report it |
+| Module | Lines | Computes | Blocks | Status |
+|---|---|---|---|---|
+| `financial-statements-core` | 1,600 | Income statement, balance sheet, cash flows, equity | Schedule L, Schedule M-2 | **CLOSED — wired in books-42**, see 3.1 |
+| `period-close-core` | 868 | Month/quarter lock against back-dated entries | The control that keeps a reported quarter from changing after you report it | Still unreachable |
 
 I am naming them here with the same specificity as the mentor modules because a claim like "the accounting side needs work" is not actionable, and because these two are the difference between a bookkeeping tool and a system that can produce a defensible year end.
 
-**A note on how this document is kept honest.** Every claim in this part — that these eleven modules exist, and that nothing in `src/app` or `src/components` imports them — is re-derived by an automated check that runs on every commit (`tests/compliance/owner-report-books-38.test.ts`). If someone builds one of these screens, that check **fails**, and the failure message tells them to update this report. That is deliberate. A gap report that quietly goes stale is worse than no gap report, because you would plan around it. So the day one of these lines becomes untrue is the day the build tells us to delete it.
+**A note on how this document is kept honest.** Every claim in this part — that these modules exist, and that nothing in `src/app` or `src/components` imports them — is re-derived by an automated check that runs on every commit (`tests/compliance/owner-report-books-38.test.ts`). If someone builds one of these screens, that check **fails**, and the failure message tells them to update this report. That is deliberate. A gap report that quietly goes stale is worse than no gap report, because you would plan around it. So the day one of these lines becomes untrue is the day the build tells us to delete it.
+
+**That check has now fired once, and this is what happened.** Wiring the financial statements screen in books-42 turned the claim "nothing imports `financial-statements-core`" into a false statement, and the build went red with a message naming the two files that now import it and instructing whoever saw it to update this report. That is the paragraph above working exactly as intended.
+
+What I did *not* do is delete the line. The entry moved to a second list in the same check, and **the assertion inverted**: `financial-statements-core` must now be reachable, and the day nothing in `src/app` or `src/components` imports it any more, the build fails again and says so. A gap that was closed last month is the easiest one in the system to reopen by accident — somebody tidies a page, removes the last import, and 1,600 tested lines slide quietly back into the dark with every test still green. Closing a gap is not a reason to stop watching it.
 
 ---
 
