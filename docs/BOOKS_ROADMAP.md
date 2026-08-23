@@ -42,11 +42,156 @@ rule 1. The order:
 | — | **Correction slice: the S-corporation year, §6621 interest, §6699** | nothing — it FIXES 3 and 4a | **SHIPPED — books-21** |
 | — | **Cleanup slice: the Accounting and Lyman tabs; the Security Log; nav/page gate agreement** | nothing — it LOCKS what 1–4a built | **SHIPPED — books-22** |
 | — | **Inventory audits reach the ledger: the count, the owner's approval, the journal entry** | nothing — it CONNECTS the shelf to 4a | **SHIPPED — books-23** |
-| 4b | **Form 1120-S and Schedule K-1** | the statements + AAA/basis + 1125-A | **NEXT** |
-| 5 | **Form 1040 and §199A** | the K-1 produced by #4 | not started |
-| 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | not started |
+| 4b | **Form 1120-S and Schedule K-1** | the statements + AAA/basis + 1125-A | **DEFERRED — see THE AGREED ORDER below** |
+| 5 | **Form 1040 and §199A** | the K-1 produced by #4 | **DEFERRED — blocked on Form 7203** |
+| 6 | **941 / 940 / W-2 / W-3** | payroll engine + the returns above | **IN PROGRESS — 941 books-40, WA quarterly books-41, 940 + W-2/W-3 authorities books-43** |
 | 7 | **WA B&O and local taxes** | the income statement's revenue lines | not started |
-| 8 | **Forms builder, generalized** | the pattern proven across #4–#7 | not started |
+| 8 | **Forms builder, generalized** | the pattern proven across #4–#7 | **PROMOTED — becomes slice D below, at Michael's request** |
+
+---
+
+## THE AGREED ORDER — books-44 onward (Michael, Aug 2026)
+
+**This section supersedes the ordering of items 4b, 5 and 8 above.** It was
+agreed after the books-43 recon and Michael confirmed it verbatim:
+
+> *"I agree with the roadmap and strategy and order. Let's start with c first,
+> then a, then d, then b last as recommended. I will be ready with what you need
+> by then. Please make sure to record everything we have just worked out as the
+> strategy and roadmap going forward for the next several slices. I don't want
+> to miss something and drift from what's important."*
+
+That last sentence is the reason this section exists. Conversations compact;
+this file is the memory that survives.
+
+| Order | Slice | What it is | Why it sits here |
+|-------|-------|-----------|------------------|
+| **C** | **Connect the unreachable teaching** | wire the 6 mentor modules no screen renders; fix the 9 broken RCW citations; retire the duplicate float rounding helper | **CHEAPEST REAL GAIN.** The teaching is already written, already tested, already paid for — and Michael cannot read a word of it. Nothing new has to be invented, only connected. |
+| **A** | **Finish the W-2 / W-3 engine** | boxes 1–6, box 12 codes, boxes 15–20, W-3 totals, the W-3 ↔ four-941s reconciliation | Natural continuation of books-43, whose authorities are already merged and verified. |
+| **D** | **The Form / Why / Check tab system** | render the actual form, box by box, with per-box authority on click | Michael is a visual learner and said the verbatim panels are "hard to digest as there is a wall of words and color". Built ONCE, generically, so every form inherits it. |
+| **B** | **K-1, 1120-S, 1040** | the entity return, the shareholder schedule, the personal return | **LAST ON PURPOSE** — see the blocker note below. |
+
+### Why B is last, and it is not a matter of taste
+
+The logic and the forms can be built before the data arrives; Michael asked for
+exactly that and it is sound. But **Form 7203 decides whether the S-corporation
+losses are deductible at all**, and it is not in hand. Building the 1040 around
+an unknown basis figure would mean inventing the one number the return turns on,
+which is standing rule 1. The structure gets built; the numbers wait.
+
+Michael's own words on this: *"We may not have the info yet we need. But we can
+build the logic and forms themselves to be ready to fill with real data once I
+have it."* That is the plan — with the discipline that an unfilled field must
+REFUSE rather than default (rule 27).
+
+### The two W-2 traps that must survive every future slice
+
+Recorded here because they look like defects and a future maintainer will try to
+"fix" them. Both are proven verbatim against mirrored sources in books-43.
+
+1. **Box 1 legitimately exceeds boxes 3 and 5 on Michael's own W-2.** Company-paid
+   health premiums for a 2%-or-more shareholder-employee are wages for income tax
+   (Instructions, Box 1, item 5) but are carved out of FICA by §3121(a)(2)(B).
+   Making those boxes agree either overpays FICA or understates his income. The
+   matching 1040 deduction is only available *if it went on the W-2 first*.
+2. **Box 17 must be blank.** Washington levies no personal income tax. PFML and
+   WA Cares are real employee deductions but they are **box 14**, not box 17.
+   Reporting them as state income tax withheld tells the IRS his employees paid a
+   tax that does not exist, and invites a deduction they are not entitled to.
+
+### The design decision behind slice D
+
+Three tabs — **Form · Why · Check** — not one wall of text.
+
+* **Form** renders the form as it is actually printed. Populated boxes show real
+  figures. Required-but-empty boxes are red. **Correctly-blank boxes are grey and
+  labelled "blank on purpose", with the reason.** A box that is *supposed* to be
+  empty must never look like one that was forgotten — that distinction is the
+  whole point, and box 17 is the worked example.
+* **Why** shows the authority for **one box at a time**, on click. Same verbatim
+  quotes, delivered at the moment the question is asked instead of forty at once.
+* **Check** carries the reconciliations (W-3 to the four 941s, and so on).
+
+**Scope honesty, so this is not oversold:** this is a *worksheet and review*
+surface, not a filing surface. Anything printed from it must be marked as such.
+Per the standing boundary, we replace the data-preparation half of Aatrix; we do
+NOT become a filing agent.
+
+---
+
+## SLICE C — THE RECON FINDINGS, MEASURED
+
+Everything below was counted from the tree at commit `0131c62b`, not recalled.
+The probe: for each `*-mentor.ts`, list importers under `src/` excluding the
+module itself and its own `-gates` sibling. Rule 66d applies — existence is
+asserted before absence of importers is called "unreachable work".
+
+### C1. Six mentor modules that no screen renders — 82 lessons, 2,345 lines
+
+| Module | Lessons | Lines | Importers under `src/` |
+|--------|---------|-------|------------------------|
+| `payroll/payroll-onboarding-mentor.ts` | 33 | 746 | **0** |
+| `accounting/tax-penalty-mentor.ts` | 20 | 540 | **0** |
+| `accounting/interest-mentor.ts` | 10 | 328 | **0** |
+| `accounting/period-close-mentor.ts` | 9 | 281 | **0** |
+| `accounting/s-corporation-year-mentor.ts` | 5 | 225 | **0** |
+| `reports/payroll-reconciliation-mentor.ts` | 5 | 225 | **0** |
+| **Total** | **82** | **2,345** | — |
+
+Each is reachable from its own test file and from `owner-report-books-38`, which
+is precisely the shape rule 50 warns about: **dead code wearing a green check.**
+The tests prove the lessons are well-formed and internally consistent. No test
+can prove Michael has any way to read them, because he does not.
+
+**They all share one shape**, verified by reading the declarations rather than
+assuming: `{ fn, plainEnglish, whyItExists, theTrap, whatIWouldDo, authorityIds }`.
+Four import the type from `basis-aaa-mentor` / `cogs-position-mentor` /
+`reports-presentation-mentor`; two declare it identically inline. **One generic
+renderer can therefore serve all six** — build it once, not six times (rule 25).
+
+**THE CONSTRAINT THAT DECIDES THE ARCHITECTURE:** four of the six
+(`interest`, `period-close`, `s-corporation-year`, `payroll-reconciliation`)
+import `node:fs` at module top level, for the build-time coverage gates that read
+the core file and assert every exported function is taught. **That import cannot
+reach a browser bundle.** The lesson DATA is pure and the gates are not, so the
+wiring must import the data without dragging `readFileSync` behind it. Options,
+in order of preference: import the data through a `server-only` store, or split
+the gates into a `*-mentor-gates.ts` sibling as `ytd-mentor` already does. The
+second is the house pattern and is the reason that pattern exists.
+
+### C2. Nine RCW citations that route to files which do not exist
+
+`verify-verbatim-quotes` reports these as hard failures today (they are the
+long-standing "9 pre-existing RCW failures" every recent slice has reported
+around). Two distinct defects hide in the nine:
+
+* `rcw-50-24-010-*` (2) and `rcw-50-24-014-*` (3) route to
+  `state-wa/rcw-50.24.010.txt` / `rcw-50.24.014.txt` — **never fetched.**
+* `rcw-50a-10-030-*` (4) route to `state-wa/rcw-50.txt` — **a routing bug**, not
+  a missing file. The regex is truncating `50A.10.030` to `50`, the same
+  swallow-the-suffix defect that once sent §280E to `usc-280.txt`.
+
+The routing bug must be fixed *before* fetching, or the fetch will be filed under
+a name nothing looks for.
+
+### C3. One duplicated rounding helper
+
+`applyMilliPct` exists in two places, one of which does float arithmetic. Money is
+integer cents by house law; a float rounding helper on a money path is a latent
+penny-drift defect. Retire the duplicate, keep the integer implementation
+(rule 25: extend, do not duplicate).
+
+### What "done" looks like for slice C
+
+1. Every one of the 82 lessons is reachable from a real screen a signed-in owner
+   can navigate to — proven by a test that walks the route, not by a screenshot.
+2. `verify-verbatim-quotes` reports **zero** failures, so the nine cease to be
+   permanent background noise that trains everyone to ignore a red line.
+3. One `applyMilliPct`, integer-only.
+4. The reachability probe from `owner-report-books-38` is UPDATED, not deleted —
+   rule 66a requires it to assert the property still holds in both directions,
+   so once these six are wired the probe must prove they are *reachable*, and
+   must still be able to fail.
 
 Then, and only then: **push notifications and the calendar.** Michael,
 books-17: *"there's no point notifying me yet if we can't use it."*
@@ -444,6 +589,24 @@ exists.
    will keep presenting both treatments until the returns settle it.
 9. **Intercompany detail between the four ledger entities** — blocks the
    combined statements and the eliminations described in slice 1.
+10. **Form 7203 per shareholder** — stock and debt basis. **This is the blocker
+    that puts slice B last.** §1366(d)(1) allows losses only to the extent of
+    basis, so without 7203 the deductibility of every S-corporation loss on the
+    1040 is unknown. The forms and logic can be built ahead of it; the numbers
+    cannot be inferred, and inferring them would be rule 1.
+11. **The twelve 2027 rates**, the **Q3/Q4 2026 filed returns**, the **salaried
+    reporting method**, the **S-election tax year**, the **ending AAA from
+    Schedule M-2**, the **§6699(e) amount**, and the **quarterly federal
+    short-term rates**. Michael is gathering these; the first payroll is
+    1 January 2027, so the 2027 rates are the time-critical set.
+
+**RESOLVED since the last revision:** the Wells Fargo loan is connected via
+Plaid (Michael, Aug 2026), which closes the input side of the non-current
+liability question. The *code* side is still open and is tracked as B7: 
+`financial-statements-store.ts` `loadNonCurrentAccountCodes()` still
+`return []`, deliberately and with the pessimistic direction documented — every
+liability presents as current, which understates the position rather than
+flattering it.
 
 ---
 
@@ -516,15 +679,54 @@ exists.
 | — | EQUIVALENCE re-proven after the rewording, with the row count PRINTED (rule 61d): two databases compared columns/constraints/policies/RLS/indexes/column-privileges — **491 rows vs 491, identical** — and the audit function body normalises to 2,344 chars either way, differing only by stripped comments | #TBD |
 | — | RESEARCH, as Michael asked: another user hit his EXACT error in the Supabase SQL editor on 2026-08-12 with unrelated SQL and no line number (SO 79993483), and supabase/cli #5146 (plus #4746/#5020/#5062) documents the splitter losing dollar-quote depth. Reported as SHARED fault: their splitter is fragile AND our file gave it something to trip on | #TBD |
 | — | answered "should I run it without RLS?" with a plain NO and the reason: 42P01 is a PARSER error raised before any policy is consulted, so disabling RLS cannot help and would trade real SSN protection for an imaginary fix. Gave him `supabase db push` as the splitter-free route | #TBD |
+| books-40 | **Form 941** — the quarterly federal return, engine + screen | #1015 |
+| books-41 | **WA quarterly returns** (ESD and L&I) wired to a screen, plus the form a test caught us dropping | **#1019 — MERGED** |
+| books-42 | **the financial statements wired and taught**, plus the excise defect that made net sales exceed gross sales | **#1020 — MERGED** |
+| books-43 | **the annual forms: Form 940 (authorities + engine) and the W-2/W-3 authorities** | **#1021 — MERGED** |
+| — | **Form 940**, and the FIVE defects reading the source caught — including a truncation that CHANGED THE LAW (quoting "paid all state unemployment tax by the due date." when the sentence continues "…of your Form 940", which would have told Michael he had lost a credit he had not lost), a word inserted the IRS never wrote, and a fabricated quote assembled entirely out of genuine fragments from two hundred lines apart | #1021 |
+| — | **the cite-format hole**: every 940 cite read "IRS, Instructions…" with a comma, so `sourceFileFor` returned null and all seventeen quotes were counted as "no local copy to check against" while the mirrored file sat on disk. Seventeen unverified quotes behind a cheerful green line | #1021 |
+| — | **W-2 / W-3 authorities**: 28 own + 13 borrowed = 41. §6051 MIRRORED rather than declared uncheckable (it is a US Government work at a public URL, so `KNOWN_UNMIRRORED_AUTHORITY_IDS` would have been a choice, not a limit) by EXTENDING `fetch-federal-authority-text.ts` (rule 25). Verifier 268 → **296 verified, exactly +28** | #1021 |
+| — | **a borrowed id that did not exist.** The reuse list named `iw2w3-2026-employer-contact-person`; the real id is `iw2w3-2026-w3-contact-person`. `formW2Authorities()` FILTERS by that list, and a filter looking for something absent returns a SHORTER ARRAY, not an error — 40 authorities where 41 were intended, silently. Invisible to `tsc` (every string is a valid string) and to the verifier (which only walks quotes that ARE present). **A reused id that does not exist is indistinguishable from one that was never listed.** Gated by asserting every borrowed id RESOLVES | #1021 |
+| — | **`source` was a file path, and `source` is an `href`.** All 28 records pointed at the repo-relative corpus path while `CompanyInformationForm` renders `href={a.source}` under "Read the original" — 28 dead links. Nothing would have caught it: the verifier routes on `.cite` and NEVER READS `.source`, and the only registry-wide assertion is non-emptiness, which a repo path satisfies. Surfaced only because six BORROWED authorities quote the same IRS document and link to irs.gov, so half a panel would have worked | #1021 |
+| — | tamper campaign **14/14 CAUGHT** (rule 39): altered quote, truncated carve-out, path-as-source, wrong-document URL, the bad borrowed id, a dropped borrowed id, a mangled cite, a mislabelled statute, both oracles, both traps, a unicode elision, a tidied page-break footer | #1021 |
 
 ---
 
+## What guards this file
+
+This document is not trusted on its honour. Three artifacts hold it to account,
+and anyone editing it should know they exist before being surprised by them:
+
+| Artifact | What it does |
+|---|---|
+| `tests/compliance/books-roadmap-agreed-order.test.ts` | Re-derives every countable claim here from the actual modules on every suite run |
+| `scripts/prove-roadmap-gate.sh` | Mutation campaign against both this file and the owner's copy — 18 attacks, 2 silent controls |
+| `docs/MICHAEL-books-43-the-plan-from-here.md` | The same plan in plain English for Michael, with a PDF |
+
+The division of labour matters. The gate checks **numbers, order and structure**
+— lesson counts, line counts, the C → A → D → B sequence by position, the
+`node:fs` count, the cross-footed total. It deliberately does **not** assert on
+the prose explaining *why* B is last or what the three tabs should look like,
+because that is judgement, and a test that breaks when someone improves a
+sentence teaches people to edit tests instead of thinking (rule 66c). The two
+silent controls in the campaign exist to prove the prose really is still free to
+change: one adds a sentence here, one rewords an explanation in the owner's copy,
+and both must stay green.
+
+The owner document is gated too, and by re-deriving its figures **from the code**
+rather than comparing them to this file. Two documents agreeing on a wrong number
+is the likely failure mode, because the second is written by copying the first —
+a document-to-document comparison is blind to exactly that case (rule 73).
+
+If you change a lesson count, a module name, or the order, expect the suite to go
+red and **fix this document** rather than the test. That is the whole point.
+
 ## How to use this file
 
-Read `todo.md` for the standing rules (1–32) first — they are binding repo law
-and rule 21 defines the method every slice follows. Then read this file to see
-what is next. Then read `docs/books-roadmap-remaining.md` for the plain-English
-explanation of why it matters.
+Read `todo.md` for the standing rules (currently 1–73) first — they are binding
+repo law and rule 21 defines the method every slice follows. Then read this file
+to see what is next. Then read `docs/books-roadmap-remaining.md` for the
+plain-English explanation of why it matters.
 
 Update the status table above the moment a slice merges. A roadmap that is not
 maintained is worse than no roadmap, because it is trusted.
