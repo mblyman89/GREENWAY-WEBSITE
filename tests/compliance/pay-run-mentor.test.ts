@@ -82,10 +82,7 @@ import {
   unionMembers,
   w4ProvenancesInSource,
 } from "@/lib/payroll/pay-run-mentor-gates";
-import {
-  stripTypeScriptComments,
-  unionMembersInSource,
-} from "@/lib/payroll/mentor-quote-gate";
+import { stripTypeScriptComments } from "@/lib/payroll/mentor-quote-gate";
 
 /** A throwaway .ts file, for pointing a gate at input it must reject. */
 function tempSource(contents: string, name = "fake.ts"): string {
@@ -618,11 +615,17 @@ describe("standing rule 65b — this mentor stays out of node:fs", () => {
     expect(raw).toMatch(/readFileSync/); // the comment really does mention it
   });
 
-  it("the gates module is the one that does the I/O", () => {
+  it("the gates module is the one that does the I/O", async () => {
     // The complement. If this stopped being true the test above would pass for
     // the wrong reason — because nothing reads from disk at all any more, and
     // every gate would then be checking a hand-typed list.
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    //
+    // `await import` rather than `require`: the repo forbids require-style
+    // imports (@typescript-eslint/no-require-imports), and the test directly
+    // above this one already uses the dynamic-import form. Two spellings of
+    // the same thing three lines apart was mine, and it was inconsistent
+    // before it was a lint error.
+    const { readFileSync } = await import("node:fs");
     const src = readFileSync(
       join(process.cwd(), "src", "lib", "payroll", "pay-run-mentor-gates.ts"),
       "utf8",
