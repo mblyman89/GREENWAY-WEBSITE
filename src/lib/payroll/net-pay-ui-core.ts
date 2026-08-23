@@ -82,6 +82,7 @@ import {
   type VoluntaryDeduction,
 } from "@/lib/payroll/net-pay-core";
 import { GREENWAY_LNI_RISK_CLASS_CODE } from "@/lib/payroll/payroll-onboarding-ui-core";
+import type { PayRunContext } from "@/lib/payroll/pay-run-core";
 import {
   ALL_PAYROLL_RATE_KEYS,
   describeKey,
@@ -162,7 +163,7 @@ export type MissingRate = {
  * means the screen can show a gap where a number should be, which is the only
  * honest rendering of "we do not know this yet".
  */
-function readRate(
+export function readRate(
   label: string,
   lookup: RateLookup<number>,
   into: MissingRate[],
@@ -173,7 +174,7 @@ function readRate(
 }
 
 /** The evidence document behind a rate on a date, so a figure is auditable. */
-function documentIdFor(
+export function documentIdFor(
   key: Parameters<typeof GREENWAY_RATES.lookup>[0],
   onIsoDate: string,
 ): string | null {
@@ -203,6 +204,94 @@ function documentIdFor(
  * is deliberate. A garnishment computed against a stale floor takes money the
  * employee was entitled to keep.
  */
+/**
+ * EVERY rate a paycheque needs on one date, read once, in one place.
+ *
+ * WHY THIS EXISTS (books-39). The illustration below assembles eleven rates by
+ * hand. The pay run needs the same eleven. Written twice, the two would
+ * eventually disagree about which unit a rate is in or which of them blocks a
+ * cheque - and the disagreement would surface as the worked example on screen
+ * and the actual paycheque printing different numbers for the same employee on
+ * the same day. Standing rule 25: one reader, two callers.
+ *
+ * NOTHING IS DEFAULTED. Every field is `number | null` and a null is passed
+ * through exactly as the registry returned it. The comment forty lines below
+ * this one, headed "THE $0.00 THAT LOOKED LIKE A CORRECT ANSWER", records what
+ * happened the last time a `?? 0` was written on this path: a missing PFML rate
+ * became a zero premium, net pay came out $19.37 too high, disposable earnings
+ * came out $19.37 too high with it, and a creditor garnishment took 25% of the
+ * inflated figure. It survived tsc and review and was caught only by running
+ * it. This function cannot repeat that mistake because it has no arithmetic in
+ * it at all.
+ *
+ * `missingRates` comes back alongside, already in Michael's language, so the
+ * caller can TELL HIM WHICH AGENCY TO CHASE rather than showing a blank.
+ */
+export function payRunRatesOn(payDateIso: string): {
+  readonly context: PayRunContext;
+  readonly missingRates: readonly MissingRate[];
+} {
+  const on = payDateIso;
+  const missingRates: MissingRate[] = [];
+  const wages = minimumWageFactsOn(on, missingRates);
+
+  const context: PayRunContext = {
+    payDateIso: on,
+    wages,
+    stateUnemploymentRateMilliPct: readRate(
+      "Unemployment (SUTA) rate",
+      GREENWAY_RATES.lookupValue("wa_suta_total", on, "milli_percent"),
+      missingRates,
+    ),
+    sutaRateNoticeDocumentId: documentIdFor("wa_suta_total", on),
+    pfmlTotalRateMilliPct: readRate(
+      "Paid Family & Medical Leave total rate",
+      GREENWAY_RATES.lookupValue("pfml_total", on, "milli_percent"),
+      missingRates,
+    ),
+    pfmlEmployerSharePctMilliPct: readRate(
+      "PFML employer share of the total",
+      GREENWAY_RATES.lookupValue("pfml_employer_share_of_total", on, "milli_percent"),
+      missingRates,
+    ),
+    waCaresRateMilliPct: readRate(
+      "WA Cares rate",
+      GREENWAY_RATES.lookupValue("wa_cares_total", on, "milli_percent"),
+      missingRates,
+    ),
+    lniEmployeeRateMilliCentsPerHour: readRate(
+      "L&I employee rate",
+      GREENWAY_RATES.lookupValue("lni_employee_rate", on, "milli_cents_per_hour"),
+      missingRates,
+    ),
+    lniEmployerRateMilliCentsPerHour: readRate(
+      "L&I employer rate",
+      GREENWAY_RATES.lookupValue("lni_employer_rate", on, "milli_cents_per_hour"),
+      missingRates,
+    ),
+    lniRiskClassCode: GREENWAY_LNI_RISK_CLASS_CODE,
+    lniRateNoticeDocumentId: documentIdFor("lni_employee_rate", on),
+
+    /*
+     * The three below are FACTS ABOUT GREENWAY, not rates, and each is true
+     * today for a stated reason rather than because it is a convenient value:
+     *
+     *   fewer than 50 WA employees - Greenway is a single Port Orchard shop.
+     *     Under 50, the employer owes no share of the PFML medical premium.
+     *   state contributions paid timely - governs the FUTA credit. Michael has
+     *     no delinquency; if that ever changes the FUTA rate rises from 0.6% to
+     *     6.0% and this must change with it.
+     *   credit reduction 0 - Washington is not a credit-reduction state for
+     *     2026. This is republished by USDOL every November.
+     */
+    employerHasFewerThan50WaEmployees: true,
+    stateContributionsPaidTimely: true,
+    creditReductionMilliPct: 0,
+  };
+
+  return { context, missingRates };
+}
+
 export function minimumWageFactsOn(
   payDateIso: string,
   into: MissingRate[],

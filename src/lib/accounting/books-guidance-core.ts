@@ -92,6 +92,13 @@ import { SICK_LEAVE_AUTHORITIES, type SickLeaveAuthority } from "@/lib/payroll/s
 import { GARNISHMENT_AUTHORITIES, type GarnishmentAuthority } from "@/lib/payroll/garnishment-authorities";
 import { YTD_AUTHORITIES, type YtdAuthority } from "@/lib/payroll/ytd-authorities";
 import { NET_PAY_AUTHORITIES, type NetPayAuthority } from "@/lib/payroll/net-pay-authorities";
+// books-39. The PAY RUN slice: the two paragraphs that decide which W-4
+// governs a cheque (and what to do when there is not a good one), the
+// five-working-day support remittance clock, and the sentence that makes the
+// Washington minimum wage change every January. Imported in the same commit
+// that declares them, for the reason recorded above and because the omission
+// was caught the hard way — see the comment on the merge block below.
+import { PAY_RUN_AUTHORITIES, type PayRunAuthority } from "@/lib/payroll/pay-run-authorities";
 import {
   WAGE_ORDER_ENTRY_AUTHORITIES,
   type WageOrderEntryAuthority,
@@ -583,6 +590,61 @@ function fromNetPay(a: NetPayAuthority): GuidanceAuthority {
 }
 
 /**
+ * books-39. The pay run — the act of turning hours into a cheque.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE FIELD NAMES DIFFER, AND THAT IS WHY THIS ADAPTER IS NOT A ONE-LINER LIKE
+ * THE OTHERS
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `PayRunAuthority` calls them `citation` and `whatItMeansHere`; the shared
+ * registry calls them `cite` and `soWhat`. The mapping is written out rather
+ * than spread, so that adding a field to either type produces a compile error
+ * here instead of silently dropping it.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS SLICE'S REGISTRY WAS NOT MERGED IN ITS OWN COMMIT, AND WHAT CAUGHT IT
+ * ─────────────────────────────────────────────────────────────────────────────
+ * It was written, mirrored verbatim against `docs/authorities/`, covered by
+ * twenty-one tests, and connected to nothing. Nobody noticed until the mentor
+ * layer cited one of the ids and
+ * `tests/compliance/authority-id-resolution.test.ts` — a repo-wide tripwire
+ * that walks every file under `src/` and resolves every `authorityId` against
+ * the MERGED registry — failed with three unresolved citations.
+ *
+ * That is the exact condition the `PAYROLL_TAX_AUTHORITIES` comment at the top
+ * of this file warns about: an exported registry that nothing merges is a set
+ * of citations no screen can find. Worth recording, because the slice's own
+ * test file was green throughout: it verified the quotes against the corpus,
+ * which is a different question from whether anything can reach them.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ON THE TWO PARAGRAPHS THAT APPEAR TWICE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * §31.3402(f)(2)-1(a)(1) and (a)(4) are ALSO mirrored by the onboarding
+ * registry, under ids `cfr-31-3402-f-2-1-a-1-furnish-on-commencement` and
+ * `cfr-31-3402-f-2-1-a-4-no-certificate-default`. Both pairs are checked and
+ * both are correct: the pay-run quotes are LONGER, carrying the paragraph
+ * numbering and, for (a)(1), the cross-references the onboarding quote trims.
+ *
+ * They keep separate ids on purpose, so the drift machinery has nothing to
+ * resolve — different ids are different records, not two versions of one. The
+ * duplication is real and is tracked rather than hidden: the honest fix is one
+ * record per paragraph cited from both places, and doing that here would mean
+ * retitling ids the onboarding screens already reference, which is a different
+ * slice's work (standing rule 4).
+ */
+function fromPayRun(a: PayRunAuthority): GuidanceAuthority {
+  return {
+    id: a.id,
+    kind: a.kind,
+    cite: a.citation,
+    quote: a.quote,
+    soWhat: a.whatItMeansHere,
+    source: a.source,
+  };
+}
+
+/**
  * books-38. Wage order ENTRY - the duties that attach to receiving the paper,
  * as distinct from the arithmetic of applying it.
  *
@@ -747,6 +809,23 @@ export const ALL_SOURCE_REGISTRIES = [
   // entire debt, while over-withholding produces a wage claim. Keeping the
   // duties visible as their own subject is the point.
   "wage-order-entry",
+  // books-39. The PAY RUN itself. Deliberately NOT folded into "payroll-tax",
+  // "net-pay" or "ytd", because those three registries all answer arithmetic
+  // questions - what is the rate, in what order does it come off, what has
+  // been paid so far - and every sentence under this tag answers a question
+  // the arithmetic never asks: what do I do about the person whose paperwork
+  // is not in order. 26 CFR 31.3402(f)(2)-1 is the whole reason a pay run can
+  // legally proceed for an employee who never handed in a W-4: it says treat
+  // them as single with no adjustments, which means a missing form is a
+  // WITHHOLDING rule, not a stop-work order. RCW 26.18.110 puts a clock on
+  // remitting what was already withheld, so the duty outlives the cheque.
+  // RCW 49.46.020 is the annual minimum-wage adjustment, which is why an
+  // unreviewed rate carried over from last year is a finding and not a
+  // rounding difference. Tagging these separately keeps "may I run this
+  // payroll at all, and on what authority" visible as its own subject,
+  // because that is the question Michael will actually be asking at 6am on a
+  // Friday - not what the FICA rate is.
+  "pay-run",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -844,6 +923,21 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...WAGE_ORDER_ENTRY_AUTHORITIES.map((a) => ({
       tag: "wage-order-entry" as const,
       authority: fromWageOrderEntry(a),
+    })),
+    // books-39. The PAY RUN authorities: the paragraph that says a missing W-4
+    // does not stop payroll (withhold as single instead), the paragraph that
+    // says an INVALID one must be disregarded entirely rather than partly
+    // honoured, the W-4's due date, the five-working-day clock for remitting
+    // support money, and the sentence that makes Washington's minimum wage
+    // change every January - which is why a rate is chosen by PAY DATE and not
+    // by the period worked. Merged here for the standing reason and for one
+    // specific one: the pay-run screen explains why a cheque was withheld as
+    // single, and the onboarding screen explains why the form was rejected.
+    // Those are the same regulation and they must not read as two different
+    // rules.
+    ...PAY_RUN_AUTHORITIES.map((a) => ({
+      tag: "pay-run" as const,
+      authority: fromPayRun(a),
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation
