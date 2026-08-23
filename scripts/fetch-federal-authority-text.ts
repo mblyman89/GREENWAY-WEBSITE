@@ -136,6 +136,29 @@ const TARGETS: readonly Target[] = [
   // outright, so the statute belongs on disk where rule 35 can check the quote
   // rather than in a comment asserting what it says.
   { kind: "usc", section: "3401" },
+  // books-43 — §6051, THE STATUTE THAT MAKES THE W-2 EXIST AT ALL.
+  //
+  // Everything the annual-forms slice quotes about Form W-2 comes from the
+  // INSTRUCTIONS, which are `irs_guidance`: the agency's view of its own form,
+  // persuasive but not law. That is a fine source for "which box does this go
+  // in", and a poor one for "why must I do this at all". §6051(a) is the
+  // answer to the second question — it is the duty itself, and it is a
+  // statute, so it outranks every instruction quoted alongside it.
+  //
+  // MIRRORED RATHER THAN ADDED TO `KNOWN_UNMIRRORED_AUTHORITY_IDS`. That list
+  // is honest debt, not a parking space: each entry is a quote no script can
+  // check. §6051 is a work of the United States Government, freely available,
+  // and one HTTP request away — so declaring it "cannot check" while the text
+  // sits behind a public URL would be a choice, not a limitation. books-26 and
+  // books-37 both paid down this list the same way, and books-37 found a
+  // reassembled quote the moment it did.
+  //
+  // It also carries the two facts the engine downstream actually enforces and
+  // which the Instructions state only as deadlines in passing: the statement
+  // is due to the EMPLOYEE by January 31 following the calendar year, and the
+  // duty attaches to "every person required to deduct and withhold" — which is
+  // why an S corporation paying its owner-employee cannot opt out of it.
+  { kind: "usc", section: "6051" },
 ];
 
 function urlFor(t: Target): string {

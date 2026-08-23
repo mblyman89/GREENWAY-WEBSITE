@@ -98,6 +98,8 @@ import { NET_PAY_AUTHORITIES, type NetPayAuthority } from "@/lib/payroll/net-pay
 // Washington minimum wage change every January. Imported in the same commit
 // that declares them, for the reason recorded above and because the omission
 // was caught the hard way — see the comment on the merge block below.
+import { FORM_940_OWN_AUTHORITIES } from "@/lib/payroll/form-940-authorities";
+import { FORM_W2_OWN_AUTHORITIES } from "@/lib/payroll/form-w2-authorities";
 import { FORM_941_AUTHORITIES } from "@/lib/payroll/form-941-authorities";
 import { WA_QUARTERLY_OWN_AUTHORITIES } from "@/lib/payroll/wa-quarterly-authorities";
 import { PAY_RUN_AUTHORITIES, type PayRunAuthority } from "@/lib/payroll/pay-run-authorities";
@@ -851,6 +853,45 @@ export const ALL_SOURCE_REGISTRIES = [
   // under the federal tag would invite a reader to carry a federal habit into a
   // state return, which is precisely how the ten-day assumption gets made.
   "wa-quarterly",
+  // books-43. The ANNUAL federal unemployment return. Tagged apart from both
+  // "payroll-tax" and "form-941" because it answers a question neither of them
+  // asks, and the answer is counter-intuitive enough that blurring it would be
+  // actively harmful.
+  //
+  // "payroll-tax" already carries §3301 (the rate is 6%), §3306 (the base is
+  // $7,000) and §3302 (there is a credit). Those are the STATUTE. What lives
+  // here is the INSTRUCTIONS - and the instructions contain the sentence that
+  // decides how much Michael actually pays: the maximum credit is earned by
+  // paying state unemployment tax "by the due date of your Form 940", not by
+  // the state's own quarterly due date. That single clause means an ESD payment
+  // that was late to Washington can still be on time for the IRS, so a reader
+  // who carries the state habit into the federal return will overstate his own
+  // tax and never know it.
+  //
+  // It is also tagged apart from "form-941" because the two returns disagree
+  // about what "late" costs. A late 941 deposit is penalised directly under
+  // IRC §6656. A late STATE payment is not penalised by the IRS at all - it
+  // shrinks a CREDIT, by exactly ten percent of the late amount, through the
+  // Worksheet-Line 10 arithmetic. Same word, entirely different machinery, and
+  // one tag for both would hide that.
+  "form-940",
+  // books-43. The W-2 and the W-3, tagged apart from "payroll" and from
+  // "form-940" for a reason that is structural rather than tidy-minded.
+  //
+  // Form 940 and Form 941 are TAX RETURNS: they compute a liability and it gets
+  // paid. Form W-2 is an INFORMATION RETURN - it computes nothing and pays
+  // nothing, it re-reports figures that twenty-six pay runs already fixed. The
+  // consequence is that its failure mode is completely different. A 940 goes
+  // wrong by miscalculating; a W-2 goes wrong by faithfully reporting a figure
+  // that was already wrong in March. So the authorities under this tag are
+  // overwhelmingly about RECONCILIATION and TRANSCRIPTION, not arithmetic, and
+  // merging them with the returns would bury that distinction on the one screen
+  // where it matters most.
+  //
+  // The tag also carries the two authorities that are specifically Michael's:
+  // the S-corporation health premium (box 1 yes, box 3 no - so box 1 legitimately
+  // exceeds box 3) and the Washington box 17 blank rule.
+  "form-w2",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -993,6 +1034,42 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // thing on every screen, which means each record has one home.
     ...WA_QUARTERLY_OWN_AUTHORITIES.map((a) => ({
       tag: "wa-quarterly" as const,
+      authority: a,
+    })),
+    // books-43. Form 940's own instruction quotes. ONLY the module's OWN
+    // authorities are merged here - `form940Authorities()` also returns three
+    // borrowed statutes (§3301, §3306, §3302) which already reach this registry
+    // through `payroll-tax-authorities`, and merging them twice would create
+    // precisely the duplicate-record drift the logic below exists to detect.
+    // Same discipline as the wa-quarterly block above: every record has ONE
+    // home.
+    //
+    // MERGED HERE FOR A REASON THAT IS NOT CEREMONIAL. `verify-verbatim-quotes`
+    // walks THIS registry and nothing else. An authorities module that exports
+    // beautifully and is never merged is not "not yet wired" - it is a set of
+    // unverified quotes wearing a green check (standing rule 50), because the
+    // one script that would have compared them to the mirrored IRS text never
+    // sees them. books-34 lost seven authorities exactly this way.
+    ...FORM_940_OWN_AUTHORITIES.map((a) => ({
+      tag: "form-940" as const,
+      authority: a,
+    })),
+    // books-43. The W-2/W-3 quotes. ONLY the module's OWN authorities are merged
+    // here - `formW2Authorities()` also returns thirteen borrowed records (seven
+    // from ytd-authorities, six from company-identity-authorities) which already
+    // reach this registry through their own home modules. Merging them twice
+    // would manufacture exactly the duplicate-record drift the logic below
+    // exists to detect. Every record has ONE home; this file is where they meet.
+    //
+    // MERGED IN THE SAME COMMIT THAT DECLARES THEM, because
+    // `verify-verbatim-quotes` walks THIS registry and nothing else. An
+    // authorities module that exports beautifully and is never merged is not
+    // "wired up later" - it is a pile of unverified quotes wearing a green check
+    // (standing rule 50). books-34 lost seven authorities precisely that way,
+    // and books-43's own Form 940 work found a cite-format typo that had
+    // silently disabled the checker for seventeen more.
+    ...FORM_W2_OWN_AUTHORITIES.map((a) => ({
+      tag: "form-w2" as const,
       authority: a,
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
