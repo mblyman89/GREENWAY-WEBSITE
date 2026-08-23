@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the eighteen books screens plus Inventory Auditing", () => {
+  it("Accounting holds the nineteen books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -395,6 +395,27 @@ describe("N4 the Accounting and Lyman tabs", () => {
      * entries automatically would also "discover" a screen that had silently
      * fallen out of the menu and report no change.
      *
+     * BOOKS-41 ADDS /admin/books/wa-quarterly, making eighteen books screens
+     * and nineteen entries.
+     *
+     * The federal quarterly return got its screen in books-40. This is the
+     * STATE half of the same Friday: one calendar deadline that is really
+     * FOUR forms going to THREE submissions at TWO agencies - the ESD 5208A
+     * and 5208B ride together in one EAMS filing, Paid Leave & WA Cares is a
+     * second submission to the same agency on a different system, and the L&I
+     * quarterly report is a third submission to a different agency entirely.
+     * A screen that said "file your state return" as one line would teach
+     * Michael to do one third of the work and believe he was finished.
+     *
+     * There is a second reason this entry earns its line, and it is a rule 50
+     * finding rather than a repeat of the ones above. When the UI core was
+     * first tested, the form-render coverage assertion came back 3 where the
+     * engine emits 4: Form 5208B carries no `lines` at all, only per-person
+     * wage detail, so the box-by-box renderer had nothing to draw and would
+     * have dropped the form silently. Nothing would have been red. The ESD
+     * filing would simply have been incomplete. That is why the coverage
+     * function is in the tested core and not in the page.
+     *
      * Extended, not loosened, for the reason spelled out above: this list is
      * the only thing that notices a screen going dark.
      */
@@ -429,6 +450,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/sick-leave-balances",
         "/admin/books/timesheets",
         "/admin/books/trial-balance",
+        "/admin/books/wa-quarterly",
         "/admin/books/ytd",
         "/admin/inventory/audits",
       ].sort(),
