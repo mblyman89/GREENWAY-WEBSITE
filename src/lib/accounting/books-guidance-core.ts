@@ -98,6 +98,7 @@ import { NET_PAY_AUTHORITIES, type NetPayAuthority } from "@/lib/payroll/net-pay
 // Washington minimum wage change every January. Imported in the same commit
 // that declares them, for the reason recorded above and because the omission
 // was caught the hard way — see the comment on the merge block below.
+import { FORM_941_AUTHORITIES } from "@/lib/payroll/form-941-authorities";
 import { PAY_RUN_AUTHORITIES, type PayRunAuthority } from "@/lib/payroll/pay-run-authorities";
 import {
   WAGE_ORDER_ENTRY_AUTHORITIES,
@@ -826,6 +827,17 @@ export const ALL_SOURCE_REGISTRIES = [
   // because that is the question Michael will actually be asking at 6am on a
   // Friday - not what the FICA rate is.
   "pay-run",
+  // books-40. The QUARTERLY RETURN. Deliberately NOT folded into "payroll-tax"
+  // or "pay-run": those answer "what does this paycheque cost", and every
+  // sentence under this tag answers a question a paycheque never asks - by
+  // WHEN must the quarter be reported, WHO counts on line 1, and what happens
+  // to a quarter in which nobody was paid at all. 26 CFR 31.6011(a)-1 is the
+  // reason a quiet quarter still needs a return filed "whether or not wages
+  // are paid therein", which is the single most expensive thing an employer
+  // can be unaware of: the penalty attaches to the missing FORM, not to
+  // missing money, so a zero quarter that is simply skipped accrues a penalty
+  // on a return that would have cost nothing to file.
+  "form-941",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -938,6 +950,18 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...PAY_RUN_AUTHORITIES.map((a) => ({
       tag: "pay-run" as const,
       authority: fromPayRun(a),
+    })),
+    // books-40. The Form 941 filing authorities: when the return is due, the
+    // weekend/holiday shift that moves the deadline, who line 1 counts, why
+    // line 2 must equal W-2 box 1, why line 5a is BOTH halves of Social
+    // Security, and the fractions-of-cents line. No adapter is needed - these
+    // are authored as GuidanceAuthority records directly. Merged HERE for the
+    // standing reason: the 941 screen, the W-2 builder and the deposit
+    // schedule will all cite 26 CFR 31.6071(a)-1, and they must be reading one
+    // record rather than three copies that can drift apart.
+    ...FORM_941_AUTHORITIES.map((a) => ({
+      tag: "form-941" as const,
+      authority: a,
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's
     // research, but merged HERE so there is exactly one registry: a citation

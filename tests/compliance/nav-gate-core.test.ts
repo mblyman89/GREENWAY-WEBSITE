@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the seventeen books screens plus Inventory Auditing", () => {
+  it("Accounting holds the eighteen books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -409,6 +409,15 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/bank",
         "/admin/books/bills",
         "/admin/books/conversion",
+        /*
+         * books-40. The quarterly federal return. Added here for the same
+         * reason the Pay Run entry above was: the engine, the store, the
+         * mentor and 95 tests were all green while the screen was reachable
+         * from nowhere. The 941 is the first thing that falls due after the
+         * first payroll runs on 1 January 2027 - a return that exists only in
+         * a test file does not get filed.
+         */
+        "/admin/books/form-941",
         "/admin/books/garnishments",
         "/admin/books/journal",
         "/admin/books/leave",
