@@ -91,6 +91,49 @@ export type PayrollRateKey =
   | "pfml_employer_share_of_total"
   | "wa_cares_total"
   | "wa_suta_total"
+  /**
+   * THE UNEMPLOYMENT TAX RATE PROPER, ON ITS OWN.
+   *
+   * WHY THIS EXISTS SEPARATELY FROM `wa_suta_total` (books-41).
+   *
+   * `wa_suta_total` carries 0.40%, which is 0.37% unemployment insurance plus
+   * the 0.03% Employment Administration Fund surcharge, and its note used to
+   * say the EAF "is not separately reportable, so the total is what gets
+   * applied". Greenway's filed Q2 2026 return says otherwise on both counts.
+   * It reports the two as SEPARATE LINES - UI $255.02 and EAF $20.68 - and the
+   * two lines are not merely presentational, because each is rounded on its
+   * own:
+   *
+   *   0.37% of 68,923.45 = 255.016765 -> 255.02
+   *   0.03% of 68,923.45 =  20.677035 ->  20.68
+   *                                      -------
+   *                                       275.70   <- the filed total
+   *
+   *   0.40% of 68,923.45 = 275.6938   -> 275.69   <- one cent SHORT
+   *
+   * The single combined rate cannot reproduce the return. That is not a
+   * rounding nicety: RCW 50.24.010 and RCW 50.24.014(2)(b) each separately
+   * command half-cent rounding on "any contributions" under that section, so
+   * the law itself requires two roundings, and doing one produces a figure the
+   * State did not assess.
+   *
+   * `wa_suta_total` is KEPT rather than deleted, because the readiness screen
+   * and the onboarding screen both quote a single headline rate off the ESD
+   * notice and that is a real thing the notice prints. It is now guarded by
+   * `findSutaComponentViolations`, which insists the parts equal the whole.
+   */
+  | "wa_suta_ui"
+  /**
+   * The Employment Administration Fund surcharge, on its own.
+   *
+   * NOT one account but two, stacked, and the statute never states the sum.
+   * RCW 50.24.014(1)(a) sets "a basic rate of two one-hundredths of one
+   * percent" and RCW 50.24.014(1)(b) sets "a basic rate of one one-hundredth
+   * of one percent". 0.02% + 0.01% = 0.03%, which is the figure that
+   * reproduces the filed EAF exactly. The arithmetic is done here, once, in
+   * the open, rather than left as a number nobody can trace to a statute.
+   */
+  | "wa_suta_eaf"
   | "wa_suta_wage_base"
   | "lni_employee_rate"
   | "lni_employer_rate"
@@ -118,6 +161,8 @@ export const ALL_PAYROLL_RATE_KEYS: readonly PayrollRateKey[] = [
   "pfml_employer_share_of_total",
   "wa_cares_total",
   "wa_suta_total",
+  "wa_suta_ui",
+  "wa_suta_eaf",
   "wa_suta_wage_base",
   "lni_employee_rate",
   "lni_employer_rate",
@@ -383,6 +428,65 @@ export function findShareSumViolations(rows: readonly PayrollRateRow[]): string[
 }
 
 /**
+ * The two unemployment components must add to exactly the headline total on
+ * every day all three are on file.
+ *
+ * WHY THIS IS NOT THE SAME CHECK AS `findShareSumViolations` (books-41).
+ *
+ * That one asserts two SHARES sum to 100% of a premium. This one asserts two
+ * RATES ON WAGES sum to a third rate on wages. They are different arithmetic
+ * with a different failure mode, and merging them would force one function to
+ * mean two things.
+ *
+ * WHY IT MATTERS ENOUGH TO CHECK. The ESD notice prints all three numbers, and
+ * a human copying them in has three chances to fumble one. If the parts stop
+ * agreeing with the whole, nothing else in the system notices: the return would
+ * be built from the components and the readiness screens would quote the total,
+ * so Michael would be shown one rate and would file another. That is precisely
+ * the class of defect that survives a green test suite, so it is caught at
+ * construction where it cannot be ignored.
+ *
+ * Deliberately silent when any of the three is missing. An absent row is
+ * already handled - a lookup for it refuses loudly - and reporting it twice
+ * would train the reader to skim these messages.
+ */
+export function findSutaComponentViolations(rows: readonly PayrollRateRow[]): string[] {
+  const problems: string[] = [];
+  const totals = rows.filter((r) => r.key === "wa_suta_total" && r.unit === "milli_percent");
+  const uis = rows.filter((r) => r.key === "wa_suta_ui" && r.unit === "milli_percent");
+  const eafs = rows.filter((r) => r.key === "wa_suta_eaf" && r.unit === "milli_percent");
+
+  for (const total of totals) {
+    for (const ui of uis) {
+      for (const eaf of eafs) {
+        // The latest start and the earliest end of the three ranges. If the
+        // window is empty, these rows never coexist and there is nothing to say.
+        let start = total.effectiveFrom;
+        if (ui.effectiveFrom > start) start = ui.effectiveFrom;
+        if (eaf.effectiveFrom > start) start = eaf.effectiveFrom;
+
+        let end: string | null = total.effectiveTo;
+        for (const candidate of [ui.effectiveTo, eaf.effectiveTo]) {
+          if (candidate === null) continue;
+          if (end === null || candidate < end) end = candidate;
+        }
+        if (end !== null && end < start) continue; // never overlap
+
+        if (ui.value + eaf.value !== total.value) {
+          problems.push(
+            `wa unemployment components: UI ${ui.value} + EAF ${eaf.value} = ` +
+              `${ui.value + eaf.value} milli-percent on ${start}, but wa_suta_total says ` +
+              `${total.value}. The parts must equal the whole, or the return is built from one ` +
+              `rate while the screens quote another.`,
+          );
+        }
+      }
+    }
+  }
+  return problems;
+}
+
+/**
  * Reports date ranges where a key has NO row between its first and last.
  *
  * Deliberately NOT an error. A gap is legitimate - Michael was not an employer
@@ -461,6 +565,7 @@ export class PayrollRateRegistry {
     problems.push(...findRateOverlaps(rows));
     problems.push(...findCeilingViolations(rows));
     problems.push(...findShareSumViolations(rows));
+    problems.push(...findSutaComponentViolations(rows));
     if (problems.length > 0) {
       throw new Error(
         `PayrollRateRegistry: ${problems.length} problem(s) in the rate table\n  - ${problems.join("\n  - ")}`,
@@ -587,6 +692,10 @@ export function describeKey(key: PayrollRateKey): string {
       return "WA Cares premium rate";
     case "wa_suta_total":
       return "WA unemployment tax rate";
+    case "wa_suta_ui":
+      return "WA unemployment insurance rate";
+    case "wa_suta_eaf":
+      return "WA Employment Administration Fund surcharge";
     case "wa_suta_wage_base":
       return "WA unemployment wage base";
     case "lni_employee_rate":

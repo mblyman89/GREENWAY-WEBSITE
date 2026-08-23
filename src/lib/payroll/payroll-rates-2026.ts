@@ -157,8 +157,26 @@ const WA_CARES_ROWS: PayrollRateRow[] = [
  * derived, only read off the notice, which is why the engine refuses without it.
  *
  * ES Reference Number 000-073905-00-0. The 0.4% total is 0.37% UI plus the 0.03%
- * Employment Administration Fund surcharge; the EAF is not optional and is not
- * separately reportable, so the total is what gets applied.
+ * Employment Administration Fund surcharge, and the EAF is not optional.
+ *
+ * CORRECTED IN books-41. This block used to say the EAF "is not separately
+ * reportable, so the total is what gets applied", and carried only the combined
+ * 0.40% row. Greenway's filed Q2 2026 return contradicts both halves of that
+ * sentence. It reports UI and EAF on separate lines, and applying the combined
+ * rate does not reproduce it:
+ *
+ *   0.37% of 68,923.45 = 255.016765 -> 255.02   (filed: 255.02)
+ *   0.03% of 68,923.45 =  20.677035 ->  20.68   (filed:  20.68)
+ *                                       ------
+ *                                       275.70   (filed: 275.70)
+ *   0.40% of 68,923.45 = 275.6938   -> 275.69   -- one cent short of the filing
+ *
+ * The cent is not a rounding preference. RCW 50.24.010 and RCW 50.24.014(2)(b)
+ * each command half-cent rounding on contributions under that section, so two
+ * separate statutory accounts round twice. The components are now on file as
+ * their own rows, and `findSutaComponentViolations` insists they still add to
+ * the headline total. The total row is kept because the ESD notice really does
+ * print one, and two screens quote it.
  */
 const WA_SUTA_ROWS: PayrollRateRow[] = [
   {
@@ -169,7 +187,27 @@ const WA_SUTA_ROWS: PayrollRateRow[] = [
     unit: "milli_percent",
     authorityId: "esd-suta-rate-structure",
     documentId: "esd-2026-tax-rate-notice-000-073905-00-0",
-    note: "Greenway 2026 unemployment rate 0.40% total (0.37% UI + 0.03% Employment Administration Fund). Employer-paid only; never withheld from an employee.",
+    note: "Greenway 2026 unemployment rate 0.40% total (0.37% UI + 0.03% Employment Administration Fund). Employer-paid only; never withheld from an employee. This is the headline figure on the notice; the quarterly return is built from the two component rows below, which round separately.",
+  },
+  {
+    key: "wa_suta_ui",
+    effectiveFrom: "2026-01-01",
+    effectiveTo: "2026-12-31",
+    value: 370, // 0.37%
+    unit: "milli_percent",
+    authorityId: "esd-suta-rate-structure",
+    documentId: "esd-2026-tax-rate-notice-000-073905-00-0",
+    note: "Greenway 2026 unemployment insurance rate 0.37%, the experience-rated component. Reproduces the filed Q2 2026 UI line of $255.02 exactly. Employer-paid only: RCW 50.24.010 makes deducting any part of it from a worker unlawful.",
+  },
+  {
+    key: "wa_suta_eaf",
+    effectiveFrom: "2026-01-01",
+    effectiveTo: "2026-12-31",
+    value: 30, // 0.03% = 0.02% (RCW 50.24.014(1)(a)) + 0.01% (RCW 50.24.014(1)(b))
+    unit: "milli_percent",
+    authorityId: "esd-suta-rate-structure",
+    documentId: "esd-2026-tax-rate-notice-000-073905-00-0",
+    note: "Employment Administration Fund surcharge 0.03%, which is itself two statutory accounts stacked: 0.02% under RCW 50.24.014(1)(a) plus 0.01% under RCW 50.24.014(1)(b). Reproduces the filed Q2 2026 EAF line of $20.68 exactly. Employer-paid only; RCW 50.24.014(2)(a) makes deducting it unlawful.",
   },
   {
     key: "wa_suta_wage_base",
