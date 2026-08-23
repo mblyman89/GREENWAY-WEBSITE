@@ -280,6 +280,16 @@ describe("the authority shape stays honest", () => {
       "sourceFile",
       "quote",
       "whatItMeansHere",
+      // books-39 phase F. `kind` and `source` were added so these five
+      // authorities could be merged into the shared GUIDANCE_AUTHORITIES
+      // registry, which is what makes a citation resolve to the same words on
+      // every screen. They were added AFTER this guard was written, and this
+      // guard went red — correctly. Widening the set is only safe because the
+      // guard's real purpose is stated in its own comment: keep unverified
+      // QUOTED TEXT from arriving under a new field name. So the two new
+      // fields are constrained below to shapes that cannot hold a quote.
+      "kind",
+      "source",
     ]);
     for (const a of PAY_RUN_AUTHORITIES) {
       for (const k of Object.keys(a)) {
@@ -290,5 +300,35 @@ describe("the authority shape stays honest", () => {
         ).toBe(true);
       }
     }
+  });
+
+  it("the two metadata fields cannot become a hiding place for a quote", () => {
+    // The point of the widening above. `kind` is a closed two-value tag and
+    // `source` is a bare URL; neither can carry a sentence of statute that
+    // nothing checks. If someone later parks prose in `source`, this fires.
+    for (const a of PAY_RUN_AUTHORITIES) {
+      expect(["regulation", "state_law"], `${a.id} has kind "${a.kind}"`).toContain(a.kind);
+      expect(a.source, `${a.id} source must be a URL`).toMatch(/^https:\/\/\S+$/);
+      // A URL has no spaces, so this is belt-and-braces against a "url plus
+      // helpful explanation" value, which is how these fields usually rot.
+      expect(a.source.includes(" "), `${a.id} source contains a space`).toBe(false);
+      expect(a.source.length, `${a.id} source is suspiciously long`).toBeLessThan(200);
+    }
+  });
+
+  it("every authority carries a source that points at the ACTUAL publisher", () => {
+    // A citation whose "source" is a blog is not a source. Federal regulation
+    // must point at eCFR; Washington statute must point at the Legislature.
+    for (const a of PAY_RUN_AUTHORITIES) {
+      if (a.kind === "regulation") {
+        expect(a.source, `${a.id} is a federal regulation`).toContain("ecfr.gov");
+      } else {
+        expect(a.source, `${a.id} is Washington statute`).toContain("leg.wa.gov");
+      }
+    }
+    // Rule 39: prove both branches were actually exercised, so this cannot
+    // pass by finding zero of either kind.
+    expect(PAY_RUN_AUTHORITIES.some((a) => a.kind === "regulation")).toBe(true);
+    expect(PAY_RUN_AUTHORITIES.some((a) => a.kind === "state_law")).toBe(true);
   });
 });

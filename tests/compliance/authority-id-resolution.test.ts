@@ -38,6 +38,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
+import { stripTypeScriptComments } from "@/lib/payroll/mentor-quote-gate";
 
 const srcDir = join(__dirname, "..", "..", "src");
 
@@ -99,6 +100,53 @@ export function extractCitedAuthorityIds(source: string): string[] {
     found.push(q[1]!);
   }
   return found;
+}
+
+/**
+ * BOOKS-39 CORRECTION — THE TRIPWIRE COULD NOT TELL CODE FROM PROSE.
+ *
+ * The extractor above reads raw source text, so it matches a citation whether
+ * that citation is EXECUTED or merely DESCRIBED. For nineteen slices nothing
+ * noticed, because nobody had written a comment containing a deliberately
+ * wrong citation. books-39 did exactly that: `pay-run-authorities.ts` explains,
+ * in the doc comment above the id union, that the W-4 lessons once cited
+ *
+ *     authorityId: "NO_W4_TREAT_AS_SINGLE"
+ *
+ * instead of the real id, and that this is why the union exists. The tripwire
+ * read the example, could not resolve it, and went red — reporting a defect
+ * that had already been fixed, in the very sentence explaining the fix.
+ *
+ * That is a bad incentive and it is the whole reason to fix this properly.
+ * Under the old behaviour the cheapest way to make the suite green is to STOP
+ * WRITING DOWN MISTAKES — to delete the example, or mangle it into
+ * `NO_W4_TREAT_AS_SINGLE` with a zero-width space, so the guard shuts up. A
+ * repo whose tests punish documenting a defect will end up with undocumented
+ * defects. Standing rule 26 says the mentor layer teaches; it cannot teach a
+ * wrong citation without quoting one.
+ *
+ * The measurement before changing anything (rule 11 — evidence, not memory):
+ * across every `.ts`/`.tsx` file under `src/`, the extractor found 1220
+ * citations on raw text and 1219 after comments were removed. Exactly ONE
+ * citation in this entire repository lives in prose, and it is the teaching
+ * example above. Zero real, executable citations are lost by this change, and
+ * zero unresolved citations remain in real code once comments are excluded.
+ * So the guard loses no coverage at all — it only stops reading fiction.
+ *
+ * The instance fix would have been to reword one comment. Rule 23 says fix the
+ * CLASS: the next person to document a citation mistake would have hit this
+ * again, and the pressure would have been on them to delete their explanation
+ * rather than on the guard to be correct.
+ *
+ * `extractCitedAuthorityIds` is deliberately NOT changed. Its unit tests feed
+ * it synthetic one-line strings, and it must keep matching those verbatim, so
+ * the comment-blindness is applied HERE, at the point where real files are
+ * read. The two vacuity risks this introduces are both pinned below: that
+ * stripping returns empty text (the scan would pass by scanning nothing), and
+ * that stripping eats code (a real citation would go unguarded).
+ */
+export function citedAuthorityIdsInRealSource(source: string): string[] {
+  return extractCitedAuthorityIds(stripTypeScriptComments(source));
 }
 
 describe("the extractor itself is not a no-op (rule 15)", () => {
@@ -210,12 +258,99 @@ describe("the extractor itself is not a no-op (rule 15)", () => {
   });
 });
 
+describe("books-39: the comment-blind reader is narrow, and provably so", () => {
+  it("still finds a citation that is REAL CODE", () => {
+    // The whole risk of this change is that it makes the tripwire lazy. This
+    // is the base case: executable citations must survive untouched.
+    expect(citedAuthorityIdsInRealSource('authorityIds: ["IRC_280E"],')).toEqual(["IRC_280E"]);
+    expect(citedAuthorityIdsInRealSource('  authorityId: "irc-6651-failure-to-file",')).toEqual([
+      "irc-6651-failure-to-file",
+    ]);
+  });
+
+  it("ignores a citation that is only DESCRIBED in a line comment", () => {
+    expect(citedAuthorityIdsInRealSource('// authorityId: "NOT_A_REAL_ID"')).toEqual([]);
+  });
+
+  it("ignores a citation that is only DESCRIBED in a block comment", () => {
+    const doc = [
+      "/**",
+      " * This is the mistake we used to make:",
+      ' *     authorityId: "NO_W4_TREAT_AS_SINGLE"',
+      " * ...and this is why it is now impossible to write.",
+      " */",
+    ].join("\n");
+    expect(citedAuthorityIdsInRealSource(doc)).toEqual([]);
+  });
+
+  it("reads the CODE on a line that also carries a trailing comment", () => {
+    // The dangerous half-measure: dropping any line containing "//" would also
+    // drop the citation next to it. This pins that we strip the comment, not
+    // the statement.
+    const line = 'authorityIds: ["IRC_280E"], // and NOT authorityId: "GHOST_ID"';
+    expect(citedAuthorityIdsInRealSource(line)).toEqual(["IRC_280E"]);
+  });
+
+  it("is genuinely FAILABLE: a bad id in real code is still caught", () => {
+    // Rule 15. If this ever returns [] the tripwire has become decorative.
+    const ids = citedAuthorityIdsInRealSource('authorityIds: ["totally-not-an-authority"],');
+    expect(ids).toEqual(["totally-not-an-authority"]);
+    expect(findGuidanceAuthority("totally-not-an-authority")).toBeUndefined();
+  });
+
+  it("does not blank out the real tree (rule 39 vacuity guard)", () => {
+    // Named risk #1 from the note above: if `stripTypeScriptComments` ever
+    // returned "" the tripwire would pass by reading nothing at all. This
+    // repository is heavily commented, so that failure is entirely plausible.
+    const total = walk(srcDir).reduce(
+      (n, f) => n + citedAuthorityIdsInRealSource(readFileSync(f, "utf8")).length,
+      0,
+    );
+    expect(total).toBeGreaterThan(1000);
+  });
+
+  it("loses at most a handful of citations versus the raw read", () => {
+    // Named risk #2: stripping eats CODE, silently un-guarding real citations.
+    // Measured at the time of writing: raw 1220, comment-blind 1219 — a single
+    // teaching example. A generous ceiling of 10 lets someone document another
+    // mistake without a test edit, while a parser bug that swallowed live code
+    // would blow straight through it.
+    let raw = 0;
+    let clean = 0;
+    for (const f of walk(srcDir)) {
+      const src = readFileSync(f, "utf8");
+      raw += extractCitedAuthorityIds(src).length;
+      clean += citedAuthorityIdsInRealSource(src).length;
+    }
+    expect(clean).toBeLessThanOrEqual(raw);
+    expect(raw - clean).toBeLessThanOrEqual(10);
+  });
+
+  it("the teaching example in pay-run-authorities.ts is the reason this exists", () => {
+    // Anchors the change to the real file that provoked it. If that comment is
+    // ever reworded away, this goes red and the next reader learns why the
+    // comment-blind reader was introduced instead of deleting it.
+    const src = readFileSync(
+      join(srcDir, "lib", "payroll", "pay-run-authorities.ts"),
+      "utf8",
+    );
+    expect(src).toContain('authorityId: "NO_W4_TREAT_AS_SINGLE"');
+    expect(extractCitedAuthorityIds(src)).toContain("NO_W4_TREAT_AS_SINGLE");
+    expect(citedAuthorityIdsInRealSource(src)).not.toContain("NO_W4_TREAT_AS_SINGLE");
+    // And the id it SHOULD have been is real.
+    expect(findGuidanceAuthority("pay-run-cfr-31-3402-f2-1-no-certificate")).toBeDefined();
+  });
+});
+
 describe("PERMANENT TRIPWIRE: every cited authority id resolves", () => {
   it("no file under src/ cites an authority that does not exist", () => {
     const unresolved: string[] = [];
     for (const file of walk(srcDir)) {
       const rel = file.slice(srcDir.length + 1);
-      for (const id of extractCitedAuthorityIds(readFileSync(file, "utf8"))) {
+      // Comment-blind (books-39): a citation written down as an EXAMPLE OF A
+      // MISTAKE is documentation, not a defect. See the long note above
+      // `citedAuthorityIdsInRealSource`. Measured cost: 1 of 1220 citations.
+      for (const id of citedAuthorityIdsInRealSource(readFileSync(file, "utf8"))) {
         if (!findGuidanceAuthority(id)) unresolved.push(`${id} (cited in src/${rel})`);
       }
     }

@@ -160,6 +160,141 @@ export function exportedFunctionNames(
   return names;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * READING A STRING-LITERAL UNION OUT OF SOURCE — and the comment that broke it
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Remove TypeScript comments from source text, preserving everything else.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS: A SEMICOLON IN A SENTENCE DELETED A REFUSAL CODE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Every mentor-gate module in this codebase reads its engine's refusal codes
+ * with the same shape of expression:
+ *
+ *     text.match(/export type SomeRefusalCode\s*=([\s\S]*?);/)
+ *
+ * The `;` is meant to be the semicolon that ends the type declaration. It is
+ * actually the FIRST semicolon after the declaration begins — and a doc-comment
+ * sitting between two union members is inside that span. `pay-run-core.ts`
+ * documents its last code like this:
+ *
+ *     /** The parts do not re-add to the whole. Never seen; always checked. *␝/
+ *     | "DOES_NOT_RECONCILE";
+ *
+ * The scrape stopped at the semicolon in "Never seen; always checked" and
+ * returned six codes instead of seven. `DOES_NOT_RECONCILE` — the code that
+ * fires when a paycheque's parts do not add up to its total — became invisible
+ * to the coverage gate. The gate then read six codes, found six lessons,
+ * and reported full coverage. Standing rule 39, produced not by a missing
+ * check but by correct English punctuation in a comment.
+ *
+ * The same span also harvested the word "furnished" out of a doc-comment that
+ * QUOTED a union member while explaining it, so `W4Provenance` scraped four
+ * members where three exist, one of them a duplicate.
+ *
+ * Neither failure is detectable by reading the gate. Both are invisible in a
+ * green suite. And both are properties of the PATTERN, not of the file it was
+ * pointed at — which is why the fix is here, in the shared module every gate
+ * can call, rather than a cleverer regex in one of them (standing rule 23).
+ *
+ * WHY STRIPPING COMMENTS IS THE RIGHT FIX RATHER THAN A SMARTER REGEX.
+ * Because the thing being parsed is a declaration, and comments are by
+ * definition not part of it. Any regex that tries to skip comments inline is
+ * solving the same problem in a harder place, and will be re-broken by the next
+ * person who writes a semicolon, an apostrophe, or a quoted example in prose.
+ *
+ * WHY STRING LITERALS ARE PRESERVED. `"http://x"` contains `//` and is not a
+ * comment. A naive strip would eat the rest of that line, silently removing
+ * union members that follow it on the same line. So this walks the text once,
+ * tracking whether it is inside a string, a template literal, or a comment.
+ *
+ * Newlines inside removed comments are KEPT, so that line numbers in any error
+ * message computed from the stripped text still match the real file.
+ */
+export function stripTypeScriptComments(text: string): string {
+  let out = "";
+  let i = 0;
+  const n = text.length;
+
+  while (i < n) {
+    const c = text[i];
+    const next = text[i + 1];
+
+    // Line comment: drop to end of line, keep the newline.
+    if (c === "/" && next === "/") {
+      while (i < n && text[i] !== "\n") i += 1;
+      continue;
+    }
+
+    // Block comment: drop, but re-emit each newline it spanned.
+    if (c === "/" && next === "*") {
+      i += 2;
+      while (i < n && !(text[i] === "*" && text[i + 1] === "/")) {
+        if (text[i] === "\n") out += "\n";
+        i += 1;
+      }
+      i += 2;
+      continue;
+    }
+
+    // String or template literal: copy verbatim, honouring backslash escapes,
+    // so that a quoted "//" or ";" inside a literal is never mistaken for
+    // syntax.
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c;
+      out += c;
+      i += 1;
+      while (i < n) {
+        if (text[i] === "\\") {
+          out += text.slice(i, i + 2);
+          i += 2;
+          continue;
+        }
+        out += text[i];
+        if (text[i] === quote) {
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      continue;
+    }
+
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+/**
+ * The members of a string-literal union type, read from source.
+ *
+ * Comments are stripped first — see `stripTypeScriptComments` for the refusal
+ * code that went missing when they were not.
+ *
+ * DUPLICATES ARE NOT SILENTLY DEDUPLICATED. If the same literal appears twice
+ * in one union, that is a real defect in the engine and the caller should be
+ * able to see it. Deduplicating here would hide it and make the count agree
+ * with a runtime array that also happens to be wrong.
+ *
+ * Returns `[]` when the union is not found. Callers must treat an empty result
+ * as a broken gate rather than as full coverage; every caller in this codebase
+ * throws on it, and that discipline is itself covered by tests.
+ */
+export function unionMembersInSource(
+  sourceText: string,
+  unionName: string,
+): readonly string[] {
+  const stripped = stripTypeScriptComments(sourceText);
+  const block = stripped.match(
+    new RegExp(`export type ${unionName}\\s*=([\\s\\S]*?);`),
+  );
+  if (!block) return [];
+  return [...block[1].matchAll(/"([^"\n]+)"/g)].map((m) => m[1]);
+}
+
 /**
  * Every lesson title a coverage map quotes must resolve to a real lesson.
  */

@@ -77,14 +77,98 @@
  * corpus grows to include them, they get entries.
  */
 
+/**
+ * THE ID OF EVERY AUTHORITY IN THIS FILE, as a closed set.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS IS A UNION AND NOT `string`
+ * ─────────────────────────────────────────────────────────────────────────────
+ * It was `string` for one afternoon, and in that afternoon it cost three wrong
+ * citations. Writing `pay-run-mentor.ts`, every W-4 provenance lesson cited its
+ * authority by the TYPESCRIPT CONST NAME —
+ *
+ *     authorityId: "NO_W4_TREAT_AS_SINGLE"
+ *
+ * — rather than by the authority's actual `id`,
+ * "pay-run-cfr-31-3402-f2-1-no-certificate". `tsc --noEmit` returned zero,
+ * because both are strings. All three citations dangled. Each one read, on the
+ * screen, as though a lawyer had checked the sentence beneath it; none of them
+ * resolved to anything at all.
+ *
+ * Standing rule 23 says fix the CLASS. The instance fix is to correct three
+ * string literals and add a test. The class fix is to make the wrong string
+ * IMPOSSIBLE TO WRITE: with `id` narrowed to this union, a mistyped or
+ * out-of-date citation fails `tsc`, in the editor, before it is ever committed
+ * — and it fails for the NEXT person too, who will not have read this comment.
+ *
+ * A test would have caught it later and at a distance. The compiler catches it
+ * now and at the keystroke. Where both are available, take the compiler; the
+ * test then exists to prove the compiler is actually being consulted.
+ *
+ * KEEPING THIS LIST HONEST. The union is written by hand, so it could in
+ * principle drift from the `id` fields below. It cannot drift silently: each
+ * authority is annotated `: PayRunAuthority`, so an `id` not in this union is a
+ * compile error, and `tests/compliance/pay-run-authorities.test.ts` asserts the
+ * union and the registry contain exactly the same ids in both directions.
+ */
+export type PayRunAuthorityId =
+  | "pay-run-cfr-31-3402-f2-1-no-certificate"
+  | "pay-run-cfr-31-3402-f2-1-invalid-certificate"
+  | "pay-run-cfr-31-3402-f2-1-furnish-on-hire"
+  | "pay-run-rcw-26-18-110-remit-clock"
+  | "pay-run-rcw-49-46-020-annual-adjustment";
+
+/** Every id above, as a runtime list. Checked against the registry by test. */
+export const ALL_PAY_RUN_AUTHORITY_IDS: readonly PayRunAuthorityId[] = [
+  "pay-run-cfr-31-3402-f2-1-no-certificate",
+  "pay-run-cfr-31-3402-f2-1-invalid-certificate",
+  "pay-run-cfr-31-3402-f2-1-furnish-on-hire",
+  "pay-run-rcw-26-18-110-remit-clock",
+  "pay-run-rcw-49-46-020-annual-adjustment",
+];
+
 /** One mirrored authority for the act of running payroll. */
 export type PayRunAuthority = {
-  /** Stable id. Referenced by refusal codes and by the mentor layer. */
-  readonly id: string;
+  /**
+   * Stable id. Referenced by refusal codes and by the mentor layer.
+   *
+   * Narrowed to `PayRunAuthorityId` on purpose — see the comment on that type
+   * for the three dangling citations that narrowing it prevents.
+   */
+  readonly id: PayRunAuthorityId;
+  /**
+   * The WEIGHT this authority carries, using the shared registry's vocabulary.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY THIS FIELD WAS ADDED AFTER THE FACT, AND WHAT CAUGHT IT
+   * ───────────────────────────────────────────────────────────────────────────
+   * This registry was written without it, on the reasoning that the pay-run
+   * screen would render these records itself and did not need the shared
+   * registry's shape. That was wrong, and a pre-existing repo-wide tripwire —
+   * `tests/compliance/authority-id-resolution.test.ts` — said so the moment the
+   * mentor cited one: it walks every file under `src/`, collects every
+   * `authorityId`, and fails if any of them does not resolve in the MERGED
+   * registry. All three of this slice's citations were unresolved, because
+   * these five records were mirrored, verbatim-checked, and never registered
+   * anywhere the rest of the application could see them.
+   *
+   * That is the books-36 condition exactly: research that never reaches the
+   * person who needs it. Adding `kind` and `source` is what lets the adapter in
+   * `books-guidance-core.ts` merge them, so a citation means the same thing on
+   * the pay-run screen as it does everywhere else.
+   *
+   * NARROW ON PURPOSE. It is a strict subset of `GuidanceAuthorityKind`. If
+   * somebody later adds a kind here that the shared registry does not know, the
+   * BUILD stops at the adapter rather than a screen rendering a blank weight
+   * badge next to a citation.
+   */
+  readonly kind: "regulation" | "state_law";
   /** Human citation, as it would appear in a memo. */
   readonly citation: string;
   /** The file under docs/authorities/ this was copied out of. */
   readonly sourceFile: string;
+  /** Where a reader goes to check it. Required by the shared registry. */
+  readonly source: string;
   /** VERBATIM. Character for character. Never edited for length or style. */
   readonly quote: string;
   /**
@@ -103,8 +187,10 @@ export type PayRunAuthority = {
 
 export const NO_W4_TREAT_AS_SINGLE: PayRunAuthority = {
   id: "pay-run-cfr-31-3402-f2-1-no-certificate",
+  kind: "regulation",
   citation: "26 C.F.R. § 31.3402(f)(2)-1(a)(4)",
   sourceFile: "federal/cfr-31.3402(f)(2)-1.txt",
+  source: "https://www.ecfr.gov/current/title-26/section-31.3402(f)(2)-1",
   quote:
     "(4) If an employee has no valid withholding allowance certificate in effect with the " +
     "employer at the time of the payment of the wages, and fails to furnish a valid withholding " +
@@ -128,8 +214,10 @@ export const NO_W4_TREAT_AS_SINGLE: PayRunAuthority = {
 
 export const INVALID_W4_MUST_BE_DISREGARDED: PayRunAuthority = {
   id: "pay-run-cfr-31-3402-f2-1-invalid-certificate",
+  kind: "regulation",
   citation: "26 C.F.R. § 31.3402(f)(2)-1(e)(1)(ii)",
   sourceFile: "federal/cfr-31.3402(f)(2)-1.txt",
+  source: "https://www.ecfr.gov/current/title-26/section-31.3402(f)(2)-1",
   quote:
     "(ii) Employer disregard of invalid withholding allowance certificate. If an employer " +
     "receives an invalid withholding allowance certificate, the employer must disregard it for " +
@@ -159,8 +247,10 @@ export const INVALID_W4_MUST_BE_DISREGARDED: PayRunAuthority = {
 
 export const W4_MUST_BE_FURNISHED_ON_HIRE: PayRunAuthority = {
   id: "pay-run-cfr-31-3402-f2-1-furnish-on-hire",
+  kind: "regulation",
   citation: "26 C.F.R. § 31.3402(f)(2)-1(a)(1)",
   sourceFile: "federal/cfr-31.3402(f)(2)-1.txt",
+  source: "https://www.ecfr.gov/current/title-26/section-31.3402(f)(2)-1",
   quote:
     "(1) On or before the date on which an individual commences employment with an employer, the " +
     "individual must furnish the employer with a signed withholding allowance certificate (see " +
@@ -183,8 +273,10 @@ export const W4_MUST_BE_FURNISHED_ON_HIRE: PayRunAuthority = {
 
 export const SUPPORT_REMITTED_WITHIN_FIVE_WORKING_DAYS: PayRunAuthority = {
   id: "pay-run-rcw-26-18-110-remit-clock",
+  kind: "state_law",
   citation: "RCW 26.18.110(2)",
   sourceFile: "state-wa/rcw-26.18.110.txt",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=26.18.110",
   quote:
     "(2) If the employer possesses any earnings or remuneration due and owing to the obligor, " +
     "the earnings subject to the wage assignment order or income withholding order shall be " +
@@ -208,8 +300,10 @@ export const SUPPORT_REMITTED_WITHIN_FIVE_WORKING_DAYS: PayRunAuthority = {
 
 export const WA_MINIMUM_WAGE_ADJUSTS_EVERY_JANUARY: PayRunAuthority = {
   id: "pay-run-rcw-49-46-020-annual-adjustment",
+  kind: "state_law",
   citation: "RCW 49.46.020(2)(b)",
   sourceFile: "state-wa/rcw-49.46.020.txt",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=49.46.020",
   quote:
     "(b) On September 30, 2020, and on each following September 30th, the department of labor " +
     "and industries shall calculate an adjusted minimum wage rate to maintain employee " +
@@ -245,5 +339,12 @@ export const PAY_RUN_AUTHORITIES: readonly PayRunAuthority[] = [
  * is a bug in the caller, and the caller's own test should say so in its own
  * words rather than inheriting an exception message from here. */
 export function payRunAuthorityById(id: string): PayRunAuthority | null {
+  // Parameter stays `string`, deliberately. Callers that have a checked
+  // PayRunAuthorityId do not need this function — they can reference the const.
+  // The callers that DO need it are holding an id that came from outside the
+  // type system: a URL parameter, a stored row, a hand-typed search box. Those
+  // are exactly the cases a null return exists to answer, and widening the
+  // parameter to `PayRunAuthorityId` would force each of them to cast, which
+  // reintroduces the unchecked string one layer further out.
   return PAY_RUN_AUTHORITIES.find((a) => a.id === id) ?? null;
 }
