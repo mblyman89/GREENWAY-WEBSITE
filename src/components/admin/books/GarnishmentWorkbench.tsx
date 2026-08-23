@@ -58,6 +58,19 @@ import {
 } from "@/lib/payroll/garnishment-mentor";
 import type { GarnishmentRefusal } from "@/lib/payroll/garnishment-core";
 import type { WageOrderDetail, WorkedExample } from "@/lib/payroll/garnishment-store";
+import type { WageOrderAlert, WatchSeverity } from "@/lib/payroll/wage-order-watch-core";
+import {
+  WATCH_ALERT_LESSONS,
+  WATCH_CHECKS,
+  WATCH_LADDER,
+  WATCH_LESSONS,
+  WATCH_WORKED_EXAMPLES,
+  WATCH_AUTHORITY_IDS,
+} from "@/lib/payroll/wage-order-watch-mentor";
+import {
+  WageOrderAnswerControl,
+  type RecordAnswerAction,
+} from "@/components/admin/books/WageOrderAnswerControl";
 import {
   WageOrderLifecycleControls,
   type WageOrderLifecycleActions,
@@ -92,6 +105,28 @@ export type GarnishmentWorkbenchProps = {
    * established shape rather than inventing a rival one (standing rule 25).
    */
   readonly lifecycle: WageOrderLifecycleActions;
+  /**
+   * books-40c. Live orders carrying an answer duty with nothing recorded.
+   *
+   * Deliberately separate from `blockedCount`. A blocked order cannot be
+   * CALCULATED; an unanswered order calculates perfectly and still exposes
+   * Greenway to the entire support debt under RCW 26.18.110(6)(b). Two
+   * different problems with two different fixes, and folding them into one
+   * number would let the more expensive one hide inside the more obvious one.
+   */
+  readonly answersOutstandingCount: number;
+  /**
+   * books-40c. Every deadline alert across every live order, most severe
+   * first. Computed by `assessWageOrder` in the store - never here.
+   */
+  readonly alerts: readonly WageOrderAlert[];
+  /**
+   * books-40c. The Pacific date the alerts were measured from, handed down to
+   * the answer form so the browser's own clock is never consulted.
+   */
+  readonly asOf: string;
+  /** books-40c. Records the answer. The only thing that stops a reminder. */
+  readonly onRecordAnswer: RecordAnswerAction;
 };
 
 /**
@@ -133,6 +168,25 @@ function money(cents: number): string {
   return `${sign}$${Math.floor(abs / 100).toLocaleString("en-US")}.${String(abs % 100).padStart(2, "0")}`;
 }
 
+/**
+ * The chip tone for a watch severity.
+ *
+ * A LOOKUP, NOT A JUDGEMENT. The severity was decided by
+ * `wage-order-watch-core.ts` against the statutes; this only chooses a colour
+ * for it. There is no threshold, no day count and no comparison in this file.
+ */
+const SEVERITY_TONE: Record<WatchSeverity, "danger" | "orange" | "neutral"> = {
+  critical: "danger",
+  warning: "orange",
+  info: "neutral",
+};
+
+const SEVERITY_WORD: Record<WatchSeverity, string> = {
+  critical: "Act today",
+  warning: "Needs attention",
+  info: "Coming up",
+};
+
 export function GarnishmentWorkbench({
   orders,
   activeCount,
@@ -140,6 +194,10 @@ export function GarnishmentWorkbench({
   blockedCount,
   worked,
   lifecycle,
+  answersOutstandingCount,
+  alerts,
+  asOf,
+  onRecordAnswer,
 }: GarnishmentWorkbenchProps) {
   const supportOrders = orders.filter(
     (o) => o.order.orderKind === "child_support" || o.order.orderKind === "spousal_support",
@@ -149,6 +207,103 @@ export function GarnishmentWorkbench({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       {/* ══ LEFT: the work ══════════════════════════════════════════════ */}
       <div className="space-y-6">
+        {/* ══ THE WATCHMAN (books-40c) ═══════════════════════════════════
+            FIRST ON THE PAGE, ABOVE EVERYTHING, AND ONLY WHEN THERE IS
+            SOMETHING TO SAY.
+
+            Michael asked how he should be notified about the twenty-day
+            answer. Email and push are the real answer - they reach him where
+            he is - but the moment he opens this screen the deadlines have to
+            be the first thing he sees, not a column he has to go looking for.
+
+            It renders nothing when there is nothing to say. A panel that is
+            always present is furniture, and furniture is invisible. This one
+            appearing at all means something needs doing today.
+
+            No arithmetic here. Every alert, its severity, its wording and its
+            ordering came from `assessWageOrder` in the store. */}
+        {alerts.length > 0 ? (
+          <Card>
+            <CardHeader
+              title="Deadlines that need you"
+              subtitle={
+                `Measured as of ${asOf}. These same warnings are emailed and pushed to you daily, ` +
+                `so you do not have to be on this screen for the clock to be watched.`
+              }
+              action={
+                <Badge tone={SEVERITY_TONE[alerts[0].severity]}>
+                  {SEVERITY_WORD[alerts[0].severity]}
+                </Badge>
+              }
+            />
+            <ul className="space-y-3">
+              {alerts.map((a) => {
+                const lesson = WATCH_ALERT_LESSONS.find((l) => l.kind === a.kind) ?? null;
+                return (
+                  <li
+                    key={`${a.kind}-${a.wageOrderId}`}
+                    className={`rounded-[var(--admin-radius-sm)] p-3 ${
+                      a.severity === "critical"
+                        ? "bg-[var(--admin-danger-soft)]"
+                        : a.severity === "warning"
+                          ? "bg-[var(--admin-orange-soft)]"
+                          : "bg-[var(--admin-surface-2)]"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p
+                        className={`text-sm font-semibold ${
+                          a.severity === "critical"
+                            ? "text-[var(--admin-danger)]"
+                            : a.severity === "warning"
+                              ? "text-[var(--admin-orange)]"
+                              : "text-[var(--admin-text)]"
+                        }`}
+                      >
+                        {a.headline}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone={SEVERITY_TONE[a.severity]}>
+                          {SEVERITY_WORD[a.severity]}
+                        </Badge>
+                        {/* The countdown is REPORTED, never computed here. */}
+                        {a.daysRemaining !== null ? (
+                          <Badge tone="neutral">
+                            {a.daysRemaining < 0
+                              ? `${Math.abs(a.daysRemaining)} days overdue`
+                              : a.daysRemaining === 0
+                                ? "Due today"
+                                : `${a.daysRemaining} days left`}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                      {a.employeeName}
+                      {a.dueDate !== null ? ` \u00b7 due ${a.dueDate}` : ""}
+                    </p>
+
+                    <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+                      <span className="font-semibold">What happens if this slips: </span>
+                      {a.consequence}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                      <span className="font-semibold">Do this now: </span>
+                      {a.whatToDoNow}
+                    </p>
+                    {lesson ? (
+                      <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+                        {lesson.whatItMeans}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader
             title="Live wage orders"
@@ -163,7 +318,15 @@ export function GarnishmentWorkbench({
                   `${blockedCount} needing an answer first` +
                   (pausedCount > 0
                     ? `. ${pausedCount} paused and withholding nothing.`
-                    : ".")
+                    : ".") +
+                  /* SAID IN ITS OWN SENTENCE (books-40c). An order can be
+                     perfectly calculable and still be an unanswered court
+                     order, which is the more expensive of the two problems.
+                     Appending it here rather than folding it into the counts
+                     above keeps "ready to calculate" meaning exactly that. */
+                  (answersOutstandingCount > 0
+                    ? ` ${answersOutstandingCount} still needing an answer filed.`
+                    : "")
             }
             action={
               orders.length > 0 ? (
@@ -171,6 +334,9 @@ export function GarnishmentWorkbench({
                   <Badge tone="green">{activeCount - blockedCount} ready</Badge>
                   {blockedCount > 0 ? <Badge tone="orange">{blockedCount} blocked</Badge> : null}
                   {pausedCount > 0 ? <Badge tone="gold">{pausedCount} paused</Badge> : null}
+                  {answersOutstandingCount > 0 ? (
+                    <Badge tone="danger">{answersOutstandingCount} unanswered</Badge>
+                  ) : null}
                 </div>
               ) : null
             }
@@ -260,6 +426,28 @@ export function GarnishmentWorkbench({
                         </p>
                       </div>
                     ) : null}
+
+                    {/* ── RECORDING THE ANSWER (books-40c) ─────────────────
+                        Placed ABOVE the lifecycle buttons deliberately. On a
+                        support order, answering is the duty with hundred-
+                        percent liability attached and ending is the one that
+                        can wait; putting the ending controls first would put
+                        the dangerous button nearest the thumb on the row that
+                        is actually asking for the affidavit.
+
+                        Whether this renders as a form or as a settled fact is
+                        decided inside the control from the recorded facts. */}
+                    <WageOrderAnswerControl
+                      orderId={o.order.id}
+                      caseNumber={o.order.caseNumber}
+                      employeeName={o.employeeName}
+                      orderKind={o.watch.orderKind}
+                      servedDate={o.watch.servedDate}
+                      answerFiledAt={o.watch.answerFiledAt}
+                      answerNotRequired={o.watch.answerNotRequired}
+                      today={asOf}
+                      onRecord={onRecordAnswer}
+                    />
 
                     {/* ── ENDING, PAUSING AND RESUMING (books-40b) ─────────
                         Which of the three appear is decided by
@@ -397,6 +585,129 @@ export function GarnishmentWorkbench({
             </p>
           </Card>
         ) : null}
+
+        {/* ══ THE ANSWER, AND WHY THE REMINDERS BEHAVE AS THEY DO ════════
+            (books-40c)
+
+            Michael asked, in as many words, how he should be notified about
+            filing the twenty-day answer. These four cards are the reply: the
+            checklist for getting it right, the escalation ladder so the
+            volume of email is predictable rather than mysterious, the worked
+            examples, and the traps.
+
+            Placed above the ending guidance because answering comes first in
+            time and first in consequence - the answer deadline arrives twenty
+            days after service, and ending an order is usually months away. */}
+        <Card>
+          <CardHeader
+            title="Filing the answer, in order"
+            subtitle="Four questions. The order matters more than it looks."
+          />
+          <ol className="space-y-4">
+            {[...WATCH_CHECKS]
+              .sort((a, b) => a.order - b.order)
+              .map((check) => (
+                <li key={check.key}>
+                  <p className="text-sm font-semibold text-[var(--admin-text)]">
+                    {check.order}. {check.question}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                    {check.whyThisOrder}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                    <span className="font-semibold">If it fails: </span>
+                    {check.ifItFails}
+                  </p>
+                </li>
+              ))}
+          </ol>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="When this system will chase you, and how hard"
+            subtitle="Set out in advance so the email is never a surprise - and so you can see it stops when the work is done, not when you click something."
+          />
+          <ul className="space-y-3">
+            {WATCH_LADDER.map((rung) => (
+              <li key={rung.when}>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">{rung.when}</p>
+                <p className="mt-0.5 text-xs text-[var(--admin-accent)]">{rung.what}</p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{rung.why}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Three answers, and the one the system refuses"
+            subtitle="Including the case where being stopped is the point."
+          />
+          <ul className="space-y-4">
+            {WATCH_WORKED_EXAMPLES.map((ex) => (
+              <li key={ex.key}>
+                <p className="text-xs text-[var(--admin-text-muted)]">{ex.situation}</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--admin-accent)]">
+                  {ex.rightAnswer}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <span className="font-semibold">What to type: </span>
+                  {ex.whatToType}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-orange)]">
+                  <span className="font-semibold">The trap: </span>
+                  {ex.theTrap}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="What the deadline texts actually say"
+            subtitle="Quoted exactly, with the plain-English reading kept separate underneath so you can always see which is the law and which is us."
+          />
+          <ul className="space-y-4">
+            {WATCH_AUTHORITY_IDS.map((id) => {
+              const a = WAGE_ORDER_ENTRY_AUTHORITIES.find((x) => x.id === id);
+              if (!a) return null;
+              return (
+                <li key={a.id}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                    {a.cite}
+                  </p>
+                  <blockquote className="mt-1 border-l-2 border-[var(--admin-accent)] pl-3 text-sm italic text-[var(--admin-text)]">
+                    {a.quote}
+                  </blockquote>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{a.soWhat}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Ways the answer goes wrong"
+            subtitle="Every one of these has an employer on the wrong end of it somewhere."
+          />
+          <ul className="space-y-4">
+            {WATCH_LESSONS.map((lesson) => (
+              <li key={lesson.topic}>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">{lesson.topic}</p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  {lesson.plainEnglish}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <span className="font-semibold">Why it matters: </span>
+                  {lesson.whyItMatters}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
 
         {/* ══ STOPPING AN ORDER ═══════════════════════════════════════════
             The most dangerous thing on this screen, and dangerous in BOTH

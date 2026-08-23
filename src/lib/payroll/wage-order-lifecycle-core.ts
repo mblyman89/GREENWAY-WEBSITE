@@ -386,6 +386,219 @@ export function validateTerminationReason(raw: string): TerminationReasonCheck {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * §4b  RECORDING THE ANSWER   (books-40c)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Mirrors 0202's `wage_orders_waiver_has_reason` (>= 5 characters). */
+export const MIN_ANSWER_WAIVER_REASON_CHARS = 5;
+
+/**
+ * Order kinds on which an answer can NEVER be waived.
+ *
+ * This is the single most consequential refusal in the slice. The waiver tick
+ * is genuinely correct for a federal tax levy - an IRS Form 668-W is satisfied
+ * by returning the exemption certificate and withholding, not by a sworn
+ * affidavit to a Washington court. On a support order it is catastrophic:
+ * RCW 26.18.110(6)(b) makes the employer who fails to answer liable for one
+ * hundred percent of the support debt, and ticking a box here would switch off
+ * the only thing warning about it.
+ *
+ * The database cannot express this rule cleanly (it would need the order kind
+ * in the same CHECK as the waiver columns, and the kind can be corrected after
+ * the fact), so it is enforced here and proved by test.
+ */
+export const ANSWER_NEVER_WAIVABLE_KINDS: readonly string[] = [
+  "child_support",
+  "spousal_support",
+];
+
+export type AnswerRecordRefusalCode =
+  | "NO_ANSWER_GIVEN"
+  | "ANSWER_BEFORE_SERVICE"
+  | "ANSWER_IN_FUTURE"
+  | "BOTH_FILED_AND_WAIVED"
+  | "WAIVER_REASON_TOO_SHORT"
+  | "WAIVER_FORBIDDEN_FOR_SUPPORT";
+
+export type AnswerRecordRefusal = {
+  readonly code: AnswerRecordRefusalCode;
+  readonly message: string;
+  readonly fix: string;
+};
+
+/** What the caller is asserting about the answer. */
+export type AnswerRecordDraft = {
+  /** ISO date the answer was filed, or null when claiming an exemption. */
+  readonly filedAt: string | null;
+  /** Free-text note about how it went out. Optional. */
+  readonly note: string | null;
+  /** True when claiming this order has no answer duty at all. */
+  readonly notRequired: boolean;
+  /** Required whenever notRequired is true. */
+  readonly waivedReason: string | null;
+};
+
+export type AnswerRecordCheck =
+  | {
+      readonly ok: true;
+      readonly filedAt: string | null;
+      readonly note: string | null;
+      readonly notRequired: boolean;
+      readonly waivedReason: string | null;
+    }
+  | { readonly ok: false; readonly refusal: AnswerRecordRefusal };
+
+const ANSWER_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Is this a recordable answer?
+ *
+ * Every refusal names the consequence and the fix, because a refusal that only
+ * says "invalid" teaches the reader to work around the machine rather than to
+ * understand it (rule 48: throw or refuse with an explanation, never a bare
+ * boolean).
+ *
+ * `today` and `servedDate` are ARGUMENTS. Nothing in this function reads a
+ * clock, so every branch is reachable in a test by passing a date.
+ */
+export function validateAnswerRecord(
+  draft: AnswerRecordDraft,
+  orderKind: string,
+  servedDate: string | null,
+  today: string,
+): AnswerRecordCheck {
+  const filedAt = draft.filedAt?.trim() ? draft.filedAt.trim() : null;
+  const waivedReason = draft.waivedReason?.trim() ? draft.waivedReason.trim() : null;
+  const note = draft.note?.trim() ? draft.note.trim() : null;
+
+  if (filedAt !== null && draft.notRequired) {
+    return {
+      ok: false,
+      refusal: {
+        code: "BOTH_FILED_AND_WAIVED",
+        message:
+          "This says the answer was filed AND that no answer was required. Both cannot be true, " +
+          "so nothing was recorded and the reminders continue.",
+        fix:
+          "Pick one. If you sent an answer, record the date you sent it and leave the exemption " +
+          "unticked. If this order genuinely has no Washington answer duty, clear the date.",
+      },
+    };
+  }
+
+  if (draft.notRequired) {
+    if (ANSWER_NEVER_WAIVABLE_KINDS.includes(orderKind)) {
+      return {
+        ok: false,
+        refusal: {
+          code: "WAIVER_FORBIDDEN_FOR_SUPPORT",
+          message:
+            "This is a support order, and a support order always has to be answered. The " +
+            "exemption was refused and nothing was changed, so the reminders will keep going.",
+          fix:
+            "Answer the order instead. RCW 26.18.110(1) requires a sworn answer within twenty " +
+            "days of service, and RCW 26.18.110(6)(b) makes Greenway liable for the ENTIRE " +
+            "support debt - not the part that should have been withheld - if it is not " +
+            "answered. Withholding every cent correctly does not cure a missing answer. Send " +
+            "the affidavit, then come back and record the date.",
+        },
+      };
+    }
+    if (waivedReason === null || waivedReason.length < MIN_ANSWER_WAIVER_REASON_CHARS) {
+      return {
+        ok: false,
+        refusal: {
+          code: "WAIVER_REASON_TOO_SHORT",
+          message:
+            "Marking an order as needing no answer requires a written reason of at least a few " +
+            "words, so nothing was changed and the reminders continue.",
+          fix:
+            "Name the document and why it carries no Washington answer duty - for example " +
+            "'IRS Form 668-W levy: satisfied by returning the exemption certificate, no " +
+            "ch. 26.18 answer duty'. If you cannot write that sentence, you do not yet know " +
+            "the exemption is correct, and the safe move is to answer the order.",
+        },
+      };
+    }
+    return { ok: true, filedAt: null, note, notRequired: true, waivedReason };
+  }
+
+  if (filedAt === null) {
+    return {
+      ok: false,
+      refusal: {
+        code: "NO_ANSWER_GIVEN",
+        message:
+          "No filing date was given and no exemption was claimed, so there is nothing to " +
+          "record and nothing was changed.",
+        fix:
+          "Enter the date the answer actually left Greenway - the date on the certified-mail " +
+          "receipt, the fax confirmation, or the portal submission.",
+      },
+    };
+  }
+
+  if (!ANSWER_ISO_RE.test(filedAt)) {
+    return {
+      ok: false,
+      refusal: {
+        code: "NO_ANSWER_GIVEN",
+        message:
+          `"${filedAt}" is not a date this system will accept, so nothing was recorded.`,
+        fix:
+          "Use the four-digit year first: 2027-01-18. A format like 01/02/2027 is genuinely " +
+          "ambiguous - it means January the second in one country and the first of February " +
+          "in another - and this is a legal deadline, so the format has to be exact.",
+      },
+    };
+  }
+
+  if (servedDate !== null && ANSWER_ISO_RE.test(servedDate) && filedAt < servedDate) {
+    return {
+      ok: false,
+      refusal: {
+        code: "ANSWER_BEFORE_SERVICE",
+        message:
+          `This says the answer was filed on ${filedAt}, which is before the order was served ` +
+          `on ${servedDate}. Nothing was recorded.`,
+        fix:
+          "One of the two dates is wrong. Check the service date against the delivery receipt " +
+          "and the filing date against your proof of sending. Do not adjust either one to make " +
+          "the other fit - both are measured from real pieces of paper.",
+      },
+    };
+  }
+
+  if (ANSWER_ISO_RE.test(today) && filedAt > today) {
+    return {
+      ok: false,
+      refusal: {
+        code: "ANSWER_IN_FUTURE",
+        message:
+          `This says the answer was filed on ${filedAt}, which has not happened yet. Nothing ` +
+          "was recorded.",
+        fix:
+          "Record the answer after you send it, using the date it actually went. Recording an " +
+          "intention as a fact would switch off the reminder for something that has not been " +
+          "done - which is the exact failure this field exists to prevent.",
+      },
+    };
+  }
+
+  return { ok: true, filedAt, note, notRequired: false, waivedReason: null };
+}
+
+/** Every refusal code, so a test can prove each one is reachable (rule 43). */
+export const ALL_ANSWER_RECORD_REFUSAL_CODES: readonly AnswerRecordRefusalCode[] = [
+  "NO_ANSWER_GIVEN",
+  "ANSWER_BEFORE_SERVICE",
+  "ANSWER_IN_FUTURE",
+  "BOTH_FILED_AND_WAIVED",
+  "WAIVER_REASON_TOO_SHORT",
+  "WAIVER_FORBIDDEN_FOR_SUPPORT",
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * §5  THE THING THAT IS NOT HERE
  * ═══════════════════════════════════════════════════════════════════════════ */
 

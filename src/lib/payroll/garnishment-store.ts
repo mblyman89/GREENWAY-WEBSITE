@@ -222,6 +222,18 @@ export type GarnishmentBoard = {
    */
   readonly alerts: readonly WageOrderAlert[];
   /**
+   * books-40c. The Pacific date every alert above was measured from.
+   *
+   * Handed to the screen rather than left implicit because the browser has its
+   * own clock, and it is not necessarily this one. A laptop in another
+   * timezone - or simply one left open past midnight - would otherwise check
+   * "is this filing date in the future?" against a different day than the
+   * server does, and Michael would get a refusal from the server that the form
+   * had already told him was fine. One date, decided in one place, used by
+   * both.
+   */
+  readonly asOf: string;
+  /**
    * A worked example against the engine, or the engine's refusals. Present only
    * when a pay period has been supplied.
    */
@@ -563,6 +575,7 @@ export async function loadGarnishmentBoard(args?: {
         hasAnswerDuty(d.watch.orderKind),
     ).length,
     alerts,
+    asOf: todayIso,
     worked,
   };
 }
