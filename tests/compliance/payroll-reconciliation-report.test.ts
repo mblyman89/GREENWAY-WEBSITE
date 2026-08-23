@@ -42,10 +42,13 @@ import {
   filedFigure,
 } from "@/lib/reports/known-good-quarters";
 import {
-  RECONCILIATION_LESSONS,
   assertEveryReconciliationFunctionIsTaught,
-  reconciliationCitedAuthorityIds,
+  assertEveryReconciliationLessonIsSubstantive,
   reconciliationExportedFunctionNames,
+} from "@/lib/reports/payroll-reconciliation-mentor-gates";
+import {
+  RECONCILIATION_LESSONS,
+  reconciliationCitedAuthorityIds,
   reconciliationLessonFor,
   reconciliationTaughtFunctionNames,
 } from "@/lib/reports/payroll-reconciliation-mentor";
@@ -494,5 +497,63 @@ describe("payroll-reconciliation-mentor", () => {
   it("no function is taught twice", () => {
     const names = reconciliationTaughtFunctionNames();
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════ *
+ * BOOKS-44: THE THINNESS GATE, RESTORED AFTER THE SPLIT
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-44: reconciliation lessons are substantive, not merely present", () => {
+  /*
+   * The twin of the block added to `period-close-core.test.ts`, and it exists
+   * for the same reason: when this mentor was split in slice C to get `node:fs`
+   * out of the browser bundle (rule 65b), the substantiveness check did not
+   * come with it. The only surviving trace was an unused `RECONCILIATION_LESSONS`
+   * import that ESLint flagged - and the tempting fix was to delete the import
+   * rather than ask why it was there.
+   *
+   * These five lessons are the ones that reconcile a filed quarter against
+   * recomputed figures. A placeholder in `theTrap` here would render on the
+   * learning screen as a large orange box saying nothing, which reads as "there
+   * is no trap in reconciling a quarter" - and there very much is.
+   */
+
+  it("passes on the real lessons", () => {
+    expect(() => assertEveryReconciliationLessonIsSubstantive()).not.toThrow();
+  });
+
+  it("THE THINNESS GATE FIRES — rule 39", () => {
+    expect(() =>
+      assertEveryReconciliationLessonIsSubstantive([
+        {
+          fn: "x",
+          plainEnglish: "short",
+          whyItExists: "short",
+          theTrap: "short",
+          whatIWouldDo: "short",
+          authorityIds: [],
+        },
+      ]),
+    ).toThrow(/TOO THIN/);
+  });
+
+  it("THE VACUOUS-INPUT GUARD FIRES — rule 39", () => {
+    expect(() => assertEveryReconciliationLessonIsSubstantive([])).toThrow(/GATE BROKEN/);
+  });
+
+  it("names the offending field, not merely the lesson", () => {
+    expect(() =>
+      assertEveryReconciliationLessonIsSubstantive([
+        {
+          fn: "buildReconciliationReport",
+          plainEnglish: "A perfectly adequate sentence that comfortably clears the floor.",
+          whyItExists: "Another perfectly adequate sentence that clears the floor as well.",
+          theTrap: "too short",
+          whatIWouldDo: "One more sentence that is long enough to pass the length check.",
+          authorityIds: [],
+        },
+      ]),
+    ).toThrow(/buildReconciliationReport\.theTrap/);
   });
 });

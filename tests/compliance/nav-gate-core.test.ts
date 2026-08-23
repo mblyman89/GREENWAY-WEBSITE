@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the twenty books screens plus Inventory Auditing", () => {
+  it("Accounting holds the twenty-one books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -441,6 +441,25 @@ describe("N4 the Accounting and Lyman tabs", () => {
      * filing would simply have been incomplete. That is why the coverage
      * function is in the tested core and not in the page.
      *
+     * BOOKS-44 ADDS /admin/books/learn, making twenty-one books screens and
+     * twenty-two entries. It is the largest rule 50 finding in this file.
+     *
+     * Every entry above describes an ENGINE that was finished and unreachable.
+     * This one describes the TEACHING. Six mentor modules — 82 lessons, written,
+     * cited, tested and green — were importable from nowhere in the application.
+     * Not one component, not one page. Michael has a Master's in accounting he
+     * has not used in thirteen years and asked to be made "the best possible
+     * accountant i can be" for this one business; the material to do it had been
+     * sitting in the repository the whole time, passing its tests, teaching
+     * nobody.
+     *
+     * The screen at this href is the eight-unit course built out of those 82
+     * lessons, ordered the way Greenway's year actually raises them rather than
+     * the way a textbook would group them. Its gate is
+     * tests/compliance/learning-path.test.ts, and the count on the screen is
+     * DERIVED from the modules, so a lesson added to any mentor appears in the
+     * course without anyone remembering to add it.
+     *
      * Extended, not loosened, for the reason spelled out above: this list is
      * the only thing that notices a screen going dark.
      */
@@ -472,6 +491,12 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/financial-statements",
         "/admin/books/garnishments",
         "/admin/books/journal",
+        /*
+         * books-44. The 82 lessons. See the note above: this href is the first
+         * entry in this list that exists to make TEACHING reachable rather than
+         * an engine, and it was the largest buried body of work found so far.
+         */
+        "/admin/books/learn",
         "/admin/books/leave",
         "/admin/books/ledger",
         "/admin/books/net-pay",

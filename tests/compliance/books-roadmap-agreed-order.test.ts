@@ -123,29 +123,29 @@ const UNREACHABLE_TEACHING = [
     file: "src/lib/accounting/interest-mentor.ts",
     lessons: INTEREST_LESSONS,
     printedLessons: 10,
-    printedLines: 328,
-    importsNodeFs: true,
+    printedLines: 257,
+    importsNodeFs: false,
   },
   {
     file: "src/lib/accounting/period-close-mentor.ts",
     lessons: PERIOD_CLOSE_LESSONS,
     printedLessons: 9,
-    printedLines: 281,
-    importsNodeFs: true,
+    printedLines: 234,
+    importsNodeFs: false,
   },
   {
     file: "src/lib/accounting/s-corporation-year-mentor.ts",
     lessons: S_CORPORATION_YEAR_LESSONS,
     printedLessons: 5,
-    printedLines: 225,
-    importsNodeFs: true,
+    printedLines: 153,
+    importsNodeFs: false,
   },
   {
     file: "src/lib/reports/payroll-reconciliation-mentor.ts",
     lessons: RECONCILIATION_LESSONS,
     printedLessons: 5,
-    printedLines: 225,
-    importsNodeFs: true,
+    printedLines: 170,
+    importsNodeFs: false,
   },
 ] as const;
 
@@ -334,10 +334,20 @@ describe("books-43: the slice-C recon figures are real", () => {
     const lines = UNREACHABLE_TEACHING.reduce((n, m) => n + lineCount(m.file), 0);
 
     expect(lessons).toBe(82);
-    expect(lines).toBe(2_345);
+
+    /*
+     * BOOKS-44: 2,345 became 2,100 and the LESSON COUNT DID NOT MOVE.
+     *
+     * That pairing is the whole point of keeping both figures. Slice C split
+     * four of these modules to get `node:fs` out of them, which removed 245
+     * lines of gate code. If the lesson count had fallen too, teaching would
+     * have been lost in the refactor and this line is where that would have
+     * surfaced. It did not: 82 before, 82 after, 245 fewer lines.
+     */
+    expect(lines).toBe(2_100);
 
     expect(roadmap, "the roadmap's lesson total is stale").toContain("**82**");
-    expect(roadmap, "the roadmap's line total is stale").toContain("**2,345**");
+    expect(roadmap, "the roadmap's line total is stale").toContain("**2,100**");
   });
 
   /**
@@ -432,27 +442,69 @@ describe("books-43: the slice-C recon figures are real", () => {
   });
 
   /**
-   * THE `node:fs` CONSTRAINT — the fact that decides how slice C is built.
+   * THE `node:fs` CONSTRAINT — the fact that decided how slice C was built.
    *
-   * Four of the six import `node:fs` at module scope for their build-time
-   * coverage gates. That import cannot reach a browser bundle, so the wiring
-   * must pull the lesson DATA without dragging `readFileSync` behind it.
+   * ───────────────────────────────────────────────────────────────────────────
+   * THIS TEST WAS REWRITTEN IN BOOKS-44, AND THE REASON MATTERS MORE THAN THE
+   * ASSERTION.
+   * ───────────────────────────────────────────────────────────────────────────
+   * When books-43 wrote it, four of the six modules imported `node:fs` at module
+   * scope for their build-time coverage gates, and it ended with
+   * `expect(count).toBe(4)`. Slice C then did the thing the roadmap told it to
+   * do: it SPLIT those four, leaving the lesson data behind and moving the
+   * disk-reading gates to `*-mentor-gates.ts` siblings (rule 65b). All six now
+   * import nothing from `node:fs`.
    *
-   * This is asserted per-module rather than as a bare count of four, because
-   * WHICH modules carry the constraint is what the implementer needs to know.
+   * At that moment `expect(count).toBe(4)` was asserting that the work had NOT
+   * been done. Left alone it would have been "fixed" by someone re-splitting the
+   * number rather than the modules. And once every entry reads `false`, the
+   * per-module loop below can no longer fail for the reason it was written —
+   * every comparison is `false === false`, which is rule 39's vacuous check.
+   *
+   * So the claim has been inverted to the one that is now load-bearing: the six
+   * modules the learning screen imports must stay free of `node:fs`, FOREVER,
+   * because a single `readFileSync` re-entering any of them breaks the client
+   * bundle and buries all 82 lessons again. The count assertion is now on the
+   * SIBLING gate files, which must still exist and must still be the ones doing
+   * the reading — otherwise "we split them" would be satisfied by having simply
+   * deleted the coverage checks.
    */
-  it("records which modules carry the node:fs constraint", () => {
+  it("the six teaching modules import no node:fs, and their gates still do", () => {
+    const hasNodeFs = (rel: string) =>
+      /from\s+["']node:fs["']/.test(readFileSync(join(ROOT, rel), "utf8"));
+
+    // 1. Not one of the six may reach the filesystem. This is the constraint
+    //    that keeps /admin/books/learn buildable.
     for (const m of UNREACHABLE_TEACHING) {
-      const code = readFileSync(join(ROOT, m.file), "utf8");
-      const has = /from\s+["']node:fs["']/.test(code);
       expect(
-        has,
-        `${m.file}: roadmap says importsNodeFs=${m.importsNodeFs}, tree says ${has}. ` +
-          `This decides whether the module can be imported by a client component.`,
+        hasNodeFs(m.file),
+        `${m.file}: imports node:fs, which cannot reach a browser bundle. The learning screen ` +
+          `imports this module; a filesystem import here buries all 82 lessons again.`,
       ).toBe(m.importsNodeFs);
+      expect(m.importsNodeFs, `${m.file} is recorded as needing node:fs`).toBe(false);
     }
-    const count = UNREACHABLE_TEACHING.filter((m) => m.importsNodeFs).length;
-    expect(count).toBe(4);
+
+    // 2. THE CONTROL (rule 55). The four gate siblings the split created must
+    //    exist AND must be the ones holding the `node:fs` import. Without this,
+    //    the loop above is equally satisfied by deleting the coverage checks
+    //    outright, which would be the same green tick over less protection.
+    const MOVED_GATES = [
+      "src/lib/accounting/interest-mentor-gates.ts",
+      "src/lib/accounting/period-close-mentor-gates.ts",
+      "src/lib/accounting/s-corporation-year-mentor-gates.ts",
+      "src/lib/reports/payroll-reconciliation-mentor-gates.ts",
+    ];
+    for (const g of MOVED_GATES) {
+      expect(existsSync(join(ROOT, g)), `${g} is missing — the split deleted the gate`).toBe(true);
+      expect(
+        hasNodeFs(g),
+        `${g} exists but reads nothing from disk, so the coverage check it was carved out to ` +
+          `hold is gone rather than moved.`,
+      ).toBe(true);
+    }
+    expect(MOVED_GATES.length, "the roadmap records four modules that were split").toBe(4);
+
+    // 3. The roadmap still explains the constraint to whoever reads it next.
     expect(roadmap).toContain("node:fs");
   });
 });

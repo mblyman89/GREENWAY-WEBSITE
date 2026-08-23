@@ -179,24 +179,36 @@ There is now a guard that runs *before* the engine is called and refuses any rol
 
 # PART FOUR — 3,575 lines of guidance nobody can read
 
-This is the largest single piece of finished, tested, unreachable work in the system, and I am listing it plainly because it represents real value sitting in the dark.
+*(Most of this is now readable. The original finding is left standing below, with the closures marked, because deleting a finding is how the record of what went wrong disappears.)*
+
+This was the largest single piece of finished, tested, unreachable work in the system, and I listed it plainly because it represented real value sitting in the dark.
 
 Nine mentor modules, all written, all tested, all with zero imports from any page or component:
 
-| Module | Lines | Teaches |
-|---|---|---|
-| `payroll-onboarding-mentor` | 746 | Hiring paperwork, W-4, I-9 |
-| `tax-penalty-mentor` | 540 | Which penalty applies and how to abate it |
-| `financial-statements-mentor` | 400 | Reading your own statements |
-| `cogs-position-mentor` | 371 | 280E and cost of goods sold — **material to a cannabis retailer** |
-| `basis-aaa-mentor` | 368 | S-corp basis and the accumulated adjustments account |
-| `interest-mentor` | 328 | Interest computation and the federal rates |
-| `internal-control-mentor` | 316 | Separation of duties in a small shop |
-| `period-close-mentor` | 281 | Closing a month properly |
-| `s-corporation-year-mentor` | 226 | The S-corp annual cycle |
-| **Total** | **3,575** | |
+| Module | Lines | Teaches | Status |
+|---|---|---|---|
+| `payroll-onboarding-mentor` | 746 | Hiring paperwork, W-4, I-9 | **CLOSED — wired in books-44**, at `/admin/books/learn` |
+| `tax-penalty-mentor` | 540 | Which penalty applies and how to abate it | **CLOSED — wired in books-44** |
+| `financial-statements-mentor` | 400 | Reading your own statements | Still unreachable |
+| `cogs-position-mentor` | 371 | 280E and cost of goods sold — **material to a cannabis retailer** | Still unreachable |
+| `basis-aaa-mentor` | 368 | S-corp basis and the accumulated adjustments account | Still unreachable |
+| `interest-mentor` | 328 | Interest computation and the federal rates | **CLOSED — wired in books-44** |
+| `internal-control-mentor` | 316 | Separation of duties in a small shop | Still unreachable |
+| `period-close-mentor` | 281 | Closing a month properly | **CLOSED — wired in books-44** |
+| `s-corporation-year-mentor` | 226 | The S-corp annual cycle | **CLOSED — wired in books-44** |
+| **Total** | **3,575** | | |
 
-This is standing rule 50 at scale — code that passes its tests and cannot be reached by a human being. Each one needs a screen, or a panel on an existing screen. The COGS/280E one is the one I would wire first: it is the single largest tax issue a Washington cannabis retailer has, and 371 lines of written guidance on it are currently invisible.
+This is standing rule 50 at scale — code that passes its tests and cannot be reached by a human being. Each one needs a screen, or a panel on an existing screen.
+
+## What books-44 did about it, and what it deliberately did not do
+
+Five of the nine above, plus `payroll-reconciliation-mentor` — which was in the same state and which this report had missed — are now on screen at **`/admin/books/learn`**. That is **82 individual lessons** that no page had ever rendered.
+
+They were not simply dumped onto a page in module order, because a list of 82 things is a filing cabinet rather than a course. They are arranged into eight units that follow the order Greenway's year actually happens: how money is written down, how the agencies count days, hiring somebody, running a payroll, checking a quarter before you file it, closing a month, the S-corporation year, and finally what it costs when something was late. Every unit says when in the year you need it and why it sits where it does in the order.
+
+**The count on that page is computed, not typed.** There is no hard-coded 82 anywhere in it. The screen counts the lessons in the six modules every time it loads, counts how many the eight units actually reach, and prints both. If somebody adds a lesson to a mentor tomorrow and forgets to place it, the banner at the top of the page turns orange and names it. That is the same defect this Part Four describes — finished teaching that nothing shows — and the page is now built so it cannot happen again quietly.
+
+**Four modules are still dark, and I am not going to pretend otherwise.** `cogs-position-mentor` (371 lines on §280E), `basis-aaa-mentor` (368 on basis and AAA), `financial-statements-mentor` (400) and `internal-control-mentor` (316) all remain unreachable. The COGS/280E one is the one I would wire next and it is the one I would have wired first if it were free: it is the single largest tax issue a Washington cannabis retailer has. It is not in this slice because it belongs with the §280E work rather than bolted onto a payroll-shaped course, and putting it somewhere convenient would have meant teaching the biggest tax issue you have in the wrong context. The automated check still asserts, on every commit, that those four are unreachable — so the day one of them is wired, the build says so and this paragraph gets shorter.
 
 ## The same is true of two calculation engines, not just the guidance
 
@@ -214,6 +226,12 @@ I am naming them here with the same specificity as the mentor modules because a 
 **That check has now fired once, and this is what happened.** Wiring the financial statements screen in books-42 turned the claim "nothing imports `financial-statements-core`" into a false statement, and the build went red with a message naming the two files that now import it and instructing whoever saw it to update this report. That is the paragraph above working exactly as intended.
 
 What I did *not* do is delete the line. The entry moved to a second list in the same check, and **the assertion inverted**: `financial-statements-core` must now be reachable, and the day nothing in `src/app` or `src/components` imports it any more, the build fails again and says so. A gap that was closed last month is the easiest one in the system to reopen by accident — somebody tidies a page, removes the last import, and 1,600 tested lines slide quietly back into the dark with every test still green. Closing a gap is not a reason to stop watching it.
+
+**It fired a second time in books-44, and that time it found a hole in itself.** The six mentors listed above as closed are all now watched by the same inverted assertion. But wiring them exposed something worth telling you about, because it is the most instructive thing that happened in that slice.
+
+The check asked one question: *does any file in `src/app` or `src/components` contain an import naming this module?* One hop. That was exactly right when the statements page imported its engine directly. The learning page does not — it reaches the mentors through two intermediate modules, three hops down. So the check would have stayed **green while being wrong**, and this report would have gone on telling you that 82 lessons were invisible on the very day they went on screen.
+
+A gate that is green and wrong is worse than one that is red, because nobody looks at it. So the check now walks the whole chain of imports rather than the first link. Two details of that were measured rather than assumed, and both were wrong on the first attempt: it has to follow relative imports as well as the `@/` shorthand ones (the first version handled only the shorthand and reported all six mentors buried), and it has to **ignore type-only imports**, which the compiler erases and which ship no code at all. That second one matters more than it sounds — `interest-mentor` borrows a type definition from `basis-aaa-mentor`, and counting that would have marked the basis and AAA teaching as reachable when not one word of it is on any screen. A genuinely open gap would have been recorded as closed on the strength of a shared type alias. There is now a test whose only job is to prove the check still refuses to follow that edge.
 
 ---
 

@@ -13,8 +13,6 @@
  * and fails if any exported function ships without a lesson. That gate has
  * already caught real omissions twice in earlier slices; it is not decorative.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 export type MentorLesson = {
   /** The exported function this lesson teaches. */
@@ -234,48 +232,3 @@ export function citedAuthorityIds(): readonly string[] {
  * actual truth about what shipped. This is what makes the coverage gate below
  * impossible to satisfy by accident.
  */
-export function exportedCoreFunctionNames(sourcePath?: string): readonly string[] {
-  const path =
-    sourcePath ?? join(process.cwd(), "src", "lib", "accounting", "period-close-core.ts");
-  const src = readFileSync(path, "utf8");
-  const names: string[] = [];
-  const re = /^export function ([A-Za-z0-9_]+)/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) names.push(m[1]);
-  return names;
-}
-
-/**
- * Fail loudly if any exported function shipped without a lesson.
- *
- * In books-17 the equivalent gate caught two functions that had genuinely been
- * forgotten. It is the reason rule 26 is enforceable rather than aspirational.
- *
- * `sourcePath` exists so a TEST can point this at a file it controls and prove
- * the gate actually fires. Without it the only available self-check was one
- * that re-implemented this logic and asserted on the copy \u2014 which is how a
- * mutation replacing the condition below with `if (false)` survived the entire
- * suite. Standing rule 16: prove the gate is WIRED, not merely present.
- */
-export function assertEveryExportedFunctionIsTaught(sourcePath?: string): void {
-  const taught = new Set(taughtFunctionNames());
-  const exported = exportedCoreFunctionNames(sourcePath);
-
-  // A gate that reads nothing approves everything. If the regex stops matching
-  // \u2014 a formatting change, a move to arrow exports \u2014 this must shout rather
-  // than quietly pass forever.
-  if (exported.length === 0) {
-    throw new Error(
-      "MENTOR COVERAGE GATE BROKEN: read no exported functions from the core module. " +
-        "A coverage gate that inspects nothing passes vacuously and protects nothing.",
-    );
-  }
-
-  const untaught = exported.filter((f) => !taught.has(f));
-  if (untaught.length > 0) {
-    throw new Error(
-      `MENTOR COVERAGE GAP: these exported functions have no lesson: ${untaught.join(", ")}. ` +
-        `Standing rule 26 requires every exported function to be taught before it ships.`,
-    );
-  }
-}

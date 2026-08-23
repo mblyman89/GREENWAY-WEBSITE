@@ -96,13 +96,50 @@ function isClientComponent(file: string): boolean {
   return /^["']use client["']/.test(stripped);
 }
 
-/** Every module specifier this file imports (static imports and re-exports). */
+/**
+ * Every module specifier this file imports (static imports and re-exports).
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * `import type` IS SKIPPED, AND THAT IS A CORRECTION, NOT A RELAXATION
+ * ────────────────────────────────────────────────────────────────────────────
+ * Found in books-44. The learning page reaches, at four hops,
+ * `payroll-reconciliation-mentor`, which does:
+ *
+ *     import type { MentorLesson } from "@/lib/reports/reports-presentation-mentor";
+ *
+ * and that module reads from disk. The walker reported the page as reaching
+ * `node:fs` and the build would have been blocked on a defect that does not
+ * exist: TypeScript ERASES a whole-clause `import type` completely. Verified
+ * rather than assumed - compiling
+ *
+ *     import type { Foo } from "./other";
+ *     export const x: Foo = ...;
+ *
+ * emits `export const x = 1;` and no import statement at all. No module edge
+ * exists in the output, so no bundler can follow one, so Turbopack cannot fail
+ * on it.
+ *
+ * This makes the walker MORE accurate, never blinder: the only edges it stops
+ * following are ones that ship no code. And a false alarm is not a harmless
+ * kind of wrong - the header on FATAL says it plainly, "a test that cries wolf
+ * gets disabled, and a disabled test protects nothing."
+ *
+ * DELIBERATELY CONSERVATIVE: only the whole-clause `import type {...} from`
+ * form is skipped. The inline form, `import { type A, b } from "..."`, still
+ * counts, because it can carry a value binding alongside the type and the
+ * import survives in the emitted code. When in doubt this over-reports, which
+ * is the safe direction to be wrong in.
+ */
 function importsOf(file: string): string[] {
   const text = readFileSync(file, "utf8");
   const specs: string[] = [];
-  for (const m of text.matchAll(/^\s*import\s[^;]*?from\s+["']([^"']+)["']/gm)) specs.push(m[1]);
+  for (const m of text.matchAll(/^\s*import\s+(?!type\s)[^;]*?from\s+["']([^"']+)["']/gm)) {
+    specs.push(m[1]);
+  }
   for (const m of text.matchAll(/^\s*import\s+["']([^"']+)["']/gm)) specs.push(m[1]);
-  for (const m of text.matchAll(/^\s*export\s[^;]*?from\s+["']([^"']+)["']/gm)) specs.push(m[1]);
+  for (const m of text.matchAll(/^\s*export\s+(?!type\s)[^;]*?from\s+["']([^"']+)["']/gm)) {
+    specs.push(m[1]);
+  }
   return specs;
 }
 
@@ -218,10 +255,37 @@ describe("client bundle purity: no browser file may reach node-only builtins", (
     for (const rel of [
       "src/lib/payroll/timesheet-mentor.ts",
       "src/lib/accounting/company-identity-mentor.ts",
+      // ── The four split in books-44 (slice C). ──────────────────────────
+      // These had to be split for the same reason as the two above, and the
+      // reason is worth restating: the learning screen renders all six mentor
+      // modules, so a single `node:fs` import anywhere in that graph is a
+      // Turbopack build failure on a page Michael needs. Rule 65b.
+      "src/lib/accounting/interest-mentor.ts",
+      "src/lib/accounting/period-close-mentor.ts",
+      "src/lib/accounting/s-corporation-year-mentor.ts",
+      "src/lib/reports/payroll-reconciliation-mentor.ts",
+      // Never had it, and must never gain it - they are the two modules the
+      // page imports directly.
+      "src/lib/accounting/learning-path-core.ts",
+      "src/lib/accounting/learning-path-ui-core.ts",
     ]) {
-      const text = readFileSync(join(ROOT, rel), "utf8");
-      const importsFs = /^\s*import\s[^;]*?from\s+["']node:fs["']/m.test(text);
-      expect(importsFs, `${rel} imports node:fs again`).toBe(false);
+      /*
+       * ENFORCES THE `FATAL` LIST, NOT A PRIVATE ONE.
+       *
+       * The first version of this loop tested its own regex for
+       * `node:(fs|path|crypto|os)`, which immediately went red on
+       * `company-identity-mentor` - a module that imports `node:path` and is
+       * perfectly fine. The header of `FATAL` says why in as many words:
+       * bundlers shim `node:path`, it does not produce the chunking error, and
+       * "a test that cries wolf gets disabled, and a disabled test protects
+       * nothing."
+       *
+       * So the policy lives in exactly one place and this reads it. Two
+       * definitions of "forbidden" in one file is how the strict one gets
+       * switched off and the loose one is the only survivor.
+       */
+      const offending = importsOf(join(ROOT, rel)).filter((s) => FATAL.has(s));
+      expect(offending, `${rel} imports a fatal builtin again: ${offending.join(", ")}`).toEqual([]);
     }
   });
 
@@ -236,5 +300,117 @@ describe("client bundle purity: no browser file may reach node-only builtins", (
     const t2 = readFileSync(join(ROOT, "tests/compliance/company-identity-mentor.test.ts"), "utf8");
     expect(t2).toContain("company-identity-mentor-gates");
     expect(t2).toContain("assertEveryExportedFunctionIsTaught");
+  });
+
+  it("the four gates that moved in books-44 are still called by the suite", () => {
+    /*
+     * Same discipline, four more modules.
+     *
+     * Splitting a coverage gate out of a mentor is a refactor that can silently
+     * DELETE the gate: the mentor still compiles, the page still renders, every
+     * test still passes, and the check that used to prove every exported
+     * function is taught simply never runs again. The only thing standing
+     * between that and shipping is this test, so it names each moved gate and
+     * the test file that must still call it.
+     */
+    const wired: readonly { test: string; gatesModule: string; gateFn: string }[] = [
+      {
+        test: "tests/compliance/books-21-mentors.test.ts",
+        gatesModule: "interest-mentor-gates",
+        gateFn: "assertEveryInterestFunctionIsTaught",
+      },
+      {
+        test: "tests/compliance/books-21-mentors.test.ts",
+        gatesModule: "s-corporation-year-mentor-gates",
+        gateFn: "assertEverySCorporationYearFunctionIsTaught",
+      },
+      {
+        test: "tests/compliance/period-close-core.test.ts",
+        gatesModule: "period-close-mentor-gates",
+        gateFn: "assertEveryExportedFunctionIsTaught",
+      },
+      {
+        test: "tests/compliance/payroll-reconciliation-report.test.ts",
+        gatesModule: "payroll-reconciliation-mentor-gates",
+        gateFn: "assertEveryReconciliationFunctionIsTaught",
+      },
+    ];
+
+    for (const w of wired) {
+      const abs = join(ROOT, w.test);
+      expect(existsSync(abs), `${w.test} no longer exists — the gate has no caller`).toBe(true);
+      const text = readFileSync(abs, "utf8");
+      expect(text, `${w.test} stopped importing ${w.gatesModule}`).toContain(w.gatesModule);
+      expect(text, `${w.test} stopped calling ${w.gateFn}`).toContain(w.gateFn);
+    }
+  });
+
+  it("skipping `import type` did not blind the walker to real value imports", () => {
+    /*
+     * THE CONTROL FOR THE CHANGE ABOVE (rule 55: a refusal that stops
+     * discriminating is not a refusal).
+     *
+     * `importsOf` was narrowed to ignore whole-clause `import type`. The
+     * failure mode of that change is silent and total: widen the exclusion by
+     * one character and the walker stops following ordinary imports too, at
+     * which point every check in this file passes while inspecting nothing.
+     *
+     * So this asserts BOTH directions against real files, not fixtures:
+     *   - a genuine VALUE import of node:fs is still found;
+     *   - a genuine TYPE-only edge is still not followed.
+     */
+    const gates = join(SRC, "lib", "payroll", "timesheet-mentor-gates.ts");
+    expect(existsSync(gates)).toBe(true);
+    expect(
+      importsOf(gates),
+      "the walker stopped seeing an ordinary value import of node:fs — it is now blind",
+    ).toContain("node:fs");
+
+    // And an ordinary aliased value import is still returned.
+    const uiCore = join(SRC, "lib", "accounting", "learning-path-ui-core.ts");
+    expect(existsSync(uiCore)).toBe(true);
+    expect(
+      importsOf(uiCore),
+      "the walker stopped seeing an ordinary relative value import",
+    ).toContain("./learning-path-core");
+
+    // The type-only edge that caused the false alarm is genuinely skipped.
+    const recon = join(SRC, "lib", "reports", "payroll-reconciliation-mentor.ts");
+    const reconText = readFileSync(recon, "utf8");
+    expect(
+      reconText,
+      "the premise of this control is gone: payroll-reconciliation-mentor no longer type-imports " +
+        "from reports-presentation-mentor, so this proves nothing. Find another type-only edge " +
+        "or delete this test and say why.",
+    ).toContain('import type { MentorLesson } from "@/lib/reports/reports-presentation-mentor"');
+    expect(
+      importsOf(recon),
+      "the walker followed a type-only import again — it will report false node:fs reaches",
+    ).not.toContain("@/lib/reports/reports-presentation-mentor");
+  });
+
+  it("the learning page reaches no node builtin, through any depth of import", () => {
+    /*
+     * THE WHOLE POINT OF THE SPLIT, ASSERTED AT THE PAGE.
+     *
+     * The four checks above look at four files. This one walks the entire
+     * import graph beneath the learning page, which is the only assertion that
+     * actually corresponds to the thing that breaks: Turbopack does not care
+     * which file the `node:fs` is in, only that the bundle reaches one.
+     *
+     * If this ever fails, the message names the chain, so the offending edge is
+     * the first thing you see rather than something to go hunting for.
+     */
+    const rel = "src/app/admin/books/learn/page.tsx";
+    const abs = join(ROOT, rel);
+    expect(existsSync(abs), `${rel} should exist`).toBe(true);
+
+    const hit = findNodeOnlyReach(abs);
+    expect(
+      hit,
+      hit
+        ? `the learning page reaches ${hit.builtin}\n      via: ${hit.chain.join("\n         -> ")}`
+        : "",
+    ).toBeNull();
   });
 });

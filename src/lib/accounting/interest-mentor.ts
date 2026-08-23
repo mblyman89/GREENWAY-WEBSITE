@@ -21,8 +21,6 @@
  * The coverage gate at the bottom reads the core module FROM DISK and takes an
  * optional path so a test can prove the gate fires (rules 16 and 39).
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import type { MentorLesson } from "@/lib/accounting/basis-aaa-mentor";
 
@@ -257,72 +255,3 @@ export function taughtInterestFunctionNames(): readonly string[] {
   return INTEREST_LESSONS.map((l) => l.fn);
 }
 
-/**
- * The exported function names in the core module, read from disk.
- *
- * Takes an optional path so a test can point it at a fixture and prove the
- * coverage gate below actually fires (rule 39).
- */
-export function exportedInterestFunctionNames(sourcePath?: string): readonly string[] {
-  const path = sourcePath ?? join(process.cwd(), "src/lib/accounting/interest-core.ts");
-  const src = readFileSync(path, "utf8");
-  const names: string[] = [];
-  const re = /^export function ([A-Za-z0-9_]+)/gm;
-  let m = re.exec(src);
-  while (m !== null) {
-    names.push(m[1]!);
-    m = re.exec(src);
-  }
-  return names;
-}
-
-/** Every exported function has a lesson, and the gate read something real. */
-export function assertEveryInterestFunctionIsTaught(sourcePath?: string): void {
-  const taught = new Set(taughtInterestFunctionNames());
-  const exported = exportedInterestFunctionNames(sourcePath);
-
-  if (exported.length === 0) {
-    throw new Error(
-      "INTEREST MENTOR COVERAGE GATE BROKEN: read no exported functions from the core module. " +
-        "A coverage gate that inspects nothing passes vacuously and protects nothing.",
-    );
-  }
-
-  const untaught = exported.filter((f) => !taught.has(f));
-  if (untaught.length > 0) {
-    throw new Error(
-      `INTEREST MENTOR COVERAGE GAP: these exported functions have no lesson: ` +
-        `${untaught.join(", ")}. Standing rule 26 requires every exported function to be taught ` +
-        `before it ships.`,
-    );
-  }
-}
-
-/** Every lesson is complete, not merely present. */
-export function assertEveryInterestLessonIsSubstantive(
-  lessons: readonly MentorLesson[] = INTEREST_LESSONS,
-): void {
-  if (lessons.length === 0) {
-    throw new Error(
-      "INTEREST MENTOR GATE BROKEN: given no lessons to inspect. Passing vacuously is not passing.",
-    );
-  }
-  const thin: string[] = [];
-  for (const l of lessons) {
-    const fields: Array<[string, string]> = [
-      ["plainEnglish", l.plainEnglish],
-      ["whyItExists", l.whyItExists],
-      ["theTrap", l.theTrap],
-      ["whatIWouldDo", l.whatIWouldDo],
-    ];
-    for (const [name, value] of fields) {
-      if (value.trim().length < 40) thin.push(`${l.fn}.${name}`);
-    }
-  }
-  if (thin.length > 0) {
-    throw new Error(
-      `INTEREST MENTOR LESSONS TOO THIN: ${thin.join(", ")}. Standing rule 26 requires a real ` +
-        `explanation in every field, not a placeholder.`,
-    );
-  }
-}
