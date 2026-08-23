@@ -14,7 +14,6 @@
 import { describe, it, expect } from "vitest";
 
 import {
-  type PeriodStatus,
   type CloseCheckResult,
   type CloseCheckId,
   ALL_PERIOD_STATUSES,

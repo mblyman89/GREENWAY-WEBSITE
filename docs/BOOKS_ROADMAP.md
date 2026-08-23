@@ -131,7 +131,7 @@ NOT become a filing agent.
 
 ---
 
-## SLICE C — THE RECON FINDINGS, MEASURED
+## SLICE C — THE RECON FINDINGS, MEASURED — **COMPLETE (books-44 + books-45)**
 
 Everything below was counted from the tree at commit `0131c62b`, not recalled.
 The probe: for each `*-mentor.ts`, list importers under `src/` excluding the
@@ -218,7 +218,11 @@ penny-drift defect. Retire the duplicate, keep the integer implementation
    so once these six are wired the probe must prove they are *reachable*, and
    must still be able to fail.
 
-#### Status after books-44
+#### Status after books-45 — ALL FIVE DONE, SLICE C CLOSED
+
+Criteria 1 and 4 closed in books-44; 2, 3 and the added 5 closed in books-45.
+Criterion 5 was not in the original four — Michael asked for worked examples
+directly, and it was adopted rather than deferred.
 
 | # | Criterion | Status |
 |---|-----------|--------|
@@ -785,6 +789,30 @@ that is already provably correct, never before.
   financial data. Proven by execution during the is_admin() audit. Needs
   re-gating to `is_admin()` with read/write split. **Owner decision needed:**
   which tables, if any, managers legitimately need.
+- **R2 — sixteen duplicate type definitions (books-45a).** Chasing the three
+  "pre-existing" eslint warnings turned up `PeriodStatus` declared in BOTH
+  `ledger-core.ts` and `period-close-core.ts`, identical values, no import
+  between them (rule 76/81). The `ledger-core` copy was referenced by nothing —
+  not even its own file — and is now deleted. A scan of every brace-free
+  single-line exported alias in `src` found **15 more with identical bodies in
+  two or more files**, measured not guessed:
+
+  `AccountType` (3 files: cutover-core, ledger-core, trial-balance-core),
+  `AtmConnectionStatus`, `BlogCategory`, `ControlSubledger`, `DiscountType`,
+  `ImageFocus`, `NormalBalance`, `PayrollReconcileStatus`, `PlaidEnvName`,
+  `PolicyDocId`, `SourceKind`, `TextAlign`, `TextVAlign`, `TxDirection`,
+  `VendorReconcileStatus`.
+
+  `AccountType` and `SourceKind` are the dangerous ones: both are long string
+  unions in the accounting core, and a member added to one copy and not the
+  other compiles perfectly while the two halves of the ledger disagree about
+  what an account is. NOT fixed here — each needs its owning module chosen and
+  the other call sites repointed, which is a slice, not a footnote. Deliberately
+  scoped OUT of books-45a rather than half-done.
+
+  The scan covered only aliases whose whole body fits on one line without
+  braces; multi-line object types were skipped rather than compared as
+  fragments (rule 86), so 16 is a floor, not a ceiling.
 - Document vault for the evidence every refusal in this system demands.
 - Audit-trail review screen — the events are recorded; there is no screen where
   Michael's grandfather can sit down and review them, which was the point of
