@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the sixteen books screens plus Inventory Auditing", () => {
+  it("Accounting holds the seventeen books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -377,6 +377,24 @@ describe("N4 the Accounting and Lyman tabs", () => {
      * books-37 the only non-test caller passed ZERO_YTD, so the wage ceiling
      * could never engage at all.
      *
+     * BOOKS-39 ADDS /admin/books/pay-run, making seventeen.
+     *
+     * The third time this exact story has repeated, and the biggest one. The
+     * pay run is the slice where all the others finally meet: Timesheets
+     * supply the hours, Payroll Setup supplies the W-4, Garnishments supply
+     * the orders, Year-to-Date says whether Social Security has already
+     * stopped, and the rate registry says what this pay DATE costs. Joining
+     * those five is what turns a pile of correct engines into a paycheque, and
+     * until this entry existed the join was reachable from nowhere — the
+     * store, the core, the mentor and 100+ tests, all green, all invisible.
+     *
+     * That is rule 50 in its purest form: dead code wearing a green check. The
+     * check was real; the screen was not there. This list is what makes the
+     * difference visible, which is why it is extended by hand every time
+     * rather than computed from the filesystem — a list that discovers new
+     * entries automatically would also "discover" a screen that had silently
+     * fallen out of the menu and report no change.
+     *
      * Extended, not loosened, for the reason spelled out above: this list is
      * the only thing that notices a screen going dark.
      */
@@ -396,6 +414,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/leave",
         "/admin/books/ledger",
         "/admin/books/net-pay",
+        "/admin/books/pay-run",
         "/admin/books/payroll",
         "/admin/books/payroll-setup",
         "/admin/books/sick-leave-balances",
