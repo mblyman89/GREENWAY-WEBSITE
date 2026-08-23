@@ -199,8 +199,17 @@ export type PayRunEmployeeInput = {
 
   /** The current W-4 row, already converted. Null when none is on file. */
   readonly w4OnFile: W4Record | null;
-  /** How often this person is paid. Drives the whole withholding table. */
-  readonly payFrequency: PayFrequency;
+  /**
+   * How often this person is paid. Drives the whole withholding table.
+   *
+   * NULLABLE ON PURPOSE. The obvious shortcut is to type this `PayFrequency`
+   * and let the store write `?? "biweekly"` when no pay record is found - and
+   * that is exactly what the first version of pay-run-store.ts did, underneath
+   * a comment claiming it did not. Biweekly is right for Greenway's staff today
+   * and silently wrong for the owner, who is paid annually. A null reaches the
+   * refusal below instead of inventing a divisor (standing rule 62d).
+   */
+  readonly payFrequency: PayFrequency | null;
 
   /** Year-to-date wage bases. NOT zeros — the wage-base ceilings depend on these. */
   readonly ytd: YtdWageAccumulators;
@@ -249,6 +258,18 @@ export type PayRunRefusalCode =
   | "NO_HOURS"
   /** Hours exist but no pay rate, so gross is unknowable. */
   | "NO_GROSS"
+  /**
+   * No current pay record says how often this person is paid.
+   *
+   * This is its own code, and not folded into NO_GROSS, because it is a
+   * DIVISOR rather than a missing amount. Pub. 15-T's percentage method
+   * annualises the wages, finds the bracket, then divides back down by the
+   * number of periods in the year. Believe 24 where the truth is 26 and every
+   * federal withholding figure is out by roughly eight percent, in a direction
+   * nobody notices, on a cheque that looks entirely ordinary - and it will not
+   * tie out until the W-2.
+   */
+  | "NO_PAY_FREQUENCY"
   /** A rate needed by every cheque has no evidenced row for the pay date. */
   | "RATE_NOT_ON_FILE"
   /** The minimum wage floor is unknown, so garnishment ceilings cannot be set. */
@@ -261,6 +282,7 @@ export type PayRunRefusalCode =
 export const ALL_PAY_RUN_REFUSAL_CODES: readonly PayRunRefusalCode[] = [
   "NO_HOURS",
   "NO_GROSS",
+  "NO_PAY_FREQUENCY",
   "RATE_NOT_ON_FILE",
   "NO_MINIMUM_WAGE",
   "ENGINE_REFUSED",
@@ -443,6 +465,22 @@ export function computePayRunLine(args: {
       whatToDo:
         "Open Staffing → this employee → Pay and set the pay basis and rate. A rate that was " +
         "never entered reads as 'unknown', not as zero, which is why nothing was computed.",
+    });
+    return blocked(refusals);
+  }
+
+  if (input.payFrequency === null) {
+    refusals.push({
+      code: "NO_PAY_FREQUENCY",
+      message:
+        `There is no current pay record for ${input.employeeName} saying how often they are ` +
+        `paid, and that answer is a divisor in the federal withholding tables rather than a ` +
+        `detail. Assuming "every two weeks" for somebody paid monthly gets every income-tax ` +
+        `figure wrong by a wide margin on a cheque that otherwise looks perfectly normal.`,
+      whatToDo:
+        "Open Staffing → this employee → Pay and set the pay frequency. Greenway's staff are " +
+        "biweekly (26 a year); the owner's is annual (1 a year). Nothing has been calculated " +
+        "for this person.",
     });
     return blocked(refusals);
   }
