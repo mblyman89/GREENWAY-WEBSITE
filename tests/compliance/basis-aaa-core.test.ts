@@ -21,6 +21,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   type ShareholderYearInput,
+  type StockBasisSchedule,
   type BasisYearInput,
   ALL_BASIS_REFUSAL_CODES,
   LAST_SUPPORTED_YEAR,
@@ -116,6 +117,44 @@ function shareholder(
     distributionsCents: 0,
     ...over,
   };
+}
+
+/**
+ * A StockBasisSchedule for calling `assessProportionality` DIRECTLY.
+ *
+ * That function reads exactly three fields - name, ownership and distributions
+ * - but its parameter is the full schedule, so the rest are filled with zeros.
+ * Built from the real exported type, so if a required field is ever added this
+ * stops compiling instead of silently testing a shape the engine never sees.
+ */
+function scheduleFor(
+  name: string,
+  milli: number,
+  distributionsCents: number,
+): StockBasisSchedule {
+  return {
+    shareholderName: name,
+    ownershipMilliPercent: milli,
+    beginningStockBasisCents: 0,
+    contributionsCents: 0,
+    allocatedOrdinaryIncomeCents: 0,
+    allocatedTaxExemptIncomeCents: 0,
+    basisAfterIncreasesCents: 0,
+    distributionsCents,
+    distributionAppliedAgainstBasisCents: 0,
+    capitalGainOnExcessDistributionCents: 0,
+    basisAfterDistributionsCents: 0,
+    nonDeductibleExpenseCents: 0,
+    nonDeductibleExpenseAppliedToStockCents: 0,
+    basisAfterNonDeductibleCents: 0,
+    lossAvailableCents: 0,
+    lossAllowedAgainstStockCents: 0,
+    lossAllowedAgainstDebtCents: 0,
+    suspendedLossCarryforwardCents: 0,
+    endingStockBasisCents: 0,
+    beginningDebtBasisCents: 0,
+    debtBasisRestoredCents: 0,
+  } as StockBasisSchedule;
 }
 
 function greenwayRoster(
@@ -1006,6 +1045,53 @@ describe("proportionality and \u00a71361(b)(1)(D)", () => {
       ),
     );
     expect(r.proportionality.authorityIds).toContain("REG_1_1361_1_L_2_I_GOVERNING_PROVISIONS");
+  });
+
+  // -------------------------------------------------------------------------
+  // Called DIRECTLY, not through computeBasisAndAaa.
+  //
+  // Every test above reaches this function through the year engine, which can
+  // only ever hand it a validated, non-empty roster. That left the function's
+  // own edges untested and its import flagged as unused - eslint was right, and
+  // deleting the import to silence it would have been rule 50 (dead code
+  // wearing a green check): a taught, exported function with no direct test.
+  // -------------------------------------------------------------------------
+
+  it("is safe on an empty roster - no shareholders is not a proportionality problem", () => {
+    const p = assessProportionality([]);
+    expect(p.isStrictlyProportionate).toBe(true);
+    expect(p.totalDistributionsCents).toBe(0);
+    expect(p.byShareholder).toEqual([]);
+    expect(p.whatToVerify).toBe("");
+  });
+
+  it("a sole shareholder is proportionate by definition, whatever they took", () => {
+    const p = assessProportionality([
+      scheduleFor(MICHAEL, 100_000, 777_777),
+    ]);
+    expect(p.isStrictlyProportionate).toBe(true);
+    expect(p.byShareholder[0].varianceCents).toBe(0);
+  });
+
+  it("prices Greenway's real 85/10/5 gap to the cent, called directly", () => {
+    // Michael 85%, mother 10% (allocated, NOT paid), grandfather 5%.
+    const p = assessProportionality([
+      scheduleFor(MICHAEL, 85_000, 5_000_000),
+      scheduleFor(MOTHER, 10_000, 0),
+      scheduleFor(GRANDFATHER, 5_000, 250_000),
+    ]);
+    expect(p.isStrictlyProportionate).toBe(false);
+
+    const by = (n: string) => p.byShareholder.find((s) => s.shareholderName === n);
+    // $52,500.00 of pro rata never reached the mother; Michael is over by $5,375.00.
+    expect(by(MOTHER)?.proRataShareCents).toBe(525_000);
+    expect(by(MOTHER)?.actuallyPaidCents).toBe(0);
+    expect(by(MOTHER)?.varianceCents).toBe(-525_000);
+    expect(by(MICHAEL)?.varianceCents).toBe(537_500);
+    expect(by(GRANDFATHER)?.varianceCents).toBe(-12_500);
+
+    // Nothing is created or destroyed by the split.
+    expect(p.byShareholder.reduce((s, x) => s + x.varianceCents, 0)).toBe(0);
   });
 
   it("quantifies the variance to the cent and the variances net to zero", () => {

@@ -2100,3 +2100,38 @@ building the matcher twice.
     narrow gate that only fires on explicit claims ("costs the same", "exactly
     the same as") is worth far more than a broad one that produces false
     accusations and gets switched off.
+
+85. A LINT WARNING IS A FINDING UNTIL PROVEN COSMETIC. Three "pre-existing
+    warnings" sat in this repo long enough to be treated as scenery and quoted
+    as a baseline. Read properly, one of them - an unused import of
+    `assessProportionality` - meant a TAUGHT, exported function had no direct
+    test and was reached only through a wrapper that could never hand it an
+    empty roster (rule 50, dead code wearing a green check). A second,
+    `PeriodStatus`, was pointing at the same type declared in TWO modules with
+    identical values and no import between them (rule 76/81).
+    THE RULE: never silence a warning until you have established which of three
+    things it is - a genuine defect, a real duplicate, or truly redundant text.
+    Delete the import ONLY in the third case. The baseline itself is the hazard:
+    a number everyone recites stops being read, and "0 errors, 3 warnings" is a
+    sentence that hides two architectural defects.
+
+85a. THE FIX FOR AN UNTESTED EXPORT IS A TEST, NOT A SMALLER IMPORT LIST.
+    Deleting `assessProportionality` from the import would have produced a clean
+    lint run and LESS coverage - the warning would be gone and the gap it marked
+    would remain, now invisible. The direct tests added instead cover what the
+    indirect route structurally cannot reach: the empty roster and the sole
+    shareholder, neither of which `computeBasisAndAaa` can ever produce because
+    it validates the roster first. Both new tests were confirmed failable by
+    mutation before being trusted.
+
+86. A DUPLICATE-DEFINITION SCAN MUST NOT TRUNCATE WHAT IT COMPARES. The first
+    version of the scan written this session matched `export type X = ...;` up
+    to the first semicolon, so every multi-line object type was cut off at its
+    opening brace and compared equal to any other type sharing that prefix. It
+    reported 36 "true duplicates", of which the object-typed ones were fabricated
+    by the regex itself. Restricted to brace-free single-line aliases - bodies it
+    can actually see in full - the honest count is 16.
+    THE RULE: a measurement tool that cannot see the whole value must SKIP that
+    value, never compare the fragment. A false accusation costs more than a miss,
+    because it is the thing that gets the whole check switched off (rule 84a) -
+    and a count reported to Michael must be one that survives being checked.

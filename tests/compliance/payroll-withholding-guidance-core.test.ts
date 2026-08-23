@@ -46,7 +46,6 @@ import {
   describeInterception,
   __runPayrollWithholdingGuidanceTests,
   type PayrollBlocker,
-  type PayrollEditTarget,
   type BlockerSeverity,
 } from "@/lib/payroll/payroll-withholding-guidance-core";
 import { findPayrollAuthority } from "@/lib/payroll/payroll-tax-authorities";

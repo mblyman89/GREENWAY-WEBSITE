@@ -77,7 +77,18 @@ export type SourceKind =
   | "close"
   | "reversal";
 
-export type PeriodStatus = "open" | "closed" | "locked";
+/**
+ * `PeriodStatus` deliberately does NOT live here.
+ *
+ * It used to be declared in this file AND in period-close-core.ts, with
+ * identical values and no import between them - two definitions of one thing
+ * (rule 76/81). The copy here was never referenced, not even inside this file,
+ * so it was pure drift risk: period-close-core's copy mirrors the `status`
+ * check constraint on `gl_periods` and carries the meanings, and a second
+ * silent copy could have grown a fourth status that the database would refuse.
+ *
+ * Import it from `@/lib/accounting/period-close-core`, which owns it.
+ */
 
 export type ControlSubledger =
   | "ap" | "ar" | "inventory" | "payroll" | "excise"
