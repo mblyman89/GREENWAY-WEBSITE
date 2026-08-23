@@ -243,7 +243,10 @@ export const WA_BOX_EXPLAINERS: readonly BoxExplainer[] = [
       "Nothing new - it is arithmetic on the two boxes above. But the ORDER is not cosmetic.",
     whoseMoney: "employer_cost",
     whyOwnershipMatters:
-      "This is the figure that leaves the bank account, and every cent of it is company money.",
+      "This is the figure that leaves the bank account, and every cent of it is company money. " +
+      "Neither part of it may be deducted from anybody's pay: RCW 50.24.010 says an employer " +
+      "attempting to do so is guilty of a misdemeanour, and RCW 50.24.014(2)(b) applies the same " +
+      "prohibition to the EAF portion. There is no consent form that makes it lawful.",
     ifItIsWrong:
       "The classic failure is rounding once instead of twice. It produces a figure one cent " +
       "below what ESD assessed, the payment does not clear the balance, and the account shows " +
@@ -379,13 +382,19 @@ export const WA_BOX_EXPLAINERS: readonly BoxExplainer[] = [
     whereItComesFrom: "The same L&I rate notice. Read, never derived.",
     whoseMoney: "employer_cost",
     whyOwnershipMatters:
-      "The larger half of workers' compensation is a company cost and cannot be shifted to " +
-      "staff beyond the employee rate the notice states.",
+      "The larger half of workers' compensation is a company cost. RCW 51.16.140(1) lets an " +
+      "employer deduct only the employee's stated half from wages, which means this half may " +
+      "not be deducted or otherwise recovered from staff at all - not by withholding it, and " +
+      "not by quietly reducing pay to offset it. Deducting more than the notice allows is the " +
+      "error to guard against, because the employee rate and the employer rate arrive on the " +
+      "same piece of paper and are easy to transpose.",
     ifItIsWrong:
       "An error here is a straight over- or under-payment of premium, and L&I audits hours " +
-      "against payroll records.",
+      "against payroll records. Transposing the two halves is worse than a simple miscount: it " +
+      "under-pays L&I and over-deducts from every employee at the same time, so one mistake " +
+      "creates both a premium liability and a wage claim.",
     q2_2026Example: "3,558 hours x $0.39485 = $1,404.88.",
-    authorityIds: ["lni-premium-rate-formula", "rcw-51-16-060-lni-hours"],
+    authorityIds: ["lni-premium-rate-formula", "rcw-51-16-060-lni-hours", "rcw-51-16-140-lni-deduction"],
   },
   {
     lineId: "lni-premium",
@@ -433,6 +442,14 @@ export type WaQuarterCheck = {
   readonly doneWhen: string;
   /** What it costs to skip it. */
   readonly ifSkipped: string;
+  /**
+   * The authorities behind this step.
+   *
+   * Present so that a checklist item is never merely somebody's opinion about
+   * good practice: every instruction here can be traced to the rule that makes
+   * it necessary, and the coverage gate proves each id resolves.
+   */
+  readonly authorityIds: readonly string[];
 };
 
 export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
@@ -450,6 +467,7 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
       "Every figure on all four returns is computed at last year's prices. This is the single " +
       "most common way a quarterly filing goes wrong, and it produces a return that looks " +
       "entirely reasonable.",
+    authorityIds: ["esd-suta-rate-structure", "esd-pfml-2026-rate-announcement", "lni-premium-rate-formula"],
   },
   {
     key: "hours-complete",
@@ -466,6 +484,7 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
       "Hours drive the entire L&I premium and no wage figure can catch an error in them. WAC " +
       "296-17-31021(2) also forbids mixing methods for salaried staff, so a per-person decision " +
       "made quietly is itself a defect.",
+    authorityIds: ["wac-296-17-31021-unit-of-exposure", "wac-296-17-31021-salaried", "rcw-51-16-060-lni-hours"],
   },
   {
     key: "cross-foot",
@@ -480,6 +499,7 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
     ifSkipped:
       "Returns that disagree with each other are the fastest route to an audit letter, because " +
       "the agencies compare them to one another and to the federal filing.",
+    authorityIds: ["wac-192-310-010-wage-detail", "wac-296-17-31023-no-payroll"],
   },
   {
     key: "whose-money",
@@ -495,6 +515,7 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
       "The two are governed by opposite rules. Unemployment tax may never be deducted from " +
       "anybody, and Paid Leave money is held in trust and may never be used by the business. " +
       "Blurring them is how an employer ends up owing both the agency and the staff.",
+    authorityIds: ["rcw-50-24-010-no-deduction", "rcw-50a-10-030-agent-and-trust", "rcw-51-16-140-lni-deduction"],
   },
   {
     key: "employer-size",
@@ -509,6 +530,7 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
     ifSkipped:
       "The exemption is decided once a year and fixed for the whole of the next one. Crossing " +
       "fifty does not produce a warning anywhere in payroll; it produces a bill.",
+    authorityIds: ["rcw-50a-10-030-small-employer", "rcw-50a-10-030-size-test", "rcw-50a-10-030-pfml"],
   },
   {
     key: "due-date",
@@ -522,6 +544,51 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
       "Two of Greenway's four 2027 deadlines move: 31 July 2027 is a Saturday and 31 October " +
       "2027 is a Sunday. Assuming the federal 941's ten-day extension applies here is the more " +
       "expensive mistake, because Washington has no such extension at all.",
+    authorityIds: ["wac-192-310-010-due-dates"],
+  },
+  {
+    key: "late-cost",
+    order: 7,
+    title: "Know what being late actually costs before you need to know",
+    doThis:
+      "If a return is going to be late, file it anyway and pay what you can. Read the penalty " +
+      "and interest figures on this screen so the decision is made with numbers rather than " +
+      "with dread.",
+    doneWhen:
+      "You can say, out loud, what a month's delay would cost on this quarter's figures - and " +
+      "you have filed rather than waited until you could pay in full.",
+    ifSkipped:
+      "The two agencies charge differently and both charge for the FILING as well as the " +
+      "payment. ESD's late-report penalty under RCW 50.12.220 is per employee not reported, so " +
+      "with ten people it scales ten times faster than the intuition of 'a small late fee'. " +
+      "Interest under RCW 50.24.040 runs separately from the penalty and does not stop while " +
+      "you gather the money. And a balance still unpaid on 30 September can push next year's " +
+      "unemployment RATE up, which quietly costs more than the penalty ever did. Filing on " +
+      "time while paying late is nearly always cheaper than doing neither.",
+    authorityIds: [
+      "rcw-50-12-220-esd-late-penalty",
+      "rcw-50-24-040-esd-interest",
+      "esd-delinquent-tax-rate-sept-30",
+      "rcw-51-48-210-lni-late-penalty",
+    ],
+  },
+  {
+    key: "closing-a-quarter-you-stopped-in",
+    order: 8,
+    title: "If Greenway ever stops paying wages, say so ON the return",
+    doThis:
+      "If the business stops employing anybody, report it on the quarterly return for the " +
+      "quarter it happened in, rather than assuming the agencies will notice the zeros.",
+    doneWhen:
+      "The final return states the date wages stopped, and you have kept the confirmation.",
+    ifSkipped:
+      "Nothing about closing is automatic. Both agencies keep expecting returns, and a return " +
+      "they expect and do not receive is a late return with a penalty attached, quarter after " +
+      "quarter, for a business that no longer has any payroll to pay them from. L&I is " +
+      "explicit that a quarter with no payroll still requires a report - silence is not a " +
+      "filing. This check is here for a day Michael hopefully never has, because the cost of " +
+      "learning it on that day is entirely avoidable.",
+    authorityIds: ["wac-192-310-010-termination", "wac-296-17-31023-no-payroll"],
   },
 ] as const;
 
@@ -618,7 +685,10 @@ export const WA_WORKED_EXAMPLES: readonly WaWorkedExample[] = [
       "Paid Leave and WA Cares: both are rates on wages, so both rise by 10% too.",
       "L&I: 3,558 hours x $0.5593 = $1,989.99. Unchanged, to the cent.",
     ],
-    answer: "Three of the four move; the workers' compensation premium does not move at all.",
+    answer:
+      "Three of the four move. Unemployment goes from $255.02 to $280.52, the EAF from $20.68 " +
+      "to $22.74, and Paid Leave and WA Cares rise by the same 10%. The L&I premium stays at " +
+      "$1,989.99 - not approximately, but to the cent, because 3,558 hours is still 3,558 hours.",
     lesson:
       "This is the fastest way to internalise the difference. L&I is insurance against injury " +
       "and an hour is an hour regardless of what it pays. It also explains the asymmetry in " +
@@ -721,6 +791,58 @@ export const WA_QUARTER_LESSONS: readonly WaMentorLesson[] = [
       "Presenting all four filings as one bill, which hides the fact that they go to two " +
       "agencies through three different systems on different rules.",
     authorityIds: ["wac-192-310-010-tax-report"],
+  },
+  {
+    fn: "waLineOf",
+    plainEnglish:
+      "Finds one box on the return by its name, so a screen or a test can ask for 'the " +
+      "unemployment line' rather than counting positions in a list.",
+    guardsAgainst:
+      "Reading a line by its index. Positions move the moment a line is added, and an index " +
+      "that has silently started pointing at the wrong box still returns a plausible number.",
+    authorityIds: ["wac-192-310-010-tax-report"],
+  },
+  {
+    fn: "formatWaLineValue",
+    plainEnglish:
+      "Renders a box the way that box is actually measured: money as dollars, hours as hours. " +
+      "The L&I return's first box is a count of 3,558 hours, not an amount of money, and this " +
+      "is the one function that knows the difference.",
+    guardsAgainst:
+      "Printing '$0.00' beside the hours box. The hours line legitimately carries zero cents, " +
+      "so any screen that reached for the money field directly would display a confident, " +
+      "wrong, and very believable zero on a return that is charged entirely on hours.",
+    authorityIds: ["wac-296-17-31021-unit-of-exposure"],
+  },
+  {
+    fn: "waLegalHolidays",
+    plainEnglish:
+      "Lists Washington's own legal holidays for a year, with the observed-day shift already " +
+      "applied - Saturday holidays move back to Friday and Sunday holidays forward to Monday, " +
+      "exactly as RCW 1.16.050(5) words it.",
+    guardsAgainst:
+      "Reusing the federal holiday table for a state deadline. The two lists genuinely differ: " +
+      "Washington has no Columbus Day (RCW 1.16.050(7)(r) recognises the date and then says it " +
+      "may not be considered a legal holiday for any purpose) and no DC Emancipation Day, and " +
+      "it adds Native American Heritage Day, the Friday after Thanksgiving, which has no " +
+      "federal equivalent.",
+    authorityIds: ["wac-192-310-010-due-dates"],
+  },
+  {
+    fn: "isWaLegalHoliday",
+    plainEnglish:
+      "Answers whether one particular date is a Washington legal holiday. Neighbouring years " +
+      "are consulted because an observed shift can carry New Year's Day back across a year " +
+      "boundary into 31 December.",
+    guardsAgainst:
+      "The tempting shortcut. This check used to be a function that simply returned 'no', on " +
+      "the reasoning that no Washington holiday can land on 30 April, 31 July, 31 October or " +
+      "31 January anyway. That reasoning happens to be correct - but it was a claim taken on " +
+      "trust, and a branch that can never fire is untested code that looks tested. The check " +
+      "now runs against a real table, and a test walks fifty years to prove the holiday branch " +
+      "never moves a deadline. If Washington ever adds a holiday on one of those dates, the " +
+      "engine already handles it and the test tells us the world changed.",
+    authorityIds: ["wac-192-310-010-due-dates"],
   },
 ] as const;
 

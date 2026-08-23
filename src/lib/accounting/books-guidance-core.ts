@@ -99,6 +99,7 @@ import { NET_PAY_AUTHORITIES, type NetPayAuthority } from "@/lib/payroll/net-pay
 // that declares them, for the reason recorded above and because the omission
 // was caught the hard way — see the comment on the merge block below.
 import { FORM_941_AUTHORITIES } from "@/lib/payroll/form-941-authorities";
+import { WA_QUARTERLY_OWN_AUTHORITIES } from "@/lib/payroll/wa-quarterly-authorities";
 import { PAY_RUN_AUTHORITIES, type PayRunAuthority } from "@/lib/payroll/pay-run-authorities";
 import {
   WAGE_ORDER_ENTRY_AUTHORITIES,
@@ -838,6 +839,18 @@ export const ALL_SOURCE_REGISTRIES = [
   // missing money, so a zero quarter that is simply skipped accrues a penalty
   // on a return that would have cost nothing to file.
   "form-941",
+  // books-41. WASHINGTON'S quarterly returns, tagged apart from "form-941" for
+  // the reason that is easiest to get wrong: the two land on the same four
+  // dates and behave differently on almost every other axis. The 941 can be
+  // filed ten days late if every deposit was made on time; WAC 192-310-010(3)(d)
+  // offers nothing equivalent. The 941 is charged on wages; the L&I quarterly
+  // report is charged on HOURS and ignores pay entirely. The 941's employer and
+  // employee halves are equal; here the unemployment tax is 100% employer money
+  // that RCW 50.24.010 makes it a misdemeanour to deduct, while the Paid Leave
+  // premium is mostly employee money the employer merely holds. Folding these
+  // under the federal tag would invite a reader to carry a federal habit into a
+  // state return, which is precisely how the ten-day assumption gets made.
+  "wa-quarterly",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -961,6 +974,25 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // record rather than three copies that can drift apart.
     ...FORM_941_AUTHORITIES.map((a) => ({
       tag: "form-941" as const,
+      authority: a,
+    })),
+    // books-41. Washington's four quarterly returns: WAC 192-310-010 (the 5208
+    // forms, their due dates and the termination rule), RCW 50.24.010 and
+    // 50.24.014 (no deduction from the worker, half-cent rounding, and the two
+    // stacked EAF accounts), RCW 50A.10.030 (Paid Leave deduction, the trust,
+    // the wage cap and the small-employer test) and WAC 296-17-31021/31023
+    // (hours as the unit of exposure, and the duty to report a quarter with no
+    // payroll).
+    //
+    // ONLY THE **OWN** AUTHORITIES ARE MERGED HERE, DELIBERATELY. The slice also
+    // cites thirteen records it BORROWS from payroll-tax-authorities - the SUTA
+    // rate structure, the PFML rate, WA Cares, the L&I formula, the late-payment
+    // rules. Those already reach this registry through their own module, and
+    // adding them a second time would create exactly the duplicate-record drift
+    // that the merge logic below exists to detect. A citation must mean one
+    // thing on every screen, which means each record has one home.
+    ...WA_QUARTERLY_OWN_AUTHORITIES.map((a) => ({
+      tag: "wa-quarterly" as const,
       authority: a,
     })),
     // books-08. Kept in its own module because it is the ledger/chart slice's

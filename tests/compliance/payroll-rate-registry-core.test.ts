@@ -32,6 +32,7 @@ import {
   findRateGaps,
   findRateOverlaps,
   findShareSumViolations,
+  findSutaComponentViolations,
   isValidIsoDate,
   validateRateRow,
   type PayrollRateKey,
@@ -1065,6 +1066,15 @@ describe("the gate is wired (rule 16)", () => {
         ],
         /must total exactly/,
       ],
+      [
+        "suta components",
+        [
+          row({ key: "wa_suta_total", value: 400 }),
+          row({ key: "wa_suta_ui", value: 370 }),
+          row({ key: "wa_suta_eaf", value: 40 }), // 370 + 40 = 410, not 400
+        ],
+        /parts must equal the whole/,
+      ],
     ];
     for (const [name, rows, re] of cases) {
       let threw = false;
@@ -1076,5 +1086,170 @@ describe("the gate is wired (rule 16)", () => {
       }
       expect(threw, `${name} must be rejected at construction`).toBe(true);
     }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE ESD NOTICE CARRIES TWO RATES, NOT ONE   (added by books-41)
+ *
+ * WHY THIS SECTION EXISTS.
+ *
+ * `findSutaComponentViolations` was wired into `PayrollRateRegistry.create`
+ * and then never tested. Grepping the repository for its name returned the
+ * definition, a docblock, and the call site - and no assertion anywhere. That
+ * is standing rule 50 exactly: dead code wearing a green check. The suite was
+ * passing 96 tests while one of the four construction gates had never been
+ * observed to fire even once.
+ *
+ * A gate that has never fired is not a gate. It is a comment that compiles.
+ *
+ * WHAT IT GUARDS, IN PLAIN ENGLISH. Michael's ESD rate notice prints his
+ * unemployment insurance rate and, next to it, an Employment Administration
+ * Fund surcharge. He pays them with one cheque, so it is natural to store one
+ * combined number. But RCW 50.24.010 and RCW 50.24.014(2)(b) each command
+ * rounding to the nearest cent for their OWN section, so the two must be
+ * computed and rounded separately and only then added. That means the system
+ * needs all three figures - the two parts and the printed total - and the
+ * three must agree. A typo in any one of them would otherwise show him one
+ * rate on the readiness screen while building his quarterly return from
+ * another, and nothing else in the system would notice.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("the WA unemployment components must add up to the printed total", () => {
+  /** The three ESD rows, sharing one window, with overrides applied. */
+  function sutaTrio(over: {
+    total?: number;
+    ui?: number;
+    eaf?: number;
+    uiFrom?: string;
+    uiTo?: string | null;
+  } = {}): PayrollRateRow[] {
+    return [
+      row({ key: "wa_suta_total", value: over.total ?? 400 }),
+      row({
+        key: "wa_suta_ui",
+        value: over.ui ?? 370,
+        effectiveFrom: over.uiFrom ?? "2026-01-01",
+        effectiveTo: over.uiTo === undefined ? "2026-12-31" : over.uiTo,
+      }),
+      row({ key: "wa_suta_eaf", value: over.eaf ?? 30 }),
+    ];
+  }
+
+  it("Greenway's own 2026 rows genuinely satisfy the rule", () => {
+    // The real table, not a fixture. If the shipped rows were inconsistent,
+    // every other test in this section would be theatre.
+    expect(findSutaComponentViolations(GREENWAY_RATE_ROWS)).toEqual([]);
+  });
+
+  it("the real 2026 split is 0.37% UI plus 0.03% EAF, totalling 0.40%", () => {
+    // Pinned because these three numbers are what reproduce Michael's filed
+    // Q2 2026 return to the penny. Any drift here is a filing difference.
+    const at = (k: PayrollRateKey) =>
+      GREENWAY_RATE_ROWS.find((r) => r.key === k && r.effectiveFrom <= "2026-04-01" &&
+        (r.effectiveTo === null || r.effectiveTo >= "2026-04-01"));
+    const ui = at("wa_suta_ui");
+    const eaf = at("wa_suta_eaf");
+    const total = at("wa_suta_total");
+    expect(ui, "no wa_suta_ui row covers Q2 2026").toBeTruthy();
+    expect(eaf, "no wa_suta_eaf row covers Q2 2026").toBeTruthy();
+    expect(total, "no wa_suta_total row covers Q2 2026").toBeTruthy();
+    expect(ui!.value).toBe(370);
+    expect(eaf!.value).toBe(30);
+    expect(total!.value).toBe(400);
+    expect(ui!.value + eaf!.value).toBe(total!.value);
+  });
+
+  it("a consistent trio is accepted", () => {
+    // Rule 39: a gate that rejects everything approves nothing useful. This
+    // is the negative control for every rejection test below.
+    expect(findSutaComponentViolations(sutaTrio())).toEqual([]);
+    expect(() => PayrollRateRegistry.create(sutaTrio())).not.toThrow();
+  });
+
+  it("a fumbled EAF is caught, and the message names all three numbers", () => {
+    const problems = findSutaComponentViolations(sutaTrio({ eaf: 40 }));
+    expect(problems.length).toBe(1);
+    // The message must be usable by somebody holding the paper notice, so it
+    // has to say what it read AND what it expected - not merely "invalid".
+    expect(problems[0]).toContain("370");
+    expect(problems[0]).toContain("40");
+    expect(problems[0]).toContain("410");
+    expect(problems[0]).toContain("400");
+  });
+
+  it("a fumbled UI rate is caught too, not just the surcharge", () => {
+    const problems = findSutaComponentViolations(sutaTrio({ ui: 380 }));
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toMatch(/parts must equal the whole/);
+  });
+
+  it("a fumbled TOTAL is caught, even when both components are right", () => {
+    // The likeliest real typo: the components are keyed from the notice
+    // correctly and the total is mistyped, so the parts are right and the
+    // headline is wrong.
+    const problems = findSutaComponentViolations(sutaTrio({ total: 410 }));
+    expect(problems.length).toBe(1);
+  });
+
+  it("being off by a single milli-percent is still a violation", () => {
+    // No tolerance. A hundredth of a percent on a $78,200 wage base is real
+    // money, and more importantly a tolerance is an invitation to drift.
+    expect(findSutaComponentViolations(sutaTrio({ eaf: 31 })).length).toBe(1);
+    expect(findSutaComponentViolations(sutaTrio({ eaf: 29 })).length).toBe(1);
+  });
+
+  it("the registry refuses to be constructed at all when they disagree", () => {
+    // Rule 16: proving the helper returns a string is not proving the system
+    // acts on it. The whole value is that a bad table cannot come into being.
+    let threw = false;
+    try {
+      PayrollRateRegistry.create(sutaTrio({ eaf: 40 }));
+    } catch (e) {
+      threw = true;
+      expect((e as Error).message).toMatch(/parts must equal the whole/);
+    }
+    expect(threw, "an inconsistent rate table was allowed to exist").toBe(true);
+  });
+
+  it("rows whose windows never overlap are not compared", () => {
+    // Deliberate behaviour, and worth pinning: a 2027 UI rate must not be
+    // measured against a 2026 total. Without this, the first day Michael
+    // enters next year's notice the whole registry would refuse to load.
+    const rows = sutaTrio({ ui: 999, uiFrom: "2027-01-01", uiTo: "2027-12-31" });
+    expect(findSutaComponentViolations(rows)).toEqual([]);
+  });
+
+  it("a missing component is silent here, because a lookup already refuses", () => {
+    // Two error messages for one cause trains a reader to skim. The absent
+    // row is caught by the readiness check, which names it explicitly.
+    expect(findSutaComponentViolations([row({ key: "wa_suta_total", value: 400 })])).toEqual([]);
+    expect(
+      findSutaComponentViolations([
+        row({ key: "wa_suta_total", value: 400 }),
+        row({ key: "wa_suta_ui", value: 370 }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("both new keys are describable, so the readiness screen can name them", () => {
+    // A missing rate is only actionable if the screen can say WHICH rate. An
+    // undescribed key would print a raw identifier at Michael.
+    expect(describeKey("wa_suta_ui")).toBe("WA unemployment insurance rate");
+    expect(describeKey("wa_suta_eaf")).toBe("WA Employment Administration Fund surcharge");
+    // And they must be distinguishable from each other and from the total.
+    const labels = new Set([
+      describeKey("wa_suta_ui"),
+      describeKey("wa_suta_eaf"),
+      describeKey("wa_suta_total"),
+    ]);
+    expect(labels.size).toBe(3);
+  });
+
+  it("both new keys are in the canonical key roster", () => {
+    // Otherwise they exist in the table but no readiness check looks for
+    // them, and Michael would be told he is ready while two rates are absent.
+    expect(ALL_PAYROLL_RATE_KEYS).toContain("wa_suta_ui");
+    expect(ALL_PAYROLL_RATE_KEYS).toContain("wa_suta_eaf");
   });
 });

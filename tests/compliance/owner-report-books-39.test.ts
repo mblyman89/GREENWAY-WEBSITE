@@ -385,10 +385,39 @@ describe("the 2027 readiness figures are recomputed, not remembered", () => {
     expect(readiness.canRun).toBe(false);
   });
 
-  it("ten of eleven rates are missing, exactly as the report states", () => {
-    expect(readiness.rates.length).toBe(11);
-    expect(readiness.missingCount).toBe(10);
-    expect(flat).toContain("Ten of your eleven rates are missing");
+  it("twelve of thirteen rates are missing, exactly as the report states", () => {
+    // WHY THESE NUMBERS MOVED, RECORDED HERE AND NOT ONLY IN GIT.
+    //
+    // This test read 11 and 10 when books-39 shipped. books-41 (the WA
+    // quarterly returns) split the ESD notice into its two real statutory
+    // accounts - `wa_suta_ui` and `wa_suta_eaf` - because RCW 50.24.010 and
+    // RCW 50.24.014(2)(b) each command rounding to the nearest cent for
+    // their OWN section, so a combined rate cannot reproduce a filed return.
+    // The registry grew by two keys, so the roster grew to 13 and the
+    // outstanding count to 12.
+    //
+    // That is a TRUE consequence of a correct change, and this test failing
+    // was the system working: it caught a shipped owner document that had
+    // gone stale on a number Michael was going to plan around. The fix was
+    // to update the document, never to revert the registry or relax this.
+    expect(readiness.rates.length).toBe(13);
+    expect(readiness.missingCount).toBe(12);
+    expect(flat).toContain("Twelve of your thirteen rates are missing");
+  });
+
+  it("the report explains WHY the count rose, rather than silently swapping numbers", () => {
+    // Rule 64a: detection is not explanation. Michael read "ten of eleven"
+    // in a document I gave him. If he re-opens it and finds "twelve of
+    // thirteen" with no account of the change, he has to wonder whether he
+    // misread it, whether something broke, or whether ESD is asking for more
+    // than it used to. None of those is true, and he should not have to
+    // guess. The report must own the change in plain words.
+    expect(flat, "the report does not admit the count changed").toContain(
+      "This paragraph used to say ten of eleven",
+    );
+    // And it must say the load-bearing reassurance: no new paperwork is
+    // needed, because both components are on the one notice he already gets.
+    expect(flat).toContain("both numbers are already printed on the one ESD notice");
   });
 
   it("the report reproduces the system's own summary sentence verbatim", () => {
@@ -540,7 +569,7 @@ describe("the report was actually delivered", () => {
     // So the literals are counted, and the generated ones are derived from
     // the same data that generates them.
     expect(flat, "the report's claim about its own test count is missing").toContain(
-      "forty-nine tests of its own",
+      "fifty tests of its own",
     );
 
     const self = readFileSync(join(__dirname, "owner-report-books-39.test.ts"), "utf8");
@@ -551,8 +580,8 @@ describe("the report was actually delivered", () => {
     const generated = QUOTE_CLAIMS.reduce((n, c) => n + c.fragments.length, 0);
     expect(
       literal + generated,
-      `report says forty-nine; this file defines ${literal} literal + ${generated} generated`,
-    ).toBe(49);
+      `report says fifty; this file defines ${literal} literal + ${generated} generated`,
+    ).toBe(50);
   });
 
   it("the report records the restore-verification lesson honestly", () => {
