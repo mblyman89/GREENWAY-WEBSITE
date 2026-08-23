@@ -5,7 +5,7 @@
  *
  * SERVER ACTIONS for entering and managing wage orders.
  *
- * These four functions are the only way a garnishment or child support order
+ * These five functions are the only way a garnishment or child support order
  * can enter, change state in, or leave the system. Before books-38 there was
  * no way at all — Michael's own words:
  *
@@ -55,14 +55,17 @@
 import { revalidatePath } from "next/cache";
 
 import { requireBooksAccess } from "@/lib/accounting/books-access";
+import type { AnswerRecordDraft } from "@/lib/payroll/wage-order-lifecycle-core";
 import type { WageOrderDraft } from "@/lib/payroll/wage-order-entry-core";
 import {
   createWageOrder,
+  recordWageOrderAnswer,
   resumeWageOrder,
   suspendWageOrder,
   terminateWageOrder,
   type WageOrderWriteResult,
 } from "@/lib/payroll/wage-order-write-store";
+import { pacificToday } from "@/lib/reports/timezone";
 
 const SCREEN = "/admin/books/garnishments";
 
@@ -181,6 +184,74 @@ export async function resumeWageOrderAction(input: {
   if (result.ok) {
     revalidatePath(SCREEN);
     revalidatePath("/admin/books/net-pay");
+  }
+  return result;
+}
+
+/**
+ * Record that the answer was filed — or that this order never needed one.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS IS THE ONLY WAY TO SILENCE A DEADLINE REMINDER  (books-40c)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The watchman added in this slice emails and pushes about the twenty-day
+ * answer deadline, and it escalates: quiet for ten days, then a note, then a
+ * warning, then critical, then critical EVERY DAY once the deadline passes and
+ * for as long as the order lives.
+ *
+ * A reminder that aggressive has to have an off switch, and the choice of what
+ * that switch does is the whole design. The obvious switch — "dismiss" — would
+ * have been wrong, and wrong in the direction that costs money. Dismissing
+ * records that Michael saw a message. It does not record that the legal duty
+ * was discharged. Six months later, when the Division of Child Support asks
+ * why no answer was received, "dismissed on 14 January" is not a defence.
+ * "Answer filed 18 January, certified mail, receipt in the payroll binder" is.
+ *
+ * So the only way to stop the reminder is to record the fact that makes the
+ * reminder unnecessary. There is deliberately no snooze and no dismiss, and
+ * `answerWriteIsTheOnlyOffSwitch()` in the gates module fails the build if one
+ * ever appears.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY `today` IS NOT ACCEPTED FROM THE CALLER
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The store's `recordWageOrderAnswer` takes `today` as an argument so that
+ * every branch of it is reachable in a test without mocking a clock. That is
+ * right for the store and wrong for the door: a `today` arriving over HTTP is
+ * not a fact, it is a value the sender chose, and the check it feeds is the one
+ * that stops a future date being recorded as a completed filing. Set it here,
+ * from the same Pacific clock the board and the nightly cron use, so all three
+ * agree about what day it is. Same reasoning as `created_by_staff_id` above.
+ */
+export async function recordWageOrderAnswerAction(input: {
+  orderId: string;
+  draft: AnswerRecordDraft;
+}): Promise<WageOrderWriteResult> {
+  await requireBooksAccess();
+
+  if (!input.orderId) {
+    return {
+      ok: false,
+      code: "NOT_FOUND",
+      message:
+        "No order was identified, so nothing was recorded and the answer reminders continue. " +
+        "Reload the garnishments page and try again.",
+    };
+  }
+
+  const result = await recordWageOrderAnswer({
+    orderId: input.orderId,
+    draft: input.draft,
+    today: pacificToday(),
+  });
+
+  if (result.ok) {
+    revalidatePath(SCREEN);
+    // NOT net-pay. Recording an answer changes no withholding: the money coming
+    // out of the next cheque is identical before and after. Revalidating a
+    // screen this does not affect would be cargo-culting the line above it.
   }
   return result;
 }

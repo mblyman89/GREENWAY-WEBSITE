@@ -312,9 +312,26 @@ describe("every action checks access before doing anything", () => {
     "terminateWageOrderAction",
     "suspendWageOrderAction",
     "resumeWageOrderAction",
+    // books-40c. This roster deliberately has to be widened by hand, and this
+    // test failing on the day the fifth action landed is the gate doing its
+    // job exactly as its comment below promised.
+    "recordWageOrderAnswerAction",
   ];
 
-  it("all four actions exist", () => {
+  /**
+   * Strip comments before counting.
+   *
+   * The docblock above these actions discusses `requireBooksAccess()` twice in
+   * prose. A raw count therefore reported 7 calls for 5 actions, which happens
+   * to be a SAFE direction to be wrong in - but only by luck. Prose could just
+   * as easily have masked a missing call, and an access-control gate that can
+   * be satisfied by a comment is not a gate (standing rule 39).
+   */
+  const codeOnly = actionsCode
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  it("all five actions exist", () => {
     for (const name of EXPORTED) {
       expect(actionsCode).toContain(`export async function ${name}`);
     }
@@ -324,12 +341,14 @@ describe("every action checks access before doing anything", () => {
     // Counted rather than spot-checked. A fifth action added later without the
     // gate is the exact defect this catches, and spot-checking four names would
     // never see it.
-    const exported = [...actionsCode.matchAll(/export\s+async\s+function\s+(\w+)/g)].map(
+    const exported = [...codeOnly.matchAll(/export\s+async\s+function\s+(\w+)/g)].map(
       (m) => m[1],
     );
-    expect(exported.length).toBe(EXPORTED.length);
+    expect(exported.sort()).toEqual([...EXPORTED].sort());
 
-    const gateCalls = actionsCode.match(/requireBooksAccess\(\)/g) ?? [];
+    // Counted on code with comments removed, so that prose ABOUT the gate can
+    // never stand in for a call TO the gate.
+    const gateCalls = codeOnly.match(/requireBooksAccess\(\)/g) ?? [];
     expect(gateCalls.length).toBe(exported.length);
   });
 
@@ -337,12 +356,20 @@ describe("every action checks access before doing anything", () => {
     // Order matters. A gate called after the write has already happened is
     // decoration. This checks the position of the call within each function
     // body rather than merely its presence.
-    const bodies = actionsCode.split(/export\s+async\s+function\s+/).slice(1);
+    const bodies = codeOnly.split(/export\s+async\s+function\s+/).slice(1);
     expect(bodies.length).toBe(EXPORTED.length);
     for (const body of bodies) {
       const gateAt = body.indexOf("requireBooksAccess()");
       expect(gateAt).toBeGreaterThan(-1);
-      for (const store of ["createWageOrder(", "terminateWageOrder(", "suspendWageOrder(", "resumeWageOrder("]) {
+      for (const store of [
+        "createWageOrder(",
+        "terminateWageOrder(",
+        "suspendWageOrder(",
+        "resumeWageOrder(",
+        // books-40c. Omitting the new store function here would have left the
+        // ordering check passing while saying nothing at all about it.
+        "recordWageOrderAnswer(",
+      ]) {
         const storeAt = body.indexOf(store);
         if (storeAt > -1) expect(gateAt).toBeLessThan(storeAt);
       }

@@ -62,6 +62,7 @@ import { loadGarnishmentBoard } from "@/lib/payroll/garnishment-store";
 import { listEmployeesForOrderEntry } from "@/lib/payroll/wage-order-write-store";
 import {
   createWageOrderAction,
+  recordWageOrderAnswerAction,
   resumeWageOrderAction,
   suspendWageOrderAction,
   terminateWageOrderAction,
@@ -157,6 +158,20 @@ export default async function GarnishmentsPage() {
             onSuspend: suspendWageOrderAction,
             onResume: resumeWageOrderAction,
           }}
+          /* THE WATCHMAN (books-40c).
+
+             `alerts` and `answersOutstandingCount` were computed by the store
+             using `assessWageOrder`, which is the SAME function the nightly
+             reminder cron uses. That is the point of passing them down rather
+             than letting the screen work them out: the board and the email
+             cannot disagree about whether something is overdue.
+
+             `asOf` travels with them so the answer form checks dates against
+             the server's Pacific day rather than the browser's clock. */
+          answersOutstandingCount={board.answersOutstandingCount}
+          alerts={board.alerts}
+          asOf={board.asOf}
+          onRecordAnswer={recordWageOrderAnswerAction}
         />
       )}
     </div>

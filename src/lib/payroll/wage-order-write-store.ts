@@ -132,7 +132,11 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 // The minimum reason length, imported rather than redeclared. See the comment
 // on the re-export further down for why the number lives in the pure module.
-import { MIN_TERMINATION_NOTE_CHARS } from "./wage-order-lifecycle-core";
+import {
+  MIN_TERMINATION_NOTE_CHARS,
+  validateAnswerRecord,
+  type AnswerRecordDraft,
+} from "./wage-order-lifecycle-core";
 
 import {
   validateWageOrderDraft,
@@ -833,6 +837,140 @@ export async function resumeWageOrder(args: {
       `Nothing has been withheld for the periods it was paused, and this has NOT gone back to ` +
       `catch them up. If the issuing authority wants the missed amounts collected, they have ` +
       `to say so in writing and it is entered as arrears - it is not something to decide here.`,
+    warnings: [],
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * §6  RECORDING THE ANSWER   (books-40c)
+ *
+ * The OFF SWITCH for the deadline reminders.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Record that the answer was filed - or that this order never needed one.
+ *
+ * WHY THIS IS A WRITE AND NOT A DISMISS BUTTON. The obvious way to stop an
+ * alert is to let someone dismiss it. That would have been wrong here. A
+ * dismissal records that Michael saw the message; it does not record that the
+ * legal duty was discharged, and those are different facts with very different
+ * consequences. Six months later "dismissed on 14 January" answers nothing at
+ * all, while "answer filed 18 January, certified mail, receipt in the payroll
+ * binder" is the evidence that RCW 26.18.110(6) turns on.
+ *
+ * So the only way to silence the reminder is to record the fact that makes it
+ * unnecessary. There is deliberately no snooze.
+ *
+ * The validation is shared with the browser (wage-order-lifecycle-core), and
+ * re-run here because a server must never trust a client-side check - but the
+ * refusal sentences are identical, so Michael cannot get one explanation from
+ * the form and a different one from the server.
+ */
+export async function recordWageOrderAnswer(args: {
+  readonly orderId: string;
+  readonly draft: AnswerRecordDraft;
+  /** ISO date. An argument so the branch is testable. */
+  readonly today: string;
+}): Promise<WageOrderWriteResult> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, code: "NOT_CONFIGURED", message: NOT_CONFIGURED };
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  // Read the order FIRST. Both the "before service" check and the support-order
+  // waiver refusal need facts that only the row has, and neither can be trusted
+  // from the browser: the order kind decides whether a waiver is merely wrong
+  // or catastrophic.
+  const { data: existing, error: readErr } = await admin
+    .from("wage_orders")
+    .select("id, case_number, order_kind, served_date, status")
+    .eq("id", args.orderId)
+    .maybeSingle();
+
+  if (readErr) {
+    return {
+      ok: false,
+      code: "READ_FAILED",
+      message:
+        `Could not read that order, so nothing was recorded and the reminders continue: ` +
+        `${readErr.message}`,
+    };
+  }
+  if (existing === null) {
+    return {
+      ok: false,
+      code: "NOT_FOUND",
+      message:
+        "That order was not found, so nothing was recorded. Reload the garnishments page to " +
+        "see its current state.",
+    };
+  }
+
+  const row = existing as unknown as {
+    id: string;
+    case_number: string;
+    order_kind: string;
+    served_date: string | null;
+    status: string;
+  };
+
+  const check = validateAnswerRecord(args.draft, row.order_kind, row.served_date, args.today);
+  if (!check.ok) {
+    return {
+      ok: false,
+      code: "REFUSED",
+      message: `${check.refusal.message} ${check.refusal.fix}`,
+    };
+  }
+
+  const { data, error } = await admin
+    .from("wage_orders")
+    .update({
+      answer_filed_at: check.filedAt,
+      answer_filed_note: check.note,
+      answer_not_required: check.notRequired,
+      answer_waived_reason: check.waivedReason,
+    })
+    .eq("id", args.orderId)
+    .select("id, case_number")
+    .maybeSingle();
+
+  if (error) return writeFailureFrom(error.message, "recorded");
+  if (data === null) {
+    return {
+      ok: false,
+      code: "NOT_FOUND",
+      message:
+        "That order could not be updated, so nothing was recorded and the reminders continue. " +
+        "Reload the garnishments page before trying again.",
+    };
+  }
+
+  const saved = data as unknown as { id: string; case_number: string };
+
+  if (check.notRequired) {
+    return {
+      ok: true,
+      orderId: saved.id,
+      message:
+        `Case ${saved.case_number} is now marked as needing no Washington answer, with your ` +
+        `reason on the record, and the answer reminders for it have stopped. Nothing else ` +
+        `about the order changed - if it is active it is still withholding.`,
+      warnings: [
+        "This only switches off the ANSWER reminder. If this is a creditor writ it still has a " +
+          "sixty-day life under RCW 6.27.350(1), and you will still be warned before it expires.",
+      ],
+    };
+  }
+
+  return {
+    ok: true,
+    orderId: saved.id,
+    message:
+      `Recorded: the answer for case ${saved.case_number} was filed on ${check.filedAt}. The ` +
+      `answer reminders for this order have stopped. Keep your proof of sending with the order ` +
+      `- the date in this system is a record of what you did, not evidence that you did it.`,
     warnings: [],
   };
 }

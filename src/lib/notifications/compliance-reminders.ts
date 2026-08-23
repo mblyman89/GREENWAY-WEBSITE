@@ -30,6 +30,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificToday, pacificDayKey } from "@/lib/reports/timezone";
 import { planPosExceptionReminder } from "@/lib/pos/exception-reminder-core";
+import { planWageOrderReminders } from "@/lib/payroll/wage-order-watch-core";
+import { loadWageOrderWatchSnapshot } from "@/lib/payroll/wage-order-watch-store";
 import { posExceptionSnapshot } from "@/lib/pos/sync-store";
 import { planWeeklyReminders } from "@/lib/compliance/ccrs-week-core";
 import { getWeekResolutions } from "@/lib/compliance/ccrs-week-store";
@@ -40,7 +42,7 @@ import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
 
-/** One reminder normalized across the weekly + monthly + POS planners. */
+/** One reminder normalized across the weekly, monthly, POS and wage-order planners. */
 type Reminder = {
   dedupeKey: string;
   stage: string;
@@ -172,8 +174,9 @@ async function logReminder(r: Reminder, channel: string, recipients: string): Pr
 }
 
 /**
- * Plan + send today's compliance reminders (weekly CCRS + monthly LIQ-1295).
- * Idempotent per day: safe to invoke multiple times.
+ * Plan + send today's compliance reminders: weekly CCRS, monthly LIQ-1295,
+ * unresolved POS exceptions, and (books-40c) wage-order answer and lien
+ * deadlines. Idempotent per day: safe to invoke multiple times.
  */
 export async function runComplianceReminders(): Promise<ReminderRunResult> {
   const result: ReminderRunResult = {
@@ -247,6 +250,40 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
   } catch (e) {
     result.notes.push(
       `POS exception planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
+    );
+  }
+
+  // 4) books-40c: wage-order deadlines - the twenty-day answer (RCW
+  //    26.18.110(1)) and the sixty-day continuing lien (RCW 6.27.350(1)).
+  //
+  //    THIS IS THE HALF THAT WAS MISSING. books-38 computed both deadlines
+  //    correctly and showed them on the entry form while Michael typed a new
+  //    order, and then nothing ever evaluated them again. Correct arithmetic
+  //    wired to nothing is not a safeguard (standing rule 50). Adding a fourth
+  //    planner here - rather than building a second notifier somewhere else -
+  //    means these deadlines inherit everything this engine already does:
+  //    dedupe against compliance_reminder_log, email via Resend, Web Push,
+  //    urgency, and the deep-link override. Standing rule 25: extend, do not
+  //    duplicate.
+  //
+  //    Own try/catch, like the three above, so a payroll read that fails at
+  //    4 a.m. cannot take the CCRS and LIQ-1295 deadline reminders down with
+  //    it. Those have their own penalties and must not share a fate.
+  try {
+    const snap = await loadWageOrderWatchSnapshot();
+    for (const r of planWageOrderReminders(todayIso, snap.orders)) {
+      reminders.push(r);
+    }
+    // A row we could not interpret is a legal obligation nobody is watching.
+    // It goes in the run notes rather than being silently dropped, because
+    // "no reminders planned" must never be able to mean "we could not read
+    // the table" (rule 64a: detection is not explanation).
+    for (const u of snap.unreadable) {
+      result.notes.push(`Wage order not understood, so NOT watched - ${u}`);
+    }
+  } catch (e) {
+    result.notes.push(
+      `Wage order watch planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
     );
   }
 

@@ -51,6 +51,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pacificToday } from "@/lib/reports/timezone";
 
 import {
   computeAllOrders,
@@ -61,6 +62,12 @@ import {
   type WageOrder,
   type WageOrderKind,
 } from "./garnishment-core";
+import {
+  assessWageOrder,
+  hasAnswerDuty,
+  type WageOrderAlert,
+  type WageOrderWatchFacts,
+} from "./wage-order-watch-core";
 
 const NOT_CONFIGURED =
   "Supabase is not configured in this environment, so no wage orders could be read. This is a " +
@@ -98,6 +105,23 @@ export type WageOrderRow = {
   readonly effective_to: string | null;
   readonly status: string;
   readonly notes: string | null;
+  /**
+   * books-38 (migration 0201). The date the order was SERVED on Greenway.
+   *
+   * Both statutory clocks are measured from this and from nothing else:
+   * RCW 26.18.110(1) runs the twenty-day answer deadline from service, and
+   * RCW 6.27.350(1) defines the effective date of a writ - the start of the
+   * sixty-day continuing lien - as the date of service.
+   *
+   * Nullable on the way in even though 0201 tightens it, because a row written
+   * before that migration can still be missing it, and the watchman must be
+   * able to SAY that rather than measure from a date it invented.
+   */
+  readonly served_date: string | null;
+  /** books-40c (migration 0202). The date the answer was filed, if it was. */
+  readonly answer_filed_at: string | null;
+  /** books-40c. True only for orders with genuinely no answer duty. */
+  readonly answer_not_required: boolean | null;
 };
 
 type EmployeeRow = {
@@ -145,6 +169,17 @@ export type WageOrderDetail = {
    * question that would fix it" instead of a general apology.
    */
   readonly missingFacts: readonly string[];
+  /**
+   * books-40c. Everything the watchman needs to judge this order's deadlines,
+   * in the shape wage-order-watch-core consumes.
+   *
+   * Carried on the detail rather than recomputed by the screen so that the
+   * board and the nightly reminder cron are looking at IDENTICAL facts. Two
+   * surfaces deriving "is this overdue" separately is how they end up
+   * disagreeing, and a board that says fine while the email says overdue is
+   * worse than either one alone.
+   */
+  readonly watch: WageOrderWatchFacts;
 };
 
 export type GarnishmentBoard = {
@@ -170,6 +205,34 @@ export type GarnishmentBoard = {
    * statement of how many are ready.
    */
   readonly blockedCount: number;
+  /**
+   * books-40c. Live orders that carry an answer duty and have not recorded one.
+   *
+   * Deliberately its own headline number rather than folded into blockedCount.
+   * A blocked order cannot CALCULATE; an unanswered order calculates perfectly
+   * and still exposes Greenway to liability for the entire support debt under
+   * RCW 26.18.110(6)(b). They are different problems with different fixes, and
+   * a single combined number would let the more expensive one hide inside the
+   * more obvious one.
+   */
+  readonly answersOutstandingCount: number;
+  /**
+   * books-40c. Every alert the watchman raises across every live order today,
+   * most severe first. Empty is the normal, healthy state.
+   */
+  readonly alerts: readonly WageOrderAlert[];
+  /**
+   * books-40c. The Pacific date every alert above was measured from.
+   *
+   * Handed to the screen rather than left implicit because the browser has its
+   * own clock, and it is not necessarily this one. A laptop in another
+   * timezone - or simply one left open past midnight - would otherwise check
+   * "is this filing date in the future?" against a different day than the
+   * server does, and Michael would get a refusal from the server that the form
+   * had already told him was fine. One date, decided in one place, used by
+   * both.
+   */
+  readonly asOf: string;
   /**
    * A worked example against the engine, or the engine's refusals. Present only
    * when a pay period has been supplied.
@@ -316,7 +379,12 @@ export async function loadGarnishmentBoard(args?: {
       "id, employee_id, order_kind, case_number, issuing_authority, order_date, payee_name, " +
         "payee_address, remittance_instructions, amount_cents_per_period, " +
         "percent_of_disposable_basis_points, arrears_cents, arrears_over_twelve_weeks, " +
-        "supports_second_family, priority, effective_from, effective_to, status, notes",
+        "supports_second_family, priority, effective_from, effective_to, status, notes, " +
+        // books-40c. Without these three the board cannot evaluate either
+        // statutory clock, which is exactly the state it was in before this
+        // slice: the deadlines existed, were computed once on the entry form,
+        // and were never looked at again (standing rule 50).
+        "served_date, answer_filed_at, answer_not_required",
     )
     // Live orders only. 'terminated' is never read onto the board; see above.
     .in("status", ["active", "suspended"])
@@ -352,6 +420,36 @@ export async function loadGarnishmentBoard(args?: {
     }
   }
 
+  /**
+   * books-40c. Build the watchman's view of one row.
+   *
+   * Declared once and used at BOTH push sites below, including the one for an
+   * order whose kind the engine does not recognise. That matters: an
+   * unrecognised order kind is exactly the row most likely to be sitting there
+   * unanswered, and dropping its deadline surveillance because the arithmetic
+   * cannot run would silence the alarm on the riskiest order on the board.
+   *
+   * `answer_not_required` is read with `=== true` rather than a truthiness
+   * test. The column is NOT NULL with a default of false in 0202, but a row
+   * read before that migration lands returns null, and `null` must mean "not
+   * exempt" (keep watching) rather than being coerced into "exempt" (go quiet).
+   * Defaulting the wrong way here would silently switch the watchman off.
+   */
+  function watchFactsFor(row: WageOrderRow, kind: WageOrderKind): WageOrderWatchFacts {
+    return {
+      id: row.id,
+      caseNumber: row.case_number,
+      employeeName: names.get(row.employee_id) ?? "(no name on file)",
+      orderKind: kind,
+      servedDate: row.served_date,
+      effectiveFrom: row.effective_from,
+      status:
+        row.status === "active" || row.status === "suspended" ? row.status : "terminated",
+      answerFiledAt: row.answer_filed_at,
+      answerNotRequired: row.answer_not_required === true,
+    };
+  }
+
   const details: WageOrderDetail[] = [];
   for (const row of rows) {
     const order = toWageOrder(row);
@@ -382,6 +480,11 @@ export async function loadGarnishmentBoard(args?: {
         status: row.status,
         arrearsCents: bigintCentsToNumber(row.arrears_cents),
         notes: row.notes,
+        // An unknown kind still gets watched. `creditor` is the placeholder the
+        // block above already uses for the order shape; the watchman treats it
+        // as a writ with an unknown answer deadline, which is the honest and
+        // conservative reading of a row nobody can classify.
+        watch: watchFactsFor(row, "creditor"),
         missingFacts: [
           `This order is recorded as "${row.order_kind}", which the calculator does not ` +
             `recognise. It has NOT been included in any total. Do not withhold against it ` +
@@ -404,6 +507,7 @@ export async function loadGarnishmentBoard(args?: {
       status: row.status,
       arrearsCents: bigintCentsToNumber(row.arrears_cents),
       notes: row.notes,
+      watch: watchFactsFor(row, order.orderKind),
       missingFacts: missingFactsFor(row),
     });
   }
@@ -444,12 +548,34 @@ export async function loadGarnishmentBoard(args?: {
   // subtraction is only true if both sides count the same population.
   const active = details.filter((d) => d.status === "active");
 
+  // books-40c. The same Pacific day the nightly reminder cron uses, so the
+  // board and the email cannot disagree about what "today" is. A board
+  // computing UTC midnight while the cron computes Pacific would put them a
+  // day apart for seven or eight hours every single day - and the disagreement
+  // would show up on the last day of a deadline, which is the worst possible
+  // day for the two surfaces to differ.
+  const todayIso = pacificToday();
+  const alerts: WageOrderAlert[] = [];
+  for (const d of details) alerts.push(...assessWageOrder(d.watch, todayIso));
+
   return {
     ok: true,
     orders: details,
     activeCount: active.length,
     pausedCount: details.filter((d) => d.status === "suspended").length,
     blockedCount: active.filter((d) => d.missingFacts.length > 0).length,
+    // Counts the DUTY, not the alert. An order served today is already
+    // outstanding even though the watchman is deliberately quiet about it for
+    // another ten days, and this number should say so: it is the size of the
+    // to-do list, not the size of the shouting.
+    answersOutstandingCount: details.filter(
+      (d) =>
+        d.watch.answerFiledAt === null &&
+        !d.watch.answerNotRequired &&
+        hasAnswerDuty(d.watch.orderKind),
+    ).length,
+    alerts,
+    asOf: todayIso,
     worked,
   };
 }
