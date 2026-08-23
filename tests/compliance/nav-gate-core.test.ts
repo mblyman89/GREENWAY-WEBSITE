@@ -319,7 +319,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the nineteen books screens plus Inventory Auditing", () => {
+  it("Accounting holds the twenty books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -395,7 +395,32 @@ describe("N4 the Accounting and Lyman tabs", () => {
      * entries automatically would also "discover" a screen that had silently
      * fallen out of the menu and report no change.
      *
-     * BOOKS-41 ADDS /admin/books/wa-quarterly, making eighteen books screens
+     * BOOKS-42 ADDS /admin/books/financial-statements, making twenty books
+     * screens and twenty-one entries.
+     *
+     * This one is the starkest rule 50 finding in the list so far, and it is
+     * worth stating plainly because it is the failure mode this whole gate was
+     * built to catch. `financial-statements-core.ts` is 1,600 lines of engine
+     * with 132 passing tests, and until this line was added NOTHING IMPORTED
+     * IT. Not one component, not one page. The income statement, the balance
+     * sheet, the cash flow statement, the statement of equity, the §280E tax
+     * bridge - all finished, all correct, all verified nightly, and all
+     * invisible to the only person who needed them. The tests were not lying;
+     * they were answering a question nobody had connected to a screen.
+     *
+     * A second finding came out of wiring it, and it is the reason the entry
+     * points at a page that refuses things. `buildIncomeStatement` filters its
+     * `exciseAccountCodes` against EVERY row of the trial balance rather than
+     * only the profit-and-loss rows. Greenway's real chart has no income- or
+     * expense-typed excise account at all - the 37% lives in 32000 Cannabis
+     * Excise Tax Payable, a LIABILITY, because RCW 69.50.535(4) makes it trust
+     * money. Passing the obvious account produced, on a perfectly balanced
+     * trial balance, net sales of $13,200 against gross sales of $10,000, and
+     * refused nothing. The engine's own tests never saw it because they use
+     * fictional codes 4900 and 6900, which are income and expense types. The
+     * guard now runs before the engine, in the tested UI core.
+     *
+     * BOOKS-41 ADDED /admin/books/wa-quarterly, making eighteen books screens
      * and nineteen entries.
      *
      * The federal quarterly return got its screen in books-40. This is the
@@ -439,6 +464,12 @@ describe("N4 the Accounting and Lyman tabs", () => {
          * a test file does not get filed.
          */
         "/admin/books/form-941",
+        /*
+         * books-42. The four financial statements. See the note above: the
+         * engine behind this href had been complete and green for months while
+         * being importable from nowhere in the application.
+         */
+        "/admin/books/financial-statements",
         "/admin/books/garnishments",
         "/admin/books/journal",
         "/admin/books/leave",

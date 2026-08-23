@@ -199,6 +199,26 @@ export type AccountRow = {
   cost_class: string | null;
   active: boolean;
   /**
+   * True for a contra account — one that sits inside a category but carries the
+   * OPPOSITE normal balance to the rest of it.
+   *
+   * ADDED IN BOOKS-42, AND IT WAS ALREADY IN THE DATABASE. `gl_accounts.is_contra`
+   * has existed since migration 0172 and migration 0173 sets it true on exactly
+   * two accounts — 50900 Discounts & Comps and 50910 Returns & Refunds. This
+   * SELECT simply never asked for it, so every screen above this store has been
+   * unable to tell a discount from a cost of sale without hard-coding the two
+   * codes.
+   *
+   * The financial statements need it for a specific reason: the income statement
+   * has to subtract contra-revenue from gross sales to arrive at net sales. If
+   * the codes were hard-coded in the statement layer, then the day a third
+   * contra account is added to the chart, net sales would silently overstate by
+   * however much went through it, and nothing would refuse — the trial balance
+   * would still tie, because a contra account balances perfectly well while
+   * being reported in the wrong place.
+   */
+  is_contra: boolean;
+  /**
    * The entities this account may be used by, or null when it is shared by all
    * four sets of books.
    *
@@ -239,7 +259,9 @@ export async function listAccounts(
   // (prove-books-lockout-part2.sh) instead of fixing the one that shouted.
   let q = admin
     .from("gl_accounts")
-    .select("code, name, type, normal_balance, default_cost_class, active, allowed_entity_codes")
+    .select(
+      "code, name, type, normal_balance, default_cost_class, active, allowed_entity_codes, is_contra",
+    )
     .order("code", { ascending: true });
 
   if (!includeInactive) q = q.eq("active", true);
@@ -255,6 +277,7 @@ export async function listAccounts(
     default_cost_class: string | null;
     active: boolean;
     allowed_entity_codes: string[] | null;
+    is_contra: boolean | null;
   }[];
 
   // The database's column is `type`; the rest of the books call it
@@ -268,6 +291,12 @@ export async function listAccounts(
     cost_class: r.default_cost_class,
     active: r.active,
     allowed_entity_codes: r.allowed_entity_codes,
+    // The column is `not null default false` in 0172, so this coalesce should
+    // never fire. It is here because standing rule 62d says a nullable read is
+    // a nullable read: PostgREST will hand back null for a column that was
+    // added later and backfilled badly, and `undefined` is not `false` — it is
+    // falsy, which would work by accident until someone wrote `=== false`.
+    is_contra: r.is_contra ?? false,
   }));
 
   if (entityCode) {
