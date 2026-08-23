@@ -77,7 +77,8 @@ export type GarnishmentStoreFailure = {
  * ROW SHAPES — what the database actually returns
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-type WageOrderRow = {
+/** Exported alongside `toWageOrder` so a caller can name the shape it passes in. */
+export type WageOrderRow = {
   readonly id: string;
   readonly employee_id: string;
   readonly order_kind: string;
@@ -215,7 +216,23 @@ function missingFactsFor(row: WageOrderRow): readonly string[] {
   return out;
 }
 
-function toWageOrder(row: WageOrderRow): WageOrder | null {
+/**
+ * A stored row, into the shape the garnishment engine consumes.
+ *
+ * EXPORTED in books-39, and the reason is worth a sentence. The pay run needs
+ * each employee's active orders in exactly this shape. The alternative was a
+ * second row->WageOrder converter living in the pay-run store, and two
+ * converters means two answers to "how much is taken out of this cheque" -
+ * which surface as the garnishments screen and the paycheque disagreeing about
+ * somebody's child support. Standing rule 25: export and reuse.
+ *
+ * Note especially what this does NOT do: it passes `arrearsOverTwelveWeeks` and
+ * `supportsSecondFamily` through as nulls when they are unknown. Those two
+ * answers are the difference between a 50% and a 65% ceiling, and the engine
+ * REFUSES when either is null. It can only refuse if this function resists
+ * sending `false`.
+ */
+export function toWageOrder(row: WageOrderRow): WageOrder | null {
   if (!isEngineOrderKind(row.order_kind)) return null;
   return {
     id: row.id,

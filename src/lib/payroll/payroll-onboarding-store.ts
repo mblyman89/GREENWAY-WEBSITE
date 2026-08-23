@@ -52,7 +52,11 @@ import {
 } from "@/lib/payroll/payroll-onboarding-core";
 // W4Record is declared in payroll-w4-core and REUSED by the onboarding core
 // rather than redeclared (standing rule 25), so it is imported from its home.
-import type { W4Record } from "@/lib/payroll/payroll-w4-core";
+import type { W4Record, PayFrequency } from "@/lib/payroll/payroll-w4-core";
+// The list of pay frequencies is the CORE's list. Reading it from there rather
+// than re-typing the eight strings means a frequency added to the core is
+// understood by the read-back below without a second edit nobody remembers.
+import { ALL_PAY_FREQUENCIES } from "@/lib/payroll/payroll-w4-core";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -485,6 +489,339 @@ function w4ToRow(employeeId: string, w4: W4Record) {
     employee_signed: signed !== null,
     is_current: true,
   };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE READ-BACK  (books-39)
+ *
+ * WHAT WAS MISSING, AND WHY IT WAS THE WHOLE BLOCKER
+ *
+ * `w4ToRow` above has existed since books-30. It writes eleven columns of a
+ * federal withholding certificate into `employee_w4`. Until this moment NOTHING
+ * IN THE APPLICATION EVER READ THEM BACK. Every read of that table in src/ was
+ * this one, at listEmployeeSetup:
+ *
+ *     admin.from("employee_w4").select("employee_id")
+ *
+ * an EXISTENCE CHECK. It answers "did somebody fill in a W-4?" and nothing else.
+ *
+ * That is why no real employee could be paid. `computePaycheckTaxes`
+ * (payroll-withholding-core.ts:1906) takes a full `W4Record` - filing status,
+ * Step 2 checkbox, Steps 3/4a/4b/4c, legacy allowances, signature. The engine
+ * was finished, tested and correct, and it could not be called on a real person
+ * because the data went INTO the database and never came out. A write-only
+ * column is not a stored fact; it is a fact we threw away politely.
+ *
+ * WHY THE INVERSE IS NOT MECHANICAL, AND THE TRAP IN IT
+ *
+ * The obvious inverse of `signed_on: signed` is `signedAt: row.signed_on`.
+ * THAT IS WRONG, and it is wrong in the direction that costs money.
+ *
+ * Look at the DDL (migration 0195, §1):  signed_on date NOT NULL.
+ * The column CANNOT be null. So `row.signed_on` is ALWAYS a date, even for a
+ * certificate nobody signed. Mapping it straight across would give every
+ * unsigned W-4 a non-null `signedAt`, and `signedAt !== null` is precisely how
+ * the rest of this codebase asks "is this form valid?".
+ *
+ * The fact of signature lives in a DIFFERENT column. `w4ToRow` wrote it:
+ *
+ *     employee_signed: signed !== null
+ *
+ * so the honest inverse must consult `employee_signed` FIRST and only then use
+ * the date. An unsigned certificate reads back with `signedAt: null`, which is
+ * what `chooseW4` in pay-run-core.ts needs in order to disregard it and apply
+ * the statutory default instead:
+ *
+ *   26 CFR 31.3402(f)(2)-1(e)(1)(ii): "the employer shall disregard the
+ *   withholding certificate"
+ *
+ * Get this one line backwards and the system honours withholding elections the
+ * employee never agreed to, under-withholds, and hands them a surprise bill in
+ * April. There is a test that fails if anyone ever "simplifies" it back.
+ *
+ * WHY THIS LIVES HERE AND NOT IN A NEW FILE
+ *
+ * Standing rule 25: extend, do not duplicate. A converter's whole job is to
+ * agree with its opposite. Put the two of them in one file, forty lines apart,
+ * and a column rename is one visible edit. Put them in two files and the day
+ * somebody adds a Step 4(d) the writer learns about it and the reader does not.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Exactly the columns `w4ToRow` writes. Never `select("*")` and never a subset. */
+export const W4_COLUMNS =
+  "employee_id, form_year, filing_status, step2_multiple_jobs, " +
+  "step3_annual_credit_cents, step4a_other_income_cents, step4b_deductions_cents, " +
+  "step4c_extra_per_period_cents, exempt_from_federal_income_tax, legacy_allowances, " +
+  "signed_on, employee_signed";
+
+export type W4Row = {
+  readonly employee_id: string;
+  readonly form_year: number;
+  readonly filing_status: string;
+  readonly step2_multiple_jobs: boolean;
+  /** bigint columns arrive from PostgREST as strings. */
+  readonly step3_annual_credit_cents: number | string | null;
+  readonly step4a_other_income_cents: number | string | null;
+  readonly step4b_deductions_cents: number | string | null;
+  readonly step4c_extra_per_period_cents: number | string | null;
+  readonly exempt_from_federal_income_tax: boolean;
+  readonly legacy_allowances: number | null;
+  readonly signed_on: string | null;
+  readonly employee_signed: boolean;
+};
+
+/**
+ * A bigint cent column, as a number.
+ *
+ * PostgREST returns `bigint` as a STRING, because a 64-bit integer does not fit
+ * in a JavaScript number in general. Cent amounts on a W-4 are far inside the
+ * safe range, so the conversion is sound - but it is done in one named place
+ * with this comment rather than as bare `Number(x)` calls scattered about.
+ *
+ * A value that is null or unparseable returns null, NOT zero. Standing rule
+ * 62d: never invent a default. Zero is a real Step 3 answer meaning "no
+ * credits"; using it for "we could not read the column" makes an unreadable
+ * row indistinguishable from a deliberate election.
+ */
+function centsFromColumn(v: number | string | null): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Is this string one of the three filing statuses the IRS actually prints?
+ *
+ * Written as a narrowing guard rather than a cast. `filing_status` is `text`
+ * with a CHECK constraint, so Postgres already refuses anything else - but the
+ * CHECK protects the DATABASE, and TypeScript casting a `string` to
+ * `W4FilingStatus` protects NOTHING. If a row ever arrives from a restored
+ * backup or a hand-run SQL statement that predates the constraint, a cast
+ * silently produces a `W4FilingStatus` that is not one, and the withholding
+ * tables look up a bracket set that does not exist.
+ */
+function isW4FilingStatus(v: string): v is W4Record["filingStatus"] {
+  return (
+    v === "married_filing_jointly" ||
+    v === "single_or_married_filing_separately" ||
+    v === "head_of_household"
+  );
+}
+
+/**
+ * A stored row, back into the record the withholding engine consumes.
+ *
+ * THE EXACT INVERSE of `w4ToRow`, with the signature trap handled above.
+ *
+ * Returns null - never a partial or defaulted record - when the row cannot be
+ * read honestly. The caller turns that null into a REFUSAL that names the
+ * employee. Refusing is safe; guessing a filing status is not.
+ */
+export function rowToW4(row: W4Row): W4Record | null {
+  if (!isW4FilingStatus(row.filing_status)) return null;
+
+  const step3 = centsFromColumn(row.step3_annual_credit_cents);
+  const step4a = centsFromColumn(row.step4a_other_income_cents);
+  const step4b = centsFromColumn(row.step4b_deductions_cents);
+  const step4c = centsFromColumn(row.step4c_extra_per_period_cents);
+  if (step3 === null || step4a === null || step4b === null || step4c === null) return null;
+
+  /*
+   * THE SIGNATURE, and the reason this is two lines instead of one.
+   *
+   * `signed_on` is NOT NULL in 0195, so it is never absent. The question "is
+   * this certificate signed?" is answered by `employee_signed`, which is the
+   * column w4ToRow computed from `signedAt !== null`. Reading the date without
+   * checking the flag would make every unsigned form look signed.
+   */
+  const signedAt = row.employee_signed ? row.signed_on : null;
+
+  return {
+    employeeId: row.employee_id,
+    formYear: row.form_year,
+    filingStatus: row.filing_status,
+    step2MultipleJobs: row.step2_multiple_jobs,
+    step3AnnualCreditCents: step3,
+    step4aOtherIncomeAnnualCents: step4a,
+    step4bDeductionsAnnualCents: step4b,
+    step4cExtraPerPeriodCents: step4c,
+    // Mirrors w4ToRow, which stores null on a 2020-or-later form. The
+    // employee_w4_redesign_shape_chk constraint enforces the same pairing.
+    legacyAllowances: row.form_year < 2020 ? row.legacy_allowances : null,
+    exemptFromFederalIncomeTax: row.exempt_from_federal_income_tax,
+    signedAt,
+  };
+}
+
+/**
+ * The CURRENT W-4 for each of these employees, as engine-ready records.
+ *
+ * An employee missing from the returned map has no readable current W-4. That
+ * is not an error here: 31.3402(f)(2)-1(a)(4) tells the employer exactly what
+ * to do about it (withhold as single with no adjustments), and `chooseW4` in
+ * pay-run-core.ts applies that rule and STAMPS the result so the screen can say
+ * out loud that the law chose, not the employee.
+ *
+ * A row that EXISTS but cannot be converted is a different animal, and it is
+ * reported separately in `unreadable` rather than folded in with "absent". If
+ * those two were merged, a corrupted row would silently receive the statutory
+ * default and look like a normal new hire.
+ */
+export async function loadCurrentW4s(employeeIds: readonly string[]): Promise<{
+  readonly byEmployeeId: ReadonlyMap<string, W4Record>;
+  readonly unreadable: readonly string[];
+  readonly readFailed: string | null;
+}> {
+  const empty = { byEmployeeId: new Map<string, W4Record>(), unreadable: [], readFailed: null };
+  /*
+   * The empty-list case is answered BEFORE the configuration check, and the
+   * order is deliberate. "Give me the W-4s for these zero employees" has a
+   * complete, correct answer - zero W-4s - that does not depend on a database
+   * being reachable. Reporting a connection failure instead would hand a caller
+   * with an empty roster a frightening error about a read that never needed to
+   * happen. Nothing can be computed wrongly from it, because there is nobody to
+   * pay.
+   */
+  if (employeeIds.length === 0) return empty;
+  if (!isSupabaseServiceConfigured) {
+    return { ...empty, readFailed: "The database connection is not configured on this server." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("employee_w4")
+    .select(W4_COLUMNS)
+    .in("employee_id", employeeIds)
+    .eq("is_current", true);
+
+  if (error) {
+    /*
+     * A read failure is NOT an empty result. Returning an empty map here would
+     * send every employee down the no-W-4 statutory-default path and produce a
+     * full run of confident, wrong paycheques (standing rule 46). The caller
+     * must surface this and refuse.
+     */
+    return { ...empty, readFailed: `Could not read the W-4 records: ${error.message}` };
+  }
+
+  return { ...foldW4Rows((data ?? []) as unknown as W4Row[]), readFailed: null };
+}
+
+/**
+ * Rows into a map, keeping the unreadable ones NAMED.
+ *
+ * Split out of the loader as a pure function so it can be tested by running it
+ * rather than by reading the loader's source text. That distinction earned its
+ * keep: the first version of this slice tested the folding by asserting the
+ * loader's source contained the word "unreadable", and a mutation that deleted
+ * the `unreadable.push(...)` line still passed, because the word survived in
+ * the return type. A behavioural test cannot be fooled that way.
+ */
+export function foldW4Rows(rows: readonly W4Row[]): {
+  readonly byEmployeeId: ReadonlyMap<string, W4Record>;
+  readonly unreadable: readonly string[];
+} {
+  const byEmployeeId = new Map<string, W4Record>();
+  const unreadable: string[] = [];
+  for (const row of rows) {
+    const record = rowToW4(row);
+    if (record === null) unreadable.push(row.employee_id);
+    else byEmployeeId.set(row.employee_id, record);
+  }
+  return { byEmployeeId, unreadable };
+}
+
+/**
+ * Each employee's pay frequency, from their CURRENT pay record.
+ *
+ * Why this is read at all: the number of pay periods in a year is a DIVISOR in
+ * the percentage method. Pub. 15-T annualises wages, finds the bracket, then
+ * divides back down. Pay somebody biweekly while the engine believes they are
+ * semimonthly (26 vs 24) and every federal withholding figure is off by about
+ * eight percent, every period, in a way that still looks like a plausible
+ * paycheque and does not tie out until the W-2.
+ *
+ * `timesheet-store.toEmployeePayFacts` already reads `employee_pay`, but it
+ * maps to `EmployeePayFacts`, which carries basis and rate and NOT frequency -
+ * the timesheet engine counts hours and has no opinion about how often they are
+ * paid. So this is a genuinely different fact, not a duplicate read.
+ *
+ * An employee absent from the map has no current pay record, or one with an
+ * unrecognised frequency. Both are refusals upstream. Nothing is defaulted:
+ * "biweekly" is right for Greenway today and would be a silent wrong answer the
+ * first time somebody is set up differently (standing rule 62d).
+ */
+export async function loadPayFrequencies(employeeIds: readonly string[]): Promise<{
+  readonly byEmployeeId: ReadonlyMap<string, PayFrequency>;
+  readonly readFailed: string | null;
+}> {
+  const empty = { byEmployeeId: new Map<string, PayFrequency>(), readFailed: null };
+  // Same ordering as loadCurrentW4s above, and for the same reason: zero
+  // employees has a correct answer that needs no database.
+  if (employeeIds.length === 0) return empty;
+  if (!isSupabaseServiceConfigured) {
+    return { ...empty, readFailed: "The database connection is not configured on this server." };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("employee_pay")
+    .select(PAY_FREQUENCY_COLUMNS)
+    .in("employee_id", employeeIds)
+    .eq("is_current", true);
+
+  if (error) {
+    return { ...empty, readFailed: `Could not read the pay records: ${error.message}` };
+  }
+
+  return {
+    byEmployeeId: foldPayFrequencyRows((data ?? []) as unknown as PayFrequencyRow[]),
+    readFailed: null,
+  };
+}
+
+/** Exactly the two columns `loadPayFrequencies` selects. */
+export type PayFrequencyRow = {
+  readonly employee_id: string;
+  readonly pay_frequency: string | null;
+};
+
+/**
+ * The columns `loadPayFrequencies` asks for, as a named constant.
+ *
+ * A constant rather than a literal inside the query for the same reason
+ * W4_COLUMNS is one: a SELECT that quietly stops asking for `pay_frequency`
+ * does not crash. Every row comes back with the column undefined, the fold
+ * recognises none of them, every employee drops out of the map, and the pay run
+ * refuses everybody with a message about missing pay records - a confusing
+ * symptom three layers away from the deleted word. Naming it gives the test
+ * something it can actually check.
+ */
+export const PAY_FREQUENCY_COLUMNS = "employee_id, pay_frequency";
+
+/**
+ * Pay-frequency rows into a map, dropping any cadence the engine cannot compute.
+ *
+ * Pure, and separate from the loader, for the same reason as `foldW4Rows`: so
+ * the rule below is proved by RUNNING it. An employee whose stored cadence is
+ * unrecognised is simply ABSENT from the map - never defaulted to "biweekly".
+ * Biweekly is right for Greenway's staff today and would be a silent wrong
+ * answer the first time somebody is set up differently, and the number of pay
+ * periods is a DIVISOR in the percentage method: believe 24 where the truth is
+ * 26 and every federal withholding figure is off by about eight percent, every
+ * period, in a way that still looks like a plausible paycheque (rule 62d).
+ */
+export function foldPayFrequencyRows(
+  rows: readonly PayFrequencyRow[],
+): ReadonlyMap<string, PayFrequency> {
+  const byEmployeeId = new Map<string, PayFrequency>();
+  for (const row of rows) {
+    // Membership test against the core's own list, so a new frequency added to
+    // payroll-w4-core is understood here without a second list to update.
+    const match = ALL_PAY_FREQUENCIES.find((f) => f === row.pay_frequency);
+    if (match !== undefined) byEmployeeId.set(row.employee_id, match);
+  }
+  return byEmployeeId;
 }
 
 function i9ToRow(employeeId: string, i9: I9Record) {
