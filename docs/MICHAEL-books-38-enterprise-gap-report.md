@@ -87,6 +87,8 @@ They are correct, they are guarded, they are covered by tests — and there is n
 
 **What it takes:** buttons on the garnishment board, and a confirmation step on terminate. Small. It should ride along with books-39.
 
+> **Update: closed in books-40b.** It did not ride along with books-39 — I said it would and it did not, which is why the books-40 report printed the call counts as a table rather than letting it slide a second time. The three buttons now exist on the garnishment board, each behind a confirmation panel that states what will happen and whether it can be undone. Ending an order requires a written reason of at least five characters, enforced in the browser, again on the server, and again by the database CHECK constraint. Building it also surfaced a second defect that this report had not spotted: `loadGarnishmentBoard()` read only `active` orders, so a paused order was invisible to every screen — a Resume button would have been a control nobody could ever reach. The board now reads `active` and `suspended`, and still never reads `terminated`.
+
 ---
 
 # PART TWO — Tax forms and filings

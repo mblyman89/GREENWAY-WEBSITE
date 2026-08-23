@@ -130,6 +130,10 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
+// The minimum reason length, imported rather than redeclared. See the comment
+// on the re-export further down for why the number lives in the pure module.
+import { MIN_TERMINATION_NOTE_CHARS } from "./wage-order-lifecycle-core";
+
 import {
   validateWageOrderDraft,
   type EmployeeChoice,
@@ -638,8 +642,21 @@ function successSentence(row: ValidatedWageOrder): string {
  * Three state changes, and NO delete. See the header.
  * ══════════════════════════════════════════════════════════════════════════ */
 
-/** The shortest reason that is actually a reason. Mirrors 0198's `>= 5`. */
-export const MIN_TERMINATION_NOTE_CHARS = 5;
+/**
+ * The shortest reason that is actually a reason. Mirrors 0198's `>= 5`.
+ *
+ * RE-EXPORTED, NOT REDECLARED (books-40b). The number now lives in
+ * `wage-order-lifecycle-core.ts` because the browser needs it too - the End
+ * button checks the reason before sending anything - and this file begins with
+ * `import "server-only"`, so a client component cannot import from here without
+ * breaking the bundle. The dependency therefore points from this node-only
+ * module to the pure one, never the reverse.
+ *
+ * It stays exported from this path so existing callers and
+ * `tests/compliance/wage-order-write-store.test.ts` keep working, and so there
+ * is still exactly one number.
+ */
+export { MIN_TERMINATION_NOTE_CHARS } from "./wage-order-lifecycle-core";
 
 /**
  * Stop withholding under an order permanently, with the reason on the record.

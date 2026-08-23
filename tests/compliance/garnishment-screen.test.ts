@@ -238,7 +238,27 @@ describe("3 an order the calculator cannot handle is shown, not hidden", () => {
   });
 
   it("only orders with nothing missing are handed to the engine", () => {
-    expect(storeCode).toMatch(/\.filter\(\s*\(d\)\s*=>\s*d\.missingFacts\.length === 0\s*\)/);
+    expect(storeCode).toMatch(/d\.missingFacts\.length === 0/);
+  });
+
+  it("and only ACTIVE orders - a paused order is never handed to the engine", () => {
+    /*
+     * ADDED IN books-40b, AND IT GUARDS A BUG THAT WAS BRIEFLY REAL.
+     *
+     * The board used to read `.eq("status", "active")`, so "everything on the
+     * board" and "everything that is withholding" were the same set and the
+     * engine filter did not need to say so. books-40b started listing paused
+     * orders too, because a Resume button needs a paused row to sit on.
+     *
+     * The moment that changed, this filter became load-bearing: without a
+     * status test, a PAUSED order would have been handed to the engine and
+     * appeared inside a worked withholding total. Paused means withhold
+     * nothing, so that is a computed instruction to take money under an order
+     * that is explicitly not running - and it would have looked entirely
+     * normal on screen.
+     */
+    const computable = storeCode.slice(storeCode.indexOf("const computable"));
+    expect(computable.slice(0, 300)).toContain('d.status === "active"');
   });
 
   it("the screen shows the missing questions next to the order they block", () => {
@@ -248,8 +268,28 @@ describe("3 an order the calculator cannot handle is shown, not hidden", () => {
   });
 
   it("blockedCount counts, and the header reports it", () => {
-    expect(storeCode).toMatch(/blockedCount:\s*details\.filter/);
+    /*
+     * Scoped to the ACTIVE orders since books-40b, not to every row on the
+     * board. The header renders `activeCount - blockedCount` as "ready to
+     * calculate", and that subtraction is only a true sentence if both sides
+     * count the same population. Counting a blocked PAUSED order in
+     * `blockedCount` while excluding it from `activeCount` would make the
+     * header report a smaller "ready" number than reality, or even a negative
+     * one.
+     */
+    expect(storeCode).toMatch(/blockedCount:\s*active\.filter/);
     expect(viewCode).toContain("blockedCount");
+  });
+
+  it("paused orders are counted separately and never folded into the active count", () => {
+    // An order that is paused is withholding nothing. Rolling it into
+    // `activeCount` would put a reassuring number on screen over a live legal
+    // obligation that has quietly stopped taking money - which is precisely
+    // the state a paused support order is in, and the one the employer carries
+    // the exposure for under RCW 26.18.110(6).
+    expect(storeCode).toMatch(/activeCount:\s*active\.length/);
+    expect(storeCode).toMatch(/pausedCount:\s*details\.filter/);
+    expect(viewCode).toContain("pausedCount");
   });
 });
 
