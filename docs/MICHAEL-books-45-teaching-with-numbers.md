@@ -8,7 +8,7 @@
 
 You said you wanted the lessons "colorful, interactive and worked examples," and that walls of words are hard to digest. So every lesson on the learning screen can now open with a small table of real numbers instead of four paragraphs of prose: **what you put in, what the system gives back, and why it matters** — with the row that trips people up marked in orange. Eight of them are built so far, out of 82 lessons, and the screen tells you that honestly rather than implying it is finished. The important part is not the eight tables. It is a rule I imposed on myself while building them: **not one number in any example is typed by hand.** Every figure is computed by calling the same engine that runs your actual payroll and your actual penalty calculations, at the moment the page is drawn. That rule caught three genuine errors in a single sitting — three lessons that I had written, read back, and believed were correct, which were teaching you the wrong thing. Those three catches are the real subject of this report, because they are the clearest evidence I can give you that this platform is built differently from the one that burned you.
 
-This also completes **slice C**. All five criteria are done, the branch is merged, and the full suite is at 430 files and 10,376 tests, all passing.
+This also completes **slice C**. All five criteria are done, the branch is merged, and the full suite is at 430 files and 10,379 tests, all passing. You also asked me to clear the three lint warnings we had been carrying rather than leave cosmetic noise in the repo — I did, and **two of the three turned out to be real defects rather than cosmetic**. That is its own section further down, because one of them concerns your mother's distributions directly.
 
 ---
 
@@ -191,6 +191,61 @@ Also still open, and visible in the roadmap: the holiday check on due dates, and
 
 ---
 
+## You asked about the warnings. Two of them were not cosmetic.
+
+You said you would rather have a clean repo than one carrying cosmetic warnings, and you were right to ask — but the more useful finding is that **they were not cosmetic**. I had been quoting "0 errors, 3 warnings" as a stable baseline for weeks. That phrase is exactly the kind of thing that stops being read once it becomes familiar, and two real defects were sitting inside it.
+
+Here is what each one actually was.
+
+### Warning 1 — a type defined twice, which is how two halves of a system start disagreeing
+
+The warning said `PeriodStatus` was imported and unused in a test. Following it, I found that **`PeriodStatus` was defined in two different files** — `ledger-core.ts` and `period-close-core.ts` — with identical values (`open`, `closed`, `locked`) and **no connection between them whatsoever**.
+
+Why that matters, in your terms. A period status is what tells the system whether a month can still be posted into. `period-close-core` owns the real one: it mirrors the constraint in your actual database and carries the plain-English meaning of each status, including that **locked** means a tax return has been filed on those numbers and nothing reopens it. The second copy was a silent twin. If someone later added a fourth status to one copy — say `under_review` — the code would compile perfectly and the database would reject it at runtime, and the error would surface somewhere far away from the cause.
+
+I checked before deleting: the `ledger-core` copy was referenced by **nothing at all** — no other file, no lesson, not even the file it lived in. A pure orphan. It is gone, with a note left where it stood explaining where the real one lives.
+
+### Warning 2 — a function that was taught but never directly tested
+
+This is the one I would have been most annoyed to discover later. The warning flagged `assessProportionality` as imported and unused. That function is **taught in one of your lessons**, so it is not obscure — and it is the one that examines whether your distributions match your ownership percentages.
+
+That function matters to you specifically. Your ownership is 85% you, 10% your mother, 5% your grandfather — and your mother's share is **allocated but not paid**. So your distributions are, by design, not proportionate, and this is the function that has to describe that situation accurately without overstating it.
+
+It *was* being tested, but only indirectly, through the wrapper that runs a whole year. That wrapper validates the shareholder list before passing it on, which means it can **never** hand the function an empty list or a single shareholder. Those two edges were untestable by that route and untested in fact.
+
+The tempting fix was to delete the import. That would have produced a clean lint run and **less coverage** — the warning gone and the gap it marked now invisible. I added three direct tests instead. One of them is your real pattern, priced by the engine:
+
+| Shareholder | Pro rata share | Actually paid | Difference |
+|---|---|---|---|
+| Michael (85%) | $44,625.00 | $50,000.00 | **over by $5,375.00** |
+| Mother (10%) | $5,250.00 | $0.00 | **under by $5,250.00** |
+| Grandfather (5%) | $2,625.00 | $2,500.00 | under by $125.00 |
+
+The differences net to exactly zero, which is the arithmetic check that nothing was invented or lost. And the engine is careful about what it concludes: an unequal distribution is **not**, by itself, a second class of stock, because that test turns on the rights in your governing documents rather than on what the cheques happened to be. What it does insist on is that the gap gets **characterised** as something — a loan from the company, additional compensation, or a gift between shareholders. Leaving it uncharacterised is the only genuinely bad option. That is a real conversation for you and your mother, and it is now on the record with a number attached.
+
+Both new tests were then deliberately sabotaged to confirm they actually fail when the engine is wrong. They did. The engine file was restored byte-for-byte afterwards.
+
+### Warning 3 — genuinely just redundant text
+
+The third was a type imported into a test that used the runtime list instead. Verified by reading every reference, then removed. This one really was cosmetic — but I only know that because I checked, and I could not have known it from the warning text alone.
+
+### What the trail led to: fifteen more duplicates
+
+If one type was silently duplicated, the obvious question is how many others are. I scanned every single-line type definition in the codebase and found **sixteen defined identically in two or more files.** Two are genuinely concerning:
+
+- **`AccountType`** — defined in **three** accounting modules. This is the list of what an account can be: asset, liability, equity, income, COGS, expense. Three copies.
+- **`SourceKind`** — defined twice. This is what a journal entry came from: a POS sale, payroll, excise, an ATM, and so on.
+
+Both are long lists, and a value added to one copy and not the others compiles cleanly while two halves of your ledger quietly disagree about what an account is. **I have not fixed these**, and I want to be direct about why: each needs its owning module chosen and every other reference repointed. That is a piece of work in its own right, and half-doing it across your accounting core would be worse than naming it. It is written into the roadmap as item R2 with all sixteen listed.
+
+One more thing worth telling you, because it is the kind of thing I would want told to me. **My first version of that scan was wrong.** It read each definition only up to the first semicolon, so any type spanning several lines got cut off at its opening brace, and any two that happened to start the same way compared as identical. It confidently reported **36** duplicates. Several were inventions of my own bad measurement. I rewrote it to skip anything it could not read in full, and the honest number is **16** — and even that is a floor rather than a total, because the multi-line types remain unmeasured.
+
+I am telling you the wrong number as well as the right one because a count I hand you is only worth anything if it survives being checked, and this one did not the first time.
+
+**The result: the repository now reports zero errors and zero warnings.** Confirmed in the real build, not just on my machine.
+
+---
+
 ## Where we are, and what is next
 
 **Slice C is complete.** All five criteria closed. Alongside the examples, this change also mirrored three Washington statutes locally so their quotes can be checked word-for-word against the real law, fixed two genuine misquotes in our own citations, and retired a duplicate percentage-calculation routine so two slightly different versions can no longer both be right.
@@ -217,4 +272,4 @@ Nothing in this platform will invent any of those. Where a number is missing, th
 
 ---
 
-**Verified before merge:** 430 test files, 10,376 tests, all passing · type-check clean · lint at baseline · 306 statute quotes verified with zero failures · 10 of 10 sabotage tests caught.
+**Verified before merge:** 430 test files, **10,379 tests**, all passing · type-check clean · **lint at zero errors and zero warnings** · 306 statute quotes verified with zero failures · 10 of 10 sabotage tests caught on the worked examples, plus 2 of 2 on the new proportionality tests.
