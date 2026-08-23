@@ -1946,3 +1946,157 @@ building the matcher twice.
     LESSON count beside the LINE count for exactly this reason: 82 before and 82
     after, with 245 fewer lines, is the pair that proves a refactor moved code
     rather than losing teaching. One figure alone cannot tell those apart.
+
+78. AN AGREEMENT TEST PROVES CONSISTENCY, NEVER CORRECTNESS. books-45 found the
+    RCW router truncating "50A" to "50", so every Paid Family and Medical Leave
+    quote was being sent to `rcw-50.txt` - not a missing file, a file for a
+    DIFFERENT STATUTE (chapter 50 is unemployment; 50A is PFML). The routing
+    lived in TWO places, `sourceFileFor` and the `MIRRORED_CORPORA` table, and a
+    test already asserted "the two must agree". It passed the whole time. Both
+    copies were wrong in the same direction, and agreement is exactly what a
+    duplicated bug produces.
+    THE RULE: never let a test compare two implementations of the same rule and
+    call that verification. Compare at least one of them against GROUND TRUTH -
+    here, the filenames actually on disk. If A and B can only be checked against
+    each other, a single copy-paste at birth makes them permanently, agreeably
+    wrong.
+
+78a. THE SAME DEFECT CLASS COMES BACK IN A NEW CORPUS. This file already carried
+    a long note about §280E being truncated to §280 because the capture was
+    digits-only. The RCW branch then made the identical mistake with the chapter
+    letter. Rule 23 says fix the class, not the instance - and "the class" is not
+    "USC sections with letters", it is "identifiers where a letter is part of the
+    number". When you fix one, grep the file for every other capture that
+    assumes digits, and fix them all in that sitting. Fixing 50A also repaired
+    50B, which nobody had noticed was broken.
+
+79. A PARSER THAT CANNOT FAIL LOUDLY WILL FAIL SILENTLY, AND ITS OUTPUT WILL BE
+    BLAMED ON THE SOURCE. The new WA mirroring script had an off-by-one: it
+    started its div-depth walk at 0 when the caller had already sliced INSIDE the
+    opening tag, and every RCW page begins with two empty sibling divs, so the
+    walk ended before the statute. It extracted 41 characters. The only reason
+    that did not become three plausible-looking mirror files containing just a
+    caption was a 200-character floor that refused to write.
+    THE RULE: a fetch/extract step must assert its output is substantial before
+    committing it. Without the floor, the verifier would have reported nine BAD
+    QUOTES - pointing the finger at Michael's statutory text - when the fault was
+    entirely in the parser. Prefer a loud refusal to a file that merely looks right.
+
+79a. MIRRORING A SOURCE IS NOT BOOKKEEPING, IT IS AN AUDIT. Twice now, the moment
+    an authority's text landed on disk it exposed a quote defect that had been
+    invisible for slices: RCW 49.52.050 at books-37, and at books-45 BOTH a
+    missing elision between subsections (7)(a) and (7)(b) - which presented two
+    separately-numbered subsections as one continuous sentence - and an INVENTED
+    subsection label "(6)(b)(ii)" that the statute never prints, sitting inside
+    the quotation marks where only the legislature's characters are allowed.
+    THE RULE: treat every unmirrored authority as DEBT with a defect rate, not as
+    a settled state. The pinpoint that helps a reader navigate belongs in `cite`,
+    which is our words; it never goes inside the quote, which is theirs. And when
+    a verifier says "matches the first N characters then diverges", N is a gift -
+    it is the exact length of the subsection that really ends there.
+
+80. A SOURCE SCRAPE MUST RECOGNISE THE FACT, NOT ONE SYNTAX FOR IT. The shared
+    `exportedFunctionNames` gate has now been too narrow three times: it could
+    not see `export async function`, and at books-45 it could not see
+    `export { name }`. Each time the module genuinely exported the function and
+    the scrape reported that it did not.
+    THE RULE: when a gate reads source text to learn a FACT about a module
+    ("what does it export", "what codes can it emit"), enumerate every syntax
+    that expresses that fact before shipping it, and add the new one to the
+    shared helper rather than to your caller. Note which direction the failure
+    points: books-45's was a loud false alarm, but the identical blind spot
+    against a barrel or facade module - one that exports everything via
+    `export { ... }` - would scrape a short list, find it fully taught, and
+    report complete coverage over an untaught module. Fixing only the noisy case
+    leaves the silent one live (rules 23, 39).
+
+81. TWO FUNCTIONS WITH ONE NAME IS A COIN FLIP OVER WHICH SAFETY NET APPLIES.
+    `applyMilliPct` existed twice: an integer-only version in the withholding
+    engine and a float-divide version in form-941-core. Exhaustive comparison
+    over -300,000 to +300,000 cents at all six rates in use found ZERO
+    disagreements, halves included - so it was never producing a wrong number on
+    a filed form, and saying otherwise would have been dressing up a fix.
+    The real difference was the GUARDS. The float version silently accepted a
+    non-integer RATE (returning a plausible number from `applyMilliPct(10_000,
+    6_200.5)`) and silently returned a value from a product past 2^53. The
+    integer version throws on both.
+    THE RULE: when retiring a duplicate, measure whether the OUTPUTS ever
+    differed and say so honestly; then compare the REFUSALS, because that is
+    usually where the real divergence lives. Keep the stricter one. Which safety
+    net protects a line of a tax return must never depend on which file the
+    caller happens to sit in.
+
+81a. A RE-EXPORT DOES NOT CREATE A LOCAL BINDING. `export { x } from "..."`
+    republishes without importing, so the file's own call sites cannot see it.
+    Use the two-line form - `import { x } from "..."; export { x };` - when the
+    module also calls the thing it republishes. Prefer re-exporting over a
+    call-site sweep when the name is TAUGHT: a mentor lesson pointing at a name
+    its module no longer exports is a broken lesson, and rule 26's coverage gate
+    is right to fail it.
+
+82. A TAUGHT EXAMPLE MUST BE COMPUTED, NEVER TYPED. Any number shown to Michael
+    as "here is what this does" must be produced by CALLING the engine that
+    lesson teaches, at render time. A hand-typed example is a second
+    implementation of that engine with no tests, and it drifts silently the
+    moment the real one changes - prose does not recompute. This codebase has
+    the scar already (a learning screen claiming a 47.9% gross margin the engine
+    never produced). The corollary is a gate: read the teaching module's own
+    SOURCE TEXT and fail on a currency literal, because by the time you hold the
+    rendered object a typed "$1,960.00" and a computed one are the same string.
+
+82a. WRITING THE EXAMPLE IS HOW YOU DISCOVER YOU HAD THE LESSON BACKWARDS.
+    Three defects in one sitting, all in prose I had already reviewed and
+    believed: the SSN example named the wrong number as the refused one (the
+    engine refuses 123-45-6789 and ACCEPTS the famous 078-05-1120, because it
+    tests structural impossibility, not fame); the overtime example called a
+    straight-time function and would have rendered a difference of ZERO, teaching
+    the opposite of the lesson; and a salary row asserted "twelve divides
+    cleanly" beside an engine output of $4,583.37. None was caught by review.
+    All three were caught by PRINTING THE RENDERED OUTPUT and reading it.
+    THE RULE: never ship a worked example you have not seen rendered with real
+    engine values. Confidence in the prose is not evidence about the arithmetic.
+
+82b. AN EXAMPLE WITHOUT A TRAP IS A DEMONSTRATION, NOT A LESSON. Michael needs
+    the cases that look fine and are not. Gate it: every worked example must mark
+    at least one row as the trap, and the trap must use the SAME colour that
+    already means "what goes wrong here" elsewhere on the screen. Colour that
+    means one thing everywhere is how a visual reader navigates without reading;
+    colour chosen per-component is the "wall of words and color" he complained
+    about, rebuilt.
+
+83. DO NOT INFER A MACHINE FACT FROM ENGLISH PROSE. A gate that decided "an
+    engine broke" by grepping displayed text for /refus/i failed the one example
+    where a refusal is the CORRECT thing to display - an SSN engine rejecting a
+    placeholder is the teaching, not a fault. Two different events had collapsed
+    into one word. Exempting that example would have fixed the instance and left
+    the class (rule 23). Emit a SENTINEL that only the machine failure can
+    produce and match the sentinel. If a check must distinguish two things, they
+    must differ in machine terms, not in wording.
+
+83a. A GATE'S FIRST DRAFT IS ITSELF UNTESTED CODE. Both gates written this
+    session were wrong on the first run - one over-broad (above), one correctly
+    catching a real defect I had just written (a hard-typed $24.50 sitting beside
+    the variable that actually fed the engine). Drive every new gate with a
+    deliberately broken input and require it to throw BEFORE trusting it green
+    against real data. A gate only ever observed passing has not been observed at
+    all.
+
+84. A MUTANT THAT SURVIVES INSIDE THE ANTI-DRIFT MODULE IS THE MOST INSTRUCTIVE
+    KIND. Moving a salary remainder from period 0 to period 25 changed every
+    figure on screen and all 34 tests stayed green, because the tests pinned the
+    example's STRUCTURE and its narrative sentences but never the first cheque's
+    VALUE. The row went on claiming "the remainder is paid out here, at the
+    start" beside a number that said otherwise - the exact defect the module was
+    built to prevent, surviving within it.
+    THE RULE: when a mutant survives, fix the CLASS. The replacement test asserts
+    the relationship (first minus rest equals the remainder; the 26 pieces sum to
+    the salary), not the literal, so the same attack cannot return wearing a
+    different amount. And always mutate a module against its OWN premise - the
+    place a safeguard is weakest is the thing it was written to guard.
+
+84a. TEST THE SENTENCE AGAINST THE NUMBER IN THE SAME OBJECT. When English and
+    arithmetic are authored side by side, nothing but an explicit check stops
+    them drifting apart, and the sentence is what gets read and believed. A
+    narrow gate that only fires on explicit claims ("costs the same", "exactly
+    the same as") is worth far more than a broad one that produces false
+    accusations and gets switched off.

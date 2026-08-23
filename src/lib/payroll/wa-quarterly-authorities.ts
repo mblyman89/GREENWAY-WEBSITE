@@ -375,11 +375,27 @@ export const RCW_50A_10_030_AGENT_AND_TRUST: GuidanceAuthority = {
   id: "rcw-50a-10-030-agent-and-trust",
   kind: "statute",
   cite: "RCW 50A.10.030(7)(a), (7)(b), (9)",
+  // books-45. THE ELISION AFTER "to the department." IS REQUIRED, and its
+  // absence was a real defect that went unnoticed for as long as this quote has
+  // existed - because RCW 50A.10.030 was not mirrored, so nothing could check it.
+  //
+  // (7)(a) ends at "remit the amounts collected to the department." and (7)(b)
+  // then STARTS A NEW SUBSECTION with "In collecting employee premiums...".
+  // Running them together implied the legislature wrote one continuous sentence.
+  // It did not. Every word here is the statute's own, in the statute's own
+  // order, but the seam between two separately-numbered subsections has to be
+  // shown, or the reader is told something about the text that is not true.
+  //
+  // This is exactly what mirroring buys: the moment the source landed on disk,
+  // the verifier reported "matches the first 163 characters, then diverges" -
+  // 163 being the precise length of (7)(a). The machine found a punctuation-
+  // level misrepresentation no human review had caught.
   quote:
     "The employer must collect from the employees the premiums provided under this section " +
-    "through payroll deductions and remit the amounts collected to the department. In collecting " +
-    "employee premiums through payroll deductions, the employer shall act as the agent of the " +
-    "employees and shall remit the amounts to the department as required by this title. ... " +
+    "through payroll deductions and remit the amounts collected to the department. ... " +
+    "In collecting employee premiums through payroll deductions, the employer shall act as " +
+    "the agent of the employees and shall remit the amounts to the department as required by " +
+    "this title. ... " +
     "Premiums collected under this section are placed in trust for the employees and employers " +
     "that the program is intended to assist.",
   soWhat:

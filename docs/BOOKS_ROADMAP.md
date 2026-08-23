@@ -71,6 +71,18 @@ this file is the memory that survives.
 | **D** | **The Form / Why / Check tab system** | render the actual form, box by box, with per-box authority on click | Michael is a visual learner and said the verbatim panels are "hard to digest as there is a wall of words and color". Built ONCE, generically, so every form inherits it. |
 | **B** | **K-1, 1120-S, 1040** | the entity return, the shareholder schedule, the personal return | **LAST ON PURPOSE** — see the blocker note below. |
 
+**Added by Michael, books-45:**
+
+| Order | Slice | What it is | Why it sits here |
+|-------|-------|-----------|------------------|
+| **E** | **WA DOR Combined Excise Tax Return** | the monthly DOR return: cannabis sales, non-cannabis sales, and ATM surcharge income, each classified correctly, shown as a visual facsimile before Michael keys it into My DOR | Michael's own request. **Monthly** — twelve filings a year against the 941's four and the 1120-S's one — and it is the only screen where all three revenue streams must be classified on one page. **Not** the LCB return already built; see §7. Waiting on his filed **July** return to reconcile against. |
+
+Where E sits is Michael's call. It is placed after D on the assumption that the
+Form/Why/Check tab system should exist first, so the DOR return inherits the
+per-box authority treatment instead of being built twice — but if the monthly
+filing is causing pain now, it can move ahead of D and adopt the tab system
+afterwards.
+
 ### Why B is last, and it is not a matter of taste
 
 The logic and the forms can be built before the data arrives; Michael asked for
@@ -211,9 +223,10 @@ penny-drift defect. Retire the duplicate, keep the integer implementation
 | # | Criterion | Status |
 |---|-----------|--------|
 | 1 | All 82 lessons reachable from a real screen | **DONE** — `/admin/books/learn`, eight units, gated by `tests/compliance/learning-path.test.ts` |
-| 2 | `verify-verbatim-quotes` at zero failures | **OPEN** — still 9. Router fix must land BEFORE the 5 missing files are fetched |
-| 3 | One `applyMilliPct`, integer-only | **OPEN** — the float duplicate is still there |
+| 2 | `verify-verbatim-quotes` at zero failures | **DONE (books-45)** — 0 failures, and verified quotes rose 296 → 306 |
+| 3 | One `applyMilliPct`, integer-only | **DONE (books-45)** — the float duplicate is retired |
 | 4 | The reachability probe updated, not deleted | **DONE** — rewritten from a one-hop string match to a transitive value-import graph walk |
+| 5 | Lessons teach with NUMBERS, not only paragraphs | **DONE (books-45)** — `worked-examples-core.ts`, 8 examples, every figure computed by the real engine at render time |
 
 **Criterion 1, in detail.** 82 lessons, 8 units, 0 unplaced, 0 dangling. The
 count on the screen is DERIVED from the mentor modules — a test asserts the
@@ -235,6 +248,65 @@ a scratch `tsc` compile rather than assumed). See standing rules 75 and 75a.
 `period-close-core` also stays on the unreachable list — its MENTOR was wired in
 books-44, its engine was not, and those are different claims.
 
+**Criterion 2, in detail (books-45).** The prediction above was right that two
+distinct defects hid in the nine, and right that the router had to be fixed
+first — but both halves turned out to be worse than recorded, and a third
+problem was hiding behind them.
+
+*The routing bug was not "a missing file", it was a wrong statute.* `[\d.]+`
+cannot express a letter, so `RCW 50A.10.030` captured `50` and the verifier
+looked for `rcw-50.txt`. Chapter 50 is the **unemployment** act; chapter 50A is
+**Paid Family and Medical Leave**. Had anyone ever placed a `rcw-50.txt` on
+disk, four PFML quotes would have been cheerfully "verified" against a different
+law. Fixing the class rather than the instance (rule 23) also repaired `50B`
+(WA Cares), which nobody had noticed was broken.
+
+*The routing lived in two places and a test already asserted they agreed.* It
+passed the whole time, because both copies carried the same bug. An agreement
+test proves consistency, never correctness — now standing rule 78. The
+replacement gate checks the routed path against **the filenames actually on
+disk**, and was proven failable by restoring the old pattern and watching it go
+red (the agreement test stayed green, which is the point).
+
+*Mirroring the sources immediately exposed two quote defects* that had been
+invisible for as long as the quotes existed, because nothing could check them:
+`rcw-50a-10-030-agent-and-trust` ran subsections (7)(a) and (7)(b) together as
+one continuous sentence with no elision, and `rcw-50a-10-030-pfml` opened its
+last segment with `(6)(b)(ii)` — a label the statute does not print, assembled
+from the surrounding nesting and placed inside the quotation marks. The pinpoint
+belongs in `cite`, which is our words. That is now twice (RCW 49.52.050 at
+books-37) that mirroring has behaved as an audit rather than as bookkeeping.
+
+New: `scripts/fetch-wa-authority-text.ts`, the Washington sibling of the federal
+fetcher — the sixteen existing WA mirrors had all been placed by hand, with no
+recorded provenance. Its 200-character floor earned its keep on first run by
+refusing to write three caption-only files after an off-by-one in the div walk;
+without it the verifier would have reported nine **bad quotes**, blaming
+Michael's statutory text for a parser bug (rule 79).
+
+Debt ledger: `rcw-50a-10-030-pfml` deleted from `KNOWN_UNMIRRORED_AUTHORITY_IDS`
+(16 → 15 payroll authorities still unmirrored). The count may only ever fall.
+
+**Criterion 3, in detail (books-45).** Measured before touched: the two
+`applyMilliPct` implementations were compared exhaustively over −300,000 to
++300,000 cents at all six rates in use, including exact-half cases. **Zero
+disagreements.** This was never putting a wrong number on a filed form, and it
+would be dishonest to present the fix as a near-miss.
+
+The divergence was in the refusals. The float version silently accepted a
+non-integer **rate** — `applyMilliPct(10_000, 6_200.5)` returned `620` rather
+than throwing — and silently returned a value from a product beyond 2^53. The
+integer version refuses both. Two functions with one name meant the safety net
+under any given line of the return depended on which file the caller sat in.
+The stricter one now serves both (rule 81).
+
+That change surfaced a third blind spot: the shared `exportedFunctionNames`
+scrape reads `export function` lines, so it could not see a re-export and
+declared the still-taught `applyMilliPct` "dead teaching". Widened in the shared
+helper, not the caller. The loud direction was harmless; the same gap against a
+facade module would have reported **full coverage over an untaught module**
+(rule 80).
+
 **Gate strength, measured.** `scripts/prove-learning-path-gate.sh` runs 27
 mutations against the new code and 3 silent controls. Result: **27/27 caught,
 0 missed, 0 no-ops, 3/3 controls correctly green.** The first run scored 19/21
@@ -242,6 +314,80 @@ and found two real holes — a security assertion satisfied by an unused import
 line, and two `assert*` functions that could be emptied to `return;` without
 going red (standing rule 74). Both are fixed and both attacks are kept
 permanently as regression witnesses.
+
+**Criterion 5, in detail (books-45).** Michael asked for *"worked examples...
+colorful, interactive... lead me through all steps and important reasoning."*
+Before building anything the existing lessons were measured, because "the
+lessons are too wordy" is an opinion and a count is not: **82 lessons, 14,562
+words, median 173 words each, and only 25 of the 82 containing a single
+concrete number.** That is the wall he described, quantified.
+
+`src/lib/accounting/worked-examples-core.ts` answers it with eight examples
+covering the DOR penalty ladder, all five agency clocks side by side, the LCB
+weekend roll, weekly overtime, SSN handling, salary division, "or part thereof"
+month counting, and the three clocks that start on a hire date. Each renders as
+a table of GIVEN → OUTPUT → WHY IT MATTERS, with the trap row in the same orange
+that already means "what goes wrong here" elsewhere on the card. The table
+renders **above** the four paragraphs, so an opened lesson leads with figures.
+
+**The rule that makes it trustworthy: not one number is typed by hand.** Every
+output is produced by calling the real engine at render time. A hand-typed
+example is a second implementation with no tests, and this codebase already
+carried that scar — an earlier learning screen claimed a 47.9% gross margin the
+engine did not compute.
+
+That rule paid for itself immediately, three times:
+
+1. **The SSN example was backwards.** It was written around `078-05-1120` (the
+   1938 wallet-card number) as the one the system refuses. Calling
+   `ssnProblems()` proved the reverse: the engine accepts it and refuses
+   `123-45-6789` as a `sequential_placeholder`. The checks test structural
+   impossibility per SSA's randomisation FAQ, not fame. As prose this would have
+   shipped and taught a fact that is simply false.
+2. **The overtime example computed zero.** The first draft called
+   `hourlyGrossCents` twice and subtracted — but that function is straight-time
+   only, so the 45/35 versus 40/40 comparison would have shown no difference at
+   all, teaching the precise opposite of the lesson. Rebuilt on
+   `computePeriodHours`, the real timesheet engine, with real punches: **$1,960.00
+   versus $2,021.25 for the identical 80 hours.**
+3. **A row's sentence contradicted its own number.** The monthly-salary row said
+   "twelve divides cleanly, so there is nothing left over" while the engine
+   returned **$4,583.37** for January — $55,000 does not divide by 12. Caught by
+   printing the rendered output instead of trusting that it read well.
+
+**The refusal boundary held.** `computeDorPenalty` refuses to compute interest
+without an evidenced rate (RCW 82.32.050(2)). A worked example is not a licence
+to slip a plausible number past that gate, so the rate is read from
+`DOR_ANNUAL_RATES`, converted basis-points → milli-percent in one named function
+(600 and 6,000 are both plausible integers; passing bp straight through is a
+tenfold error), and a gate fails CI if any example ever renders a refusal.
+
+**Gate strength, measured.** `worked-examples-gates.ts` checks four things in
+rising order of value: structure, substance (no example without a digit in it),
+provenance (the source text really imports the engines and contains no typed
+currency), and **contradiction** (a row claiming two things "cost the same" must
+show the same figure twice). Eleven tests drive each gate with a deliberately
+broken example and require it to throw — rule 39.
+
+A ten-mutant campaign against the examples scored **9/10 on the first pass.**
+The survivor is worth recording: moving the salary remainder from period 0 to
+period 25 changed every figure on screen while the row's sentence still claimed
+the remainder lands on the first cheque, and all 34 tests stayed green because
+none pinned that value. That is the exact prose-versus-arithmetic defect the
+module exists to prevent, surviving *inside* the module built to prevent it. A
+test was added that checks the class rather than the instance — first cheque
+minus the rest must equal the remainder, and the 26 pieces must sum to the
+salary — and the retry scored **10/10**.
+
+One gate was also over-broad on its first draft and had to be fixed at the class
+level. It grepped output text for `/refus/i`, which failed the SSN example — the
+one place a refusal is the correct thing to display. Exempting that example
+would have fixed the instance; the real defect was inferring a machine fact
+("an engine broke") from English prose. Engine failures now emit
+`ENGINE_REFUSAL_MARKER`, a token no sentence contains (rule 23).
+
+**Honest coverage: 8 of 82 lessons carry a worked example.** The screen says so
+in those words rather than implying the course is more finished than it is.
 
 Then, and only then: **push notifications and the calendar.** Michael,
 books-17: *"there's no point notifying me yet if we can't use it."*
@@ -550,10 +696,59 @@ forms need. What is missing is the forms themselves and the calendar of when
 they are due. Note the trust-fund exposure already modelled in books-16: these
 are penalties on money already withheld and already held.
 
-### 7. WA B&O and local taxes
+### 7. WA DOR Combined Excise Tax Return — the monthly one Michael actually files
 
-State business & occupation tax and Port Orchard local taxes, read off the
-income statement's revenue lines.
+**Requested by Michael directly (books-45):** *"a department of revenue sales
+tax form so i can see visually what the monthly return will look like before i
+go onto my portal to report and pay. we will need to know all sales, cannabis
+and non cannabis, as well as monthly atm revenue."*
+
+**This is a DIFFERENT RETURN from the one already built, and confusing the two
+would be an expensive mistake.** `src/lib/compliance/excise-return-core.ts` is
+the **WSLCB** Cannabis Retailer Sales & Excise Tax return, form LIQ-1295 — the
+37% cannabis excise under RCW 69.50.535, filed with the Liquor and Cannabis
+Board. The return described here is the **Department of Revenue** Combined
+Excise Tax Return, filed monthly on My DOR. Two agencies, two portals, two due
+dates, two sets of penalties. Greenway files both.
+
+**Why this ranks above the remaining chain items:** it is a **monthly, recurring,
+cash-out-the-door filing** that Michael performs by hand today, and it is the one
+place where cannabis sales, non-cannabis sales, and ATM income all have to be
+classified correctly on a single page. The 941 is quarterly; the 1120-S is
+annual; this is twelve times a year, every year.
+
+**Three revenue streams, three different tax treatments — this is the whole
+difficulty, and it is exactly what Michael asked to see laid out:**
+
+| Stream | Retailing B&O | Retail sales tax | Notes |
+|---|---|---|---|
+| Cannabis sales | yes | yes | the 37% LCB excise is **not** part of the retail selling price for sales-tax purposes — RCW 69.50.535(4). Getting this wrong overstates the DOR base every single month |
+| Non-cannabis sales (merch, accessories) | yes | yes | already modelled in `src/lib/noncannabis/` |
+| ATM surcharge income | **service B&O, not retailing** | **no** | this is fee income for a service, not a retail sale of goods. Putting it on the retailing line is the classic error — it taxes it at the wrong rate *and* wrongly drags it into the sales-tax base. Data already exists in `src/lib/atm/` |
+
+**What it consumes (all of it already exists, none of it needs inventing):** the
+POS sale ledger for cannabis and non-cannabis gross, `src/lib/atm/` for surcharge
+revenue, `src/lib/medical/tax.ts` for the medical exemption, and
+`src/lib/reports/tax-base-core.ts` for the pre-tax base that already knows how to
+strip tax out of a tax-inclusive price.
+
+**What it must produce:** a full visual facsimile of the return, line by line,
+with every figure traceable to the transactions behind it — so Michael can read
+it, understand *why* each number is what it is, and only then key it into My DOR.
+
+**Deliberately NOT a filing agent.** Same boundary as everywhere else in this
+product: we prepare and explain, Michael files and pays. The screen's job is to
+make the portal a transcription step rather than a judgement call.
+
+**Blocked on one thing, and Michael has already offered it:** his **filed July
+return**, so every line can be reconciled against a real one before this is
+trusted — the same method that made the 941 engine credible, where his filed
+Q2 2026 return became the oracle. Local rates (Port Orchard, Kitsap County) must
+come from the DOR rate lookup for the specific period, never from memory: they
+change, and a stale local rate is a silent monthly underpayment.
+
+State business & occupation tax and Port Orchard local taxes are computed here,
+read off the income statement's revenue lines.
 
 ### 8. Forms builder, generalized
 

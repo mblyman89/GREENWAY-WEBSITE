@@ -86,14 +86,50 @@ export const MEDICARE_EMPLOYEE_MILLI_PCT = 1_450;
  * form that carries negative adjustments (line 7 can be negative, and
  * Greenway's filed Q2 2026 line 7 IS negative) that asymmetry is a real defect
  * rather than a theoretical one.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * books-45: THIS IS NOW THE WITHHOLDING ENGINE'S FUNCTION, RE-EXPORTED.
+ *
+ * It used to be a second, independent implementation with the same name, and it
+ * computed `(cents * milliPct) / 100_000` — a FLOAT DIVIDE — before rounding.
+ * The withholding engine's version never leaves integer arithmetic: it forms
+ * the product and divides with `divideRoundHalfUp`, using `%` and comparison
+ * only.
+ *
+ * WHAT THE DUPLICATE ACTUALLY COST, measured rather than assumed. Exhaustively
+ * comparing both versions over −300,000 to +300,000 cents at all six rates this
+ * codebase uses produced ZERO disagreements, and they agree on the exact-half
+ * cases too. So this was never handing Michael a wrong number on a filed form,
+ * and it is important to say that plainly rather than dress the fix up as a
+ * near-miss.
+ *
+ * The cost was in the GUARDS, and there the two were not equivalent at all:
+ *
+ *   applyMilliPct(10_000, 6_200.5)          float: returned 620   integer: THREW
+ *   applyMilliPct(900_000_000_000_000, ...) float: returned a value from a
+ *                                           product past 2^53    integer: THREW
+ *
+ * A non-integer RATE is exactly how a "6.2%" typed as 0.062 or a rate divided
+ * one time too many enters a money path, and the float version accepted it
+ * silently and returned a plausible-looking number. The integer version refuses.
+ * Standing rule 27: refuse rather than default.
+ *
+ * Two functions with one name, one of which is stricter, is a coin flip over
+ * which safety net is under any given line of the return — decided by which
+ * file the caller happened to be in. The stricter one wins, everywhere.
+ *
+ * The re-export is deliberate rather than a call-site sweep: `applyMilliPct` is
+ * taught as part of the 941 module's own vocabulary (see form-941-mentor), and
+ * a lesson that points at a name this file no longer exports would be a broken
+ * lesson. Same name, same module surface, one implementation underneath.
+ *
+ * NOTE the two-line form. A bare `export { x } from "..."` re-exports without
+ * creating a local binding, so this file's own four call sites could not see
+ * it — `tsc` said so immediately, which is the compiler doing the job a guess
+ * would have skipped.
  */
-export function applyMilliPct(cents: number, milliPct: number): number {
-  if (!Number.isInteger(cents)) {
-    throw new Error(`form-941: expected integer cents, got ${cents}.`);
-  }
-  const exact = (cents * milliPct) / 100_000;
-  return exact < 0 ? -Math.round(-exact) : Math.round(exact);
-}
+import { applyMilliPct } from "@/lib/payroll/payroll-withholding-core";
+export { applyMilliPct };
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §2  WHAT THE ENGINE NEEDS TO BE TOLD

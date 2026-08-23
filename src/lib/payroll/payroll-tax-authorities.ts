@@ -395,7 +395,24 @@ export const RCW_50A_10_030_PFML: GuidanceAuthority = {
     "equal to the maximum wages subject to taxation for social security as determined by the social " +
     "security administration. ... (5)(a) Employers with fewer than 50 employees employed in the state " +
     "are not required to pay the employer portion of premiums for family and medical leave. ... " +
-    "(6)(b)(ii) The total premium rate must not exceed 1.20 percent.",
+    // books-45. THE LABEL HERE IS "(ii)", NOT "(6)(b)(ii)", and the difference
+    // is the difference between quoting and paraphrasing.
+    //
+    // Segments 1-3 above each begin with a label the legislature actually
+    // prints - "(3)(a)", "(4)", "(5)(a)" all appear verbatim at the start of
+    // their subsections. This one did not. The enacted line reads simply
+    // "(ii) The total premium rate must not exceed 1.20 percent."; the "(6)(b)"
+    // prefix was ASSEMBLED by a previous author from the surrounding nesting to
+    // help the reader, and then placed inside the quotation marks.
+    //
+    // The help is real and it stays - but it belongs in `cite`, which already
+    // says "(6)(b)(ii)" and is our own words about where to look. Inside the
+    // quote it is a small fiction: it tells the reader the statute prints
+    // characters that the statute does not print. Rule 24 does not bend for
+    // helpful additions, and an amber panel that is 99% verbatim is not
+    // verbatim. Caught the instant the source was mirrored - the verifier
+    // reported "segment 4 of 4: no common prefix with the source at all".
+    "(ii) The total premium rate must not exceed 1.20 percent.",
   soWhat:
     "Paid Leave stops at the same wage ceiling as Social Security — and it says so by pointing AT " +
     "Social Security, so the two numbers can never legally disagree. That is why the code derives the " +

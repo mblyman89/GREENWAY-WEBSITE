@@ -57,6 +57,7 @@ import {
   type LessonCard,
   type UnitAccent,
 } from "@/lib/accounting/learning-path-ui-core";
+import type { WorkedExample } from "@/lib/accounting/worked-examples-core";
 import { AuthorityPanel } from "@/components/admin/books/AuthorityPanel";
 
 export const dynamic = "force-dynamic";
@@ -385,6 +386,20 @@ function LessonView({ lesson }: { lesson: LessonCard }) {
         {lesson.positionLine}
       </p>
 
+      {/*
+        THE WORKED EXAMPLE COMES FIRST, BEFORE THE FOUR PARAGRAPHS.
+
+        The order is the whole point. Michael is a visual learner who told us
+        these cards were "a wall of words and color", and the measurement bore
+        him out: the 82 lessons average 173 words each and only 25 of them
+        contain a single number. Putting the table underneath the prose would
+        mean reaching it only after reading the wall. Putting it on top means
+        the first thing on an opened lesson is four rows of real Greenway
+        figures, and the paragraphs below become the explanation of something
+        already seen rather than a preamble to it.
+      */}
+      {lesson.workedExample ? <WorkedExampleView example={lesson.workedExample} /> : null}
+
       <div className="mt-3 space-y-3">
         {lesson.fields.map((f) => (
           <Field key={f.label} label={f.label} body={f.body} tone={f.tone} />
@@ -405,6 +420,98 @@ function LessonView({ lesson }: { lesson: LessonCard }) {
         </p>
       )}
     </details>
+  );
+}
+
+/**
+ * A worked example: the engine's own arithmetic, laid out as a table.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY IT LOOKS THE WAY IT DOES
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Three rules, all borrowed from the rest of this page rather than invented
+ * here, because a screen where colour means different things in different
+ * places is the "wall of colour" complaint all over again:
+ *
+ *   • ORANGE IS ALWAYS THE TRAP. It means exactly what it means in the
+ *     "What goes wrong here" block six inches below. A reader who has learned
+ *     the colour once has learned it everywhere.
+ *   • THE OUTPUT COLUMN IS MONOSPACED AND EMPHASISED. It is the answer, and it
+ *     is the reason the table exists; it should be findable without reading.
+ *   • EVERY ROW EXPLAINS ITSELF. A number with no sentence beside it is a
+ *     figure to be taken on faith, which is how Sage taught him nothing.
+ *
+ * Rendered as a real <table> rather than a grid of divs so that the row and
+ * column relationships survive for a screen reader, and so it prints sensibly.
+ */
+function WorkedExampleView({ example }: { example: WorkedExample }) {
+  return (
+    <section className="mt-4 rounded-xl border border-sky-400/35 bg-sky-400/[0.06] p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-sky-200/80">
+        Worked example
+      </p>
+      <h4 className="mt-1 text-sm font-black text-white">{example.title}</h4>
+      <p className="mt-2 text-sm leading-relaxed text-white/70">{example.setup}</p>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-white/40">
+              <th scope="col" className="border-b border-white/10 py-2 pr-4 font-black">
+                What happens
+              </th>
+              <th scope="col" className="border-b border-white/10 py-2 pr-4 font-black">
+                What it comes to
+              </th>
+              <th scope="col" className="border-b border-white/10 py-2 font-black">
+                Why that matters
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {example.rows.map((row) => (
+              <tr
+                key={row.given}
+                className={
+                  row.isTrap
+                    ? "bg-[var(--admin-orange)]/[0.10] align-top"
+                    : "align-top"
+                }
+              >
+                <td className="border-b border-white/5 py-2 pr-4 text-white/75">
+                  {row.isTrap ? (
+                    <span
+                      className="mr-2 inline-block rounded bg-[var(--admin-orange)]/25 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--admin-orange)]"
+                      title="This is the case the lesson warns about"
+                    >
+                      Trap
+                    </span>
+                  ) : null}
+                  {row.given}
+                </td>
+                <td className="border-b border-white/5 py-2 pr-4 font-mono text-sm font-black text-white">
+                  {row.output}
+                </td>
+                <td className="border-b border-white/5 py-2 text-white/60">{row.soWhat}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="mt-3 rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/[0.08] p-3 text-sm leading-relaxed text-white/80">
+        <span className="font-black uppercase tracking-wide text-[var(--admin-accent)]">
+          The point:{" "}
+        </span>
+        {example.takeaway}
+      </p>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-white/30">
+        Every figure above was produced by running the same code that runs your
+        real books — not typed in by hand. If the engine ever changes, this table
+        changes with it.
+      </p>
+    </section>
   );
 }
 

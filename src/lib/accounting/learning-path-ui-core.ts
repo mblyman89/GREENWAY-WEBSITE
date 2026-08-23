@@ -66,6 +66,7 @@ import {
   type LessonSourceKey,
   type PlacedLesson,
 } from "./learning-path-core";
+import { workedExampleFor, type WorkedExample } from "./worked-examples-core";
 
 /* ══════════════════════════════════════════════════════════════════════════ *
  * COLOUR, AND WHAT IT IS ALLOWED TO MEAN
@@ -239,6 +240,17 @@ export type LessonCard = {
   readonly authorityIds: readonly string[];
   /** Shown when a lesson cites nothing, instead of an empty space. */
   readonly noAuthorityNote: string | null;
+  /**
+   * The worked example for this lesson, or null when it does not have one yet.
+   *
+   * NULL IS AN HONEST ANSWER HERE, not a gap to be papered over. Only a handful
+   * of the 82 lessons carry an example so far, and a card that invented a
+   * placeholder table would be worse than one that shows none: Michael has said
+   * the four-paragraph cards are already "a wall of words", and filling the
+   * fifth slot with filler would add to the wall while teaching nothing. The
+   * coverage banner names the real number instead.
+   */
+  readonly workedExample: WorkedExample | null;
 };
 
 /**
@@ -340,6 +352,7 @@ export function buildLessonCard(source: LessonSourceKey, fn: string): LessonCard
     ],
     authorityIds: lesson.authorityIds,
     noAuthorityNote: lesson.authorityIds.length === 0 ? NO_AUTHORITY_NOTE : null,
+    workedExample: workedExampleFor(lessonKey(source, fn)),
   };
 }
 
