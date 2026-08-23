@@ -1,0 +1,88 @@
+SOURCE TEXT - RCW 50.24.014
+Retrieved 2026-08-23 from https://app.leg.wa.gov/RCW/default.aspx?cite=50.24.014
+Washington State law. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+RCW 50.24.014
+
+Financing special unemployment assistance—Financing the employment security department's administrative costs—Accounts—Contributions.
+
+id='contentWrapper' class='section-page'>
+
+(1)(a) A separate and identifiable account to provide for the financing of special programs to assist the unemployed is established in the administrative contingency fund. All money in this account shall be expended solely for the purposes of this title and for no other purposes whatsoever, except as provided in subsection (4) of this section. Contributions to this account shall accrue and become payable by each employer, except employers as described in RCW 50.44.010 and 50.44.030 who have properly elected to make payments in lieu of contributions, taxable local government employers as described in RCW 50.44.035, and those employers who are required to make payments in lieu of contributions, at a basic rate of two one-hundredths of one percent. The amount of wages subject to tax shall be determined under RCW 50.24.010.
+
+(b) A separate and identifiable account is established in the administrative contingency fund for financing the employment security department's administrative costs under RCW 50.22.150 and 50.22.155 and the costs under RCW 50.22.150(11) and 50.22.155 (1)(m) and (2)(m). All money in this account shall be expended solely for the purposes of this title and for no other purposes whatsoever. Contributions to this account shall accrue and become payable by each employer, except employers as described in RCW 50.44.010 and 50.44.030 who have properly elected to make payments in lieu of contributions, taxable local government employers as described in RCW 50.44.035, those employers who are required to make payments in lieu of contributions, those employers described under RCW 50.29.025(1)(d), and those qualified employers assigned rate class 20 or rate class 40, as applicable, under RCW 50.29.025, at a basic rate of one one-hundredth of one percent. The amount of wages subject to tax shall be determined under RCW 50.24.010. Any amount of contributions payable under this subsection (1)(b) that exceeds the amount that would have been collected at a rate of four one-thousandths of one percent must be deposited in the account created in (a) of this subsection.
+
+(2)(a) Contributions under this section shall become due and be paid by each employer under rules as the commissioner may prescribe, and shall not be deducted, in whole or in part, from the remuneration of individuals in the employ of the employer. Any deduction in violation of this section is unlawful.
+
+(b) In the payment of any contributions under this section, a fractional part of a cent shall be disregarded unless it amounts to one-half cent or more, in which case it shall be increased to one cent.
+
+(3) If the commissioner determines that federal funding has been increased to provide financing for the services specified in chapter 50.62 RCW, the commissioner shall direct that collection of contributions under this section be terminated on the following January 1st.
+
+(4) During the 2023-2025 and 2025-2027 fiscal biennia, moneys in the account in subsection (1)(a) of this section may be appropriated for poverty reduction programs that coordinate employment, training, education, and other existing systems designed to assist low-income individuals attain self-sufficiency, including the temporary assistance for needy families WorkFirst program established under chapter 74.08A RCW and the food stamp employment and training program established under chapter 74.04 RCW.
+
+[ 2026 c 268 s 931; 2025 c 424 s 966; 2023 c 475 s 934; 2021 c 2 s 15; 2016 sp.s. c 36 s 941; 2011 c 4 s 11; 2009 c 566 s 2; 2007 c 327 s 2; 2006 c 13 s 20. Prior: 2003 2nd sp.s. c 4 s 25; 2000 c 2 s 15; prior: 1998 c 346 s 901; 1998 c 161 s 7; 1994 c 187 s 3; 1993 c 483 s 20; 1987 c 171 s 4; 1985 ex.s. c 5 s 8.]
+
+Notes:
+
+Effective date—2026 c 268: See note following RCW 28B.15.210.
+
+Effective date—2025 c 424: See note following RCW 9.46.100.
+
+Effective date—2023 c 475: See note following RCW 16.76.030.
+
+Intent—Conflict with federal requirements—Effective date—2021 c 2: See notes following RCW 50.04.323.
+
+Effective date—2016 sp.s. c 36: See note following RCW 18.20.430.
+
+Contingent effective date—2011 c 4 ss 7-15: See note following RCW 50.20.099.
+
+Conflict with federal requirements—2011 c 4: See note following RCW 50.29.021.
+
+Findings—Intent—2009 c 566: "(1) The legislature finds that:
+
+(a) This is a time of great economic difficulty for the residents of Washington state;
+
+(b) Education and training provides opportunity for unemployed workers and economically disadvantaged adults to move into living wage jobs and is of critical importance to the current and future prosperity of the residents of Washington state;
+
+(c) Community and technical college workforce training programs, private career schools and colleges, and Washington state apprenticeship and training council-approved apprenticeship programs provide effective and efficient pathways for people to enter high-demand occupations while also meeting the needs of the economy;
+
+(d) The identification of high-demand occupations needs to be based on reliable labor market research; and
+
+(e) Workforce development councils are in a position to provide funding for economically disadvantaged adults and unemployed workers to access training.
+
+(2) Consistent with the intent of the workforce investment act adult and dislocated worker program provisions of the American recovery and reinvestment act of 2009, the legislature intends that individuals who are eligible for services under the workforce investment act adult and dislocated worker programs, or are receiving or have exhausted entitlement to unemployment compensation benefits be provided the opportunity to enroll in training programs to prepare for a high-demand occupation." [ 2009 c 566 s 1.]
+
+Effective date—2009 c 566: "This act is necessary for the immediate preservation of the public peace, health, or safety, or support of the state government and its existing public institutions, and takes effect immediately [May 19, 2009]." [ 2009 c 566 s 8.]
+
+Severability—2007 c 327: "If any provision of this act or its application to any person or circumstance is held invalid, the remainder of the act or the application of the provision to other persons or circumstances is not affected." [ 2007 c 327 s 5.]
+
+Conflict with federal requirements—2007 c 327: "If any part of this act is found to be in conflict with federal requirements that are a prescribed condition to the allocation of federal funds to the state or the eligibility of employers in this state for federal unemployment tax credits, the conflicting part of this act is inoperative solely to the extent of the conflict, and the finding or determination does not affect the operation of the remainder of this act. Rules adopted under this act must meet federal requirements that are a necessary condition to the receipt of federal funds by the state or the granting of federal unemployment tax credits to employers in this state." [ 2007 c 327 s 6.]
+
+Effective date—2007 c 327: "This act is necessary for the immediate preservation of the public peace, health, or safety, or support of the state government and its existing public institutions, and takes effect July 1, 2007." [ 2007 c 327 s 7.]
+
+Retroactive application—2006 c 13 ss 8-22: See note following RCW 50.04.293.
+
+Conflict with federal requirements—Part headings not law—Severability—2006 c 13: See notes following RCW 50.20.120.
+
+Conflict with federal requirements—Severability—Effective date—2003 2nd sp.s. c 4: See notes following RCW 50.01.010.
+
+Application—2000 c 2 ss 1, 2, 4, 5, 8, and 12-15: See note following RCW 50.22.150.
+
+Conflict with federal requirements—Severability—Effective date—2000 c 2: See notes following RCW 50.04.355.
+
+Construction—1998 c 346: "This act shall not be construed as affecting any right or cause of action asserted in Washington State Legislature v. State of Washington (Thurston county superior court cause no. 98-2-00105-1)." [ 1998 c 346 s 912.]
+
+Severability—1998 c 346: "If any provision of this act or its application to any person or circumstance is held invalid, the remainder of the act or the application of the provision to other persons or circumstances is not affected." [ 1998 c 346 s 914.]
+
+Effective date—1998 c 346: "This act is necessary for the immediate preservation of the public peace, health, or safety, or support of the state government and its existing public institutions, and takes effect immediately [April 3, 1998]." [ 1998 c 346 s 915.]
+
+Finding—Intent—1998 c 161: See note following RCW 50.20.140.
+
+Conflict with federal requirements—1994 c 187: "If any part of this act is found to be in conflict with federal requirements that are a prescribed condition to the allocation of federal funds to the state or the eligibility of employers in this state for federal unemployment tax credits, the conflicting part of this act is hereby declared to be inoperative solely to the extent of the conflict, and such finding or determination shall not affect the operation of the remainder of this act. The rules under this act shall meet federal requirements that are a necessary condition to the receipt of federal funds by the state or the granting of federal unemployment tax credits to employers in this state." [ 1994 c 187 s 6.]
+
+Effective dates, applicability—Conflict with federal requirements—Severability—1993 c 483: See notes following RCW 50.04.293.
+
+Conflict with federal requirements—Severability—1987 c 171: See notes following RCW 50.62.010.
+
+Conflict with federal requirements—Severability—1985 ex.s. c 5: See notes following RCW 50.62.010.

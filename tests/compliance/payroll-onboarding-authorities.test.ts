@@ -31,8 +31,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { join, basename } from "node:path";
 
 import {
   PAYROLL_ONBOARDING_AUTHORITIES,
@@ -409,7 +409,19 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
       "irc-3302-futa-credit",
       "irc-3306-futa-wage-base",
       // Washington paid leave and long-term care
-      "rcw-50a-10-030-pfml",
+      //
+      // books-45 PAID OFF "rcw-50a-10-030-pfml", which used to sit here. Two
+      // separate bugs kept RCW 50A.10.030 unmirrored: the verifier's router
+      // captured RCW chapters with a digits-only pattern, so "50A" truncated to
+      // "50" and the fetch target was a file for the UNEMPLOYMENT act rather
+      // than the paid-leave act; and the section had never been fetched. Both
+      // fixed, and the text now lives at state-wa/rcw-50A.10.030.txt.
+      //
+      // Paying it immediately proved the point of the ledger: with the source
+      // finally checkable, the quote turned out to open its last segment with
+      // "(6)(b)(ii)", a subsection label the statute does not actually print.
+      // An unverified quote is not a quote that happens to be fine, it is a
+      // quote nobody has looked at.
       "rcw-50b-04-080-wa-cares",
       // Unemployment insurance
       "rcw-50-12-220-esd-late-penalty",
@@ -436,15 +448,21 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
       (id) => id.startsWith("rcw-5") || id.startsWith("irc-33") || id.startsWith("irc-31"),
     );
     expect([...actual].sort()).toEqual([...expectedPayrollDebt].sort());
-    // Stated plainly for the record: SIXTEEN payroll authorities are quoted
+    // Stated plainly for the record: FIFTEEN payroll authorities are quoted
     // from a URL rather than from mirrored text. Their quotes may be perfect —
     // §280E's were — but "may be" is what rule 35 exists to replace.
     //
-    // Was seventeen until books-37 mirrored RCW 51.16.140. The count is
-    // asserted separately from the list on purpose: the list catches a
-    // SUBSTITUTION (one id quietly swapped for another leaves the length
-    // unchanged), and the count catches a silent ADDITION to the debt pile.
-    expect(actual.length).toBe(16);
+    // Seventeen until books-37 mirrored RCW 51.16.140; sixteen until books-45
+    // mirrored RCW 50A.10.030. The count is asserted separately from the list
+    // on purpose: the list catches a SUBSTITUTION (one id quietly swapped for
+    // another leaves the length unchanged), and the count catches a silent
+    // ADDITION to the debt pile.
+    //
+    // NOTE THE DIRECTION OF TRAVEL. This number is only ever allowed to fall.
+    // If a future slice needs to raise it, that is a new unverifiable quote
+    // entering the payroll engine and it must be argued for in the pull
+    // request, not absorbed by editing this line.
+    expect(actual.length).toBe(15);
   });
 });
 
@@ -482,5 +500,122 @@ describe("the mirrored sources carry their provenance", () => {
       // A so-what that merely repeats the citation teaches nothing.
       expect(a.soWhat.split(/\s+/).length, `${a.id} soWhat word count`).toBeGreaterThan(35);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7) THE ROUTER ITSELF — checked against the corpus on disk, not against a twin
+// ---------------------------------------------------------------------------
+
+/**
+ * books-45. WHY THIS BLOCK EXISTS.
+ *
+ * The citation-to-filename routing lives in two places inside
+ * `verify-verbatim-quotes.ts`: the commented branches of `sourceFileFor`, and
+ * the `MIRRORED_CORPORA` table used by `expectedCorpusFile`. A test already
+ * asserted the two agree. It passed for many slices while BOTH were wrong.
+ *
+ * The RCW pattern captured `[\d.]+` — digits and dots — which cannot express
+ * the letter in a Washington chapter number. "RCW 50A.10.030(7)(c)" therefore
+ * captured "50", and the verifier went looking for `rcw-50.txt`. That is not
+ * merely a missing file: chapter 50 is the UNEMPLOYMENT act and chapter 50A is
+ * the PAID FAMILY AND MEDICAL LEAVE act. Had a `rcw-50.txt` ever been placed on
+ * disk, four PFML quotes would have been cheerfully "verified" against an
+ * entirely different statute.
+ *
+ * The agreement test could never have caught this, because a bug copied into
+ * both implementations produces perfect agreement. So this block does the thing
+ * that agreement cannot do: it checks the ROUTED PATH against GROUND TRUTH —
+ * the filenames that actually exist in the corpus directory (rule 78).
+ */
+describe("the citation router is checked against the corpus, not against itself", () => {
+  const WA_DIR = join(AUTHORITY_DIR, "state-wa");
+
+  it("every mirrored WA file is reachable from some citation the router produces", () => {
+    // GROUND TRUTH: what is actually on disk.
+    const onDisk = readdirSync(WA_DIR).filter((f) => f.startsWith("rcw-") && f.endsWith(".txt"));
+    expect(onDisk.length, "the WA corpus should not be empty").toBeGreaterThan(0);
+
+    // What the router asks for, across every RCW citation in the whole registry.
+    // Recorded debt is excluded BY ID, exactly as the verifier excludes it.
+    // Those authorities are knowingly unmirrored and are tracked in the ledger
+    // asserted above; this test is about ROUTING, not about the debt pile.
+    const debt = new Set(KNOWN_UNMIRRORED_AUTHORITY_IDS);
+    const asked = new Set<string>();
+    for (const a of GUIDANCE_AUTHORITIES) {
+      if (!a.cite.startsWith("RCW ")) continue;
+      if (debt.has(a.id)) continue;
+      const expected = expectedCorpusFile(a.cite, AUTHORITY_DIR);
+      if (expected) asked.add(basename(expected.path));
+    }
+    // Non-vacuity: if this ever routed nothing, the assertion below would pass
+    // by examining an empty set — the classic check that cannot fail.
+    expect(asked.size, "no RCW citations were routed at all").toBeGreaterThan(5);
+
+    // THE ASSERTION THAT MATTERS: no citation may route to a WA filename that
+    // does not exist, UNLESS that authority is recorded debt. This is what
+    // would have caught `rcw-50.txt` on the day the bug was introduced.
+    const phantom = [...asked].filter((f) => !onDisk.includes(f));
+    expect(
+      phantom,
+      `the router asks for WA files that do not exist: ${phantom.join(", ")}. ` +
+        `Either the cite-to-file mapping is truncating something (the 50A bug), ` +
+        `or the source was never fetched. Do NOT create an empty file to satisfy this.`,
+    ).toEqual([]);
+  });
+
+  it("a lettered chapter keeps its letter — the exact bug books-45 fixed", () => {
+    // Regression lock. If someone restores `[\d.]+`, these two die immediately.
+    const pfml = expectedCorpusFile("RCW 50A.10.030(7)(c)", AUTHORITY_DIR);
+    expect(pfml, "RCW 50A must route somewhere").not.toBeNull();
+    expect(basename((pfml as { path: string }).path)).toBe("rcw-50A.10.030.txt");
+
+    const ltc = expectedCorpusFile("RCW 50B.04.080(1)", AUTHORITY_DIR);
+    expect(ltc, "RCW 50B must route somewhere").not.toBeNull();
+    expect(basename((ltc as { path: string }).path)).toBe("rcw-50B.04.080.txt");
+
+    // AND IT MUST NOT COLLAPSE ONTO THE NEIGHBOURING ACT. This is the assertion
+    // that states the danger out loud: 50, 50A and 50B are three different
+    // statutes, and routing any of them onto another is worse than failing.
+    const ui = expectedCorpusFile("RCW 50.24.010", AUTHORITY_DIR);
+    expect(basename((ui as { path: string }).path)).toBe("rcw-50.24.010.txt");
+    expect(basename((pfml as { path: string }).path)).not.toBe(
+      basename((ui as { path: string }).path),
+    );
+    expect(basename((ltc as { path: string }).path)).not.toBe(
+      basename((ui as { path: string }).path),
+    );
+  });
+
+  it("THE TRUNCATING PATTERN IS PROVABLY CAUGHT (rule 15: failable, for the right reason)", () => {
+    // A check that cannot fail is not a check. This drives the OLD, broken
+    // pattern by hand and proves the assertion above would have gone red —
+    // so the regression lock is not decorative.
+    const broken = /^RCW ([\d.]+)/.exec("RCW 50A.10.030(7)(c)");
+    expect(broken, "the old pattern did match — it matched the WRONG thing").not.toBeNull();
+    expect((broken as RegExpExecArray)[1]).toBe("50");
+    expect(`rcw-${(broken as RegExpExecArray)[1]}.txt`).toBe("rcw-50.txt");
+
+    // And that file has never existed, which is why nine quotes failed.
+    expect(readdirSync(WA_DIR)).not.toContain("rcw-50.txt");
+  });
+
+  it("the two routers agree on every RCW citation — necessary, but not sufficient", () => {
+    // Kept deliberately, and deliberately labelled. Agreement is still worth
+    // asserting: a future edit to one copy alone should be caught. It simply
+    // must never again be MISTAKEN for verification, which is why it sits
+    // BELOW the ground-truth checks rather than standing in for them.
+    let compared = 0;
+    for (const a of GUIDANCE_AUTHORITIES) {
+      if (!a.cite.startsWith("RCW ")) continue;
+      const viaTable = expectedCorpusFile(a.cite, AUTHORITY_DIR);
+      const viaBranch = sourceFileFor(a.cite, AUTHORITY_DIR);
+      if (viaBranch === null) continue; // file absent; the block above owns that case
+      expect(basename(viaBranch), `${a.id}: the two routers disagree`).toBe(
+        basename((viaTable as { path: string }).path),
+      );
+      compared += 1;
+    }
+    expect(compared, "nothing was actually compared").toBeGreaterThan(5);
   });
 });

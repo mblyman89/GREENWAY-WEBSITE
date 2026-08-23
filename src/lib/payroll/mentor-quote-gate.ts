@@ -149,6 +149,43 @@ export function exportedFunctionNames(
   const names = [
     ...text.matchAll(/^export (?:async )?function ([A-Za-z0-9_]+)/gm),
   ].map((m) => m[1]);
+
+  // books-45. RE-EXPORTED FUNCTIONS ARE EXPORTED FUNCTIONS.
+  //
+  // Third time this scrape has been too narrow, and the pattern of the mistake
+  // is always the same: it recognises one SYNTAX for exporting rather than the
+  // FACT of being exported. First it could not see `export async function`.
+  // Now it could not see `export { name }`.
+  //
+  // Found when form-941-core stopped defining its own float `applyMilliPct` and
+  // began re-exporting the withholding engine's exact integer one instead. The
+  // function is still part of the module's public surface, is still called four
+  // times inside the file, and is still taught by a lesson - but the scrape
+  // read only `export function` lines, concluded the engine no longer exported
+  // it, and failed the coverage gate for "dead teaching" that was not dead.
+  //
+  // THE DANGEROUS DIRECTION IS THE OTHER ONE. Here it produced a loud false
+  // alarm, which is survivable. But the same blind spot means a module that
+  // exports ALL its functions this way - a barrel or a facade - would scrape to
+  // a short list, and every un-scraped function would be silently untaught
+  // while the gate reported full coverage (rule 39). Fixing it only for the
+  // noisy case would have left the quiet case live.
+  //
+  // Type-only re-exports are excluded: `export type { X }` is not a function
+  // and must not be demanded of the mentor (rule 75a).
+  for (const m of text.matchAll(/^export\s+(?!type\b)\{([^}]*)\}/gm)) {
+    for (const raw of m[1].split(",")) {
+      const part = raw.trim();
+      if (part.length === 0) continue;
+      if (part.startsWith("type ")) continue; // inline `export { type X }`
+      // `export { a as b }` publishes b, which is the name a lesson must use.
+      const published = part.includes(" as ") ? part.split(" as ")[1].trim() : part;
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(published) && !names.includes(published)) {
+        names.push(published);
+      }
+    }
+  }
+
   if (names.length === 0) {
     throw new Error(
       `${label} FUNCTION GATE BROKEN: read no exported functions from ${absoluteSourcePath}. ` +

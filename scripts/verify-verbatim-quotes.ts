@@ -60,7 +60,15 @@ const MIRRORED_CORPORA: ReadonlyArray<{
   { name: "8 CFR", re: /^8 C\.?F\.?R\.? §(\d+[a-z]?\.\d+)/, file: (m) => ["federal", `cfr-8-${m[1]}.txt`] },
   { name: "26 U.S.C.", re: /^26 U\.S\.C\. §(\d+[A-Z]?)/, file: (m) => ["federal", `usc-${m[1]}.txt`] },
   { name: "Rev. Proc.", re: /^Rev\. Proc\. (\d{4})-(\d+)/, file: (m) => ["federal", `revproc-${m[1]}-${m[2]}.txt`] },
-  { name: "RCW", re: /^RCW ([\d.]+)/, file: (m) => ["state-wa", `rcw-${m[1]}.txt`] },
+  // books-45. THE CHAPTER LETTER IS PART OF THE CHAPTER NUMBER. See the long
+  // note on the RCW branch of `sourceFileFor` - this entry carried the same
+  // truncation bug, and the test that asserts these two agree did NOT catch it,
+  // because both copies were wrong in the SAME direction. An agreement test
+  // proves consistency, never correctness; it will happily bless two identical
+  // mistakes. That is why the fix below is paired with a test that checks the
+  // ROUTED PATH against the corpus on disk, not merely one router against the
+  // other.
+  { name: "RCW", re: /^RCW (\d+[A-Z]?(?:\.\d+)*)/, file: (m) => ["state-wa", `rcw-${m[1]}.txt`] },
   // books-32. 29 CFR part 778 is the FLSA overtime regulation, and it is the
   // reason the timesheet engine computes overtime per WORKWEEK rather than per
   // pay period. Every section we rely on lives in one mirrored file, because
@@ -394,10 +402,35 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   }
 
   // RCW 69.50.328  ->  state-wa/rcw-69.50.328.txt
+  // RCW 50A.10.030 ->  state-wa/rcw-50A.10.030.txt   (NOTE THE LETTER)
+  //
   // books-20. Washington statutes decide whether Greenway is a reseller or a
   // producer, which decides which half of §1.471-3 applies to it. A conclusion
   // that consequential is not allowed to rest on an unverifiable paraphrase.
-  const rcw = /^RCW ([\d.]+)/.exec(cite);
+  //
+  // books-45, AND THIS IS THE SECOND TIME THIS EXACT BUG HAS BEEN FOUND IN THIS
+  // FILE. The pattern used to be /^RCW ([\d.]+)/. A character class of digits
+  // and dots cannot express the LETTER in a Washington chapter number, so
+  // "RCW 50A.10.030(7)(c)" captured just "50" and the verifier went looking for
+  // `rcw-50.txt` - a file that has never existed and never will. The four
+  // Paid Family and Medical Leave quotes therefore reported as "the mapping is
+  // wrong or the source was never fetched" rather than being checked.
+  //
+  // Washington puts the whole PFML act in chapter 50A and the whole Long-Term
+  // Care act in 50B, deliberately lettered so they sit beside chapter 50
+  // (unemployment) without colliding with it. Truncating at the letter does not
+  // merely miss the file, it aims at a DIFFERENT STATUTE: 50A.10.030 is the PFML
+  // premium, chapter 50 is unemployment. Silently verifying a PFML quote against
+  // the unemployment act would have been far worse than failing to find a file.
+  //
+  // This is the same defect class as the §280E truncation recorded above, which
+  // is why standing rule 23 says fix the class and not the instance. The capture
+  // now takes an optional chapter letter for EVERY citation, not a special case
+  // for the two chapters that happen to have one today - so 50B was repaired by
+  // this change as well, before anybody had noticed it was broken. Verified by
+  // probe: routing changes for the six lettered cites and is byte-identical for
+  // all ten numeric ones, and trailing punctuation is still dropped.
+  const rcw = /^RCW (\d+[A-Z]?(?:\.\d+)*)/.exec(cite);
   if (rcw) {
     const p = join(dir, "state-wa", `rcw-${rcw[1]}.txt`);
     return existsSync(p) ? p : null;
@@ -701,7 +734,18 @@ export const KNOWN_UNMIRRORED_AUTHORITY_IDS: readonly string[] = [
   // paycheque may not rest on a quote nobody is checking. Mirroring them
   // immediately caught a reassembled quote on 49.52.050 that had been sitting
   // unverified - see the note on RCW_49_52_050_WAGE_REBATE.
-  "rcw-50a-10-030-pfml",
+  // "rcw-50a-10-030-pfml" WAS HERE. books-45 mirrored RCW 50A.10.030 to
+  // docs/authorities/state-wa/rcw-50A.10.030.txt, so the debt is paid and the
+  // exemption is deleted rather than left standing - the verifier itself
+  // demanded this, refusing to let a mirrored source keep a skip.
+  //
+  // Paying it immediately earned its keep: with the text finally checkable, the
+  // quote turned out to carry an invented subsection label, "(6)(b)(ii)", that
+  // the statute does not print. See the note on the quote in
+  // payroll-tax-authorities.ts. That is twice now - 49.52.050 at books-37, and
+  // this one - that mirroring a source has exposed a quote defect the moment it
+  // became checkable, which is the entire argument for treating an unmirrored
+  // authority as DEBT and not as a settled state.
   "rcw-50b-04-080-wa-cares",
   // Washington — unemployment insurance
   "rcw-50-12-220-esd-late-penalty",
