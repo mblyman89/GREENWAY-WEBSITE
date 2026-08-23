@@ -196,6 +196,114 @@ export const GARNISHMENT_FIELD_LESSONS: readonly FieldLesson[] = [
     ],
   },
   {
+    /*
+     * books-40c. The OFF SWITCH.
+     *
+     * This column is the reason the deadline reminders can exist at all. A
+     * warning that cannot be satisfied is a warning that gets muted, and a
+     * muted warning protects nobody - so before building anything that nags
+     * about the answer deadline, there had to be a way to say "done".
+     */
+    field: "wage_orders.answer_filed_at",
+    whatItIs:
+      "The date you actually sent the sworn answer back. Blank means it has not been done yet, " +
+      "and blank is the only thing that keeps the reminders coming.",
+    whereItIsUsed:
+      "It is the switch that turns the answer reminders off. While it is blank the system counts " +
+      "the days from the service date and escalates - quiet at first, then a warning, then a " +
+      "daily alert once the deadline has passed. Fill it in and all of that stops immediately " +
+      "for this order.",
+    whyItMatters:
+      "Answering and RECORDING that you answered are two different acts, and only the second one " +
+      "is visible to anybody else. If you file the answer and never note it here, the system " +
+      "keeps shouting at you about something you already did - and the real damage is not the " +
+      "noise, it is that you learn to ignore the alert. The next order, the one you genuinely " +
+      "forgot, arrives into a channel you have already decided is wrong.",
+    theTrap:
+      "Putting the date you FILLED IN the form rather than the date you sent it. The deadline is " +
+      "about when the answer left Greenway. Also: do not backdate it to make an overdue order " +
+      "look tidy. If it went late, record when it actually went - a late answer honestly dated " +
+      "is a far better position than a false record, and the database will refuse any date " +
+      "earlier than the service date anyway.",
+    howToBeSure:
+      "Use the proof you kept when you sent it: the certified-mail receipt, the fax confirmation, " +
+      "or the timestamp on the portal submission. Keep that proof with the order. If you cannot " +
+      "produce evidence that the answer was sent, treat it as not sent and answer it again today.",
+    authorityIds: ["wage-order-rcw-26-18-110-answer", "wage-order-rcw-6-27-200-default"],
+  },
+  {
+    field: "wage_orders.answer_filed_note",
+    whatItIs:
+      "A short free-text note about how the answer went out - who signed it, how it was sent, and " +
+      "anything unusual that happened.",
+    whereItIsUsed:
+      "Nothing calculates from it. It sits with the order so that a year from now, when somebody " +
+      "asks what Greenway did about this case, the answer is written down instead of remembered.",
+    whyItMatters:
+      "The value of this field only appears when there is a dispute, which is exactly when memory " +
+      "is worth nothing. 'Mailed certified 1/18, receipt in the payroll binder, signed by " +
+      "Michael' is evidence. 'I am fairly sure we sent it' is not.",
+    theTrap:
+      "Treating it as optional because nothing breaks when it is empty. Nothing breaks today. It " +
+      "breaks in eighteen months when the only person who remembers has left.",
+    howToBeSure:
+      "Write it while you are sending the answer, not afterwards. One sentence is enough: what " +
+      "went, how it went, and where the proof is filed.",
+    authorityIds: ["wage-order-rcw-26-18-110-answer"],
+  },
+  {
+    /*
+     * Deliberately awkward to use, and the lesson says so. See migration 0202.
+     */
+    field: "wage_orders.answer_not_required",
+    whatItIs:
+      "A tick that means this particular order genuinely has no Washington answer duty, so the " +
+      "reminders should never start. It is NOT a snooze button.",
+    whereItIsUsed:
+      "Ticking it silences the answer reminders for this order permanently, in the same way that " +
+      "recording an answer date does.",
+    whyItMatters:
+      "It is true for some orders and dangerous for others. A federal tax levy on IRS Form 668-W " +
+      "is not answered by a sworn affidavit to a Washington court - you complete the exemption " +
+      "certificate and begin withholding, and that is the whole duty. The same is broadly true " +
+      "of a student-loan administrative garnishment, which runs under its own federal procedure. " +
+      "For those, a twenty-day RCW 26.18 countdown would be inventing an obligation. But tick it " +
+      "on a child-support order and you have switched off the alarm on the one obligation where " +
+      "failing to answer makes Greenway liable for the ENTIRE support debt.",
+    theTrap:
+      "Using it to make a nagging alert go away on a busy day. That is why it is deliberately " +
+      "awkward: the system will not accept the tick without a written reason, and it refuses it " +
+      "outright on child-support and spousal-support orders. If you find yourself wanting to " +
+      "tick this to get some quiet, the honest move is to answer the order instead.",
+    howToBeSure:
+      "Ask one question: does a Washington court or the state registry expect a sworn answer from " +
+      "Greenway on this paper? Support orders and creditor writs, yes. Tax levies, no. If you " +
+      "are not certain, do not tick it - answer the order, which is never the wrong thing to do.",
+    authorityIds: ["wage-order-rcw-26-18-110-answer", "wage-order-rcw-6-27-200-default"],
+  },
+  {
+    field: "wage_orders.answer_waived_reason",
+    whatItIs:
+      "The written reason why the tick above is correct. The database will not accept the tick " +
+      "without at least a few words here.",
+    whereItIsUsed:
+      "Stored with the order and shown wherever the exemption is displayed, so the decision is " +
+      "always visible next to its justification rather than as a bare tick.",
+    whyItMatters:
+      "An unexplained waiver looks exactly like a mistake, and in a year nobody - including you - " +
+      "will be able to tell which it was. Requiring the sentence also slows the decision down by " +
+      "about ten seconds, which is precisely the point: it converts a reflex click into a small " +
+      "act of judgement.",
+    theTrap:
+      "Typing 'n/a' or 'not needed'. That is not a reason, it is a restatement of the tick, and " +
+      "the field is length-checked specifically to make that answer inconvenient.",
+    howToBeSure:
+      "Name the document and the rule in one line - for example 'IRS Form 668-W levy: satisfied " +
+      "by returning the exemption certificate, no ch. 26.18 answer duty'. If you cannot write " +
+      "that sentence, you do not yet know that the waiver is correct.",
+    authorityIds: ["wage-order-rcw-26-18-110-answer"],
+  },
+  {
     field: "wage_orders.payee_name",
     whatItIs:
       "Who the cheque is actually made out to. Very often this is NOT the person owed the money.",

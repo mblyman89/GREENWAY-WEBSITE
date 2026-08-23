@@ -617,7 +617,13 @@ describe("toWageOrder IS SHARED, NOT COPIED (standing rule 25)", () => {
       effective_from: "2027-01-01",
       effective_to: null,
       status: "active",
+      // books-38 / books-40c columns. toWageOrder ignores all three - the
+      // deadline surveillance reads them straight off the row - but the
+      // fixture carries them so it stays an honest picture of a real row.
+      served_date: "2027-01-01",
       notes: null,
+      answer_filed_at: null,
+      answer_not_required: false,
     };
     expect(toWageOrder(row)).toBeNull();
   });
@@ -650,7 +656,10 @@ describe("toWageOrder IS SHARED, NOT COPIED (standing rule 25)", () => {
       effective_from: "2027-01-01",
       effective_to: null,
       status: "active",
+      served_date: "2027-01-01",
       notes: null,
+      answer_filed_at: null,
+      answer_not_required: false,
     });
     expect(order).not.toBeNull();
     expect(order!.arrearsOverTwelveWeeks).toBeNull();

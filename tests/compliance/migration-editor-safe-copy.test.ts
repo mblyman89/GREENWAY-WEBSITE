@@ -222,14 +222,23 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
       });
   }
 
-  it("finds at least the six pairs known to exist (rule 39: no vacuous pass)", () => {
+  it("finds at least the eight pairs known to exist (rule 39: no vacuous pass)", () => {
     // A directory walk that finds nothing would make every test below pass
     // without asserting anything. Measured at the time of writing: 0195, 0196,
     // 0197, 0198, 0199 and 0200. The floor rises with each new copy on purpose
     // - a floor of 1 would still pass after five of the six copies were
     // deleted, which is exactly the silent hole this block exists to close.
+    //
+    // THE FLOOR HAD ALREADY SLIPPED ONCE. When books-40c came to add 0202 the
+    // floor still read 6 while the directory held 8: 0201 shipped a copy in
+    // books-38 and nobody raised the floor with it. Nothing failed, because a
+    // floor of 6 is satisfied by 8 - which is precisely how a "rises with each
+    // new copy" rule dies quietly. The generic tests below did still cover
+    // 0201 (they iterate the directory), so no drift went unchecked; what was
+    // lost was the guarantee that 0201's copy could not be DELETED unnoticed.
+    // Both 0201 and 0202 are named explicitly below and the floor is now 8.
     const found = pairs().map((p) => p.base);
-    expect(found.length).toBeGreaterThanOrEqual(6);
+    expect(found.length).toBeGreaterThanOrEqual(8);
     expect(found).toContain("0195_employee_payroll_setup");
     expect(found).toContain("0196_company_profile");
     expect(found).toContain("0197_timesheet_workweek");
@@ -245,6 +254,17 @@ describe("every editor-safe copy in the directory, discovered not listed", () =>
     // hand, and a migration that fixes a broken approval path is the last one
     // that should arrive mangled.
     expect(found).toContain("0200_sick_leave_split_draw_fix");
+    // books-38. served_date - the single date the twenty-day answer deadline
+    // (RCW 26.18.110(1)) and the sixty-day continuing lien (RCW 6.27.350(1))
+    // are BOTH measured from. This is the copy whose floor was never raised.
+    expect(found).toContain("0201_wage_orders_served_date");
+    // books-40c. The answer log: answer_filed_at / answer_not_required. This
+    // is the fact that lets a reminder STOP. Its copy matters more than most,
+    // because the columns it adds are the OFF switch for a daily critical
+    // alert - if Michael pastes a mangled version and the columns never land,
+    // the watchman nags forever with no way to satisfy it, and he learns to
+    // ignore the one alert that carries whole-support-debt liability.
+    expect(found).toContain("0202_wage_order_answer_log");
   });
 
   it("every copy has a real migration behind it", () => {

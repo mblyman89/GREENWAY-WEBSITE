@@ -129,7 +129,39 @@ describe("the migration list is ordered the way the database will see it", () =>
     // applied in order to a real PostgreSQL 15.18 with exit 0, and each of the
     // four branches of its conditional NOT NULL block was driven and observed.
     // Only then was 0200 advanced to 0201.
-    expect(listed[listed.length - 1]).toMatch(/^0201_/);
+    //
+    // IT FIRED A FIFTH TIME ON 0202 (books-40c, the answer log -- the fact that
+    // lets the twenty-day reminder STOP) AND WAS HONOURED, NOT SILENCED.
+    // Re-verified against the directory before this line was touched:
+    // 202 files; `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so every
+    // name is still zero-padded to four digits; and `ls [0-9]*.sql | sort -c`
+    // exits clean, so the on-disk order and the string sort this module relies
+    // on are still the same order.
+    //
+    // 0202 was likewise EXECUTED, not merely read. All 202 migrations were
+    // applied in order to a real PostgreSQL 15.18 (Debian 15.18-0+deb12u1)
+    // with exit 0, and 0202 was then applied a SECOND time cleanly, because
+    // Michael applies these by hand and a hand can slip.
+    //
+    // Executing it is still not enough: a CHECK constraint that exists but has
+    // never refused anything is a constraint nobody has tested (rule 50 -- dead
+    // code wearing a green check). So every constraint 0202 adds was DRIVEN and
+    // its refusal OBSERVED, each inside its own savepoint so that one expected
+    // failure could not poison the transaction and make the later probes pass
+    // vacuously:
+    //   - wage_orders_answer_after_served REFUSED answer_filed_at one day
+    //     before served_date, and ACCEPTED it on the served date itself;
+    //   - wage_orders_answer_xor_waiver REFUSED a row that was both answered
+    //     and marked exempt;
+    //   - wage_orders_waiver_has_reason REFUSED a waiver with a NULL reason and
+    //     again with a 3-character reason, then ACCEPTED a real one;
+    //   - the outstanding-answer worklist predicate returned 1 for an
+    //     unanswered order and 0 for an exempt one -- checked BOTH ways, so the
+    //     filter is not vacuous in either direction (rule 39);
+    //   - `explain` confirmed wage_orders_answer_outstanding_idx is genuinely
+    //     chosen by the planner for that predicate, rather than merely existing.
+    // Only then was 0201 advanced to 0202.
+    expect(listed[listed.length - 1]).toMatch(/^0202_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

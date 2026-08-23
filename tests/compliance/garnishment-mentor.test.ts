@@ -109,7 +109,14 @@ describe("the wage order schema is read from disk, not remembered", () => {
     //
     // Both are fixed, and the second now pushes an `unrecognised` entry rather
     // than dropping the statement in silence.
-    expect(garnishmentMigrationColumnNames().length).toBe(24);
+    //
+    // 24 -> 28 from books-40c, which added four answer-log columns in
+    // migration 0202: answer_filed_at, answer_filed_note, answer_not_required
+    // and answer_waived_reason. That this count moved at all is evidence the
+    // multi-migration walk fixed above is still working - 0202 is a bare
+    // `alter table ... add column if not exists`, the exact shape that used to
+    // parse to {} and report nothing.
+    expect(garnishmentMigrationColumnNames().length).toBe(28);
   });
 
   it("does not pick up the sick leave tables, which have their own mentor", () => {
@@ -219,7 +226,7 @@ describe("every wage order column that holds a decision is taught", () => {
     expect(() => assertEveryGarnishmentFieldIsTaught()).not.toThrow();
   });
 
-  it("teaches all nineteen non-structural columns", () => {
+  it("teaches all twenty-three non-structural columns", () => {
     const cols = garnishmentMigrationColumnNames();
     const structural = new Set(GARNISHMENT_STRUCTURAL_COLUMNS);
     const mustTeach = cols.filter((c) => !structural.has(c));
@@ -227,7 +234,16 @@ describe("every wage order column that holds a decision is taught", () => {
     // structural: it is a fact somebody has to read off a delivery receipt,
     // and getting it wrong misstates a legal deadline in whichever direction
     // happens to hurt.
-    expect(mustTeach.length).toBe(19);
+    //
+    // 19 -> 23 with books-40c's answer log: answer_filed_at,
+    // answer_filed_note, answer_not_required and answer_waived_reason. None of
+    // them are structural either, and this gate FIRED on all four before any
+    // lesson existed - which is the whole reason the lessons were written
+    // rather than the count quietly bumped. answer_not_required in particular
+    // is the most dangerous tick on the page: correct on a tax levy, and on a
+    // child-support order it silences the alarm on the one obligation that
+    // makes Greenway liable for the entire support debt.
+    expect(mustTeach.length).toBe(23);
     const taught = new Set(taughtGarnishmentFieldNames());
     for (const c of mustTeach) expect(taught.has(c), `${c} has no lesson`).toBe(true);
   });
