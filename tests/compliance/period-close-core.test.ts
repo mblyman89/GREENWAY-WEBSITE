@@ -44,12 +44,15 @@ import {
 } from "@/lib/accounting/period-close-authorities";
 
 import {
+  exportedCoreFunctionNames,
+  assertEveryExportedFunctionIsTaught,
+  assertEveryPeriodCloseLessonIsSubstantive,
+} from "@/lib/accounting/period-close-mentor-gates";
+import {
   PERIOD_CLOSE_LESSONS,
   lessonFor,
   taughtFunctionNames,
   citedAuthorityIds,
-  exportedCoreFunctionNames,
-  assertEveryExportedFunctionIsTaught,
 } from "@/lib/accounting/period-close-mentor";
 
 import {
@@ -1106,5 +1109,69 @@ describe("the mentor layer keeps up with the fixes", () => {
     const lesson = lessonFor("refuseIfNotFinished");
     expect(lesson).toBeDefined();
     expect(lesson!.theTrap.toLowerCase()).toMatch(/early|ahead/);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════ *
+ * BOOKS-44: THE THINNESS GATE, RESTORED AFTER THE SPLIT
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-44: period-close lessons are substantive, not merely present", () => {
+  /*
+   * This block exists because of an unused import.
+   *
+   * When `period-close-mentor-gates.ts` was carved out of the mentor in slice C
+   * (rule 65b - node:fs must not reach a browser bundle), `PERIOD_CLOSE_LESSONS`
+   * came across in the import list and nothing in the new file used it. ESLint
+   * said "defined but never used", and the five-second fix was to delete the
+   * import and move on.
+   *
+   * That import was not noise. It was the footprint of a substantiveness check
+   * that had been lost in the split - the sibling gates for the interest and
+   * S-corporation mentors both still had theirs. Deleting the evidence would
+   * have been rule 12, silently plugging a hole. The gate was restored instead,
+   * and these are the tests that make it load-bearing rather than decorative:
+   * a restored gate nothing calls is just more dead code with a green tick.
+   */
+
+  it("passes on the real lessons", () => {
+    expect(() => assertEveryPeriodCloseLessonIsSubstantive()).not.toThrow();
+  });
+
+  it("THE THINNESS GATE FIRES — rule 39", () => {
+    expect(() =>
+      assertEveryPeriodCloseLessonIsSubstantive([
+        {
+          fn: "x",
+          plainEnglish: "short",
+          whyItExists: "short",
+          theTrap: "short",
+          whatIWouldDo: "short",
+          authorityIds: [],
+        },
+      ]),
+    ).toThrow(/TOO THIN/);
+  });
+
+  it("THE VACUOUS-INPUT GUARD FIRES — rule 39", () => {
+    // A check handed nothing to inspect approves everything it was given.
+    expect(() => assertEveryPeriodCloseLessonIsSubstantive([])).toThrow(/GATE BROKEN/);
+  });
+
+  it("names the offending field, not merely the lesson", () => {
+    // A refusal that says "something is thin" sends the reader hunting. This
+    // one has to say which lesson and which of its four blocks.
+    expect(() =>
+      assertEveryPeriodCloseLessonIsSubstantive([
+        {
+          fn: "evaluatePeriodClose",
+          plainEnglish: "A perfectly adequate sentence that comfortably clears the floor.",
+          whyItExists: "Another perfectly adequate sentence that clears the floor as well.",
+          theTrap: "too short",
+          whatIWouldDo: "One more sentence that is long enough to pass the length check.",
+          authorityIds: [],
+        },
+      ]),
+    ).toThrow(/evaluatePeriodClose\.theTrap/);
   });
 });

@@ -43,7 +43,7 @@
  *    biweekly. That number is recomputed here rather than trusted.
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -334,17 +334,19 @@ describe("the gap report's claims about the code are still true", () => {
    * So the module list is now derived data, and both directions are asserted.
    */
   const UNREACHABLE_MODULES: readonly { file: string; slug: string }[] = [
-    { file: "src/lib/payroll/payroll-onboarding-mentor.ts", slug: "payroll-onboarding-mentor" },
     { file: "src/lib/accounting/basis-aaa-mentor.ts", slug: "basis-aaa-mentor" },
     { file: "src/lib/accounting/cogs-position-mentor.ts", slug: "cogs-position-mentor" },
     { file: "src/lib/accounting/financial-statements-mentor.ts", slug: "financial-statements-mentor" },
-    { file: "src/lib/accounting/interest-mentor.ts", slug: "interest-mentor" },
     { file: "src/lib/accounting/internal-control-mentor.ts", slug: "internal-control-mentor" },
-    { file: "src/lib/accounting/period-close-mentor.ts", slug: "period-close-mentor" },
-    { file: "src/lib/accounting/s-corporation-year-mentor.ts", slug: "s-corporation-year-mentor" },
-    { file: "src/lib/accounting/tax-penalty-mentor.ts", slug: "tax-penalty-mentor" },
     // The report separately calls this ENGINE unreachable, in the section on
     // period close. Same claim, same exposure.
+    //
+    // STILL UNREACHABLE AFTER books-44, AND THE REASON IS WORTH RECORDING.
+    // books-44 wired `period-close-MENTOR` to a screen, which is the teaching
+    // ABOUT closing a period. The ENGINE that actually decides whether a month
+    // may be sealed is a different module and still has no screen. Marking this
+    // closed because its mentor got connected would be exactly the kind of
+    // "near enough" that this whole test block exists to refuse.
     { file: "src/lib/accounting/period-close-core.ts", slug: "period-close-core" },
   ];
 
@@ -378,36 +380,173 @@ describe("the gap report's claims about the code are still true", () => {
       slug: "financial-statements-core",
       wiredIn: "books-42, at /admin/books/financial-statements",
     },
+    /*
+     * THE SIX MENTORS CONNECTED BY books-44 (slice C), at /admin/books/learn.
+     *
+     * 82 lessons across 2,345 lines, every one of them finished and tested and
+     * reachable from nowhere. They are all now placed in the eight-unit
+     * curriculum in `learning-path-core.ts`, which the page renders.
+     *
+     * NOTE ON HOW THEY ARE REACHED, because it matters to the probe below.
+     * None of these is imported DIRECTLY by the page. The chain is
+     *
+     *   page.tsx -> learning-path-ui-core -> learning-path-core -> mentor
+     *
+     * which is three hops. The original one-hop probe would have reported all
+     * six as still buried, and the gap report would have gone on telling
+     * Michael his teaching was invisible while it was on screen. That is why
+     * `importedFromUi` was rewritten to follow the import graph.
+     */
+    {
+      file: "src/lib/payroll/payroll-onboarding-mentor.ts",
+      slug: "payroll-onboarding-mentor",
+      wiredIn: "books-44, at /admin/books/learn",
+    },
+    {
+      file: "src/lib/accounting/tax-penalty-mentor.ts",
+      slug: "tax-penalty-mentor",
+      wiredIn: "books-44, at /admin/books/learn",
+    },
+    {
+      file: "src/lib/accounting/interest-mentor.ts",
+      slug: "interest-mentor",
+      wiredIn: "books-44, at /admin/books/learn",
+    },
+    {
+      file: "src/lib/accounting/period-close-mentor.ts",
+      slug: "period-close-mentor",
+      wiredIn: "books-44, at /admin/books/learn",
+    },
+    {
+      file: "src/lib/accounting/s-corporation-year-mentor.ts",
+      slug: "s-corporation-year-mentor",
+      wiredIn: "books-44, at /admin/books/learn",
+    },
+    {
+      file: "src/lib/reports/payroll-reconciliation-mentor.ts",
+      slug: "payroll-reconciliation-mentor",
+      wiredIn: "books-44, at /admin/books/learn",
+    },
   ];
 
-  /**
-   * Does anything a user can actually reach import this module?
+  /*
+   * ────────────────────────────────────────────────────────────────────────
+   * REACHABILITY, AND WHY THIS PROBE WAS REWRITTEN IN books-44
+   * ────────────────────────────────────────────────────────────────────────
+   * The original probe asked one question: does any file in `src/app` or
+   * `src/components` contain an import specifier naming this module? That is
+   * ONE HOP, and it was right for books-42, where the page imported the engine
+   * directly.
    *
-   * "Reachable" means imported from `src/app` or `src/components` — a page, a
-   * layout, a server action, a rendered component. A module imported only by
-   * its own test file, or by another equally-unreachable module, is still dead
-   * as far as Michael is concerned: no screen shows it to him.
+   * books-44 broke it. The learning screen reaches its six mentors through two
+   * intermediate modules:
+   *
+   *   page.tsx -> learning-path-ui-core -> learning-path-core -> the mentor
+   *
+   * Under the one-hop probe every one of those mentors still looked buried, so
+   * the gap report would have kept telling Michael that 82 lessons were
+   * invisible on the very day they went on screen. The probe would have been
+   * green and wrong, which is the worst state a gate can be in.
+   *
+   * So it now walks the import GRAPH from every page and component and returns
+   * the chain by which a module is reached. Two deliberate decisions:
+   *
+   *   VALUE IMPORTS ONLY. `import type { X } from "..."` is erased by the
+   *   compiler. It ships no code and puts no lesson in front of anybody. This
+   *   is not hypothetical: `interest-mentor` imports the `MentorLesson` TYPE
+   *   from `basis-aaa-mentor`, and counting that would have marked
+   *   `basis-aaa-mentor` as reachable - falsely closing a gap that is still
+   *   wide open, purely because of a shared type alias.
+   *
+   *   RELATIVE IMPORTS ARE RESOLVED TOO, not just `@/` aliases. The first
+   *   version of this walker handled only the alias, and `learning-path-ui-core`
+   *   imports its core with `./learning-path-core`. It reported all six mentors
+   *   unreachable. Measured, found wrong, fixed - rather than believed.
    */
-  const importedFromUi = (slug: string): string[] => {
-    const hits: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const p = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(p);
-        } else if (/\.(ts|tsx)$/.test(entry.name)) {
-          const code = readFileSync(p, "utf8");
-          // Match it as an import specifier, not as a word in a comment.
-          if (new RegExp(`from\\s+["'][^"']*${slug}["']`).test(code)) {
-            hits.push(p.slice(ROOT.length + 1));
-          }
-        }
+
+  /** Resolve one import specifier to a real file on disk, or null. */
+  const resolveSpec = (spec: string, fromFile: string): string | null => {
+    let base: string;
+    if (spec.startsWith("@/")) base = join(SRC, spec.slice(2));
+    else if (spec.startsWith(".")) base = join(fromFile, "..", spec);
+    else return null;
+    for (const c of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts"), join(base, "index.tsx")]) {
+      if (existsSync(c) && statSync(c).isFile()) return c;
+    }
+    return null;
+  };
+
+  /** The VALUE imports of one file, resolved. Type-only imports are ignored. */
+  const valueImportsOf = (file: string): string[] => {
+    const code = readFileSync(file, "utf8");
+    const out: string[] = [];
+    const re = /(?:^|\n)\s*import\s+(?!type\s)([\s\S]*?)from\s+["']([^"']+)["']/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(code)) !== null) {
+      const r = resolveSpec(m[2], file);
+      if (r) out.push(r);
+    }
+    return out;
+  };
+
+  const tsFilesUnder = (dir: string): string[] => {
+    const out: string[] = [];
+    const walk = (d: string) => {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (/\.(ts|tsx)$/.test(entry.name)) out.push(p);
       }
     };
-    walk(join(SRC, "app"));
-    walk(join(SRC, "components"));
-    return hits;
+    walk(dir);
+    return out;
   };
+
+  /**
+   * Every module reachable from a page or a component, mapped to the file that
+   * first reached it, so a failure can print the actual chain rather than just
+   * asserting one exists.
+   *
+   * Computed once: the graph is ~1,600 files and every test below queries it.
+   */
+  const reachedFrom: Map<string, string | null> = (() => {
+    const seeds = [...tsFilesUnder(join(SRC, "app")), ...tsFilesUnder(join(SRC, "components"))];
+    const prev = new Map<string, string | null>();
+    for (const s of seeds) prev.set(s, null);
+    const queue = [...seeds];
+    while (queue.length > 0) {
+      const f = queue.shift() as string;
+      for (const dep of valueImportsOf(f)) {
+        if (!prev.has(dep)) {
+          prev.set(dep, f);
+          queue.push(dep);
+        }
+      }
+    }
+    return prev;
+  })();
+
+  /** The import chain from a page/component down to this file, or []. */
+  const reachChain = (file: string): string[] => {
+    const abs = join(ROOT, file);
+    if (!reachedFrom.has(abs)) return [];
+    const chain: string[] = [];
+    let cur: string | null | undefined = abs;
+    while (cur) {
+      chain.push(cur.slice(ROOT.length + 1));
+      cur = reachedFrom.get(cur) ?? null;
+    }
+    return chain.reverse();
+  };
+
+  /**
+   * Does anything a user can actually reach import this module, at any depth?
+   *
+   * A module imported only by its own test file, or only by another equally
+   * unreachable module, is still dead as far as Michael is concerned: no screen
+   * shows it to him.
+   */
+  const importedFromUi = (file: string): string[] => reachChain(file);
 
   it("claim: the modules named in the report all still EXIST", () => {
     // Guard the guard (rule 39). If a file were renamed, the reachability
@@ -431,11 +570,11 @@ describe("the gap report's claims about the code are still true", () => {
     // This is the half the old test could not see. It fails the day someone
     // builds the screen — which is a good day, and the report gets updated.
     for (const m of UNREACHABLE_MODULES) {
-      const hits = importedFromUi(m.slug);
+      const chain = importedFromUi(m.file);
       expect(
-        hits,
-        `${m.slug} is now imported by ${hits.join(", ")} — it is REACHABLE, so the ` +
-          `gap report's claim that it is buried is out of date. Update the report.`,
+        chain,
+        `${m.slug} is now reachable via ${chain.join(" -> ")} — so the gap report's claim that ` +
+          `it is buried is out of date. Move it to NOW_REACHABLE_MODULES and update the report.`,
       ).toEqual([]);
     }
   });
@@ -450,13 +589,13 @@ describe("the gap report's claims about the code are still true", () => {
         `${m.file} no longer exists, yet the report records it as wired`,
       ).toBe(true);
 
-      const hits = importedFromUi(m.slug);
+      const chain = importedFromUi(m.file);
       expect(
-        hits.length,
-        `${m.slug} was wired in ${m.wiredIn} and is now imported by NOTHING in src/app or ` +
+        chain.length,
+        `${m.slug} was wired in ${m.wiredIn} and is now reachable from NOTHING in src/app or ` +
           `src/components. It has gone back to being finished, tested and invisible — which is ` +
-          `standing rule 50, and is precisely the state books-42 existed to end. Restore the ` +
-          `import, or if the screen was removed on purpose, move this entry back to ` +
+          `standing rule 50, and is precisely the state books-42 and books-44 existed to end. ` +
+          `Restore the import, or if the screen was removed on purpose, move this entry back to ` +
           `UNREACHABLE_MODULES and say so in the gap report.`,
       ).toBeGreaterThan(0);
     }
@@ -472,13 +611,75 @@ describe("the gap report's claims about the code are still true", () => {
   });
 
   it("the reachability probe is not vacuous — it finds a module that IS wired", () => {
-    // Rule 39 again, and the most important test in this block. If `walk` had
-    // a bad path, or the regex never matched anything, all three checks above
-    // would pass while inspecting nothing at all. This proves the probe can
-    // return a hit: the garnishment entry core is wired into the screen this
-    // very slice shipped, so it MUST be found.
-    const wired = importedFromUi("wage-order-entry-core");
-    expect(wired.length, "the reachability probe found nothing it should have found").toBeGreaterThan(0);
+    // Rule 39 again, and the most important test in this block. If the walker
+    // had a bad path, or the resolver never matched anything, all the checks
+    // above would pass while inspecting nothing at all. This proves the probe
+    // can return a hit: the garnishment entry core is wired into a screen, so
+    // it MUST be found.
+    const wired = importedFromUi("src/lib/payroll/wage-order-entry-core.ts");
+    expect(
+      wired.length,
+      "the reachability probe found nothing it should have found",
+    ).toBeGreaterThan(0);
+  });
+
+  it("the reachability probe follows a chain of imports, not just one hop", () => {
+    /*
+     * The specific hole books-44 opened, held shut.
+     *
+     * `payroll-onboarding-mentor` is imported by NO page and NO component. It
+     * is three hops down:
+     *
+     *   page.tsx -> learning-path-ui-core -> learning-path-core -> the mentor
+     *
+     * A one-hop probe returns nothing here and reports the module buried while
+     * Michael is reading it on screen. So this asserts the chain is found AND
+     * that it is genuinely longer than one hop - a probe that had quietly
+     * regressed to direct imports would fail on the length check even if some
+     * other path happened to exist.
+     */
+    const chain = importedFromUi("src/lib/payroll/payroll-onboarding-mentor.ts");
+    expect(chain.length, "the multi-hop chain to the onboarding mentor was not found").toBeGreaterThan(2);
+    expect(chain[0], "a reach chain must start at a page or a component").toMatch(
+      /^src\/(app|components)\//,
+    );
+    expect(chain[chain.length - 1]).toBe("src/lib/payroll/payroll-onboarding-mentor.ts");
+  });
+
+  it("the reachability probe ignores type-only imports, which ship no code", () => {
+    /*
+     * THE CONTROL THAT STOPS THIS PROBE CLOSING GAPS THAT ARE STILL OPEN
+     * (rule 55: a refusal that never discriminates is not a refusal).
+     *
+     * `interest-mentor` is reachable, and it imports `MentorLesson` from
+     * `basis-aaa-mentor`. That import is `import type`, which TypeScript erases
+     * entirely - no code ships, and not one word of the basis/AAA teaching
+     * reaches a screen. If the walker counted type imports, `basis-aaa-mentor`
+     * would be marked reachable and a genuinely open gap would be recorded as
+     * closed, on the strength of a shared type alias.
+     *
+     * This asserts both halves: the type import really is there in the source,
+     * and the probe still refuses to follow it.
+     */
+    const interest = read("src/lib/accounting/interest-mentor.ts");
+    expect(
+      interest,
+      "the premise of this control is gone: interest-mentor no longer type-imports from " +
+        "basis-aaa-mentor, so this test is no longer proving anything. Find another type-only " +
+        "edge to test, or delete it and say why.",
+    ).toMatch(/import type \{[^}]*MentorLesson[^}]*\} from "@\/lib\/accounting\/basis-aaa-mentor"/);
+
+    expect(
+      importedFromUi("src/lib/accounting/interest-mentor.ts").length,
+      "the premise of this control is gone: interest-mentor is not reachable",
+    ).toBeGreaterThan(0);
+
+    expect(
+      importedFromUi("src/lib/accounting/basis-aaa-mentor.ts"),
+      "the probe followed a TYPE-ONLY import and marked basis-aaa-mentor reachable. No code " +
+        "ships across that edge and no lesson in it is on any screen — this would record an " +
+        "open gap as closed.",
+    ).toEqual([]);
   });
 
   it("claim: the garnishment lifecycle actions have no caller", () => {

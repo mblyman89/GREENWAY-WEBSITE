@@ -19,18 +19,22 @@ import { describe, it, expect } from "vitest";
 
 import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
 import {
-  INTEREST_LESSONS,
   assertEveryInterestFunctionIsTaught,
   assertEveryInterestLessonIsSubstantive,
   exportedInterestFunctionNames,
+} from "@/lib/accounting/interest-mentor-gates";
+import {
+  INTEREST_LESSONS,
   findInterestLesson,
   taughtInterestFunctionNames,
 } from "@/lib/accounting/interest-mentor";
 import {
-  S_CORPORATION_YEAR_LESSONS,
   assertEverySCorporationYearFunctionIsTaught,
   assertEverySCorporationYearLessonIsSubstantive,
   exportedSCorporationYearFunctionNames,
+} from "@/lib/accounting/s-corporation-year-mentor-gates";
+import {
+  S_CORPORATION_YEAR_LESSONS,
   findSCorporationYearLesson,
   taughtSCorporationYearFunctionNames,
 } from "@/lib/accounting/s-corporation-year-mentor";

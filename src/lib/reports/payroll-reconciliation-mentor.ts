@@ -22,8 +22,6 @@
  * Coverage is enforced by `assertEveryReconciliationFunctionIsTaught()`, which
  * reads BOTH core modules from disk (standing rule 26).
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import type { MentorLesson } from "@/lib/reports/reports-presentation-mentor";
 
@@ -170,56 +168,3 @@ export function reconciliationCitedAuthorityIds(): readonly string[] {
   return [...out].sort();
 }
 
-/** The two core modules this mentor layer is responsible for covering. */
-const COVERED_MODULES: readonly string[] = [
-  "payroll-reconciliation-report-core.ts",
-  "known-good-quarters.ts",
-];
-
-export function reconciliationExportedFunctionNames(): readonly string[] {
-  const names: string[] = [];
-  for (const file of COVERED_MODULES) {
-    const src = readFileSync(join(process.cwd(), "src", "lib", "reports", file), "utf8");
-    const re = /^export function ([A-Za-z_$][A-Za-z0-9_$]*)/gm;
-    let m: RegExpExecArray | null = re.exec(src);
-    while (m !== null) {
-      names.push(m[1]);
-      m = re.exec(src);
-    }
-  }
-  return names;
-}
-
-/**
- * THE COVERAGE GATE (standing rule 26), across BOTH modules.
- *
- * Fails the same three ways as its siblings: a vacuous read, an untaught
- * export, and a lesson for code that no longer exists.
- */
-export function assertEveryReconciliationFunctionIsTaught(): void {
-  const exported = reconciliationExportedFunctionNames();
-  if (exported.length === 0) {
-    throw new Error(
-      `payroll-reconciliation-mentor: found NO exported functions across ${COVERED_MODULES.join(" and ")}. ` +
-        "The coverage gate cannot read the source, so it would pass without checking anything.",
-    );
-  }
-
-  const taught = new Set(reconciliationTaughtFunctionNames());
-  const untaught = exported.filter((n) => !taught.has(n));
-  if (untaught.length > 0) {
-    throw new Error(
-      `payroll-reconciliation-mentor: these exported functions have no lesson: ${untaught.join(", ")}. ` +
-        "A reconciliation function that ships without an explanation is an unfinished function (standing rule 26).",
-    );
-  }
-
-  const exportedSet = new Set(exported);
-  const orphans = reconciliationTaughtFunctionNames().filter((n) => !exportedSet.has(n));
-  if (orphans.length > 0) {
-    throw new Error(
-      `payroll-reconciliation-mentor: these lessons teach functions that no longer exist: ${orphans.join(", ")}. ` +
-        "A mentor layer that describes deleted code teaches something false.",
-    );
-  }
-}

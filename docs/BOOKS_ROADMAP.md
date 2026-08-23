@@ -126,17 +126,30 @@ The probe: for each `*-mentor.ts`, list importers under `src/` excluding the
 module itself and its own `-gates` sibling. Rule 66d applies — existence is
 asserted before absence of importers is called "unreachable work".
 
-### C1. Six mentor modules that no screen renders — 82 lessons, 2,345 lines
+### C1. Six mentor modules that no screen renders — 82 lessons, 2,100 lines
 
 | Module | Lessons | Lines | Importers under `src/` |
 |--------|---------|-------|------------------------|
 | `payroll/payroll-onboarding-mentor.ts` | 33 | 746 | **0** |
 | `accounting/tax-penalty-mentor.ts` | 20 | 540 | **0** |
-| `accounting/interest-mentor.ts` | 10 | 328 | **0** |
-| `accounting/period-close-mentor.ts` | 9 | 281 | **0** |
-| `accounting/s-corporation-year-mentor.ts` | 5 | 225 | **0** |
-| `reports/payroll-reconciliation-mentor.ts` | 5 | 225 | **0** |
-| **Total** | **82** | **2,345** | — |
+| `accounting/interest-mentor.ts` | 10 | 257 | **0** |
+| `accounting/period-close-mentor.ts` | 9 | 234 | **0** |
+| `accounting/s-corporation-year-mentor.ts` | 5 | 153 | **0** |
+| `reports/payroll-reconciliation-mentor.ts` | 5 | 170 | **0** |
+| **Total** | **82** | **2,100** | — |
+
+**WHY FOUR OF THESE LINE COUNTS FELL DURING SLICE C, AND THE TOTAL WITH THEM.**
+When this table was first written the total was **2,345**. Four of the six
+modules imported `node:fs` to read authority text off disk, which meant no
+client component could ever import them — the one hard constraint that decided
+slice C's whole architecture. So those four were split: the lesson DATA stayed
+in `*-mentor.ts`, and the disk-reading coverage checks moved to a sibling
+`*-mentor-gates.ts`, per standing rule 65b. The lessons did not change and none
+were lost — the count is still **82** — but 245 lines of gate code left the four
+files. The `importsNodeFs` column in
+`tests/compliance/books-roadmap-agreed-order.test.ts` is now `false` for all six,
+and that gate re-derives every figure above from the tree on each run, which is
+why this paragraph exists rather than a quietly edited number.
 
 Each is reachable from its own test file and from `owner-report-books-38`, which
 is precisely the shape rule 50 warns about: **dead code wearing a green check.**
@@ -192,6 +205,43 @@ penny-drift defect. Retire the duplicate, keep the integer implementation
    rule 66a requires it to assert the property still holds in both directions,
    so once these six are wired the probe must prove they are *reachable*, and
    must still be able to fail.
+
+#### Status after books-44
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | All 82 lessons reachable from a real screen | **DONE** — `/admin/books/learn`, eight units, gated by `tests/compliance/learning-path.test.ts` |
+| 2 | `verify-verbatim-quotes` at zero failures | **OPEN** — still 9. Router fix must land BEFORE the 5 missing files are fetched |
+| 3 | One `applyMilliPct`, integer-only | **OPEN** — the float duplicate is still there |
+| 4 | The reachability probe updated, not deleted | **DONE** — rewritten from a one-hop string match to a transitive value-import graph walk |
+
+**Criterion 1, in detail.** 82 lessons, 8 units, 0 unplaced, 0 dangling. The
+count on the screen is DERIVED from the mentor modules — a test asserts the
+literal `82` appears nowhere in executable code across all three files, so a
+lesson added to any mentor joins the course without anyone remembering to add
+it. The nav entry is held by the exact-list assertion in `nav-gate-core.test.ts`,
+which fails both when a screen is added AND when one silently vanishes.
+
+**Criterion 4, in detail.** The old probe asked "does any file under `src/app`
+import this module?" — one hop, `@/` aliases only. It reported all six mentors
+unreachable *after* they were wired, because the page imports a core which
+imports the mentors. It now walks the graph transitively, resolves relative
+specifiers too, and ignores type-only imports (which emit no code, verified with
+a scratch `tsc` compile rather than assumed). See standing rules 75 and 75a.
+
+**Four modules remain unreachable and are named rather than left dark:**
+`basis-aaa-mentor`, `cogs-position-mentor`, `financial-statements-mentor`,
+`internal-control-mentor`. COGS/§280E is the next one to surface. The engine
+`period-close-core` also stays on the unreachable list — its MENTOR was wired in
+books-44, its engine was not, and those are different claims.
+
+**Gate strength, measured.** `scripts/prove-learning-path-gate.sh` runs 27
+mutations against the new code and 3 silent controls. Result: **27/27 caught,
+0 missed, 0 no-ops, 3/3 controls correctly green.** The first run scored 19/21
+and found two real holes — a security assertion satisfied by an unused import
+line, and two `assert*` functions that could be emptied to `return;` without
+going red (standing rule 74). Both are fixed and both attacks are kept
+permanently as regression witnesses.
 
 Then, and only then: **push notifications and the calendar.** Michael,
 books-17: *"there's no point notifying me yet if we can't use it."*

@@ -1861,3 +1861,88 @@ building the matcher twice.
     campaign is what proves it still is. Check the ORDER by position and the
     heading separately from the table, because a correct table under a heading
     that says something else is read as the heading.
+
+74. "IT DID NOT COMPLAIN" IS NOT "IT FOUND NO PROBLEM".
+    books-44 wrote `assertCurriculumIsWellFormed()` and
+    `assertLearningUiIsWellFormed()` - two functions whose whole job is to
+    refuse a broken curriculum. Both took NO arguments and read the real
+    CURRICULUM off the module. The only thing any test could then do was call
+    them and assert they did not throw. The mutation campaign replaced both
+    bodies with `return;` and the entire suite stayed GREEN, because a function
+    that does nothing never complains, and silence is indistinguishable from
+    approval from the outside.
+    THE RULE: an assertion function must take the thing it inspects as a
+    PARAMETER, defaulted to the real value. The default keeps every production
+    caller unchanged; the parameter is what lets the suite feed it a
+    deliberately broken input and require it to object to each specific fault by
+    name. If the only test you can write about a gate is "it stays quiet on
+    input that is already correct", you have not tested the gate - you have
+    tested the input. You do not test a smoke alarm by observing that it is
+    silent; you hold something under it.
+
+74a. THE COROLLARY FOR EVERY GATE ALREADY IN THIS REPO. Any zero-argument
+    `assert*` function is presumed vacuous until a test has driven it into each
+    of its throw branches. Count the `throw` statements; count the tests that
+    reach them. If the second number is smaller, the difference is decoration.
+
+75. A REACHABILITY OR PURITY CHECK MUST WALK THE IMPORT GRAPH, NOT ONE HOP.
+    The pre-existing `importedFromUi` probe in `owner-report-books-38.test.ts`
+    asked "does any file under `src/app` import this module?" - one hop, exact
+    string match on the `@/` alias. It reported all six mentors unreachable
+    AFTER they had been wired, because the page imports a core which imports the
+    mentors. A one-hop check answers a question nobody asked.
+    THE RULE: reachability is transitive, so the probe must be too - a memoised
+    BFS from every entry point, resolving BOTH `@/` aliases AND relative
+    specifiers. A probe that resolves only one specifier style will silently
+    report false negatives for half the tree, and a false negative here reads
+    as "this work is buried" when it is not, or as "this is safe" when it is
+    not. Test the walker itself against a known-deep chain and assert the chain
+    length is greater than 2, or the walker's own depth is unproven.
+
+75a. A PURITY WALKER MUST IGNORE TYPE-ONLY IMPORTS. `import type { X } from "y"`
+    emits NO import statement after compilation - verified empirically in
+    books-44 with a scratch `tsc` run, not assumed. So a type edge is not a
+    bundle edge. `client-bundle-purity` counted them and reported the learning
+    page reaching `node:fs` through a chain whose final link was
+    `import type { MentorLesson }`. The report was false, and the tempting fix -
+    restructuring innocent code to satisfy it - would have been real work done
+    to appease a broken measurement. Skip WHOLE-CLAUSE `import type`; still
+    count inline `import { type A, b }`, because `b` is real. Then add a control
+    asserting the walker still finds a genuine value import, or you have simply
+    switched it off.
+
+76. TWO DEFINITIONS OF "FORBIDDEN" IN ONE FILE IS HOW THE STRICT ONE GETS
+    SWITCHED OFF. books-44 added a loop to `client-bundle-purity.test.ts` that
+    used its own private regex, `node:(fs|path|crypto|os)`, instead of the
+    file's shared `FATAL` set. It went red on `company-identity-mentor`, which
+    imports `node:path` - deliberately allowed, because bundlers shim it and
+    "a test that cries wolf gets disabled". The new loop was not stricter, it
+    was a SECOND POLICY, and the pressure it created was pressure to loosen
+    something.
+    THE RULE: one policy per concern per file, named and exported, with the
+    reason for every exclusion written next to it. A new check enforces the
+    EXISTING constant or it changes that constant deliberately and updates the
+    reasoning. It never quietly ships a rival definition, because the resolution
+    of a conflict between two policies is always the weaker one winning.
+
+77. AN UNUSED IMPORT AFTER A REFACTOR IS EVIDENCE, NOT NOISE.
+    When four mentors were split under rule 65b, `PERIOD_CLOSE_LESSONS` and
+    `RECONCILIATION_LESSONS` came across into the new `-gates.ts` siblings and
+    nothing used them. ESLint flagged both. The five-second fix is to delete the
+    import and watch the warning disappear - and that would have been rule 12,
+    silently plugging a hole. Those imports were the FOOTPRINT of a
+    substantiveness check that had been lost in the split; the two other
+    siblings still had theirs.
+    THE RULE: when a refactor leaves an unused import behind, find out what used
+    to use it before deleting it. Compare against the sibling that was NOT
+    refactored - if the sibling still calls something this file no longer does,
+    the check was dropped, not outgrown. Restore it, then wire a test that
+    breaks it deliberately, because a restored gate nothing calls is just more
+    dead code with a green tick (rule 50).
+
+77a. A FIGURE IN A ROADMAP IS A CLAIM ABOUT THE TREE AND GOES STALE THE MOMENT
+    THE TREE MOVES. The same split changed four line counts and the total, from
+    2,345 to 2,100, and the roadmap gate caught it on the next run. Keep the
+    LESSON count beside the LINE count for exactly this reason: 82 before and 82
+    after, with 245 fewer lines, is the pair that proves a refactor moved code
+    rather than losing teaching. One figure alone cannot tell those apart.
