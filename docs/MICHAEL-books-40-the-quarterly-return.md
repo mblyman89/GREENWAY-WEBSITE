@@ -34,6 +34,14 @@ workbench component for every one of those three actions and found this:
 | `suspendWageOrderAction` | **0** |
 | `resumeWageOrderAction` | **0** |
 
+> **Correction, added later: this gap was closed in books-40b.** The table
+> above was true on the day this report was written and it is no longer true.
+> The three buttons now exist on the garnishments board. I am leaving the
+> original table in place rather than quietly editing it, because a document
+> that silently rewrites its own history is not worth trusting on the parts you
+> cannot check. The test that policed this claim was inverted rather than
+> deleted: it now fails if those actions ever stop being called.
+
 So you can create a wage order and you cannot end one. The machinery is
 complete right up to the point where a human would touch it. That is exactly
 the pattern you described when you said a lot of what we need is built but not

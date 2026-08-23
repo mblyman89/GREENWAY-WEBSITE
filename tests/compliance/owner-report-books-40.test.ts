@@ -754,13 +754,27 @@ describe("the findings the report reports are still true", () => {
     }
   });
 
-  it("those three actions are still uncalled by the UI, so the table is still true", () => {
-    // The claim is "0 times each". Re-derived from the screen's own source, so
-    // that wiring them up (the next small PR) turns this red and forces the
-    // report to be corrected rather than left boasting about a gap that closed.
+  it("the 0/0/0 table is dated, and the report says so rather than still claiming it", () => {
+    /*
+     * THIS TEST USED TO ASSERT THE OPPOSITE, AND THAT IS THE POINT.
+     *
+     * When books-40 shipped, it asserted `sources.includes(action) === false`
+     * for all three lifecycle actions, with this comment:
+     *
+     *   "so that wiring them up (the next small PR) turns this red and forces
+     *    the report to be corrected rather than left boasting about a gap that
+     *    closed."
+     *
+     * books-40b is that PR. The test went red exactly as designed, and the
+     * correct response was NOT to delete it - a deleted test proves nothing
+     * about whether the report was updated. So it is inverted instead: the
+     * actions must now BE called, and the report must carry a dated correction
+     * saying so. A stale document that boasts about a gap it already closed is
+     * its own kind of dishonesty, and standing rule 66 covers it.
+     */
     const dir = join(ROOT, "src", "app", "admin", "books", "garnishments");
     const sources = readdirSync(dir)
-      .filter((f) => f.endsWith(".tsx"))
+      .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
       .map((f) => readFileSync(join(dir, f), "utf8"))
       .join("\n");
     for (const action of [
@@ -770,9 +784,17 @@ describe("the findings the report reports are still true", () => {
     ]) {
       expect(
         sources.includes(action),
-        `${action} is now called by the UI - update the report's 0/0/0 table`,
-      ).toBe(false);
+        `${action} is not called by the garnishments page - the wiring regressed`,
+      ).toBe(true);
     }
+
+    // And the report must not still be presenting the zeros as current.
+    // `flat` rather than `flatWords`, because the word normaliser strips
+    // hyphens and would turn the slice name into "books 40b".
+    expect(
+      flat,
+      "the books-40 report still presents the 0/0/0 table as the current state",
+    ).toContain("closed in books-40b");
   });
 
   it("the ESD and L&I figures promised for books-41 come from the oracle", () => {

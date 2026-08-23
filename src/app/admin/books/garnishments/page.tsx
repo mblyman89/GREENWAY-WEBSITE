@@ -60,7 +60,12 @@ import { WageOrderEntryForm } from "@/components/admin/books/WageOrderEntryForm"
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { loadGarnishmentBoard } from "@/lib/payroll/garnishment-store";
 import { listEmployeesForOrderEntry } from "@/lib/payroll/wage-order-write-store";
-import { createWageOrderAction } from "./actions";
+import {
+  createWageOrderAction,
+  resumeWageOrderAction,
+  suspendWageOrderAction,
+  terminateWageOrderAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -131,11 +136,27 @@ export default async function GarnishmentsPage() {
           </p>
         </Card>
       ) : (
+        /* THE LIFECYCLE ACTIONS ARE HANDED DOWN FROM HERE (books-40b).
+           The workbench is a client component and `actions.ts` reaches
+           `wage-order-write-store.ts`, which begins with `import "server-only"`.
+           Passing the actions as props is the same route
+           `createWageOrderAction` already takes into the entry form, so the
+           established pattern is extended rather than a second one invented.
+
+           Every one of these three calls `requireBooksAccess()` before it
+           touches anything, and the admin client bypasses RLS entirely, so
+           that check inside the action is the real gate - not this page's. */
         <GarnishmentWorkbench
           orders={board.orders}
           activeCount={board.activeCount}
+          pausedCount={board.pausedCount}
           blockedCount={board.blockedCount}
           worked={board.worked}
+          lifecycle={{
+            onTerminate: terminateWageOrderAction,
+            onSuspend: suspendWageOrderAction,
+            onResume: resumeWageOrderAction,
+          }}
         />
       )}
     </div>

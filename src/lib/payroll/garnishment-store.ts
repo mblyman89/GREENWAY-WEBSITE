@@ -149,9 +149,26 @@ export type WageOrderDetail = {
 
 export type GarnishmentBoard = {
   readonly ok: true;
+  /** Live orders - active and paused. Terminated orders are never listed. */
   readonly orders: readonly WageOrderDetail[];
+  /**
+   * Orders that will withhold on the next pay run. Paused orders are NOT
+   * counted here; they are counted in `pausedCount`, because an order that has
+   * quietly stopped taking money must never hide inside a number that reads as
+   * "everything is running".
+   */
   readonly activeCount: number;
-  /** Orders that cannot be computed until somebody answers a question. */
+  /**
+   * Orders that are paused. Live obligations that are currently withholding
+   * nothing, which is the state most easily forgotten and the one the employer
+   * carries the exposure for.
+   */
+  readonly pausedCount: number;
+  /**
+   * ACTIVE orders that cannot be computed until somebody answers a question.
+   * Scoped to the active ones so `activeCount - blockedCount` is a true
+   * statement of how many are ready.
+   */
   readonly blockedCount: number;
   /**
    * A worked example against the engine, or the engine's refusals. Present only
@@ -253,13 +270,35 @@ export function toWageOrder(row: WageOrderRow): WageOrder | null {
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Every ACTIVE wage order, with the employee's name attached.
+ * Every wage order that is still LIVE - active or paused - with the employee's
+ * name attached.
  *
- * Suspended and terminated orders are excluded deliberately. A terminated order
+ * TERMINATED ORDERS ARE EXCLUDED, DELIBERATELY AND PERMANENTLY. An ended order
  * that still appeared on a live board would eventually be withheld against, and
- * withholding on a released order is a conversion of the employee's wages -
- * a worse error than failing to withhold, because the money has already gone to
- * somebody who is not entitled to it.
+ * withholding on a released order is a conversion of the employee's wages - a
+ * worse error than failing to withhold, because the money has already gone to
+ * somebody who is not entitled to it. Excluded from the BOARD is not deleted:
+ * the row stays in the database forever with the reason it ended on it.
+ *
+ * WHY SUSPENDED ORDERS ARE NOW INCLUDED, AND THE BUG THAT FOUND IT (books-40b)
+ *
+ * This read used to be `.eq("status", "active")`, which meant a paused order
+ * was invisible to every screen in the application. That was survivable while
+ * nothing could pause an order from the UI. It stopped being survivable the
+ * moment this slice added a Resume button: a Resume button can only ever appear
+ * on a paused order, so with an active-only read it would have been a control
+ * no human being could reach - shipped, tested, green, and unusable. Standing
+ * rule 50 in its most convincing disguise.
+ *
+ * A paused order is also the one most likely to be forgotten. It is a live
+ * legal obligation that has quietly stopped taking money, and the employer
+ * carries the exposure for that under RCW 26.18.110(6). Showing it is the whole
+ * point; it is listed separately from the active ones so it can never be
+ * mistaken for something that is currently withholding.
+ *
+ * `pausedCount` is reported separately from `activeCount` for the same reason.
+ * Rolling the two together would let a paused support order hide inside a
+ * headline number that reads as "everything is running".
  */
 export async function loadGarnishmentBoard(args?: {
   readonly pay?: PaycheckFacts;
@@ -279,7 +318,8 @@ export async function loadGarnishmentBoard(args?: {
         "percent_of_disposable_basis_points, arrears_cents, arrears_over_twelve_weeks, " +
         "supports_second_family, priority, effective_from, effective_to, status, notes",
     )
-    .eq("status", "active")
+    // Live orders only. 'terminated' is never read onto the board; see above.
+    .in("status", ["active", "suspended"])
     .order("priority", { ascending: true });
 
   if (orderErr) {
@@ -373,16 +413,43 @@ export async function loadGarnishmentBoard(args?: {
   // looks like a withholding instruction and is not one.
   let worked: WorkedExample | null = null;
   if (args?.pay && args?.wages) {
-    const computable = details.filter((d) => d.missingFacts.length === 0).map((d) => d.order);
+    // ACTIVE ONLY, AND THIS LINE IS LOAD-BEARING (books-40b).
+    //
+    // The board began listing paused orders in this slice so that a Resume
+    // button has something to attach to. That change made this filter
+    // dangerous: without the status test, a PAUSED order would be handed to
+    // the engine and would appear in a worked withholding total. Pausing means
+    // "withhold nothing", so that would have been a computed instruction to
+    // take money out of somebody's pay under an order that is explicitly not
+    // running - and it would have looked completely normal on screen.
+    //
+    // Caught by the existing `blockedCount` test going red for an unrelated
+    // reason, which is what those tests are for.
+    const computable = details
+      .filter((d) => d.status === "active" && d.missingFacts.length === 0)
+      .map((d) => d.order);
     const res = computeAllOrders({ orders: computable, pay: args.pay, wages: args.wages });
     worked = res.ok ? { ok: true, result: res.value } : { ok: false, refusals: res.refusals };
   }
 
+  // COUNTED SEPARATELY, ON PURPOSE (books-40b).
+  //
+  // `activeCount` means "orders that will actually withhold on the next pay
+  // run". A paused order will not, so counting it as active would put a
+  // reassuring number on screen over an order that has silently stopped taking
+  // money - which is the exact failure a paused support order represents.
+  //
+  // `blockedCount` is scoped to the ACTIVE ones for the same reason: the header
+  // renders `activeCount - blockedCount` as "ready to calculate", and that
+  // subtraction is only true if both sides count the same population.
+  const active = details.filter((d) => d.status === "active");
+
   return {
     ok: true,
     orders: details,
-    activeCount: details.length,
-    blockedCount: details.filter((d) => d.missingFacts.length > 0).length,
+    activeCount: active.length,
+    pausedCount: details.filter((d) => d.status === "suspended").length,
+    blockedCount: active.filter((d) => d.missingFacts.length > 0).length,
     worked,
   };
 }

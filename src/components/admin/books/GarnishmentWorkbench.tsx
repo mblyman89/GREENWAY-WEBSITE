@@ -58,12 +58,40 @@ import {
 } from "@/lib/payroll/garnishment-mentor";
 import type { GarnishmentRefusal } from "@/lib/payroll/garnishment-core";
 import type { WageOrderDetail, WorkedExample } from "@/lib/payroll/garnishment-store";
+import {
+  WageOrderLifecycleControls,
+  type WageOrderLifecycleActions,
+} from "@/components/admin/books/WageOrderLifecycleControls";
+import {
+  KIND_COMPARISON,
+  LIFECYCLE_AUTHORITY_IDS,
+  LIFECYCLE_CHECKS,
+  LIFECYCLE_LESSONS,
+  LIFECYCLE_WORKED_EXAMPLES,
+} from "@/lib/payroll/wage-order-lifecycle-mentor";
+import { WAGE_ORDER_ENTRY_AUTHORITIES } from "@/lib/payroll/wage-order-entry-authorities";
 
 export type GarnishmentWorkbenchProps = {
   readonly orders: readonly WageOrderDetail[];
   readonly activeCount: number;
+  /**
+   * Live orders that are currently withholding NOTHING. Reported separately
+   * from `activeCount` on purpose - see the store. A paused support order
+   * folded into an "active" headline would read as though it were running.
+   */
+  readonly pausedCount: number;
   readonly blockedCount: number;
   readonly worked: WorkedExample | null;
+  /**
+   * The three lifecycle server actions, passed down from the page (books-40b).
+   *
+   * Passed in rather than imported because this is a `"use client"` file and
+   * `actions.ts` reaches `wage-order-write-store.ts`, which begins with
+   * `import "server-only"`. Threading them through props is the pattern the
+   * entry form already uses for `createWageOrderAction`, so this extends the
+   * established shape rather than inventing a rival one (standing rule 25).
+   */
+  readonly lifecycle: WageOrderLifecycleActions;
 };
 
 /**
@@ -108,8 +136,10 @@ function money(cents: number): string {
 export function GarnishmentWorkbench({
   orders,
   activeCount,
+  pausedCount,
   blockedCount,
   worked,
+  lifecycle,
 }: GarnishmentWorkbenchProps) {
   const supportOrders = orders.filter(
     (o) => o.order.orderKind === "child_support" || o.order.orderKind === "spousal_support",
@@ -121,23 +151,32 @@ export function GarnishmentWorkbench({
       <div className="space-y-6">
         <Card>
           <CardHeader
-            title="Active wage orders"
+            title="Live wage orders"
             subtitle={
-              activeCount === 0
-                ? "No active orders are on file."
-                : `${activeCount} active - ${activeCount - blockedCount} ready to calculate, ${blockedCount} needing an answer first.`
+              /* PAUSED IS NAMED SEPARATELY, ALWAYS (books-40b).
+                 An order that is paused is withholding nothing, and folding it
+                 into an "active" count would put a reassuring number over a
+                 live obligation that has quietly stopped taking money. */
+              orders.length === 0
+                ? "No live orders are on file."
+                : `${activeCount} active - ${activeCount - blockedCount} ready to calculate, ` +
+                  `${blockedCount} needing an answer first` +
+                  (pausedCount > 0
+                    ? `. ${pausedCount} paused and withholding nothing.`
+                    : ".")
             }
             action={
-              activeCount > 0 ? (
+              orders.length > 0 ? (
                 <div className="flex gap-2">
                   <Badge tone="green">{activeCount - blockedCount} ready</Badge>
                   {blockedCount > 0 ? <Badge tone="orange">{blockedCount} blocked</Badge> : null}
+                  {pausedCount > 0 ? <Badge tone="gold">{pausedCount} paused</Badge> : null}
                 </div>
               ) : null
             }
           />
 
-          {activeCount === 0 ? (
+          {orders.length === 0 ? (
             <p className="text-sm text-[var(--admin-text-muted)]">
               Nothing is on file. When a court, the Division of Child Support, or the
               IRS sends an order, it is recorded here and every pay run from that day
@@ -165,7 +204,15 @@ export function GarnishmentWorkbench({
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {ceiling ? <Badge tone="neutral">{ceiling}</Badge> : null}
-                        {blocked ? (
+                        {/* PAUSED OUTRANKS EVERY OTHER CHIP. A paused order is
+                            withholding nothing, so "Ready" beside it would be
+                            actively misleading - it is ready in the sense that
+                            the calculator could compute it, and not running.
+                            The state that decides whether money moves is the
+                            one that gets said first. */}
+                        {o.status === "suspended" ? (
+                          <Badge tone="gold">Paused - not withholding</Badge>
+                        ) : blocked ? (
                           <Badge tone="orange">Needs an answer</Badge>
                         ) : (
                           <Badge tone="green">Ready</Badge>
@@ -213,6 +260,18 @@ export function GarnishmentWorkbench({
                         </p>
                       </div>
                     ) : null}
+
+                    {/* ── ENDING, PAUSING AND RESUMING (books-40b) ─────────
+                        Which of the three appear is decided by
+                        `lifecycleOptionsFor(status)` inside the control, not
+                        here. This file passes the facts and nothing else. */}
+                    <WageOrderLifecycleControls
+                      orderId={o.order.id}
+                      status={o.status}
+                      caseNumber={o.order.caseNumber}
+                      employeeName={o.employeeName}
+                      actions={lifecycle}
+                    />
                   </li>
                 );
               })}
@@ -338,6 +397,139 @@ export function GarnishmentWorkbench({
             </p>
           </Card>
         ) : null}
+
+        {/* ══ STOPPING AN ORDER ═══════════════════════════════════════════
+            The most dangerous thing on this screen, and dangerous in BOTH
+            directions - stop too late and you are taking money without
+            authority; stop too early on a support order and Greenway can be
+            made to pay the debt itself. There is no cautious default, so the
+            guidance is placed next to the buttons rather than behind a link. */}
+        <Card>
+          <CardHeader
+            title="Before you end or pause anything"
+            subtitle="Five questions, in the order a CPA would actually ask them."
+          />
+          <ol className="space-y-4">
+            {[...LIFECYCLE_CHECKS]
+              .sort((a, b) => a.order - b.order)
+              .map((check) => (
+                <li key={check.key}>
+                  <p className="text-sm font-semibold text-[var(--admin-text)]">
+                    {check.order}. {check.question}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                    {check.whyThisOrder}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                    <span className="font-semibold">If it fails: </span>
+                    {check.ifItFails}
+                  </p>
+                </li>
+              ))}
+          </ol>
+        </Card>
+
+        {/* THE COMPARISON. Almost every serious mistake in ending a
+            garnishment is applying one column's rule to the other column's
+            order, so the two are put side by side rather than described. */}
+        <Card>
+          <CardHeader
+            title="A creditor writ expires. A support order does not."
+            subtitle="Same envelope, same drawer, opposite rules. This is the difference that matters most."
+          />
+          <ul className="space-y-4">
+            {KIND_COMPARISON.map((row) => (
+              <li key={row.aspect}>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">{row.aspect}</p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <span className="font-semibold text-[var(--admin-orange)]">Creditor writ: </span>
+                  {row.creditorWrit}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <span className="font-semibold text-[var(--admin-accent)]">Support order: </span>
+                  {row.supportOrder}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {/* WORKED EXAMPLES. Michael asked for these by name, repeatedly, and
+            they are the part people actually read. */}
+        <Card>
+          <CardHeader
+            title="Three situations, and the right button"
+            subtitle="Including the one where the right answer is to change nothing."
+          />
+          <ul className="space-y-4">
+            {LIFECYCLE_WORKED_EXAMPLES.map((ex) => (
+              <li key={ex.key}>
+                <p className="text-xs text-[var(--admin-text-muted)]">{ex.situation}</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--admin-accent)]">
+                  {ex.rightAnswer}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <span className="font-semibold">What to type: </span>
+                  {ex.whatToType}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-orange)]">
+                  <span className="font-semibold">The trap: </span>
+                  {ex.theTrap}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {/* THE TEXTS THAT DECIDE WHEN WITHHOLDING STOPS. Resolved by id
+            against the real registry so there is exactly one copy of every
+            quotation in the codebase (standing rule 25). */}
+        <Card>
+          <CardHeader
+            title="When withholding stops, word for word"
+            subtitle="Quoted exactly, with the plain-English reading kept separate underneath so you can always see which is the law and which is us."
+          />
+          <ul className="space-y-4">
+            {LIFECYCLE_AUTHORITY_IDS.map((id) => {
+              const a = WAGE_ORDER_ENTRY_AUTHORITIES.find((x) => x.id === id);
+              if (!a) return null;
+              return (
+                <li key={a.id}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                    {a.cite}
+                  </p>
+                  <blockquote className="mt-1 border-l-2 border-[var(--admin-accent)] pl-3 text-sm italic text-[var(--admin-text)]">
+                    {a.quote}
+                  </blockquote>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{a.soWhat}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+
+        {/* THE TRAPS AROUND STOPPING. Mistakes competent people make at the
+            moment of clicking, not definitions. */}
+        <Card>
+          <CardHeader
+            title="Ways this goes wrong"
+            subtitle="Each of these looks reasonable at the moment of clicking and is expensive afterwards."
+          />
+          <ul className="space-y-4">
+            {LIFECYCLE_LESSONS.map((lesson) => (
+              <li key={lesson.topic}>
+                <p className="text-sm font-semibold text-[var(--admin-text)]">{lesson.topic}</p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  {lesson.plainEnglish}
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <span className="font-semibold">Why it matters: </span>
+                  {lesson.whyItMatters}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
 
         {/* THE VERBATIM SOURCE TEXT. Michael asked for this by name, and it is
             rendered as a quotation with its citation, never paraphrased. */}
