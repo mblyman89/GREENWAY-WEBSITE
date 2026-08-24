@@ -484,6 +484,24 @@ describe("N4 the Accounting and Lyman tabs", () => {
          */
         "/admin/books/form-941",
         /*
+         * books-47. The annual federal unemployment return.
+         *
+         * Added the moment the screen was written, because this list is the
+         * only thing in the repository that notices a screen going dark, and
+         * the 940 had spent an entire slice as an engine, a store, a set of
+         * authorities and a hundred-odd passing tests with no door into it.
+         *
+         * It matters more here than the count of tests suggests. The 940 is
+         * the form where doing nothing is silently expensive: the difference
+         * between the 6.0% headline rate and the 0.6% effective rate is earned
+         * by paying Washington on time, and if nobody ever opens the screen
+         * nobody ever sees that the credit was lost. A 941 that goes unfiled
+         * produces a notice within months. A 940 credit that goes unclaimed
+         * produces a bill ten times larger and no notice at all, because the
+         * return was filed and was arithmetically correct.
+         */
+        "/admin/books/form-940",
+        /*
          * books-46. The annual wage statement, and the first entry in this list
          * whose engine was NEVER unreachable — it was built and registered in
          * the same slice, which is the habit this whole file exists to enforce.

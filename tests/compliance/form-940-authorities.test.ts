@@ -345,7 +345,10 @@ describe("books-43: every Form 940 quote is verbatim", () => {
 
 describe("books-43: the authority set is complete and correctly weighted", () => {
   it("carries every authority this slice researched", () => {
-    expect(FORM_940_OWN_AUTHORITIES.length).toBe(18);
+    // 18 from books-43, plus the three line-level passages books-47 added so
+    // that the lessons for lines 3, 7 and 17 carry authority of their own
+    // rather than teaching on my say-so (standing rule 24).
+    expect(FORM_940_OWN_AUTHORITIES.length).toBe(21);
   });
 
   it("has unique ids", () => {

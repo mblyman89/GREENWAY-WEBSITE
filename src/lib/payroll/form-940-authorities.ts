@@ -311,6 +311,81 @@ export const I940_LINE_5_WAGE_BASE: GuidanceAuthority = {
 };
 
 /**
+ * LINE 3 — "ALL PAYMENTS", INCLUDING THE ONES THAT ARE NOT TAXABLE.
+ *
+ * The sentence that matters is the third one: "even if the payments aren't
+ * taxable for FUTA". Line 3 is deliberately gross. People who enter their
+ * taxable figure here and then subtract again on line 5 remove the same money
+ * twice and understate the tax, which is why this passage is quoted onto the
+ * line 3 lesson rather than merely paraphrased.
+ *
+ * The elision skips the long bulleted catalogue of includable compensation —
+ * salaries, fringe benefits, cafeteria plans and so on — and resumes at the
+ * sentence about payment method. Nothing of substance is omitted from the
+ * proposition being cited: that line 3 is everything.
+ */
+export const I940_LINE_3_ALL_PAYMENTS: GuidanceAuthority = {
+  id: "i940-line-3-all-payments",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), line 3 - Total Payments to All Employees",
+  quote:
+    "Report the total payments you made during the calendar year on line 3. Include payments for " +
+    "the services of all employees, even if the payments aren't taxable for FUTA. Your method of " +
+    "payment doesn't determine whether payments are wages.",
+  soWhat:
+    "Line 3 is gross and it is everything. The IRS says to include payments that are not even " +
+    "taxable for FUTA, because the subtracting happens later on lines 4 and 5. Entering an " +
+    "already-reduced figure here and then subtracting again takes the same money out twice and " +
+    "understates the tax you owe.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 7 — THE ONLY FIGURE ON THE FORM THAT TAX IS ACTUALLY CHARGED ON.
+ *
+ * Two sentences, quoted together because line 7 is meaningless without line 6:
+ * the subtotal of exempt payments and above-ceiling excess is what gets taken
+ * off the gross. Line 7 is then the taxable base, and every dollar of FUTA
+ * flows from it.
+ */
+export const I940_LINE_7_TAXABLE_WAGES: GuidanceAuthority = {
+  id: "i940-line-7-taxable-wages",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), line 7 - Total Taxable FUTA Wages",
+  quote:
+    "To figure your subtotal, add the amounts on lines 4 and 5 and enter the result on line 6. " +
+    "... To figure your total taxable FUTA wages, subtract line 6 from line 3 and enter the " +
+    "result on line 7.",
+  soWhat:
+    "Line 7 is the one figure on the form that tax is genuinely charged on. Everything above it " +
+    "is bookkeeping: gross in line 3, exempt and above-ceiling money out through line 6. Divide " +
+    "line 7 by $7,000 and you get the number of full wage bases you funded this year, which is a " +
+    "headcount sanity check you can do in your head.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 17 — THE FORM'S OWN INTERNAL PROOF.
+ *
+ * "must equal line 12" is not advice. It is an identity, and it is the single
+ * cheapest error check on the whole return: if Part 5 does not foot to line
+ * 12, something upstream is wrong and the IRS will see it immediately.
+ */
+export const I940_LINE_17_MUST_EQUAL_12: GuidanceAuthority = {
+  id: "i940-line-17-must-equal-12",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), line 17 - Total Tax Liability for the Year",
+  quote:
+    "Your total tax liability for the year must equal line 12. Copy the amount from line 12 onto " +
+    "line 17.",
+  soWhat:
+    "This is the form checking itself. Part 5 splits the year's tax across four quarters, and the " +
+    "four quarters must add back to line 12 to the cent. If they do not, the quarterly split is " +
+    "wrong, and it is far better to find that here than in a notice.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
  * LINE 8. The form computes tax at 0.6% here, BEFORE any adjustment — that is,
  * it optimistically assumes the full 5.4% credit. Lines 9, 10 and 11 then claw
  * it back if the assumption was wrong. Understanding that ordering is what
@@ -697,13 +772,16 @@ export const FORM_940_OWN_AUTHORITIES: readonly GuidanceAuthority[] = [
   I940_RATE_AND_CREDIT,
   I940_CREDIT_REQUIRES_TIMELY_STATE_PAYMENT,
   I940_ON_TIME_AND_LATE_DEFINED,
+  I940_LINE_3_ALL_PAYMENTS,
   I940_LINE_5_WAGE_BASE,
+  I940_LINE_7_TAXABLE_WAGES,
   I940_LINE_8_BEFORE_ADJUSTMENTS,
   I940_LINE_9_ALL_EXCLUDED,
   I940_WORKSHEET_TRIGGER,
   I940_WORKSHEET_IS_NOT_FILED,
   I940_WORKSHEET_LINE_10,
   I940_LINE_12_TOTAL,
+  I940_LINE_17_MUST_EQUAL_12,
   I940_WHEN_TO_FILE,
   I940_DEPOSIT_THRESHOLD,
   I940_FOURTH_QUARTER,
