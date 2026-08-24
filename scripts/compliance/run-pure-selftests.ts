@@ -46,6 +46,15 @@ import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core"
 // pure test below, not this server-only-free runner. See
 // tests/compliance/product-lookup-core.test.ts.
 import { __runProductLookupParseTests } from "../../src/lib/inventory/product-lookup-parse";
+// books-47, SLICE D: the Form / Why / Check teaching surface. All three are
+// pure and browser-safe by construction -- none may touch node:fs, because the
+// explorer that consumes them is a client component. Registering them here
+// means CI runs their embedded self-tests even if the vitest file is ever
+// renamed or skipped: a self-test nothing invokes is dead code wearing a green
+// check (rule 50).
+import { __runFormBoxCoreTests } from "../../src/lib/payroll/form-box-core";
+import { __runFormBoxAdapterTests } from "../../src/lib/payroll/form-box-adapters";
+import { __runFormBoxUiCoreTests } from "../../src/lib/payroll/form-box-ui-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
@@ -809,6 +818,19 @@ async function main() {
 
   __runAuditHubGuidanceCoreTests();
   console.log("audit-hub-guidance-core self-tests: all passed");
+
+  // books-47 slice D, THE TEACHING SURFACE. Ordered the way the data flows:
+  // the box model first, then the adapters that translate each engine into it,
+  // then the screen logic that draws the result. A failure in the model makes
+  // the other two meaningless, so it must report first.
+  __runFormBoxCoreTests();
+  console.log("form-box-core self-tests: all passed");
+
+  __runFormBoxAdapterTests();
+  console.log("form-box-adapters self-tests: all passed");
+
+  __runFormBoxUiCoreTests();
+  console.log("form-box-ui-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
