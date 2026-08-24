@@ -59,6 +59,7 @@ import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { form940Boxes } from "@/lib/payroll/form-box-adapters";
 import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
+import { form940Checks } from "@/lib/payroll/form-940-checks";
 import { loadForm940 } from "@/lib/payroll/form-940-store";
 import { formatCents } from "@/lib/payroll/payroll-deposit-schedule-core";
 
@@ -244,6 +245,7 @@ export default async function Form940Page({
           subtitle="Click a line number to be taught it: what it is, where it came from, and the law behind it."
           boxes={form940Boxes(result.ret)}
           lessons={FORM_940_LESSONS}
+          checks={form940Checks(result.ret)}
         />
       ) : null}
 
