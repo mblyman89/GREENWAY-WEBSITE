@@ -55,6 +55,7 @@ import { __runProductLookupParseTests } from "../../src/lib/inventory/product-lo
 import { __runFormBoxCoreTests } from "../../src/lib/payroll/form-box-core";
 import { __runFormBoxAdapterTests } from "../../src/lib/payroll/form-box-adapters";
 import { __runFormBoxUiCoreTests } from "../../src/lib/payroll/form-box-ui-core";
+import { __runFormBoxTeachingCoreTests } from "../../src/lib/payroll/form-box-teaching-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
@@ -831,6 +832,9 @@ async function main() {
 
   __runFormBoxUiCoreTests();
   console.log("form-box-ui-core self-tests: all passed");
+
+  __runFormBoxTeachingCoreTests();
+  console.log("form-box-teaching-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

@@ -796,7 +796,7 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The law, verbatim | `form-w2-authorities.ts` (28 own + 13 borrowed = 41) | `form-w2-authorities.test.ts` (39) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
-| The screen | `src/app/admin/books/form-w2/page.tsx` (881 lines) | `nav-gate-core.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (933 lines) | `nav-gate-core.test.ts` |
 
 **Both W-2 traps are implemented and on screen**, not merely documented: box 1
 exceeding boxes 3 and 5 renders GREEN with the §3121(a)(2)(B) carve-out quoted

@@ -57,7 +57,8 @@ import Link from "next/link";
 import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
-import { form940Boxes } from "@/lib/payroll/form-box-adapters";
+import { form940Boxes, FORM_ID_940 } from "@/lib/payroll/form-box-adapters";
+import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
 import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { form940Checks } from "@/lib/payroll/form-940-checks";
 import { loadForm940 } from "@/lib/payroll/form-940-store";
@@ -238,16 +239,45 @@ export default async function Form940Page({
         </Card>
       ) : null}
 
-      {/* ── 4. take me to school ─────────────────────────────────────── */}
-      {result.ok ? (
-        <FormBoxExplorer
-          title="Form 940, box by box"
-          subtitle="Click a line number to be taught it: what it is, where it came from, and the law behind it."
-          boxes={form940Boxes(result.ret)}
-          lessons={FORM_940_LESSONS}
-          checks={form940Checks(result.ret)}
-        />
-      ) : null}
+      {/* ── 4. take me to school ───────────────────────────────────────
+          THE TABS ARE NOT CONDITIONAL ANY MORE (books-49).
+
+          Michael, verbatim, after inspecting the shipped build: "I am unable
+          to see or use the tab system we built... The form pages are still
+          just walls of text."
+
+          He was right, and the cause was this line. It used to read
+          `{result.ok ? <FormBoxExplorer .../> : null}`. `result.ok` is false
+          until real pay runs exist, and the first payroll is 1 January 2027 —
+          so the teaching surface was never on the page, and would not have
+          been for a year. Verified by running the engine against the data the
+          live system actually has and printing the guard: false.
+
+          The confusion the old code made was between two different sentences:
+          "I cannot compute your figures" and "I cannot teach you this form".
+          Only the first was ever true. A form's boxes, captions, whose-money
+          classification and law do not depend on Greenway having run payroll.
+
+          So the explorer now ALWAYS renders. When the engine produced a
+          return, it teaches the real figures. When it did not, it teaches the
+          same boxes with every figure marked "not computed yet" — never as
+          0.00, because a zero is a claim. */}
+      <FormBoxExplorer
+        title="Form 940, box by box"
+        subtitle={
+          result.ok
+            ? "Click a line number to be taught it: what it is, where it came from, and the law behind it."
+            : "Your figures are not available yet, so the amounts are marked as not computed. Every box still teaches — click a line number."
+        }
+        boxes={result.ok ? form940Boxes(result.ret) : teachingBoxes(FORM_ID_940)}
+        lessons={FORM_940_LESSONS}
+        /* Checks need a computed return by definition: a reconciliation
+           compares two figures, and with no figures there is nothing to
+           compare. Passing [] is honest here — the Check tab says so — and is
+           NOT the same as the permanently-empty tab rule 39 warns about,
+           because it becomes populated the moment a return exists. */
+        checks={result.ok ? form940Checks(result.ret) : []}
+      />
 
       <Card>
         <CardHeader title="The related returns" />

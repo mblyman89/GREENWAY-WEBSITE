@@ -342,6 +342,7 @@ function fakeBox(over: Partial<FormBox>): FormBox {
     whose: "employer_cost",
     derivation: "d",
     blankOnPurpose: null,
+    notComputedYet: null,
     emphasise: false,
     ...over,
   };

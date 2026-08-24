@@ -2207,3 +2207,88 @@ building the matcher twice.
     original inline helper - an orphaned helper compiles forever (rule 50), which
     is how the now-deleted `Lesson` function survived the first extraction pass
     and had to be found by grep rather than by `tsc`.
+
+92. A FEATURE GATED ON DATA THAT DOES NOT EXIST YET IS A FEATURE THAT DOES NOT
+    EXIST. Michael reported the teaching tabs as invisible: "The form pages are
+    still just walls of text." Every gate was green. `<FormBoxExplorer` was in
+    all three files, real lessons were passed, real boxes were passed, the Check
+    tab was wired. The component was nested inside `{result.ok ? ... : null}`
+    and `result.ok` is false until real pay runs exist - first payroll 1 January
+    2027. So the feature was built, tested, merged and unreachable for a year.
+    THE DIAGNOSIS THAT FOUND IT was not reading the source. It was RUNNING the
+    engine with the input the live system actually has today and printing the
+    guard's value: `result.ok: false` -> `explorer IS NOT RENDERED`. Reading the
+    ternary shows what it does; running it shows what it does HERE, NOW.
+    THE RULE: for anything conditional on computed data, evaluate the condition
+    against the system's CURRENT state, not its intended one. And separate the
+    two sentences a refusal can mean: "I cannot compute your figures" is often
+    true, "I cannot teach you the form" almost never is. Static teaching must
+    never be gated on dynamic data.
+
+93. A FILE CHECKED ONLY AGAINST ITSELF AGREES WITH ITSELF.
+    The teaching specimen written in this slice held its own copy of whose money
+    each box is, because the adapters' tables were private. It DRIFTED WITHIN
+    HOURS - same slice, same author, same day: `lni-hours` classified
+    `not_money` in the copy and `shared` in the engine, and the two bottom-line
+    boxes of the Washington returns (`esd-total`, `lni-premium`) were missing
+    from the copy altogether. Four self-tests were green the whole time, because
+    all four read only the file they were testing.
+    It was found by BUILDING A REAL RETURN and printing the engine's lines
+    beside the hand-written table.
+    THE RULE: a gate over derived data must compare against the SOURCE, not
+    against a sibling copy. If a second copy is needed because the first is
+    private, export the first - privacy that forces duplication costs more than
+    it protects (rule 25). And when a duplicate is found, do not correct its
+    three wrong values; delete its ability to hold values at all. Here
+    `TeachingBox.whose` was replaced by `whoseSource`, which names WHERE the
+    answer lives and cannot contain one.
+
+94. AN IMPOSSIBLE BRANCH CAN HIDE THE BUG THAT MAKES IT IMPOSSIBLE.
+    The specimen decided a box's unit with
+      `t.whose === "not_money" ? (t.box === "lni-hours" ? "hours" : "count") : "money"`
+    The inner branch names one box id in a renderer, which is already a smell.
+    Worse: `lni-hours` is not `not_money` at all, so once the classification was
+    corrected the "hours" branch could never be reached - and while the
+    classification was WRONG, the branch existed to paper over it. A hand-written
+    special case and a misclassification were propping each other up.
+    THE RULE: a conditional naming a specific identifier inside a generic mapper
+    is a place to look for a wrong value upstream, not a place to add a case.
+    Derive the consequence from the classification (`not_money` MEANS not
+    dollars) so there is one fact rather than a fact plus a workaround for it.
+
+95. A LOOP THAT SKIPS EMPTY THINGS WILL SKIP THE THING THAT IS EMPTY BY DESIGN.
+    The Washington tab loop ended `if (boxes.length === 0) return null`, which
+    looks like defensive tidiness. Form 5208B is a WAGE DETAIL - one row per
+    person, carried in `ret.wageDetail`, never in `ret.lines` - so it emits zero
+    lines with a complete year of real payroll behind it, and that tab was
+    dropped ALWAYS, not merely early. Unlike the gating bug it would never have
+    healed on its own. Proved by building a valid quarter and counting per form:
+    5208A 3, PFML 3, L&I 4, 5208B ZERO.
+    Worse, the prose renderer three hundred lines above ALREADY knew this and
+    called `waWageDetailRows` for that form. The knowledge existed in the file
+    and the second renderer did not inherit it.
+    THE RULE: before skipping an empty collection, ask whether any member is
+    legitimately empty. Then assert that emptiness AS a fact (rule 87) so the
+    day it changes is a red build: this slice asserts the 5208B emits no lines,
+    that it carries wage-detail rows instead, and that it is taught anyway.
+    Corollary: when adding a renderer beside an existing one, read the existing
+    one for the special cases it already handles.
+
+96. A ZERO IS A CLAIM; "NOT KNOWN YET" IS A DIFFERENT STATE AND NEEDS ITS OWN
+    FIELD. Showing a form before payroll exists meant every figure column had no
+    value. The cheap answer is `amountCents: 0`, which renders "$0.00" - and
+    "$0.00" in a wage box says Greenway paid somebody nothing, while "0 hours"
+    on an L&I return is a reportable-hours figure the state acts on. The
+    existing `blankOnPurpose` could NOT be reused: it means "the law says leave
+    this empty", a statement about the form. This needed "we have not counted
+    yet", a statement about our data. Collapsing them would tell Michael the IRS
+    wants a box blank when in truth we simply do not know.
+    So `notComputedYet: string | null` was added and made REQUIRED, not
+    optional - which broke eight call sites and `tsc` named every one. That is
+    the point: an optional field would have defaulted the eight silently.
+    THE RULE: a new state gets a new field, the field is required so the compiler
+    finds every site, and the safety is restated at each site rather than
+    inherited (rule 62d) - `splitMoney` skips uncomputed boxes explicitly so
+    placeholder amounts can never be summed into a total Michael reads as fact.
+    And order the formatter so the unknown case is checked FIRST; placed after
+    the money branch it would print the very "$0.00" it exists to prevent.

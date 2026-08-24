@@ -40,6 +40,7 @@ function box(over: Partial<FormBox>): FormBox {
     whose: "employer_cost",
     derivation: "derivation",
     blankOnPurpose: null,
+    notComputedYet: null,
     emphasise: false,
     ...over,
   };
