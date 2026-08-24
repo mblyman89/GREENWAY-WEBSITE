@@ -2520,3 +2520,85 @@ building the matcher twice.
     least likely to be tested, because when it passes nobody looks at it and when
     it fails everyone blames the thing under test. Rule 22a says a test is a
     suspect. So is the harness.
+
+105. A MIGRATION THAT REFUSES MUST NOT ALSO HAVE INSTALLED ITSELF. ASK WHAT IT
+    LEFT BEHIND, NOT ONLY WHAT IT SAID.
+    Migration 0206 installs a guard trigger and then checks that the current
+    data satisfies it. The first draft did those in that order. Every statement
+    in a migration auto-commits on its own, so when the check failed, psql had
+    ALREADY committed the CREATE TRIGGER statements. The migration reported
+    refusal and had installed itself anyway.
+    That is worse than either clean outcome. "It refused" and "it installed" are
+    both survivable, because in both cases the operator's mental model matches
+    the database. "It refused AND installed" means the two disagree and nothing
+    in the output says so - and this repository's migrations are applied BY HAND
+    by the owner in the Supabase SQL editor, so the only reader of that output
+    is the person least equipped to detect the contradiction.
+    THE RULE: validate preconditions BEFORE creating anything, and wrap a
+    migration that has more than one effect in an explicit begin/commit so a
+    failure anywhere rolls back the file as a unit. Then assert the post-state
+    of the FAILURE PATH in the verify script: after a refused install, the count
+    of the objects it would have created must be zero.
+    HOW IT WAS FOUND: not by review. By a verify check that asked the awkward
+    follow-up question - "it refused, fine; now what does the database look
+    like?" Rule 39a says the pre-state is evidence. So is the post-state of the
+    path you hope never runs.
+
+106. WHEN A NEW CHECK FAILS, FIND OUT WHICH MECHANISM REFUSED BEFORE YOU CLAIM
+    OR FIX ANYTHING.
+    Writing the empty-roster guard produced two red results that looked like my
+    bugs and were not. A TRUNCATE was refused - by a pre-existing foreign key
+    from gl_journal_lines, not by my trigger. A legitimate two-statement
+    ownership reshuffle was refused - by the pre-existing statement-level sum
+    trigger from 0172, which fails on the intermediate 95000 total even though
+    the transaction would have ended at exactly 100000. Both were reproduced
+    against the SHIPPED schema with my migration absent, which is the only way
+    to tell "mine" from "already there".
+    THE RULE: before fixing a failure a new guard appears to cause, re-run it
+    with the new guard removed. If it still fails, it is a PROPERTY of the
+    system: record it, name the mechanism, and do not take credit for a refusal
+    someone else's constraint produced. If it only fails with the guard present,
+    it is yours.
+    THE COROLLARY THAT MATTERS MORE: a verify script must name the mechanism it
+    observed, not just the outcome. "Truncate is refused" reads like the new
+    trigger works. "Refused by the pre-existing foreign key, NOT by 0206" is the
+    truth, and it is what tells the next reader that TRUNCATE ... CASCADE is a
+    separate case still needing its own test - which it was, and which then
+    found the real gap.
+
+107. ASK POSTGRES WHAT IT PERMITS BEFORE DESIGNING AROUND WHAT YOU BELIEVE IT
+    PERMITS.
+    The empty-roster guard had to tolerate a transient empty state, because 0205
+    replaces the roster by DELETE-then-INSERT inside one transaction. The design
+    therefore depended on facts about PostgreSQL that I could easily have
+    asserted from memory and got wrong. Established by asking a real server
+    instead: a naive statement-level emptiness check DOES break 0205 (verified,
+    it failed); a constraint trigger MAY NOT be FOR EACH STATEMENT (postgres
+    rejects it outright, so the design is forced to FOR EACH ROW); and a
+    DEFERRABLE INITIALLY DEFERRED trigger both permits 0205's delete-then-insert
+    AND still refuses a real emptying at commit.
+    THE RULE: when a design rests on the semantics of a database feature -
+    trigger timing, deferral, what fires on TRUNCATE, what auto-commits - stand
+    up a throwaway instance and make it answer, in the same slice, before the
+    migration is written. Three assumptions here, and the naive one was wrong;
+    had it shipped it would have broken an EXISTING migration the owner runs by
+    hand. Reading the manual is good. Getting a rc=3 from the actual server is
+    proof.
+
+108. AN OWNER'S ANSWER CLOSES A QUESTION AND USUALLY OPENS A BETTER ONE. WRITE
+    DOWN BOTH.
+    Asked whether his mother and step-father receive distributions, Michael
+    answered that he pays them by carrying them on his insurance plan and paying
+    the premiums as their compensation. That CLOSES the distributions question -
+    receives_distributions = false is correct, no cash went out - and it opens a
+    larger one, because a premium paid for a 2%-or-more shareholder-employee of
+    an S corporation is compensation that belongs in box 1 of a W-2. The filed
+    2025 W-2s show exactly that shape: box 14 "HEALTH" of 11,029.32 against box
+    1 of 11,029.32 for Teri Becker, and 30,980.16 against 53,530.16 for Michael.
+    THE RULE: when an owner answers, update the register to CLOSED and, in the
+    same edit, record what the answer newly implies - with the mechanism named,
+    the mirrored authority cited if one exists, and an explicit statement of
+    where the verified ground stops. Here §1372 and §318 are NOT mirrored in
+    this repository, so the fringe-benefit and family-attribution consequences
+    are flagged for the preparer and computed by nothing. An answer that only
+    ever closes things is an answer nobody thought about.

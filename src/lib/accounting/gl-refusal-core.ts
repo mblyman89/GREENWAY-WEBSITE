@@ -503,6 +503,34 @@ const REFUSALS: Record<
       "Check the roster against the Schedule K-1s: every shareholder must be listed by name with their real percentage, and the number of shareholders must match. Percentages that happen to total 100% are not enough — the wrong list of people can still add up perfectly.",
   },
 
+  /**
+   * WHY THIS IS A THIRD ENTRY AND NOT A LINE IN EITHER OF THE OTHER TWO.
+   *
+   * There are now three distinct ways the ownership register can be wrong, and
+   * they need three different sentences because they need three different
+   * actions from the reader:
+   *
+   *   GL_OWNERSHIP    the percentages do not total 100%   -> fix the numbers
+   *   GL_ROSTER_FIX   the wrong PEOPLE are listed         -> fix the names
+   *   GL_ROSTER_EMPTY there is nobody listed at all       -> load the roster
+   *
+   * The last one is the one that hid the longest, because the check that was
+   * meant to catch it groups the shareholders by entity and rejects any group
+   * that does not total 100%. Zero rows produce zero groups, and a group that
+   * does not exist cannot be rejected, so an empty register sailed through the
+   * exact test written to police it.
+   *
+   * It matters because emptiness is not read as "unknown" downstream, it is
+   * read as ZERO. IRC 6699(b)(2) multiplies the late-filing penalty by the
+   * number of shareholders, so an empty roster prices a real penalty at $0.00
+   * - the same silent-zero failure books-21 exists to prevent.
+   */
+  GL_ROSTER_EMPTY: {
+    title: "This company is set up as an S corporation but nobody is listed as an owner.",
+    whatToDo:
+      "Load the shareholders before doing anything else. An empty list is not treated as “we don’t know yet” — it is counted as zero people, and several tax figures multiply by that count, so a real penalty can quietly come out as $0.00. Take the names and percentages from the Schedule K-1s on the last filed return.",
+  },
+
   // --- automatic posting --------------------------------------------------
   GL_AUTOPOST_NOT_ELIGIBLE: {
     title: "That kind of entry is never posted automatically.",
