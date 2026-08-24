@@ -1,4 +1,4 @@
-# Learning the books — 82 lessons that were already written, and nobody could read
+# Learning the books — 83 lessons that were already written, and nobody could read
 
 **For Michael. Written at the end of books-44, slice C.**
 
@@ -59,7 +59,7 @@ material to do it had been sitting in the repository the whole time.
 
 ## What now exists
 
-A screen at **Accounting → Learning the Books**. Eight units, 82 lessons, in the
+A screen at **Accounting → Learning the Books**. Eight units, 83 lessons, in the
 order Greenway's year actually raises them.
 
 | # | Unit | Lessons | The question it answers |
@@ -71,8 +71,8 @@ order Greenway's year actually raises them.
 | 5 | Checking your own work — before anyone else does | 5 | How do I know the quarter is right before I file it? |
 | 6 | Closing the month — making a period stop moving | 8 | What does it actually mean to say a month is finished? |
 | 7 | The S-corporation year — where the shop's numbers become yours | 5 | Why does an S corporation need to know which year it started being one? |
-| 8 | When something is late — penalties and interest | 17 | It slipped. What does it cost, and what do I do now? |
-| | **Total** | **82** | |
+| 8 | When something is late — penalties and interest | 18 | It slipped. What does it cost, and what do I do now? |
+| | **Total** | **83** | |
 
 Every unit tells you **why it sits where it sits**. Unit 1 is first because
 every other unit's arithmetic depends on knowing that money is an integer number
@@ -101,7 +101,7 @@ Where a lesson rests on somebody else's words — a statute, a regulation, an IR
 publication — those words appear in an amber panel, quoted exactly. **Amber is
 always someone else's language and never my commentary.** 61 different
 authorities are cited across the course, and a test checks every single citation
-resolves to a real document. Sixteen of the 82 lessons cite nothing, because they
+resolves to a real document. Sixteen of the 83 lessons cite nothing, because they
 are teaching arithmetic or judgement rather than law; those say so explicitly
 rather than leaving a blank space where you would wonder if something failed to
 load.
@@ -110,7 +110,7 @@ load.
 
 ## The number at the top of the screen is not typed
 
-The screen says "82 lessons in 8 units". **Nobody wrote 82 anywhere.** It is
+The screen says "83 lessons in 8 units". **Nobody wrote 83 anywhere.** It is
 counted from the lesson files every time the page loads.
 
 This matters more than it sounds. If the count were typed, it would be correct on
@@ -124,6 +124,24 @@ literal `82` in executable code and fail if it finds one. It allows the number i
 comments, where it is describing history. If a lesson is ever added to any of the
 six teaching files, it appears in the course automatically and the count moves
 by itself.
+
+**AND THAT HAS NOW ACTUALLY HAPPENED, SO HERE IS THE RECEIPT (books-50).** The
+paragraph above was a promise about a thing that had not been tested by events
+yet. It has been now. Fixing your shareholder roster meant the system had to
+start *calculating* your §6699 late-filing exposure from the number of
+shareholders rather than having it typed into a sentence — because the typed
+figure had been worked out from a roster of three people when your filed
+Schedule K-1s report four, and it was therefore $2,340 too low. That calculation
+is a new piece of engine, a new piece of engine is not allowed to ship without a
+lesson, and so the course grew from **82** lessons to **83**, and unit 8 grew from
+17 to 18.
+
+Nothing was edited to make that happen. I added the lesson and placed it in unit
+8 next to the penalty it sizes; the heading of this document, the unit table
+above, the total row, and the number on the screen itself all moved on their own,
+and the tests that re-count them from the code told me which sentences in *this
+file* had gone stale. That is exactly the behaviour the paragraph above promised,
+observed rather than asserted.
 
 There is also a **coverage banner** at the top of the screen. It is green when
 every lesson that exists is placed in the course. If one is ever written and not
@@ -243,7 +261,7 @@ that is where it would have shown up.
 
 ## What I would do with this, if I were you
 
-**Do not read it front to back.** It is 82 lessons and it is not a book.
+**Do not read it front to back.** It is 83 lessons and it is not a book.
 
 Read **Unit 1** properly, once. Seven lessons, and it explains why the system
 refuses numbers that look perfectly fine to you — that is the thing most likely
@@ -305,6 +323,11 @@ rates have to be in the system before it does.
 
 ---
 
-*Verified at the time of writing: 429 test files, 10,320 tests, all passing.
-82 lessons, 8 units, 0 unplaced, 0 broken references. 27 sabotage attempts,
-27 caught, 3 controls correctly allowed through.*
+*Verified at the time of writing — that is, at the end of books-44, and these are
+deliberately left as the books-44 figures rather than quietly restated: 429 test
+files, 10,320 tests, all passing. 82 lessons, 8 units, 0 unplaced, 0 broken
+references. 27 sabotage attempts, 27 caught, 3 controls correctly allowed
+through. The lesson count is **83** as of books-50, for the reason given in "the
+number at the top of the screen is not typed" above; the count on the screen is
+recounted from the code on every page load, so it is the live figure and this
+line is a dated snapshot.*

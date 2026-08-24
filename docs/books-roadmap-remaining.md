@@ -124,8 +124,9 @@ figure — not quietly pick one for you.
 
 Two related flags came out of that same transcript review and belong here
 rather than buried in a research file: the **disproportionate distributions**
-question, which touches the one-class-of-stock requirement (your mother's 10%
-is allocated but not paid), and the **CHAMP-structure substantiation** gap —
+question, which touches the one-class-of-stock requirement (not every holder
+is paid the distribution they are allocated; corrected in books-50 — your
+mother holds 5%, and the 10% figure is the Becker household, two shareholders), and the **CHAMP-structure substantiation** gap —
 the written leases, square-footage study, and duty studies that a 280E cost
 allocation needs standing behind it. You have told me those documents do not
 exist yet, so drafting the templates is on my side of the line, not yours.

@@ -21,6 +21,14 @@
  * Debit/credit presentation is a display concern, handled by toDebitCredit().
  */
 
+// The one place that knows who owns Greenway (books-50). Imported so the
+// self-test fixture cannot drift from the filed Form 1120-S the way it did
+// before: it carried a three-person register (Michael 85, mother 10,
+// grandfather 5) that no filed return supports.
+// shareholder-roster-core is itself dependency-free, so this adds no cycle and
+// keeps this module pure.
+import { GREENWAY_SHAREHOLDERS } from "./shareholder-roster-core";
+
 // ---------------------------------------------------------------------------
 // 0) Domain types — mirrored exactly from migration 0172.
 // ---------------------------------------------------------------------------
@@ -927,12 +935,16 @@ export function __runLedgerCoreTests(): string {
   ok(cashRow?.debitCents === 150000 && cashRow?.creditCents === 0, "net debit lands in the debit column");
 
   // ---- ownership -----------------------------------------------------------
-  const holders = [
-    { name: "Michael Lyman", ownershipMilliPct: 85000 },
-    { name: "Mother", ownershipMilliPct: 10000 },
-    { name: "Nicholas Mullan", ownershipMilliPct: 5000 },
-  ];
-  ok(assertOwnershipSums(holders).ok, "85 + 10 + 5 = 100%");
+  // The FILED roster, four shareholders at 85/5/5/5, taken from the single
+  // source of truth rather than hand-typed (books-50). This fixture previously
+  // read Michael 85 / "Mother" 10 / Nicholas 5, which is not who owns this
+  // company: the 2024 Form 1120-S carries four Schedule K-1s.
+  const holders = GREENWAY_SHAREHOLDERS.map((s) => ({
+    name: s.name,
+    ownershipMilliPct: s.ownershipMilliPct,
+  }));
+  ok(assertOwnershipSums(holders).ok, "85 + 5 + 5 + 5 = 100%");
+  ok(holders.length === 4, "four shareholders, per box I of the filed return");
   ok(!assertOwnershipSums([{ name: "A", ownershipMilliPct: 90000 }]).ok, "90% alone is rejected");
 
   // Allocation must never lose or invent a cent — test a deliberately awkward
@@ -941,17 +953,49 @@ export function __runLedgerCoreTests(): string {
   const allocSum = alloc.reduce((s, a) => s + a.amountCents, 0);
   ok(allocSum === 100001, `allocation sums exactly to the original (got ${allocSum})`);
   ok(alloc[0].amountCents === 85001, `largest remainder goes to the 85% holder (got ${alloc[0].amountCents})`);
+  ok(
+    alloc[1].amountCents === 5000 && alloc[2].amountCents === 5000 && alloc[3].amountCents === 5000,
+    "and each 5% holder gets exactly 5000, not a rounded-up 5001",
+  );
 
   const allocNeg = allocateByOwnership(-100001, holders);
   ok(allocNeg.reduce((s, a) => s + a.amountCents, 0) === -100001, "negative allocation also sums exactly");
 
-  // Real 2024 K-1 ordinary income, $630,215.00 in cents. Michael's 85% share
-  // must reconcile to the penny against what the return reports.
-  const alloc2024 = allocateByOwnership(63021500, holders);
-  ok(alloc2024.reduce((s, a) => s + a.amountCents, 0) === 63021500, "2024 K-1 allocation sums exactly");
-  ok(alloc2024[0].amountCents === 53568275, `Michael's 85% of $630,215 (got ${alloc2024[0].amountCents})`);
-  ok(alloc2024[1].amountCents === 6302150, `mom's 10% of $630,215 (got ${alloc2024[1].amountCents})`);
-  ok(alloc2024[2].amountCents === 3151075, `grandfather's 5% of $630,215 (got ${alloc2024[2].amountCents})`);
+  // Real 2024 figures, and a correction of TWO errors in the previous version
+  // of this fixture (books-50).
+  //
+  // ERROR 1 was the roster: it allocated to a three-person register that put
+  // the mother at ten per cent and omitted the step-father entirely.
+  //
+  // ERROR 2 was subtler and worth spelling out. The old fixture fed $630,215
+  // in as the amount to be ALLOCATED, then asserted that "Michael's 85% of
+  // $630,215" is $535,682.75. But $630,215 is not the company's income - it IS
+  // Michael's 85% share, box 1 of his own Schedule K-1. Taking 85% of it a
+  // second time allocates a share of a share. The company total is Form 1120-S
+  // page 1, line 22: $741,431.
+  //
+  // Verified against the filed 2024 return: box 1 reads $630,215 for Michael
+  // and $37,072 for each of the other three, and 630,215 + 3 x 37,072 =
+  // 741,431 exactly. Note the preparer rounded the three small holders to
+  // whole dollars and let the majority holder absorb the residual - so his
+  // $630,215 sits $1.35 below an exact 85% of $741,431 ($630,216.35). That is
+  // the same "assign the remainder deliberately" discipline this allocator
+  // implements, done at whole-dollar granularity on the return.
+  const TOTAL_2024_CENTS = 74143100; // $741,431.00 - Form 1120-S line 22
+  const alloc2024 = allocateByOwnership(TOTAL_2024_CENTS, holders);
+  ok(
+    alloc2024.reduce((s, a) => s + a.amountCents, 0) === TOTAL_2024_CENTS,
+    "2024 allocation sums exactly to line 22",
+  );
+  ok(alloc2024[0].amountCents === 63021635, `Michael's 85% of $741,431 (got ${alloc2024[0].amountCents})`);
+  ok(alloc2024[1].amountCents === 3707155, `grandfather's 5% (got ${alloc2024[1].amountCents})`);
+  ok(alloc2024[2].amountCents === 3707155, `step-father's 5% (got ${alloc2024[2].amountCents})`);
+  ok(alloc2024[3].amountCents === 3707155, `mother's 5% (got ${alloc2024[3].amountCents})`);
+  // Nobody is at 10%: a 10% share of line 22 would be $74,143.10 (rule 87).
+  ok(
+    alloc2024.every((a) => a.amountCents !== 7414310),
+    "no shareholder receives a 10% allocation - that was the pre-books-50 error",
+  );
 
   // 2022 and 2023 K-1 figures, same reconciliation.
   ok(allocateByOwnership(46344000, holders).reduce((s, a) => s + a.amountCents, 0) === 46344000,

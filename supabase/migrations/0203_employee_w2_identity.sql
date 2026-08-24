@@ -44,8 +44,9 @@
 -- engine already implements it and refuses a premium recorded against someone
 -- not flagged. But `W2EmployeeFacts.isTwoPercentShareholder` had no source.
 --
--- public.gl_shareholders (0172) records OWNERSHIP — Michael 85%, his mother 10%,
--- his grandfather 5% — but it is a table of owners, not of employees. It has no
+-- public.gl_shareholders (0172) records OWNERSHIP — Michael 85%, his grandfather
+-- 5%, his step-father 5% and his mother 5%, per the filed Form 1120-S (corrected
+-- in books-50) — but it is a table of owners, not of employees. It has no
 -- employee_id. Ownership and employment are genuinely different relations: his
 -- mother is allocated income and is not an employee, and being a shareholder
 -- does not by itself make someone a shareholder-EMPLOYEE. Matching the two

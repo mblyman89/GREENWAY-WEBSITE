@@ -739,9 +739,14 @@ describe("B5: interest over a period, re-rated quarterly and compounded through"
 });
 
 describe("B6: §6699 — the penalty this system could not see", () => {
+  // FOUR shareholders, not three (books-50). Box I of the filed 2024 Form
+  // 1120-S - "Enter the number of shareholders who were shareholders during
+  // any part of the tax year" - reads 4, and that is the exact question
+  // §6699(b)(2) asks. The old fixture used 3, which understated Greenway's own
+  // twelve-month exposure by $2,340.
   const base = {
     monthsLate: 12,
-    shareholderCount: 3,
+    shareholderCount: 4,
     perShareholderPerMonthCents: SECTION_6699_STATUTORY_BASE_CENTS,
     reasonableCauseEstablished: false,
   };
@@ -749,31 +754,36 @@ describe("B6: §6699 — the penalty this system could not see", () => {
   it("THE FINDING: a year-late 1120-S with no tax due is not $0.00", () => {
     // Before books-21 the penalty engine answered $0.00 for exactly these
     // facts, because §6651 is a percentage of tax and an S corporation shows
-    // none. Measured, not assumed. At the mere statutory base it is $7,020, and
-    // the real §6699(e) figure is higher still.
+    // none. Measured, not assumed. Hand-computed: $195 x 12 months x 4
+    // shareholders = $9,360, and the real §6699(e) figure is higher still.
     const r = computeSection6699Penalty(base);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.penaltyCents).toBe(702_000);
+    expect(r.penaltyCents).toBe(936_000);
     expect(r.penaltyCents).not.toBe(0);
+    // The superseded three-shareholder answer, asserted as an absence so the
+    // regression is named rather than merely avoided (standing rule 87).
+    expect(r.penaltyCents).not.toBe(702_000);
+    expect(r.penaltyCents - 702_000).toBe(234_000);
     expect(r.monthsCharged).toBe(12);
   });
 
   it("multiplies per shareholder per month, and the split is irrelevant", () => {
-    // Michael 85 / mother 10 / grandfather 5. A 5% holder costs the same as an
-    // 85% holder, which is the counter-intuitive part.
+    // The filed split is 85/5/5/5. A 5% holder costs the same as an 85%
+    // holder, which is the counter-intuitive part.
     const one = computeSection6699Penalty({ ...base, shareholderCount: 1, monthsLate: 1 });
-    const three = computeSection6699Penalty({ ...base, shareholderCount: 3, monthsLate: 1 });
+    const four = computeSection6699Penalty({ ...base, shareholderCount: 4, monthsLate: 1 });
     expect(one.ok && one.penaltyCents).toBe(19_500);
-    expect(three.ok && three.penaltyCents).toBe(58_500);
-    expect((three.ok ? three.penaltyCents : 0)).toBe((one.ok ? one.penaltyCents : 0) * 3);
+    expect(four.ok && four.penaltyCents).toBe(78_000);
+    expect((four.ok ? four.penaltyCents : 0)).toBe((one.ok ? one.penaltyCents : 0) * 4);
   });
 
   it("charges one month for one day late — 'or fraction thereof'", () => {
     const r = computeSection6699Penalty({ ...base, monthsLate: 1 });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.penaltyCents).toBe(58_500);
+    // Hand-computed: $195 x 1 month x 4 shareholders = $780.00.
+    expect(r.penaltyCents).toBe(78_000);
     expect(r.plainEnglish).toMatch(/no such thing as being slightly late/i);
   });
 
@@ -781,9 +791,10 @@ describe("B6: §6699 — the penalty this system could not see", () => {
     const twelve = computeSection6699Penalty({ ...base, monthsLate: 12 });
     const thirteen = computeSection6699Penalty({ ...base, monthsLate: 13 });
     const twoYears = computeSection6699Penalty({ ...base, monthsLate: 24 });
-    expect(twelve.ok && twelve.penaltyCents).toBe(702_000);
-    expect(thirteen.ok && thirteen.penaltyCents).toBe(702_000);
-    expect(twoYears.ok && twoYears.penaltyCents).toBe(702_000);
+    // $195 x 12 months x 4 shareholders = $9,360.00, and no more however late.
+    expect(twelve.ok && twelve.penaltyCents).toBe(936_000);
+    expect(thirteen.ok && thirteen.penaltyCents).toBe(936_000);
+    expect(twoYears.ok && twoYears.penaltyCents).toBe(936_000);
     expect(thirteen.ok && thirteen.monthsCharged).toBe(SECTION_6699_MAX_MONTHS);
     expect(thirteen.ok && thirteen.plainEnglish).toMatch(/capped at 12 months/i);
     // And the uncapped case must NOT claim a cap.

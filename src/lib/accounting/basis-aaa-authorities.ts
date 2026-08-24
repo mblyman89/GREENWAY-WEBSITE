@@ -468,7 +468,8 @@ export const REG_1_1361_1_L_2_I_GOVERNING_PROVISIONS: GuidanceAuthority = {
     "distributions \"are to be given appropriate tax effect,\" meaning they get recharacterised as " +
     "something — a loan, compensation, a gift. So the honest output for Greenway is neither \"fine\" " +
     "nor \"your election is dead.\" It is: your governing documents decide the class question, and " +
-    "the gap between 85/10/5 and what was actually paid still has to be characterised. Both halves " +
+    "the gap between the 85/5/5/5 allocation and what was actually paid still has to be " +
+    "characterised. Both halves " +
     "get reported.",
   source: ECFR_1361_1,
 };

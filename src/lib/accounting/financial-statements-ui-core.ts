@@ -368,7 +368,7 @@ export type FsFactsOnFile = {
   hasAccumulatedEandP: boolean | null;
   /** Schedule M-2, line 8, prior year. */
   beginningAaaSupplied: boolean;
-  /** Beginning stock basis for all three shareholders. */
+  /** Beginning stock basis for all four shareholders. */
   beginningBasisSupplied: boolean;
 };
 

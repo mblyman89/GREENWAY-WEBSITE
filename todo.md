@@ -2363,3 +2363,160 @@ building the matcher twice.
     here, and the report says so rather than reasoning past the gap (rule 87).
     Under Sec. 280E the difference between a business expense and shareholder
     compensation changes tax actually owed, so "probably fine" is not available.
+
+101. A WRONG ROSTER STILL ADDS UP TO 100%. CHECK IDENTITY, NOT THE TOTAL.
+    Rule 7 recorded Greenway as THREE shareholders: Michael 85%, mother 10%,
+    grandfather 5%. The filed Form 1120-S carries FOUR Schedule K-1s at
+    85/5/5/5, and box I - "Enter the number of shareholders who were
+    shareholders during any part of the tax year" - reads 4. Michael confirmed
+    it in his own words: "there is 4 individuals. My wife and I: 85%, my
+    grandpa: 5%, and my mom and step father: 5% each," unchanged for nearly all
+    twelve years. So rule 7 was WRONG WHEN WRITTEN, not stale, and there is no
+    stock transfer to record. Rule 7 is SUPERSEDED, not edited (append-only).
+    Rule 7 was not fabricated, and that is the instructive part. Washington is
+    a community-property state, so the mother's 5% and the step-father's 5% ARE
+    one 10% marital economic unit. Rule 7 collapsed a four-person LEGAL roster
+    into a three-person ECONOMIC one, and then used the economic figure in a
+    place that required the legal one - a shareholder COUNT. Michael's own "my
+    wife and I: 85%" is the same phenomenon one level up: true economically,
+    one name on the K-1. IRC 1361(c)(1)(A)(i) does treat "a husband and wife"
+    as one shareholder, but it opens "For purposes of subsection (b)(1)(A)" -
+    the 100-shareholder ceiling and nothing else. It does not merge spouses for
+    6699 counting and does not license a fifth roster entry.
+    THE COST WAS MONEY. IRC 6699(b) multiplies $195 by "the number of persons
+    who were shareholders". tax-penalty-core.ts told him "with Greenway's three
+    shareholders that is about $7,000"; the correct figure at the un-inflated
+    base is 4 x 12 x $195 = $9,360. Understated by $2,340. interest-core.ts
+    went further and instructed him to ENTER three into the calculator, so the
+    software taught him to reproduce the error himself. Both engines were
+    input-driven and CORRECT; only the guidance prose was wrong. Prose that
+    states a number is an engine (rule 96).
+    WHY IT SURVIVED FORTY-NINE SLICES, WHICH IS THE REAL LESSON:
+    85000 + 10000 + 5000 = 100000. THE WRONG ROSTER BALANCES. Every guard in
+    the codebase checked that ownership totals 100%, and the wrong roster
+    passes every one of them. A wrong roster is not an unbalanced roster; it is
+    a balanced roster describing the wrong people. I nearly shipped a test
+    asserting the sum check would refuse 85/10/5 - it does not, and cannot.
+    Mutation testing then found the mirror-image hole: disabling the total
+    comparison SURVIVED, because no test had ever passed a roster that failed
+    to total 100 - every fixture tripped some other guard first. A function
+    named assertRosterTotalsOneHundred had no test in which a roster did not
+    total one hundred.
+    THE RULE: when a fact is a SET of named things, the invariant is identity -
+    the names and their values - not an aggregate over them. Aggregate checks
+    (sums, counts, totals) are necessary and are never sufficient, because
+    infinitely many wrong sets share the right total. Give such a fact ONE
+    exported source of truth, generate every sentence that mentions it, and
+    gate on membership. And for every aggregate guard, write the test where the
+    aggregate itself is wrong; if no fixture reaches that comparison, the guard
+    is untested no matter how green the suite looks.
+
+102. A WHOLE-FILE EXEMPTION TURNS A GATE OFF FOR TEXT NOBODY HAS WRITTEN YET.
+
+    books-50. The tree gate that bans the superseded shareholder roster needed
+    an escape hatch, because some files must QUOTE the wrong roster in order to
+    explain why it was wrong - the migration that corrects it, the mentor lesson
+    about it, the correction notice in Michael's old reports. The first design
+    exempted those files. Then the gate caught the very files that slice was
+    creating, and the obvious fix was to add them to the exemption list.
+
+    That would have been the wrong fix, and it took noticing to see why.
+    `shareholder-roster-mentor.ts` is precisely the kind of file a future slice
+    will copy a roster claim into. Exempting it does not just permit today's
+    honest narration; it permits tomorrow's careless assertion, silently, in the
+    file most likely to contain one. An exemption is inherited by every line
+    added to that file forever, including lines written by someone who never
+    read the exemption list.
+
+    THE RULE: scope an exemption as narrowly as the thing being exempted. Prefer
+    a PER-LINE marker that must sit on the offending line itself, so every
+    exemption is visible to the person reading that line rather than only to
+    someone reading the test. A file-level allowlist is acceptable only where a
+    per-line marker is impossible (a test that must contain the banned strings
+    as patterns) or forbidden (an append-only document). And test the escape
+    hatch in both directions: prove a marked line passes, prove an UNMARKED line
+    after it still fails, or the hatch is one comment away from disabling
+    everything below it.
+
+    COROLLARY, same slice, same gate: `re.exec(wholeFileText)` returns only the
+    FIRST match. A file stating the wrong fact three times reported one offence,
+    so each fix appeared to uncover a brand-new problem and the true size of the
+    job stayed hidden. Scan line by line and report EVERY occurrence. A gate
+    that undercounts is a gate that lies about whether you are finished.
+
+103. A DERIVED NUMBER HAS DEPENDENTS, AND THE GATES WILL TELL YOU WHERE THEY
+    ARE — IF YOU LET THEM FINISH.
+    (books-50, fixing the roster.)
+
+    Correcting the shareholder roster from three people to four required one new
+    exported function, `formatSection6699MaximumUsd`, so the §6699 exposure would
+    be CALCULATED from the roster instead of typed into a sentence. That single
+    addition failed 18 tests across four files, and not one of them was about
+    §6699:
+
+      - rule 26 forbids shipping an exported function untaught, so the interest
+        mentor's lesson count moved 10 -> 11 and its line count 257 -> 287;
+      - the curriculum places lessons explicitly, so an unplaced lesson is a
+        lesson nobody can read — the exact defect slice C existed to end;
+      - two owner documents and the roadmap PRINT those counts, and three
+        separate gates re-derive them from the tree on every run;
+      - one of those documents ships as a PDF, which is a RENDERING of the
+        markdown and therefore went stale the moment the markdown was corrected;
+      - and the roster tree gate flagged nine lines of my own new prose, because
+        narrating "it used to say 85/10/5" is textually identical to asserting
+        it.
+
+    THE RULE: when a number becomes derived, expect a fan-out, and work the
+    failure list to zero before concluding anything. Do NOT fix the first failure
+    and re-run hoping the count drops monotonically — it will not, because the
+    gates are chained: placing the lesson changed the total, which changed which
+    documents were stale. Read the WHOLE list first, understand which failures
+    are consequences of the same cause, and fix by cause rather than by line
+    number.
+
+    THE COROLLARY THAT MATTERS MORE: every one of those 18 failures was a gate
+    doing its job. The temptation is to read a long red list as damage. It is the
+    opposite — it is the map. The figures in BOOKS_ROADMAP.md, in the two owner
+    documents, and on the learning screen were all recounted from the code and
+    every stale copy named itself. A repository where correcting one fact turns
+    18 tests red is a repository where nobody can correct one fact and leave
+    seventeen lies behind.
+
+    AND CHECK THE ARTEFACTS THAT ARE NOT TEXT. The PDF's test asserted only that
+    the file EXISTS and exceeds 20 KB, which a stale PDF satisfies perfectly. It
+    had to be rebuilt and then READ BACK with pdftotext to confirm the new
+    figures actually landed. An existence check on a generated artefact is not a
+    freshness check (see rule 66d): assert the CONTENT, or regenerate and verify
+    by hand, but never let "the file is there" stand in for "the file is right".
+
+104. RUN THE SCRIPT THE WAY THE DOCUMENTATION SAYS TO RUN IT, AS THE USER WHO
+    WILL RUN IT.
+    (books-50, the same slice, found while re-verifying migration 0205.)
+
+    `verify-shareholder-roster-fix.sh` documented its own usage as `bash
+    scripts/accounting/verify-shareholder-roster-fix.sh`. Run exactly that way in
+    this environment it died on its FIRST command: `initdb: error: cannot be run
+    as root`. The eleven other verify scripts in that same directory had all
+    solved this long ago — they check `id -u` and drop to the postgres account —
+    and I had written a twelfth that did not.
+
+    Two things made it worse than a missing feature. First, the failure happened
+    inside a `... | tail` pipeline, and a pipeline's exit status is the LAST
+    command's, so a total failure could read as a pass to anyone skimming.
+    Second, the script had a fixed `sleep 2` waiting for the server, which is a
+    guess about a machine's speed dressed up as a step; on the day it is wrong,
+    every check below reports a connection error and none of them says "the
+    server never started".
+
+    THE RULE: before believing a verification script, run it the documented way,
+    in the environment it will actually run in, as the user who will actually run
+    it. Then check the neighbours — if eleven scripts in a directory solve a
+    problem one way, the twelfth does not get to invent a way (rule 73). Never
+    put a step that can fail on the left of a pipe. And never sleep-and-hope for
+    a dependency: POLL for it to answer a real query, and if it never does, print
+    its log and stop.
+
+    THE DEEPER POINT: a verification script is itself code, and it is the code
+    least likely to be tested, because when it passes nobody looks at it and when
+    it fails everyone blames the thing under test. Rule 22a says a test is a
+    suspect. So is the harness.

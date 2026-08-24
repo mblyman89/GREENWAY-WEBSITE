@@ -40,7 +40,7 @@
  * prepare anyone for that.
  *
  * Everything here is therefore written for a Washington I-502 retailer, an S
- * corporation, with three shareholders, taking cash across a counter, unable to
+ * corporation, with four shareholders, taking cash across a counter, unable to
  * use ordinary banking. Not for a business in general.
  *
  * ─────────────────────────────────────────────────────────────────────────────
@@ -264,9 +264,10 @@ export const STATEMENT_LESSONS: readonly StatementLesson[] = [
       "Three of them, stacked. Assuming basis and AAA are the same account — basis stops at zero, " +
       "AAA does not, because §1368(e)(1)(A) expressly disregards the 'but not below zero' language. " +
       "Testing distributions against basis BEFORE adding the year's income, which invents a capital " +
-      "gain that does not exist. And splitting distributions pro-rata to ownership: your mother is " +
-      "allocated 10% but is not paid, so pro-rata would be wrong for two of the three shareholders " +
-      "and would understate your own draw, which is the figure most likely to trip §1368(b)(2).",
+      "gain that does not exist. And splitting distributions pro-rata to ownership: not every " +
+      "shareholder is actually paid what they are allocated, so pro-rata would be wrong for " +
+      "several of the four shareholders and would understate your own draw, which is the figure " +
+      "most likely to trip §1368(b)(2).",
     the280eTwist:
       "This is the one most owners never see coming. §280E-disallowed expenses still reduce your " +
       "stock basis, even though they gave you no deduction. So basis burns down in a year the " +

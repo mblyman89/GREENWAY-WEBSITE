@@ -138,17 +138,17 @@ The probe: for each `*-mentor.ts`, list importers under `src/` excluding the
 module itself and its own `-gates` sibling. Rule 66d applies — existence is
 asserted before absence of importers is called "unreachable work".
 
-### C1. Six mentor modules that no screen renders — 82 lessons, 2,100 lines
+### C1. Six mentor modules that no screen renders — 83 lessons, 2,130 lines
 
 | Module | Lessons | Lines | Importers under `src/` |
 |--------|---------|-------|------------------------|
 | `payroll/payroll-onboarding-mentor.ts` | 33 | 746 | **0** |
 | `accounting/tax-penalty-mentor.ts` | 20 | 540 | **0** |
-| `accounting/interest-mentor.ts` | 10 | 257 | **0** |
+| `accounting/interest-mentor.ts` | 11 | 287 | **0** |
 | `accounting/period-close-mentor.ts` | 9 | 234 | **0** |
 | `accounting/s-corporation-year-mentor.ts` | 5 | 153 | **0** |
 | `reports/payroll-reconciliation-mentor.ts` | 5 | 170 | **0** |
-| **Total** | **82** | **2,100** | — |
+| **Total** | **83** | **2,130** | — |
 
 **WHY FOUR OF THESE LINE COUNTS FELL DURING SLICE C, AND THE TOTAL WITH THEM.**
 When this table was first written the total was **2,345**. Four of the six
@@ -157,11 +157,27 @@ client component could ever import them — the one hard constraint that decided
 slice C's whole architecture. So those four were split: the lesson DATA stayed
 in `*-mentor.ts`, and the disk-reading coverage checks moved to a sibling
 `*-mentor-gates.ts`, per standing rule 65b. The lessons did not change and none
-were lost — the count is still **82** — but 245 lines of gate code left the four
-files. The `importsNodeFs` column in
+were lost — the count did not move at all across that refactor, 82 before and 82
+after — but 245 lines of gate code left the four files. The `importsNodeFs` column in
 `tests/compliance/books-roadmap-agreed-order.test.ts` is now `false` for all six,
 and that gate re-derives every figure above from the tree on each run, which is
 why this paragraph exists rather than a quietly edited number.
+
+**WHY THE TOTAL ROSE IN BOOKS-50, AND WHY THAT IS THE GOOD DIRECTION.** The
+roster correction added one exported function to `interest-core.ts`:
+`formatSection6699MaximumUsd`, which derives the twelve-month §6699 exposure from
+the number of people on the shareholder roster instead of leaving it typed into a
+sentence. It exists because the typed version had gone stale — it was built on a
+roster of three when the filed Schedule K-1s report four, understating the
+exposure by $2,340. Standing rule 26 does not allow a new exported function to
+ship untaught, so `interest-mentor.ts` went from 10 lessons to 11 and from 257
+lines to 287, and the totals above moved with it. The lesson was then placed in
+the curriculum next to the §6699 penalty it sizes, so nothing became reachable-
+in-principle-only: every one of the lessons in this table appears in a unit on
+`/admin/books/learn`, and the count is still **83** after placement as it was
+before it. Thirty lines arriving with exactly one lesson is the pairing worth
+noticing — lines rising while the lesson count stayed flat would have meant
+thirty lines of something that is not teaching had entered a teaching module.
 
 Each is reachable from its own test file and from `owner-report-books-38`, which
 is precisely the shape rule 50 warns about: **dead code wearing a green check.**
@@ -527,8 +543,15 @@ gate for cut-over gates G1–G5.
 
 Stock basis and debt basis per shareholder (IRC §1367), the Accumulated
 Adjustments Account (IRC §1368(e)(1)), OAA, and the distribution ordering rules.
-Handles the three-shareholder reality: Michael 85%, his mother 10% (allocated,
-**not** paid), his grandfather Nicholas Mullan 5% (paid).
+Handles the shareholder reality: Michael B Lyman 85%, his grandfather Nicholas C
+Mullan 5% (paid), his step-father James H Becker 5%, his mother Theresa L Becker
+5%. **CORRECTED IN books-50.** As shipped, books-19 was built on a three-person
+roster of Michael 85 / mother 10 / grandfather 5, which is not what the Form
+1120-S reports: box I says four shareholders and there are four K-1s at
+85/5/5/5. (SUPERSEDED-ROSTER: the 10% was the Becker HOUSEHOLD - Theresa and
+James are married to each other and Washington is a community-property state -
+recorded where the legal roster belonged.) The engine was always input-driven
+and correct; the fixture and the prose were wrong.
 
 Shipped as `basis-aaa-core.ts` (pure engine, integer cents),
 `basis-aaa-authorities.ts` (14 verbatim authorities, all machine-verified) and
@@ -648,8 +671,11 @@ engine still refuses, because two tax years give two different answers.
 - **§6699 did not exist in this codebase.** `grep -c 6699` returned 0. Asked what
   a year-late 1120-S cost, the penalty engine applied §6651 — a percentage of tax
   shown — to an S corporation showing none, and answered **$0.00**. Measured, not
-  assumed. The real floor is $7,020 for three shareholders at the un-inflated
-  base. A system that reports a five-figure exposure as nothing does not fail to
+  assumed. The real floor is **$9,360** for the four shareholders the return
+  actually reports, at the un-inflated base. **CORRECTED IN books-50:** this
+  line originally read $7,020 for three shareholders (SUPERSEDED-ROSTER),
+  which understated the twelve-month exposure by $2,340. The figure is now
+  computed by `formatSection6699MaximumUsd()` rather than typed. A system that reports a five-figure exposure as nothing does not fail to
   warn; it recommends the behaviour it exists to prevent.
 
 **Also shipped:** `interest-core.ts` (§6622 daily compounding via BigInt, one

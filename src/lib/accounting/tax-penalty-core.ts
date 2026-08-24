@@ -70,6 +70,8 @@
  */
 
 import type { GuidanceAuthority } from "@/lib/accounting/books-guidance-core";
+import { formatSection6699MaximumUsd } from "@/lib/accounting/interest-core";
+import { GREENWAY_SHAREHOLDER_COUNT } from "@/lib/accounting/shareholder-roster-core";
 
 // ---------------------------------------------------------------------------
 // 1) UNITS — stated once, enforced everywhere
@@ -1393,8 +1395,9 @@ export function computeIrsFilePayPenalty(input: IrsFilePayPenaltyInput): Penalty
       "If the late return is a Form 1120-S, the §6651 percentages above are NOT the main exposure. " +
       "IRC §6699 charges a flat amount per shareholder per month, up to 12 months, and makes no " +
       "reference to how much tax is due — so a return showing nothing owed carries exactly the same " +
-      "penalty as one showing a million. With Greenway's three shareholders that is about $7,000 for a " +
-      "year even at the un-inflated statutory base, and the ownership split is irrelevant: a 5% holder " +
+      `penalty as one showing a million. With Greenway's ${String(GREENWAY_SHAREHOLDER_COUNT)} ` +
+      `shareholders that is ${formatSection6699MaximumUsd()} for a full twelve months even at the ` +
+      "un-inflated statutory base, and the ownership split is irrelevant: a 5% holder " +
       "costs exactly as much as an 85% holder. It is charged for each month or fraction thereof, so one " +
       "day late is a full month. Use computeSection6699Penalty in interest-core.ts for that number. " +
       "This engine does not fold it in, because it is a different penalty on a different base and " +

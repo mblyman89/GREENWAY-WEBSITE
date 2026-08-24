@@ -89,9 +89,9 @@ export const BASIS_AAA_LESSONS: readonly MentorLesson[] = [
       "Splits an amount between shareholders by ownership so that the pieces add back to exactly " +
       "the original amount, with no cent invented and none lost.",
     whyItExists:
-      "$100.00 split 85/10/5 is fine. $100.01 is not: the three shares are $85.01, $10.00 and $5.00 " +
-      "only if you decide deliberately who gets the leftover cent. Left to naive rounding you get " +
-      "$100.00 or $100.02, and the difference has to go somewhere \u2014 usually into a plug.",
+      "$100.00 split 85/5/5/5 is fine. $100.01 is not: the four shares are $85.01, $5.00, $5.00 and " +
+      "$5.00 only if you decide deliberately who gets the leftover cent. Left to naive rounding you " +
+      "get $100.00 or $100.04, and the difference has to go somewhere \u2014 usually into a plug.",
     theTrap:
       "Assuming a loss splits differently from a profit. It does not; the same percentages apply. " +
       "But code that allocates by flooring will drift in the opposite direction on negatives, so " +
@@ -162,9 +162,10 @@ export const BASIS_AAA_LESSONS: readonly MentorLesson[] = [
       "Compares what each shareholder was actually paid to what their ownership percentage would " +
       "have given them, and explains what any difference does and does not mean.",
     whyItExists:
-      "Greenway pays Nicholas Mullan his 5% but allocates rather than pays his mother's 10%. That " +
-      "is a real, deliberate, ongoing pattern, and it deserves a straight answer rather than either " +
-      "silence or an alarm.",
+      "At Greenway what a shareholder is ALLOCATED and what a shareholder is actually PAID are not " +
+      "the same number for every holder. That is a real, deliberate, ongoing pattern, and it " +
+      "deserves a straight answer rather than either silence or an alarm. Which holders are paid " +
+      "is an owner fact the engine is given, never one it assumes.",
     theTrap:
       "Believing that unequal distributions terminate the S election. They generally do not \u2014 the " +
       "test in \u00a71.1361-1(l)(1) is about the RIGHTS in your governing documents, and the regulation's " +

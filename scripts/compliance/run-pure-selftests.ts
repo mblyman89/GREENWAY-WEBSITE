@@ -110,6 +110,12 @@ import { __runCoreumSyncCoreTests } from "../../src/lib/crypto/coreum/coreum-syn
 import { __runStellarClientCoreTests } from "../../src/lib/crypto/stellar/stellar-client-core";
 import { __runStellarMapCoreTests } from "../../src/lib/crypto/stellar/stellar-map-core";
 import { __runStellarSyncCoreTests } from "../../src/lib/crypto/stellar/stellar-sync-core";
+// Slice books-50: the single source of truth for who owns Greenway. The filed
+// Form 1120-S carries four Schedule K-1s at 85/5/5/5; many files used to
+// hand-type a three-person roster instead, putting the mother at ten per cent,
+// and one of them attached a dollar figure to it. Registered FIRST among the
+// accounting cores because ledger-core now imports it.
+import { __runShareholderRosterCoreTests } from "../../src/lib/accounting/shareholder-roster-core";
 import { __runLedgerCoreTests } from "../../src/lib/accounting/ledger-core";
 import { __runCoaCoreTests } from "../../src/lib/accounting/coa-core";
 // Slice books-23: the category -> inventory-account map the posting engine has
@@ -773,6 +779,8 @@ async function main() {
   __runStellarClientCoreTests();
   __runStellarMapCoreTests();
   __runStellarSyncCoreTests();
+  __runShareholderRosterCoreTests();
+  console.log("shareholder-roster-core self-tests: all passed");
   __runLedgerCoreTests();
   __runCoaCoreTests();
   __runAuditPostingAccountsTests();

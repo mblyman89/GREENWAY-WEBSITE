@@ -557,7 +557,7 @@ begin
     false,false,null,false,'none',null,false,'40000',null,null);
   perform public.gl_upsert_account('40300','Retained Earnings','equity',
     false,false,null,false,'none',null,true,'40000',null,
-    'ONE retained earnings account. The old chart had 40000/40001/40002/40003 split by shareholder name (LYMAN / MULLAN / BECKER); shareholder is now a dimension on the journal line (gl_shareholders), verified 85/10/5 against K-1 transcripts.');
+    'ONE retained earnings account. The old chart had 40000/40001/40002/40003 split by shareholder name (LYMAN / MULLAN / BECKER); shareholder is now a dimension on the journal line (gl_shareholders), verified against the filed Schedule K-1s: four shareholders at 85/5/5/5 (corrected in books-50; this comment previously recorded a three-holder split).');
   perform public.gl_upsert_account('40400','Opening Balance Equity','equity',
     false,false,null,false,'none',null,true,'40000',null,
     'SYSTEM. Holds the cut-over opening entry only, and must return to ZERO once every opening balance is evidenced. A permanent balance here means the cut-over is unfinished.');

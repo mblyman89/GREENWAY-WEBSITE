@@ -117,9 +117,21 @@ needed, so it still works years from now if a website reorganises.
 
 ## The question about unequal distributions — the actual answer
 
-You have three shareholders: you at 85%, your mother at 10%, your grandfather at
-5%. Your grandfather gets paid. Your mother is allocated her share but does not
-receive cash.
+> **CORRECTION, books-50 (August 2026).** When I wrote this I had your roster
+> wrong. This section said you had three shareholders. Your filed Form 1120-S
+> says **four**: you at 85%, your grandfather Nicholas C Mullan at 5%, your
+> step-father James H Becker at 5%, and your mother Theresa L Becker at 5%.
+> (SUPERSEDED-ROSTER: the old text said "your mother at 10%". That 10% is
+> real, but it is the Becker HOUSEHOLD - your mother and step-father are
+> married to each other and Washington is a community-property state - so it is
+> two 5% interests on the return, not one 10% interest.) The reasoning below
+> about one class of stock is unchanged and still correct; only the names and
+> the count were wrong.
+
+You have four shareholders: you at 85%, and your grandfather, your step-father
+and your mother at 5% each. Your grandfather gets paid. The two Becker
+interests are allocated their share; whether they receive cash is a question I
+have flagged for you to confirm rather than assumed.
 
 The worry is a rule called **one class of stock**. An S-corporation is only
 allowed one class of stock, and if it accidentally has two, the S election can
@@ -174,8 +186,10 @@ Following your rule that it should refuse rather than warn:
   stops. Previously that would have quietly recorded that you took no
   distribution — overstating your basis, overstating the AAA, and looking
   completely normal on the report.
-- **Round a fraction of a cent.** Everything is whole cents, and the three-way
-  85/10/5 split is proven never to lose or invent a cent.
+- **Round a fraction of a cent.** Everything is whole cents, and the four-way
+  85/5/5/5 split is proven never to lose or invent a cent. (This line first
+  described a three-way 85/10/5 split; SUPERSEDED-ROSTER, corrected in
+  books-50. The proof itself did not depend on the roster and still holds.)
 
 ---
 

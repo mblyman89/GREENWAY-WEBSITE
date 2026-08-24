@@ -44,6 +44,7 @@ import {
   type TrialBalanceRow,
   isValidYmd,
 } from "@/lib/accounting/trial-balance-core";
+import { describeRoster } from "@/lib/accounting/shareholder-roster-core";
 
 // ---------------------------------------------------------------------------
 // 1) THE §280E WALL
@@ -1059,11 +1060,18 @@ export type BuildEquityStatementInput = {
   /**
    * Distributions actually PAID to each shareholder, by name.
    *
-   * This exists because of a specific Greenway fact (standing rule 7): mom's
-   * 10% is ALLOCATED but NOT PAID, while grandfather's 5% IS paid. Allocating
-   * distributions pro-rata to ownership would therefore be wrong for two of
-   * the three shareholders, and it would understate Michael's own draw — the
-   * one number most likely to trip §1368(b)(2). So it is supplied as fact.
+   * This exists because of a specific Greenway fact: allocation and payment
+   * are NOT the same thing here. Income is allocated strictly pro rata, but
+   * distributions are not all actually paid out - at least one minority holder
+   * is allocated income without receiving cash for it. Splitting distributions
+   * pro rata to ownership would therefore be wrong for several of the four
+   * shareholders, and it would understate Michael's own draw — the one number
+   * most likely to trip §1368(b)(2). So it is supplied as fact, per person.
+   *
+   * WHICH holders are paid and which are only allocated is an OWNER FACT that
+   * has not been re-confirmed since the roster was corrected in books-50. It
+   * is deliberately not hard-coded here; this field is the input that carries
+   * it.
    */
   distributionsByShareholder: Readonly<Record<string, number>>;
   /**
@@ -1126,8 +1134,8 @@ export function buildEquityStatement(
         "without the register there is no stock basis to track — which is the number that decides " +
         "whether a distribution is tax-free or a capital gain.",
       whatToDo:
-        "Provide the shareholder register for this period. For Greenway the split on file is " +
-        "Michael 85%, mother 10%, grandfather 5%.",
+        `Provide the shareholder register for this period. For Greenway the split on file is ` +
+        `${describeRoster()}.`,
       authorityIds: ["IRC_1367_STOCK_BASIS_ADJUSTMENTS"],
     });
   }
@@ -1199,9 +1207,13 @@ export function buildEquityStatement(
     });
   }
 
-  // Ownership must total exactly 100%. In MILLI-PERCENT so 85% + 10% + 5% is
-  // 85000 + 10000 + 5000 = 100000 EXACTLY, with no floating point anywhere
-  // near a number that decides who owns what.
+  // Ownership must total exactly 100%. In MILLI-PERCENT so 85% + 5% + 5% + 5%
+  // is 85000 + 5000 + 5000 + 5000 = 100000 EXACTLY, with no floating point
+  // anywhere near a number that decides who owns what.
+  //
+  // Note that totalling 100% does NOT mean the roster is right: the superseded
+  // three-person register also totalled exactly 100000, which is why it went
+  // unnoticed for forty-nine slices. See shareholder-roster-core.
   let ownership = 0;
   for (const s of input.shareholders) ownership += s.ownershipMilliPercent;
   if (input.shareholders.length > 0 && ownership !== 100000) {
@@ -1211,8 +1223,8 @@ export function buildEquityStatement(
         `Ownership adds up to ${formatMilliPercent(ownership)}, not 100%. Every dollar of an S ` +
         `corporation's income has to be allocated to somebody, so the percentages must total exactly 100.`,
       whatToDo:
-        "Check the shareholder register. For Greenway the split on file is Michael 85%, mother 10%, " +
-        "grandfather 5%. If that has changed, the change needs documenting before it is reported.",
+        `Check the shareholder register. For Greenway the split on file is ${describeRoster()}. ` +
+        `If that has changed, the change needs documenting before it is reported.`,
       authorityIds: ["IRC_1367_STOCK_BASIS_ADJUSTMENTS"],
     });
   }
@@ -1266,8 +1278,9 @@ export function buildEquityStatement(
         whatToDo:
           "Pull the actual payments — checks, transfers, cash out of the safe — and list them by " +
           "person. Do NOT make the difference disappear by spreading it pro-rata across the owners: " +
-          "mom is allocated 10% but is not paid, so a pro-rata split would be wrong for two of the " +
-          "three shareholders and would understate Michael's own draw.",
+          "not every shareholder is actually paid the distribution they are allocated, so a " +
+          "pro-rata split would be wrong for several of the four shareholders and would " +
+          "understate Michael's own draw.",
         authorityIds: ["IRC_1368_DISTRIBUTIONS_AAA", "IRC_1367_STOCK_BASIS_ADJUSTMENTS"],
       });
     }

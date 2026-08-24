@@ -71,7 +71,7 @@ nothing.
 This is the finding I most want you to understand, because it is a little
 embarrassing and very instructive.
 
-There are **six teaching modules** in this system — 82 individual lessons,
+There are **six teaching modules** in this system — 83 individual lessons,
 2,345 lines — that are **fully written, fully tested, and reachable from no
 screen whatsoever.** Every one has passing tests. Every one is invisible to you.
 
@@ -79,11 +79,28 @@ screen whatsoever.** Every one has passing tests. Every one is invisible to you.
 |---|---|
 | Payroll onboarding (I-9, W-4, SSN handling, first paycheque) | 33 |
 | Tax penalties | 20 |
-| Interest under §6621 | 10 |
+| Interest under §6621 | 11 |
 | Period close | 9 |
 | The S-corporation year | 5 |
 | Payroll reconciliation | 5 |
-| **Total** | **82** |
+| **Total** | **83** |
+
+> **A NOTE ON THE COUNT, ADDED LATER (books-50).** When this document was
+> written the total was **82**, and the interest module had **10** lessons. It has
+> **11** now. Nothing was discovered or renamed — one lesson was genuinely added,
+> and it is worth knowing why, because it is the same kind of mistake this whole
+> document is about. Your §6699 late-filing exposure was written into the
+> guidance as a typed-in dollar figure. That figure was calculated from a
+> shareholder roster of **three** people; your filed Schedule K-1s report
+> **four**. So the number was too low by **$2,340**, and it would have stayed too
+> low forever, because a number sitting inside a sentence has no way of noticing
+> that the fact underneath it moved. The fix was to make the system *calculate*
+> that figure from the roster every time it is shown. That calculation is a new
+> piece of engine, and the standing rules do not let a new piece of engine ship
+> without a lesson explaining it — so the count went up by one. The figures in
+> the table above are re-counted from the code by
+> `tests/compliance/books-roadmap-agreed-order.test.ts` on every run, which is
+> why you are reading a note instead of a quietly edited number.
 
 Each lesson has the same five parts, and I want you to see the shape because it
 is the shape of good teaching:

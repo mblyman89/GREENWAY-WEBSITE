@@ -129,8 +129,15 @@ const UNREACHABLE_TEACHING = [
   {
     file: "src/lib/accounting/interest-mentor.ts",
     lessons: INTEREST_LESSONS,
-    printedLessons: 10,
-    printedLines: 257,
+    // books-50: 10 -> 11 lessons, 257 -> 287 lines. The eleventh teaches
+    // formatSection6699MaximumUsd, which was added to interest-core.ts so the
+    // §6699 exposure quoted in the guidance is DERIVED from the shareholder
+    // roster instead of typed in by hand — the hand-typed copy had gone stale at
+    // three shareholders when the filed returns show four. Standing rule 26
+    // means a new exported function cannot ship untaught, so the count had to
+    // move, and these figures are the roadmap's claim about that count.
+    printedLessons: 11,
+    printedLines: 287,
     importsNodeFs: false,
   },
   {
@@ -340,7 +347,11 @@ describe("books-43: the slice-C recon figures are real", () => {
     const lessons = UNREACHABLE_TEACHING.reduce((n, m) => n + m.lessons.length, 0);
     const lines = UNREACHABLE_TEACHING.reduce((n, m) => n + lineCount(m.file), 0);
 
-    expect(lessons).toBe(82);
+    // books-50: 82 -> 83. One lesson was ADDED, not moved: rule 26 forbids
+    // shipping formatSection6699MaximumUsd untaught. The figure is spelled out
+    // here as well as derived above so that a lesson going MISSING can never be
+    // absorbed silently by both sides of a comparison falling together.
+    expect(lessons).toBe(83);
 
     /*
      * BOOKS-44: 2,345 became 2,100 and the LESSON COUNT DID NOT MOVE.
@@ -350,8 +361,15 @@ describe("books-43: the slice-C recon figures are real", () => {
      * lines of gate code. If the lesson count had fallen too, teaching would
      * have been lost in the refactor and this line is where that would have
      * surfaced. It did not: 82 before, 82 after, 245 fewer lines.
+     *
+     * BOOKS-50: 2,100 BECAME 2,130 AND THE LESSON COUNT MOVED WITH IT, 82 -> 83.
+     * That is the OPPOSITE pairing to the slice-C one above, and it is just as
+     * informative. Thirty lines arrived carrying exactly one new lesson, so what
+     * arrived is teaching. Lines rising while the lesson count stayed FLAT would
+     * have meant thirty lines of something that is not a lesson had been added to
+     * a teaching module - and that is the case this pair exists to catch.
      */
-    expect(lines).toBe(2_100);
+    expect(lines).toBe(2_130);
 
     /*
      * ═══ books-46 — THIS PAIR OF ASSERTIONS WAS DECORATIVE, AND THE MUTATION

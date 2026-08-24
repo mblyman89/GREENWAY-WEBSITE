@@ -100,6 +100,7 @@ import {
 const MICHAEL = "Michael Lyman";
 const MOTHER = "Mother";
 const GRANDFATHER = "Nicholas Mullan";
+const STEPFATHER = "James Becker";
 
 function shareholder(
   name: string,
@@ -157,17 +158,28 @@ function scheduleFor(
   } as StockBasisSchedule;
 }
 
+/**
+ * The FILED Greenway roster: four shareholders at 85/5/5/5.
+ *
+ * Corrected in books-50. This helper previously returned a three-person
+ * register that put the mother at ten per cent, which is not who owns this
+ * company - the filed Form 1120-S carries four Schedule K-1s and box I reads
+ * 4. Note the old version summed to exactly 100000, so no ownership-total
+ * assertion anywhere could catch it.
+ */
 function greenwayRoster(
   over: {
     michael?: Partial<ShareholderYearInput>;
-    mother?: Partial<ShareholderYearInput>;
     grandfather?: Partial<ShareholderYearInput>;
+    stepfather?: Partial<ShareholderYearInput>;
+    mother?: Partial<ShareholderYearInput>;
   } = {},
 ): ShareholderYearInput[] {
   return [
     shareholder(MICHAEL, 85_000, over.michael),
-    shareholder(MOTHER, 10_000, over.mother),
     shareholder(GRANDFATHER, 5_000, over.grandfather),
+    shareholder(STEPFATHER, 5_000, over.stepfather),
+    shareholder(MOTHER, 5_000, over.mother),
   ];
 }
 
@@ -976,10 +988,15 @@ describe("proportionality and \u00a71361(b)(1)(D)", () => {
       computeBasisAndAaa(
         year({
           ordinaryIncomeCents: 1_000_000,
+          // $1,000.00 distributed strictly pro rata on the FILED 85/5/5/5
+          // roster: $850.00 to Michael and $50.00 to each 5% holder. Under the
+          // superseded 85/10/5 fixture this read 85_000/10_000/5_000. [SUPERSEDED-ROSTER]
+          // SUPERSEDED-ROSTER: named above only to record what changed.
           shareholders: greenwayRoster({
             michael: { distributionsCents: 85_000 },
-            mother: { distributionsCents: 10_000 },
             grandfather: { distributionsCents: 5_000 },
+            stepfather: { distributionsCents: 5_000 },
+            mother: { distributionsCents: 5_000 },
           }),
         }),
       ),
@@ -1073,22 +1090,30 @@ describe("proportionality and \u00a71361(b)(1)(D)", () => {
     expect(p.byShareholder[0].varianceCents).toBe(0);
   });
 
-  it("prices Greenway's real 85/10/5 gap to the cent, called directly", () => {
-    // Michael 85%, mother 10% (allocated, NOT paid), grandfather 5%.
+  it("prices Greenway's real 85/5/5/5 gap to the cent, called directly", () => {
+    // The FILED roster (books-50): Michael 85%, grandfather 5%, step-father 5%,
+    // mother 5%. This fixture previously used a three-person 85/10/5 register  [SUPERSEDED-ROSTER],
+    // which no return supports. $52,500.00 was paid out in total.
     const p = assessProportionality([
       scheduleFor(MICHAEL, 85_000, 5_000_000),
-      scheduleFor(MOTHER, 10_000, 0),
       scheduleFor(GRANDFATHER, 5_000, 250_000),
+      scheduleFor(STEPFATHER, 5_000, 0),
+      scheduleFor(MOTHER, 5_000, 0),
     ]);
     expect(p.isStrictlyProportionate).toBe(false);
 
     const by = (n: string) => p.byShareholder.find((s) => s.shareholderName === n);
-    // $52,500.00 of pro rata never reached the mother; Michael is over by $5,375.00.
-    expect(by(MOTHER)?.proRataShareCents).toBe(525_000);
-    expect(by(MOTHER)?.actuallyPaidCents).toBe(0);
-    expect(by(MOTHER)?.varianceCents).toBe(-525_000);
+    // Hand-computed from $52,500.00 total: a 5% pro rata share is $2,625.00 and
+    // an 85% share is $44,625.00, so Michael is over by $5,375.00.
+    expect(by(MICHAEL)?.proRataShareCents).toBe(4_462_500);
     expect(by(MICHAEL)?.varianceCents).toBe(537_500);
+    expect(by(GRANDFATHER)?.proRataShareCents).toBe(262_500);
     expect(by(GRANDFATHER)?.varianceCents).toBe(-12_500);
+    // The two unpaid 5% holders are each short their whole pro rata share.
+    expect(by(STEPFATHER)?.actuallyPaidCents).toBe(0);
+    expect(by(STEPFATHER)?.varianceCents).toBe(-262_500);
+    expect(by(MOTHER)?.actuallyPaidCents).toBe(0);
+    expect(by(MOTHER)?.varianceCents).toBe(-262_500);
 
     // Nothing is created or destroyed by the split.
     expect(p.byShareholder.reduce((s, x) => s + x.varianceCents, 0)).toBe(0);
@@ -1381,7 +1406,11 @@ describe("defects found by attacking the engine after it went green", () => {
     );
   });
 
-  it("D4: the allocation never loses a cent, even on a prime total split 85/10/5", () => {
+  it("D4: the allocation never loses a cent, even on a prime total split 85/5/5/5", () => {
+    // Title corrected in books-50: this fixture is `year()`, whose roster is
+    // `greenwayRoster()` - the FILED four-person 85/5/5/5 register. The title
+    // still described the superseded three-person split, so it named a roster
+    // the test had already stopped using.
     const r = ok(computeBasisAndAaa(year({ ordinaryIncomeCents: 999_983 })));
     const allocated = r.shareholders.reduce((s, sh) => s + sh.allocatedOrdinaryIncomeCents, 0);
     expect(allocated).toBe(999_983);
@@ -1427,7 +1456,7 @@ describe("defects found by attacking the engine after it went green", () => {
   });
 
   it("D8: the proportionality check tolerates the rounding cent it creates itself", () => {
-    // A total of 1 cent cannot be split 85/10/5 evenly. The pro-rata figure
+    // A total of 1 cent cannot be split 85/5/5/5 evenly. The pro-rata figure
     // must be compared against the SAME allocator the engine uses, or every
     // odd-cent year is falsely reported as disproportionate.
     const r = ok(
@@ -1811,7 +1840,13 @@ describe("holes found by mutating the engine against a green suite", () => {
   // person with the largest fractional entitlement, not an arbitrary one.
 
   it("M28: the odd cent goes to the largest remainder, not to the last in the list", () => {
-    // 85/10/5 on 10 cents: exact shares are 8.5, 1.0, 0.5. Floors are 8, 1, 0,
+    // A SYNTHETIC three-holder register, not Greenway's. This test exercises the
+    // largest-remainder tie-break and needs a shape where the odd cent is
+    // contested; the real 85/5/5/5 roster does not produce that on 10 cents.
+    // The shape used here is arbitrary test data and the names are the
+    // allocator's own fixtures, not the filed roster.
+    // 85/10/5 on 10 cents: exact shares are 8.5, 1.0, 0.5.  [SUPERSEDED-ROSTER]
+    // Floors are 8, 1, 0,
     // leaving 1 cent. The largest remainder is Michael's .5 ahead of the
     // grandfather's .5 on the ownership tie-break, so Michael takes it.
     const m = allocateProRata(10, [

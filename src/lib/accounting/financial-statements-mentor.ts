@@ -259,8 +259,9 @@ export const FINANCIAL_STATEMENT_LESSONS: readonly MentorLesson[] = [
       "Three traps stacked together. First, assuming basis and AAA are the same account — basis stops " +
       "at zero, AAA does not, because §1368(e)(1)(A) expressly disregards the 'but not below zero' " +
       "language. Second, testing distributions against basis BEFORE adding the year's income, which " +
-      "invents a capital gain that does not exist. Third, splitting distributions pro-rata: your mother " +
-      "is allocated 10% but is not paid, so pro-rata would be wrong for two of three shareholders.",
+      "invents a capital gain that does not exist. Third, splitting distributions pro-rata: not every " +
+      "shareholder is paid what they are allocated, so pro-rata would be wrong for several of the " +
+      "four shareholders.",
     whatIWouldDo:
       "Watch your own basis like a fuel gauge. §280E expenses burn it down even in a profitable year, " +
       "and once it hits zero every further dollar you take out is a capital gain — tax owed in a year " +
