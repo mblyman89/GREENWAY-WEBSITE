@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ALL_FORM_TABS,
+  ALL_WHOSE_MONEY,
   boxIsEmpty,
   boxTone,
   formatBoxValue,
@@ -23,7 +24,7 @@ import {
   __runFormBoxCoreTests,
   type BoxLesson,
   type FormBox,
-  type WhoseMoney,
+
 } from "@/lib/payroll/form-box-core";
 
 function box(over: Partial<FormBox>): FormBox {
@@ -101,8 +102,9 @@ describe("trap 2: a deliberate blank must never look like a forgotten one", () =
   it("gives blank-on-purpose precedence over EVERY money category", () => {
     // Rule 34: run the gate in both directions. If any category could override
     // the neutral, box 17 would be coloured as though money had moved.
-    const all: readonly WhoseMoney[] = ["employer_cost", "employee_money", "shared", "not_money"];
-    for (const whose of all) {
+    // Walked from the exported vocabulary, not a copy typed here: a hand-typed
+    // list silently stops covering a category the day a new one is added (rule 43).
+    for (const whose of ALL_WHOSE_MONEY) {
       expect(boxTone(box({ whose, blankOnPurpose: "correct reason" }))).toBe("neutral");
     }
   });
@@ -110,8 +112,7 @@ describe("trap 2: a deliberate blank must never look like a forgotten one", () =
 
 describe("whose money it is — the legal distinction, not a label", () => {
   it("gives every category a label, a consequence and a tone", () => {
-    const all: readonly WhoseMoney[] = ["employer_cost", "employee_money", "shared", "not_money"];
-    for (const w of all) {
+    for (const w of ALL_WHOSE_MONEY) {
       expect(whoseMoneyLabel(w).length).toBeGreaterThan(3);
       expect(whoseMoneyConsequence(w).length).toBeGreaterThan(40);
       expect(whoseMoneyTone(w)).toBeTruthy();
@@ -137,6 +138,39 @@ describe("whose money it is — the legal distinction, not a label", () => {
     expect(c).toContain("MEDICAL AID");
     // The trap is thinking "half the premium". The text must say that is wrong.
     expect(c.toLowerCase()).toContain("half the whole premium is not the same");
+  });
+
+  it("treats a wage base as something NOBODY owes", () => {
+    // Form 941 line 2 and Form 940 line 3 are wages. They are the biggest
+    // figures on either form and no one owes a cent of them. Reading a base as
+    // an amount due is the classic misreading of a payroll return.
+    const c = whoseMoneyConsequence("tax_base");
+    expect(c).toContain("Nobody owes");
+    expect(c.toLowerCase()).toContain("wages");
+    expect(whoseMoneyLabel("tax_base").toLowerCase()).toContain("not the tax");
+  });
+
+  it("keeps a wage base VISUALLY QUIET even though it is the biggest number", () => {
+    // The tempting change is to colour the biggest figure. That would send the
+    // eye to the one box that carries no obligation.
+    expect(whoseMoneyTone("tax_base")).toBe("neutral");
+  });
+
+  it("keeps a wage base OUT of the employer/employee split", () => {
+    const fica = [
+      box({ box: "employee-fica", amountCents: 527_36, whose: "employee_money" }),
+      box({ box: "employer-fica", amountCents: 527_36, whose: "employer_cost" }),
+    ];
+    const clean = splitMoney(fica);
+    const polluted = splitMoney([
+      box({ box: "2", amountCents: 6_892_345, whose: "tax_base" }),
+      ...fica,
+    ]);
+    expect(polluted.totalCents).toBe(clean.totalCents);
+    // FICA is 50/50 by law. If the base leaked in it would read about 87/13,
+    // which is wrong AND plausible - the worst combination.
+    expect(polluted.employerMilliPct).toBe(50_000);
+    expect(polluted.employeeMilliPct).toBe(50_000);
   });
 
   it("gives the four categories four DISTINCT tones where it matters", () => {

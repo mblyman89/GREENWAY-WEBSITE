@@ -165,7 +165,29 @@ export type BoxMeasure = "money" | "hours" | "count";
  * about the one distinction that carries criminal exposure. So the colour of
  * every box on this system is driven by this field.
  */
-export type WhoseMoney = "employer_cost" | "employee_money" | "shared" | "not_money";
+export type WhoseMoney =
+  | "employer_cost"
+  | "employee_money"
+  | "shared"
+  | "tax_base"
+  | "not_money";
+
+/**
+ * Every category, as DATA.
+ *
+ * Exported so a coverage test can walk the whole vocabulary instead of keeping
+ * its own hand-typed copy of it. A test that lists the members itself passes
+ * happily on the day a sixth category is added and never mentions it again -
+ * standing rule 43, and the reason this constant exists rather than a comment
+ * asking people to remember.
+ */
+export const ALL_WHOSE_MONEY: readonly WhoseMoney[] = [
+  "employer_cost",
+  "employee_money",
+  "shared",
+  "tax_base",
+  "not_money",
+];
 
 /**
  * The plain-English name for a money category, for a caption or a legend.
@@ -178,6 +200,8 @@ export function whoseMoneyLabel(whose: WhoseMoney): string {
       return "Your employees' money, held in trust";
     case "shared":
       return "Shared — the State sets the split";
+    case "tax_base":
+      return "What the tax is charged on, not the tax";
     case "not_money":
       return "Not money";
   }
@@ -209,6 +233,13 @@ export function whoseMoneyConsequence(whose: WhoseMoney): string {
         "Both sides pay, and the State decides the split — you do not. For L&I, RCW 51.16.140(1) " +
         "lets you deduct one-half of the MEDICAL AID portion only. Half the whole premium is not " +
         "the same number, and taking it is unlawful."
+      );
+    case "tax_base":
+      return (
+        "Nobody owes this figure. It is the WAGES the tax is charged on, and it is here so the " +
+        "tax below it can be checked. Reading a wage base as an amount due is the single most " +
+        "common way to misread one of these returns \u2014 it makes the form look many times more " +
+        "expensive than it is."
       );
     case "not_money":
       return "This box is a count, not an amount. Nothing is owed on the strength of this box alone.";
@@ -245,6 +276,14 @@ export function whoseMoneyTone(whose: WhoseMoney): ScreenTone {
       // Orange: the split is the trap. Orange says "check the ratio", which is
       // exactly the question RCW 51.16.140(1) turns on.
       return "orange";
+    case "tax_base":
+      // Neutral, deliberately, and this is the most important colour decision on
+      // the screen. A wage base is the BIGGEST number on Form 941 - line 2 dwarfs
+      // every tax line beneath it. If it were coloured, the eye would go to it
+      // first and Michael would spend his attention on the one figure nobody owes.
+      // Neutral makes the big number recede so the taxes stand out, which is the
+      // opposite of what colouring-by-magnitude would have done.
+      return "neutral";
     case "not_money":
       return "neutral";
   }
@@ -506,12 +545,27 @@ export type MoneySplit = {
  * `assertSplitIgnoresTotals` below proves it, and the percentages return NULL on
  * a zero total rather than 0 - because "nothing was owed" and "none of it was
  * yours" are different statements and a zero would blur them.
+ *
+ * ═══ AND WHY "tax_base" IS EXCLUDED, WHICH MATTERS EVEN MORE ═══
+ *
+ * A `tax_base` box holds WAGES. On Form 941 line 2 that is around $69,000 while
+ * the taxes beneath it are around $10,000. Letting a wage base into this sum
+ * would not merely skew the split, it would swamp it - the bar would read about
+ * 87% "employer" and the real question, who funded the tax, would become
+ * invisible. This function answers "whose money was OWED", so only boxes that
+ * somebody actually owes may enter it.
+ *
+ * This is written as an allow-list, never a deny-list: a category is added only
+ * by being named here. A new sixth category therefore contributes NOTHING until
+ * somebody makes a decision about it, which is the failure mode worth having.
  */
 export function splitMoney(boxes: readonly FormBox[]): MoneySplit {
   let employerCents = 0;
   let employeeCents = 0;
   for (const b of boxes) {
     if (b.measure !== "money") continue;
+    // Allow-list. "shared" is a total, "tax_base" is wages, "not_money" is a
+    // count; none of the three is money anybody owes, so none may be added.
     if (b.whose === "employer_cost") employerCents += b.amountCents;
     else if (b.whose === "employee_money") employeeCents += b.amountCents;
   }
@@ -683,6 +737,50 @@ export function assertSplitIgnoresTotals(): void {
 }
 
 /**
+ * The split must ignore a WAGE BASE, or the bar stops answering its own question.
+ *
+ * Modelled on the real Form 941 shape, where line 2 is wages of about $69,000
+ * and the taxes below it are about $10,000. If the base leaked in, the split
+ * would read roughly 87/13 instead of the true 50/50 of FICA, and it would look
+ * plausible - which is the dangerous kind of wrong.
+ */
+export function assertSplitIgnoresTaxBase(): void {
+  const withoutBase = [
+    box({ box: "employee-fica", amountCents: 527_36, whose: "employee_money" }),
+    box({ box: "employer-fica", amountCents: 527_36, whose: "employer_cost" }),
+  ];
+  const withBase = [
+    box({ box: "2", amountCents: 6_892_345, whose: "tax_base" }),
+    ...withoutBase,
+  ];
+  const a = splitMoney(withoutBase);
+  const b = splitMoney(withBase);
+  assert(
+    a.totalCents === b.totalCents,
+    `a wage base changed the total from ${a.totalCents} to ${b.totalCents}`,
+  );
+  assert(b.employerCents === 527_36, `wage base leaked into employer: ${b.employerCents}`);
+  // FICA is the textbook 50/50, and it must still read that way.
+  assert(b.employerMilliPct === 50_000, `employer pct ${b.employerMilliPct}, expected 50000`);
+  assert(b.employeeMilliPct === 50_000, `employee pct ${b.employeeMilliPct}, expected 50000`);
+}
+
+/**
+ * A wage base must be NEUTRAL, not coloured.
+ *
+ * Stated as its own gate because it is the one colour rule a well-meaning future
+ * change is most likely to "improve" - the biggest number on the form looks like
+ * it deserves the loudest colour, and it deserves the quietest.
+ */
+export function assertTaxBaseIsQuiet(): void {
+  assert(whoseMoneyTone("tax_base") === "neutral", "a wage base must not be coloured");
+  assert(
+    whoseMoneyConsequence("tax_base").includes("Nobody owes"),
+    "the wage base consequence must say nobody owes it",
+  );
+}
+
+/**
  * A zero total yields NULL percentages, never zero.
  *
  * "Nothing was owed" and "none of it was yours" are different facts. A zero
@@ -702,8 +800,8 @@ export function assertZeroTotalGivesNullPercentages(): void {
 
 /** Every money category must have a label, a consequence and a tone. */
 export function assertEveryCategoryIsExplained(): void {
-  const all: readonly WhoseMoney[] = ["employer_cost", "employee_money", "shared", "not_money"];
-  for (const w of all) {
+  // Walked from the exported constant, never from a copy typed out here. Rule 43.
+  for (const w of ALL_WHOSE_MONEY) {
     assert(whoseMoneyLabel(w).length > 3, `no label for ${w}`);
     assert(whoseMoneyConsequence(w).length > 40, `no real consequence for ${w}`);
     whoseMoneyTone(w);
@@ -772,6 +870,8 @@ export function __runFormBoxCoreTests(): void {
   assertBlankOnPurposeBeatsWhoseMoney();
   assertEmptinessIsMeasureAware();
   assertSplitIgnoresTotals();
+  assertSplitIgnoresTaxBase();
+  assertTaxBaseIsQuiet();
   assertZeroTotalGivesNullPercentages();
   assertEveryCategoryIsExplained();
   assertEveryTabIsExplained();
