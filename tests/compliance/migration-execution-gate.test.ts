@@ -344,7 +344,65 @@ describe("the migration list is ordered the way the database will see it", () =>
     // the other eleven verify scripts in that directory already did, and it POLLS
     // for a server that answers a real query instead of sleeping a fixed two
     // seconds and hoping. Only then was 0204 advanced to 0205.
-    expect(listed[listed.length - 1]).toMatch(/^0205_/);
+    //
+    // ─── IT FIRED A NINTH TIME, ON 0206 (books-51) ───────────────────────────
+    //
+    // 0206_ownership_requires_a_roster.sql closes the SECOND blind spot recorded
+    // seven paragraphs above - the one this very comment said was "a schema
+    // change and a separate slice". This is that slice, so the note above is now
+    // discharged rather than outstanding.
+    //
+    // WHAT 0206 DOES: an S-corporation entity may not be left with zero active
+    // shareholders. The existing sum trigger cannot catch that, because GROUP BY
+    // over zero rows yields zero groups and HAVING cannot reject a group that
+    // does not exist. It matters because emptiness is not read downstream as
+    // "unknown", it is read as ZERO, and IRC §6699(b)(2) MULTIPLIES by the
+    // shareholder count - so an empty roster prices a real twelve-month penalty
+    // at $0.00. That is the identical silent-zero failure books-21 was created
+    // to remove.
+    //
+    // 0206 WAS EXECUTED, not merely read, by
+    // scripts/accounting/verify-empty-roster-guard.sh against a real PostgreSQL
+    // 15 cluster: 44 checks, 0 failures, exit 0, ALL CHECKS PASSED. What it
+    // proves, in the order it proves it:
+    //   - THE PRE-STATE IS THE BUG (rule 39d). BEFORE 0206, `delete from
+    //     gl_shareholders` returns rc=0 and leaves count(*) = 0. Without this
+    //     the guard might be defending a gap that was never open.
+    //   - AFTER 0206 the same delete is refused with rc=3 and GL_ROSTER_EMPTY,
+    //     and the four rows are STILL THERE, so the transaction really rolled
+    //     back rather than the message merely being printed.
+    //   - THE SOFT DOORWAY IS SHUT TOO: `update ... set active = false` on every
+    //     row is refused. A guard that only watches DELETE has a side entrance.
+    //   - TRUNCATE, honestly attributed (rule 106). Plain TRUNCATE is refused by
+    //     a PRE-EXISTING foreign key from gl_journal_lines, NOT by 0206 - so the
+    //     script says so instead of taking the credit, and then drives
+    //     TRUNCATE ... CASCADE, which IS refused by 0206's own truncate trigger.
+    //   - IT DOES NOT BREAK 0205 (the whole design question). 0205 replaces the
+    //     roster by DELETE-then-INSERT, so it is legitimately empty for a moment
+    //     inside one transaction. A naive statement-level emptiness check BREAKS
+    //     it - measured, it failed - which is why the shipped guard is a
+    //     DEFERRABLE INITIALLY DEFERRED constraint trigger that fires at commit.
+    //     PostgreSQL also refuses to make a constraint trigger FOR EACH
+    //     STATEMENT, so FOR EACH ROW is forced, not chosen (rule 107).
+    //   - APPLIED THREE TIMES, still exactly one guard trigger, roster untouched.
+    //   - THE THREE NON-S-CORP ENTITIES ARE UNAFFECTED. atm, landholding and
+    //     personal hold zero shareholders CORRECTLY - a Schedule C business has
+    //     an owner, not a roster - so the guard keys on tax_form = '1120S'. A
+    //     false alarm teaches the owner to ignore the alarm.
+    //   - IT REFUSES TO INSTALL over data it would immediately contradict, and
+    //     an inactive-only roster does NOT satisfy it (emptiness in disguise).
+    //
+    // 0206 HAD A REAL BUG, AND THE VERIFY SCRIPT FOUND IT, NOT REVIEW. The first
+    // draft created the triggers and validated afterwards. Every statement in a
+    // migration auto-commits, so a FAILED validation still left both triggers
+    // installed: the migration said "no" and had done it anyway. These
+    // migrations are applied BY HAND by the owner, so the only reader of that
+    // contradiction is the person least able to spot it. 0206 now validates
+    // first and wraps the file in one begin/commit, and the script asserts the
+    // post-state of the failure path - zero guard triggers after a refused
+    // install. That is standing rule 105, and rule 39a's point that a pre-state
+    // is evidence, extended to the path you hope never runs.
+    expect(listed[listed.length - 1]).toMatch(/^0206_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
