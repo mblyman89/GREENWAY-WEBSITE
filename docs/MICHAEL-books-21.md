@@ -144,9 +144,16 @@ corporation returns. It charges a flat amount **per shareholder per month**, up 
 it **never mentions the tax at all**. A return showing nothing owed carries exactly the same penalty
 as one showing a million dollars.
 
-You have three shareholders. At the un-inflated base figure in the statute, a return one year late
-costs **$7,020**. The actual inflation-adjusted figure is higher, and I do not have it yet — see the
-list at the bottom.
+> **CORRECTION, books-50 (August 2026).** This paragraph said you had three
+> shareholders and put the figure at $7,020 <!-- SUPERSEDED-ROSTER -->. Your filed Form 1120-S reports
+> **four** shareholders (SUPERSEDED-ROSTER), so the correct figure is
+> **$9,360** — $2,340 more than I told you. The engine was always right; the
+> sentence was typed by hand. It is now computed from the roster, so it cannot
+> drift again.
+
+You have four shareholders. At the un-inflated base figure in the statute, a return one year late
+costs **$9,360** — $195 per shareholder per month, four shareholders, twelve months. The actual
+inflation-adjusted figure is higher, and I do not have it yet — see the list at the bottom.
 
 Before this week, the word "6699" did not appear anywhere in this codebase. Not in the penalty engine,
 not in a comment, nowhere. I checked by searching for it and got zero results.
@@ -299,5 +306,6 @@ that needs the two numbers at the top of the list above.
 One last note on process, since it is the whole reason this slice was worth doing. Of the four
 assumptions I started the week with, **three were wrong**, and all three were only caught by reading
 the actual statute text rather than reasoning from what I expected it to say. The one about §6621(c)
-turned into good news for you. The one about §6699 turned into a $7,000 blind spot. Neither would have
+turned into good news for you. The one about §6699 turned into a $7,000 blind spot <!-- SUPERSEDED-ROSTER --> — which books-50
+later found was itself understated: the real figure is $9,360. <!-- SUPERSEDED-ROSTER --> Neither would have
 surfaced from a well-written plan.

@@ -282,7 +282,69 @@ describe("the migration list is ordered the way the database will see it", () =>
     // that denies everyone and a policy that denies no one both look like a
     // pass if only one direction is measured.
     // Only then was 0203 advanced to 0204.
-    expect(listed[listed.length - 1]).toMatch(/^0204_/);
+    //
+    // IT FIRED AN EIGHTH TIME ON 0205 (books-50, the four-shareholder roster
+    // correction) AND WAS HONOURED, NOT SILENCED.
+    // Re-verified against the directory before this line was touched:
+    // 205 files; `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so every
+    // name is still zero-padded to four digits; and `ls [0-9]*.sql | sort -c`
+    // exits clean, so the on-disk order and the string sort this module relies
+    // on are still the same order.
+    //
+    // WHY 0205 EXISTS: 0172 seeded the greenway roster as three people -
+    // 85/10/5, with one row literally named 'Mother' - and the owner states the [SUPERSEDED-ROSTER]
+    // filed Schedule K-1s show FOUR: himself and his wife at 85%, his
+    // grandfather at 5%, and his mother and step-father at 5% each. The count is
+    // not cosmetic. IRC §6699 charges $195 per shareholder per month, so a
+    // wrong count of 3 understates a full-year late-filing exposure as $7,020 [SUPERSEDED-ROSTER]
+    // when it is $9,360.
+    //
+    // 0205 WAS EXECUTED, not merely read, by
+    // scripts/accounting/verify-shareholder-roster-fix.sh against a real
+    // PostgreSQL 15 cluster, and that script exits 0 with ALL CHECKS PASSED.
+    // What it proves, in the order it proves it:
+    //   - THE PRE-STATE IS THE BUG (rule 39d). It applies 0172 first and asserts
+    //     the roster really is the wrong three rows, one of them named 'Mother',
+    //     BEFORE correcting anything. Without this the whole run would be
+    //     vacuous, because inserting a correct roster into an empty table would
+    //     pass just as well.
+    //   - THE PRE-STATE TOTALS EXACTLY 100000 milli-percent. This is the finding
+    //     worth keeping: gl_assert_ownership_sums() only checks that ownership
+    //     SUMS to 100%, so the wrong roster balanced perfectly and the existing
+    //     trigger could never have caught it. A correct total is not a correct
+    //     roster.
+    //   - It applies 0205 a first, SECOND and THIRD time with zero errors,
+    //     because Michael applies these by hand and a hand can slip - and
+    //     because twice can hide a bug that alternates.
+    //   - IT WAS ATTACKED (rule 39b). The 85/10/5 roster was re-introduced and [SUPERSEDED-ROSTER]
+    //     0205 re-corrected it; then EVERY shareholder was deleted and 0205
+    //     rebuilt all four from empty.
+    //   - A SECOND BLIND SPOT IN THE SAME TRIGGER was found while building that
+    //     attack, and is recorded rather than assumed: deleting every
+    //     shareholder of an entity raises NOTHING, because `group by e.code
+    //     having sum(...) <> 100000` over zero rows yields zero groups for
+    //     HAVING to reject. Widening the trigger is a schema change and a
+    //     separate slice (rule 4).
+    //   - 0205's OWN GUARD WAS SEEN TO FIRE (rule 15). Removing the greenway
+    //     entity cannot be done by renaming it - gl_entities.code carries
+    //     `check (code in ('greenway','atm','landholding','personal'))`, so a
+    //     rename is structurally impossible, not merely awkward - so the row was
+    //     really deleted, after its dependents were enumerated from
+    //     pg_constraint rather than guessed (12 gl_periods, 1
+    //     gl_journal_sequences, all ON DELETE RESTRICT; the RESTRICT was itself
+    //     driven and observed). 0205 then refused with a non-zero exit and its
+    //     GL_ROSTER_FIX message, and WROTE NOTHING while refusing.
+    //
+    // THE VERIFY SCRIPT ITSELF HAD A DEFECT WORTH RECORDING, because it is the
+    // same class of bug this whole module exists to catch. It called initdb
+    // directly; initdb refuses to run as root; so run the documented way it died
+    // on its first command - and it died inside a `... | tail` pipeline, where
+    // the exit status belongs to tail and a total failure can read as a pass. It
+    // now drops to the postgres account for the server-side commands, exactly as
+    // the other eleven verify scripts in that directory already did, and it POLLS
+    // for a server that answers a real query instead of sleeping a fixed two
+    // seconds and hoping. Only then was 0204 advanced to 0205.
+    expect(listed[listed.length - 1]).toMatch(/^0205_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

@@ -18,6 +18,9 @@ import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 
 import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
+// books-50: imported so the lesson's dollar figure can be checked against what
+// the engine actually computes, rather than against another hand-typed copy.
+import { formatSection6699MaximumUsd } from "@/lib/accounting/interest-core";
 import {
   assertEveryInterestFunctionIsTaught,
   assertEveryInterestLessonIsSubstantive,
@@ -124,8 +127,14 @@ describe("M2: the interest mentor covers the engine", () => {
     expect(() => assertEveryInterestFunctionIsTaught()).not.toThrow();
   });
 
-  it("reads the real engine and finds all ten functions", () => {
+  it("reads the real engine and finds all eleven functions", () => {
+    // The order is SOURCE order, not alphabetical, which is why the newest
+    // function is first rather than last: formatSection6699MaximumUsd sits up in
+    // the constants section beside SECTION_6699_STATUTORY_BASE_CENTS and
+    // SECTION_6699_MAX_MONTHS, the two values it multiplies, rather than down
+    // among the date helpers.
     expect(exportedInterestFunctionNames()).toEqual([
+      "formatSection6699MaximumUsd",
       "isIsoDate",
       "daysBetween",
       "daysInYearOf",
@@ -177,7 +186,24 @@ describe("M2: the interest mentor covers the engine", () => {
     // The §6699 blind spot.
     const p = findInterestLesson("computeSection6699Penalty");
     expect(p!.whyItExists).toMatch(/answered zero|answered \$0/i);
-    expect(p!.theTrap).toMatch(/7,020|7020/);
+    // THIS LINE USED TO REQUIRE "$7,020", AND THAT IS WHY IT IS COMMENTED. [SUPERSEDED-ROSTER]
+    //
+    // $7,020 is $195 x 12 months x THREE shareholders. Greenway has FOUR, and [SUPERSEDED-ROSTER]
+    // the filed Schedule K-1s always did; the roster recorded in migration 0172
+    // was wrong (85/10/5, with one row named only "Mother"), and books-50 [SUPERSEDED-ROSTER]
+    // corrected it to 85/5/5/5. The correct twelve-month figure at the statutory
+    // base is $9,360.
+    //
+    // So this assertion had quietly inverted: it was pinning the lesson to the
+    // UNDERSTATED number and would have FAILED the day the lesson was corrected
+    // — a test defending the defect it was written to expose. A test is a
+    // suspect too (standing rule 22a). It now requires the right figure, which
+    // means it still does its original job — proving the lesson names a concrete
+    // amount rather than waving at "a large penalty" — while no longer voting
+    // for the wrong one.
+    expect(p!.theTrap).toMatch(/9,360|9360/);
+    // And it must NOT have quietly kept the old figure alongside the new one.
+    expect(p!.theTrap).not.toMatch(/7,020|7020/);
     expect(p!.theTrap).toMatch(/any part of the year/i);
     // The §6621(c) immunity.
     const r = findInterestLesson("rateKindFor");
@@ -192,6 +218,49 @@ describe("M2: the interest mentor covers the engine", () => {
     const c = findInterestLesson("computeInterest");
     expect(c!.theTrap).toMatch(/previous quarter/i);
     expect(c!.theTrap).toMatch(/reconciles perfectly against itself/i);
+  });
+
+  // -------------------------------------------------------------------------
+  // books-50: the roster correction reached this engine, so it must reach the
+  // lesson too.
+  // -------------------------------------------------------------------------
+  it("teaches the derived-figure helper, and teaches WHY it is derived", () => {
+    const f = findInterestLesson("formatSection6699MaximumUsd");
+    expect(f, "formatSection6699MaximumUsd ships untaught \u2014 standing rule 26").toBeTruthy();
+    // The whole reason the function exists is that a hand-typed figure went
+    // stale when the roster changed. If the lesson does not say that, it is
+    // teaching the mechanics and withholding the point.
+    expect(`${f!.whyItExists} ${f!.theTrap}`).toMatch(/roster|headcount|shareholder/i);
+    expect(f!.whyItExists).toMatch(/2,340|2340/);
+    // It must also warn that this is a floor, not a worst case, because the
+    // statutory base has been inflation-adjusted every year since 2014.
+    expect(`${f!.theTrap} ${f!.whatIWouldDo}`).toMatch(/floor|minimum|indexed|inflat/i);
+  });
+
+  it("the taught figure AGREES with what the engine actually computes", () => {
+    // A lesson that quotes a number the code does not produce is worse than no
+    // lesson, because it is believed. This is the same class of defect the
+    // helper was written to kill, so it is checked rather than trusted: the
+    // figure is read out of the ENGINE and looked for in the PROSE.
+    const computed = formatSection6699MaximumUsd(); // e.g. "$9,360"
+    expect(computed).toBe("$9,360");
+    const penalty = findInterestLesson("computeSection6699Penalty");
+    expect(
+      penalty!.theTrap,
+      `the \u00a76699 lesson must quote ${computed}, the figure the engine computes`,
+    ).toContain(computed);
+  });
+
+  it("no lesson in this module still quotes the three-shareholder figure", () => {
+    // The sweep, not the spot-check. $7,020 was correct for a roster of three [SUPERSEDED-ROSTER]
+    // and is now simply wrong; if it survives anywhere in these lessons, the
+    // owner reads an exposure $2,340 lower than it is.
+    for (const lesson of INTEREST_LESSONS) {
+      const prose = `${lesson.plainEnglish} ${lesson.whyItExists} ${lesson.theTrap} ${lesson.whatIWouldDo}`;
+      expect(prose, `lesson for ${lesson.fn} still quotes the pre-correction figure`).not.toMatch(
+        /\$7,020|\$7020/, // [SUPERSEDED-ROSTER] this regex FORBIDS the figure
+      );
+    }
   });
 });
 

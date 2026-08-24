@@ -73,6 +73,10 @@
  * the system clock cannot be tested for a date that is not today (rule 15).
  */
 import type { StatementRefusal } from "@/lib/accounting/financial-statements-core";
+import {
+  GREENWAY_SHAREHOLDER_COUNT,
+  describeRoster,
+} from "@/lib/accounting/shareholder-roster-core";
 
 // ---------------------------------------------------------------------------
 // 1) UNITS
@@ -123,6 +127,31 @@ export const SECTION_6699_STATUTORY_BASE_CENTS = 195_00;
 
 /** §6651(a) flush text: "the lesser of $435 or 100 percent of the ... tax". */
 export const SECTION_6651_STATUTORY_BASE_CENTS = 435_00;
+
+/**
+ * The twelve-month §6699 exposure for Greenway at the UN-INFLATED statutory
+ * base, formatted for prose. Computed, never typed.
+ *
+ * This exists because a hand-typed version of this number was wrong. Guidance
+ * in tax-penalty-core.ts quoted a figure built on a roster of THREE when the
+ * filed Form 1120-S reports four, understating the exposure by $2,340. A sentence about money is
+ * a claim (standing rule 96), so it is now derived from the roster and the two
+ * statutory constants above.
+ *
+ * NOT the operative figure: §6699(e) inflates the $195 base annually. This is
+ * a floor, and the wording it feeds says so.
+ */
+export function formatSection6699MaximumUsd(): string {
+  const cents =
+    SECTION_6699_STATUTORY_BASE_CENTS * SECTION_6699_MAX_MONTHS * GREENWAY_SHAREHOLDER_COUNT;
+  if (cents % 100 !== 0) {
+    throw new Error(
+      `formatSection6699MaximumUsd: ${String(cents)} cents is not a whole number of dollars. ` +
+        "The statutory base is a whole-dollar amount, so this cannot happen without a unit error.",
+    );
+  }
+  return `$${(cents / 100).toLocaleString("en-US")}`;
+}
 
 // ---------------------------------------------------------------------------
 // 2) DATES
@@ -700,8 +729,9 @@ export function computeSection6699Penalty(input: Section6699Input): Section6699R
         "\u00a76699(b)(2) counts \"the number of persons who were shareholders in the S corporation " +
         "during any part of the taxable year\" \u2014 ANY part. Somebody who held stock for a single " +
         "day in January counts in full, and counts for all twelve months. For Greenway the answer " +
-        "is three: Michael, his mother and his grandfather. Note this has nothing to do with the " +
-        "85/10/5 split; a 5% holder costs exactly as much as an 85% holder.",
+        `is ${String(GREENWAY_SHAREHOLDER_COUNT)}: ${describeRoster()}. That is what box I of the ` +
+        "filed Form 1120-S reports. Note this has nothing to do with the ownership split; a 5% " +
+        "holder costs exactly as much as an 85% holder.",
       authorityIds: ["irc-6699-s-corp-failure-to-file"],
     });
   }

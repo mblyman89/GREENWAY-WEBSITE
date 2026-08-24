@@ -294,8 +294,9 @@ export const IRC_6699_S_CORP_FAILURE_TO_FILE: GuidanceAuthority = {
     "the formula at all, so a return showing zero tax \u2014 which is what a normal S-corporation return " +
     "shows, because the income goes onto the shareholders' 1040s \u2014 carries exactly the same penalty " +
     "as one showing a million. For Greenway the arithmetic is $195, adjusted for inflation, times " +
-    "THREE shareholders, times every month or part month it is late, capped at twelve. At the " +
-    "statutory base that is a little over $7,000 for a return with no tax due on it. Three details " +
+    "FOUR shareholders \u2014 the number box I of the filed Form 1120-S reports \u2014 times every month " +
+    "or part month it is late, capped at twelve. At the statutory base that is $9,360 for a return " +
+    "with no tax due on it. Three details " +
     "that cost real money if missed. \u201cFraction thereof\u201d means one day late is a full month, so " +
     "there is no such thing as being slightly late. The multiplier counts anyone who was a " +
     "shareholder \u201cduring any part of the taxable year\u201d, so adding a shareholder for a single day " +

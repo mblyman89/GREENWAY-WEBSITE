@@ -461,6 +461,12 @@ export const CURRICULUM: readonly CurriculumUnit[] = [
       ["interest", "compoundDailyInterestCents"],
       ["interest", "computeInterest"],
       ["interest", "computeSection6699Penalty"],
+      // books-50: placed IMMEDIATELY after the penalty it sizes, because the
+      // lesson only lands next to it. On its own, "a helper that formats a
+      // dollar figure" reads as plumbing; read straight after the §6699 lesson
+      // it is the answer to "so what is that number for Greenway, and why is it
+      // not typed into the sentence?".
+      ["interest", "formatSection6699MaximumUsd"],
       ["interest", "section6651MinimumFor"],
       ["interest", "validateSection6651Rows"],
       ["penalties", "bookingInstructions"],

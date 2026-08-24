@@ -68,6 +68,7 @@ import { PERIOD_CLOSE_AUTHORITIES_NEW } from "./period-close-authorities";
 import { BASIS_AAA_AUTHORITIES_NEW } from "./basis-aaa-authorities";
 import { COGS_POSITION_AUTHORITIES_NEW } from "./cogs-position-authorities";
 import { INTEREST_AUTHORITIES_NEW } from "./interest-authorities";
+import { SHAREHOLDER_ROSTER_AUTHORITIES } from "./shareholder-roster-authorities";
 // books-25. The HIRING PAPERWORK authorities: Form I-9 (8 CFR §274a.2), the
 // W-4 withholding certificate regulation (26 CFR §31.3402(f)(2)-1), and
 // Washington's twenty-day new-hire report (RCW 26.23.040). Imported HERE, in
@@ -892,6 +893,33 @@ export const ALL_SOURCE_REGISTRIES = [
   // the S-corporation health premium (box 1 yes, box 3 no - so box 1 legitimately
   // exceeds box 3) and the Washington box 17 blank rule.
   "form-w2",
+  // books-50. WHO THE SHAREHOLDERS ARE, tagged apart from "basis-aaa" and from
+  // "interest" although it touches both, because it answers a question neither
+  // of them asks.
+  //
+  // "basis-aaa" carries \u00a71361(b)(1) and the one-class-of-stock regulation: may
+  // this company BE an S corporation, and does an uneven distribution threaten
+  // that. "interest" carries \u00a76699: what does a late 1120-S cost, given a
+  // number of shareholders. Both take the roster as an input and neither one
+  // interrogates it. This tag holds the sentences that decide the input itself.
+  //
+  // The distinction earned its own tag the hard way. The seeded roster said
+  // three shareholders where the filed returns say four, and it survived
+  // forty-nine slices BECAUSE it balanced - 85000 + 10000 + 5000 [SUPERSEDED-ROSTER] is exactly
+  // 100000 (SUPERSEDED-ROSTER: the filed roster is 85000 + 5000 + 5000 + 5000),
+  // so every total check in the system passed it. Nothing was watching
+  // WHO the holders were, only that their shares added up. Meanwhile \u00a76699
+  // multiplies by the count, so the wrong roster understated a twelve-month
+  // exposure by $2,340 while every gate stayed green.
+  //
+  // The authorities here are also the ones most likely to be misread in
+  // Greenway's favour, which is the real reason they need a home: \u00a71361(c)(1)
+  // does say a husband and wife are one shareholder, and does say an entire
+  // family is one shareholder, and Greenway's four holders ARE one family. Both
+  // sentences are scoped to subsection (b)(1)(A) and to nothing else. A reader
+  // who drops the scope clause gets one shareholder instead of four and a
+  // \u00a76699 figure of $2,340 instead of $9,360.
+  "shareholder-roster",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -1169,6 +1197,29 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // corporation, and the first says Greenway is not one.
     ...INTEREST_AUTHORITIES_NEW.map((a) => ({
       tag: "interest" as const,
+      authority: a,
+    })),
+    // books-50. THE ROSTER ITSELF. \u00a71361(c)(1)(A) and (c)(1)(B)(i) - the two
+    // sentences that decide how many shareholders Greenway has, and the reason
+    // the answer is four rather than one.
+    //
+    // Merged HERE, in the same commit that created the file, and asserted by
+    // `tests/compliance/shareholder-roster-core.test.ts` to be reachable
+    // through GUIDANCE_AUTHORITIES. That test exists because of books-27: a
+    // finished authorities module with twenty-one passing tests sat unmerged
+    // for four slices, and every screen citing it rendered an unresolved id.
+    // The tests passed the entire time, because they tested the leaf array.
+    //
+    // Note what is NOT re-declared. \u00a76699 (the sentence that multiplies by the
+    // number of shareholders) already lives under "interest", and \u00a71361(b)(1) -
+    // the very subsection the family rule is scoped TO - already lives under
+    // "basis-aaa" as IRC_1361_B_1_D_ONE_CLASS, which quotes (b)(1) whole
+    // including clause (A). Copying either one here would create two records
+    // that can drift apart while both look authoritative, which is the failure
+    // standing rule 73 describes: comparing two documents is blind to both
+    // being wrong. The mentor cites the EXISTING ids.
+    ...SHAREHOLDER_ROSTER_AUTHORITIES.map((a) => ({
+      tag: "shareholder-roster" as const,
       authority: a,
     })),
     // books-25. WHAT A NEW HIRE MUST FILL OUT, WHEN, AND WHAT HAPPENS WHEN

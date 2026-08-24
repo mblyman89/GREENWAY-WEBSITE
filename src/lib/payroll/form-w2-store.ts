@@ -48,9 +48,10 @@
  *
  *   2. SHAREHOLDER STATUS.  Answered by `employees.gl_shareholder_id is not
  *      null` and by nothing else. Never by matching names against
- *      gl_shareholders, never by "is this person the owner". Michael's mother is
- *      a 10% shareholder who is allocated income and is NOT an employee; being
- *      an owner does not make someone a shareholder-EMPLOYEE.
+ *      gl_shareholders, never by "is this person the owner". Michael's mother
+ *      is a 5% shareholder (books-50: the filed 1120-S shows four holders at
+ *      85/5/5/5) who is allocated income and is NOT an employee; being an owner
+ *      does not make someone a shareholder-EMPLOYEE.
  *
  *   3. A HEALTH PREMIUM.  Read from `employee_scorp_health_premiums` for that
  *      exact (employee, year). No row means no premium was recorded, which the

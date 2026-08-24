@@ -4,8 +4,10 @@
  * Vitest mirror for the general-ledger pure core: money parsing that cannot lose
  * a penny to floating point, the normal-balance rule, the line in the sand at
  * 2026-01-01, every posting rule enforced by gl_post_journal(), the trial
- * balance, and ownership allocation across Michael (85%), his mother (10%) and
- * his grandfather (5%).
+ * balance, and ownership allocation across the four shareholders the filed Form
+ * 1120-S reports: Michael (85%), his grandfather (5%), his step-father (5%) and
+ * his mother (5%). Corrected in books-50 from a three-person roster that had
+ * the mother at ten per cent.
  *
  * These rules live in two places on purpose: here, for fast feedback in the UI,
  * and in supabase/migrations/0172_gl_foundation.sql, which is the real authority.

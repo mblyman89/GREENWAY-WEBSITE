@@ -480,6 +480,28 @@ const REFUSALS: Record<
     whatToDo:
       "Anything allocated by ownership would be silently over- or under-allocated. Fix the percentages so they total exactly 100%.",
   },
+  /**
+   * Raised by migration 0205, which corrects the shareholder roster.
+   *
+   * WHY IT NEEDS ITS OWN ENTRY RATHER THAN LEANING ON GL_OWNERSHIP: the two ask
+   * genuinely different questions, and the difference is the entire point of
+   * that migration. GL_OWNERSHIP asks "do the percentages total 100%". The
+   * original roster - three people at 85/10/5, one of them recorded only as  [SUPERSEDED-ROSTER]
+   * "Mother" - totalled exactly 100%, so it satisfied GL_OWNERSHIP perfectly
+   * while naming the wrong PEOPLE and the wrong NUMBER of them. GL_ROSTER_FIX
+   * asks the question that actually matters: are these the shareholders on the
+   * filed returns, and are there the right number of them?
+   *
+   * The count is not cosmetic. §6699 charges a flat amount per shareholder per
+   * month for a late S-corporation return, so the number of rows in this table
+   * multiplies straight into a penalty figure, and the SPLIT is irrelevant to it
+   * - a 5% holder costs exactly as much as an 85% holder.
+   */
+  GL_ROSTER_FIX: {
+    title: "The shareholder roster does not match the returns that were filed.",
+    whatToDo:
+      "Check the roster against the Schedule K-1s: every shareholder must be listed by name with their real percentage, and the number of shareholders must match. Percentages that happen to total 100% are not enough — the wrong list of people can still add up perfectly.",
+  },
 
   // --- automatic posting --------------------------------------------------
   GL_AUTOPOST_NOT_ELIGIBLE: {

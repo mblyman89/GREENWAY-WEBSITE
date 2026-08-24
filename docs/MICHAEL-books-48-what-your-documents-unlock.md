@@ -225,11 +225,21 @@ the record, as verified against the returns:
 | Theresa L Becker | your mother | 5% |
 | James H Becker | your step-father | 5% |
 
-You gifted your mother 10%. Washington is a **community-property state**, so her
+You gifted your mother 10%. <!-- SUPERSEDED-ROSTER: this is the HOUSEHOLD figure and it is
+correct as written; the legal roster is 85/5/5/5. --> Washington is a **community-property state**, so her
 husband James owns half of what she owns by operation of law, and the return
 correctly reports it as two 5% interests rather than one 10% interest. Her
-economic unit is still the 10% you gave her. I verified the arithmetic: box 1 of
-$34,151 × 2 = $68,302, against an exact 10% share of $68,302.90. It ties.
+economic unit is still the 10% you gave her. I verified the arithmetic on your
+**2025** return: box 1 of $34,151 × 2 = $68,302, against an exact 10% share of
+$68,302.90 (10% of the $683,029 on line 22). It ties.
+
+> Added in books-50: this paragraph is correct, and I want to record that I
+> briefly decided it was not. Re-checking it, I looked for $34,151 on the
+> **2024** return, whose total is $741,431, could not find it, and concluded the
+> arithmetic was wrong. The figures are from **2025**. On the 2024 return the
+> same holders show $37,072 each against a $741,431 total. Both years say
+> 85/5/5/5. The lesson is to check which year a number belongs to before
+> calling it wrong.
 
 **Why the software has to care.** An S corporation is allowed only **one class of
 stock**, which in practice means every distribution must be strictly

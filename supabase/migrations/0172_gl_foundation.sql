@@ -592,7 +592,12 @@ create trigger trg_gl_audit_append_only
   for each row execute function public.gl_guard_audit_append_only();
 
 -- ---------------------------------------------------------------------------
--- Ownership must total exactly 100% per entity (85000 + 10000 + 5000 = 100000).
+-- Ownership must total exactly 100% per entity, in integer milli-percent.
+-- For Greenway that is 85000 + 5000 + 5000 + 5000 = 100000 (four shareholders;
+-- corrected in books-50 — the comment here previously showed a three-holder
+-- register. NOTE: totalling 100000 does NOT prove the roster is right, since
+-- the wrong three-person register totalled 100000 too. This CHECK is still
+-- correct and still necessary; it simply cannot police WHO the holders are.
 -- Deferred-style check: evaluated after each statement so a multi-row insert can
 -- land as a set.
 -- ---------------------------------------------------------------------------
@@ -977,7 +982,13 @@ select id, 1 from public.gl_entities
 on conflict (entity_id) do nothing;
 
 -- Ownership of the S-corp, verified against IRS Schedule K-1 transcripts for
--- 2022, 2023 and 2024 (each shows Michael at 85%). 85000 + 10000 + 5000 = 100000.
+-- 2022, 2023 and 2024 (each shows Michael at 85%).
+-- CORRECTED BY MIGRATION 0205 (books-50). The roster seeded below is WRONG: it
+-- names three shareholders where the filed Form 1120-S box I reports FOUR
+-- (85/5/5/5). It went unnoticed for forty-nine slices because it BALANCES -
+-- 85000 + 10000 + 5000 = 100000 exactly [SUPERSEDED-ROSTER] - so the trigger passed it
+-- every time. This file is left as it was applied; 0205 corrects the DATA
+-- forward-only. [SUPERSEDED-ROSTER: the filed roster is 85000 + 5000 + 5000 + 5000.]
 insert into public.gl_shareholders
   (entity_id, name, relationship, ownership_milli_pct, receives_distributions, notes)
 select e.id, v.name, v.relationship, v.pct, v.receives, v.notes

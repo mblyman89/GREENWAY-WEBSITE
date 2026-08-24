@@ -187,11 +187,11 @@ export const INTEREST_LESSONS: readonly MentorLesson[] = [
       "that reports a real five-figure exposure as nothing does not merely fail to warn; it " +
       "recommends the thing it exists to prevent.",
     theTrap:
-      "Assuming no tax means no penalty. \u00a76699 never mentions the tax. Greenway has three " +
-      "shareholders, so at the statutory base the exposure is $7,020 for a year, and the actual " +
+      "Assuming no tax means no penalty. \u00a76699 never mentions the tax. Greenway has FOUR " +
+      "shareholders, so at the statutory base the exposure is $9,360 for a year, and the actual " +
       "inflation-adjusted figure is higher. Two more traps in the details: the shareholder count " +
       "is everyone who held stock during ANY PART of the year, so a one-day holder counts in full " +
-      "for all twelve months and the 85/10/5 split is irrelevant \u2014 a five per cent holder costs " +
+      "for all twelve months and the ownership split is irrelevant \u2014 a five per cent holder costs " +
       "exactly as much as an eighty-five per cent one. And it is charged per month 'or fraction " +
       "thereof', so there is no such thing as being slightly late.",
     whatIWouldDo:
@@ -200,6 +200,36 @@ export const INTEREST_LESSONS: readonly MentorLesson[] = [
       "is already late, note that \u00a76699's reasonable-cause defence is broader than \u00a76651's: it " +
       "asks only for reasonable cause, where \u00a76651 also requires that the failure was not due to " +
       "willful neglect. It still has to be argued and documented.",
+    authorityIds: ["irc-6699-s-corp-failure-to-file", "irc-6699-e-inflation-adjustment"],
+  },
+  {
+    fn: "formatSection6699MaximumUsd",
+    plainEnglish:
+      "Works out the twelve-month late-filing exposure in dollars from the number of people on " +
+      "the shareholder roster, so the figure quoted in the written guidance is calculated rather " +
+      "than typed in by hand.",
+    whyItExists:
+      "Because the hand-typed version was wrong, and wrong in the direction that gives false " +
+      "comfort. The guidance quoted a full-year exposure built on a roster of three people when " +
+      "the filed returns report four, understating it by $2,340. Nobody mistyped a digit \u2014 the " +
+      "sentence was written once, was correct for the roster as it was then recorded, and simply " +
+      "stayed there after the roster was corrected. A number sitting inside a sentence has no " +
+      "way of noticing that the fact underneath it moved.",
+    theTrap:
+      "Treating a figure in prose as decoration. This one is a claim about money, and it is a " +
+      "product of three separate things: the amount per shareholder per month, the twelve-month " +
+      "ceiling, and the headcount. The headcount is the one that changes \u2014 someone is added, an " +
+      "estate holds shares for part of a year, a name was recorded as a relationship rather than " +
+      "a person \u2014 and every prose copy of the answer silently keeps the old count. The related " +
+      "trap is the opposite mistake: reading this as the worst case. It is the FLOOR, because it " +
+      "deliberately uses the un-inflated statutory amount, and the real figure has been indexed " +
+      "upward every year since 2014.",
+    whatIWouldDo:
+      "Never write a dollar amount into a sentence when it can be derived from the data the " +
+      "sentence is about. If the roster gains or loses a shareholder, this number must move on " +
+      "its own, and every place that quotes it must move with it. And when using it to judge " +
+      "risk, treat it as the minimum: look up the inflation-adjusted amount for the actual year " +
+      "before relying on the total.",
     authorityIds: ["irc-6699-s-corp-failure-to-file", "irc-6699-e-inflation-adjustment"],
   },
   {

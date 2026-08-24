@@ -49,6 +49,10 @@ import {
   SYSTEM_START_YEAR,
   validateSElectionFacts,
 } from "@/lib/accounting/s-corporation-year-core";
+import {
+  describeRoster,
+  describeRosterMilliPctSum,
+} from "@/lib/accounting/shareholder-roster-core";
 
 // ---------------------------------------------------------------------------
 // 1) MONEY, AND THE REFUSAL TO PRETEND
@@ -145,7 +149,7 @@ export { SYSTEM_START_YEAR, LAST_SUPPORTED_YEAR };
 
 export type ShareholderYearInput = {
   shareholderName: string;
-  /** 85% is 85_000. Integer milli-percent so three shareholders can sum exactly. */
+  /** 85% is 85_000. Integer milli-percent so the four shareholders sum exactly. */
   ownershipMilliPercent: number;
   /** Stock basis carried in from last year. Never negative (\u00a71367(a)(2) floor). */
   beginningStockBasisCents: number;
@@ -599,7 +603,7 @@ export function validateShareholders(
       message: "No shareholders were supplied, so there is nobody to compute basis for.",
       whatToDo:
         "An S corporation has at least one shareholder by definition. Supply the roster: for " +
-        "Greenway that is Michael at 85%, his mother at 10%, and Nicholas Mullan at 5%.",
+        `Greenway that is ${describeRoster()}.`,
       authorityIds: ["IRC_1361_B_1_D_ONE_CLASS"],
     });
     return refusals;
@@ -725,7 +729,7 @@ export function validateShareholders(
       whatToDo:
         "Every share of an S corporation is owned by somebody, and income is allocated strictly " +
         "pro rata. If the percentages do not total 100 the allocation is wrong for everyone. For " +
-        "Greenway the roster is 85000 + 10000 + 5000.",
+        `Greenway the roster is ${describeRosterMilliPctSum()}.`,
       authorityIds: ["IRC_1366_D_LOSS_LIMITATION"],
     });
   }
