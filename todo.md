@@ -2292,3 +2292,74 @@ building the matcher twice.
     placeholder amounts can never be summed into a total Michael reads as fact.
     And order the formatter so the unknown case is checked FIRST; placed after
     the money branch it would print the very "$0.00" it exists to prevent.
+
+97. READ YOUR OWN PRIOR WORK BEFORE YOU WARN THE OWNER ABOUT ANYTHING.
+    I drafted a warning to Michael that paying his grandfather less than his 5%
+    share risked creating a second class of stock and destroying the S election.
+    Then I checked it. Sec. 1.1361-1(l)(1) - already mirrored in this repo at
+    docs/authorities/federal/cfr-1.1361-1.txt, line 366 - says the test is
+    whether the GOVERNING PROVISIONS confer identical rights, not whether the
+    distributions happened to be proportionate. Uneven cheques are not by
+    themselves a second class of stock; the regulation's own example has one
+    shareholder paid a full year later and still finds one class. The repo had
+    this RIGHT since books-19, in basis-aaa-authorities.ts, with fourteen
+    verbatim authorities and a paragraph in BOOKS_ROADMAP.md explaining that the
+    engine "neither shrugs nor cries wolf".
+    So the failure was not ignorance of the law. It was writing prose from
+    recollection while the verified answer sat in the same repository.
+    THE RULE: before telling the owner that something is a risk, grep the repo
+    for the topic and read what was already proven. A warning is advice, and he
+    has a master's in accounting he has not used in thirteen years - he will
+    believe a confident sentence and act on it. And when you do get it wrong,
+    leave the correction VISIBLE in the document rather than swapping it
+    silently: a corrected conclusion with no record of the correction is one
+    careless edit away from reverting.
+
+98. A VERIFIER THAT CANNOT SEE A QUOTE APPROVES WHATEVER IT CANNOT SEE.
+    The books-49 quote gate reported a MISSING quote that was in fact present
+    and verbatim. Cause: the blockquote was nested inside a list item, so the
+    line began with whitespace, and the un-quoting regex was anchored /^>/. Every
+    indented quote line was silently dropped before comparison.
+    This is rule 39 wearing different clothes, and the dangerous direction is the
+    opposite of the one I hit. I got a FALSE ALARM, which is loud and gets fixed.
+    Had the report contained a paraphrase on an indented line, the same bug would
+    have produced a FALSE PASS - silent, permanent, and indistinguishable from a
+    verified quote.
+    THE RULE: a text-extraction step inside a gate is itself untested code. Prove
+    the extractor reaches the shape the document actually uses, and add a test
+    asserting the document STILL uses that shape (here: at least one blockquote
+    is still nested in a list item), so the case the gate was written for cannot
+    silently stop being exercised.
+
+99. A MISSED MUTANT IS A CLAIM AND NEEDS PROVING TOO.
+    In the books-49 campaign M1 reported MISSED and I nearly recorded a gate
+    hole. Before believing it I diffed the mutated file against the original:
+    NO CHANGE. The sed pattern spanned a hard line wrap, so the mutant never
+    mutated anything. Re-run line-scoped, it was caught immediately.
+    A broken mutant and a real hole look IDENTICAL in the output - both print
+    "no failures". Accepting the first reading would have sent me chasing a
+    non-existent defect; the mirror-image error is a genuine hole dismissed as
+    "probably a bad sed".
+    THE RULE: every MISSED result must be confirmed by showing the mutant
+    actually changed the file (diff, or grep the mutated line) before it is
+    called a hole OR dismissed. In documents especially, remember prose is
+    hard-wrapped: a pattern that reads naturally as one phrase may not exist on
+    any single line.
+
+100. RECORD THE OWNER'S SPOKEN FACTS IN THE REPO, WITH THE DOCUMENT THAT WOULD
+    SETTLE THEM. Michael volunteered four facts about his own tax position in
+    passing, inside a message about a UI defect: his grandfather is paid when
+    cash allows, his mother was an employee solely to be carried on the shop
+    insurance, there is a fully-funded Fidelity HSA connected via Plaid, and the
+    QBI deduction reads 0.00 and he doubts it. Each one changes a figure the
+    engine will eventually compute. All four arrived in a chat transcript, which
+    is the one place guaranteed not to survive.
+    THE RULE: an owner-stated fact gets written into the repo in the same slice
+    it is said, in a section marked as flagged-not-computed, and each entry must
+    carry three things: the MECHANISM (named statute or instruction), WHAT IS
+    VERIFIED against a mirrored source with the file and line, and THE DOCUMENT
+    NEEDED to settle it. State plainly where the verified ground stops - the
+    family-attribution rule and the >2%-shareholder HSA rule are NOT mirrored
+    here, and the report says so rather than reasoning past the gap (rule 87).
+    Under Sec. 280E the difference between a business expense and shareholder
+    compensation changes tax actually owed, so "probably fine" is not available.
