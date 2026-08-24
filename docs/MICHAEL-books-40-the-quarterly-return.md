@@ -111,7 +111,7 @@ multiplier on the form itself:
 > base limit of $184,500 has been reached. line 5a (column 1) x 0.124 line 5a
 > (column 2)
 
-— IRS, Instructions for Form 941, line 5a (Taxable social security wages)
+— IRS Instructions for Form 941 (2026), line 5a (Taxable social security wages)
 
 Three things in there are worth saying out loud. The **0.124** at the end is the
 giveaway that both halves are in the line. The **$184,500** cap is per person
@@ -176,10 +176,10 @@ One note on line 2, because it is the line that ties this return to January's
 W-2s:
 
 > Enter amounts on line 2 that would also be included in box 1 of your
-> employees' Forms W-2. See Box 1 - Wages, tips, other compensation in the
+> employees' Forms W-2. See Box 1—Wages, tips, other compensation in the
 > General Instructions for Forms W-2 and W-3 for details.
 
-— IRS, Instructions for Form 941, line 2 (Wages, Tips, and Other Compensation)
+— IRS Instructions for Form 941 (2026), line 2 (Wages, Tips, and Other Compensation)
 
 That is a definition by cross-reference, and it is why the four quarterly 941s
 and the January W-2s have to agree — the IRS compares them mechanically. It also
@@ -211,12 +211,12 @@ IRS admitting in writing that the form does not foot:
 
 > Enter adjustments for fractions of cents (due to rounding) relating to the
 > employee share of social security and Medicare taxes withheld. The employee
-> share of amounts shown in column 2 of lines 5a-5d may differ slightly from
+> share of amounts shown in column 2 of lines 5a–5d may differ slightly from
 > amounts actually withheld from employees' pay due to the rounding of social
 > security and Medicare taxes based on statutory rates. This adjustment may be a
 > positive or a negative adjustment.
 
-— IRS, Instructions for Form 941, line 7 (Current quarter's adjustment for
+— IRS Instructions for Form 941 (2026), line 7 (Current quarter's adjustment for
 fractions of cents)
 
 When you run a paycheque, the tax is rounded to the nearest cent on **that
@@ -318,11 +318,14 @@ here". It means:
 
 > Enter the number of employees on your payroll for the pay period including
 > March 12, June 12, September 12, or December 12, for the quarter indicated at
-> the top of Form 941. Don't include: Household employees, Employees in nonpay
-> status for the pay period, Farm employees, Pensioners, or Active members of
-> the U.S. Armed Forces.
+> the top of Form 941. Don't include:
+> • Household employees,
+> • Employees in nonpay status for the pay period,
+> • Farm employees,
+> • Pensioners, or
+> • Active members of the U.S. Armed Forces.
 
-— IRS, Instructions for Form 941, line 1 (Number of Employees Who Received
+— IRS Instructions for Form 941 (2026), line 1 (Number of Employees Who Received
 Wages, Tips, or Other Compensation)
 
 One specific pay period. The one containing the 12th of the quarter's **last**

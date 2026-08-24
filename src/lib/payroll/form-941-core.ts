@@ -440,6 +440,29 @@ export type Form941Return = {
   readonly sourceLabel: string;
   /** The single sentence to put at the top of the screen. */
   readonly verdict: string;
+  /**
+   * Line 5a COLUMN 1 - the social security wage base, after the annual cap.
+   *
+   * ═══ WHY THESE TWO FIELDS EXIST SEPARATELY FROM `lines`. ═══
+   *
+   * Lines 5a and 5c each have TWO columns on the paper form: column 1 is the
+   * wage base, column 2 is the tax. `lines` carries only column 2, because
+   * that is what feeds the totals - the derivation text mentions the base in
+   * prose but prose is not a figure anything can compare.
+   *
+   * The confirmation step needs to compare the wage BASE against what was
+   * filed, and it must not re-derive it. Dividing column 2 by 12.4% to recover
+   * column 1 would be wrong in a way that is almost impossible to see: the
+   * division does not invert `applyMilliPct`'s rounding, so the recovered base
+   * would be a cent or two out on most quarters and the reconciliation would
+   * report a phantom difference in the wage base every single time.
+   *
+   * So the engine states what it used. These are the exact integers that went
+   * into `applyMilliPct`, not a reconstruction of them.
+   */
+  readonly oasdiTaxableWagesCents: number;
+  /** Line 5c COLUMN 1 - the Medicare wage base. Uncapped, so normally = wages. */
+  readonly medicareTaxableWagesCents: number;
 };
 
 export type Form941Result =
@@ -758,5 +781,10 @@ export function buildForm941(req: Form941Request): Form941Result {
     subjectCount: req.subjects.length,
     sourceLabel: req.sourceLabel,
     verdict,
+    // The SAME integers handed to applyMilliPct above, not a recomputation.
+    // See the field comments on Form941Return for why recovering these by
+    // dividing column 2 by the rate would be quietly wrong.
+    oasdiTaxableWagesCents: oasdiBase,
+    medicareTaxableWagesCents: medicareBase,
   };
 }

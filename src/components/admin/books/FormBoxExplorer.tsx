@@ -65,6 +65,7 @@
 import { useMemo, useState } from "react";
 
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
+import { BoxLessonBody } from "@/components/admin/books/BoxLessonBody";
 import {
   type BoxLesson,
   type FormBox,
@@ -376,109 +377,11 @@ export function FormBoxExplorer({
                 }
               />
 
-              <div className="mt-3 space-y-3 text-xs leading-relaxed">
-                <Lesson label="What this box is" tone="neutral">
-                  {openLesson.plainEnglish}
-                </Lesson>
-                <Lesson label="Where the figure comes from" tone="neutral">
-                  {openLesson.whereItComesFrom}
-                </Lesson>
-                <Lesson label="How to read it as a tool" tone="green">
-                  {openLesson.howToReadIt}
-                </Lesson>
-                {openLesson.commonMistake !== null && (
-                  <Lesson label="The mistake people actually make" tone="orange">
-                    {openLesson.commonMistake}
-                  </Lesson>
-                )}
-                <Lesson label="What to do" tone="gold">
-                  {openLesson.whatToDo}
-                </Lesson>
-              </div>
-
-              {openLesson.examples.length > 0 && (
-                <div className="mt-4 space-y-3">
-                  <h4 className="text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                    Worked examples
-                  </h4>
-                  {openLesson.examples.map((ex) => (
-                    <div
-                      key={ex.title}
-                      className={`rounded-[var(--admin-radius-sm)] border p-3 ${PANEL.neutral}`}
-                    >
-                      <div className="text-xs font-semibold">{ex.title}</div>
-                      <ol className="mt-2 list-decimal space-y-1 pl-4 text-[0.7rem] text-[var(--admin-text-muted)]">
-                        {ex.steps.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ol>
-                      <div className="mt-2 font-mono text-xs text-[var(--admin-accent)]">
-                        = {ex.answer}
-                      </div>
-                      <div className="mt-1 text-[0.7rem] italic text-[var(--admin-text-muted)]">
-                        {ex.moral}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {openLesson.quotes.length > 0 && (
-                <div className="mt-4 space-y-3">
-                  <h4 className="text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                    The authority, word for word
-                  </h4>
-                  {openLesson.quotes.map((q) => (
-                    <div
-                      key={q.cite}
-                      className={`rounded-[var(--admin-radius-sm)] border p-3 ${PANEL.gold}`}
-                    >
-                      <div className="text-[0.65rem] uppercase tracking-wide text-[var(--admin-gold)]">
-                        {q.cite}
-                      </div>
-                      <blockquote className="mt-2 border-l-2 border-[var(--admin-gold)]/50 pl-3 text-[0.72rem] italic">
-                        “{q.quote}”
-                      </blockquote>
-                      <div className="mt-2 text-[0.7rem]">
-                        <span className="font-semibold">What that means here: </span>
-                        {q.soWhat}
-                      </div>
-                      <a
-                        href={q.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-block text-[0.65rem] text-[var(--admin-accent)] underline"
-                      >
-                        Read the source
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {openLesson.tiesTo.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                    What this box must agree with
-                  </h4>
-                  <ul className="mt-2 space-y-1 text-[0.7rem]">
-                    {openLesson.tiesTo.map((t) => (
-                      <li key={`${t.formId}:${t.box}`} className="text-[var(--admin-text-muted)]">
-                        <span className="font-mono text-[var(--admin-accent)]">
-                          {t.formId} box {t.box}
-                        </span>
-                        {" — "}
-                        {t.why}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-[0.65rem] text-[var(--admin-text-muted)]">
-                    These links are what turn a stack of forms into a system. If two of them
-                    disagree, one of them is wrong, and finding out here costs minutes instead
-                    of waiting for a notice.
-                  </p>
-                </div>
-              )}
+              {/* THE LESSON BODY. Every display-bearing member of BoxLesson,
+                  rendered by the ONE component that renders them, shared with
+                  the Form 941 confirmation step. See BoxLessonBody.tsx for why
+                  this is not a second copy of the same markup (rule 25). */}
+              <BoxLessonBody lesson={openLesson} />
 
               <button
                 type="button"
@@ -538,25 +441,14 @@ export function FormBoxExplorer({
   );
 }
 
-/** One labelled block of the lesson. */
-function Lesson({
-  label,
-  tone,
-  children,
-}: {
-  readonly label: string;
-  readonly tone: ScreenTone;
-  readonly children: React.ReactNode;
-}) {
-  return (
-    <div className={`rounded-[var(--admin-radius-sm)] border p-3 ${PANEL[tone]}`}>
-      <div className={`text-[0.65rem] font-semibold uppercase tracking-wide ${TEXT[tone]}`}>
-        {label}
-      </div>
-      <p className="mt-1 text-[0.72rem] leading-relaxed">{children}</p>
-    </div>
-  );
-}
+/*
+ * THE `Lesson` BLOCK HELPER MOVED TO BoxLessonBody.tsx (books-48).
+ *
+ * It was defined here and used only by the lesson body, which is now shared
+ * with the Form 941 confirmation step. Leaving a copy behind would be dead
+ * code wearing a green check (rule 50): it would still compile, still look
+ * maintained, and would quietly become the version nobody edits.
+ */
 
 /**
  * One figure in a reconciliation.

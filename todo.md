@@ -2135,3 +2135,75 @@ building the matcher twice.
     value, never compare the fragment. A false accusation costs more than a miss,
     because it is the thing that gets the whole check switched off (rule 84a) -
     and a count reported to Michael must be one that survives being checked.
+
+87. AN ABSENCE MUST BE ASSERTED AS AN ABSENCE, NEVER THROUGH A DERIVED LABEL.
+    The books-48 mutation campaign changed `rightCents: filed?.line3... ?? null`
+    to `?? 0` and the whole 69-test gate stayed GREEN. Every assertion in the
+    check-row section was written about `tone`, and a quarter nobody has recorded
+    scores a DISAGREEMENT under `?? 0` exactly as it scores CANNOT_CHECK under
+    `?? null` - both are non-green, so `tone` cannot tell the two apart. The gate
+    was measuring the colour of the answer instead of the answer.
+    THE RULE: when the distinction under test is PRESENT vs ABSENT, assert on the
+    field that carries absence - `rightCents === null`, `differenceCents === null`,
+    `outcome === "cannot_check"` - and assert it for EVERY row, not a sample.
+    A label computed downstream of the thing you care about has already thrown
+    away the difference you were trying to protect. This is the highest-value
+    finding of the slice and no green suite would ever have produced it: it took
+    a deliberate mutation (rule 83) to expose a hole that had been there since
+    the module was written.
+87a. THE MOST DANGEROUS MUTANT IS THE ONE THAT LOOKS LIKE A TIDY-UP. `?? null`
+    to `?? 0` is precisely the edit a future reader makes to remove a nullable
+    type from a signature. It is not vandalism, it is housekeeping - which is why
+    the gate has to be the thing that stops it. Ask of every nullable in a
+    comparison surface: if somebody "simplified" this to a zero, would anything
+    go red?
+
+88. A UI BRANCH FOR A STATE THE CORE CANNOT PRODUCE IS DEAD CODE THAT TEACHES
+    A LIE. The 941 entry form shipped a general-refusal panel - a place to show
+    refusals not attached to any single field. The core has nine refusal codes
+    and every one of them names a field; the ONLY `field: null` in the entire
+    module is a WARNING. So the panel could never render, and worse, it implied
+    to the next reader that field-less refusals are a thing the system emits.
+    Found only because a test asked "does anything reach this?" and the answer
+    was no (rules 40 and 50).
+    THE RULE: before writing a branch for a shape, grep the core for a producer
+    of that shape. If none exists, do not write the branch - and if the branch
+    is written anyway, the gate must prove reachability, not merely rendering.
+    A rendering test passes on code nothing can ever reach.
+
+89. A GREP GATE MUST NOT READ THE COMMENTS THAT EXPLAIN THE GATE. The test
+    proving the 941 form uses text inputs rather than number inputs searched the
+    file for `type="number"` and failed - on the form's own comment explaining
+    WHY number inputs were rejected. The prose that documents a rule is not a
+    violation of it.
+    THE RULE: strip block and line comments before scanning source for forbidden
+    text, and then assert the stripped body is still substantial (`length > 2000`)
+    so a stripper that accidentally deletes everything cannot hand back a vacuous
+    pass (rule 39). Corollary: a well-commented file is the MOST likely to trip a
+    naive scan, so the better the documentation the sooner this bites.
+
+90. A CONSTANT NAMED LIKE A QUESTION IS NOT NECESSARILY A BOOLEAN.
+    `FILED_941_YEAR_BOUNDS_MATCH_MIGRATION` reads as a yes/no and was asserted
+    `.toBe(true)`. It is the SQL constraint text `"tax_year between 2020 and
+    2100"` - a non-empty string, therefore truthy, therefore an assertion that
+    could only ever have passed by coincidence of naming. It failed loudly here
+    only because `.toBe(true)` is strict; `.toBeTruthy()` would have shipped a
+    gate that proved nothing.
+    THE RULE: read the DEFINITION of every constant a gate asserts against, in
+    the file that declares it, before writing the assertion. And prefer strict
+    equality over truthiness in gates, because truthiness is what lets a
+    mis-typed assertion pass silently.
+
+91. WHEN A SECOND CALLER NEEDS AN EXISTING RENDERER, EXTRACT IT - DO NOT WRITE
+    A SECOND ONE. `BoxLesson` carries eight display-bearing members. A second
+    renderer for the 941 confirmation panel would have looked correct on the day
+    it was written and would have silently stopped teaching the ninth member the
+    moment one was added - no type error, no failing test, just a lesson that
+    quietly shows less than the other screen shows. `BoxLessonBody` was lifted
+    out of `FormBoxExplorer` so both surfaces render from one place (rule 25).
+    THE RULE: duplication is at its most expensive in presentation code, because
+    the compiler cannot see a missing paragraph. Extract, keep the per-caller
+    header at the call site where it legitimately differs, and then DELETE the
+    original inline helper - an orphaned helper compiles forever (rule 50), which
+    is how the now-deleted `Lesson` function survived the first extraction pass
+    and had to be found by grep rather than by `tsc`.

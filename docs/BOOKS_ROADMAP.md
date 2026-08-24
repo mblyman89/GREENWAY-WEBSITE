@@ -878,12 +878,26 @@ boundary rather than swept in.
 
 ### Still open in slice A's territory
 
-- **Nothing writes `filed_form_941_totals` yet.** The table is live and the
-  reconciliation reads it, but the rows must be keyed in from the filed returns.
-  This is deliberate — the whole value of the check is that the figures come from
-  a DIFFERENT source than this software; a screen that computed them itself would
-  only ever agree with itself. **A data-entry surface for those four rows is the
-  next piece of work in this area.**
+- **`filed_form_941_totals` now has a writer, and the table is still empty.**
+  Those are two different facts and both matter. Slice books-48 built the
+  **data-entry surface** that was named here as the next piece of work: a form
+  on `/admin/books/form-941` where Michael types the six figures off a return he
+  has already filed, plus the date he filed it and where the paper came from.
+  Until he types the first one, every reconciliation row still reports
+  `cannot_check` — which is the honest answer and is now proven to be the answer
+  (see below), because the previous behaviour of comparing an unsupplied figure
+  against zero came back as a disagreement rather than as an absence, and a
+  future refactor toward `?? 0` would have come back GREEN.
+  The figures are typed rather than computed **on purpose**, and this is the
+  whole point of the screen: the W-2/W-3 side of the comparison descends from
+  `payroll_run_lines`, so if the filed side were derived from pay runs too, both
+  sides would share one ancestor and would agree TRIVIALLY, ALWAYS — including
+  in the quarter where a 941 went out with a transposed digit. Rule 39 on the
+  highest-stakes screen in the module. The typing is the second witness.
+  **Still open here:** nobody has keyed a real return yet, because the first one
+  will not exist until Q1 2027 is filed in April 2027. Michael can key the four
+  2026 quarters from his Aatrix copies at any time and the check will light up
+  the moment he does.
 - `payroll_ytd_accumulators` does not yet carry PFML / WA Cares **withheld**,
   which box 14 wants.
 - Worked examples still cover 8 of 82 lessons.
