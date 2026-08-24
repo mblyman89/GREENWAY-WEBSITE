@@ -110,7 +110,42 @@ const TAUGHT_SCREENS: readonly {
       "and WA Cares amounts withheld — which the year-to-date accumulators do not yet carry. " +
       "Until they do, any row here would be arithmetic against a number we invented.",
   },
+  {
+    // ADDED books-49. This screen had NO explorer at all: `w2Boxes` was written
+    // and called by nothing, and `FORM_W2_LESSONS` is a MentorLesson, which the
+    // explorer cannot consume. The eight BoxLessons were written for this slice.
+    label: "Form W-2 (annual wage report)",
+    page: "src/app/admin/books/form-w2/page.tsx",
+    lessonsExport: "FORM_W2_BOX_LESSONS",
+    checksMissingBecause:
+      "The W-2/W-3 reconciliation compares the annual totals against four filed 941s, and this " +
+      "screen already renders that comparison itself in its own reconciliation card rather than " +
+      "through the explorer's Check tab. Duplicating it into the tab would show Michael the same " +
+      "figures twice and give two places for them to disagree.",
+  },
 ];
+
+/**
+ * ═══ WHY THIS FILE NOW STRIPS COMMENTS BEFORE IT SEARCHES (books-49) ═══
+ *
+ * Standing rule 89: a grep gate must not read the comments that explain the
+ * gate. This is not hypothetical here. The pages carry comments that QUOTE the
+ * defective code they replaced, verbatim, so the reason for the fix survives —
+ * form-940/page.tsx contains the literal text
+ *
+ *     `{result.ok ? <FormBoxExplorer .../> : null}`
+ *
+ * inside a comment explaining why that gating was wrong. A scan looking for
+ * conditionally-rendered explorers finds that comment and fails a page that is
+ * correct, and the natural "fix" is to delete the explanation — trading a
+ * comment that teaches for a gate that passes.
+ *
+ * So comments come out first, and the search runs on code only.
+ */
+function stripComments(src: string): string {
+  // Block comments first (they can contain //), then line comments.
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
 
 function read(rel: string): string {
   const path = join(ROOT, rel);
@@ -159,6 +194,116 @@ describe("books-47: every taught screen actually renders the tab system", () => 
   });
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * books-49: THE EXPLORER IS REACHABLE, NOT MERELY PRESENT
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * THE BUG THIS FILE MISSED, IN MICHAEL'S WORDS:
+ *
+ *   "I am unable to see or use the tab system we built to let me see the
+ *    various forms and be able to click them for learning about them. The form
+ *    pages are still just walls of text."
+ *
+ * Every assertion above passed the whole time. `<FormBoxExplorer` was in all
+ * three files, real lessons were passed, real boxes were passed, and the Check
+ * tab was wired. The gate was green and the feature was invisible.
+ *
+ * The reason: the explorer was nested inside `{result.ok ? ... : null}`, and
+ * `result.ok` is FALSE until real pay runs exist. Greenway's first payroll is
+ * 1 January 2027. So the teaching surface was correctly built, correctly
+ * tested, and unreachable for a year — standing rule 40 (an unreachable guard
+ * is an untested guard) applied to UI, and rule 88 (no UI branch for a state
+ * the core cannot produce) turned inside out: this was a UI branch for a state
+ * the core could not YET produce.
+ *
+ * This file's own header claimed it "catches an ABSENCE". It did not. A
+ * rendered-but-unreachable component is textually present and visually absent,
+ * and `toContain` cannot tell those apart. That is why the assertions below
+ * are about POSITION rather than existence.
+ */
+describe("books-49: the teaching tabs are reachable before any payroll exists", () => {
+  /**
+   * The core assertion: no `<FormBoxExplorer` may be preceded, on its own line
+   * or the lines just above it, by a data-dependent ternary that could render
+   * `null` instead.
+   *
+   * Implemented by finding each explorer and walking BACKWARDS through the
+   * enclosing JSX expression to see whether it sits on the true-branch of a
+   * conditional keyed on computed results.
+   */
+  it("never nests the explorer inside a result.ok conditional", () => {
+    let checked = 0;
+    for (const screen of TAUGHT_SCREENS) {
+      const code = stripComments(read(screen.page));
+      const lines = code.split("\n");
+      for (let i = 0; i < lines.length; i += 1) {
+        if (!lines[i].includes("<FormBoxExplorer")) continue;
+        checked += 1;
+        // The five lines above an explorer are where a wrapping ternary lives.
+        const preamble = lines.slice(Math.max(0, i - 5), i).join("\n");
+        /*
+         * The shapes that made the tabs invisible, all three of them real:
+         *   {result.ok ? <FormBoxExplorer
+         *   {result.ok && result.subjectCount > 0 ? <FormBoxExplorer
+         *   {result.ok && result.value.lines.length > 0 ? ( ... <FormBoxExplorer
+         * A ternary on `result.` opening just above an explorer is the pattern.
+         */
+        const gated = /\{\s*result\.[A-Za-z0-9_.]*[^}]*\?\s*\(?\s*$/m.test(preamble);
+        expect(
+          gated,
+          `${screen.label} line ${i + 1}: the explorer is nested inside a conditional on ` +
+            `computed data. It will not render until real payroll exists, which is exactly ` +
+            `the bug Michael reported. Render it unconditionally and branch on the BOXES ` +
+            `instead: figures when they exist, teachingBoxes() when they do not.`,
+        ).toBe(false);
+      }
+    }
+    // Rule 39 / rule 66d: assert existence before absence. If the explorers
+    // ever vanish, the loop above passes by inspecting nothing.
+    expect(checked, "no explorers were found at all, so this gate proved nothing").toBeGreaterThanOrEqual(4);
+  });
+
+  /**
+   * A page may not fall back to an EMPTY box list either.
+   *
+   * `boxes={result.ok ? adapter(ret) : []}` renders the tabs, satisfies the
+   * assertion above, and shows Michael a form with no rows — a working screen
+   * with nothing on it, which looks like a bug in his data rather than a
+   * missing feature. Every page must name a teaching fallback instead.
+   */
+  it("falls back to a teaching specimen rather than to no boxes", () => {
+    for (const screen of TAUGHT_SCREENS) {
+      const code = stripComments(read(screen.page));
+      expect(code, `${screen.label} passes an empty box list`).not.toMatch(/boxes=\{[^}]*:\s*\[\]\s*\}/);
+      expect(
+        code,
+        `${screen.label} renders the explorer but never calls teachingBoxes(), so before ` +
+          `payroll exists it has nothing to show`,
+      ).toContain("teachingBoxes(");
+    }
+  });
+
+  /**
+   * THE WASHINGTON SCREEN MAY NOT SKIP A FORM FOR HAVING NO BOXES.
+   *
+   * Separate assertion because it is a separate defect with a separate cause.
+   * The tab loop used to end with `if (boxes.length === 0) return null`, and
+   * Form 5208B produces ZERO engine lines BY DESIGN — it is a wage detail, one
+   * row per person, carried in `ret.wageDetail`. So that tab was dropped even
+   * with a full year of real payroll behind it. Not a timing bug like the
+   * others; that one never healed on its own.
+   */
+  it("does not drop a Washington form for having no engine lines", () => {
+    const code = stripComments(read("src/app/admin/books/wa-quarterly/page.tsx"));
+    expect(
+      code,
+      "the Washington screen still skips forms with no boxes, which permanently drops the " +
+        "5208B wage detail — the one form that never has engine lines at all",
+    ).not.toMatch(/boxes\.length\s*===\s*0\s*\)\s*return null/);
+  });
+});
+
 describe("books-47: the Check tab is either wired or honestly declared empty", () => {
   /**
    * THE GATE THAT FOUND THE BUG.
@@ -197,7 +342,10 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
    */
   it("states exactly how many screens still lack reconciliations", () => {
     const excused = TAUGHT_SCREENS.filter((s) => s.checksMissingBecause !== null);
-    expect(excused.map((s) => s.label)).toEqual(["Washington quarterly returns"]);
+    expect(excused.map((s) => s.label)).toEqual([
+      "Washington quarterly returns",
+      "Form W-2 (annual wage report)",
+    ]);
     /*
      * WENT FROM 2 TO 1 IN books-48.
      *
@@ -207,8 +355,21 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
      * accumulators do not carry the PFML and WA Cares amounts withheld - and
      * NOT on work nobody has done, which is the distinction that decides
      * whether an excuse is honest.
+     *
+     * WENT FROM 1 TO 2 IN books-49, AND THIS TEST IS WHY THE INCREASE IS HERE
+     * IN WRITING. The W-2 screen gained an explorer in that slice (it had none
+     * at all), so it joined the list. Adding it made this test fail, which is
+     * the behaviour that was designed in: a new un-reconciled screen cannot be
+     * added quietly, only deliberately, with the reason typed out above.
+     *
+     * The W-2's excuse is a different KIND from Washington's. Washington's is
+     * blocked on data the system does not carry. The W-2's is a deliberate
+     * choice not to render the same reconciliation twice - that screen already
+     * compares the W-3 against the four filed 941s in its own card. Showing it
+     * again in the Check tab would give two places for one answer to disagree
+     * with itself.
      */
-    expect(excused.length).toBe(1);
+    expect(excused.length).toBe(2);
   });
 
   it("proves at least one screen really does reconcile, or the gate is vacuous", () => {

@@ -96,6 +96,12 @@ import {
   w2ChecksInOrder,
 } from "@/lib/payroll/form-w2-mentor";
 import { loadW2s } from "@/lib/payroll/form-w2-store";
+// The teaching surface (books-49). `w2Boxes` existed and was called by nothing;
+// the box lessons had to be written because FORM_W2_LESSONS is a MentorLesson.
+import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
+import { w2Boxes, FORM_ID_W2 } from "@/lib/payroll/form-box-adapters";
+import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
+import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
 import {
   groupW2Refusals,
   reconRows,
@@ -721,6 +727,52 @@ export default async function FormW2Page({
           </div>
         </Card>
       )}
+
+      {/* ═══ TAKE ME TO SCHOOL — THE W-2 (books-49) ═══════════════════════════
+
+          Michael, verbatim: "There should be a visual form for every single
+          form in its own tab."
+
+          The W-2 was the form with NO teaching tab at all. The section above
+          this one renders a table per employee, and that table is exactly what
+          Michael described as "still just walls of text" - you can read it,
+          but you cannot click a box and be taught it.
+
+          Two things had to be built before this could exist, and it is worth
+          recording why neither was already done:
+
+          1. `w2Boxes` had been written in form-box-adapters.ts and was used by
+             NOTHING. Dead code wearing a green check (rule 50) - it was tested,
+             it worked, and no screen ever called it.
+
+          2. `FORM_W2_LESSONS` exists and looks like it fills the gap, but it is
+             a MentorLesson - it teaches the FORM as a whole. The explorer needs
+             BoxLessons, which teach one box each. So the eight box lessons were
+             written for this slice, and every quote in them is verified
+             character for character against the mirrored IRS instructions.
+
+          UNCONDITIONAL, on purpose. Greenway's first payroll is 1 January 2027,
+          so `forms` is empty for the whole of this year. Gating the teaching on
+          having W-2s would hide it until the day it stopped being needed - the
+          exact bug reported on the 940, 941 and Washington screens.
+
+          WHOSE W-2 IS SHOWN. When real forms exist the FIRST one is the worked
+          specimen, because the explorer teaches ONE form's boxes and eight
+          identical tabs would teach nothing new; the per-person figures are in
+          the table above. When none exist, the teaching specimen is used and
+          every figure reads "not computed yet" rather than $0.00 - a zero here
+          would claim Greenway paid somebody nothing, which is a statement
+          rather than a blank. */}
+      <FormBoxExplorer
+        title="Form W-2, box by box"
+        subtitle={
+          forms.length > 0
+            ? `Employer's annual wage report. Showing ${forms[0].employeeName || "the first form"} as the worked example - click a box number to be taught it: what belongs there, whose money it is, and which boxes on your other forms must agree with it.`
+            : "Employer's annual wage report. Your figures are not available yet, so the amounts are marked as not computed rather than shown as zero. Every box still teaches - click a box number."
+        }
+        boxes={forms.length > 0 ? w2Boxes(forms[0]) : teachingBoxes(FORM_ID_W2)}
+        lessons={FORM_W2_BOX_LESSONS}
+      />
 
       {/* ── 7. THE CHECKLIST ─────────────────────────────────────────────── */}
       <Card>

@@ -76,6 +76,7 @@ import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { waBoxes } from "@/lib/payroll/form-box-adapters";
+import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
 import { waQuarterlyAuthorities } from "@/lib/payroll/wa-quarterly-authorities";
 import {
@@ -533,22 +534,53 @@ export default async function WaQuarterlyPage({
           `waBoxes` translates; it computes nothing. An hours line with no hour
           count throws rather than reporting zero reportable hours, because a
           zero is a claim L&I would act on. */}
-      {result.ok && result.value.lines.length > 0
-        ? FORM_ORDER.map((form) => {
-            const guide = waFormGuide(form);
-            const boxes = waBoxes(result.value, form);
-            if (boxes.length === 0) return null;
-            return (
-              <FormBoxExplorer
-                key={`teach-${form}`}
-                title={`${guide ? guide.officialName : form} - box by box`}
-                subtitle="Click a box number to be taught it: where the figure came from, whose money it is, and the law behind it."
-                boxes={boxes}
-                lessons={WA_QUARTERLY_LESSONS}
-              />
-            );
-          })
-        : null}
+      {/* ═══ EVERY WASHINGTON FORM GETS A TAB, ALWAYS (books-49) ═══
+
+          Michael, verbatim: "There should be a visual form for every single
+          form in its own tab." Before this slice, none of them appeared, and
+          one of them could never have appeared. Two separate defects:
+
+          1. THE WHOLE BLOCK WAS GATED on `result.ok && lines.length > 0`.
+             Greenway's first payroll is 1 January 2027, so that condition is
+             false today and stays false for the rest of the year. Teaching
+             does not depend on data - the captions, the lessons and the law
+             are all static - so gating the teaching on this quarter's payroll
+             confused "I cannot compute your figures" with "I cannot teach you
+             the form". Only the first was ever true.
+
+          2. `if (boxes.length === 0) return null` DROPPED THE 5208B FOREVER,
+             not just before 2027. Proved by building a complete valid quarter
+             and counting: 5208A 3 lines, PFML 3, L&I 4, and 5208B ZERO. The
+             wage detail is one row per PERSON, carried in `ret.wageDetail`,
+             so it has no boxes to count and the guard skipped it every time.
+             The prose renderer above already handles this correctly by calling
+             `waWageDetailRows`; the teaching renderer never got the same
+             treatment. `teachingBoxes("esd_5208b")` now describes it by its
+             COLUMNS, which is the honest shape of a form made of people.
+
+          The rule the whole block obeys: when figures exist, show them; when
+          they do not, teach the box and say the figure is not computed. Never
+          print $0.00 for something nobody has counted - a zero is a claim. */}
+      {FORM_ORDER.map((form) => {
+        const guide = waFormGuide(form);
+        // Figures only when the engine actually produced them for THIS form.
+        // The 5208B never has any, so it always falls through to teaching.
+        const computed = result.ok ? waBoxes(result.value, form) : [];
+        const hasFigures = computed.length > 0;
+        return (
+          <FormBoxExplorer
+            key={`teach-${form}`}
+            title={`${guide ? guide.officialName : form} - box by box`}
+            subtitle={
+              hasFigures
+                ? "Click a box number to be taught it: where the figure came from, whose money it is, and the law behind it."
+                : "Click a box number to be taught it: what belongs there, whose money it is, and the law behind it. Your figures are not available yet, so the amounts are marked as not computed rather than shown as zero."
+            }
+            boxes={hasFigures ? computed : teachingBoxes(form)}
+            lessons={WA_QUARTERLY_LESSONS}
+          />
+        );
+      })}
 
       {/* The empty state is NOT "nothing to see here" - a zero must be filed. */}
       {result.ok && result.value.lines.length === 0 ? (

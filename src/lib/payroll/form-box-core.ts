@@ -335,6 +335,36 @@ export type FormBox = {
   readonly blankOnPurpose: string | null;
   /** True for boxes a reader must not skim (the ones other forms are compared against). */
   readonly emphasise: boolean;
+  /**
+   * Set when THE FIGURE IS NOT KNOWN, and it carries the reason.
+   *
+   * ═══ WHY THIS IS NOT JUST amountCents = 0 (books-49) ═══
+   *
+   * Michael reported: "I am unable to see or use the tab system... The form
+   * pages are still just walls of text." The cause was that every teaching
+   * surface was hidden behind `result.ok`, which is false until real payroll
+   * exists — and the first payroll is 1 January 2027. So the one thing he
+   * asked for was invisible, and would have stayed invisible for a year.
+   *
+   * The fix is to teach the form whether or not the figures exist. That
+   * immediately raises the question this field answers: what goes in the
+   * figure column when nothing has been computed?
+   *
+   * NOT zero. A zero is a CLAIM. `$0.00` in box 5a says "you paid no Social
+   * Security wages this quarter", which on a filed return is a statement the
+   * IRS acts on. This codebase already refuses that trade elsewhere — the
+   * Washington hours adapter THROWS rather than report zero reportable hours,
+   * because "zero hours" is a claim on a workers' compensation return. The
+   * same reasoning applies to every box on every form.
+   *
+   * So an unknown figure is modelled as its own state. `blankOnPurpose` could
+   * not be reused: that field means "this box is CORRECTLY empty and here is
+   * the law that says so" — a statement of fact about the form. This one means
+   * "we do not know yet" — a statement about OUR data. Collapsing the two would
+   * tell Michael that a box he simply has no data for is a box the IRS wants
+   * left blank, which is a different and much more dangerous sentence.
+   */
+  readonly notComputedYet: string | null;
 };
 
 /**
@@ -346,6 +376,16 @@ export type FormBox = {
  * otherwise reappear in every new screen.
  */
 export function formatBoxValue(box: FormBox): string {
+  /*
+   * AN UNKNOWN FIGURE IS NEVER PRINTED AS A NUMBER (books-49).
+   *
+   * This branch is first on purpose. If it came after the money branch, a box
+   * carrying `notComputedYet` with the default amountCents of 0 would print
+   * "$0.00" — the exact false claim the field exists to prevent. Order is
+   * load-bearing here, and the gate asserts this by constructing a
+   * not-computed box and checking the output contains no digits.
+   */
+  if (box.notComputedYet !== null) return "not computed yet";
   if (box.measure === "hours") {
     const hundredths = box.quantity ?? 0;
     const hours = hundredths / 100;
@@ -374,6 +414,18 @@ export function formatBoxValue(box: FormBox): string {
  * employees is a real, meaningful zero on a return that still has to be filed.
  */
 export function boxIsEmpty(box: FormBox): boolean {
+  /*
+   * UNKNOWN IS NOT EMPTY (books-49).
+   *
+   * "Empty" is a statement about the FORM: this box has nothing in it. A box
+   * whose figure has not been computed yet is not empty — we simply have not
+   * looked. Returning true here would make `correctlyBlank` reachable for a
+   * not-computed box (it is `empty && blankOnPurpose !== null`), which would
+   * grey the box out and tell Michael the form wants it left blank. That is
+   * the confusion `notComputedYet` was created to prevent, so it is refused at
+   * the one place that decides emptiness rather than at each caller.
+   */
+  if (box.notComputedYet !== null) return false;
   if (box.measure === "money") return box.amountCents === 0;
   return (box.quantity ?? 0) === 0;
 }
@@ -388,6 +440,17 @@ export function boxIsEmpty(box: FormBox): boolean {
  */
 export function boxTone(box: FormBox): ScreenTone {
   if (box.blankOnPurpose !== null) return "neutral";
+  /*
+   * AN UNKNOWN FIGURE IS PAINTED NEUTRAL (books-49), and it is checked SECOND
+   * so that a box which is blank on purpose keeps saying so.
+   *
+   * Colour on this screen carries meaning, never decoration — gold is "your
+   * money", green is "your employees' money". Painting a box gold because it
+   * WOULD be Greenway's money if it had a figure states a fact about money
+   * that has not been counted. Neutral says "no claim is being made here",
+   * which is exactly the claim we are entitled to make.
+   */
+  if (box.notComputedYet !== null) return "neutral";
   return whoseMoneyTone(box.whose);
 }
 
@@ -564,6 +627,17 @@ export function splitMoney(boxes: readonly FormBox[]): MoneySplit {
   let employeeCents = 0;
   for (const b of boxes) {
     if (b.measure !== "money") continue;
+    /*
+     * A FIGURE WE HAVE NOT COMPUTED CANNOT BE ADDED UP (books-49).
+     *
+     * Skipped EXPLICITLY rather than relying on the fact that such a box
+     * carries amountCents = 0 and would therefore add nothing. That would be
+     * correct by accident: the day somebody builds a not-computed box that
+     * also carries a placeholder amount, this loop would silently start
+     * summing figures nobody computed into a bar Michael reads as fact.
+     * Rule 62d — the safety must be stated, not inherited.
+     */
+    if (b.notComputedYet !== null) continue;
     // Allow-list. "shared" is a total, "tax_base" is wages, "not_money" is a
     // count; none of the three is money anybody owes, so none may be added.
     if (b.whose === "employer_cost") employerCents += b.amountCents;
@@ -639,6 +713,7 @@ function box(over: Partial<FormBox>): FormBox {
     whose: "employer_cost",
     derivation: "test",
     blankOnPurpose: null,
+    notComputedYet: null,
     emphasise: false,
     ...over,
   };

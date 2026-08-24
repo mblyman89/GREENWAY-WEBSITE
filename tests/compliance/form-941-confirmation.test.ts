@@ -517,10 +517,36 @@ describe("books-48: the two sides of the comparison stay independent", () => {
   });
 
   it("the page passes the FILED figures into the checks, not the computed ones", () => {
-    const at = PAGE.indexOf("checks={form941Checks(");
+    /*
+     * ═══ WHY THIS SEARCHES FOR `form941Checks(` AND NOT `checks={form941Checks(` ═══
+     *
+     * The original assertion looked for the literal `checks={form941Checks(`,
+     * which pinned the CALL SITE'S PUNCTUATION rather than the behaviour it
+     * cares about. books-49 had to make the explorer render unconditionally
+     * (the tabs were nested inside `{result.ok ? ... : null}` and therefore
+     * invisible until Greenway's first payroll in January 2027), and the checks
+     * prop legitimately became:
+     *
+     *     checks={result.ok ? form941Checks(result, filedForThisQuarter) : []}
+     *
+     * which is the same wiring with a guard in front of it - a reconciliation
+     * needs a computed return on one side, so when the engine refused there is
+     * genuinely nothing to reconcile.
+     *
+     * The old assertion failed on that, and the tempting "fix" was to widen the
+     * string until it passed. That would have been fitting the test to the code.
+     * Instead the assertion now states the thing that actually matters and is
+     * unchanged: wherever `form941Checks` is called, the FILED figures are what
+     * is handed to it. If someone ever passes the computed return on both sides,
+     * this still fails - which is the whole point of the books-48 gate.
+     */
+    const at = PAGE.indexOf("form941Checks(");
     expect(at, "the 941 page no longer wires the Check tab").toBeGreaterThan(-1);
     const call = PAGE.slice(at, at + 120);
     expect(call).toContain("filedForThisQuarter");
+    // And it is still passed as the `checks` prop rather than merely computed
+    // and dropped, which would be a call with no rendering behind it.
+    expect(PAGE).toContain("checks={");
   });
 
   it("the page reads the filed figures from the confirmation store", () => {

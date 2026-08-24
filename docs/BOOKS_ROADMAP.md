@@ -796,7 +796,7 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The law, verbatim | `form-w2-authorities.ts` (28 own + 13 borrowed = 41) | `form-w2-authorities.test.ts` (39) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
-| The screen | `src/app/admin/books/form-w2/page.tsx` (881 lines) | `nav-gate-core.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (933 lines) | `nav-gate-core.test.ts` |
 
 **Both W-2 traps are implemented and on screen**, not merely documented: box 1
 exceeding boxes 3 and 5 renders GREEN with the §3121(a)(2)(B) carve-out quoted
@@ -1129,3 +1129,66 @@ plain-English explanation of why it matters.
 
 Update the status table above the moment a slice merges. A roadmap that is not
 maintained is worse than no roadmap, because it is trusted.
+
+## Owner-stated facts recorded in books-49 (flagged, NOT computed)
+
+Michael volunteered four facts about his own tax position while reporting the
+invisible-tab defect. They are recorded here because each one changes a figure
+the engine will eventually compute, and because a fact remembered only in a chat
+transcript is a fact that will be lost. Each entry states the mechanism, what is
+verified, and the document that would settle it. **None of these is implemented.
+None is assumed. Do not compute anything from this section without the document
+named in it.**
+
+**1. Nicholas C Mullan (grandfather, 5%) is paid when cash allows.** He defers to
+Michael's household. This explains the distribution variance visible on the filed
+1120-S. Under Sec. 1.1361-1(l)(1) - mirrored at
+`docs/authorities/federal/cfr-1.1361-1.txt`, the operative sentence is on line
+366 - uneven distributions are **not** by themselves a second class of stock,
+because the test is whether the *governing provisions* confer identical rights.
+The second clause of that same sentence is what bites: distributions differing in
+timing or amount "are to be given appropriate tax effect in accordance with the
+facts and circumstances." So the gap must be characterised as something (most
+likely a debt owed to him), and the characterisation must be dated and written
+down. The basis/AAA engine from books-19 already names the variance and the test.
+**Needed: a dated note in the corporate records saying what the unpaid amount is.**
+
+**2. Theresa L Becker (mother, 5%) was an employee solely to be carried on the
+company insurance policy**, because it was cheaper through Greenway than through
+her own employer. Michael paid her premiums as compensation for her and James's
+share. She is now on Medicare and no longer employed, and will not be paid
+materially going forward. She owns 5%, which is more than 2%, so item 5 of the
+Box 1 inclusion list in the 2026 Form W-2 instructions applies to her directly:
+"The cost of accident and health insurance premiums for 2%-or-more
+shareholder-employees paid by an S corporation." Verified at line 2035 of
+`docs/authorities/federal/irs-instructions-w-2-w-3-2026.txt`. This is the same
+mechanism already documented above for Michael's own W-2, where Box 1 exceeds
+Boxes 3 and 5 because Sec. 3121(a)(2)(B) carves the premiums out of FICA. The
+matching personal deduction exists **only if the amount went on the W-2 first**.
+**Needed: her W-2s for the years she was on the policy, to see how it was
+reported.** Note also: the family-attribution rule that would matter if she owned
+2% or less is **not** mirrored in this repo; it is not needed for this conclusion
+because 5% clears the threshold on its own.
+
+**3. A Fidelity HSA funded to the annual limit every year, connected via Plaid**,
+serving as the family's health coverage. Verified from
+`docs/authorities/federal/irs-instructions-w-2-w-3-2026.txt` lines 1349-1379:
+every employer HSA contribution must appear in **box 12 code W** without
+exception, and lands in boxes 1, 3 and 5 **as well** if it is not excludable from
+the employee's income. Employee contributions made outside a cafeteria plan are
+themselves includible as wages, deductible within limits on the 1040. The rule
+that decides excludability **for a more-than-2% shareholder is not mirrored in
+this repo.** The widely-followed treatment makes it wages with an offsetting
+personal deduction, but that is unproven here and must be sourced before any
+computation. This interacts with Sec. 280E: whether a payment is a business
+expense or shareholder compensation changes the tax actually owed, so the
+characterisation is not clerical. **Needed: which account funds the contributions
+(business or personal), and whether they appear on any W-2 or in box 12.**
+
+**4. The QBI deduction is reported as 0.00 and Michael is unsure whether that is
+right.** Two readings, mutually exclusive, and the repo takes no position: either
+it is a deliberate position that Sec. 280E-disallowed activity generates no
+qualified business income, or it is an omission. The way to distinguish them is
+documentary - a deliberate position generally leaves a supporting statement on the
+return - not doctrinal argument. **Needed: the complete 2024 Form 1040 with all
+statements.** Do not resolve this from either direction without it.

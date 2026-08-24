@@ -133,7 +133,7 @@ export function taughtFormTitle(formId: string): string {
  * disagree with the classification, and a classification nobody can disagree
  * with is a classification nobody can check.
  */
-type WhoseRow = { readonly whose: WhoseMoney; readonly why: string };
+export type WhoseRow = { readonly whose: WhoseMoney; readonly why: string };
 
 /**
  * Form 941, every printed line the engine emits, classified.
@@ -153,7 +153,25 @@ type WhoseRow = { readonly whose: WhoseMoney; readonly why: string };
  * than a late payment of Greenway's own expense - the money was never Greenway's
  * to be short of.
  */
-const FORM_941_WHOSE: Readonly<Record<string, WhoseRow>> = {
+/*
+ * ═══ WHY THESE THREE TABLES ARE EXPORTED (books-49) ═══
+ *
+ * They were private, and being private is what let a second copy of the same
+ * knowledge appear. The teaching specimen in `form-box-teaching-core.ts` needs
+ * to know whose money each box is BEFORE any return has been computed, and
+ * with no export available the first draft simply re-typed the answers by hand.
+ *
+ * That copy drifted immediately - inside the same slice, written the same day
+ * by the same author. Running the engine and printing its lines beside the
+ * hand-written table showed `lni-hours` classified `not_money` in one place and
+ * `shared` in the other, and the two bottom-line boxes (`esd-total`,
+ * `lni-premium`) missing from the copy altogether.
+ *
+ * So these are exported not for convenience but so that there is exactly ONE
+ * answer to "whose money is box 5a", and any screen that wants it has to come
+ * here and get it. Standing rule 25: extend, never duplicate.
+ */
+export const FORM_941_WHOSE: Readonly<Record<string, WhoseRow>> = {
   "1": {
     whose: "not_money",
     why: "A headcount of people, not an amount. Nothing is owed because of this box.",
@@ -219,7 +237,7 @@ const FORM_941_WHOSE: Readonly<Record<string, WhoseRow>> = {
  * see at a glance that this form has no shared lines at all.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
+export const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
   "3": {
     whose: "tax_base",
     why: "Total payments to employees. The starting figure, not an amount owed.",
@@ -293,7 +311,7 @@ const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
  * classification for "Social Security" would have destroyed the ability to state
  * that reconciliation.
  */
-const FORM_W2_WHOSE: Readonly<Record<string, WhoseRow>> = {
+export const FORM_W2_WHOSE: Readonly<Record<string, WhoseRow>> = {
   "1": {
     whose: "tax_base",
     why: "Taxable wages for income tax. A wage figure the employee reports, not an amount owed.",
@@ -406,6 +424,11 @@ export function form941Boxes(ret: Form941Return): readonly FormBox[] {
       // Line 12 is the figure that must be deposited and the one every other
       // line exists to arrive at.
       emphasise: l.line === "12",
+      // This adapter is only ever handed a return the engine successfully
+      // BUILT, so every figure here is computed. The not-yet-computed case is
+      // a different adapter entirely (`teachingBoxes`), because a screen with
+      // no data does not have a Form941Return to map over at all.
+      notComputedYet: null,
     };
   });
 }
@@ -440,6 +463,8 @@ export function form940Boxes(ret: Form940Return): readonly FormBox[] {
       // Line 12 is the annual FUTA tax; line 17 must equal it, and the equality
       // is the return's own internal check.
       emphasise: l.line === "12" || l.line === "17",
+      // Built from a return the engine produced: every figure is computed.
+      notComputedYet: null,
     };
   });
 }
@@ -478,6 +503,8 @@ export function w2Boxes(form: W2Form): readonly FormBox[] {
         : null,
       // Box 1 is the figure the employee copies onto their own tax return.
       emphasise: b.box === "1",
+      // Built from a W-2 the engine produced: every figure is computed.
+      notComputedYet: null,
     };
   });
 }
@@ -526,6 +553,8 @@ export function waBoxes(
       // The Washington engine emits a line only when it belongs on the return.
       blankOnPurpose: null,
       emphasise: l.id === "lni-premium" || l.id === "esd-total",
+      // Built from a quarter the engine produced: every figure is computed.
+      notComputedYet: null,
     };
   });
 }

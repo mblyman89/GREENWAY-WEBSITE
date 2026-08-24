@@ -57,7 +57,8 @@ import { FiledForm941ConfirmationPanel } from "@/components/admin/books/FiledFor
 import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
-import { form941Boxes } from "@/lib/payroll/form-box-adapters";
+import { form941Boxes, FORM_ID_941 } from "@/lib/payroll/form-box-adapters";
+import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
 import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { form941Authorities } from "@/lib/payroll/form-941-authorities";
 import { lineOf } from "@/lib/payroll/form-941-core";
@@ -398,23 +399,42 @@ export default async function Form941Page({
           worked examples, the verbatim IRS instruction, and the boxes on other
           forms that must agree with it. It computes nothing - `form941Boxes`
           only translates the engine's own result into the box model. */}
-      {result.ok && result.subjectCount > 0 ? (
-        <FormBoxExplorer
-          title={`Form 941 - ${result.quarterLabel}, line by line`}
-          subtitle="Employer's QUARTERLY Federal Tax Return. Click a line number to be taught it."
-          boxes={form941Boxes(result)}
-          lessons={FORM_941_LESSONS}
-          /* THE CHECK TAB NOW HAS SOMETHING TO CHECK (books-48).
-             Until this slice the Check tab was structurally empty on this form
-             because nothing wrote `filed_form_941_totals` - the tab existed and
-             taught nothing, which is a gate that parses nothing (rule 39). It
-             now compares the computed return against the figures Michael
-             transcribed off the return he actually filed. When no figures have
-             been entered yet, `form941Checks` is given null and every row SAYS
-             so; it does not compare against zeroes and it does not go green. */
-          checks={form941Checks(result, filedForThisQuarter)}
-        />
-      ) : null}
+      {/* THE TABS ARE NOT CONDITIONAL ANY MORE (books-49). The guard here was
+          `result.ok && result.subjectCount > 0`, which is false until real pay
+          runs exist — so Michael reported the page as "still just walls of
+          text", and he was right. Teaching does not depend on data; only the
+          figures do. See form-box-teaching-core.ts for the full reasoning. */}
+      <FormBoxExplorer
+        title={
+          result.ok
+            ? `Form 941 - ${result.quarterLabel}, line by line`
+            : "Form 941, line by line"
+        }
+        subtitle={
+          result.ok && result.subjectCount > 0
+            ? "Employer's QUARTERLY Federal Tax Return. Click a line number to be taught it."
+            : "Employer's QUARTERLY Federal Tax Return. Your figures are not available yet, so the amounts are marked as not computed. Every line still teaches — click a line number."
+        }
+        boxes={
+          result.ok && result.subjectCount > 0
+            ? form941Boxes(result)
+            : teachingBoxes(FORM_ID_941)
+        }
+        lessons={FORM_941_LESSONS}
+        /* THE CHECK TAB HAS SOMETHING TO CHECK (books-48).
+           Before that slice the Check tab was structurally empty on this form
+           because nothing wrote `filed_form_941_totals` - the tab existed and
+           taught nothing, which is a gate that parses nothing (rule 39). It
+           now compares the computed return against the figures Michael
+           transcribed off the return he actually filed. When no figures have
+           been entered yet, `form941Checks` is given null and every row SAYS
+           so; it does not compare against zeroes and it does not go green.
+
+           books-49: a reconciliation needs a computed return on one side, so
+           when the engine refused there is nothing to reconcile and the rows
+           are empty. The Check tab states that; it does not invent rows. */
+        checks={result.ok ? form941Checks(result, filedForThisQuarter) : []}
+      />
 
       {/* ── 4b. WHAT WAS ACTUALLY FILED (books-48) ───────────────────────────
           Placed AFTER the return and the explorer, and before the checklist,

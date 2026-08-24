@@ -2207,3 +2207,159 @@ building the matcher twice.
     original inline helper - an orphaned helper compiles forever (rule 50), which
     is how the now-deleted `Lesson` function survived the first extraction pass
     and had to be found by grep rather than by `tsc`.
+
+92. A FEATURE GATED ON DATA THAT DOES NOT EXIST YET IS A FEATURE THAT DOES NOT
+    EXIST. Michael reported the teaching tabs as invisible: "The form pages are
+    still just walls of text." Every gate was green. `<FormBoxExplorer` was in
+    all three files, real lessons were passed, real boxes were passed, the Check
+    tab was wired. The component was nested inside `{result.ok ? ... : null}`
+    and `result.ok` is false until real pay runs exist - first payroll 1 January
+    2027. So the feature was built, tested, merged and unreachable for a year.
+    THE DIAGNOSIS THAT FOUND IT was not reading the source. It was RUNNING the
+    engine with the input the live system actually has today and printing the
+    guard's value: `result.ok: false` -> `explorer IS NOT RENDERED`. Reading the
+    ternary shows what it does; running it shows what it does HERE, NOW.
+    THE RULE: for anything conditional on computed data, evaluate the condition
+    against the system's CURRENT state, not its intended one. And separate the
+    two sentences a refusal can mean: "I cannot compute your figures" is often
+    true, "I cannot teach you the form" almost never is. Static teaching must
+    never be gated on dynamic data.
+
+93. A FILE CHECKED ONLY AGAINST ITSELF AGREES WITH ITSELF.
+    The teaching specimen written in this slice held its own copy of whose money
+    each box is, because the adapters' tables were private. It DRIFTED WITHIN
+    HOURS - same slice, same author, same day: `lni-hours` classified
+    `not_money` in the copy and `shared` in the engine, and the two bottom-line
+    boxes of the Washington returns (`esd-total`, `lni-premium`) were missing
+    from the copy altogether. Four self-tests were green the whole time, because
+    all four read only the file they were testing.
+    It was found by BUILDING A REAL RETURN and printing the engine's lines
+    beside the hand-written table.
+    THE RULE: a gate over derived data must compare against the SOURCE, not
+    against a sibling copy. If a second copy is needed because the first is
+    private, export the first - privacy that forces duplication costs more than
+    it protects (rule 25). And when a duplicate is found, do not correct its
+    three wrong values; delete its ability to hold values at all. Here
+    `TeachingBox.whose` was replaced by `whoseSource`, which names WHERE the
+    answer lives and cannot contain one.
+
+94. AN IMPOSSIBLE BRANCH CAN HIDE THE BUG THAT MAKES IT IMPOSSIBLE.
+    The specimen decided a box's unit with
+      `t.whose === "not_money" ? (t.box === "lni-hours" ? "hours" : "count") : "money"`
+    The inner branch names one box id in a renderer, which is already a smell.
+    Worse: `lni-hours` is not `not_money` at all, so once the classification was
+    corrected the "hours" branch could never be reached - and while the
+    classification was WRONG, the branch existed to paper over it. A hand-written
+    special case and a misclassification were propping each other up.
+    THE RULE: a conditional naming a specific identifier inside a generic mapper
+    is a place to look for a wrong value upstream, not a place to add a case.
+    Derive the consequence from the classification (`not_money` MEANS not
+    dollars) so there is one fact rather than a fact plus a workaround for it.
+
+95. A LOOP THAT SKIPS EMPTY THINGS WILL SKIP THE THING THAT IS EMPTY BY DESIGN.
+    The Washington tab loop ended `if (boxes.length === 0) return null`, which
+    looks like defensive tidiness. Form 5208B is a WAGE DETAIL - one row per
+    person, carried in `ret.wageDetail`, never in `ret.lines` - so it emits zero
+    lines with a complete year of real payroll behind it, and that tab was
+    dropped ALWAYS, not merely early. Unlike the gating bug it would never have
+    healed on its own. Proved by building a valid quarter and counting per form:
+    5208A 3, PFML 3, L&I 4, 5208B ZERO.
+    Worse, the prose renderer three hundred lines above ALREADY knew this and
+    called `waWageDetailRows` for that form. The knowledge existed in the file
+    and the second renderer did not inherit it.
+    THE RULE: before skipping an empty collection, ask whether any member is
+    legitimately empty. Then assert that emptiness AS a fact (rule 87) so the
+    day it changes is a red build: this slice asserts the 5208B emits no lines,
+    that it carries wage-detail rows instead, and that it is taught anyway.
+    Corollary: when adding a renderer beside an existing one, read the existing
+    one for the special cases it already handles.
+
+96. A ZERO IS A CLAIM; "NOT KNOWN YET" IS A DIFFERENT STATE AND NEEDS ITS OWN
+    FIELD. Showing a form before payroll exists meant every figure column had no
+    value. The cheap answer is `amountCents: 0`, which renders "$0.00" - and
+    "$0.00" in a wage box says Greenway paid somebody nothing, while "0 hours"
+    on an L&I return is a reportable-hours figure the state acts on. The
+    existing `blankOnPurpose` could NOT be reused: it means "the law says leave
+    this empty", a statement about the form. This needed "we have not counted
+    yet", a statement about our data. Collapsing them would tell Michael the IRS
+    wants a box blank when in truth we simply do not know.
+    So `notComputedYet: string | null` was added and made REQUIRED, not
+    optional - which broke eight call sites and `tsc` named every one. That is
+    the point: an optional field would have defaulted the eight silently.
+    THE RULE: a new state gets a new field, the field is required so the compiler
+    finds every site, and the safety is restated at each site rather than
+    inherited (rule 62d) - `splitMoney` skips uncomputed boxes explicitly so
+    placeholder amounts can never be summed into a total Michael reads as fact.
+    And order the formatter so the unknown case is checked FIRST; placed after
+    the money branch it would print the very "$0.00" it exists to prevent.
+
+97. READ YOUR OWN PRIOR WORK BEFORE YOU WARN THE OWNER ABOUT ANYTHING.
+    I drafted a warning to Michael that paying his grandfather less than his 5%
+    share risked creating a second class of stock and destroying the S election.
+    Then I checked it. Sec. 1.1361-1(l)(1) - already mirrored in this repo at
+    docs/authorities/federal/cfr-1.1361-1.txt, line 366 - says the test is
+    whether the GOVERNING PROVISIONS confer identical rights, not whether the
+    distributions happened to be proportionate. Uneven cheques are not by
+    themselves a second class of stock; the regulation's own example has one
+    shareholder paid a full year later and still finds one class. The repo had
+    this RIGHT since books-19, in basis-aaa-authorities.ts, with fourteen
+    verbatim authorities and a paragraph in BOOKS_ROADMAP.md explaining that the
+    engine "neither shrugs nor cries wolf".
+    So the failure was not ignorance of the law. It was writing prose from
+    recollection while the verified answer sat in the same repository.
+    THE RULE: before telling the owner that something is a risk, grep the repo
+    for the topic and read what was already proven. A warning is advice, and he
+    has a master's in accounting he has not used in thirteen years - he will
+    believe a confident sentence and act on it. And when you do get it wrong,
+    leave the correction VISIBLE in the document rather than swapping it
+    silently: a corrected conclusion with no record of the correction is one
+    careless edit away from reverting.
+
+98. A VERIFIER THAT CANNOT SEE A QUOTE APPROVES WHATEVER IT CANNOT SEE.
+    The books-49 quote gate reported a MISSING quote that was in fact present
+    and verbatim. Cause: the blockquote was nested inside a list item, so the
+    line began with whitespace, and the un-quoting regex was anchored /^>/. Every
+    indented quote line was silently dropped before comparison.
+    This is rule 39 wearing different clothes, and the dangerous direction is the
+    opposite of the one I hit. I got a FALSE ALARM, which is loud and gets fixed.
+    Had the report contained a paraphrase on an indented line, the same bug would
+    have produced a FALSE PASS - silent, permanent, and indistinguishable from a
+    verified quote.
+    THE RULE: a text-extraction step inside a gate is itself untested code. Prove
+    the extractor reaches the shape the document actually uses, and add a test
+    asserting the document STILL uses that shape (here: at least one blockquote
+    is still nested in a list item), so the case the gate was written for cannot
+    silently stop being exercised.
+
+99. A MISSED MUTANT IS A CLAIM AND NEEDS PROVING TOO.
+    In the books-49 campaign M1 reported MISSED and I nearly recorded a gate
+    hole. Before believing it I diffed the mutated file against the original:
+    NO CHANGE. The sed pattern spanned a hard line wrap, so the mutant never
+    mutated anything. Re-run line-scoped, it was caught immediately.
+    A broken mutant and a real hole look IDENTICAL in the output - both print
+    "no failures". Accepting the first reading would have sent me chasing a
+    non-existent defect; the mirror-image error is a genuine hole dismissed as
+    "probably a bad sed".
+    THE RULE: every MISSED result must be confirmed by showing the mutant
+    actually changed the file (diff, or grep the mutated line) before it is
+    called a hole OR dismissed. In documents especially, remember prose is
+    hard-wrapped: a pattern that reads naturally as one phrase may not exist on
+    any single line.
+
+100. RECORD THE OWNER'S SPOKEN FACTS IN THE REPO, WITH THE DOCUMENT THAT WOULD
+    SETTLE THEM. Michael volunteered four facts about his own tax position in
+    passing, inside a message about a UI defect: his grandfather is paid when
+    cash allows, his mother was an employee solely to be carried on the shop
+    insurance, there is a fully-funded Fidelity HSA connected via Plaid, and the
+    QBI deduction reads 0.00 and he doubts it. Each one changes a figure the
+    engine will eventually compute. All four arrived in a chat transcript, which
+    is the one place guaranteed not to survive.
+    THE RULE: an owner-stated fact gets written into the repo in the same slice
+    it is said, in a section marked as flagged-not-computed, and each entry must
+    carry three things: the MECHANISM (named statute or instruction), WHAT IS
+    VERIFIED against a mirrored source with the file and line, and THE DOCUMENT
+    NEEDED to settle it. State plainly where the verified ground stops - the
+    family-attribution rule and the >2%-shareholder HSA rule are NOT mirrored
+    here, and the report says so rather than reasoning past the gap (rule 87).
+    Under Sec. 280E the difference between a business expense and shareholder
+    compensation changes tax actually owed, so "probably fine" is not available.
