@@ -83,10 +83,23 @@ const TAUGHT_SCREENS: readonly {
     label: "Form 941 (quarterly federal)",
     page: "src/app/admin/books/form-941/page.tsx",
     lessonsExport: "FORM_941_LESSONS",
-    checksMissingBecause:
-      "The 941's reconciliations compare the return against the totals actually filed, and " +
-      "nothing writes filed_form_941_totals yet. Building rows from figures nobody has entered " +
-      "would compare the return against itself and paint a green tick that means nothing.",
+    /*
+     * CLOSED IN books-48. The admission that used to sit here read:
+     *
+     *   "The 941's reconciliations compare the return against the totals
+     *    actually filed, and nothing writes filed_form_941_totals yet.
+     *    Building rows from figures nobody has entered would compare the
+     *    return against itself and paint a green tick that means nothing."
+     *
+     * Something writes it now: the confirmation step on the 941 screen, backed
+     * by `saveFiledForm941`. The reasoning in that sentence was right and was
+     * honoured rather than worked around - the figures are TYPED IN from the
+     * filed paper, not copied from the computed return, so the two sides of
+     * every check row come from genuinely independent sources and a green tick
+     * now carries information. Quoted rather than deleted so the reason the
+     * gap existed survives the closing of it.
+     */
+    checksMissingBecause: null,
   },
   {
     label: "Washington quarterly returns",
@@ -184,13 +197,18 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
    */
   it("states exactly how many screens still lack reconciliations", () => {
     const excused = TAUGHT_SCREENS.filter((s) => s.checksMissingBecause !== null);
-    expect(excused.map((s) => s.label)).toEqual([
-      "Form 941 (quarterly federal)",
-      "Washington quarterly returns",
-    ]);
-    // Both are blocked on data Michael has not supplied rather than on work
-    // not done, which is why they are excused rather than fixed.
-    expect(excused.length).toBe(2);
+    expect(excused.map((s) => s.label)).toEqual(["Washington quarterly returns"]);
+    /*
+     * WENT FROM 2 TO 1 IN books-48.
+     *
+     * Form 941 came off this list because the confirmation step now supplies
+     * the independent side of the comparison. The one that remains is blocked
+     * on data that does not exist in the system yet - the year-to-date
+     * accumulators do not carry the PFML and WA Cares amounts withheld - and
+     * NOT on work nobody has done, which is the distinction that decides
+     * whether an excuse is honest.
+     */
+    expect(excused.length).toBe(1);
   });
 
   it("proves at least one screen really does reconcile, or the gate is vacuous", () => {

@@ -53,6 +53,7 @@
 
 import Link from "next/link";
 
+import { FiledForm941ConfirmationPanel } from "@/components/admin/books/FiledForm941ConfirmationPanel";
 import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
@@ -60,11 +61,14 @@ import { form941Boxes } from "@/lib/payroll/form-box-adapters";
 import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { form941Authorities } from "@/lib/payroll/form-941-authorities";
 import { lineOf } from "@/lib/payroll/form-941-core";
+import { form941Checks, filedTotalTax, type FiledQuarterFigures } from "@/lib/payroll/form-941-checks";
+import { loadRecordedForm941Quarters } from "@/lib/payroll/form-941-confirmation-store";
 import {
   FORM_941_WORKED_EXAMPLES,
   form941ChecksInOrder,
 } from "@/lib/payroll/form-941-mentor";
 import { loadForm941 } from "@/lib/payroll/form-941-store";
+import { saveFiledForm941Action } from "./actions";
 import {
   emptyStateFor,
   fileButtonState,
@@ -161,6 +165,28 @@ export default async function Form941Page({
       </Shell>
     );
   }
+
+  /* ── WHAT WAS ACTUALLY FILED (books-48) ───────────────────────────────────
+     Read alongside the computed return so the two can be compared. This read
+     is allowed to FAIL WITHOUT TAKING THE PAGE DOWN: the computed return is
+     useful on its own, and losing the whole screen because the confirmation
+     table could not be reached would be a worse outcome than losing the
+     comparison. But the failure is never swallowed - the reason is passed into
+     the panel and shown, because an empty "already recorded" list looks exactly
+     like "nothing recorded yet", which is good news that is not known to be
+     true. */
+  const recorded = await loadRecordedForm941Quarters(quarter.year);
+  const recordedQuarters = recorded.ok ? recorded.quarters : [];
+  const recordedUnavailableBecause = recorded.ok ? null : recorded.message;
+
+  /* The one recorded quarter that matches what is on screen, as the narrow
+     shape `form941Checks` takes. `?? null` is deliberate and load-bearing: a
+     quarter that has not been recorded must arrive as null so every check row
+     says "not recorded yet" rather than comparing against zeroes, which would
+     report a difference of the entire return and scream about a catastrophe
+     that has not happened. */
+  const filedForThisQuarter: FiledQuarterFigures | null =
+    recordedQuarters.find((r) => r.quarter === quarter.quarter) ?? null;
 
   const { result } = loaded;
   const action = nextAction(result, today);
@@ -378,7 +404,54 @@ export default async function Form941Page({
           subtitle="Employer's QUARTERLY Federal Tax Return. Click a line number to be taught it."
           boxes={form941Boxes(result)}
           lessons={FORM_941_LESSONS}
+          /* THE CHECK TAB NOW HAS SOMETHING TO CHECK (books-48).
+             Until this slice the Check tab was structurally empty on this form
+             because nothing wrote `filed_form_941_totals` - the tab existed and
+             taught nothing, which is a gate that parses nothing (rule 39). It
+             now compares the computed return against the figures Michael
+             transcribed off the return he actually filed. When no figures have
+             been entered yet, `form941Checks` is given null and every row SAYS
+             so; it does not compare against zeroes and it does not go green. */
+          checks={form941Checks(result, filedForThisQuarter)}
         />
+      ) : null}
+
+      {/* ── 4b. WHAT WAS ACTUALLY FILED (books-48) ───────────────────────────
+          Placed AFTER the return and the explorer, and before the checklist,
+          because that is the order the work happens in: read what the software
+          computed, file the return, then come back and record what went on the
+          paper. Putting the entry form first would ask for figures from a
+          return that has not been prepared yet. */}
+      <FiledForm941ConfirmationPanel
+        taxYear={quarter.year}
+        alreadyRecordedQuarters={recordedQuarters.map((r) => r.quarter)}
+        recordedUnavailableBecause={recordedUnavailableBecause}
+        onSubmit={saveFiledForm941Action}
+      />
+
+      {/* ── what has been recorded so far ─────────────────────────────────── */}
+      {recordedQuarters.length > 0 ? (
+        <Card>
+          <CardHeader
+            title={`Filed figures recorded for ${quarter.year}`}
+            subtitle="What you told this system you filed, and where you said it came from."
+          />
+          <dl className="grid gap-3 sm:grid-cols-2">
+            {recordedQuarters.map((r) => (
+              <Fact
+                key={r.quarter}
+                label={`Q${r.quarter} - filed ${r.filedOn}`}
+                /* `filedTotalTax`, NOT the same three additions written out
+                   here. The sum is a judgement about which components make up
+                   total tax before adjustments, it lives in a tested module,
+                   and a second copy in untestable JSX is how the screen and
+                   the check rows end up disagreeing about the same figure. */
+                value={formatCents(filedTotalTax(r))}
+                note={`Line 3 plus 5a plus 5c+5d, which is what the total tax before adjustments should come to. Source: ${r.sourceNote}`}
+              />
+            ))}
+          </dl>
+        </Card>
       ) : null}
 
       {/* ── the read itself, so the numbers can be traced ──────────────── */}
