@@ -161,7 +161,59 @@ describe("the migration list is ordered the way the database will see it", () =>
     //   - `explain` confirmed wage_orders_answer_outstanding_idx is genuinely
     //     chosen by the planner for that predicate, rather than merely existing.
     // Only then was 0201 advanced to 0202.
-    expect(listed[listed.length - 1]).toMatch(/^0202_/);
+    //
+    // IT FIRED A SIXTH TIME ON 0203 (books-46, the four facts a W-2 needs that
+    // this database could not state) AND WAS HONOURED, NOT SILENCED.
+    // Re-verified against the directory before this line was touched:
+    // 203 files; `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so every
+    // name is still zero-padded to four digits; and `ls [0-9]*.sql | sort -c`
+    // exits clean, so the on-disk order and the string sort this module relies
+    // on are still the same order.
+    //
+    // 0203 was EXECUTED, not merely read. All 203 migrations were applied in
+    // order to a real PostgreSQL 15.18 (Debian 15.18-0+deb12u1) with exit 0,
+    // and 0203 was then applied a SECOND and THIRD time with zero errors,
+    // because Michael applies these by hand and a hand can slip.
+    //
+    // EXECUTING IT IMMEDIATELY FOUND A DEFECT THAT READING IT HAD NOT. The
+    // ordering guard's gl_shareholders branch contained the literal text
+    // "2% shareholder-employee". RAISE treats % as a parameter placeholder, so
+    // PL/pgSQL refused to COMPILE the block: "too few parameters specified for
+    // RAISE". The whole precheck therefore failed before checking anything,
+    // which means the ordering guard could never have fired. Fixed to %% and
+    // then DRIVEN: with gl_shareholders dropped, the guard raises and the
+    // message renders "2%" correctly.
+    //
+    // Every constraint 0203 adds was driven and its refusal OBSERVED, each
+    // inside its own savepoint so one expected failure could not poison the
+    // transaction and make later probes pass vacuously (rule 39):
+    //   - the three legal-name CHECKs each REFUSED a whitespace-only value and
+    //     ACCEPTED a real name ("Michael" / "Lyman");
+    //   - employees_one_per_shareholder_idx REFUSED a second employee claiming
+    //     the same gl_shareholders row, which would have put one person's
+    //     shareholder-employee status on two W-2s;
+    //   - the FK REFUSED a link to a non-existent owner, and ON DELETE RESTRICT
+    //     REFUSED deleting an owner still referenced by an employee;
+    //   - w2_void was observed defaulting to false rather than null;
+    //   - premium_cents REFUSED -1; source_note REFUSED whitespace; tax_year
+    //     REFUSED 1999; a valid row was ACCEPTED; a SECOND row for the same
+    //     (employee, year) was REFUSED because it would double box 1; and the
+    //     same employee in a DIFFERENT year was ACCEPTED.
+    //
+    // THE COLUMN-PRIVILEGE RERUN IN §6 WAS PROVED LOAD-BEARING RATHER THAN
+    // DECORATIVE, which is the part most worth recording. 0195 revokes SELECT
+    // on public.employees and grants it back column by column; column
+    // privileges do not extend to columns added later. So 0203 was applied
+    // twice to two freshly initialised clusters:
+    //   - WITHOUT §6: `set role authenticated; select w2_last_name from
+    //     public.employees` returns "permission denied for table employees",
+    //     while ssn_last_four still reads fine. The new columns are
+    //     unreachable to every ordinary screen.
+    //   - WITH §6: the same select returns rows, and ssn_full is STILL denied.
+    // That is the identical trap 0195 documents about ssn_last_four, and it was
+    // checked BOTH ways rather than assumed.
+    // Only then was 0202 advanced to 0203.
+    expect(listed[listed.length - 1]).toMatch(/^0203_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
