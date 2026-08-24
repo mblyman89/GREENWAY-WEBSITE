@@ -188,24 +188,54 @@ return shows one distribution figure where a strict ownership split would
 predict another. If he owns 5% and takes less than 5%, the arithmetic stops
 matching.
 
-Here is the thing to know, said plainly: **an S corporation is required to treat
-all shareholders of the same class of stock identically when it distributes
-money.** Not as a matter of fairness — as a condition of remaining an S
-corporation. If distributions are persistently disproportionate, the IRS
-position is that a second class of stock effectively exists, and a corporation
-with two classes of stock is not eligible to be an S corporation. The
-consequence of losing that eligibility is that Greenway would be taxed as a
-regular corporation, which given §280E is a genuinely bad outcome.
+I started to write you a warning here, and then I checked it against the actual
+regulation and found I had it wrong. I am leaving the correction visible rather
+than quietly fixing it, because you should see how this goes when it goes right.
 
-I want to be precise about how worried to be. This is usually **fixable and
-often not fatal.** The standard treatment is that the unpaid amount is recorded
-as owed to him rather than forgiven — the money is his, it just has not moved
-yet. That is a normal, defensible arrangement between family shareholders. What
-turns it into a problem is doing it informally for years with nothing written
-down, so that later there is no way to show the money was owed rather than never
-allocated. **The fix is paperwork, and paperwork is cheap right now.** This is
-worth twenty minutes with your grandfather and a note in the corporate records.
-It is not worth losing sleep over.
+**What I was about to tell you:** that paying your grandfather less than his 5%
+share risks creating a second class of stock, which would disqualify Greenway
+from being an S corporation altogether.
+
+**What the regulation actually says.** The test lives in §1.1361-1(l)(1), and I
+pulled the sentence out of the copy we hold in our own document library:
+
+> Although a corporation is not treated as having more than one class of stock so
+> long as the governing provisions provide for identical distribution and
+> liquidation rights, any distributions (including actual, constructive, or
+> deemed distributions) that differ in timing or amount are to be given
+> appropriate tax effect in accordance with the facts and circumstances.
+
+Read that first clause carefully, because it is the good news. The test is
+**not** "were the cheques equal." The test is **"do the governing documents give
+everyone identical rights"** — your charter, your articles, your bylaws, state
+law, and any binding agreement about distributions. Uneven payments do **not**,
+by themselves, create a second class of stock. The regulation's own worked
+example has one shareholder paid a full year after another and still concludes
+there is a single class of stock.
+
+So the arrangement you described with your grandfather is not an existential
+threat to your S election. I should not have implied it was.
+
+**What the second clause does require**, and this is the part that is real: the
+gap has to be *given appropriate tax effect*. Plain English: the difference
+between what he was entitled to and what he actually received cannot just sit
+there as an unexplained hole. It has to be characterised as **something** — most
+commonly a loan from the company to the other shareholders, additional
+compensation, or a gift between shareholders. Each of those three has a
+different tax result, so which one it is matters.
+
+**So the practical answer is the same even though my reasoning was wrong:** it is
+a paperwork job, and paperwork is cheap right now. Twenty minutes with your
+grandfather to agree what the unpaid amount *is* — money the company still owes
+him is the most likely and usually the cleanest answer — and a dated note in the
+corporate records saying so. What makes this messy is not the arrangement. It is
+doing it informally for years and then having no way to show what the gap was.
+Do it now while everyone remembers and agrees.
+
+This same analysis is already built into the basis and AAA engine from an earlier
+slice, with fourteen verbatim authorities behind it. The engine names the
+variance, names the test, and states what has to be verified — it neither shrugs
+nor cries wolf. I should have read my own work before writing you a warning.
 
 ### Your mother, employed so she could be on your insurance
 
@@ -217,20 +247,44 @@ that it was cheaper through you than through her work, and that you paid her
 insurance premiums as compensation for their share. Every part of that sentence
 has a consequence:
 
-- **"As compensation" is the right instinct.** Health premiums paid for an
-  employee are normally tax-free to the employee. But she is also a
-  **shareholder** — 5% — and she is your **mother**, and the tax code has a rule
-  that says family members' ownership counts as yours for this purpose. That
-  rule is called attribution. Under it she is treated as a more-than-2%
-  shareholder even though she owns 5%, and for a more-than-2% shareholder the
-  premiums are **not** tax-free. They belong in Box 1 of her W-2 as wages.
-- **The offsetting good news:** those same premiums are then generally
-  deductible on the personal return as self-employed health insurance. So this
-  is frequently a wash in net tax. The failure mode is not usually "you owe a
-  fortune," it is "the W-2 was wrong," and a wrong W-2 is a correctable thing.
-- **She is now on Medicare and no longer employed.** That is genuinely good
-  news: it means this stops going forward. It matters for the years it was
-  happening, not for 2027 onward.
+- **"As compensation" is the right instinct**, and the official instructions say
+  so directly. She owns 5%, which is more than 2%, so this line from the 2026
+  Form W-2 instructions is about her exactly. It is item 5 in the list of things
+  that must be included in Box 1:
+
+  > The cost of accident and health insurance premiums for 2%-or-more
+  > shareholder-employees paid by an S corporation.
+
+  Plain English: for an ordinary employee, company-paid health premiums are
+  tax-free and appear nowhere on the W-2. For a shareholder who owns more than
+  2%, they are **wages** and they belong in Box 1. She is in the second group.
+  This is not an interpretation — it is the instruction, quoted from the copy in
+  our own document library.
+
+- **This is already built and already known.** Your own W-2 has the same feature,
+  and the roadmap records it as a deliberate result rather than a bug: Box 1
+  legitimately comes out **higher** than Boxes 3 and 5, because §3121(a)(2)(B)
+  carves these premiums out of Social Security and Medicare even though income
+  tax still applies. Anyone who "fixes" those boxes to agree either overpays FICA
+  or understates income. So the shape of this was handled before you asked.
+
+- **The offsetting good news:** those same premiums are then generally deductible
+  on the personal return as self-employed health insurance — **but only if they
+  went on the W-2 first.** That conditional is the whole ballgame. Reporting it
+  correctly is what unlocks the deduction; leaving it off does not save tax, it
+  just forfeits the offset. So the likely failure mode here is not "you owe a
+  fortune," it is "the W-2 was wrong and the deduction was lost."
+
+- **One thing I am flagging rather than asserting.** There is a further rule that
+  treats a family member's ownership as the owner's own for some of these tests.
+  I have **not** mirrored that statute into our document library yet, so I am not
+  going to state how it applies to your mother. I do not need it for the
+  conclusion above — she owns 5% in her own name, which is already more than 2% —
+  but I want you to know exactly where the verified ground stops.
+
+- **She is now on Medicare and no longer employed.** Genuinely good news: it
+  means this stops going forward. It matters for the years it was happening, not
+  for 2027 onward.
 
 What I will not do is tell you which years were reported which way. I have not
 seen her W-2s. I will check them against this rule the moment you send them, and
@@ -242,12 +296,37 @@ You said you have an HSA for the shop, that it is your family's health
 insurance, that you invest the full allowed amount every year, and that it is
 connected through Plaid.
 
-**There is a known trap here and I am flagging it rather than guessing.** For a
-more-than-2% shareholder of an S corporation — which you are, at 85% — the
-company cannot make HSA contributions on your behalf the way it can for a rank
-and file employee. If it does, those contributions are not a tax-free fringe
-benefit. They are wages: they go in Box 1 of your W-2, and you then take the
-deduction personally on your own return instead.
+**There is a known trap here and I am flagging it rather than guessing.** Let me
+separate what I can prove from what I cannot, because the difference matters.
+
+**What the instructions verifiably say.** Two sentences from the 2026 Form W-2
+instructions, quoted from our document library, do most of the work:
+
+> You must report all employer contributions (including an employee's
+> contributions through a cafeteria plan) to an HSA in box 12 of Form W-2 with
+> code W. Employer contributions to an HSA that are not excludable from the
+> income of the employee must also be reported in boxes 1, 3, and 5.
+
+And for money you put in yourself, outside a cafeteria plan:
+
+> An employee's contributions to an HSA (unless made through a cafeteria plan)
+> are includible in income as wages and are subject to federal income tax
+> withholding and social security and Medicare taxes... Employee contributions
+> are deductible, within limits, on the employee's Form 1040 or 1040-SR.
+
+Read those together and the shape is clear. **Every** employer HSA contribution
+has to show up in Box 12 with code W — there is no version of this where the
+contribution is invisible on the W-2. Whether it *also* lands in Boxes 1, 3 and 5
+turns entirely on one question: is it excludable from your income or not?
+
+**Where the verified ground stops.** The rule that answers that question for a
+more-than-2% shareholder of an S corporation — which you are, at 85% — is **not**
+in the documents I have mirrored. The widely-followed treatment is that the
+company cannot give you a tax-free HSA contribution the way it can for a rank and
+file employee, so it becomes wages in Box 1 with a matching personal deduction
+instead. **I am telling you that is the likely answer, and I am telling you I have
+not proven it from source text.** I will mirror the governing authority and show
+you the sentence before this goes anywhere near a computation.
 
 Why this matters more for you than for most people: **§280E.** Greenway cannot
 deduct ordinary business expenses. So the question of whether an HSA
