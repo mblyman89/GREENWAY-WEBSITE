@@ -37,6 +37,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { requiredBigint } from "@/lib/supabase/pg-bigint";
 import {
   evaluateOnboarding,
   canRevealSsn,
@@ -571,22 +572,78 @@ export type W4Row = {
 };
 
 /**
- * A bigint cent column, as a number.
+ * Read a nullable bigint cent column from `employee_w4`.
  *
- * PostgREST returns `bigint` as a STRING, because a 64-bit integer does not fit
- * in a JavaScript number in general. Cent amounts on a W-4 are far inside the
- * safe range, so the conversion is sound - but it is done in one named place
- * with this comment rather than as bare `Number(x)` calls scattered about.
+ * The conversion lives in `@/lib/supabase/pg-bigint`; this wrapper pins the
+ * table and keeps the four call sites below unchanged.
  *
- * A value that is null or unparseable returns null, NOT zero. Standing rule
- * 62d: never invent a default. Zero is a real Step 3 answer meaning "no
- * credits"; using it for "we could not read the column" makes an unreadable
- * row indistinguishable from a deliberate election.
+ * WHY IT MOVED, AND WHAT CHANGED. The note that used to sit here invoked
+ * standing rule 62d correctly - "a value that is null or unparseable returns
+ * null, NOT zero... Zero is a real Step 3 answer meaning no credits; using it
+ * for we could not read the column makes an unreadable row indistinguishable
+ * from a deliberate election." That reasoning is exactly right, and the code
+ * under it did not achieve it. `Number("")` is 0, and the guard tested the
+ * RESULT of the conversion rather than the text going in, so an empty
+ * `step3_annual_credit_cents` returned 0 - a deliberate election of "no
+ * credits" - which is the precise confusion the comment forbade. It also
+ * accepted `"9007199254740993"` as an off-by-one integer, because `isFinite`
+ * says nothing about whether the digits survived.
+ *
+ * ═══ AND THEN books-46 CORRECTED THIS COMMENT, WHICH WAS WRONG. ═══
+ *
+ * The paragraph that used to sit here argued for `optionalBigint` on the ground
+ * that "`null` here means the employee left Step 3 blank - itself a real W-4
+ * answer". That is a plausible sentence and it is false. All four of these
+ * columns are NOT NULL, verified against the live schema:
+ *
+ *   step3_annual_credit_cents      bigint  NOT NULL
+ *   step4a_other_income_cents      bigint  NOT NULL
+ *   step4b_deductions_cents        bigint  NOT NULL
+ *   step4c_extra_per_period_cents  bigint  NOT NULL
+ *
+ * A W-4 with Step 3 left blank is therefore stored as ZERO, not as null. Null
+ * cannot mean "blank" because null cannot occur. If one ever arrives - from a
+ * restored backup, a hand-run statement, or a `select` that outer-joined - it
+ * is not an election, it is a broken row. So this reads `requiredBigint`: the
+ * ONLY correct reading of a null in a NOT NULL column is a refusal.
+ *
+ * (`W4Row` still declares these `number | string | null`, and that is honest:
+ * it describes what PostgREST may hand us over the wire, not what the
+ * constraint permits. The type is the pessimist and the constraint is the fact.
+ * Reconciling them by tightening the type would be inventing a guarantee the
+ * transport does not make.)
+ *
+ * ═══ WHY THIS CATCHES INSTEAD OF LETTING THE ERROR FLY. ═══
+ *
+ * `requiredBigint` THROWS, and that is right for its own contract - it is used
+ * by screens where an unreadable wage column must stop the page. Here it would
+ * be wrong to let it fly, and the full suite is what proved it: this function's
+ * caller, `foldW4Rows`, returns `{ byEmployeeId, unreadable }` and deliberately
+ * isolates damage PER EMPLOYEE. One corrupt W-4 names one person and the other
+ * employees still get paid.
+ *
+ * An uncaught throw would convert that into a batch failure: a single bad row
+ * takes down the entire payroll load, and the message names the column but not
+ * the employee - so Michael would be told a step4a somewhere is unreadable,
+ * with no way to find whose. Strictness that destroys the ability to act on it
+ * is not strictness, it is a worse outage.
+ *
+ * So the refusal is CAUGHT and turned into the null this caller's contract is
+ * built on. Nothing is guessed: null here still means "this row cannot be read
+ * honestly", the row is still refused, and the employee is still named upstream
+ * by `foldW4Rows`. The message is preserved on the returned marker so the
+ * detail is not thrown away either.
  */
-function centsFromColumn(v: number | string | null): number | null {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === "string" ? Number(v) : v;
-  return Number.isFinite(n) ? n : null;
+function centsFromColumn(v: number | string | null, column: string): number | null {
+  try {
+    return requiredBigint(v, { table: "employee_w4", column, context: "an employee W-4" });
+  } catch {
+    // The shared reader has already decided this column is unreadable. This
+    // caller's contract expresses that as null, per the note above. The
+    // employee is named by `foldW4Rows`, which is the layer that knows who
+    // this row belongs to.
+    return null;
+  }
 }
 
 /**
@@ -620,10 +677,10 @@ function isW4FilingStatus(v: string): v is W4Record["filingStatus"] {
 export function rowToW4(row: W4Row): W4Record | null {
   if (!isW4FilingStatus(row.filing_status)) return null;
 
-  const step3 = centsFromColumn(row.step3_annual_credit_cents);
-  const step4a = centsFromColumn(row.step4a_other_income_cents);
-  const step4b = centsFromColumn(row.step4b_deductions_cents);
-  const step4c = centsFromColumn(row.step4c_extra_per_period_cents);
+  const step3 = centsFromColumn(row.step3_annual_credit_cents, "step3_annual_credit_cents");
+  const step4a = centsFromColumn(row.step4a_other_income_cents, "step4a_other_income_cents");
+  const step4b = centsFromColumn(row.step4b_deductions_cents, "step4b_deductions_cents");
+  const step4c = centsFromColumn(row.step4c_extra_per_period_cents, "step4c_extra_per_period_cents");
   if (step3 === null || step4a === null || step4b === null || step4c === null) return null;
 
   /*

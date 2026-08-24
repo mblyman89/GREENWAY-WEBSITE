@@ -278,6 +278,7 @@ import { __runMedicalTestModeCoreTests } from "../../src/lib/pos/medical-testmod
 import { __runSawPrefillCoreTests } from "../../src/lib/pos/saw-prefill-core";
 import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
+import { __runPgBigintTests } from "../../src/lib/supabase/pg-bigint";
 import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
 import { __runRevenueBasisTests } from "../../src/lib/reports/revenue-basis";
 import { __runRejectedReportTests } from "../../src/lib/pos/rejected-report-core";
@@ -584,6 +585,7 @@ async function main() {
   __runGrowflowMenuUiCoreTests();
   __runMediaAutosaveCoreTests();
   __runPostgrestEscapeTests();
+  __runPgBigintTests();
   __runConstantTimeTests();
   __runGramsPerOunceTests();
   __runPrintRetryCoreTests();

@@ -99,6 +99,7 @@ import type {
   TrialBalanceRow,
 } from "./trial-balance-core";
 import { isWrongSide, type TrialBalanceView } from "./books-ledger-guidance-core";
+import type { ScreenTone } from "@/lib/ui/screen-tone-core";
 
 // ---------------------------------------------------------------------------
 // 1) THE HOUSE TONES.
@@ -110,7 +111,11 @@ import { isWrongSide, type TrialBalanceView } from "./books-ledger-guidance-core
 // intermediate tones that exist.
 // ---------------------------------------------------------------------------
 
-export type FsTone = "green" | "gold" | "orange" | "danger" | "neutral";
+/**
+ * BOOKS-46: NOW AN ALIAS. See `@/lib/ui/screen-tone-core` - this union was one
+ * of four identical declarations under four different names (rules 23 and 25).
+ */
+export type FsTone = ScreenTone;
 
 // ---------------------------------------------------------------------------
 // 2) THE ADAPTER — and why it is not a one-liner.

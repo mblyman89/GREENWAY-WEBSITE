@@ -51,12 +51,29 @@ import {
 } from "@/lib/payroll/form-941-core";
 import { formatCents, type QuarterRef } from "@/lib/payroll/payroll-deposit-schedule-core";
 import { form941RefusalLessonFor } from "@/lib/payroll/form-941-mentor";
+import type { ScreenTone } from "@/lib/ui/screen-tone-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §1  HOW LONG IS LEFT
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-export type Form941Tone = "green" | "gold" | "orange" | "danger" | "neutral";
+/**
+ * BOOKS-46: THIS IS NOW AN ALIAS, NOT A SECOND DECLARATION.
+ *
+ * This union used to be declared here in full. It was declared in full in three
+ * other files too - `pay-run-ui-core.ts`, `wa-quarterly-ui-core.ts` and
+ * `financial-statements-ui-core.ts` - with four different names, the same five
+ * members, and no import between any of them.
+ *
+ * Slice A needed a fifth for the W-2 screen. Rule 25 says extend rather than
+ * duplicate and rule 23 says fix the class then USE the fixed thing, so the
+ * vocabulary moved to `@/lib/ui/screen-tone-core` and this name survives as an
+ * alias. Nothing that imports `Form941Tone` had to change, which is the point:
+ * the consolidation is invisible at every call site and the duplication is gone.
+ *
+ * @see ScreenTone for the members and the argument for gold.
+ */
+export type Form941Tone = ScreenTone;
 
 /**
  * Whole days from `today` to `due`, both ISO dates. Negative means overdue.

@@ -213,7 +213,76 @@ describe("the migration list is ordered the way the database will see it", () =>
     // That is the identical trap 0195 documents about ssn_last_four, and it was
     // checked BOTH ways rather than assumed.
     // Only then was 0202 advanced to 0203.
-    expect(listed[listed.length - 1]).toMatch(/^0203_/);
+    //
+    // IT FIRED A SEVENTH TIME ON 0204 (books-46, what was actually filed on the
+    // four 941s) AND WAS HONOURED, NOT SILENCED.
+    // Re-verified against the directory before this line was touched:
+    // 204 files; `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so every
+    // name is still zero-padded to four digits; and `ls [0-9]*.sql | sort -c`
+    // exits clean, so the on-disk order and the string sort this module relies
+    // on are still the same order.
+    //
+    // WHY 0204 EXISTS AT ALL IS THE PART WORTH RECORDING, because it was found
+    // by wiring, not by planning. `reconcileW3To941s` in form-w2-core.ts takes a
+    // `Form941YearTotals`. Grepping the whole repository for producers of that
+    // type returned exactly two hits, BOTH inside form-w2-core.test.ts. Nothing
+    // in src/ had ever built one. The reconciliation engine - the single most
+    // important thing on the W-2 screen, because a W-2 is an information return
+    // whose real question is "does it agree with the four 941s" - was fully
+    // written, fully tested, mutation tested, and UNREACHABLE from the running
+    // application. Standing rule 50: dead code wearing a green check. The tests
+    // passed because the tests supplied the input the application could not.
+    //
+    // THE OBVIOUS FIX WAS REJECTED FOR A MEASURED REASON. Summing
+    // payroll_run_lines for the year would have compiled and would have
+    // destroyed the check: the W-2 side already descends from
+    // payroll_ytd_accumulators, which is fed from payroll_run_lines, so both
+    // sides would have shared one ancestor and agreed TRIVIALLY, ALWAYS -
+    // including in the quarter where a 941 was filed with a transposed figure.
+    // That is rule 39 on the highest-stakes screen in the payroll module. The
+    // comparison is worth something only because the two sides are INDEPENDENT,
+    // so 0204 stores what Michael actually filed, transcribed from the return in
+    // his hand. `grep -rn "create table.*form_941\|create table.*filed_return"`
+    // over supabase/migrations returned nothing: no table anywhere recorded what
+    // had left the building, and loadForm941 recomputes the quarter from the pay
+    // runs every time it is opened. It is a calculator, not a filing cabinet.
+    //
+    // 0204 was EXECUTED, not merely read, against a real PostgreSQL 15.18
+    // (Debian 15.18-0+deb12u1) cluster carrying all 203 prior migrations, and
+    // then applied a SECOND time with zero errors, because Michael applies these
+    // by hand and a hand can slip.
+    //
+    // BOTH ordering guards were DRIVEN rather than trusted - the whole lesson of
+    // 0203, whose guard looked correct and could never compile. With is_owner()
+    // dropped inside a transaction the guard raised and its message rendered in
+    // full; likewise with set_updated_at() dropped. Both probes were rolled
+    // back and the objects re-verified present afterwards.
+    //
+    // Every constraint was driven, and a CONTROL was driven alongside each so
+    // the refusals are known to DISCRIMINATE rather than merely to fire
+    // (rule 55):
+    //   - a legitimate Q1 2027 row was ACCEPTED;
+    //   - the (tax_year, quarter) unique constraint REFUSED a second Q1, which
+    //     would have let a four-quarter total silently double one quarter;
+    //   - the quarter CHECK REFUSED 5, which would have made a "four-quarter"
+    //     reconciliation span five quarters of wages;
+    //   - the >= 0 CHECK REFUSED -1 on line 3;
+    //   - source_note REFUSED a whitespace-only string, which would otherwise
+    //     pass a NOT NULL test while being just as absent;
+    //   - filed_on REFUSED null, so no row can claim to describe a filing
+    //     without naming when the filing happened;
+    //   - line_5d_addl_medicare_tax_cents was OBSERVED defaulting to 0 rather
+    //     than null.
+    //
+    // THE TRIGGER AND THE RLS POLICY WERE PROVED LOAD-BEARING, not merely
+    // present. On insert, updated_at equalled created_at; after an update it was
+    // strictly GREATER, so set_updated_at is actually firing. And the owner-only
+    // policy was checked BOTH ways: as superuser the table showed 1 row, and
+    // after `set role authenticated` with SELECT granted it showed 0. A policy
+    // that denies everyone and a policy that denies no one both look like a
+    // pass if only one direction is measured.
+    // Only then was 0203 advanced to 0204.
+    expect(listed[listed.length - 1]).toMatch(/^0204_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
