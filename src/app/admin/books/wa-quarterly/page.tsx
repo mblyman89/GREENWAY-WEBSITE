@@ -72,8 +72,11 @@
 
 import Link from "next/link";
 
+import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
+import { waBoxes } from "@/lib/payroll/form-box-adapters";
+import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
 import { waQuarterlyAuthorities } from "@/lib/payroll/wa-quarterly-authorities";
 import {
   type WaQuarterFormId,
@@ -512,6 +515,40 @@ export default async function WaQuarterlyPage({
           );
         })
       ) : null}
+
+      {/* ── TAKE ME TO SCHOOL (books-47 slice D) ───────────────────────────
+          Michael's slice-D correction, verbatim: "the majority of the forms I
+          really am interested in are the payroll forms like 940 941 l&I esd
+          pfml wa cares etc."
+
+          So all four Washington forms get a teaching surface, each one
+          separately, because they are charged three incompatible ways and the
+          whole difficulty of this screen is keeping them apart: unemployment
+          on CAPPED wages and paid entirely by the business, Paid Leave and WA
+          Cares on wages but withheld from staff and held in trust, L&I on
+          HOURS. The whose-money bar on each one makes that visible at a
+          glance, which is the fastest way to see that an L&I figure has been
+          treated as if employees paid all of it.
+
+          `waBoxes` translates; it computes nothing. An hours line with no hour
+          count throws rather than reporting zero reportable hours, because a
+          zero is a claim L&I would act on. */}
+      {result.ok && result.value.lines.length > 0
+        ? FORM_ORDER.map((form) => {
+            const guide = waFormGuide(form);
+            const boxes = waBoxes(result.value, form);
+            if (boxes.length === 0) return null;
+            return (
+              <FormBoxExplorer
+                key={`teach-${form}`}
+                title={`${guide ? guide.officialName : form} - box by box`}
+                subtitle="Click a box number to be taught it: where the figure came from, whose money it is, and the law behind it."
+                boxes={boxes}
+                lessons={WA_QUARTERLY_LESSONS}
+              />
+            );
+          })
+        : null}
 
       {/* The empty state is NOT "nothing to see here" - a zero must be filed. */}
       {result.ok && result.value.lines.length === 0 ? (
