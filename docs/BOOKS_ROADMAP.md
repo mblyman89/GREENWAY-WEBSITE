@@ -781,6 +781,118 @@ that is already provably correct, never before.
 
 ---
 
+## SLICE A — THE W-2 / W-3 ENGINE — **COMPLETE (books-46)**
+
+Built in four commits on `books-46`. What Michael can now do that he could not
+before: open `/admin/books/form-w2`, see every employee's W-2 box by box with the
+derivation of each figure, see the W-3 totals, and — the point of the slice — see
+those totals compared line by line against the four Form 941s he actually filed.
+
+| Piece | Where | Gate |
+|---|---|---|
+| The engine (boxes 1–6, 12, 14, 15–20, W-3 totals, reconciliation) | `form-w2-core.ts` | `form-w2-core.test.ts` |
+| The reader | `form-w2-store.ts` | `form-w2-store.test.ts` (69) |
+| The screen logic | `form-w2-ui-core.ts` | `form-w2-ui-core.test.ts` (63) |
+| The law, verbatim | `form-w2-authorities.ts` (28 own + 13 borrowed = 41) | `form-w2-authorities.test.ts` (39) |
+| The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
+| The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (881 lines) | `nav-gate-core.test.ts` |
+
+**Both W-2 traps are implemented and on screen**, not merely documented: box 1
+exceeding boxes 3 and 5 renders GREEN with the §3121(a)(2)(B) carve-out quoted
+beside it, and box 17 renders grey and labelled *blank on purpose* rather than
+empty. The trap-1 badge states the **observable** (box 1 exceeds boxes 3 and 5)
+rather than asserting shareholder status, because nothing in a wage record knows
+who the shareholders are — ownership lives in the ledger.
+
+**The due date is computed, never typed.** For tax year 2026 it resolves to
+**2027-02-01**, because 31 January 2027 falls on a Sunday. It is derived through
+`onOrAfterBusinessDay` against the holiday calendar and matches the date the
+authorities cite, so the screen and the law cannot drift apart.
+
+### The defect class this slice found, and why it mattered more than the form
+
+Running the new store gate for the first time produced one failing assertion. It
+was not a test bug. It exposed **one defective idiom duplicated across six
+independent stores** — payroll W-2, YTD, garnishment, onboarding, loans and ATM —
+each carrying a comment explaining that reading an unreadable wage column as zero
+is the most dangerous possible answer, and then producing exactly that zero.
+
+Measured with `npx tsx`, not reasoned about:
+
+| Input | `Number()` returns | Old guard verdict |
+|---|---|---|
+| `""` | `0` | **accepted as zero** |
+| `"   "` | `0` | **accepted as zero** |
+| `"0x1F"` | `31` | accepted |
+| `"1e3"` | `1000` | accepted |
+| `" 900000 "` | `900000` | accepted |
+| `"9007199254740993"` | `9007199254740992` | accepted, **off by one, silently** |
+
+Three distinct defects: `Number("")` is 0 rather than `NaN`; `Number.isInteger`
+says nothing about whether the digits *survived* the conversion; and the nullable
+variants returned `null` for GARBAGE as well as for absence, merging "this column
+is empty" with "this column is unreadable". All six comments named the hazard and
+none of the six guarded it. Untestable by construction — each was a private
+function inside a `server-only` module no unit test could reach.
+
+Fixed as a class in `src/lib/supabase/pg-bigint.ts` (397 lines, 38 self-tests +
+29 vitest tests), following the `postgrest-escape.ts` precedent. Split by
+NULLABILITY ALONE — `requiredBigint` / `optionalBigint`, not one function with a
+flag — and a test proves the two agree on every value that is actually present.
+The idiom now has **zero occurrences** in `src/`.
+
+Triaged empirically rather than by inspection: `crypto-store-core.ts` and
+`promotions-store.ts` (`parsePotencyNumber`, a float parser) are different in
+kind — blank→null is already correct there — and were left alone at a defensible
+boundary rather than swept in.
+
+### Four more defects, found by making the modules reachable
+
+1. **Seven dead links in a panel a gate already guarded (rule 39).**
+   `form-w2-authorities.ts` documents finding and fixing exactly this bug — a
+   repo-relative path in `source`, which is rendered as `href={a.source}` and is
+   non-empty, so every existing check passes. It fixed its own 28 and shipped a
+   gate. The gate loops `FORM_W2_OWN_AUTHORITIES`; the panel renders **41**. The
+   seven borrowed from `ytd-authorities` still carried paths. Fixed by splitting
+   `W2_SOURCE_PATH` (for the corpus verifier) from `W2_SOURCE_URL` (for Michael),
+   with three new gates including one tying the path and the URL to the same
+   document YEAR — a failure mode the split itself newly creates.
+2. **The store refused honestly and the page rendered the refusal as blank
+   space (rule 63d).** `loadW2s` deliberately returns `null` rather than
+   comparing the W-3 against zeros, because zeros-vs-zeros comes back ALL GREEN.
+   Its comment says "the screen says so in gold". The screen said nothing — the
+   branch was `: null`, so the most important card rendered as a heading over
+   empty space, which on a page full of green ticks reads as *nothing to report*.
+3. **A comment written one slice earlier was factually wrong (rule 1).** The four
+   `employee_w4` cent columns are `bigint NOT NULL`, verified against the live
+   schema — so the claim that `null` meant "the employee left Step 3 blank" was
+   inventing a meaning for a state the constraint forbids. A blank Step 3 is
+   stored as **zero**. Now `requiredBigint`, with the throw caught because
+   `foldW4Rows` isolates damage per employee and an uncaught throw would turn one
+   corrupt W-4 into a whole-payroll outage naming the column but not the person.
+4. **Eleven guessed API shapes.** The page did not compile because it was written
+   against what the APIs ought to look like. Notably `ReconciliationResult` has
+   `verdict` while `ReconciliationLine` has `plain` — the same word on two types,
+   so one of two call sites was right and the other was not.
+
+### Still open in slice A's territory
+
+- **Nothing writes `filed_form_941_totals` yet.** The table is live and the
+  reconciliation reads it, but the rows must be keyed in from the filed returns.
+  This is deliberate — the whole value of the check is that the figures come from
+  a DIFFERENT source than this software; a screen that computed them itself would
+  only ever agree with itself. **A data-entry surface for those four rows is the
+  next piece of work in this area.**
+- `payroll_ytd_accumulators` does not yet carry PFML / WA Cares **withheld**,
+  which box 14 wants.
+- Worked examples still cover 8 of 82 lessons.
+- The three `atm_*` row types are cast `as Array<Record<string, unknown>>`, so no
+  column in `atm/store.ts` has ever been type-checked. Found while repointing it;
+  scoped out of a W-2 commit deliberately.
+
+---
+
 ## Also outstanding (not in the mandated chain)
 
 - **R1 — the security finding.** Twenty RLS policies use `for all using
