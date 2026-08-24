@@ -81,12 +81,17 @@ import {
   waFormGuide,
   waRefusalLesson,
 } from "@/lib/payroll/wa-quarterly-mentor";
+import type { ScreenTone } from "@/lib/ui/screen-tone-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §1  HOW LONG IS LEFT
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-export type WaQuarterTone = "green" | "gold" | "orange" | "danger" | "neutral";
+/**
+ * BOOKS-46: NOW AN ALIAS. See `@/lib/ui/screen-tone-core` - this union was one
+ * of four identical declarations under four different names (rules 23 and 25).
+ */
+export type WaQuarterTone = ScreenTone;
 
 /**
  * Whole days from `today` to `due`, both ISO dates. Negative means overdue.

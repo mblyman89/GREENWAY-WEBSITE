@@ -40,8 +40,11 @@ import {
   SSA_REJECTION_CONDITIONS,
   W2_BOX3_WAGE_BASE_CEILING,
   W2_WORKED_EXAMPLE,
+  W2_SOURCE_PATH,
+  W2_SOURCE_URL,
 } from "@/lib/payroll/ytd-authorities";
 import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
+import { FORM_W2_SOURCE_URL } from "@/lib/payroll/form-w2-authorities";
 
 /** The same whitespace normalisation the verbatim checker applies. */
 function normalise(s: string): string {
@@ -85,17 +88,83 @@ describe("books-34: YTD authorities are registered and complete", () => {
     // Guards the failure mode where a citation is phrased so that no corpus
     // route matches it: the quote is then SKIPPED, not verified, and the
     // checker still says PASSED.
+    //
+    // books-46: this used to read `a.source`, back when `source` held the repo
+    // path. It now reads W2_SOURCE_PATH, because the path and the URL became
+    // two different fields. Verified failable: pointing the constant at a
+    // non-existent file turns this red.
     for (const a of YTD_AUTHORITIES) {
       expect(a.cite).toMatch(/^IRS Instructions for Forms W-2 and W-3 \(2026\), /);
-      const path = join(process.cwd(), a.source);
-      expect(() => readFileSync(path, "utf8")).not.toThrow();
+    }
+    expect(() => readFileSync(join(process.cwd(), W2_SOURCE_PATH), "utf8")).not.toThrow();
+  });
+
+  /**
+   * ═══ books-46 — THE SEVEN DEAD LINKS, AND WHY THE EXISTING GATE MISSED THEM ═══
+   *
+   * `GuidanceAuthority.source` is rendered as `href={a.source}`. These seven
+   * authorities are BORROWED by `formW2Authorities()` and appear in the same
+   * on-screen panel as that module's own 28, so a repo-relative path here is a
+   * dead link on the Form W-2 screen.
+   *
+   * `form-w2-authorities.ts` had already found this bug, fixed it, and written
+   * a gate — but the gate loops `FORM_W2_OWN_AUTHORITIES`, i.e. 28 of the 41
+   * rows the panel renders. The other 13 come from here and from
+   * `company-identity-authorities`; the identity six were already URLs, so
+   * these seven were the entire remaining hole. A fix scoped narrower than the
+   * defect leaves the defect (standing rule 39, and rule 23: fix the class).
+   *
+   * So the assertion now lives on BOTH sides of the borrow.
+   */
+  it("gives every source a URL a browser can open, not a repo path", () => {
+    for (const a of YTD_AUTHORITIES) {
+      expect(a.source, `${a.id}: source is rendered as an href`).toMatch(/^https:\/\//);
+      expect(a.source, `${a.id}: a repo path is a dead link on screen`).not.toContain(
+        "docs/authorities/",
+      );
+    }
+  });
+
+  /**
+   * ...AND IT MUST BE THE SAME URL THE NEIGHBOURING MODULE USES.
+   *
+   * "It is a URL" is weaker than "it is THE url". These seven and the W-2
+   * module's 28 quote ONE document and render SIDE BY SIDE. If the two modules
+   * disagreed about its address, the panel would contradict itself in a way no
+   * per-module test could see — each half would be internally consistent.
+   */
+  it("addresses the IRS instructions identically to the module that borrows these", () => {
+    expect(W2_SOURCE_URL).toBe(FORM_W2_SOURCE_URL);
+    for (const a of YTD_AUTHORITIES) {
+      expect(a.source, `${a.id}`).toBe(FORM_W2_SOURCE_URL);
+    }
+  });
+
+  /**
+   * THE PATH AND THE URL MUST DESCRIBE THE SAME DOCUMENT.
+   *
+   * Splitting one constant into two creates a new failure mode that neither
+   * half can detect alone: the machine-readable path could be updated to a
+   * 2027 corpus while the human-readable link still points at the 2026 PDF, or
+   * vice versa. Michael would then be reading a different year's document from
+   * the one the quotes were verified against — and every test would pass. The
+   * filename and the URL both carry the year, so tie them together.
+   */
+  it("keeps the mirrored path and the public URL on the same document year", () => {
+    expect(W2_SOURCE_PATH).toContain("w-2-w-3-2026");
+    expect(W2_SOURCE_URL).toContain("iw2w3");
+    for (const a of YTD_AUTHORITIES) {
+      expect(a.cite, `${a.id}`).toContain("(2026)");
     }
   });
 });
 
 describe("books-34: quotes are structurally complete, not merely present", () => {
   const corpus = normalise(
-    readFileSync(join(process.cwd(), W2_BOX3_WAGE_BASE_CEILING.source), "utf8"),
+    // books-46: reads the PATH constant, not `.source`. `.source` is now the
+    // public URL, and `readFileSync("https://...")` throws — which is how this
+    // line announced the change rather than passing on stale bytes.
+    readFileSync(join(process.cwd(), W2_SOURCE_PATH), "utf8"),
   );
 
   it("every YTD quote appears in the mirrored corpus", () => {

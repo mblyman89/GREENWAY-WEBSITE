@@ -80,6 +80,7 @@ import {
   type PayRunCheck,
 } from "@/lib/payroll/pay-run-mentor";
 import { formatCentsPlain } from "@/lib/payroll/payroll-withholding-core";
+import type { ScreenTone } from "@/lib/ui/screen-tone-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * 1) COLOUR
@@ -92,7 +93,14 @@ import { formatCentsPlain } from "@/lib/payroll/payroll-withholding-core";
  * "outline" which renders identically to "neutral" and would therefore let two
  * different meanings share a colour without anybody noticing.
  */
-export type PayRunTone = "green" | "gold" | "orange" | "danger" | "neutral";
+/**
+ * BOOKS-46: NOW AN ALIAS. The five-member tone vocabulary was declared
+ * identically here, in `form-941-ui-core.ts`, in `wa-quarterly-ui-core.ts` and
+ * in `financial-statements-ui-core.ts` - four names, one idea, no import
+ * between them. It now lives in `@/lib/ui/screen-tone-core` and this name is
+ * retained so no call site had to change (rules 23 and 25).
+ */
+export type PayRunTone = ScreenTone;
 
 /**
  * Line status to colour.

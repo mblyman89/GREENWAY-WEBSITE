@@ -56,6 +56,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { requiredBigint } from "@/lib/supabase/pg-bigint";
 
 import {
   applyRunToAccumulator,
@@ -114,37 +115,31 @@ type EmployeeRow = {
 };
 
 /**
- * Postgres `bigint` arrives over PostgREST as a STRING, because a bigint does
- * not fit in a JavaScript number safely. Reading it with `Number(...)` without
- * saying so is how a money column silently becomes a float.
+ * Read a `not null` bigint cent column from `payroll_ytd_accumulators`.
  *
- * WHY THIS ONE REFUSES INSTEAD OF RETURNING NULL. The garnishment store has a
- * sibling of this helper that returns `number | null`, which is right there:
- * a missing arrears figure is a legitimate unknown. Here it is not. Every
- * column this reads is `not null default 0` in migration 0199, so a null or an
- * unparseable value does not mean "unknown", it means the row is not the shape
- * the schema promises. Returning 0 for it would post a zero into somebody's
- * Social Security wages and look exactly like a new hire. So this throws, and
- * the caller turns it into a READ_FAILED the screen can display.
+ * The conversion itself now lives in `@/lib/supabase/pg-bigint`. This wrapper
+ * survives only to keep the 24 call sites below reading as they did, and to
+ * pin the table name once instead of at each one.
+ *
+ * WHY IT MOVED. The body used to be here, and it had two defects that its own
+ * comment ruled out. It guarded with `Number.isFinite(n) && Number.isInteger(n)`
+ * and then explained at length that reading an unreadable wage column as zero
+ * is the most dangerous possible wrong answer because zero wages looks exactly
+ * like an employee who has not been paid yet. But `Number("")` is 0, so an
+ * empty string produced exactly that zero and the refusal never fired. It also
+ * said, correctly, that a bigint does not fit safely in a JavaScript number -
+ * and then checked `isInteger`, which accepts `"9007199254740993"` as
+ * 9007199254740992 without complaint. Three sibling stores had copied the same
+ * guard and therefore the same two defects. The shared module validates the
+ * text before converting and checks `isSafeInteger` after; being pure, it is
+ * also tested directly, which none of the four copies were.
  */
 function requiredBigintCents(v: number | string | null, column: string, employeeId: string): number {
-  if (v === null) {
-    throw new Error(
-      `payroll_ytd_accumulators.${column} is null for employee ${employeeId}, but migration 0199 ` +
-        `declares it "not null default 0". Reading it as zero would look exactly like an employee ` +
-        `who has not been paid yet this year, which is the most dangerous possible wrong answer ` +
-        `for a wage-base column. Nothing was assumed.`,
-    );
-  }
-  const n = typeof v === "string" ? Number(v) : v;
-  if (!Number.isFinite(n) || !Number.isInteger(n)) {
-    throw new Error(
-      `payroll_ytd_accumulators.${column} for employee ${employeeId} read as "${String(v)}", which ` +
-        `is not a whole number. Every figure in this table is whole cents (or hundredth-hours for ` +
-        `L&I). Nothing was assumed.`,
-    );
-  }
-  return n;
+  return requiredBigint(v, {
+    table: "payroll_ytd_accumulators",
+    column,
+    context: `employee ${employeeId}`,
+  });
 }
 
 /**

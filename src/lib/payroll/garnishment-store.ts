@@ -51,6 +51,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { optionalBigint } from "@/lib/supabase/pg-bigint";
 import { pacificToday } from "@/lib/reports/timezone";
 
 import {
@@ -130,19 +131,30 @@ type EmployeeRow = {
 };
 
 /**
- * Postgres `bigint` arrives over PostgREST as a STRING, because a bigint does
- * not fit in a JavaScript number safely. Reading it with `Number(...)` without
- * saying so is how a money column silently becomes a float.
+ * Read a nullable bigint cent column from `wage_orders`.
  *
- * Cent amounts at Greenway's scale are far inside the safe integer range, so
- * the conversion is sound - but it is done in one named place, with this
- * comment, rather than scattered as bare `Number(x)` calls that a reader has to
- * individually convince themselves about.
+ * The conversion lives in `@/lib/supabase/pg-bigint`; this wrapper pins the
+ * table name and keeps the call sites below unchanged.
+ *
+ * WHY IT MOVED, AND WHAT CHANGED. The body used to be here and read
+ * `Number.isFinite(n) ? n : null`, which had three problems. Two it shared with
+ * the three sibling stores that had copied the same idea: `Number("")` is 0, so
+ * an empty string became a real-looking zero; and `isFinite` does not mean the
+ * value survived the conversion, so `"9007199254740993"` came through as
+ * 9007199254740992, off by one, silently.
+ *
+ * The third was specific to the nullable case and is the more interesting one.
+ * Returning `null` for an UNREADABLE value made it indistinguishable from a
+ * genuinely empty column - and on a wage order that distinction is the whole
+ * point. A garnishment with no recorded arrears and a garnishment whose arrears
+ * column contains something unparseable are different situations: the first is
+ * a fact about the court order, the second is a fact about the database, and
+ * only one of them means "proceed". `optionalBigint` keeps null for absence and
+ * THROWS for garbage, so the caller's existing null-handling still means what
+ * it says.
  */
-function bigintCentsToNumber(v: number | string | null): number | null {
-  if (v === null) return null;
-  const n = typeof v === "string" ? Number(v) : v;
-  return Number.isFinite(n) ? n : null;
+function bigintCentsToNumber(v: number | string | null, column: string): number | null {
+  return optionalBigint(v, { table: "wage_orders", column, context: "a wage order" });
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -319,7 +331,7 @@ export function toWageOrder(row: WageOrderRow): WageOrder | null {
     employeeId: row.employee_id,
     orderKind: row.order_kind,
     caseNumber: row.case_number,
-    amountCents: bigintCentsToNumber(row.amount_cents_per_period),
+    amountCents: bigintCentsToNumber(row.amount_cents_per_period, "amount_cents_per_period"),
     percentOfDisposableBasisPoints: row.percent_of_disposable_basis_points,
     // Passed through UNTOUCHED. See the header: a null here must stay a null.
     arrearsOverTwelveWeeks: row.arrears_over_twelve_weeks,
@@ -478,7 +490,7 @@ export async function loadGarnishmentBoard(args?: {
         effectiveFrom: row.effective_from,
         effectiveTo: row.effective_to,
         status: row.status,
-        arrearsCents: bigintCentsToNumber(row.arrears_cents),
+        arrearsCents: bigintCentsToNumber(row.arrears_cents, "arrears_cents"),
         notes: row.notes,
         // An unknown kind still gets watched. `creditor` is the placeholder the
         // block above already uses for the order shape; the watchman treats it
@@ -505,7 +517,7 @@ export async function loadGarnishmentBoard(args?: {
       effectiveFrom: row.effective_from,
       effectiveTo: row.effective_to,
       status: row.status,
-      arrearsCents: bigintCentsToNumber(row.arrears_cents),
+      arrearsCents: bigintCentsToNumber(row.arrears_cents, "arrears_cents"),
       notes: row.notes,
       watch: watchFactsFor(row, order.orderKind),
       missingFacts: missingFactsFor(row),

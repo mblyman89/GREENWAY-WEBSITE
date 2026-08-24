@@ -19,6 +19,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { optionalBigint } from "@/lib/supabase/pg-bigint";
 import { encryptSecret, decryptSecret, maskAccountTail } from "@/lib/security/at-rest-crypto";
 import { listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
 import { toBankDeposits, type BankDeposit, type ReconcileSettlement } from "@/lib/atm/atm-reconcile-core";
@@ -332,12 +333,12 @@ export async function listAtmSettlements(limit = 400): Promise<AtmSettlementRow[
       id: String(r.id),
       settlementDate: String(r.settlement_date ?? ""),
       terminalId: String(r.terminal_id ?? ""),
-      totalTrx: numOrNull(r.total_trx),
-      withdrawalTrx: numOrNull(r.withdrawal_trx),
-      surchargedWdTrx: numOrNull(r.surcharged_wd_trx),
-      terminalTransactionCents: numOrNull(r.terminal_transaction_cents),
-      surchargeCents: numOrNull(r.surcharge_cents),
-      settlementTotalCents: numOrNull(r.settlement_total_cents),
+      totalTrx: numOrNull(r.total_trx, "atm_settlements", "total_trx"),
+      withdrawalTrx: numOrNull(r.withdrawal_trx, "atm_settlements", "withdrawal_trx"),
+      surchargedWdTrx: numOrNull(r.surcharged_wd_trx, "atm_settlements", "surcharged_wd_trx"),
+      terminalTransactionCents: numOrNull(r.terminal_transaction_cents, "atm_settlements", "terminal_transaction_cents"),
+      surchargeCents: numOrNull(r.surcharge_cents, "atm_settlements", "surcharge_cents"),
+      settlementTotalCents: numOrNull(r.settlement_total_cents, "atm_settlements", "settlement_total_cents"),
     }));
   } catch {
     return [];
@@ -383,7 +384,7 @@ export async function listAtmCashLoads(limit = 400): Promise<AtmCashLoadRow[]> {
         loadedAtRaw: rawTrxTime ?? (r.loaded_at ? String(r.loaded_at) : null),
         loadDate: r.load_date ? String(r.load_date) : null,
         cashLoadCents: Number(r.cash_load_cents ?? 0),
-        balanceAfterCents: numOrNull(r.balance_after_cents),
+        balanceAfterCents: numOrNull(r.balance_after_cents, "atm_cash_loads", "balance_after_cents"),
         source: r.source === "manual" ? "manual" : "pai",
       };
     });
@@ -435,11 +436,55 @@ export async function insertManualCashLoad(
   }
 }
 
-/** Coerce a DB numeric/text/null into number|null without inventing a value. */
-function numOrNull(v: unknown): number | null {
+/**
+ * Read a nullable numeric column from one of the three `atm_*` tables.
+ *
+ * Its docstring used to say "without inventing a value", and the body did not
+ * deliver that. It took `unknown`, handed anything non-numeric to `Number()`,
+ * and kept the result if it was finite - so an empty string became 0. A zero
+ * `settlement_total_cents` or a zero `balance_cents` is not a refusal, it is a
+ * reading: it says the terminal settled nothing, or holds no cash. That is a
+ * value invented out of a blank, in the function whose contract was not to.
+ * `Number.isFinite` also let `"9007199254740993"` through as an off-by-one
+ * integer, on `bigint` columns.
+ *
+ * The conversion now comes from `@/lib/supabase/pg-bigint`, which validates the
+ * text before converting and refuses anything outside JavaScript's exact
+ * integer range. All eleven columns behind this reader are nullable in the
+ * schema, so `optionalBigint` is the right half: a terminal with no reported
+ * balance keeps its null, while an unreadable balance now says so instead of
+ * quietly resembling one.
+ *
+ * IT STILL TAKES `unknown`, AND THAT IS A FINDING, NOT A PREFERENCE. Narrowing
+ * the parameter to `number | string | null` was tried first and the compiler
+ * refused it in eleven places, which is how the real problem surfaced: every
+ * caller reads rows cast `as Array<Record<string, unknown>>`, so no column in
+ * this file has ever been type-checked at all. The cast asserts the shape
+ * instead of establishing it, and a cast protects nothing. Removing those casts
+ * means giving three `atm_*` row types real shapes, which is a change to the
+ * ATM ingestion path and does not belong in a commit about W-2s; it is recorded
+ * on the roadmap instead.
+ *
+ * So `unknown` stays, and this function REFUSES what it cannot recognise rather
+ * than coercing it. That is the part that matters: `Number([])` is 0 and
+ * `Number(true)` is 1, so the old body would have turned an object, an empty
+ * array or a boolean into a plausible ATM balance. Now anything that is not a
+ * number, a numeric string, or absent stops here and says which column it came
+ * from.
+ */
+function numOrNull(v: unknown, table: string, column: string): number | null {
   if (v === null || v === undefined) return null;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
+  if (typeof v !== "number" && typeof v !== "string") {
+    throw new Error(
+      `${table}.${column} arrived as a ${
+        Array.isArray(v) ? "array" : typeof v
+      }, which is not something a numeric column can return. Nothing was assumed: an array, ` +
+        `an object or a boolean all convert to a plausible-looking number in JavaScript ` +
+        `(Number([]) is 0, Number(true) is 1), so this reading stopped instead of inventing an ` +
+        `ATM balance out of the wrong type.`,
+    );
+  }
+  return optionalBigint(v, { table, column, context: `an ${table} row` });
 }
 
 // ---------------------------------------------------------------------------
@@ -589,13 +634,13 @@ function mapTerminalStatusRecord(r: Record<string, unknown>): AtmTerminalStatusR
     status: textOrNullDb(r.status),
     location: textOrNullDb(r.location),
     groupName: textOrNullDb(r.group_name),
-    daysUntilCashOut: numOrNull(r.days_until_cash_out),
-    trxsSinceSettlement: numOrNull(r.trxs_since_settlement),
+    daysUntilCashOut: numOrNull(r.days_until_cash_out, "atm_terminal_status", "days_until_cash_out"),
+    trxsSinceSettlement: numOrNull(r.trxs_since_settlement, "atm_terminal_status", "trxs_since_settlement"),
     lastTrxRaw: textOrNullDb(r.last_trx_raw),
     lastWdTrxRaw: textOrNullDb(r.last_wd_trx_raw),
     lastRevTrxRaw: textOrNullDb(r.last_rev_trx_raw),
-    balancePrevEodCents: numOrNull(r.balance_prev_eod_cents),
-    balanceCents: numOrNull(r.balance_cents),
+    balancePrevEodCents: numOrNull(r.balance_prev_eod_cents, "atm_terminal_status", "balance_prev_eod_cents"),
+    balanceCents: numOrNull(r.balance_cents, "atm_terminal_status", "balance_cents"),
   };
 }
 

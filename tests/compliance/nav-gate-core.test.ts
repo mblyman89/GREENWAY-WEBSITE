@@ -484,6 +484,24 @@ describe("N4 the Accounting and Lyman tabs", () => {
          */
         "/admin/books/form-941",
         /*
+         * books-46. The annual wage statement, and the first entry in this list
+         * whose engine was NEVER unreachable — it was built and registered in
+         * the same slice, which is the habit this whole file exists to enforce.
+         *
+         * It sits beside the 941 in the menu because the two are read together:
+         * the W-3 totals must equal the sum of the four filed 941s, and this
+         * screen performs that comparison line by line rather than trusting it.
+         *
+         * The entry is here rather than merely in the nav data because THIS
+         * LIST IS THE ONLY THING THAT NOTICES A SCREEN GOING DARK. A W-2 screen
+         * that quietly stopped being linked would not fail a single other test:
+         * the engine tests would stay green, the store tests would stay green,
+         * and the wage statements simply would not get prepared. For a form
+         * whose deadline is 2027-02-01 and whose late penalty is charged PER
+         * STATEMENT, silence is the expensive failure.
+         */
+        "/admin/books/form-w2",
+        /*
          * books-42. The four financial statements. See the note above: the
          * engine behind this href had been complete and green for months while
          * being importable from nowhere in the application.

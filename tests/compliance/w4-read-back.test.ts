@@ -365,6 +365,91 @@ describe("A ROW THAT CANNOT BE READ HONESTLY IS REFUSED, NOT GUESSED", () => {
     expect(rowToW4(signedModernRow({ step4c_extra_per_period_cents: null }))).toBeNull();
   });
 
+  /**
+   * ═══ books-46 — THE FOUR COLUMNS ARE NOT NULL, SO NULL IS CORRUPTION. ═══
+   *
+   * `centsFromColumn` used to call `optionalBigint`, justified by a comment
+   * claiming null meant "the employee left Step 3 blank - itself a real W-4
+   * answer". Verified against the live schema, that is false:
+   *
+   *   step3_annual_credit_cents      bigint NOT NULL
+   *   step4a_other_income_cents      bigint NOT NULL
+   *   step4b_deductions_cents        bigint NOT NULL
+   *   step4c_extra_per_period_cents  bigint NOT NULL
+   *
+   * A blank Step 3 is stored as ZERO. Null cannot occur, so null can only mean
+   * a broken row, and the reader is now `requiredBigint`.
+   *
+   * These cases are the ones a plain `Number()` guard waves through, and every
+   * one was measured rather than reasoned about: `Number("")` is 0,
+   * `Number("0x1F")` is 31, `Number("1e3")` is 1000, `Number(" 900 ")` is 900,
+   * and `Number("9007199254740993")` comes back off by one while remaining a
+   * finite integer. Each would have become a real dollar figure on a real W-4.
+   */
+  it("refuses every text a bare Number() would silently accept", () => {
+    for (const bad of [
+      "",
+      "   ",
+      "0x1F",
+      "1e3",
+      "+900",
+      " 900 ",
+      "12.5",
+      "abc",
+      "9007199254740993",
+    ]) {
+      expect(
+        rowToW4(signedModernRow({ step4a_other_income_cents: bad })),
+        `${JSON.stringify(bad)} must be refused, not converted`,
+      ).toBeNull();
+    }
+  });
+
+  /**
+   * THE CONTROLS (standing rule 55). A refusal that refuses everything is not
+   * a guard, it is an outage, and the test above cannot tell the difference on
+   * its own. Every value here must survive AND arrive unchanged - asserting
+   * merely non-null would pass a reader that returned the wrong number.
+   *
+   * `9007199254740991` is `Number.MAX_SAFE_INTEGER`: the largest value that
+   * round-trips exactly. It is here because the boundary is where an
+   * off-by-one guard hides.
+   */
+  it("accepts every legitimate figure and returns it unchanged", () => {
+    for (const good of [0, 1, 12345, -500, 900000, 9007199254740991]) {
+      const record = rowToW4(signedModernRow({ step4a_other_income_cents: String(good) }));
+      expect(record, `${good} must be accepted`).not.toBeNull();
+      expect(record!.step4aOtherIncomeAnnualCents, `${good} must survive intact`).toBe(good);
+    }
+  });
+
+  /**
+   * ═══ WHY THE REFUSAL IS CAUGHT AND NOT ALLOWED TO FLY. ═══
+   *
+   * `requiredBigint` throws. `foldW4Rows` isolates damage PER EMPLOYEE, and an
+   * uncaught throw would destroy that: one corrupt row would abort the whole
+   * payroll load with a message naming the COLUMN but not the PERSON, leaving
+   * Michael told that some step4a somewhere is unreadable with no way to find
+   * whose. Strictness that removes the ability to act on it is a worse outage,
+   * not a stronger guard.
+   *
+   * Asserted on the RESULT rather than the source text, for the reason the note
+   * above `foldW4Rows` already records: a source-text test for the word
+   * "unreadable" survived a mutation that deleted the push.
+   */
+  it("names the broken rows without taking down the readable ones", () => {
+    const folded = foldW4Rows([
+      signedModernRow({ employee_id: "good-1" }),
+      signedModernRow({ employee_id: "bad-1", step4a_other_income_cents: "not a number" }),
+      signedModernRow({ employee_id: "good-2", step3_annual_credit_cents: "250000" }),
+      signedModernRow({ employee_id: "bad-2", step3_annual_credit_cents: null }),
+    ]);
+    expect([...folded.byEmployeeId.keys()].sort()).toEqual(["good-1", "good-2"]);
+    expect([...folded.unreadable].sort()).toEqual(["bad-1", "bad-2"]);
+    // The surviving rows must be USABLE, not merely present.
+    expect(folded.byEmployeeId.get("good-2")!.step3AnnualCreditCents).toBe(250000);
+  });
+
   it("a genuine zero is preserved as zero, so the refusal above is not over-eager", () => {
     // The mirror image of the previous test. If null-checking were written as
     // a falsy check (`if (!step3)`), a legitimate zero would be refused and

@@ -15,6 +15,7 @@ import "server-only";
  */
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { optionalBigint, requiredBigint } from "@/lib/supabase/pg-bigint";
 import { type LoanKind } from "./loan-core";
 
 // ---------------------------------------------------------------------------
@@ -102,10 +103,43 @@ type LoanRow = {
   active: boolean | null;
 };
 
-function toNum(v: number | string | null | undefined): number | null {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
+/**
+ * Read a `not null` numeric column on a loan row.
+ *
+ * WHY THERE ARE NOW TWO OF THESE. There used to be one `toNum` returning
+ * `number | null`, and four of its ten call sites finished with `?? 0`. That
+ * pattern is worth naming, because it looks defensive and is the opposite: the
+ * reader gave up and the caller invented a zero. On a loan, a fabricated zero
+ * principal or a zero interest rate does not fail loudly - it produces a
+ * plausible amortisation schedule for a loan that does not exist on those
+ * terms, and the interest split then flows into the books.
+ *
+ * The four `?? 0` sites turned out to be exactly the four columns the schema
+ * declares `not null`: `manual_loans.original_principal_cents`, `rate_milli_pct`
+ * and `term_months`, and `manual_loan_payments.amount_cents`. That is not a
+ * coincidence - `?? 0` was standing in for "this one is always there", which is
+ * a fact the migration already states. So it is now stated once, by calling the
+ * reader that refuses instead of the one that returns null.
+ *
+ * The conversion itself is in `@/lib/supabase/pg-bigint`, along with the record
+ * of the two defects the old shared idiom carried: `Number("")` is 0, not NaN,
+ * and `Number.isFinite` does not tell you a 64-bit value survived the trip.
+ */
+function requiredNum(v: number | string | null | undefined, column: string): number {
+  return requiredBigint(v, { table: "manual_loans", column, context: "a loan record" });
+}
+
+/**
+ * Read a genuinely nullable numeric column on a loan row.
+ *
+ * These six columns are nullable in the schema and their absence is real
+ * information: a payment with no recorded principal/interest split has not been
+ * broken out yet, and a loan with no scheduled payment has no fixed one. Null
+ * is passed through faithfully; an UNREADABLE value throws rather than
+ * masquerading as one of those legitimate blanks.
+ */
+function optionalNum(v: number | string | null | undefined, column: string): number | null {
+  return optionalBigint(v, { table: "manual_loans", column, context: "a loan record" });
 }
 
 function toLoanRecord(row: LoanRow): LoanRecord {
@@ -114,13 +148,13 @@ function toLoanRecord(row: LoanRow): LoanRecord {
     id: row.id,
     name: row.name,
     kind,
-    originalPrincipalCents: toNum(row.original_principal_cents) ?? 0,
-    currentBalanceCents: toNum(row.current_balance_cents),
-    rateMilliPct: toNum(row.rate_milli_pct) ?? 0,
-    termMonths: toNum(row.term_months) ?? 0,
+    originalPrincipalCents: requiredNum(row.original_principal_cents, "original_principal_cents"),
+    currentBalanceCents: optionalNum(row.current_balance_cents, "current_balance_cents"),
+    rateMilliPct: requiredNum(row.rate_milli_pct, "rate_milli_pct"),
+    termMonths: requiredNum(row.term_months, "term_months"),
     firstPaymentDate: row.first_payment_date ?? "",
     maturityDate: row.maturity_date,
-    scheduledPaymentCents: toNum(row.scheduled_payment_cents),
+    scheduledPaymentCents: optionalNum(row.scheduled_payment_cents, "scheduled_payment_cents"),
     fundingAccountId: row.funding_account_id,
     notes: row.notes,
     active: row.active !== false,
@@ -148,11 +182,11 @@ function toPaymentRecord(row: PaymentRow): LoanPaymentRecord {
     id: row.id,
     loanId: row.loan_id,
     paidDate: row.paid_date ?? "",
-    amountCents: toNum(row.amount_cents) ?? 0,
-    principalCents: toNum(row.principal_cents),
-    interestCents: toNum(row.interest_cents),
-    escrowCents: toNum(row.escrow_cents),
-    feesCents: toNum(row.fees_cents),
+    amountCents: requiredNum(row.amount_cents, "amount_cents"),
+    principalCents: optionalNum(row.principal_cents, "principal_cents"),
+    interestCents: optionalNum(row.interest_cents, "interest_cents"),
+    escrowCents: optionalNum(row.escrow_cents, "escrow_cents"),
+    feesCents: optionalNum(row.fees_cents, "fees_cents"),
     matchedTransactionId: row.matched_transaction_id,
     description: row.description,
   };
