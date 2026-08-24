@@ -53,8 +53,11 @@
 
 import Link from "next/link";
 
+import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
 import { Badge, Card, CardHeader } from "@/components/admin/ui";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
+import { form941Boxes } from "@/lib/payroll/form-box-adapters";
+import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { form941Authorities } from "@/lib/payroll/form-941-authorities";
 import { lineOf } from "@/lib/payroll/form-941-core";
 import {
@@ -357,6 +360,25 @@ export default async function Form941Page({
             </p>
           </div>
         </Card>
+      ) : null}
+
+      {/* ── TAKE ME TO SCHOOL (books-47 slice D) ───────────────────────────
+          Michael, verbatim: "I want to be able to see the form, and click a
+          box to have it teach me all there is to know about that box... When I
+          say take me to school, I meant while I'm in the system working."
+
+          The table above shows the RETURN. This shows the same figures as a
+          teachable surface: click a line number and get the plain English, the
+          worked examples, the verbatim IRS instruction, and the boxes on other
+          forms that must agree with it. It computes nothing - `form941Boxes`
+          only translates the engine's own result into the box model. */}
+      {result.ok && result.subjectCount > 0 ? (
+        <FormBoxExplorer
+          title={`Form 941 - ${result.quarterLabel}, line by line`}
+          subtitle="Employer's QUARTERLY Federal Tax Return. Click a line number to be taught it."
+          boxes={form941Boxes(result)}
+          lessons={FORM_941_LESSONS}
+        />
       ) : null}
 
       {/* ── the read itself, so the numbers can be traced ──────────────── */}
