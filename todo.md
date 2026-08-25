@@ -2671,3 +2671,38 @@ building the matcher twice.
       (f) Frequent pushes are also a bisect trail. When a gate goes red twenty
           files later, the WIP commits are what turn "something broke" into a
           single small diff.
+
+111. "NO TESTS" IS THE MOST DANGEROUS THING A TEST RUNNER CAN SAY, AND A
+     MUTATION HARNESS THAT CANNOT SEE IT WILL TELL YOU A GATE HAS A HOLE
+     WHEN THE GATE IS FINE - OR WORSE, THE REVERSE.
+     Discovered in books-55 while mutation-proving the owner-report gate.
+     Mutation E1 renamed an export so the module failed to LOAD. vitest
+     printed:
+
+         Test Files  1 failed (1)
+              Tests  no tests
+
+     The harness read only the `Tests` line, found no "failed" in it, and
+     scored the mutation as SURVIVED - i.e. as a hole in the gate. The gate
+     had in fact failed as loudly as it is possible to fail. Zero tests ran,
+     so zero assertions failed, so the line that reports assertions was
+     silent.
+       (a) Any harness that classifies a run MUST read the `Test Files` line
+           as well as the `Tests` line, and MUST treat "no tests" as RED.
+           A suite that did not execute has not approved anything - rule 39
+           applied to the runner itself: a verifier that did not run
+           approves everything.
+       (b) State the expected direction for EVERY mutation before running it
+           (`expect="red"` / `expect="green"`) and print expected-vs-got.
+           A harness that only prints what happened invites reading whatever
+           happened as correct. Three books-55 mutations came out opposite
+           to prediction, and each one was a real finding only because the
+           prediction was written down first.
+       (c) A mutation that DID NOT APPLY must be reported as SKIPPED, never
+           as survived. Verify the text was actually replaced, and that it
+           was replaced in LIVE CODE - books-55 had a mutation that edited
+           only a comment describing a historical bug and looked like a
+           survived mutation.
+       (d) Restore and re-run the baseline at the END of the sweep, and print
+           `git diff --stat` to prove the tree is clean. A harness that
+           leaves a mutation behind poisons every measurement that follows.
