@@ -114,6 +114,36 @@ const TARGETS: readonly Target[] = [
   // penalty engine reported a year-late 1120-S as costing $0.00. The real floor
   // is $195 (as adjusted) per shareholder per month.
   { kind: "usc", section: "6699" },
+  /*
+   * books-57 — §163 AND §6656, MIRRORED RATHER THAN DECLARED UNCHECKABLE.
+   *
+   * Both were invisible until this slice for the same reason: their cites are
+   * written `26 U.S.C. § 163(a)` WITH a space, and both routers demanded `§`
+   * with none, so neither was ever looked for. Fixing the routers turned the
+   * silence into rule 48's loud failure — "in a corpus we MIRROR, but no file
+   * was found" — which is the correct and useful outcome.
+   *
+   * The cheap answer was two lines in KNOWN_UNMIRRORED_AUTHORITY_IDS. The note
+   * on §6051 above already refuses that reasoning in almost these words: that
+   * list "is honest debt, not a parking space", and calling a work of the United
+   * States Government uncheckable while its text sits behind a public URL "would
+   * be a choice, not a limitation". The list's own docblock is blunter still —
+   * "an entry on this list is not neutral. It is a quote nobody is reading."
+   *
+   * That warning has now been paid out FOUR times: books-26 (RCW 49.46.020),
+   * books-37 (RCW 49.52.050), books-55 (§3306) and books-57 (§162 and §6651)
+   * each found a defective quote the moment the source was actually fetched.
+   *
+   * WHY THESE TWO MATTER TO GREENWAY SPECIFICALLY. §163 is the interest
+   * deduction, which is the rule that decides how much of Michael's mortgage
+   * payment is an expense at all — the app splits that payment three ways and
+   * §163(a) is the authority for the split. §6656 is the FAILURE-TO-DEPOSIT
+   * penalty, the one that fires on a late payroll deposit rather than a late
+   * return, and it is tiered (2/5/10/15%) in a way the penalty engine models
+   * day by day. Both are quoted to the owner as reasons for a number.
+   */
+  { kind: "usc", section: "163" },
+  { kind: "usc", section: "6656" },
   // books-25 — hiring paperwork: the W-4 and the I-9.
   //
   // Michael asked the system to teach him how to answer an employee who asks

@@ -339,12 +339,13 @@ export const IRC_162_F_PENALTIES: GuidanceAuthority = {
   kind: "statute",
   cite: "26 U.S.C. § 162(f)(1), (f)(4)",
   quote:
-    "(f)(1) In general.—Except as provided in the following paragraphs of this subsection, no " +
-    "deduction otherwise allowable shall be allowed under this chapter for any amount paid or " +
-    "incurred (whether by suit, agreement, or otherwise) to, or at the direction of, a government or " +
-    "governmental entity in relation to the violation of any law or the investigation or inquiry by " +
-    "such government or entity into the potential violation of any law. ... (f)(4) Exception for " +
-    "taxes due.—Paragraph (1) shall not apply to any amount paid or incurred as taxes due.",
+    "(f) Fines, penalties, and other amounts.\n(1) In general.\nExcept as provided in the following " +
+    "paragraphs of this subsection, no deduction otherwise allowable shall be allowed under this " +
+    "chapter for any amount paid or incurred (whether by suit, agreement, or otherwise) to, or at the " +
+    "direction of, a government or governmental entity in relation to the violation of any law or the " +
+    "investigation or inquiry by such government or entity into the potential violation of any law. " +
+    "... (4) Exception for taxes due.\nParagraph (1) shall not apply to any amount paid or incurred " +
+    "as taxes due.",
   soWhat:
     "The tax itself is deductible. The PENALTY on top of it is not — not to any government, federal " +
     "or state, and it does not matter that you paid it out of the business account. The money really " +
@@ -361,10 +362,10 @@ export const IRC_163_H_PERSONAL_INTEREST: GuidanceAuthority = {
   kind: "statute",
   cite: "26 U.S.C. § 163(a), (h)(1)",
   quote:
-    "(a) General rule.—There shall be allowed as a deduction all interest paid or accrued within the " +
-    "taxable year on indebtedness. ... (h)(1) In general.—In the case of a taxpayer other than a " +
-    "corporation, no deduction shall be allowed under this chapter for personal interest paid or " +
-    "accrued during the taxable year.",
+    "(a) General rule.\nThere shall be allowed as a deduction all interest paid or accrued within the " +
+    "taxable year on indebtedness. ... (h) Disallowance of deduction for personal interest.\n(1) In " +
+    "general.\nIn the case of a taxpayer other than a corporation, no deduction shall be allowed " +
+    "under this chapter for personal interest paid or accrued during the taxable year.",
   soWhat:
     "Interest starts out fully deductible under subsection (a) — and then subsection (h) takes it " +
     "back for anyone who is not a corporation. That phrase 'other than a corporation' is why your " +
@@ -443,13 +444,15 @@ export const IRC_6651_C1_INTERACTION: GuidanceAuthority = {
   kind: "statute",
   cite: "26 U.S.C. § 6651(a)(2), (c)(1)",
   quote:
-    "(a)(2) ... there shall be added to the amount shown as tax on such return 0.5 percent of the " +
-    "amount of such tax if the failure is for not more than 1 month, with an additional 0.5 percent " +
-    "for each additional month or fraction thereof during which such failure continues, not exceeding " +
-    "25 percent in the aggregate ... (c)(1) With respect to any return, the amount of the addition " +
-    "under paragraph (1) of subsection (a) shall be reduced by the amount of the addition under " +
-    "paragraph (2) of subsection (a) for any month (or fraction thereof) to which an addition to tax " +
-    "applies under both paragraphs (1) and (2).",
+    "to pay the amount shown as tax on any return specified in paragraph (1) on or before the date " +
+    "prescribed for payment of such tax ... there shall be added to the amount shown as tax on such " +
+    "return 0.5 percent of the amount of such tax if the failure is for not more than 1 month, with " +
+    "an additional 0.5 percent for each additional month or fraction thereof during which such " +
+    "failure continues, not exceeding 25 percent in the aggregate; or ... (c) Limitations and special " +
+    "rule.\n(1) Additions under more than one paragraph.\nWith respect to any return, the amount of " +
+    "the addition under paragraph (1) of subsection (a) shall be reduced by the amount of the " +
+    "addition under paragraph (2) of subsection (a) for any month (or fraction thereof) to which an " +
+    "addition to tax applies under both paragraphs (1) and (2).",
   soWhat:
     "If you file late AND pay late in the same month, the combined federal bite is 5.0 percent, NOT " +
     "5.5 percent. The failure-to-file 5% is expressly REDUCED by the failure-to-pay 0.5%, so the " +

@@ -78,7 +78,32 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     file: (m) => ["federal", `cfr-${m[1]}.txt`],
   },
   { name: "8 CFR", re: /^8 C\.?F\.?R\.? §(\d+[a-z]?\.\d+)/, file: (m) => ["federal", `cfr-8-${m[1]}.txt`] },
-  { name: "26 U.S.C.", re: /^26 U\.S\.C\. §(\d+[A-Z]?)/, file: (m) => ["federal", `usc-${m[1]}.txt`] },
+  /*
+   * books-57. `§\s*` HERE TOO, AND IT IS THE SAME DEFECT AS THE CFR ROWS ABOVE.
+   *
+   * books-55 fixed the space for CFR and wrote, immediately above, that "the two
+   * functions are required to agree ... and they now agree on the space too."
+   * It fixed the CORPUS, not the CLASS. The US Code row four lines down still
+   * demanded `§` with no space, so five citations written the way the government
+   * prints them - `26 U.S.C. § 162(f)(1), (f)(4)` - matched NEITHER router.
+   *
+   * Cost of those two characters, measured rather than estimated: usc-162.txt
+   * (110,114 bytes) and usc-6651.txt (24,284 bytes) were on disk the whole time,
+   * so THREE quotes were reported as "no local copy to check against" while
+   * their source sat in the repository. When they were finally compared, ALL
+   * THREE FAILED - they spliced statutory headings onto bodies. A broken router
+   * and three bad quotes had been concealing each other, which is why
+   * authority-routing-completeness.test.ts could not see them: it asks whether a
+   * held file CONTAINS a skipped quote, and the answer was honestly no.
+   *
+   * Standing rule 23. The fix is the pattern for EVERY section, not a branch for
+   * the five that happen to carry a space today.
+   */
+  {
+    name: "26 U.S.C.",
+    re: /^26 U\.S\.C\. §\s*(\d+[A-Z]?)/,
+    file: (m) => ["federal", `usc-${m[1]}.txt`],
+  },
   // books-55. An IRS WEB PAGE, as distinct from a numbered publication.
   //
   // Mapped explicitly rather than by pattern, for the same reason the WAC
@@ -472,7 +497,11 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   // Standing rule 23 — fix the class, not the instance: the letter is now part
   // of the capture for every section, not special-cased for the three that
   // happen to have one today.
-  const usc = /^26 U\.S\.C\. §(\d+[A-Z]?)/.exec(cite);
+  // books-57. `§\s*` MUST MATCH THE MIRRORED_CORPORA ROW - see the long note
+  // there. If only one of the two is fixed, the outcome is not a silent skip but
+  // the confusing rule-48 failure books-55 hit: "this citation is in a corpus we
+  // MIRROR, but no file was found", naming a path that exists.
+  const usc = /^26 U\.S\.C\. §\s*(\d+[A-Z]?)/.exec(cite);
   if (usc) {
     const p = join(dir, "federal", `usc-${usc[1]}.txt`);
     return existsSync(p) ? p : null;
@@ -868,7 +897,20 @@ export const KNOWN_UNMIRRORED_AUTHORITY_IDS: readonly string[] = [
   "IRC_6672_TRUST_PENALTY",
   "IRC_7501_TRUST",
   // Internal Revenue Code — deductions, substantiation and accuracy penalties
-  "IRC_163_A_INTEREST",
+  // "IRC_163_A_INTEREST" WAS HERE, and books-57 deleted it because the debt is
+  // paid: §163 is now mirrored at docs/authorities/federal/usc-163.txt.
+  //
+  // THE FOURTH TIME THIS LIST HAS PAID OUT ON ITS OWN WARNING. The docblock
+  // above says "an entry on this list is not neutral. It is a quote nobody is
+  // reading", and again it was right twice over. Mirroring §163 verified this
+  // quote for the first time - and the SAME run failed the OTHER §163 quote,
+  // IRC_163_H_PERSONAL_INTEREST, which had spliced "(a) General rule." onto its
+  // body with an em-dash the statute does not contain. One authority proved
+  // clean, its neighbour proved reconstructed, and neither had ever been read.
+  //
+  // books-26 (RCW 49.46.020), books-37 (RCW 49.52.050), books-55 (§3306) and now
+  // books-57 (§162, §6651, §163, §6656). The rate is not improving, which is the
+  // argument for fetching a source rather than recording a promise to.
   "IRC_263A_FLUSH",
   "IRC_448C_2026",
   "IRC_6001_SUBSTANTIATION",

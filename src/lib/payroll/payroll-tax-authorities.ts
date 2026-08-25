@@ -792,14 +792,16 @@ export const IRC_6656_DEPOSIT_PENALTY: GuidanceAuthority = {
   kind: "statute",
   cite: "26 U.S.C. § 6656(a), (b)(1)",
   quote:
-    "(a) In the case of any failure by any person to deposit ... on the date prescribed therefor any " +
-    "amount of tax imposed by this title ... unless it is shown that such failure is due to " +
+    "(a) Underpayment of deposits.\nIn the case of any failure by any person to deposit (as required " +
+    "by this title or by regulations of the Secretary under this title) on the date prescribed " +
+    "therefor any amount of tax imposed by this title in such government depository as is authorized " +
+    "under section 6302(c) to receive such deposit, unless it is shown that such failure is due to " +
     "reasonable cause and not due to willful neglect, there shall be imposed upon such person a " +
-    "penalty equal to the applicable percentage of the amount of the underpayment. (b)(1)(A) ... the " +
-    "term 'applicable percentage' means — (i) 2 percent if the failure is for not more than 5 days, " +
-    "(ii) 5 percent if the failure is for more than 5 days but not more than 15 days, and (iii) 10 " +
-    "percent if the failure is for more than 15 days. (B) ... the applicable percentage shall be 15 " +
-    "percent.",
+    "penalty equal to the applicable percentage of the amount of the underpayment.\n(b) Definitions. " +
+    "For purposes of subsection (a)—\n(1) Applicable percentage.\n(A) In general. Except as provided " +
+    "in subparagraph (B), the term “applicable percentage” means—\n(i)\n2 percent if the failure is " +
+    "for not more than 5 days,\n(ii)\n5 percent if the failure is for more than 5 days but not more " +
+    "than 15 days, and\n(iii)\n10 percent if the failure is for more than 15 days.",
   soWhat:
     "The IRS counts DAYS, not months, and Washington counts months. A deposit six days late is 5% " +
     "federally while the State is still in its first month; sixteen days late is already the full 10% " +
@@ -815,13 +817,13 @@ export const IRC_6651_FAILURE_TO_FILE: GuidanceAuthority = {
   kind: "statute",
   cite: "26 U.S.C. § 6651(a)(1)",
   quote:
-    "In case of failure to file any return required under authority of subchapter A of chapter 61 ... " +
-    "on the date prescribed therefor (determined with regard to any extension of time for filing), " +
-    "unless it is shown that such failure is due to reasonable cause and not due to willful neglect, " +
-    "there shall be added to the amount required to be shown as tax on such return 5 percent of the " +
-    "amount of such tax if the failure is for not more than 1 month, with an additional 5 percent for " +
-    "each additional month or fraction thereof during which such failure continues, not exceeding 25 " +
-    "percent in the aggregate.",
+    "(a) Addition to the tax. In case of failure—\n(1)\nto file any return required under authority " +
+    "of subchapter A of chapter 61 ... on the date prescribed therefor (determined with regard to any " +
+    "extension of time for filing), unless it is shown that such failure is due to reasonable cause " +
+    "and not due to willful neglect, there shall be added to the amount required to be shown as tax " +
+    "on such return 5 percent of the amount of such tax if the failure is for not more than 1 month, " +
+    "with an additional 5 percent for each additional month or fraction thereof during which such " +
+    "failure continues, not exceeding 25 percent in the aggregate;",
   soWhat:
     "Failing to FILE federally is 5% a month up to a 25% ceiling — and note this one is written as " +
     "'an additional 5 percent for each additional month', which is genuinely incremental, unlike the " +
