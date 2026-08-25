@@ -101,7 +101,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS Instructions for Form 941 (2026), line 1",
         quote:
-          "Enter the number of employees on your payroll for the pay\nperiod including March 12, June 12, September 12, or\nDecember 12, for the quarter indicated at the top of Form\n941.",
+          "Enter the number of employees on your payroll for the pay\nperiod including March 12, June 12, September 12, or\nDecember 12, for the quarter indicated at the top of Form\n941. Don’t include:\n• Household employees,\n• Employees in nonpay status for the pay period,\n• Farm employees,\n• Pensioners, or\n• Active members of the U.S. Armed Forces.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -292,7 +292,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
       },
       {
         cite: "IRS Instructions for Form 941 (2026), line 5a",
-        quote: "Enter the amount before payroll deductions.",
+        quote: "Enter the amount before payroll deductions. Don’t\ninclude tips on this line.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
