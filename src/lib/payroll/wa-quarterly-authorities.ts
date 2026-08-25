@@ -161,12 +161,40 @@ export const WAC_192_310_010_TERMINATION: GuidanceAuthority = {
   id: "wac-192-310-010-termination",
   kind: "regulation",
   cite: "WAC 192-310-010(3)(e)",
+  /*
+   * ═══ CORRECTED IN books-56, AND THE WAY IT WAS FOUND IS THE POINT ═══
+   *
+   * This quote was written in an earlier slice and altered the regulation twice
+   * without saying so. It dropped the opening subject, "Termination of
+   * business.", and it renumbered the two subsections from the published
+   * "(3)(e)(i)" and "(3)(e)(ii)" down to a bare "(i)" and "(ii)".
+   *
+   * Neither change makes the sentence say anything different, which is exactly
+   * what rule 24/35 is for. A quotation that reads correctly and is not what the
+   * source says is worse than an obvious paraphrase: it invites a reader to trust
+   * it precisely because it looks careful. The renumbering is also the more
+   * harmful half in practice — anybody searching the published rule for "(i)"
+   * to check this text will not find it where the quote implies it is.
+   *
+   * WHY IT SURVIVED UNTIL NOW. `scripts/verify-verbatim-quotes.ts` can only
+   * compare a quote against a file the repository actually holds, and until
+   * books-56 there was no mirror of WAC 192-310-010. So this authority was
+   * skipped — counted among the "no local copy to check against" — and a skip
+   * reads exactly like a pass in a summary line. That is standing rule 39: a
+   * verifier that cannot see something approves it.
+   *
+   * Mirroring the regulation for the new ESD lessons made it checkable for the
+   * first time, and it failed on the first run. This is the second defect in one
+   * slice found by the same mechanism, the other being the routing table that had
+   * never learned to send WAC-192 citations anywhere. Neither was found by
+   * reading the file.
+   */
   quote:
-    "Each employer who stops doing business or whose account is closed by the department must " +
-    "immediately file: (i) A tax report for the current calendar quarter which covers tax " +
-    "payments due on the date the account is closed; and (ii) A report of employees' wages for " +
-    "the current calendar quarter which includes all wages paid as of the date the account is " +
-    "closed.",
+    "Termination of business. Each employer who stops doing business or whose account is closed " +
+    "by the department must immediately file: (3)(e)(i) A tax report for the current calendar " +
+    "quarter which covers tax payments due on the date the account is closed; and (3)(e)(ii) A " +
+    "report of employees' wages for the current calendar quarter which includes all wages paid " +
+    "as of the date the account is closed.",
   soWhat:
     "The word is IMMEDIATELY, not 'by the usual due date'. If Greenway ever closed or sold, or " +
     "if ESD closed the account, the part-quarter return would be due at once rather than at the " +
