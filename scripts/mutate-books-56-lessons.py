@@ -30,17 +30,54 @@ LESSONS_W2 = "src/lib/payroll/form-box-lessons-w2.ts"
 LESSONS_WA = "src/lib/payroll/form-box-lessons-wa.ts"
 AUTH_WA = "src/lib/payroll/wa-quarterly-authorities.ts"
 
-# The gates that should be able to see these mutations.
-GATES = [
-    "tests/compliance/form-box-adapters.test.ts",
-    "tests/compliance/form-box-teaching-core.test.ts",
-    "tests/compliance/form-box-lessons-w2.test.ts",
-    "tests/compliance/form-box-lessons-wa.test.ts",
-    "tests/compliance/forms-roadmap-tracker.test.ts",
-    "tests/compliance/owner-report-books-53.test.ts",
-    "tests/compliance/owner-report-books-54.test.ts",
-    "tests/compliance/authority-routing-completeness.test.ts",
-]
+# ══════════════════════════════════════════════════════════════════════════════
+#  WHY THIS HARNESS RUNS THE WHOLE SUITE AND NOT A CHOSEN LIST OF GATES
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# It used to run a hand-written list of eight files:
+#
+#     GATES = ["tests/compliance/form-box-adapters.test.ts", ... ]   # 8 entries
+#
+# described in the comment above it as "the gates that should be able to see
+# these mutations". That list was the harness's own rule 39 defect: a verifier
+# that cannot see something approves it.
+#
+# HOW IT WAS CAUGHT. M16 (the employee's NAME classified as money) was closed by
+# tests/compliance/identifier-boxes-are-never-money.test.ts, and that gate was
+# proved RED by applying M16's substitution to the real adapters file by hand:
+# exit code 1, naming box e. Then this harness was re-run and reported
+#
+#     M16: GREEN     (predicted RED)   <== AGAINST PREDICTION
+#
+# Both results were correct. The mutation IS caught; this harness simply was not
+# looking at the file that catches it. Measured at the time: the repository had
+# 459 test files and this list named 8 of them, so 451 files - including all
+# three gates written during books-56 - could not contribute a verdict.
+#
+# That is worse than a missing test. A missing test is silent; this printed
+# "GREEN" with authority, and "GREEN" from a mutation harness is a positive
+# claim that no gate anywhere objects. Acting on it would have meant deleting a
+# gate that works, or - the direction that nearly happened - concluding M16 was
+# an equivalent mutant and writing that conclusion into a document.
+#
+# WHY THE FIX IS NOT "ADD THE THREE FILES". That repeats the defect with a
+# longer list, and the next gate written is invisible again. The class defect is
+# the hand-maintained list itself (rule 23), so it is gone. `run_gates` now runs
+# the ENTIRE suite, which is the only set that cannot fall behind, and asserts a
+# floor on how many files it saw so that a collapsing suite is RED rather than
+# quietly small (rule 111).
+#
+# COST, MEASURED, not estimated: the full suite is 459 files / 11,227 tests /
+# 102 seconds on this 2-core sandbox, so 20 mutations plus two baselines is
+# about 37 minutes. A mutation campaign is not something run on every commit,
+# and a fast answer that can say GREEN when a gate exists and works is worth
+# nothing.
+
+# The floor below is deliberately far under the real count (459 at the time of
+# writing) so that adding or removing a few test files never trips it, while a
+# vitest filter typo or a collapsed config - the failure that produced this
+# whole investigation - cannot be reported as GREEN.
+MIN_TEST_FILES = 400
 
 # (id, file, find, replace, predict_red, what_it_simulates)
 MUTATIONS = [
@@ -163,12 +200,67 @@ def tree_is_clean():
     return run("git status --porcelain").stdout.strip() == ""
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  CRASH SAFETY: `finally` DOES NOT RUN IF THE PROCESS IS KILLED
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# This harness deliberately edits REAL source files and relies on try/finally to
+# put them back. That is sound for an exception and useless for a kill.
+#
+# It happened. A sibling probe running these same mutations against the full
+# suite was killed by a command timeout partway through M12, and it left
+#
+#     M src/lib/payroll/wa-quarterly-authorities.ts
+#
+# on disk with the mutated subsection numbering in it - the very defect M12
+# exists to simulate, sitting in the working tree looking like authored work. It
+# was recovered with `git checkout --` and the leftover .mutbak was byte-identical
+# to the committed copy, so nothing was lost. But the next person to hit that has
+# no reason to know a mutation is why the file changed, and on this sandbox
+# - which crashes often, and is the reason rule 110 exists - a kill mid-mutation
+# is a routine event rather than a remote one.
+#
+# So two things, neither of which relies on this process staying alive:
+#
+#   1. A LEFTOVER BACKUP IS A REFUSAL TO START. If a .mutbak exists, a previous
+#      run died holding a mutation. The harness will not add a second layer of
+#      edits on top of an unknown state; it says exactly which file to restore.
+#
+#   2. THE BACKUP IS NAMED SO IT CANNOT BE MISTAKEN FOR WORK. `.mutbak` sitting
+#      beside a modified source file is the signal that the modification is a
+#      mutation, not a change someone made on purpose.
+#
+# The recovery instruction is `git checkout -- <file>` rather than "move the
+# .mutbak back", because git's copy is the authority and the .mutbak may itself
+# have been written by a half-finished run.
+def refuse_if_a_previous_run_died():
+    leftovers = sorted(str(p.relative_to(REPO)) for p in REPO.rglob("*.mutbak"))
+    if not leftovers:
+        return False
+    print("REFUSING TO RUN: a previous mutation run left backup files behind, which means")
+    print("it was killed while a source file was MUTATED. The working tree may contain a")
+    print("deliberate defect that looks like authored code. Restore before running again:")
+    print()
+    for rel in leftovers:
+        print(f"    git checkout -- {rel[: -len('.mutbak')]}")
+        print(f"    rm {rel}")
+    print()
+    print("Verify with `git status --porcelain` before re-running.")
+    return True
+
+
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def run_gates():
-    """Return 'RED', 'GREEN', or 'NO-TESTS'. Rule 111: no tests is RED."""
-    r = run(f"npx vitest run {' '.join(GATES)}")
+    """Run the WHOLE suite. Return 'RED', 'GREEN', 'NO-TESTS' or 'TOO-FEW'.
+
+    Rule 111: no tests is RED. TOO-FEW is the same idea one step earlier - a run
+    that saw a fraction of the suite must not be able to say GREEN, because that
+    is exactly how the eight-file GATES list reported M16 as uncaught while the
+    gate that catches it sat on disk, passing, unread.
+    """
+    r = run("npx vitest run")
     out = ANSI.sub("", r.stdout + r.stderr)
     if "No test files found" in out:
         return "NO-TESTS", out
@@ -178,10 +270,19 @@ def run_gates():
         return "NO-TESTS", out
     if "failed" in mfiles.group(1) or "failed" in mtests.group(1):
         return "RED", out
+
+    # GREEN is only allowed to mean "nothing objected" if enough was asked.
+    # Count every file total vitest reports, passed or otherwise.
+    seen = sum(int(n) for n in re.findall(r"(\d+)\s+(?:passed|failed|skipped)", mfiles.group(1)))
+    if seen < MIN_TEST_FILES:
+        return "TOO-FEW", out + f"\n\nHARNESS: only {seen} test files ran, expected >= {MIN_TEST_FILES}"
     return "GREEN", out
 
 
 def main():
+    if refuse_if_a_previous_run_died():
+        return 2
+
     if not tree_is_clean():
         print("REFUSING TO RUN: working tree is dirty. Commit first.")
         return 2
@@ -216,6 +317,18 @@ def main():
             verdict, _ = run_gates()
         finally:
             shutil.move(str(backup), str(path))
+
+        # TOO-FEW is neither a caught mutation nor a surviving one: it means this
+        # harness did not ask the question. Counting it either way would launder a
+        # tooling fault into a result about the code, which is the precise mistake
+        # the old GATES list made. Stop instead (rule 48 - fail loudly).
+        if verdict == "TOO-FEW":
+            print(
+                f"{mid}: TOO-FEW test files ran -- this is a HARNESS fault, not a result.\n"
+                f"Refusing to continue: a partial run cannot be reported as caught or survived.\n"
+                f"The file has already been restored; check the vitest invocation."
+            )
+            return 2
 
         caught = verdict in ("RED", "NO-TESTS")
         agree = caught == predict_red
