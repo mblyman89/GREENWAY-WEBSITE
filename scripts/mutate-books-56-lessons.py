@@ -100,7 +100,9 @@ MUTATIONS = [
     ("M11", AUTH_WA,
      '"Termination of business. Each employer who stops doing business or whose account is closed " +',
      '"Each employer who stops doing business or whose account is closed " +',
-     True, "re-introduces exactly the pre-existing defect this slice fixed"),
+     False, "drops a titled subject phrase. EQUIVALENT MUTANT - investigated three times, "
+            "see docs/books-56-m11-investigation.md. 24 correct authorities legitimately omit "
+            "a subject like 'In general.', so no rule can condemn this without condemning them"),
 
     ("M12", AUTH_WA,
      '"quarter which covers tax payments due on the date the account is closed; and (3)(e)(ii) A " +',

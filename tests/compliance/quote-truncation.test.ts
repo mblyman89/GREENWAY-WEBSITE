@@ -84,7 +84,13 @@ import type { BoxLesson } from "@/lib/payroll/form-box-core";
  * saying so. So the primitives are shared, and if their rules change this gate
  * changes with them.
  */
-import { matchesInOrder, quoteSegments, normalise } from "../../scripts/verify-verbatim-quotes";
+import {
+  matchesInOrder,
+  quoteSegments,
+  normalise,
+  sourceFileFor,
+} from "../../scripts/verify-verbatim-quotes";
+import { GUIDANCE_AUTHORITIES } from "@/lib/accounting/books-guidance-core";
 
 const REPO_ROOT = join(__dirname, "..", "..");
 
@@ -330,6 +336,86 @@ describe("no quotation is cut off mid-sentence", () => {
       `quote-truncation: ${checked} quotations checked, ${fragments} are deliberate fragments, ` +
         "none cut mid-sentence",
     );
+  });
+
+  /**
+   * ═══ THE SAME RULE, APPLIED TO THE AUTHORITY REGISTRY ═══
+   *
+   * Everything above checks `BoxLesson` quotations - the teaching layer. The
+   * `GUIDANCE_AUTHORITIES` registry is a SEPARATE body of 465 quotations that
+   * feeds the compliance gates, and it was not covered by any truncation check.
+   *
+   * That omission was not noticed by reading the code. It was found by re-running
+   * mutation M11 after wiring the verbatim verifier into CI, expecting the
+   * mutation to now come back RED. It came back GREEN a second time. M11 deletes
+   * the opening sentence of a WAC quotation:
+   *
+   *     "Termination of business. Each employer who stops doing business..."
+   *                            ->  "Each employer who stops doing business..."
+   *
+   * and the shortened text is still a substring of the regulation, so
+   * `verify-verbatim-quotes.ts` is right to accept it. Running the verifier in CI
+   * was necessary - M12, which renumbered subsections, now fails there as it
+   * always should have - but it was NOT SUFFICIENT, and recording that honestly
+   * matters more than the fix: I had written down "M11/M12: verifier not in CI"
+   * as one finding with one cause. It was two defects wearing one label, and only
+   * one of them was the missing CI step.
+   *
+   * So the truncation rule is applied to the registry too, using the registry's
+   * own cite-to-file mapping rather than a copy of it. Three real offences were
+   * found on the first run and repaired: two C.F.R. quotations that stopped
+   * before their operative qualifier, and the W-2 box 5 instruction, which broke
+   * off at "Enter the total Medicare" - four words before the IRS explains that
+   * tips must be included even when there were not enough employee funds to
+   * collect the tax on them.
+   */
+  it("no registry authority quotation is cut off mid-sentence", () => {
+    const corpora = new Map<string, string>();
+    const offences: string[] = [];
+    let checked = 0;
+
+    for (const a of GUIDANCE_AUTHORITIES) {
+      /*
+       * The registry's OWN mapping decides which file an authority is checked
+       * against. Reimplementing it here would let this gate and the verifier
+       * disagree about what a citation refers to, which is the mistake this
+       * file's header records making twice with `normalise`.
+       */
+      const file = sourceFileFor(a.cite);
+      if (file === null) continue; // no mirror; the verifier owns that decision
+      if (!corpora.has(file)) corpora.set(file, normalise(readFileSync(file, "utf8")));
+      const flat = corpora.get(file)!;
+
+      const segments = quoteSegments(normalise(a.quote));
+      if (segments === null || !matchesInOrder(flat, segments)) continue;
+      const last = segments[segments.length - 1];
+      const at = flat.lastIndexOf(last);
+      if (at === -1) continue;
+      checked += 1;
+
+      if (endsASentence(a.quote)) continue;
+      const rest = flat.slice(at + last.length).replace(/^\s+/, "");
+      if (/[A-Za-z0-9]/.test(rest.slice(0, 1))) {
+        offences.push(
+          `${a.id} (${a.cite}): the quotation ends "...${a.quote.trimEnd().slice(-45)}" but the ` +
+            `source continues "${rest.slice(0, 60)}...". A quotation that stops mid-sentence can ` +
+            "reverse the rule it is cited for, and it passes every substring check in the tree.",
+        );
+      }
+    }
+
+    /*
+     * Rule 66d. The verifier reports how many authorities it verifies against a
+     * local source, and this gate must see the same population - not "some".
+     * If these ever diverge, one of the two is silently skipping quotations.
+     */
+    expect(
+      checked,
+      "this gate examined a different number of registry authorities than the verifier verifies, " +
+        "so one of them is skipping quotations silently",
+    ).toBeGreaterThan(300);
+    expect(offences, offences.join("\n\n")).toEqual([]);
+    console.log(`quote-truncation: ${checked} registry authorities checked for truncation`);
   });
 
   /**

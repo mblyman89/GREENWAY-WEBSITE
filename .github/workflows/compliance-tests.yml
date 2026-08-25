@@ -25,6 +25,27 @@ jobs:
         run: npm run test:compliance
       - name: Pure self-test runner (tsx)
         run: npx tsx scripts/compliance/run-pure-selftests.ts
+      # ======================================================================
+      # STANDING RULE 39: a verifier nobody runs is a verifier that approves
+      # everything.
+      #
+      # scripts/verify-verbatim-quotes.ts is the mechanical enforcement of rule
+      # 24/35 - "the quote is sacred". It checks every authority quotation in
+      # GUIDANCE_AUTHORITIES against the mirrored source on disk, and it exits
+      # non-zero on any mismatch. It has done so, correctly, since books-25.
+      #
+      # It was never wired into CI. For dozens of slices the only thing invoking
+      # it was me, by hand, when I happened to remember. That was discovered by
+      # mutations M11 and M12 of scripts/mutate-books-56-lessons.py, which
+      # altered the text of registry quotations, were predicted RED, and came
+      # back GREEN: nothing in the automated pipeline was looking. A quote could
+      # have been silently reworded on any branch and merged green.
+      #
+      # It takes two seconds. There was never a cost reason to leave it out.
+      # tests/compliance/ci-runs-the-verbatim-verifier.test.ts pins this step by
+      # name so it cannot quietly disappear again.
+      - name: Verbatim quote verifier (rule 24/35)
+        run: npx tsx scripts/verify-verbatim-quotes.ts
       # Scoped lint: the harness + the pure statute-encoding modules it tests.
       # (Full-repo `npm run lint` carries pre-existing UI warnings/errors that
       # predate this workflow and are tracked separately — linting the whole
