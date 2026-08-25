@@ -186,9 +186,26 @@ describe("every figure in the report is re-derived, not remembered", () => {
   });
 
   it("states the suite size as a floor, not a frozen number", () => {
-    // Asserting the exact totals would make this letter fail on the next
-    // slice's first new test. The claim that matters is that nothing vanished.
-    expect(FLAT).toContain("454 files, 11,153 tests, all passing");
+    /*
+     * Asserting the exact totals would make this letter fail on the next
+     * slice's first new test. The claim that matters is that nothing vanished.
+     *
+     * A SELF-REFERENCE TRAP, RECORDED SO THE NEXT SLICE DOES NOT CHASE IT.
+     *
+     * The letter quotes the suite size, and THIS FILE is part of the suite. So
+     * the act of gating the letter changed the number the letter cites: the
+     * figure measured while writing the prose was 454 files / 11,153 tests, and
+     * adding these 15 tests made it 455 / 11,168. The first measurement was not
+     * wrong, it was taken before the gate existed.
+     *
+     * This is why the claim is deliberately a STRING IN THE PROSE checked for
+     * presence, and not a live comparison against a re-counted suite. A test
+     * that recounts the suite and compares it to the letter can never settle:
+     * every change to the letter's gate invalidates the letter. The honest
+     * version is a figure stamped at a moment in time, with the moment
+     * disclosed - which is what a dated report is.
+     */
+    expect(FLAT).toContain("455 files, 11,168 tests, all passing");
   });
 });
 

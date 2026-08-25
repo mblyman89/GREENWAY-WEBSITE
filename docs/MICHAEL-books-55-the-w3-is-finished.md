@@ -199,7 +199,7 @@ Every figure above was measured on this machine, not remembered:
 | Cross-references, all resolving | 34 |
 | Legal quotes verified against source | 335 |
 | Quotes with no local copy (disclosed) | 130, of which 34 are recorded debt |
-| Full test suite | 454 files, 11,153 tests, all passing |
+| Full test suite | 455 files, 11,168 tests, all passing |
 | Ownership-row sabotage attempts caught | 124 of 124 |
 | Sabotage attempts on the new guard | 14, all as measured |
 
