@@ -164,7 +164,26 @@ export type PaidLeaveCsvRefusalCode =
   | "NEGATIVE_WAGES"
   | "MISSING_DOB"
   | "MALFORMED_DOB"
-  | "NON_INTEGER_CENTS";
+  | "NON_INTEGER_CENTS"
+  /**
+   * A name field contains the delimiter itself.
+   *
+   * Found by asking what happens to `buildPaidLeaveCsv` if a name contains a
+   * comma. The answer was: the eight-field self-check at the end of the writer
+   * throws. That is the WRONG CHANNEL. The self-check exists to catch a broken
+   * WRITER; a comma in an employee's name is broken INPUT, and input problems
+   * must come back as a refusal Michael can read and act on, not as an internal
+   * error that looks like a crash.
+   *
+   * The specification does not permit the character: "May contain letters,
+   * spaces, hyphens, and/or apostrophes." A comma is none of those. So this
+   * refuses rather than quoting the field — quoting IS legal (ESD prints a
+   * fully-quoted sample and calls it "acceptable"), but partial quoting of only
+   * the offending field is a third format that ESD never shows, and inventing a
+   * format is how a file gets silently mis-parsed. Refusing puts the decision
+   * where it belongs: with the person who knows the employee's real name.
+   */
+  | "NAME_CONTAINS_DELIMITER";
 
 export type PaidLeaveCsvRefusal = {
   readonly code: PaidLeaveCsvRefusalCode;
@@ -242,12 +261,38 @@ export function paidLeaveSsn(ssn: string): string {
 /**
  * DOB: "Format DOB using MMDDYYYY or MM/DD/YYY or MM-DD-YYYY."
  *
- * MMDDYYYY chosen — the unpunctuated form, which is what the column heading
- * itself names. The spec's own example table is inconsistent here (it shows
- * `01011990`, `12/11/2000` and `08181989` in one three-row sample), which is
- * evidence that all three are accepted, not that any is preferred. Picking the
- * one printed in the heading is the least surprising choice, and unlike the
- * slashed form it cannot be re-interpreted as a date by a spreadsheet.
+ * MMDDYYYY chosen — the unpunctuated form.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * I CORRECTED MY OWN REASONING HERE, AND THE ORIGINAL IS WORTH KEEPING
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * I first wrote that the specification's example table "is inconsistent here
+ * (it shows `01011990`, `12/11/2000` and `08181989` in one three-row sample),
+ * which is evidence that all three are accepted, not that any is preferred."
+ * The conclusion — write MMDDYYYY — was right. The reasoning was wrong, and it
+ * was wrong because I was reading the only part of the document that extracts
+ * as text.
+ *
+ * On page 3, ESD prints two screenshots captioned "If opened in a plain text
+ * editor, your final .csv file should look like this". Those are IMAGES; they
+ * do not extract, so the mirrored prose file is blank at that point. Extracted
+ * with `pdfimages` and enlarged, they show the finished bytes — and in the
+ * finished file all three rows are unpunctuated:
+ *
+ *     123-33-1234,Doe,John,B,1200,45322.22,Y,01011990
+ *     034-35-4567,Smith,Jane,,4,70.00,N,12112000
+ *     143556786,O’Brian,Robert,H,1300,5000.50,,08181989
+ *
+ * Row 2 is `12112000` in the FILE and `12/11/2000` in the padded table. So the
+ * table was never "inconsistent": it was illustrating accepted INPUT styles,
+ * exactly as the prose says — "Format DOB using MMDDYYYY or MM/DD/YYY or
+ * MM-DD-YYYY" — while the file itself carries one style. The unpunctuated form
+ * is not merely "least surprising", it is what ESD's own sample file contains.
+ *
+ * Transcribed and reasoned in
+ * `docs/authorities/state-wa/esd-paid-leave-csv-plain-text-sample.txt`, with a
+ * register of what a pixel-reading could get wrong.
  */
 export function paidLeaveDob(isoDate: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
@@ -261,6 +306,16 @@ export function paidLeaveDob(isoDate: string): string {
  * `N` is written rather than blank. Both are legal; a visible `N` is a positive
  * statement that the question was answered, where a blank cell is
  * indistinguishable from a column that failed to export.
+ *
+ * ESD's own sample file uses BOTH: row 2 carries `N`, and row 3 leaves the
+ * field empty (`...,5000.50,,08181989`). So writing `N` is squarely within what
+ * the department publishes, and the choice between them is ours to make on the
+ * grounds above rather than a requirement either way.
+ *
+ * What this function must NOT be is a way to answer the question for Michael.
+ * It takes a boolean that somebody has already decided. `waCaresExempt` is not
+ * optional on the input type precisely so that "we don't know yet" cannot be
+ * quietly rendered as `N` — see the type's docblock, and rule 62d.
  */
 export function paidLeaveWaCares(exempt: boolean): string {
   return exempt ? "Y" : "N";
@@ -309,12 +364,39 @@ function validate(rows: readonly PaidLeaveEmployeeRow[]): readonly PaidLeaveCsvR
         explanation: "First name is Required by the specification and cannot be blank.",
       });
     }
+    /*
+     * The delimiter must not appear inside a field. Checked on every field this
+     * writer copies through verbatim, not just the two names, because the check
+     * is about the DELIMITER rather than about names: any unescaped comma shifts
+     * every later column left, and a shifted row is the failure that puts a date
+     * of birth in the WA Cares column.
+     */
+    for (const [label, value] of [
+      ["last name", r.lastName],
+      ["first name", r.firstName],
+      ["middle initial", r.middleInitial],
+    ] as const) {
+      if (value.includes(",")) {
+        out.push({
+          code: "NAME_CONTAINS_DELIMITER",
+          subject: who,
+          explanation:
+            `The ${label} contains a comma, which is the field delimiter of this file: ` +
+            `${JSON.stringify(value)}. The specification allows names that "May contain ` +
+            `letters, spaces, hyphens, and/or apostrophes" — a comma is none of those. ` +
+            `Left in place it would shift every later column left, so that a date of ` +
+            `birth lands in the WA Cares column and the row is silently wrong rather ` +
+            `than rejected. Correct the name in the payroll record.`,
+        });
+      }
+    }
     if (r.middleInitial.length > 1) {
       out.push({
         code: "MIDDLE_INITIAL_TOO_LONG",
         subject: who,
         explanation:
-          `Middle initial must be "a single alphabetical character only", got ` +
+          `Middle initial must be, in the specification's words, "A single alphabetical ` +
+          `character only" \u2014 got ` +
           `${JSON.stringify(r.middleInitial)}. This file wants an INITIAL; the EAMS ` +
           `unemployment file is the one that takes a middle NAME of up to 20 characters.`,
       });
