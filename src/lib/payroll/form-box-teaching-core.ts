@@ -443,6 +443,45 @@ export const FORM_941_TEACHING: readonly TeachingBox[] = [
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 export const FORM_940_TEACHING: readonly TeachingBox[] = [
+  /*
+   * ═══ PART 1, ADDED IN books-54 ═══
+   *
+   * The 940 specimen started at line 3, so the whole of Part 1 was missing:
+   * the state code, the multi-state tick and the credit-reduction tick. Those
+   * three boxes decide whether a Schedule A has to be attached at all, which
+   * makes them the first thing to check on the form and the last thing this
+   * screen could show.
+   *
+   * Captions below are transcribed from the printed 2025 Form 940 (the filed
+   * copy at /workspace/2025_FORM_940_-_SAGE.pdf), not from the instructions.
+   * The two differ in wording, and what Michael is holding is the form.
+   */
+  {
+    box: "1a",
+    caption: "If you had to pay state unemployment tax in one state only, enter the state abbreviation",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "The two-letter postal code of the single state where state unemployment tax was owed. " +
+      "For Greenway that is WA. Left blank by a multi-state employer, who ticks 1b instead.",
+  },
+  {
+    box: "1b",
+    caption: "If you had to pay state unemployment tax in more than one state, you are a multi-state employer",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "A tickbox. Ticking it requires Schedule A to be completed and attached. Greenway pays " +
+      "only Washington, so this stays empty \u2014 but it would have to be ticked the first year an " +
+      "employee worked in another state.",
+  },
+  {
+    box: "2",
+    caption: "If you paid wages in a state that is subject to CREDIT REDUCTION",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "A tickbox, and it also requires Schedule A. Ticked only if a state you paid wages in was " +
+      "named a credit reduction state for that year by the Department of Labor. Washington is " +
+      "not one today; this is decided annually and must be re-checked, never assumed.",
+  },
   {
     box: "3",
     caption: "Total payments to all employees",
@@ -456,6 +495,61 @@ export const FORM_940_TEACHING: readonly TeachingBox[] = [
     howItGetsFilled:
       "Pay that FUTA does not reach — for example certain fringe benefits and group-term life " +
       "insurance. Subtracted from box 3.",
+  },
+  /*
+   * ═══ THE FIVE CATEGORY TICKBOXES UNDER LINE 4 (books-54) ═══
+   *
+   * The printed form groups these under one instruction, "Check all that
+   * apply", so they are five boxes describing ONE amount. The amount is on
+   * line 4; these say which kind it was.
+   *
+   * Their captions on the paper are two or three words each, which is why the
+   * `howItGetsFilled` text carries the real content. The IRS gives each
+   * category a bulleted list of what qualifies, and those lists are where the
+   * traps live — 4c in particular excludes the employee's own elective
+   * deferral while including the employer's contribution.
+   */
+  {
+    box: "4a",
+    caption: "Fringe benefits",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "Ticked when part of the line 4 amount was fringe benefits — certain meals and lodging, " +
+      "contributions to accident or health plans, or benefits excluded under a section 125 " +
+      "cafeteria plan.",
+  },
+  {
+    box: "4b",
+    caption: "Group-term life insurance",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "Ticked when part of the line 4 amount was employer-paid group-term life insurance.",
+  },
+  {
+    box: "4c",
+    caption: "Retirement/Pension",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "Ticked for employer contributions to a qualified plan, including a SIMPLE retirement " +
+      "account. Read the exclusion carefully: an employee's own elective salary reduction " +
+      "contribution is NOT exempt and stays in the FUTA base.",
+  },
+  {
+    box: "4d",
+    caption: "Dependent care",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "Ticked for dependent care assistance, exempt up to $5,000 per employee and $2,500 if the " +
+      "employee is married filing separately. Anything above the cap is ordinary taxable wages.",
+  },
+  {
+    box: "4e",
+    caption: "Other",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "The catch-all category, for things such as agricultural labour payments, H-2A visa " +
+      "workers, and payments under a workers' compensation law. Not a place to put anything " +
+      "that does not fit: if nothing on the IRS list applies, line 4 is blank and this is empty.",
   },
   {
     box: "5",
@@ -534,6 +628,56 @@ export const FORM_940_TEACHING: readonly TeachingBox[] = [
     caption: "Overpayment",
     whoseSource: FED_940,
     howItGetsFilled: "Box 13 minus box 12, when deposits exceeded the tax.",
+  },
+  /*
+   * ═══ THE DIRECT-DEPOSIT BOXES (books-54) ═══
+   *
+   * Direct deposit of a Form 940 refund is new for the 2025 revision, which is
+   * why these four boxes appear on the form Michael filed and were absent from
+   * this specimen. On his copy they are printed and empty, because Greenway's
+   * line 13 equalled line 12 exactly and there was nothing to refund.
+   *
+   * 15c and 15e carry NO specimen value on purpose. They are a bank routing
+   * number and a bank account number — credentials, not accounting figures.
+   * A plausible-looking example in either box is the one kind of teaching aid
+   * that could cause real harm, and the no-fabricated-figures gate in this
+   * file's test would object to a digit here in any case.
+   */
+  {
+    box: "15b",
+    caption: "Check one: Apply to next return. / Send a refund.",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "A choice, ticked only when line 15a shows an overpayment. Check exactly one box: " +
+      "checking both, or neither, means the IRS applies the money to the next return by " +
+      "default. Whatever is ticked, the IRS may still take the overpayment against any " +
+      "past-due account under the same EIN.",
+  },
+  {
+    box: "15c",
+    caption: "Routing number",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "Nine digits from the bank, used only when 15b asks for a refund. The first two digits " +
+      "must fall in 01—12 or 21—32, which is a free validity check before filing. No " +
+      "specimen value is shown here because this box holds a real bank credential.",
+  },
+  {
+    box: "15d",
+    caption: "Type: Checking / Savings",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "A tickbox describing the account on 15c and 15e. Exactly one. Getting it wrong can cause " +
+      "the deposit to be rejected outright and a paper cheque issued instead.",
+  },
+  {
+    box: "15e",
+    caption: "Account number",
+    whoseSource: FED_940,
+    howItGetsFilled:
+      "Up to seventeen characters from the bank, hyphens included but spaces and symbols " +
+      "omitted, entered left to right. Used only when line 15b asks for a refund. No specimen " +
+      "value is shown here because this box holds a real bank credential.",
   },
   {
     box: "16a",
@@ -1049,6 +1193,66 @@ export function assertEveryTaughtBoxHasASpecimen(lessons: readonly BoxLesson[]):
         `lesson cannot be reached before payroll exists`,
     );
   }
+}
+
+/**
+ * THE DEAD CROSS-REFERENCE GUARD (books-54).
+ *
+ * ═══ WHAT THIS FOUND, AND WHY IT HAD TO BE A GATE RATHER THAN A FIX ═══
+ *
+ * Every lesson carries `tiesTo` — "this box relates to that box on that other
+ * form" — and NOTHING in the repository checked that the other box existed.
+ * Standing rule 39 in its plainest form: a verifier that cannot see something
+ * approves it.
+ *
+ * Measured before anything was written: 56 ties across the four lesson sets,
+ * of which TWO were dead. Both in `form-box-lessons-wa.ts`, both pointing at
+ * `esd_5208b` box "wage-detail", which has never existed. The 5208B specimen
+ * carries `wage-detail-wages`, `wage-detail-hours` and `wage-detail-total`.
+ * The ties predate this slice (they arrived with books-47 slice D) and were
+ * green for every commit since, because a tie is rendered prose and prose does
+ * not execute.
+ *
+ * That is a real defect and not a cosmetic one. The tie tells Michael to go
+ * and compare a figure against a box that is not on the screen he is sent to.
+ *
+ * Fixing only those two would have been fixing the instance (rule 23). The
+ * class is "a lesson may point anywhere", and this closes it: a tie must name
+ * a form in TEACHING_FORMS and a box that form actually has.
+ *
+ * WHY IT TAKES THE LESSONS AS A PARAMETER. Same reason
+ * `assertEveryTaughtBoxHasASpecimen` does: this module must not import the
+ * lesson modules, or the teaching specimen — the thing that is supposed to be
+ * checkable on its own — would depend on the material it checks.
+ */
+export function assertEveryTieResolves(lessons: readonly BoxLesson[]): void {
+  let checked = 0;
+  for (const l of lessons) {
+    for (const t of l.tiesTo) {
+      const spec = TEACHING_FORMS[t.formId];
+      assert(
+        spec !== undefined,
+        `${l.formId} box ${l.box} ties to form ${t.formId}, which has no teaching specimen, ` +
+          `so the cross-reference sends Michael to a screen that cannot exist`,
+      );
+      assert(
+        spec.some((b) => b.box === t.box),
+        `${l.formId} box ${l.box} ties to ${t.formId} box ${t.box}, which that form does not ` +
+          `have. Its boxes are: ${spec.map((b) => b.box).join(", ")}`,
+      );
+      checked += 1;
+    }
+  }
+  /*
+   * Rule 66d: assert existence before absence. A loop over lessons that all
+   * happen to carry an empty `tiesTo` array passes without checking anything,
+   * and would keep passing if every tie in the repository were deleted. So the
+   * function refuses to report success on a set it never actually examined.
+   */
+  assert(
+    checked > 0,
+    `no ties were checked across ${lessons.length} lessons, so this proves nothing`,
+  );
 }
 
 /** No specimen box may claim a figure. The whole point is that none is known. */

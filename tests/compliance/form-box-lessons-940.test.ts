@@ -207,19 +207,128 @@ describe("every Form 940 quote is really in the IRS instructions", () => {
   });
 });
 
+/**
+ * ═══ WHAT IS ACTUALLY PRINTED ON FORM 940, READ OFF THE PAPER (books-54) ═══
+ *
+ * Thirty numbered lines, transcribed from the filed 2025 Form 940 at
+ * /workspace/2025_FORM_940_-_SAGE.pdf by extracting its text and reading each
+ * label in context. This is an OUTSIDE MEASUREMENT: it does not come from the
+ * engine, the specimen table, or the ownership table, so it can contradict all
+ * three. That is the whole point (rule 39).
+ *
+ * WHY THIS LIST REPLACED AN ENGINE-DERIVED ONE. The gate below used to read
+ * `form940Boxes(builtReturn())` and refuse any lesson for a line the engine did
+ * not emit. That sounds strict and is actually the wrong shape, because the
+ * engine emits only the eighteen lines that carry an AMOUNT for one particular
+ * fixture. The twelve tickbox and text lines -- 1a, 1b, 2, 4a-4e, 15b-15e --
+ * are on the paper, print on Michael's own filed copy, and can never be
+ * emitted by an arithmetic engine, so the old gate made them permanently
+ * unteachable. It was enforcing "the engine knows about it" while reading as
+ * "the form has it".
+ *
+ * The 941 never had this restriction, which is why books-53 could teach its
+ * tickboxes (lines 4, 15b-15e, 16-18) without a fight.
+ *
+ * A regex was NOT used to build this list. An earlier attempt at one on this
+ * very form returned 28 labels including the false positives "24" and "25" from
+ * a paragraph of body text, and MISSED "5f" because a lowercase word followed
+ * it. Every entry below was confirmed by reading its surrounding line.
+ */
+const LINES_ON_THE_PRINTED_940: readonly string[] = [
+  "1a", // If you had to pay state unemployment tax in one state only...
+  "1b", // ...in more than one state, you are a multi-state employer
+  "2", // If you paid wages in a state that is subject to CREDIT REDUCTION
+  "3", // Total payments to all employees
+  "4", // Payments exempt from FUTA tax
+  "4a", // Check all that apply: Fringe benefits
+  "4b", // Group-term life insurance
+  "4c", // Retirement/Pension
+  "4d", // Dependent care
+  "4e", // Other
+  "5", // Total of payments made to each employee in excess of $7,000
+  "6", // Subtotal (line 4 + line 5 = line 6)
+  "7", // Total taxable FUTA wages (line 3 - line 6 = line 7)
+  "8", // FUTA tax before adjustments (line 7 x 0.006 = line 8)
+  "9", // If ALL of the taxable FUTA wages were excluded from state unemployment tax
+  "10", // If SOME of the taxable FUTA wages were excluded...
+  "11", // If credit reduction applies, enter the total from Schedule A
+  "12", // Total FUTA tax after adjustments
+  "13", // FUTA tax deposited for the year, including any overpayment applied
+  "14", // Balance due
+  "15a", // Overpayment
+  "15b", // Check one: Apply to next return. / Send a refund.
+  "15c", // Routing number
+  "15d", // Type: Checking / Savings
+  "15e", // Account number
+  "16a", // 1st quarter (January 1 - March 31)
+  "16b", // 2nd quarter (April 1 - June 30)
+  "16c", // 3rd quarter (July 1 - September 30)
+  "16d", // 4th quarter (October 1 - December 31)
+  "17", // Total tax liability for the year
+];
+
 describe("every lesson is reachable from the real engine", () => {
   it("teaches only lines Form 940 actually has", () => {
-    const boxes = form940Boxes(builtReturn());
-    const realLines = new Set(boxes.map((b) => b.box));
-    expect(realLines.size).toBeGreaterThan(5);
+    expect(LINES_ON_THE_PRINTED_940).toHaveLength(30);
+    const onPaper = new Set(LINES_ON_THE_PRINTED_940);
 
     for (const lesson of FORM_940_LESSONS) {
       expect(
-        realLines.has(lesson.box),
-        `lesson teaches line ${lesson.box}, which the engine never emits`,
+        onPaper.has(lesson.box),
+        `lesson teaches line ${lesson.box}, which is not printed on Form 940`,
       ).toBe(true);
       expect(lesson.formId).toBe("form_940");
     }
+  });
+
+  /**
+   * RULE 15 -- the gate above must be able to fail.
+   *
+   * A `Set.has` check against a hand-written list is exactly the kind of gate
+   * that passes vacuously if the list is wrong or empty. Assert a line that is
+   * NOT on the 940 is rejected, and one that IS is accepted.
+   */
+  it("would reject a lesson for a line the form does not have", () => {
+    const onPaper = new Set(LINES_ON_THE_PRINTED_940);
+    // Form 941 has lines 18 and 5a. Form 940 has neither.
+    expect(onPaper.has("18")).toBe(false);
+    expect(onPaper.has("5a")).toBe(false);
+    // And the boundaries of the real list.
+    expect(onPaper.has("1a")).toBe(true);
+    expect(onPaper.has("17")).toBe(true);
+  });
+
+  /**
+   * THE ENGINE-VERSUS-PAPER GAP, STATED RATHER THAN HIDDEN.
+   *
+   * Replacing the engine-derived list with the printed one would be a quiet
+   * loosening if nothing recorded what the engine covers. So this measures the
+   * gap explicitly: every line the engine DOES emit must be on the paper (an
+   * engine emitting a line that does not exist is a serious bug), and the lines
+   * on the paper that the engine cannot emit must be exactly the twelve tickbox
+   * and text lines.
+   */
+  it("emits only real lines, and the gap is exactly the twelve non-amount lines", () => {
+    const emitted = form940Boxes(builtReturn()).map((b) => b.box);
+    const onPaper = new Set(LINES_ON_THE_PRINTED_940);
+    for (const box of emitted) {
+      expect(onPaper.has(box), `engine emits line ${box}, which is not on the form`).toBe(true);
+    }
+    const notEmitted = LINES_ON_THE_PRINTED_940.filter((b) => !emitted.includes(b));
+    expect(notEmitted).toEqual([
+      "1a",
+      "1b",
+      "2",
+      "4a",
+      "4b",
+      "4c",
+      "4d",
+      "4e",
+      "15b",
+      "15c",
+      "15d",
+      "15e",
+    ]);
   });
 
   it("is found by lessonFor, the same lookup the screen uses", () => {

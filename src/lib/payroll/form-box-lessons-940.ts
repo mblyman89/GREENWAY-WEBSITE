@@ -75,8 +75,20 @@ import {
   FORM_940_SOURCE_PATH,
   I940_CREDIT_REQUIRES_TIMELY_STATE_PAYMENT,
   I940_LINE_12_TOTAL,
+  I940_LINE_15B_APPLY_OR_REFUND,
+  I940_LINE_15C_ROUTING_NUMBER,
+  I940_LINE_15D_ACCOUNT_TYPE,
+  I940_LINE_15E_ACCOUNT_NUMBER,
   I940_LINE_17_MUST_EQUAL_12,
+  I940_LINE_1A_ONE_STATE,
+  I940_LINE_1B_MULTI_STATE,
+  I940_LINE_2_CREDIT_REDUCTION_BOX,
   I940_LINE_3_ALL_PAYMENTS,
+  I940_LINE_4A_FRINGE_BENEFITS,
+  I940_LINE_4B_GROUP_TERM_LIFE,
+  I940_LINE_4C_RETIREMENT_PENSION,
+  I940_LINE_4D_DEPENDENT_CARE,
+  I940_LINE_4E_OTHER_PAYMENTS,
   I940_LINE_5_WAGE_BASE,
   I940_LINE_7_TAXABLE_WAGES,
   I940_LINE_8_BEFORE_ADJUSTMENTS,
@@ -120,6 +132,166 @@ function quoteOf(a: {
 }
 
 export const FORM_940_LESSONS: readonly BoxLesson[] = [
+  {
+    formId: "form_940",
+    box: "1a",
+    headline:
+      "Two letters that decide whether you owe a Schedule A",
+    plainEnglish:
+      "Line 1a holds the postal abbreviation of the ONE state where you had to pay state " +
+      "unemployment tax. For Greenway that is WA. It is not an amount and nothing is computed from " +
+      "it, but it is the first thing on the form for a reason: it tells the IRS you are a " +
+      "single-state employer, and a single-state employer does not file Schedule A.",
+    whereItComesFrom:
+      "From the fact of where Greenway's employees work and which state agency it pays unemployment " +
+      "tax to. Washington's Employment Security Department, so WA. It comes from a decision about " +
+      "the business, not from any ledger account.",
+    howToReadIt:
+      "Read it together with 1b as a pair: exactly one of the two should be filled in. 1a with a " +
+      "state code and 1b blank is the simple case. Both filled is a contradiction, and both blank " +
+      "means either you paid no state unemployment tax at all — which forces line 9 and loses the " +
+      "whole 5.4% credit — or you forgot.",
+    commonMistake:
+      "Leaving 1a blank because it looks like an optional detail. If 1a and 1b are both empty and " +
+      "line 7 is more than zero, the instructions require line 9 to be completed, which multiplies " +
+      "the wage base by 5.4% instead of 0.6%. On Greenway's own 2025 figures that is the difference " +
+      "between $420 and $3,780.",
+    whatToDo:
+      "Enter WA on line 1a and leave 1b empty, every year, until the first year an employee " +
+      "performs work in another state. Check it before anything else on the form.",
+    examples: [
+      {
+        title: "The Washington-only year",
+        steps: [
+          "Greenway paid state unemployment tax to Washington ESD and to no other state.",
+          "Line 1a: WA.",
+          "Line 1b: left blank.",
+          "No Schedule A is required.",
+        ],
+        answer: "WA",
+        moral:
+          "The answer is two letters, and it is worth as much as the largest credit on the form.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_1A_ONE_STATE)],
+    tiesTo: [
+      {
+        formId: "esd_5208a",
+        box: "esd-ui",
+        why:
+          "Line 1a asserts that Washington is the state you paid unemployment tax to, and the ESD " +
+          "5208A is that payment. If a quarter's 5208A was never filed, the assertion on line 1a is " +
+          "the one that becomes false.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "1b",
+    headline:
+      "The tickbox that turns a one-page job into a two-form job",
+    plainEnglish:
+      "Line 1b is a single tickbox meaning \"I owed state unemployment tax in more than one state " +
+      "this year\". Ticking it obliges you to fill out Schedule A and attach it. It stays empty for " +
+      "Greenway today, and it is worth understanding now rather than the year it first applies.",
+    whereItComesFrom:
+      "From where work was physically performed, not from where the company is registered and not " +
+      "from where an employee happens to live. One employee working a few weeks in Oregon can make " +
+      "this box apply.",
+    howToReadIt:
+      "Treat it as a question about your payroll footprint rather than about tax. If you are paying " +
+      "unemployment tax to two agencies, this box is ticked and 1a is blank. There is no partial " +
+      "answer — it is either one state or more than one.",
+    commonMistake:
+      "Ticking 1b and also entering a state on 1a. They are alternatives, not a heading and a " +
+      "detail, and filling both tells the IRS two different things about the same year.",
+    whatToDo:
+      "Leave 1b blank while Greenway pays only Washington. Revisit it the first time an employee " +
+      "works outside Washington, and file Schedule A that year.",
+    examples: [
+      {
+        title: "A hypothetical Oregon delivery route",
+        steps: [
+          "Suppose one employee spent eight weeks working in Oregon.",
+          "Greenway would owe unemployment tax to Washington AND Oregon.",
+          "Line 1a: left blank. Line 1b: ticked.",
+          "Schedule A must be completed and attached.",
+        ],
+        answer: "ticked",
+        moral:
+          "The trigger is where the work happened. Nothing about the company's address changes the " +
+          "answer.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_1B_MULTI_STATE)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "1a",
+        why:
+          "1a and 1b are mutually exclusive. Exactly one of them should be filled in on any given " +
+          "return, and checking that pair is a five-second review that catches a whole class of " +
+          "error.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "2",
+    headline:
+      "A tickbox that can cost real money, decided annually by someone else",
+    plainEnglish:
+      "Line 2 asks whether you paid wages in a state that is subject to CREDIT REDUCTION. A credit " +
+      "reduction state is one that borrowed from the federal government to pay unemployment " +
+      "benefits and has not repaid it. Employers there lose part of the 5.4% credit and owe more " +
+      "federal tax. Ticking line 2 forces Schedule A, and the extra tax it computes lands on line " +
+      "11.",
+    whereItComesFrom:
+      "From the U.S. Department of Labor's list for that specific year, not from Greenway's " +
+      "records. The list changes annually, which is why this software asks for the answer instead " +
+      "of storing one.",
+    howToReadIt:
+      "Read line 2 as a warning light rather than a figure. Blank means the full credit survives " +
+      "and line 8's 0.6% stands. Ticked means look at line 11, because that is where the cost " +
+      "appears. For the 2025 year the credit reduction states were California and the U.S. Virgin " +
+      "Islands — Washington was not one.",
+    commonMistake:
+      "Assuming last year's answer. This is the single most common reason a 940 is amended: a state " +
+      "joins or leaves the list, the preparer copies the prior year's form, and the federal tax is " +
+      "understated by up to 5.4% of the wage base.",
+    whatToDo:
+      "Check the Department of Labor's credit reduction list every January before filing, even in a " +
+      "year you expect no change. Record the year you checked.",
+    examples: [
+      {
+        title: "Why the answer is not a constant",
+        steps: [
+          "A state borrows from the federal unemployment account in a recession.",
+          "It fails to repay within the statutory window.",
+          "The Department of Labor names it a credit reduction state.",
+          "Every employer paying wages there ticks line 2 and files Schedule A.",
+        ],
+        answer: "blank for Washington",
+        moral:
+          "Nothing Greenway does affects this box. It is decided by a state government and a " +
+          "federal department, and it must be looked up rather than remembered.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_2_CREDIT_REDUCTION_BOX)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "11",
+        why:
+          "Line 2 is the tickbox and line 11 is the money. If line 2 is ticked, line 11 should " +
+          "carry the Schedule A total; if line 2 is blank, line 11 should be blank or zero. One " +
+          "filled without the other is a contradiction on the face of the return.",
+      },
+    ],
+  },
+
   /* ── LINE 3 ─────────────────────────────────────────────────────────── */
   {
     formId: "form_940",
@@ -169,6 +341,265 @@ export const FORM_940_LESSONS: readonly BoxLesson[] = [
           "Both are wages paid in the same year, so the four quarters of 941 line 2 should be in " +
           "the same neighbourhood as 940 line 3. They will not match exactly — the definitions of " +
           "taxable wages differ — but a large gap means one of them is wrong.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "4a",
+    headline:
+      "The fringe-benefit category, and the box that touches health premiums",
+    plainEnglish:
+      "Line 4a is one of five tickboxes under line 4 saying WHICH KIND of exempt payment the line 4 " +
+      "amount was. 4a covers fringe benefits: certain meals and lodging, contributions to accident " +
+      "or health plans, and benefits excluded under a section 125 cafeteria plan. It is a tick, not " +
+      "an amount.",
+    whereItComesFrom:
+      "From the benefit categories behind whatever total sits on line 4. If line 4 is zero then no " +
+      "box under it is ticked at all.",
+    howToReadIt:
+      "Use the ticks to explain the line 4 total to yourself. Line 4 is a single number, and a year " +
+      "later nobody remembers what it was made of — the ticks are the record. If line 4 has an " +
+      "amount and no box is ticked, the composition of that subtraction has been lost.",
+    commonMistake:
+      "Ticking 4a for the employer-paid health premiums on a more-than-2% S-corporation " +
+      "shareholder. Those premiums are added to the shareholder's taxable wages, not exempted from " +
+      "them, so they belong in line 3 and NOT in line 4. This matters at Greenway specifically, " +
+      "because a shareholder health premium already appears in box 1 of a filed W-2 here.",
+    whatToDo:
+      "Tick 4a only when a real fringe benefit from the IRS list was included in line 3 and is " +
+      "being taken back out on line 4. If line 4 is blank, leave every box under it blank.",
+    examples: [
+      {
+        title: "A cafeteria plan deduction",
+        steps: [
+          "Suppose Greenway ran pre-tax benefit deductions under a section 125 plan.",
+          "Those amounts are paid to employees and belong in line 3.",
+          "They are exempt from FUTA, so the same amounts come out on line 4.",
+          "4a is ticked to record that the exemption was a fringe benefit.",
+        ],
+        answer: "ticked when line 4 includes a fringe benefit",
+        moral:
+          "A payment must be IN line 3 before it can come out on line 4. That is the rule the IRS " +
+          "states in the line 4 instruction and the one people break.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_4A_FRINGE_BENEFITS)],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "14",
+        why:
+          "Box 14 of the W-2 is where Greenway's filed 2025 forms carry a HEALTH entry for a " +
+          "shareholder-employee. That amount is taxable wages, which is exactly why it must not be " +
+          "swept into line 4 of the 940 as a fringe benefit.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "4b",
+    headline:
+      "Group-term life insurance, exempt from FUTA in full",
+    plainEnglish:
+      "Line 4b is the tickbox for employer-paid group-term life insurance. It is one of the " +
+      "cleanest exemptions on the form: the premiums are wages for some purposes and are not " +
+      "reached by FUTA at all.",
+    whereItComesFrom:
+      "From the payroll register's benefit lines. If Greenway pays group-term life premiums for " +
+      "staff, the amount belongs in line 3 and then comes out again on line 4 with this box ticked.",
+    howToReadIt:
+      "A ticked 4b tells you part of the line 4 subtraction is insurance rather than cash pay. It " +
+      "is also a signal about the payroll setup: an employer with group-term life cover has benefit " +
+      "accounts that need reconciling to the W-2 as well.",
+    commonMistake:
+      "Confusing group-term life with the imputed cost of coverage above $50,000, which is taxable " +
+      "and reported in W-2 box 12 with code C. The exemption here is not a blanket exemption for " +
+      "anything labelled life insurance.",
+    whatToDo:
+      "Tick 4b when group-term life premiums were included in line 3 and are being removed on line " +
+      "4. Leave it blank in a year Greenway pays no such premiums.",
+    examples: [
+      {
+        title: "Reading the tick as documentation",
+        steps: [
+          "Line 4 shows a single total.",
+          "4b is ticked and no other box is.",
+          "That total is therefore entirely group-term life insurance.",
+          "The figure can be tied straight back to one benefit account.",
+        ],
+        answer: "ticked when group-term life is in line 4",
+        moral:
+          "Five tickboxes turn one anonymous subtotal into something auditable a year later.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_4B_GROUP_TERM_LIFE)],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "12",
+        why:
+          "Group-term life cover above $50,000 produces an imputed taxable amount reported in W-2 " +
+          "box 12 code C. The 940's 4b exemption and that W-2 entry are two different things about " +
+          "the same benefit, and reading them together prevents treating taxable cover as exempt.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "4c",
+    headline:
+      "Retirement contributions: the employer's are exempt, the employee's are not",
+    plainEnglish:
+      "Line 4c is the tickbox for retirement and pension contributions. The distinction inside it " +
+      "is the one that matters: the EMPLOYER's contribution to a qualified plan is exempt from " +
+      "FUTA, and the employee's own elective salary reduction contribution is not.",
+    whereItComesFrom:
+      "From the employer-contribution side of any retirement plan Greenway offers, kept separate " +
+      "from employee deferrals. Two different accounts, and they are treated oppositely here.",
+    howToReadIt:
+      "If 4c is ticked, ask immediately whether the amount in line 4 is the employer's contribution " +
+      "alone. An employee's 401(k) deferral is still FUTA wages — it reduces income tax " +
+      "withholding, not federal unemployment tax.",
+    commonMistake:
+      "Taking the whole retirement plan total out on line 4. Elective salary reduction " +
+      "contributions stay in the FUTA base, so including them understates line 7 and therefore the " +
+      "tax on line 8. The IRS states the exclusion in the same sentence as the exemption, and it is " +
+      "easy to read past.",
+    whatToDo:
+      "Split any retirement figure into employer contribution and employee deferral before touching " +
+      "line 4. Put only the employer's part there, and tick 4c.",
+    examples: [
+      {
+        title: "A SIMPLE plan with both kinds of contribution",
+        steps: [
+          "An employee defers part of their own pay into the plan.",
+          "Greenway also makes an employer contribution.",
+          "Only the employer contribution is exempt from FUTA and goes on line 4.",
+          "The employee's deferral remains in the FUTA base.",
+        ],
+        answer: "employer contribution only",
+        moral:
+          "The same plan produces one exempt figure and one taxable figure. Treating the plan as a " +
+          "single number is how the base gets understated.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_4C_RETIREMENT_PENSION)],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "12",
+        why:
+          "Employee elective deferrals are reported in W-2 box 12 with code D and remain in the " +
+          "FUTA base. If a box 12 code D amount ever appeared inside 940 line 4, one of the two " +
+          "forms is wrong.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "4d",
+    headline:
+      "Dependent care, exempt only up to a hard ceiling",
+    plainEnglish:
+      "Line 4d is the tickbox for dependent care assistance. It is exempt from FUTA up to $5,000 " +
+      "per employee for the year, or $2,500 if the employee is married and files separately. " +
+      "Anything above the ceiling is ordinary taxable wages.",
+    whereItComesFrom:
+      "From a dependent care assistance programme, per employee and per year. The cap is applied to " +
+      "each person separately, not to the company total.",
+    howToReadIt:
+      "A ticked 4d should prompt one arithmetic check: is any single employee's dependent care " +
+      "above $5,000? This is one of very few line 4 categories with a number inside it, so it is " +
+      "one of the few that can be partly exempt — the first $5,000 out, the rest left in.",
+    commonMistake:
+      "Applying the $5,000 cap to the total across all employees rather than per employee, or " +
+      "forgetting the $2,500 halving for married-filing-separately. Both produce a line 4 that is " +
+      "too large and a tax that is too small.",
+    whatToDo:
+      "Cap dependent care at $5,000 per employee before it reaches line 4, and check filing status " +
+      "for anyone claiming near the ceiling.",
+    examples: [
+      {
+        title: "One employee above the ceiling",
+        steps: [
+          "Suppose an employee received $6,200 of dependent care assistance.",
+          "The first $5,000 is exempt from FUTA and belongs on line 4.",
+          "The remaining $1,200 stays in the FUTA base as ordinary wages.",
+          "4d is ticked for the exempt portion only.",
+        ],
+        answer: "$5,000 exempt, $1,200 taxable",
+        moral:
+          "A category with a ceiling is never all-or-nothing. Splitting at the cap is the whole " +
+          "job.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_4D_DEPENDENT_CARE)],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "10",
+        why:
+          "W-2 box 10 reports dependent care benefits, and amounts above the exclusion are carried " +
+          "into taxable wages in box 1. Box 10 and 940 line 4 should tell the same story about the " +
+          "same programme.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "4e",
+    headline:
+      "The catch-all category, which is not a catch-all for convenience",
+    plainEnglish:
+      "Line 4e is the last of the five tickboxes and covers the IRS's \"other payments\" list: " +
+      "certain agricultural labour payments, payments to H-2A visa workers, workers' compensation " +
+      "payments made because of a work-related injury, and some domestic service payments. It is a " +
+      "specific list, not a miscellaneous bucket.",
+    whereItComesFrom:
+      "From the IRS's enumerated categories in the line 4 instructions. If a payment is not on one " +
+      "of the five lists, it is not exempt and does not belong on line 4 at all.",
+    howToReadIt:
+      "Treat a ticked 4e as the one that needs the most support. 4a to 4d name a recognisable kind " +
+      "of benefit; 4e means \"something else the IRS allows\", and a year later that is the hardest " +
+      "to reconstruct. For Greenway the realistic reading is that 4e stays blank — a retail " +
+      "cannabis shop has no agricultural labour or H-2A workers.",
+    commonMistake:
+      "Using 4e as a home for anything that seemed non-taxable. The word \"other\" invites it, and " +
+      "the effect is a subtraction from the FUTA base with no authority behind it, which " +
+      "understates the tax and is indefensible on audit.",
+    whatToDo:
+      "Leave 4e blank unless a payment matches a category the IRS actually lists, and write down " +
+      "which category it was. If it does not match, do not put the amount on line 4.",
+    examples: [
+      {
+        title: "Workers' compensation, which really is exempt",
+        steps: [
+          "An injured employee receives payments under a workers' compensation law.",
+          "Those payments are on the IRS's other-payments list.",
+          "They are exempt from FUTA and belong on line 4 with 4e ticked.",
+          "An ordinary bonus, by contrast, is on no list and stays in the base.",
+        ],
+        answer: "ticked only for a listed category",
+        moral:
+          "The test is whether the IRS names it, not whether it feels like a payment that should " +
+          "not be taxed.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_4E_OTHER_PAYMENTS)],
+    tiesTo: [
+      {
+        formId: "lni_quarterly",
+        box: "lni-hours",
+        why:
+          "Workers' compensation payments are exempt from FUTA under 4e, and the L&I quarterly " +
+          "return is where Greenway's workers' compensation obligation is reported. The same injury " +
+          "touches both forms in opposite directions.",
       },
     ],
   },
@@ -496,6 +927,207 @@ export const FORM_940_LESSONS: readonly BoxLesson[] = [
           "Part 5 splits the year's liability across four quarters. Line 17 is those four added " +
           "up and it must equal line 12 to the cent. A mismatch is an arithmetic error the IRS " +
           "checks automatically.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "15b",
+    headline:
+      "Overpaid: carry it forward, or take it back",
+    plainEnglish:
+      "Line 15b appears only when line 15a shows an overpayment. It is a choice between applying " +
+      "the money to next year's return and having it refunded. Check exactly one box. Check both, " +
+      "or neither, and the IRS applies it to the next return by default.",
+    whereItComesFrom:
+      "From the comparison the form already made: line 13 deposits against line 12 tax. If 13 " +
+      "exceeds 12, the difference is on 15a and this choice becomes live.",
+    howToReadIt:
+      "For a tax as small as FUTA usually is, applying it forward is almost always less work than a " +
+      "refund — a refund needs bank details on 15c to 15e and creates a payment to reconcile. But " +
+      "note the sentence about past-due accounts: whatever you tick, the IRS may take the " +
+      "overpayment against any other liability under the same EIN, so an expected refund is not a " +
+      "certainty.",
+    commonMistake:
+      "Ticking the refund box and leaving 15c to 15e empty. The instructions say plainly that the " +
+      "refund may then be delayed, because there is nowhere to send it.",
+    whatToDo:
+      "Tick one box only. Choose \"apply to next return\" unless Greenway actually needs the cash, " +
+      "and if you choose a refund, complete 15c, 15d and 15e in the same sitting.",
+    examples: [
+      {
+        title: "A small overpayment on a small tax",
+        steps: [
+          "Line 12 shows the year's FUTA tax.",
+          "Line 13 shows deposits that came to more than the tax.",
+          "The difference lands on line 15a.",
+          "Line 15b decides where it goes; ticking neither box sends it forward anyway.",
+        ],
+        answer: "one box, never two",
+        moral:
+          "The default is not neutral. Not choosing IS choosing to carry it forward.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_15B_APPLY_OR_REFUND)],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "15b",
+        why:
+          "The 941 carries the identical choice with the identical default, and the wording is " +
+          "nearly the same. Learning it once covers both forms, which is the payoff for reading the " +
+          "pair together.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "15c",
+    headline:
+      "A bank routing number, with a validity check you can run yourself",
+    plainEnglish:
+      "Line 15c is the nine-digit routing number of the account a refund should be sent to. It is " +
+      "used only when line 15b asked for a refund. Direct deposit of a Form 940 refund is new for " +
+      "the 2025 revision of the form.",
+    whereItComesFrom:
+      "From the bank, and specifically from the bank's own advice rather than from a cheque. The " +
+      "instructions warn that the number on a deposit slip can differ from the number on your " +
+      "cheques, and that some cheques are payable through a different institution entirely.",
+    howToReadIt:
+      "Run the free check the IRS gives you: nine digits, and the first two must fall in 01 to 12 " +
+      "or 21 to 32. Anything else is not a valid routing number and the deposit will fail. This is " +
+      "a figure to verify before filing, not after — a rejected direct deposit becomes a paper " +
+      "cheque and weeks of delay.",
+    commonMistake:
+      "Reading the routing number off a cheque for a savings account, or off a deposit slip. Both " +
+      "are named in the instructions as sources that are commonly wrong.",
+    whatToDo:
+      "Ask the bank for the routing number to use for a direct deposit, confirm the first two " +
+      "digits are in range, and leave 15c blank whenever no refund was requested.",
+    examples: [
+      {
+        title: "The two-digit range check",
+        steps: [
+          "Count the digits: there must be exactly nine.",
+          "Read the first two digits.",
+          "They must be 01 through 12, or 21 through 32.",
+          "If they are not, the number is not a routing number.",
+        ],
+        answer: "nine digits, first two in range",
+        moral:
+          "The IRS printed a validation rule in the instructions. Using it costs seconds and " +
+          "prevents a failed refund.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_15C_ROUTING_NUMBER)],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "15c",
+        why:
+          "The 941 carries the same routing-number box with the same nine-digit rule and the same " +
+          "first-two-digit range. The bank details for both forms should be identical, and a " +
+          "difference between them is a mistake on one of the two.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "15d",
+    headline:
+      "Checking or savings: one box, and getting it wrong kills the deposit",
+    plainEnglish:
+      "Line 15d is a tickbox for the type of account named on 15c and 15e. Check the correct one " +
+      "and only one. The instructions are unusually blunt about why: the deposit is accepted or " +
+      "rejected on the strength of it.",
+    whereItComesFrom:
+      "From the account itself. If there is any doubt about how the bank classifies the account, " +
+      "the instructions say to ask the bank rather than guess.",
+    howToReadIt:
+      "Read it as part of a set with 15c and 15e. Either all three are completed because a refund " +
+      "was requested, or all three are empty. One or two of the three filled in is always an error.",
+    commonMistake:
+      "Ticking both boxes to be safe, or assuming a business account is a checking account because " +
+      "that is what most are. Both produce a rejected deposit and a paper cheque.",
+    whatToDo:
+      "Tick exactly one box, and ask the bank if the account type is not certain. Leave it blank " +
+      "when no refund was requested.",
+    examples: [
+      {
+        title: "The all-or-nothing set",
+        steps: [
+          "Line 15b asks for a refund.",
+          "15c gets the routing number, 15d the account type, 15e the account number.",
+          "If 15b does not ask for a refund, all three stay empty.",
+          "A partly completed set is always wrong.",
+        ],
+        answer: "one box, or none at all",
+        moral:
+          "Three boxes that only make sense together are best checked together.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_15D_ACCOUNT_TYPE)],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "15d",
+        why:
+          "The same tickbox exists on the 941 with the same consequence for a wrong answer. Both " +
+          "forms should point at the same account, so both should tick the same type.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "15e",
+    headline:
+      "The account number, and the formatting rules that are easy to break",
+    plainEnglish:
+      "Line 15e is the bank account number for a refund, used only when line 15b asked for one. Up " +
+      "to seventeen characters, letters allowed as well as numbers. Include hyphens but leave out " +
+      "spaces and special symbols, and write it from left to right, leaving any unused boxes empty.",
+    whereItComesFrom:
+      "From the bank. Like 15c this is a credential rather than an accounting figure, which is why " +
+      "the teaching screen shows no specimen value for it.",
+    howToReadIt:
+      "The formatting instructions are the substance here. Left-to-right with trailing boxes blank " +
+      "is the opposite of how amounts are entered on this form, where figures are right-aligned — " +
+      "which is exactly why it is worth reading twice.",
+    commonMistake:
+      "Right-aligning the account number the way every dollar figure on the form is aligned, or " +
+      "copying spaces and symbols out of a bank statement. Either can send the refund to the wrong " +
+      "account or cause the deposit to be rejected.",
+    whatToDo:
+      "Enter the account number from the left, keep hyphens, drop spaces and symbols, and leave 15e " +
+      "blank unless a refund was actually requested.",
+    examples: [
+      {
+        title: "Why the alignment rule is worth noticing",
+        steps: [
+          "Every money box on this form is filled from the right.",
+          "The account number is filled from the LEFT.",
+          "Unused boxes at the end are left blank.",
+          "Hyphens stay; spaces and symbols are omitted.",
+        ],
+        answer: "left to right, unused boxes blank",
+        moral:
+          "One field on the form follows the opposite convention to all the others, and the " +
+          "instructions say so explicitly.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_15E_ACCOUNT_NUMBER)],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "15e",
+        why:
+          "The 941 has the identical box with the identical seventeen-character and left-to-right " +
+          "rules. If Greenway ever requests refunds on both forms, the account details should match " +
+          "exactly.",
       },
     ],
   },

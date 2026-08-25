@@ -142,8 +142,16 @@ export const WA_QUARTERLY_LESSONS: readonly BoxLesson[] = [
     ],
     tiesTo: [
       {
+        /*
+         * Was `box: "wage-detail"` until books-54, which is a box the 5208B
+         * has never had. The specimen carries `wage-detail-wages`,
+         * `wage-detail-hours` and `wage-detail-total`; this tie is about WAGES
+         * adding up, so it points at the per-person wages column. The dead
+         * reference was found by `assertEveryTieResolves`, added in the same
+         * slice precisely because nothing had ever checked a tie target.
+         */
         formId: "esd_5208b",
-        box: "wage-detail",
+        box: "wage-detail-wages",
         why:
           "The 5208A says what is owed; the 5208B says who earned it. The wages listed person by " +
           "person on the 5208B must add up to the wage figure the 5208A taxed.",
@@ -413,8 +421,15 @@ export const WA_QUARTERLY_LESSONS: readonly BoxLesson[] = [
     quotes: [],
     tiesTo: [
       {
+        /*
+         * Also `box: "wage-detail"` until books-54. This tie is about HOURS,
+         * not wages, so it resolves to the hours column rather than the wages
+         * one — the two dead references were identical in text and had to be
+         * repointed differently, which is exactly why a gate is worth more
+         * than a search-and-replace.
+         */
         formId: "esd_5208b",
-        box: "wage-detail",
+        box: "wage-detail-hours",
         why:
           "Both returns report hours for the same quarter. If the L&I hours and the ESD wage-detail " +
           "hours disagree, one of the two returns is wrong and the agencies can see it.",

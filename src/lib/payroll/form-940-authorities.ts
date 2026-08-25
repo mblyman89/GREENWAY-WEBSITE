@@ -686,6 +686,262 @@ export const I940_CREDIT_REDUCTION_STATE: GuidanceAuthority = {
   source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
 };
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * §4b  THE TWELVE LINES THAT HAD NO WORDS (books-54)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Form 940 has 30 numbered lines on the printed page. This module explained
+ * eighteen of them. The twelve below were unexplainable by construction: no
+ * authority, no lesson, and -- for the ownership table in form-box-adapters --
+ * no classification either, which means `resolveWhose` THREW for them and the
+ * teaching screen could not even list the box.
+ *
+ * The twelve: 1a, 1b, 2, 4a, 4b, 4c, 4d, 4e, 15b, 15c, 15d, 15e. Line 4 itself
+ * was classified but had no authority, so it is quoted here too.
+ *
+ * WHY 15b-15e EXIST ON A 940 AT ALL. Direct deposit of Form 940 refunds is new
+ * for the 2025 revision. Michael's own filed 2025 form shows 15c/15d/15e
+ * printed and empty. They are bank credentials, not accounting figures, which
+ * is the reason the teaching layer deliberately shows no specimen value.
+ *
+ * EVERY QUOTE BELOW WAS SLICED FROM THE CORPUS BY MACHINE. Two anchors used
+ * while doing it were not unique -- "Fringe benefits, such as the following."
+ * and "Other payments, such as the following." each appear twice, once in the
+ * line-3 section and once in the line-4 section. Taking the first hit produced
+ * a 2,180-character "quote" that swallowed the IRS's three-employee worked
+ * example and a page header, and it PASSED a substring check because it was a
+ * genuine contiguous slice. That is defect 5 in the test file's list, produced
+ * again from a different direction, and it is why the slicer now pins the
+ * search to a section, caps the length, and refuses a slice containing a page
+ * header.
+ *
+ * ONE SENTENCE IS DELIBERATELY NOT QUOTED. The line-2 section contains "For
+ * tax year 2025, there are credit reduction states." -- with no number where a
+ * count belongs. That is genuinely what the mirrored PDF says (verified at the
+ * byte level, and it reads the same way at two separate places in the
+ * document), so the mirror is faithful and the omission is the IRS's. It is
+ * not quoted because a sentence with a hole in it teaches nothing; the
+ * complete adjacent sentence is quoted instead. For the record, the 2025
+ * credit reduction states are California and the U.S. Virgin Islands, and
+ * neither is Washington.
+ *
+ * A HYPHENATION ARTEFACT IS ALSO AVOIDED. The 1b heading in the PDF breaks
+ * "employer" across a line as "employ-" / "er)", which after newline-closing
+ * becomes "employ- er)". Showing Michael a word split in half would make him
+ * doubt every other quote, and repairing it would be a third transformation
+ * this module does not declare. So the quote starts at the next sentence.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+export const I940_LINE_1A_ONE_STATE: GuidanceAuthority = {
+  id: "i940-line-1a-one-state",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 1a. One state only",
+  quote:
+    "1a. One state only. Enter the two-letter USPS abbreviation for the state where you were " +
+    "required to pay your state unemployment tax on line 1a. For a list of state abbreviations, " +
+    "see the Schedule A (Form 940) instructions or go to the website for the U.S. Postal Service " +
+    "at USPS.com.",
+  soWhat:
+    "Greenway pays state unemployment tax to Washington and only to Washington, so line 1a reads " +
+    "WA and line 1b stays empty. Two letters, and they decide whether a Schedule A has to be " +
+    "attached at all.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_1B_MULTI_STATE: GuidanceAuthority = {
+  id: "i940-line-1b-multi-state",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 1b. More than one state (you're a multi-state " +
+    "employer)",
+  quote:
+    "Check the box on line 1b. Then, fill out Schedule A (Form 940) and attach it to your Form " +
+    "940.",
+  soWhat:
+    "This box is for employers who owe state unemployment tax in more than one state. Ticking it " +
+    "obliges you to file Schedule A. Greenway operates in Washington only, so it stays blank -- " +
+    "but it would have to be ticked the first year an employee worked in Oregon.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_2_CREDIT_REDUCTION_BOX: GuidanceAuthority = {
+  id: "i940-line-2-credit-reduction-box",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 2. If You Paid Wages in a State That Is Subject to " +
+    "Credit Reduction",
+  quote:
+    "If you paid wages subject to the unemployment tax laws of these states, check the box on " +
+    "line 2 and fill out Schedule A (Form 940). See the instructions for line 9 before completing " +
+    "Schedule A (Form 940).",
+  soWhat:
+    "Line 2 is a tickbox, not an amount. You tick it only if you paid wages in a state that the " +
+    "Department of Labor has named a credit reduction state for that year, and ticking it forces " +
+    "a Schedule A. Washington is not one today, so the box stays empty -- but this is decided " +
+    "annually and must be re-checked every January rather than assumed.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_4_EXEMPT_MUST_BE_IN_LINE_3: GuidanceAuthority = {
+  id: "i940-line-4-exempt-must-be-in-line-3",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 4. Payments Exempt From FUTA Tax",
+  quote:
+    "If you enter an amount on line 4, check the appropriate box or boxes on lines 4a through 4e " +
+    "to show the types of payments exempt from FUTA tax. You only report a payment as exempt from " +
+    "FUTA tax on line 4 if you included the payment on line 3.",
+  soWhat:
+    "The trap is in the last sentence: a payment only belongs on line 4 if it was already counted " +
+    "on line 3. Line 4 SUBTRACTS, so putting something there that was never added takes money out " +
+    "of the base that was never in it, and understates the tax.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_4A_FRINGE_BENEFITS: GuidanceAuthority = {
+  id: "i940-line-4a-fringe-benefits",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 4a. Fringe benefits",
+  quote:
+    "Fringe benefits, such as the following. —The value of certain meals and lodging. " +
+    "—Contributions to accident or health plans for employees, including certain employer " +
+    "payments to a health savings account or an Archer MSA. —Payments for benefits excluded under " +
+    "section 125 (cafeteria) plans.",
+  soWhat:
+    "The 4a box describes WHAT KIND of exempt payment line 4 holds. Note the third bullet: " +
+    "section 125 cafeteria plan benefits. If Greenway ever runs pre-tax benefit deductions " +
+    "through a cafeteria plan, this is the box that explains the line 4 amount.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_4B_GROUP_TERM_LIFE: GuidanceAuthority = {
+  id: "i940-line-4b-group-term-life",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 4b. Group-term life insurance",
+  quote:
+    "Group-term life insurance. For information about group-term life insurance and other " +
+    "payments for fringe benefits that may be exempt from FUTA tax, see Pub. 15-B.",
+  soWhat:
+    "Employer-paid group-term life insurance is exempt from FUTA. It is a separate tickbox from " +
+    "4a because the IRS wants to know which category the line 4 subtraction came from.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_4C_RETIREMENT_PENSION: GuidanceAuthority = {
+  id: "i940-line-4c-retirement-pension",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 4c. Retirement/Pension",
+  quote:
+    "Retirement/Pension, such as employer contributions to a qualified plan, including a SIMPLE " +
+    "retirement account (other than elective salary reduction contributions) and a 401(k) plan.",
+  soWhat:
+    "Employer contributions to a qualified plan are exempt from FUTA. Read the parenthesis " +
+    "carefully: elective salary reduction contributions are NOT exempt. The employer's own " +
+    "contribution comes out of the base; the employee's deferral stays in it.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_4D_DEPENDENT_CARE: GuidanceAuthority = {
+  id: "i940-line-4d-dependent-care",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 4d. Dependent care",
+  quote:
+    "Dependent care, such as payments (up to $5,000 per employee, $2,500 if married filing " +
+    "separately) for a qualifying person's care that allows your employees to work and that would " +
+    "be excludable by the employee under section 129.",
+  soWhat:
+    "Dependent care assistance is exempt from FUTA up to $5,000 per employee, halved for " +
+    "married-filing-separately. Anything above the cap is ordinary taxable wages, so this is one " +
+    "of the few line 4 categories with an arithmetic ceiling inside it.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_4E_OTHER_PAYMENTS: GuidanceAuthority = {
+  id: "i940-line-4e-other-payments",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 4e. Other payments",
+  quote:
+    "Other payments, such as the following. —All non-cash payments and certain cash payments for " +
+    "agricultural labor, and all payments to H-2A visa workers.",
+  soWhat:
+    "The catch-all box. For Greenway the relevant reading is the opposite of what people expect: " +
+    "this list does NOT include ordinary wages, so 4e is not a place to park anything that does " +
+    "not fit. If nothing on the list applies, line 4 is blank and 4e is unticked.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_15B_APPLY_OR_REFUND: GuidanceAuthority = {
+  id: "i940-line-15b-apply-or-refund",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 15b. Choose to have your overpayment applied to your " +
+    "next return or refunded",
+  quote:
+    "15b. Choose to have your overpayment applied to your next return or refunded. If you " +
+    "deposited more than the FUTA tax due for the year, you may choose to have us either: ... " +
+    "Check the appropriate box on line 15b to tell us which option you select. Check only one box " +
+    "on line 15b. If you don't check either box or if you check both boxes, we will generally " +
+    "apply the overpayment to your next return.",
+  soWhat:
+    "If you overpaid, you must choose: carry it forward, or take it back. Two facts matter. Check " +
+    "ONE box -- checking both, or neither, means the IRS applies it to the next return by " +
+    "default. And regardless of what you check, the IRS may take the overpayment against any " +
+    "past-due account under the same EIN.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_15C_ROUTING_NUMBER: GuidanceAuthority = {
+  id: "i940-line-15c-routing-number",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 15c. Routing number",
+  quote:
+    "15c. Routing number. The routing number must be nine digits. The first two digits must be 01 " +
+    "through 12 or 21 through 32. Verify that your financial institution will accept a direct " +
+    "deposit.",
+  soWhat:
+    "A bank routing number, entered only when you asked for a refund on 15b. Nine digits, and the " +
+    "first two must fall in 01-12 or 21-32 -- which is a free validity check you can run before " +
+    "filing. This figure comes from the bank, never from the ledger.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_15D_ACCOUNT_TYPE: GuidanceAuthority = {
+  id: "i940-line-15d-account-type",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 15d. Type of account",
+  quote:
+    "15d. Type of account. Check the appropriate box for the type of account. Don't check more " +
+    "than one box. You must check the correct box to ensure your deposit is accepted.",
+  soWhat:
+    "Checking or savings, exactly one box. Getting it wrong does not merely delay the refund; it " +
+    "can cause the deposit to be rejected outright and a paper cheque issued instead.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+export const I940_LINE_15E_ACCOUNT_NUMBER: GuidanceAuthority = {
+  id: "i940-line-15e-account-number",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), 15e. Account number",
+  quote:
+    "15e. Account number. The account number can be up to 17 characters (both numbers and " +
+    "letters). Include hyphens but omit spaces and special symbols. Enter the number from left to " +
+    "right and leave any unused boxes blank.",
+  soWhat:
+    "The bank account number for the refund, up to seventeen characters, hyphens included but " +
+    "spaces and symbols omitted, left-aligned. Like 15c this is a bank credential rather than an " +
+    "accounting figure, which is why the teaching screen shows no specimen value for it.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * §5  THE IRS'S OWN WORKED EXAMPLE — A TEST VECTOR, NOT AN ILLUSTRATION
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -788,6 +1044,19 @@ export const FORM_940_OWN_AUTHORITIES: readonly GuidanceAuthority[] = [
   I940_BALANCE_DUE_BANDS,
   I940_CREDIT_REDUCTION_STATE,
   I940_WORKSHEET_EXAMPLE_FACTS,
+  I940_LINE_1A_ONE_STATE,
+  I940_LINE_1B_MULTI_STATE,
+  I940_LINE_2_CREDIT_REDUCTION_BOX,
+  I940_LINE_4_EXEMPT_MUST_BE_IN_LINE_3,
+  I940_LINE_4A_FRINGE_BENEFITS,
+  I940_LINE_4B_GROUP_TERM_LIFE,
+  I940_LINE_4C_RETIREMENT_PENSION,
+  I940_LINE_4D_DEPENDENT_CARE,
+  I940_LINE_4E_OTHER_PAYMENTS,
+  I940_LINE_15B_APPLY_OR_REFUND,
+  I940_LINE_15C_ROUTING_NUMBER,
+  I940_LINE_15D_ACCOUNT_TYPE,
+  I940_LINE_15E_ACCOUNT_NUMBER,
 ];
 
 /**

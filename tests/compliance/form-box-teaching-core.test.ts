@@ -38,9 +38,16 @@ import {
   assertEveryWaFormIsTeachable,
   assertEveryFederalBoxIsClassified,
   assertNoSpecimenClaimsAFigure,
+  assertEveryTieResolves,
+  assertEveryTaughtBoxHasASpecimen,
   __runFormBoxTeachingCoreTests,
 } from "@/lib/payroll/form-box-teaching-core";
 import { formatBoxValue, boxIsEmpty, boxTone } from "@/lib/payroll/form-box-core";
+import type { BoxLesson } from "@/lib/payroll/form-box-core";
+import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
+import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
+import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
+import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
 
 describe("the teaching specimen agrees with the engine", () => {
   it("runs every pure self-test in the module", () => {
@@ -57,6 +64,150 @@ describe("the teaching specimen agrees with the engine", () => {
 
   it("resolves every federal box through the adapters' single table", () => {
     expect(() => assertEveryFederalBoxIsClassified()).not.toThrow();
+  });
+});
+
+/**
+ * ═══ EVERY CROSS-REFERENCE GOES SOMEWHERE REAL (books-54) ═══
+ *
+ * A lesson's `tiesTo` says "this box relates to that box on that other form".
+ * Until this slice, nothing checked that the other box existed, and rendered
+ * prose does not execute — so a tie could point anywhere for years and every
+ * test in the repository would stay green.
+ *
+ * MEASURED BEFORE THE GATE WAS WRITTEN: 56 ties across the four lesson sets,
+ * of which two were dead. Both lived in `form-box-lessons-wa.ts` and both
+ * pointed at `esd_5208b` box "wage-detail" — a box that has never existed. The
+ * 5208B has `wage-detail-wages`, `wage-detail-hours` and `wage-detail-total`.
+ * They arrived with books-47 slice D and survived every commit since.
+ *
+ * The two ties carried IDENTICAL target text but needed DIFFERENT fixes: one
+ * is about wages reconciling and one about hours, so a search-and-replace
+ * would have repointed both at whichever column was typed first and the gate
+ * would have gone green on a half-wrong answer.
+ *
+ * All four sets are checked here rather than one, because this is where the
+ * specimen tables live and the fourth set is the one that was broken.
+ */
+describe("every cross-reference between forms goes somewhere real", () => {
+  /**
+   * RULE 15 FIRST: the gate must be shown capable of failing before any
+   * passing assertion below it means anything.
+   *
+   * Three separate ways a tie can be wrong, and a fourth case — a lesson set
+   * with no ties at all — which must ALSO be refused, because a checker that
+   * examined nothing is a checker that approves everything (rule 66d).
+   */
+  it("refuses a tie to a form that does not exist, a box that does not exist, and an empty set", () => {
+    const base: BoxLesson = {
+      formId: "form_940",
+      box: "3",
+      headline: "h",
+      plainEnglish: "p",
+      whereItComesFrom: "w",
+      howToReadIt: "r",
+      commonMistake: null,
+      whatToDo: "d",
+      examples: [],
+      quotes: [],
+      tiesTo: [],
+    };
+
+    // 1. a form id nothing teaches
+    expect(() =>
+      assertEveryTieResolves([
+        { ...base, tiesTo: [{ formId: "form_1120s", box: "1", why: "y" }] },
+      ]),
+    ).toThrow(/has no teaching specimen/);
+
+    // 2. a real form, a box it does not have
+    expect(() =>
+      assertEveryTieResolves([
+        { ...base, tiesTo: [{ formId: "esd_5208b", box: "wage-detail", why: "y" }] },
+      ]),
+    ).toThrow(/does not\s+have/);
+
+    // 3. the exact historical defect, named, so the fix cannot silently revert
+    expect(() =>
+      assertEveryTieResolves([
+        { ...base, tiesTo: [{ formId: "esd_5208b", box: "wage-detail", why: "y" }] },
+      ]),
+    ).toThrow(/wage-detail-wages/);
+
+    // 4. nothing to check is not a pass
+    expect(() => assertEveryTieResolves([base])).toThrow(/proves nothing/);
+    expect(() => assertEveryTieResolves([])).toThrow(/proves nothing/);
+
+    // And a tie that IS right must be accepted, or the gate refuses everything
+    // and its passing above would be meaningless.
+    expect(() =>
+      assertEveryTieResolves([
+        { ...base, tiesTo: [{ formId: "esd_5208b", box: "wage-detail-wages", why: "y" }] },
+      ]),
+    ).not.toThrow();
+  });
+
+  it("resolves every tie in all four lesson sets", () => {
+    /*
+     * Held as data with the set NAME attached, so a failure says which file to
+     * open. Iterating anonymous arrays would report "expected not to throw"
+     * and leave the reader to find which of four modules was at fault.
+     */
+    const SETS: readonly { readonly name: string; readonly lessons: readonly BoxLesson[] }[] = [
+      { name: "form-box-lessons-940.ts", lessons: FORM_940_LESSONS },
+      { name: "form-box-lessons-941.ts", lessons: FORM_941_LESSONS },
+      { name: "form-box-lessons-w2.ts", lessons: FORM_W2_BOX_LESSONS },
+      { name: "form-box-lessons-wa.ts", lessons: WA_QUARTERLY_LESSONS },
+    ];
+
+    let ties = 0;
+    for (const s of SETS) {
+      expect(() => assertEveryTieResolves(s.lessons), `dead tie in ${s.name}`).not.toThrow();
+      ties += s.lessons.reduce((n, l) => n + l.tiesTo.length, 0);
+    }
+
+    /*
+     * A floor on the total, so this cannot pass by the lesson modules being
+     * emptied. 56 is the measured count at books-54; it may only grow.
+     */
+    expect(ties, "far fewer ties than expected; a lesson module lost its content").toBeGreaterThanOrEqual(56);
+  });
+
+  /**
+   * The companion check, applied to all four sets rather than the one.
+   *
+   * `assertEveryTaughtBoxHasASpecimen` has existed since books-49 but was
+   * called for the W-2 lessons ONLY. It passes for all four — measured, not
+   * assumed — so the other three were correct by luck rather than by gate.
+   */
+  it("gives every taught box a specimen, in all four lesson sets", () => {
+    for (const lessons of [
+      FORM_940_LESSONS,
+      FORM_941_LESSONS,
+      FORM_W2_BOX_LESSONS,
+      WA_QUARTERLY_LESSONS,
+    ]) {
+      expect(() => assertEveryTaughtBoxHasASpecimen(lessons)).not.toThrow();
+    }
+
+    // Rule 15: and it must still refuse a box that has no specimen.
+    expect(() =>
+      assertEveryTaughtBoxHasASpecimen([
+        {
+          formId: "form_940",
+          box: "99",
+          headline: "h",
+          plainEnglish: "p",
+          whereItComesFrom: "w",
+          howToReadIt: "r",
+          commonMistake: null,
+          whatToDo: "d",
+          examples: [],
+          quotes: [],
+          tiesTo: [],
+        },
+      ]),
+    ).toThrow(/not in the teaching specimen/);
   });
 });
 
