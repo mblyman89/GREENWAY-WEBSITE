@@ -123,11 +123,40 @@ of the coupling and it is the one worth writing down.
 
 **Also corrected in books-54: a fourth thing that nothing checked.** Every
 lesson carries `tiesTo` cross-references, and no gate verified the target box
-existed. Measured: 56 ties, **2 dead** — both in `form-box-lessons-wa.ts`,
-both pointing at `esd_5208b` box `"wage-detail"`, which has never existed (the
-real columns are `wage-detail-wages`, `-hours` and `-total`). Pre-existing since
-books-47 slice D. Closed by `assertEveryTieResolves`, now applied to all four
-lesson sets.
+existed. **2 dead** were found — both in `form-box-lessons-wa.ts`, both pointing
+at `esd_5208b` box `"wage-detail"`, which has never existed (the real columns
+are `wage-detail-wages`, `-hours` and `-total`). Pre-existing since books-47
+slice D. Closed by `assertEveryTieResolves`, now applied to every lesson set.
+
+**Correction issued in books-55 to a number this document and the books-54
+owner report both stated wrongly.** That paragraph originally read "Measured: 56
+ties, 2 dead". The 56 was wrong when it was written; the true figure at the time
+was 62. It was a partial count — taken over four lesson sets while six exist —
+and it was reported to Michael in the books-54 summary as though it were the
+whole population. The two dead ties were real and are genuinely fixed; only the
+denominator was wrong.
+
+Recorded here rather than quietly overwritten, because the failure was not
+arithmetic. It was reporting a measurement without checking that the thing
+measured was the whole of the thing described, which is the same mistake as the
+gates that checked four of six lesson sets, three of four ownership tables and
+one of two explorers on a shared page.
+
+Counted at books-55, by loading every lesson module and summing `tiesTo`:
+
+| lesson set | lessons | ties |
+| --- | --- | --- |
+| `form-box-lessons-941.ts` | 20 | 19 |
+| `form-box-lessons-940.ts` | 20 | 20 |
+| `form-box-lessons-wa.ts` | 8 | 4 |
+| `form-box-lessons-w2.ts` | 20 | 13 |
+| `form-box-lessons-w3.ts` | 31 | 34 |
+| `form-941-confirmation-lessons.ts` | 4 | 6 |
+| **total** | **103** | **96** |
+
+Every one of the 96 resolves to a box that exists. The W-3 is the first set
+with more ties than lessons, which is what a transmittal should look like: most
+of its boxes have to agree with something on another form.
 
 The drift gate `assertSpecimenMatchesTheEngine` runs one way only — every box
 the engine emits must be taught. It does not require that every taught box be
