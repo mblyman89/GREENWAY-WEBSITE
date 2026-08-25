@@ -303,12 +303,138 @@ export const FORM_941_TEACHING: readonly TeachingBox[] = [
       "different things to the IRS.",
   },
   {
-    box: "15",
+    // Relabelled from "15" to "15a" in books-53. The printed 2026 form has
+    // 15a Overpayment and 15b the refund-or-apply choice; there is no bare
+    // line 15. Michael copies these labels into agency portals, so the label
+    // must match the paper.
+    box: "15a",
     caption: "Overpayment",
     whoseSource: FED_941,
     howItGetsFilled:
       "Box 13 minus box 12, when the deposits were the larger — money the IRS is holding that " +
-      "is yours. You then choose whether it is refunded or applied to the next quarter.",
+      "is yours. You then choose on line 15b whether it is refunded or applied to the next quarter.",
+  },
+  /*
+   * ═══ THE ELEVEN LINES ADDED IN books-53 ═══
+   *
+   * Captions are transcribed from the PRINTED form Michael files
+   * (2ND_QTR_FORM_941.pdf), not from the prose headings in the instructions.
+   * The two differ, and the paper is what he is looking at when he reads this
+   * screen.
+   */
+  {
+    box: "4",
+    caption: "If no wages, tips, and other compensation are subject to social security or Medicare tax",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A tickbox, not an amount. Ticked only if NONE of the wages on line 2 are subject to " +
+      "Social Security or Medicare tax — which is not the case at Greenway.",
+  },
+  {
+    box: "5b",
+    caption: "Taxable social security tips",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "Tips employees reported for the quarter, sharing line 5a's annual ceiling per person. " +
+      "Service charges are not tips and do not belong here.",
+  },
+  {
+    box: "5d",
+    caption: "Taxable wages & tips subject to Additional Medicare Tax withholding",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "Wages above $200,000 for one person, taxed at 0.9% and withheld from the employee only. " +
+      "The multiplier is not doubled because there is no employer share.",
+  },
+  {
+    box: "5f",
+    caption: "Section 3121(q) Notice and Demand — Tax due on unreported tips",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "Copied from an IRS Section 3121(q) Notice and Demand when one is received. Never " +
+      "computed here, and blank unless such a notice has arrived.",
+  },
+  {
+    box: "8",
+    caption: "Current quarter's adjustment for sick pay",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A normally NEGATIVE adjustment when a third-party payer of sick pay handled the taxes. " +
+      "The sick pay itself still belongs on lines 5a and 5c.",
+  },
+  {
+    box: "9",
+    caption: "Current quarter's adjustments for tips and group-term life insurance",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A normally NEGATIVE adjustment for the employee share that could not be collected — on " +
+      "tips, and on group-term life insurance for former employees.",
+  },
+  {
+    box: "11",
+    caption: "Qualified small business payroll tax credit for increasing research activities",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "Taken from Form 8974, line 12 or line 17. If an amount appears here, Form 8974 must be " +
+      "attached to the return.",
+  },
+  {
+    box: "15b",
+    caption: "Check one: Apply to next return / Send a refund",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A choice, not an amount. If neither box is ticked the IRS will generally apply the " +
+      "overpayment to the next return rather than refund it.",
+  },
+  {
+    box: "15c",
+    caption: "Routing number",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "Supplied from the bank, never from the ledger. Nine digits, used only when line 15b asks " +
+      "for a refund. No specimen value is shown here because this box holds a real bank " +
+      "credential.",
+  },
+  {
+    box: "15d",
+    caption: "Type: Checking / Savings",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A tickbox describing the account on 15c and 15e. Exactly one, and only when a refund is " +
+      "being requested.",
+  },
+  {
+    box: "15e",
+    caption: "Account number",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "Supplied from the bank, never from the ledger. Up to seventeen characters, used only when " +
+      "line 15b asks for a refund. No specimen value is shown here because this box holds a real " +
+      "bank credential.",
+  },
+  {
+    box: "16",
+    caption: "Check one: tax liability for the quarter",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "The deposit schedule, plus the monthly tax LIABILITY if monthly. Liability follows pay " +
+      "dates, not deposit dates, and the three months must total line 12.",
+  },
+  {
+    box: "17",
+    caption: "If your business has closed or you stopped paying wages",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A tickbox and the final date wages were paid. Ticked only when Greenway has genuinely " +
+      "stopped paying wages, never for a quarter that merely had no payroll.",
+  },
+  {
+    box: "18",
+    caption: "If you're a seasonal employer and you don't have to file a return for every quarter of the year",
+    whoseSource: FED_941,
+    howItGetsFilled:
+      "A tickbox for employers who hire only seasonally. It must be ticked on EVERY Form 941 " +
+      "filed, not once.",
   },
 ];
 

@@ -737,7 +737,13 @@ export function buildForm941(req: Form941Request): Form941Result {
       });
     } else if (balance !== null && balance < 0) {
       lines.push({
-        line: "15",
+        // The IRS calls this line 15a, not 15. The printed 2026 form has
+        // 15a Overpayment, 15b the refund-or-apply choice, and 15c-15e the
+        // bank details; there is no bare "line 15" anywhere in the
+        // instructions. Michael reads these labels straight across into an
+        // agency portal, so a label that does not match the form he is filling
+        // in is a transcription error waiting to happen.
+        line: "15a",
         caption: "Overpayment",
         amountCents: -balance,
         isCount: false,

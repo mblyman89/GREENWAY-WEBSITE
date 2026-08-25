@@ -219,9 +219,107 @@ export const FORM_941_WHOSE: Readonly<Record<string, WhoseRow>> = {
     whose: "shared",
     why: "What is still owed. Part of it was withheld from employees, part is Greenway's own share.",
   },
-  "15": {
+  "15a": {
     whose: "shared",
     why: "An overpayment — money already sent that exceeds the tax, of both kinds.",
+  },
+  /*
+   * ═══ THE ELEVEN LINES ADDED IN books-53 ═══
+   *
+   * A note on `tax_base` versus `not_money`, because the distinction is not
+   * about importance. `tax_base` means the line reports a FIGURE that some tax
+   * is later computed from; `not_money` means the line is a tickbox, a name or
+   * an identifier and drives the measure "count", so it can never be rendered
+   * with a dollar sign.
+   *
+   * Lines 4, 16, 17 and 18 are tickboxes and dates. They are `not_money` for
+   * that mechanical reason, not because they are unimportant — line 16 in
+   * particular can draw a penalty when filled in wrongly.
+   *
+   * Line 5d is the interesting one. Every other Social Security and Medicare
+   * line on this form is `shared`, because those taxes are paid twice. The
+   * Additional Medicare Tax is not: the instructions say "There is no employer
+   * share of Additional Medicare Tax." Classifying it `shared` would tell
+   * Michael that Greenway owes a matching 0.9% it does not owe.
+   */
+  "4": {
+    whose: "not_money",
+    why:
+      "A tickbox stating that no wages at all are subject to Social Security or Medicare tax. " +
+      "It reports no amount, so it can never be a dollar figure.",
+  },
+  "5b": {
+    whose: "shared",
+    why:
+      "Social Security on reported tips, paid twice like line 5a — 6.2% withheld from the " +
+      "employee and 6.2% from Greenway on the same tips.",
+  },
+  "5d": {
+    whose: "employee_money",
+    why:
+      "Wages above $200,000 carrying the 0.9% Additional Medicare Tax. The instructions state " +
+      "there is no employer share, so unlike 5a and 5c this is the employee's money alone.",
+  },
+  "5f": {
+    whose: "shared",
+    why:
+      "Tax the IRS demands on tips employees failed to report, billed by notice. It covers the " +
+      "employer share of Social Security and Medicare on those tips.",
+  },
+  "8": {
+    whose: "shared",
+    why:
+      "An adjustment moving liability for sick-pay taxes between Greenway and a third-party " +
+      "payer. It touches both the employee share and the employer share.",
+  },
+  "9": {
+    whose: "employee_money",
+    why:
+      "The uncollected EMPLOYEE share of Social Security and Medicare on tips and on group-term " +
+      "life for former employees. It is their tax that could not be withheld, not Greenway's.",
+  },
+  "11": {
+    whose: "shared",
+    why:
+      "A research credit from Form 8974 offsetting total tax, which is itself made of both the " +
+      "withheld employee money and Greenway's own share.",
+  },
+  "15c": {
+    whose: "not_money",
+    why:
+      "A bank routing number. It says where a refund should be sent, not who owns anything.",
+  },
+  "15d": {
+    whose: "not_money",
+    why: "A tickbox naming the type of bank account. It reports no money at all.",
+  },
+  "15e": {
+    whose: "not_money",
+    why:
+      "A bank account number. It says where a refund should be sent, not who owns anything.",
+  },
+  "15b": {
+    whose: "not_money",
+    why:
+      "A choice between having the overpayment refunded or applied to the next return. A tickbox, " +
+      "carrying no amount of its own.",
+  },
+  "16": {
+    whose: "not_money",
+    why:
+      "The deposit-schedule tickbox and the monthly liability breakdown. The line itself records " +
+      "a schedule rather than a single amount owed.",
+  },
+  "17": {
+    whose: "not_money",
+    why:
+      "A tickbox and a date, stating that the business has stopped paying wages. It reports no " +
+      "money at all.",
+  },
+  "18": {
+    whose: "not_money",
+    why:
+      "A tickbox stating that the employer hires only seasonally. It reports no money at all.",
   },
 };
 
@@ -860,10 +958,165 @@ export function assertWithheldMoneyIsNeverTheEmployers(): void {
   }
 }
 
+/**
+ * Every Form 941 line, and whose money it is, pinned one line at a time.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY THIS GATE EXISTS -- IT WAS FOUND BY BREAKING THE CODE, NOT BY READING IT
+ * ────────────────────────────────────────────────────────────────────────────
+ * While mutation-testing books-53 I changed line 5d from `employee_money` to
+ * `shared` -- an assertion that Greenway pays half of the Additional Medicare
+ * Tax. The IRS instructions say the exact opposite, in the very file this
+ * module quotes: "Additional Medicare Tax is only imposed on the employee.
+ * There is no employer share of Additional Medicare Tax."
+ * (docs/authorities/federal/irs-instructions-941-2026.txt, lines 1192-1194.)
+ *
+ * All 11,046 tests passed.
+ *
+ * Rule 106 says find out whether a hole is new or pre-existing before claiming
+ * credit for it, so I mutated line 13 -- `shared` -> `employer_cost`, a line
+ * that has been in this table since books-49. That passed too. So the hole was
+ * PRE-EXISTING and books-53 merely widened it from 13 lines to 24: only lines
+ * 1, 2, 3 and 5a had individually named tests, and the other twenty lines could
+ * be relabelled at will without a single test objecting.
+ *
+ * Why the existing gates did not catch it:
+ *   - assertEveryClassificationIsJustified only checks that a `why` string is
+ *     present and non-trivial. A wrong classification with good prose sails
+ *     through -- and mutation 1 kept the prose that CONTRADICTED it.
+ *   - assertSocialSecurityIsClassifiedTwice pins 5a alone.
+ *   - assertWithheldMoneyIsNeverTheEmployers (books-52) covers the W-2 only.
+ *
+ * Why a full table instead of one more assertion about 5d: a single assertion
+ * would have closed exactly one hole and left nineteen open, and the next line
+ * added to the form would arrive unprotected all over again. Pinning the whole
+ * table means an unintended ownership change cannot be silent, and a NEW line
+ * cannot be added without someone deciding, in writing, whose money it is.
+ *
+ * This is a deliberate duplication of the data in FORM_941_WHOSE, which rule 25
+ * would normally forbid. It is justified because the two copies exist for
+ * opposite reasons: FORM_941_WHOSE is what the application believes, and this is
+ * what a human checked against the printed form and the instructions. A gate
+ * that imports its expectation from the thing it is checking asserts nothing.
+ * Written out by hand from the classifications verified in books-49 and
+ * books-53; the captions are in FORM_941_TEACHING.
+ */
+const FORM_941_EXPECTED_WHOSE: Readonly<Record<string, WhoseMoney>> = {
+  "1": "not_money", // Number of employees -- a headcount
+  "2": "tax_base", // Wages, tips, and other compensation
+  "3": "employee_money", // Federal income tax withheld from wages
+  "4": "not_money", // Tickbox: wages not subject to social security/Medicare
+  "5a": "shared", // Taxable social security wages (12.4% = 6.2% + 6.2%)
+  "5b": "shared", // Taxable social security tips (same split)
+  "5c": "shared", // Taxable Medicare wages & tips (2.9% = 1.45% + 1.45%)
+  "5d": "employee_money", // Additional Medicare Tax -- NO employer share
+  "5e": "shared", // Total of 5a-5d
+  "5f": "shared", // Section 3121(q) Notice and Demand -- tax due on unreported tips
+  "6": "shared", // Total taxes before adjustments
+  "7": "shared", // Current quarter's adjustment for fractions of cents
+  "8": "shared", // Current quarter's adjustment for sick pay
+  "9": "employee_money", // Uncollected EMPLOYEE share on tips and group-term life
+  "10": "shared", // Total taxes after adjustments
+  "11": "shared", // Nonrefundable portion of credit
+  "12": "shared", // Total taxes after adjustments and nonrefundable credits
+  "13": "shared", // Total deposits for this quarter
+  "14": "shared", // Balance due
+  "15a": "shared", // Overpayment
+  "15b": "not_money", // Tickbox: apply to next return, or send a refund
+  "15c": "not_money", // Routing number for a refund by direct deposit
+  "15d": "not_money", // Tickbox: checking or savings
+  "15e": "not_money", // Account number for a refund by direct deposit
+  "16": "not_money", // Deposit schedule and tax liability selection
+  "17": "not_money", // Tickbox: business has closed / stopped paying wages
+  "18": "not_money", // Tickbox: seasonal employer
+};
+
+/**
+ * The Additional Medicare Tax has no employer share. Said once, in the open,
+ * with the authority attached, because it is the one line on this form whose
+ * ownership differs from the social security and Medicare lines beside it.
+ */
+export function assertAdditionalMedicareTaxHasNoEmployerShare(): void {
+  const row = FORM_941_WHOSE["5d"];
+  assert(
+    row !== undefined,
+    "Form 941 line 5d (Additional Medicare Tax) has no classification at all. " +
+      "It must be classified before this gate can check it.",
+  );
+  assert(
+    row.whose !== "shared",
+    "Form 941 line 5d is classified `shared`, which says Greenway pays half of the " +
+      "Additional Medicare Tax. The instructions say: \u201cAdditional Medicare Tax is only " +
+      "imposed on the employee. There is no employer share of Additional Medicare Tax.\u201d " +
+      "Lines 5a, 5b and 5c are shared; 5d is not, and that is the point of the line.",
+  );
+  assert(
+    row.whose !== "employer_cost",
+    "Form 941 line 5d is classified `employer_cost`, but the Additional Medicare Tax is " +
+      "withheld from the employee and is never Greenway's own cost.",
+  );
+  assert(
+    row.whose === "employee_money",
+    `Form 941 line 5d must be classified employee_money, not ${row.whose}. ` +
+      "It is withheld from one employee's pay above $200,000 and nobody else contributes.",
+  );
+}
+
+/**
+ * No line on the 941 may quietly change whose money it is.
+ *
+ * Checks both directions on purpose (rule 66d): every expected line must still
+ * be classified, and every classified line must be expected. The second half is
+ * what protects the NEXT line added to the form -- it will fail here until
+ * somebody writes down whose money it is.
+ */
+export function assertEvery941LineOwnershipIsPinned(): void {
+  const expectedIds = Object.keys(FORM_941_EXPECTED_WHOSE);
+  const actualIds = Object.keys(FORM_941_WHOSE);
+
+  assert(
+    expectedIds.length === 27,
+    `The pinned Form 941 ownership table should describe 27 lines but describes ` +
+      `${expectedIds.length}. If the form gained or lost a line, update the table ` +
+      "deliberately rather than changing this count to match.",
+  );
+
+  for (const lineId of expectedIds) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_941_WHOSE, lineId),
+      `Form 941 line ${lineId} is pinned in the expected-ownership table but is no longer ` +
+        "classified in FORM_941_WHOSE. A line cannot stop having an owner.",
+    );
+  }
+
+  for (const lineId of actualIds) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_941_EXPECTED_WHOSE, lineId),
+      `Form 941 line ${lineId} is classified in FORM_941_WHOSE but nobody has pinned whose ` +
+        "money it is. Add it to FORM_941_EXPECTED_WHOSE with a comment naming the line, so " +
+        "the classification is a decision on the record and not an accident.",
+    );
+  }
+
+  for (const lineId of expectedIds) {
+    const expected = FORM_941_EXPECTED_WHOSE[lineId];
+    const actual = FORM_941_WHOSE[lineId].whose;
+    assert(
+      actual === expected,
+      `Form 941 line ${lineId} is classified ${actual} but was verified against the printed ` +
+        `form and the instructions as ${expected}. Either the classification is wrong, or the ` +
+        "law changed and the pinned table needs updating with a source. Do not simply " +
+        "reconcile the two to make this pass.",
+    );
+  }
+}
+
 export function __runFormBoxAdapterTests(): void {
   assertUnknownBoxIsRefused();
   assertEveryClassificationIsJustified();
   assertFutaIsNeverEmployeeMoney();
   assertSocialSecurityIsClassifiedTwice();
   assertWithheldMoneyIsNeverTheEmployers();
+  assertAdditionalMedicareTaxHasNoEmployerShare();
+  assertEvery941LineOwnershipIsPinned();
 }

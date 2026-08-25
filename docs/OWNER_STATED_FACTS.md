@@ -125,9 +125,28 @@ insurance plan and paying their premium for them as their compensation."*
   Ten W-2s, and the W-3 box c states ten. Only seven of the ten carry any box 2
   withholding — Teri Becker is one of the three with none.
 - **No W-2 for `JAMES H BECKER`** appears in the 2025 employer copies supplied.
-  Michael's statement covers "them" plural, so either James was compensated
-  another way, is covered as a dependent on Teri's plan, or a document is
-  missing. **OPEN.**
+  **RESOLVED by the owner, August 2026.** Michael: *"James was not an employee in
+  2024 or 2025 or 2026. He was an employee like my mom, Theresa, for health
+  insurance benefits. They both are not getting distributions, like grandpa,
+  currently."*
+
+  So the absence of a W-2 is **correct and expected**, not a missing document.
+  The register had it the right way round: it recorded the absence as a question
+  rather than inventing an explanation.
+
+  **What this does NOT settle, and must not be read as settling.** Michael's
+  sentence uses "employee" in the ordinary sense of *someone on the health plan*.
+  Whether either person is an **employee for payroll-tax purposes** in any year
+  is a separate question with a different test, and it is the substance of open
+  question 4. Two facts already in this register make that worth care rather than
+  alarm: a **W-2 for `TERI L BECKER` does exist** in the 2025 employer copies
+  (box 14 `HEALTH 11,029.32`, equal to box 1 to the penny, with **no box 2
+  withholding**), and Michael has said he pays no cash wages. A person with a
+  filed W-2 is being treated as an employee by whoever filed it. Reconciling that
+  with "not an employee" is exactly what the preparer needs to confirm.
+
+  **Do not use this entry to conclude anything about the FICA treatment in boxes
+  3 and 5.** That remains OPEN (question 4).
 - **Document that would settle it:** the insurance carrier's invoices showing who
   was covered and the premium per person per year, and confirmation from the
   preparer of how each premium was reported.
@@ -185,7 +204,7 @@ therefore repeated at the end of every owner report until they are closed.
 |---|---|---|---|
 | 1 | The two LLC legal names above — confirm the crossed naming is right, and supply UBI/EIN for each | Nicholas Mullan | **OPEN** — owner is asking |
 | 2 | The Schedule C industry codes appear **swapped** between the two Sch C businesses, and rent is on Sch C rather than Sch E (self-employment tax consequence) | Nicholas Mullan | **OPEN** — owner is asking |
-| 3 | Was James H Becker an employee, and is there a W-2 for him? None appears in the 2025 employer copies | Michael / payroll records | **OPEN** |
+| 3 | ~~Was James H Becker an employee, and is there a W-2 for him?~~ | Michael | **CLOSED** Aug 2026 → C4 |
 | 4 | How were the health premiums reported for each Becker, and is the FICA treatment in boxes 3 and 5 intended? | Nicholas Mullan | **OPEN** |
 | 5 | Is Nicholas paid as compensation (W-2/1099) or as a distribution? | Nicholas Mullan | **OPEN** |
 | 6 | Intercompany rent between the entities is not modelled at all yet | build slice | **OPEN** — candidate next slice |
@@ -197,3 +216,4 @@ therefore repeated at the end of every owner report until they are closed.
 | C1 | Do the Beckers receive distributions? | **CLOSED** Aug 2026 — not in cash; compensated by employer-paid insurance premiums. See §2a. |
 | C2 | Are the 2027 rates urgent? | **CLOSED** — no. Michael: *"they don't get released until Novemberish."* I had wrongly implied urgency. |
 | C3 | ATM and landholding legal names | **CLOSED as stated**, §1. Still awaiting documentary confirmation (question 1). |
+| C4 | Was James H Becker an employee, and is there a W-2 for him? | **CLOSED as stated** Aug 2026. Michael: *"James was not an employee in 2024 or 2025 or 2026. He was an employee like my mom, Theresa, for health insurance benefits."* The missing W-2 is therefore expected, not a lost document. **Payroll-tax employee status is a different test and stays OPEN under question 4** — a W-2 for Teri Becker does exist. See §2a. |
