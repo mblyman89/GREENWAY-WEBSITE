@@ -75,13 +75,24 @@ this file is the memory that survives.
 
 | Order | Slice | What it is | Why it sits here |
 |-------|-------|-----------|------------------|
-| **E** | **WA DOR Combined Excise Tax Return** | the monthly DOR return: cannabis sales, non-cannabis sales, and ATM surcharge income, each classified correctly, shown as a visual facsimile before Michael keys it into My DOR | Michael's own request. **Monthly** — twelve filings a year against the 941's four and the 1120-S's one — and it is the only screen where all three revenue streams must be classified on one page. **Not** the LCB return already built; see §7. Waiting on his filed **July** return to reconcile against. |
+| ~~**E**~~ | ~~**WA DOR Combined Excise Tax Return**~~ | **CANCELLED BY MICHAEL, books-59.** No page will be built. | See below. |
 
-Where E sits is Michael's call. It is placed after D on the assumption that the
-Form/Why/Check tab system should exist first, so the DOR return inherits the
-per-box authority treatment instead of being built twice — but if the monthly
-filing is causing pain now, it can move ahead of D and adopt the tab system
-afterwards.
+**E IS CANCELLED. Do not build it, and do not re-propose it.** Michael's words,
+books-59: *"as for the dor form. i think since it is really a self explanatory
+form, i simply enter total sales and it tells me what i owe. really nothing to
+know or learn, so i think we should not worry about it."*
+
+He is right, and the reason is worth keeping: the My DOR portal computes the tax
+from the figures he types in, so a facsimile would teach him nothing he does not
+already see on the screen in front of him. Every other form in this roadmap
+exists because a box needs *deriving* or *explaining*; this one does not.
+
+**What survived the cancellation, and it is the valuable half.** The reason the
+form was wanted at all was to get all three sales-tax types classified
+correctly. That is now done in the ENGINE instead of a screen — see
+`src/lib/accounting/bo-tax-core.ts` and §7 below. His instruction: *"we need to
+account for sales tax by all three types, state/ local/ b&o. its important that
+the books account for b&o as it is an expense and not a liability."*
 
 ### Why B is last, and it is not a matter of taste
 
@@ -726,12 +737,47 @@ forms need. What is missing is the forms themselves and the calendar of when
 they are due. Note the trust-fund exposure already modelled in books-16: these
 are penalties on money already withheld and already held.
 
-### 7. WA DOR Combined Excise Tax Return — the monthly one Michael actually files
+### 7. WA DOR Combined Excise Tax Return — THE FORM IS CANCELLED, THE TAX LOGIC IS BUILT
 
-**Requested by Michael directly (books-45):** *"a department of revenue sales
-tax form so i can see visually what the monthly return will look like before i
-go onto my portal to report and pay. we will need to know all sales, cannabis
-and non cannabis, as well as monthly atm revenue."*
+> **STATUS, books-59: the SCREEN is cancelled. The three-way tax classification
+> described in this section is BUILT and TESTED in
+> `src/lib/accounting/bo-tax-core.ts`.**
+>
+> Michael cancelled the facsimile: *"as for the dor form. i think since it is
+> really a self explanatory form, i simply enter total sales and it tells me
+> what i owe. really nothing to know or learn, so i think we should not worry
+> about it."*
+>
+> He then named the part that actually mattered: *"However, we need to account
+> for sales tax by all three types, state/ local/ b&o. its important that the
+> books account for b&o as it is an expense and not a liability."*
+>
+> **What was measured before building (books-59):** state (650 bps) and local
+> (280 bps) were ALREADY computed and reported separately in
+> `src/lib/reports/wa-tax.ts`. B&O was absent from the entire codebase — no
+> rate, no computation, and nothing posting to `75040 B&O Tax Expense` or
+> `32200 B&O Tax Payable`, both of which migration 0173 had created months
+> earlier and left unused.
+>
+> **The unit defect this uncovered (standing rule 114):** B&O Retailing is
+> `0.004710` = **47.10 basis points**, which is not an integer. Storing it in
+> bps understates Michael's filed July return by \$1.68/month (47 bps) or
+> overstates it by \$15.16/month (48 bps). B&O rates are therefore stored in
+> MILLIONTHS (rate x 1e6): `4710` and `15000`, both exact. 650/280 bps convert
+> without moving, so no existing figure changed.
+>
+> **Corpus:** his filed July 2026 return, confirmation # 0-053-958-352, mirrored
+> at `docs/authorities/state-wa/dor-combined-excise-return-july-2026.txt` and
+> reconciled to the cent on all six lines before any figure was used
+> (standing rule 115).
+>
+> The classification table below is still correct and is now enforced by tests
+> rather than being a plan. Keep it for the reasoning; do not build the page.
+
+**Originally requested by Michael (books-45), now superseded:** *"a department of
+revenue sales tax form so i can see visually what the monthly return will look
+like before i go onto my portal to report and pay. we will need to know all
+sales, cannabis and non cannabis, as well as monthly atm revenue."*
 
 **This is a DIFFERENT RETURN from the one already built, and confusing the two
 would be an expensive mistake.** `src/lib/compliance/excise-return-core.ts` is
@@ -741,11 +787,12 @@ Board. The return described here is the **Department of Revenue** Combined
 Excise Tax Return, filed monthly on My DOR. Two agencies, two portals, two due
 dates, two sets of penalties. Greenway files both.
 
-**Why this ranks above the remaining chain items:** it is a **monthly, recurring,
-cash-out-the-door filing** that Michael performs by hand today, and it is the one
-place where cannabis sales, non-cannabis sales, and ATM income all have to be
-classified correctly on a single page. The 941 is quarterly; the 1120-S is
-annual; this is twelve times a year, every year.
+**Why it once ranked above the remaining chain items (retained for the
+reasoning, no longer a ranking):** it is a monthly, recurring, cash-out-the-door
+filing, and the one place where cannabis sales, non-cannabis sales and ATM income
+all have to be classified correctly. That classification burden was real — which
+is why it moved into the engine when the screen was cancelled. The portal does
+the arithmetic; only the classification ever needed our help.
 
 **Three revenue streams, three different tax treatments — this is the whole
 difficulty, and it is exactly what Michael asked to see laid out:**
@@ -762,9 +809,12 @@ revenue, `src/lib/medical/tax.ts` for the medical exemption, and
 `src/lib/reports/tax-base-core.ts` for the pre-tax base that already knows how to
 strip tax out of a tax-inclusive price.
 
-**What it must produce:** a full visual facsimile of the return, line by line,
-with every figure traceable to the transactions behind it — so Michael can read
-it, understand *why* each number is what it is, and only then key it into My DOR.
+**~~What it must produce~~ — CANCELLED.** No facsimile will be built. What
+replaced it: `threeTypeBreakdown()` in `src/lib/accounting/bo-tax-core.ts`
+returns state, local and B&O as three separate figures, with B&O split by
+classification (retailing vs service-and-other), and `boAccrualEntry()` books
+B&O as an EXPENSE with a timing payable — never as trust money the way sales tax
+and the 37% excise are booked. 54 tests, 18 mutations, all caught.
 
 **Deliberately NOT a filing agent.** Same boundary as everywhere else in this
 product: we prepare and explain, Michael files and pays. The screen's job is to

@@ -1,0 +1,91 @@
+SOURCE DOCUMENT - WASHINGTON DEPARTMENT OF REVENUE
+Combined Excise Tax Return, filing period July 31, 2026
+Filed by Michael Lyman for GREENWAY, account 603-353-555
+Confirmation # 0-053-958-352, submitted Aug-23-2026, paid by ACH debit
+
+Supplied by the owner on 2026-08-25 with the words:
+  "my uploaded JULY.pdf in the workspace is the actual return i filed with
+   dor, so it is authoritative."
+
+Extracted from JULY.pdf (109,738 bytes, 2 pages, PDF 1.7) with
+`pdftotext -layout`. A second copy of the same return exists in the workspace
+as "July 2026 Department of Revenue.pdf"; the two extractions were diffed and
+are identical apart from a trailing form-feed byte.
+
+This is a taxpayer's own filed return, not a copyrighted publication. It is
+mirrored here because standing rules 24 and 35 require quoting authority
+verbatim and proving the quote by machine, and standing rule 115 requires a
+filed return to be reconciled to the cent before it is trusted.
+
+RECONCILIATION PERFORMED BEFORE ANY FIGURE WAS USED (all six MATCH):
+  B&O Retailing        168,465.17 x 0.004710 =    793.47  filed    793.47
+  B&O Service & Other    4,355.00 x 0.015000 =     65.33  filed     65.33
+  State Retail Sales   168,465.17 x 0.065000 = 10,950.24  filed 10,950.24
+  Local Port Orchard   168,465.17 x 0.028000 =  4,717.02  filed  4,717.02
+  B&O subtotal            793.47 + 65.33     =    858.80  filed    858.80
+  Grand total   858.80 + 10,950.24 + 4,717.02 = 16,526.06 filed 16,526.06
+
+==============================================================================
+
+                                Combined Excise Tax Return
+                                                      GREENWAY
+                                                      603-353-555
+
+
+                       Filing Period: July 31, 2026           Due Date:     August 25, 2026
+
+                       Filing Frequency: Monthly
+
+
+
+
+Business & Occupation
+Tax Classification                          Gross Amount            Deductions Taxable Amount        Tax Rate      Tax Due
+Retailing                                       168,465.17                0.00         168,465.17    0.004710       793.47
+
+Service and Other Activities (Less Than            4,355.00               0.00           4,355.00    0.015000         65.33
+$1,000,000 in the Prior Year)
+                                                                                  Total Business & Occupation       858.80
+
+
+State Sales and Use
+Tax Classification                          Gross Amount            Deductions Taxable Amount        Tax Rate      Tax Due
+Retail Sales                                    168,465.17                0.00         168,465.17    0.065000     10,950.24
+
+                                                                                     Total State Sales and Use    10,950.24
+
+
+Deductions
+Tax Classification             Deduction                                                                           Amount
+
+
+Business & Occupation
+
+Retailing                      Advancements / Reimbursements, Returns & Allowances                                     0.00
+
+State Sales and Use
+
+Retail Sales                   Returns and Allowances                                                                  0.00
+
+Local City and/or County Sales Tax
+
+Location                                                                         Taxable Amount     Tax Rate       Tax Due
+1802 - PORT ORCHARD                                                                  168,465.17     0.028000       4,717.02
+
+                                                                    Total Local City and/or County Sales Tax       4,717.02
+
+
+
+
+                                                                                      Total Tax                  16,526.06
+                                                                                       Subtotal                  16,526.06
+                                                                        Total Amount Owed                        16,526.06
+____________________________________________________________________________________
+
+Submission                                                               Payment
+
+Confirmation #: 0-053-958-352                                            Amount Due: $16,526.06
+Prepared By: Michael Lyman                                               Amount Paid: $16,526.06
+Phone Number: (360) 204-1119                                             Effective Date: Aug-25-2026
+Email Address: michael@greenwaymarijuana.com                             Method: Bank Account (ACH Debit)
+Submitted Date: Aug-23-2026
