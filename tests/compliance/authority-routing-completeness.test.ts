@@ -291,6 +291,39 @@ describe("books-55: the verifier's skip list contains nothing it could have chec
       ["26 C.F.R. § 31.3402(f)(2)-1(a)(1)", "cfr-31.3402(f)(2)-1.txt"],
       ["26 C.F.R. §1.471-2(a)", "cfr-1.471-2.txt"],
       ["26 C.F.R. § 1.471-2(a)", "cfr-1.471-2.txt"],
+      /*
+       * books-57. THE US CODE ROWS, ADDED BECAUSE THE CFR FIX ABOVE WAS NOT THE
+       * CLASS FIX IT CLAIMED TO BE.
+       *
+       * The comment on the CFR rows in verify-verbatim-quotes.ts argued that
+       * "the two functions are required to agree ... and they now agree on the
+       * space too". True, for CFR. Four lines below it the `26 U.S.C.` row still
+       * demanded `§` with no space, and five citations are written the way the
+       * government prints them:
+       *
+       *   26 U.S.C. § 162(f)(1), (f)(4)     usc-162.txt   HELD (110,114 bytes)
+       *   26 U.S.C. § 6651(a)(1)            usc-6651.txt  HELD ( 24,284 bytes)
+       *   26 U.S.C. § 6651(a)(2), (c)(1)    usc-6651.txt  HELD
+       *   26 U.S.C. § 163(a), (h)(1)        not held at the time
+       *   26 U.S.C. § 6656(a), (b)(1)       not held at the time
+       *
+       * Three quotes therefore sat unverified with their source in the
+       * repository. Two characters. And when the comparison finally ran, all
+       * three FAILED - they had spliced statutory headings onto bodies - which
+       * is why the sibling test above ("never skips a quote whose text is
+       * already in a file we hold") reported nothing: it asks whether a held
+       * file CONTAINS the skipped quote, and a RECONSTRUCTED quote is not in any
+       * file. The router defect and the quote defect hid each other.
+       *
+       * Both spacings for both corpora are pinned here, so reverting either
+       * `§\s*` fails. Unlike the part-1 CFR row - which rule 40 flagged as
+       * unreachable by any cite in the repo - the US Code space form IS in live
+       * use by five authorities today.
+       */
+      ["26 U.S.C. §162(f)(1)", "usc-162.txt"],
+      ["26 U.S.C. § 162(f)(1), (f)(4)", "usc-162.txt"],
+      ["26 U.S.C. §6651(a)(1)", "usc-6651.txt"],
+      ["26 U.S.C. § 6651(a)(2), (c)(1)", "usc-6651.txt"],
     ];
     for (const [cite, expectedFile] of cases) {
       const got = expectedCorpusFile(cite);
@@ -314,6 +347,74 @@ describe("books-55: the verifier's skip list contains nothing it could have chec
    * such entry (`irc-3306-futa-wage-base`); this makes that a rule rather than
    * a good habit.
    */
+  /**
+   * THE CLASS GATE: A CITATION MUST NOT SIT ON THE WRONG SIDE OF ITS OWN CORPUS.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY THE FOUR TESTS ABOVE WERE NOT ENOUGH, MEASURED
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * Every gate in this file so far asks a question about SPECIFIC citations or
+   * about quotes that are FINDABLE ON DISK. books-57 slipped through all of
+   * them at once, and it is worth being precise about how, because the shape
+   * recurs:
+   *
+   *   - "never skips a quote whose text is in a file we hold" saw nothing,
+   *     because the three quotes were editorial reconstructions. Their text was
+   *     in NO file. The gate was correct and blind simultaneously.
+   *   - "recognises every routable citation as belonging to a mirrored corpus"
+   *     checks the direction router -> table. These cites routed NOWHERE, so
+   *     they were never examined.
+   *   - the spacing test enumerated CFR cases only, and enumeration cannot warn
+   *     you about the corpus you forgot to enumerate.
+   *
+   * So this test asks the question none of them ask, in the other direction:
+   * FOR EVERY AUTHORITY, IF `expectedCorpusFile` CAN CLASSIFY ITS CITE AND THE
+   * FILE IS ON DISK, THEN `sourceFileFor` MUST ROUTE IT. No exceptions, no list.
+   *
+   * That is the invariant the §280E, CON 8, "IRS, Instructions", "§ 31." and
+   * "§ 162" defects all violated - five occurrences, five different corpora,
+   * one shape. It cannot be satisfied by adding a branch for today's five
+   * citations, which is precisely why it is written over the whole registry
+   * rather than over a table of known cases (rule 43: walk the vocabulary, do
+   * not hand-list it).
+   *
+   * WHAT IT DOES NOT DEMAND. It says nothing about cites the table cannot
+   * classify - those are the honest unmirrored majority - and nothing about a
+   * classified cite whose file is genuinely absent, which is rule 48's loud
+   * failure and is already asserted by the verifier itself. Only the
+   * contradiction is forbidden: "we know which corpus this is, we have the
+   * file, and we still are not looking at it."
+   */
+  it("routes every citation whose corpus it can classify and whose file is held", () => {
+    const contradictions: string[] = [];
+    let classifiedAndHeld = 0;
+
+    for (const a of GUIDANCE_AUTHORITIES) {
+      const expected = expectedCorpusFile(a.cite);
+      if (expected === null) continue; // unmirrored corpus: nothing is claimed
+      if (!existsSync(expected.path)) continue; // rule 48's case, asserted elsewhere
+      classifiedAndHeld += 1;
+      if (sourceFileFor(a.cite) !== null) continue;
+      contradictions.push(
+        `${a.id} (${a.cite}) — expectedCorpusFile() classifies this as ${expected.corpus} ` +
+          `and the file EXISTS at ${expected.path.replace(ROOT, ".")}, but sourceFileFor() ` +
+          `returns null, so the verifier reports "no local copy to check against" about a ` +
+          `document sitting in this repository. That is the §280E / CON 8 / "IRS, Instructions" ` +
+          `/ "§ 31." / "§ 162" defect. Fix the router pattern for the CLASS, not for this cite.`,
+      );
+    }
+
+    // Rule 66d: existence before absence. If nothing is classified-and-held the
+    // loop proves nothing, and a renamed corpus directory would make this gate
+    // pass by examining zero authorities.
+    expect(
+      classifiedAndHeld,
+      "no authority has a classifiable cite AND a held file - the corpus has moved or emptied",
+    ).toBeGreaterThan(300);
+    expect(contradictions, contradictions.join("\n\n")).toEqual([]);
+  });
+
   it("keeps no stale entry in the recorded-debt list", () => {
     const stale: string[] = [];
     for (const id of UNMIRRORED) {
