@@ -62,6 +62,504 @@ export const SS_WAGE_BASE_2026_DOLLARS = 184_500;
 export const BOX_4_CEILING_2026_DOLLARS = 11_439;
 
 export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
+  /* ═════════════════ THE SIX LETTERED BOXES (books-56) ═════════════════
+   *
+   * WHY THESE SIX ARRIVED SEVEN SLICES LATE, recorded because the reason is
+   * more useful than the lessons.
+   *
+   * Every earlier slice built this form outward from what the W-2 ENGINE
+   * computes, and the engine computes money. Nothing computes a person's name,
+   * so boxes a through f — the SSN, the EIN, the two addresses, the control
+   * number and the name — were absent from the ownership table, absent from the
+   * teaching specimen, and therefore unteachable. `resolveWhose` throws on a box
+   * it does not know, so the form could not even LIST them.
+   *
+   * They were found because a NEW lesson, written for the ESD 5208B wage detail,
+   * tied its employee row to `form_w2` box `e`, and `assertEveryTieResolves`
+   * refused the tie and printed the twenty boxes the W-2 had. The tie was right
+   * about the paper. The specimen was wrong. A books-49 gate caught a
+   * books-49-era omission because a cross-reference finally forced it to answer.
+   *
+   * WHY IT MATTERS MORE HERE THAN ELSEWHERE ON THIS FORM. Michael prepared all
+   * ten of Greenway's 2025 W-2s and the W-3 himself and has said he believes he
+   * may have got them wrong. Boxes a, e and f are the three fields the SSA
+   * matches on. A wrong figure in box 1 is arithmetic: the IRS queries it. A
+   * wrong NAME in box e is silent — the filing is accepted, nothing on
+   * Greenway's side looks wrong, and years later an employee finds a year
+   * missing from their earnings record. The boxes with the quietest failure mode
+   * were the boxes with nothing behind them.
+   */
+  {
+    formId: "form_w2",
+    box: "a",
+    headline: "The Social Security number — the one box where a mistake is completely silent",
+    plainEnglish:
+      "The employee's Social Security number, copied from their card. No money is calculated here " +
+      "and no tax is charged on it, which is exactly why it gets treated as paperwork. It is not " +
+      "paperwork. This is the box that decides WHOSE earnings record receives credit for every " +
+      "dollar in boxes 1 through 6 beside it. Get it wrong and the money is reported, the return " +
+      "is accepted, and it lands in nobody's account.",
+    whereItComesFrom:
+      "The employee's actual social security card, at hire, verified against it — not from a job " +
+      "application, not from a payroll nickname, and not from an old record carried forward. The " +
+      "SSA offers free online verification of names and numbers, which is the only way to know " +
+      "rather than believe.",
+    howToReadIt:
+      "There is nothing to read as a quantity, so read it as a match instead: every number here " +
+      "must appear identically on that person's row of the ESD 5208B wage detail for the same " +
+      "quarters. Greenway's 2025 employer copies carry ten distinct numbers, one per person, and " +
+      "the W-3's box c count of ten is what makes that cross-check possible at all.",
+    commonMistake:
+      "Two mistakes, and neither announces itself. The first is a digit transposed from a card " +
+      "nobody re-checked since hire. The second is more specific and the IRS calls it out by " +
+      "name: letting software auto-populate an ITIN into this box because it is the only " +
+      "nine-digit number on file. An ITIN is formatted exactly like an SSN — it begins with a 9 " +
+      "— so it looks correct and is not.",
+    whatToDo:
+      "Match every number to the card itself before filing, and use the SSA's free verification " +
+      "service for anybody hired since the last time you checked. Never invent a placeholder. If " +
+      "the card genuinely has not arrived, write \u201cApplied For\u201d on a paper filing or enter zeros " +
+      "when e-filing, then correct it with a W-2c once the real number appears.",
+    examples: [
+      {
+        title: "What an employee with no card yet looks like on paper versus in a file",
+        steps: [
+          "A new hire has applied for a card but it has not arrived before the January deadline.",
+          "On a PAPER Form W-2 filed with the SSA, box a reads \u201cApplied For\u201d.",
+          "If e-filing, it is zeros instead: 000-00-0000 when creating the form online, or " +
+            "000000000 when uploading a file.",
+          "Note that the two e-file spellings differ only by hyphens, and the instructions give " +
+            "each a specific channel. This is the same distinction the Paid Leave CSV forces.",
+          "Then, once the number arrives, file a Form W-2c showing it. The deadline is not a " +
+            "reason to guess a number.",
+        ],
+        answer: "\u201cApplied For\u201d on paper, zeros when e-filing, then a W-2c",
+        moral:
+          "There is an authorised way to say \u201cI do not know this number yet\u201d. Because there is, " +
+          "there is never a reason to fill the box with something untrue.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box a",
+        quote:
+          "Box a\u2014Employee\u2019s social security number. Enter the\nnumber shown on the employee\u2019s social security card.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\u201cShown on the card\u201d is the whole rule. Not what the employee says it is, not what your " +
+          "records say it is — what is printed on the card. Everything else in this lesson " +
+          "follows from that one sentence.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box a",
+        quote:
+          "If the employee has applied for a card but the number is\nnot received in time for filing, enter \u201cApplied For\u201d in box a\non paper Forms W-2 filed with the SSA. If e-filing, enter\nzeros (000-00-0000 if creating forms online or 000000000\nif uploading a file).",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The authorised way to file without a number. Notice the IRS specifies the format for " +
+          "each channel down to the hyphens, which tells you how literally these files are read " +
+          "by machine.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box a, Caution",
+        quote: "Caution: Do not auto-populate an ITIN into box a.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "A warning aimed squarely at payroll software rather than at people, which is why it " +
+          "belongs in a system like this one. If an ITIN is the only nine-digit number on file, " +
+          "a program will helpfully put it here and be wrong.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), ITINs for aliens",
+        quote:
+          "Do not accept an ITIN in place of an\nSSN for employee identification or for work.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The rule behind the caution. Worth reading beside WAC 192-310-010(3)(b)(v), which says " +
+          "an ITIN DOES qualify on Washington's wage detail. The two governments genuinely differ " +
+          "here, so one right answer does not transfer to the other form.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box a",
+        quote:
+          "If you do not provide the correct employee name and\nSSN on Form W-2, you may owe a penalty unless you\nhave reasonable cause.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The name and the number are penalised together, as one fact. That is the clearest sign " +
+          "these two boxes are not administrative trivia: they carry their own penalty, separate " +
+          "from anything to do with the amounts.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208b",
+        box: "employee",
+        why:
+          "Washington's quarterly wage detail lists the same person by name and Social Security " +
+          "number. If this box and that row disagree, at least one of the two filings is " +
+          "crediting the wrong record — and the ITIN rule differs between them, so it is a real " +
+          "difference and not merely a copy.",
+      },
+    ],
+  },
+  {
+    formId: "form_w2",
+    box: "b",
+    headline: "Greenway's EIN — the number that must be identical on every payroll filing",
+    plainEnglish:
+      "The Employer Identification Number the IRS assigned to Greenway. Where box a identifies the " +
+      "employee, this identifies the employer. It is the key the IRS uses to match these W-2s " +
+      "against the four quarterly Forms 941 that reported the same wages during the year.",
+    whereItComesFrom:
+      "The EIN already used on Greenway's own federal employment tax returns. Greenway's 2025 " +
+      "employer copies show 46-4217016, and the same number appears on the W-3 that transmitted " +
+      "them — as box e there, not box b, because the two forms use different letters.",
+    howToReadIt:
+      "Read it as an equality check across the year: this number, the number on all four 941s, " +
+      "and the number on the W-3 must be one number. If the W-2s say one thing and the 941s say " +
+      "another, the IRS has two unrelated sets of records for one company and the wage totals " +
+      "cannot reconcile.",
+    commonMistake:
+      "Three, all named in the instructions. Truncating it, which is forbidden even though " +
+      "truncation is permitted for the employee's SSN on some copies. Substituting your own " +
+      "Social Security number when the EIN is not to hand. And using a prior owner's EIN, which " +
+      "is a live risk for any business that changed hands.",
+    whatToDo:
+      "Copy it from the last filed Form 941, not from memory, and check it against the W-3 in the " +
+      "same envelope. If Greenway genuinely had no EIN at filing time, write \u201cApplied For\u201d — " +
+      "never a Social Security number.",
+    examples: [
+      {
+        title: "Why this box is checked against the 941 rather than against itself",
+        steps: [
+          "The IRS matches the year's W-2 wage totals to the four 941s filed under the same EIN.",
+          "Greenway's 2025 W-3 reports box 1 wages of $332,975.44 across ten W-2s.",
+          "That total is what the four quarterly 941 box 2 figures must add up to.",
+          "The match happens BY EIN. A wrong EIN does not produce a mismatch — it produces no " +
+            "match at all, which is a different and worse problem.",
+        ],
+        answer: "One EIN across ten W-2s, one W-3, and four 941s",
+        moral:
+          "An identifier error does not make a number wrong. It makes the number belong to " +
+          "nobody, and that is far harder to notice than a figure that fails to add up.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box b",
+        quote:
+          "Box b\u2014Employer identification number (EIN). Show\nthe EIN assigned to you by the IRS (00-0000000). This\nshould be the same number that you used on your federal\nemployment tax returns (Forms 941, 943, 944, CT-1, or\nSchedule H (Form 1040)). Do not truncate your EIN.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\u201cThe same number that you used on your federal employment tax returns\u201d is the " +
+          "cross-check stated by the IRS itself. Greenway files 941s, so the 941 is the document " +
+          "to copy it from.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w3",
+        box: "e",
+        why:
+          "The transmittal carries the same EIN, and the instructions say to enter the same number " +
+          "as on the W-2s. Note the letter changes between the two forms: employer EIN is box b " +
+          "on the W-2 and box e on the W-3, which is exactly the sort of slip a hand-filled form " +
+          "invites.",
+      },
+      {
+        formId: "form_941",
+        box: "1",
+        why:
+          "The quarterly return is filed under this same EIN, and it is the document the IRS " +
+          "reconciles these W-2s against. Copy the number from there rather than retyping it.",
+      },
+    ],
+  },
+  {
+    formId: "form_w2",
+    box: "c",
+    headline: "Greenway's name and address — the employer block, not the employee's",
+    plainEnglish:
+      "Greenway's own name, address and ZIP code, printed on every employee's copy so they know " +
+      "who paid them. It sits directly above the employee's address in box f, and the whole " +
+      "difficulty of this box is that the two are adjacent and easily swapped.",
+    whereItComesFrom:
+      "The same name and address shown on Greenway's Forms 941. The 2025 employer copies read " +
+      "LYMAN'S MARIJUANA, 4851 GEIGER RD SE, PORT ORCHARD WA 98367.",
+    howToReadIt:
+      "Compare it against the 941 and against the W-3's box f employer name. All three should be " +
+      "one company written one way. A business trading under a name different from its " +
+      "registered name is the usual reason they drift apart.",
+    commonMistake:
+      "Putting the employee's address here, or Greenway's address in box f. Also using commas and " +
+      "periods in the address, which the Postal Service recommends against for return addresses " +
+      "— minor, but it is the one formatting note the IRS chose to include.",
+    whatToDo:
+      "Copy the name and address from the most recent 941 so the two agree by construction, and " +
+      "read box c and box f together to confirm one is the company and the other is the person.",
+    examples: [
+      {
+        title: "Two addresses, two different purposes",
+        steps: [
+          "Box c is Greenway: it tells the employee and the SSA who the employer is.",
+          "Box f is the employee: it is where their copies of this form are posted.",
+          "On Michael's 2025 copies, box c reads PORT ORCHARD WA 98367 for the company, while " +
+            "one employee's box f reads PORT ORCHARD WA 98366 — a neighbouring ZIP.",
+          "Because the two are one digit apart, a swap produces a form that looks entirely " +
+            "plausible and posts to the wrong place.",
+        ],
+        answer: "Company in c, person in f",
+        moral:
+          "The most confusable pairs on a form are the ones printed next to each other. That is " +
+          "an argument for checking them together rather than in isolation.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box c",
+        quote:
+          "Box c\u2014Employer\u2019s name, address, and ZIP code.\nThis entry should be the same as shown on your Forms\n941, 943, 944, CT-1, or Schedule H (Form 1040).",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The same instruction as box b: match the 941. The IRS is describing a filing system " +
+          "that matches records to each other, and it says twice in two boxes which document is " +
+          "the reference copy.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w3",
+        box: "f",
+        why:
+          "The W-3's box f is the employer's name and the instructions say to enter the same name " +
+          "as on the W-2s. Another letter change between the two forms: employer name is box c " +
+          "here and box f there.",
+      },
+    ],
+  },
+  {
+    formId: "form_w2",
+    box: "d",
+    headline: "Control number — optional, and the letter differs from the W-3's",
+    plainEnglish:
+      "An optional reference of your own for telling individual W-2s apart, useful only if you " +
+      "have enough forms to need a filing system for them. The IRS says outright that you do not " +
+      "have to use it, and Greenway leaves it empty.",
+    whereItComesFrom:
+      "Nowhere in the accounting records. It is yours to assign or to ignore. Greenway's 2025 " +
+      "employer copies leave it blank, and blank is correct rather than incomplete.",
+    howToReadIt:
+      "Nothing to read. The only thing worth knowing is structural: the W-2's control number is " +
+      "box d, and the W-3's control number is box a. The two forms disagree about which letter " +
+      "means this.",
+    commonMistake:
+      "Treating an empty optional box as a gap and inventing something to fill it. A box the " +
+      "instructions describe as optional is finished when it is empty.",
+    whatToDo:
+      "Leave it blank unless you have a numbering scheme you actually use. If you do use one, " +
+      "remember it is for your benefit only — the SSA does not match on it.",
+    examples: [
+      {
+        title: "The same idea under two different letters",
+        steps: [
+          "On the Form W-2, the control number is box d.",
+          "On the Form W-3 transmittal that goes on top of them, the control number is box a.",
+          "Meanwhile the W-2's box a is the employee's SSN and the W-3's box d is an " +
+            "establishment number.",
+          "So the same two letters mean four different things across two forms that travel in " +
+            "one envelope.",
+        ],
+        answer: "d on the W-2, a on the W-3",
+        moral:
+          "Lettered boxes are not a shared vocabulary across forms. Read the caption printed on " +
+          "the paper, never the letter alone.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box d",
+        quote:
+          "Box d\u2014Control number. You may use this box to\nidentify individual Forms W-2. You do not have to use this\nbox.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\u201cYou do not have to use this box\u201d is about as clear as tax writing gets. It is quoted " +
+          "here so that leaving it empty is a decision backed by the instructions rather than an " +
+          "omission somebody later worries about.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w3",
+        box: "a",
+        why:
+          "The W-3's control number, the same optional idea under a different letter. Tied here " +
+          "specifically so the letter mismatch is visible on both screens rather than discovered " +
+          "while filling a form by hand.",
+      },
+    ],
+  },
+  {
+    formId: "form_w2",
+    box: "e",
+    headline: "The employee's name — and the last name is the part that matters most",
+    plainEnglish:
+      "The employee's name exactly as it appears on their social security card: first name, " +
+      "middle initial, last name. Like box a it holds no money, and like box a it decides whose " +
+      "earnings record gets credited. The SSA matches the name and the number together, so this " +
+      "box can invalidate a correct SSN.",
+    whereItComesFrom:
+      "The social security card. Not the payroll system's display name, not what the person signs " +
+      "their emails, and not a married name the employer was told about but the SSA never was.",
+    howToReadIt:
+      "Read it against the ESD 5208B wage detail row for the same person and the same quarter. " +
+      "Greenway's ten 2025 employees include compound and multi-part names — TAITAGUE, ZENGER, " +
+      "BECKER, BRITTON — and compound names are where the formatting rules bite.",
+    commonMistake:
+      "A married name changed with the employer but never with the Social Security Administration, " +
+      "which is the single most common cause of a rejected wage report. Then compound names " +
+      "joined into one word, titles or degrees added, and a suffix entered when it is not on the " +
+      "card — the instructions say the SSA would rather you left the suffix off Copy A even when " +
+      "it is.",
+    whatToDo:
+      "Fill this from the card. Where a name has changed, keep using the name on the original " +
+      "card until you have seen the corrected one; the employee gets that from any SSA office. " +
+      "Separate compound names with a hyphen or a space, never by joining them, and leave off " +
+      "\u201cDr.\u201d, \u201cRN\u201d and \u201cEsq.\u201d entirely.",
+    examples: [
+      {
+        title: "The IRS's own compound-name example, and why it has two right answers",
+        steps: [
+          "Take the name \u201cJessie R Smith-Jones\u201d.",
+          "The last name field takes \u201cSmith-Jones\u201d OR \u201cSmith Jones\u201d — a hyphen or a blank space.",
+          "What it must never take is \u201cSmithJones\u201d, because joining the parts into one word " +
+            "makes a name the SSA cannot match.",
+          "And all parts must be present: dropping \u201cJones\u201d to make it fit is not an option, " +
+            "though initials for the first and middle names are if the space is genuinely short.",
+          "This is a real risk at Greenway, whose employee list includes multi-part names.",
+        ],
+        answer: "Smith-Jones or Smith Jones, never SmithJones",
+        moral:
+          "The instructions permit two spellings and forbid a third. That is worth knowing " +
+          "precisely because the forbidden one is what a text field with no spaces encourages.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes e and f",
+        quote:
+          "Boxes e and f\u2014Employee\u2019s name and address. Enter\nthe name as shown on your employee\u2019s social security\ncard (first name, middle initial, last name).",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The IRS gives boxes e and f one joint heading, which is why they are taught as a pair " +
+          "here. The rule itself is the same three words as box a: as shown on the card.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes e and f",
+        quote:
+          "It is especially important to report the exact last\nname of the employee.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The IRS singles out one part of the name as especially important. If you check one " +
+          "thing before filing, check the last names against the cards.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes e and f",
+        quote:
+          "Separate parts of a compound name with either a\nhyphen or a blank space. Do not join them into a single\nword.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "Two permitted spellings and one forbidden one, stated plainly. This is the rule that " +
+          "decides whether a hyphenated surname credits the right person.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208b",
+        box: "employee",
+        why:
+          "The Washington wage detail lists the same person by full name. A name that matches the " +
+          "card on one filing and the payroll nickname on the other means one of the two credits " +
+          "nobody, and nothing on Greenway's side will look wrong either way.",
+      },
+    ],
+  },
+  {
+    formId: "form_w2",
+    box: "f",
+    headline: "The employee's address — where their own copies of this form go",
+    plainEnglish:
+      "The employee's address and ZIP code. Its practical job is delivery: this is where the " +
+      "employee's copies are posted so they can file their own tax return. It is the employee's " +
+      "address, distinct from Greenway's in box c immediately above it.",
+    whereItComesFrom:
+      "The employee record, kept current. Include the number, street, and apartment or suite " +
+      "number — Greenway's 2025 copies show at least one address with an APT line.",
+    howToReadIt:
+      "Read it beside box c and confirm one is the company and the other the person. Greenway's " +
+      "employees are mostly in Port Orchard, the same town as the business, and two neighbouring " +
+      "ZIP codes appear across the ten forms — 98367 and 98366.",
+    commonMistake:
+      "A stale address for somebody who moved or left during the year, so their copies never " +
+      "arrive and they cannot file. Confusing this box with box c is the other, and the shared " +
+      "town makes it easy: the same city and state on both lines looks like a duplicate rather " +
+      "than like a mistake.",
+    whatToDo:
+      "Confirm addresses with employees before the January filing run, especially leavers, and " +
+      "check that box c and box f are not the same address unless somebody genuinely lives at " +
+      "the shop.",
+    examples: [
+      {
+        title: "Why leavers are the risk on this box",
+        steps: [
+          "A W-2 is required for anybody paid during the year, including people who left in " +
+            "January.",
+          "The address on file for a leaver is the address they had while employed.",
+          "Nothing in payroll updates after they go, so the copies post to a house they no " +
+            "longer occupy.",
+          "The filing with the SSA is unaffected and entirely correct. The employee is simply " +
+            "unable to file their own return, and hears nothing.",
+        ],
+        answer: "Correct filing, undelivered copies",
+        moral:
+          "This box has no effect on any tax computation and can still leave a person unable to " +
+          "do their taxes. Not every consequence on a form is a tax consequence.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes e and f",
+        quote:
+          "Boxes e and f\u2014Employee\u2019s name and address. Enter\nthe name as shown on your employee\u2019s social security\ncard (first name, middle initial, last name).",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The joint heading for both boxes. Quoted on both lessons because the instructions " +
+          "genuinely treat the name and the address as one instruction, and splitting them here " +
+          "is this system's choice rather than the IRS's.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "c",
+        why:
+          "The employer's address, printed directly above this one. Tied deliberately: the two " +
+          "adjacent address blocks are the pair most easily swapped on this form, and a tie makes " +
+          "each screen name the other.",
+      },
+    ],
+  },
   {
     formId: "form_w2",
     box: "1",
