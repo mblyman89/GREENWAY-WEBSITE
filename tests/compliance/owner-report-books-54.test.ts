@@ -465,11 +465,24 @@ describe("the report's cross-form claims are true", () => {
     ].reduce((n, set) => n + set.reduce((m, l) => m + l.tiesTo.length, 0), 0);
 
     /*
-     * The same four sets today. books-56 added 7 ties to the W-2 (its six new
-     * lettered boxes cross-reference the W-3, the 941 and the ESD wage detail)
-     * and 7 to the Washington set.
+     * THE LIVE FIGURE IS NOT PINNED, AND THAT IS THE POINT (books-60).
+     *
+     * The comment four paragraphs up says it exactly: "a test that hard-codes a
+     * total of a growing thing will break on every slice, and each break invites
+     * the lazy repair." This assertion was `toBe(70)`, and books-60 broke it by
+     * adding 6 ties to the 941 -- the fourth rewrite of the same test, for the
+     * fourth time for the same reason.
+     *
+     * So the live total is no longer pinned to a literal. What this test is
+     * actually FOR is the correction: proving that the books-54 report counted
+     * four sets of five and that the four-set subtotal has grown since. Both of
+     * those are asserted below and neither needs a magic number.
+     *
+     * The dated constants above stay pinned, because they are history and
+     * history does not move. The roadmap tracker (forms-roadmap-tracker.test.ts)
+     * is where today's per-set counts are checked, row by row, against a table
+     * a human maintains -- one place for the live figures, not two.
      */
-    expect(fourSetSubtotal).toBe(70);
     expect(
       fourSetSubtotal,
       "the four-set subtotal fell below its books-54 value, so ties were deleted rather than " +

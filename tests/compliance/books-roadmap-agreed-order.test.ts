@@ -937,9 +937,27 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
    * to re-measure rather than one the gate can re-derive.
    */
   const RUNTIME_COUNTED: Readonly<Record<string, number>> = {
-    // 29 `it(` in source; walks ALL_TAUGHT_FORM_IDS (8 forms x 5 tests) plus
-    // 24 standalone tests. Measured with `vitest run` in books-58.
-    "form-sheet-core.test.ts": 64,
+    /*
+     * Was 64 at books-58. books-60 added a per-ROUTE block that discovers sheet
+     * pages on disk and runs 9 tests against each (2 routes today = 18), plus a
+     * discovery-found-something test and 2 for the newly-reachable "not taught
+     * yet" marker. 64 + 21 = 85.
+     *
+     * Note what this figure now depends on: adding a THIRD sheet route will move
+     * it to 94 without anybody editing this test file. That is the intended
+     * behaviour of the loop (rule 23 / rule 117 -- discover the population), and
+     * it is exactly why this file cannot be counted from source and has to be
+     * re-measured. Measured with `vitest run` in books-60.
+     */
+    "form-sheet-core.test.ts": 85,
+    /*
+     * 22 `it(` in source; one `for` loop over three (label, figure) pairs from
+     * his filed 940 turns 1 into 3. 22 + 2 = 24... plus the loop's own `it(`
+     * being counted once already, so the runner reports 25. Measured with
+     * `vitest run` in books-60 rather than reasoned about, which is the entire
+     * reason this map exists.
+     */
+    "owner-report-books-60.test.ts": 25,
   };
 
   it("prints the true test count for every test file it names", () => {
@@ -973,12 +991,24 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
      * loop-detection branch and RUNTIME_COUNTED exist because of it - see note
      * 3 in the docblock.
      *
-     * Every one of the eight is checked against a live count in the loop below
+     * THE NINTH, TENTH AND ELEVENTH arrived in books-60, and the ninth is not a
+     * new file at all: form-sheet-core.test.ts is now NAMED TWICE, once on the
+     * W-2's sheet row and once on the 941's, because one test file covers both
+     * routes. The regex matches per-mention, not per-file, so a file documented
+     * on two rows counts twice here. That is correct and worth keeping: each
+     * mention is a separate claim in the document and each one gets verified.
+     *
+     * The other two are owner-report-books-60.test.ts (25) and
+     * filed-940-threshold.test.ts (10). The second of those is the gate that
+     * keeps four deliberately-untaught Form 940 boxes untaught for exactly as
+     * long as Michael's filed return justifies it (rule 118).
+     *
+     * Every one of the eleven is checked against a live count in the loop below
      * - statically where that is sound, and against a measured runtime figure
      * where it is not - so raising this number does not weaken anything. It
      * only records that a human looked at the new rows.
      */
-    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(8);
+    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(11);
 
     for (const [, fileName, printedRaw] of rows) {
       const rel = join("tests", "compliance", fileName);

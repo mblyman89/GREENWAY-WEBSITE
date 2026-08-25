@@ -874,7 +874,9 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
 | The screen | `src/app/admin/books/form-w2/page.tsx` (999 lines) | `nav-gate-core.test.ts` |
 | The W-3 taught box by box **(books-55)** | `form-box-lessons-w3.ts` | `form-box-lessons-w3.test.ts` (17) |
-| The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (64) |
+| The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (85) |
+| The 941 as one big sheet **(books-60)** | `form-941/sheet/page.tsx`, one link added to `form-941/page.tsx` | `form-sheet-core.test.ts` (85), `owner-report-books-60.test.ts` (25) |
+| The filed 940 as an authority **(books-60)** | `docs/authorities/federal/filed-form-940-2025-greenway.txt`, `scripts/mirror-filed-940.py` | `filed-940-threshold.test.ts` (10) |
 
 **books-58 grew the screen row above by 29 lines, and that is the ENTIRE change
 to that file.** Michael asked for "one large page with nothing on it but form",
@@ -894,6 +896,37 @@ and it was caught in the same hour rather than by him, a year later.
 it from the MENU and not from reachability; the two are different, and the
 `known` list cannot tell them apart. So `form-sheet-core.test.ts` asserts the
 door exists. Delete the link and it goes red.
+
+### books-60: the second sheet, and what the second sheet exposed
+
+Michael asked to "get back to work on the forms. i really want to see and
+interact with the forms now." The 941 was chosen over the 940 and the W-3 for a
+reason recorded in books-58's own report as a known weakness: the W-2 has zero
+untaught boxes, so the sheet's "not taught yet" marker was UNREACHABLE on the
+only form that had a sheet — an untested guard by rule 40. The 941 has three
+untaught boxes (12, 13, 14), so it is the first screen where both affordances
+render together and the marker stops being a claim.
+
+Adding the second route immediately showed the cost of the first route's tests
+being written by name. `form-sheet-core.test.ts` pinned `form-w2/sheet` and
+nothing else, so the 941's page could have shipped with no door, no access
+guard, no specimen fallback and no honesty line with every test green. The
+block now DISCOVERS sheet routes by walking `src/app/admin/books/*/sheet/` and
+holds each to the same nine promises; a third route inherits them by existing.
+Recorded as rule 117.
+
+**And one mutant escaped, on the assertion that mattered most.** The access
+check read `expect(sheetPage).toMatch(/requireBooksAccess/)`. Deleting the
+`await requireBooksAccess();` call from the body of the page — leaving a screen
+of payroll and tax figures with no permission check — left the suite GREEN,
+because the `import { requireBooksAccess }` line still matched. The gate had
+been testing an import, never a guard. `extractPageGuard` in
+`src/lib/auth/nav-gate-core.ts` already existed for exactly this, strips
+comments first, requires a call shape, and even carried a comment describing
+the hazard; it simply was not being used. Both the 941's and the W-2's
+assertions were repaired and a mutant was run against the W-2 to prove the fix
+reached it. Recorded as rule 116 — third recurrence of the "passed for the
+wrong reason" class.
 
 Two defects were found by running the new core over forms it had not been
 written against, which is the argument for it being form-agnostic:

@@ -286,6 +286,19 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * exemption from the MENU - not from reachability.
        */
       "/admin/books/form-w2/sheet",
+      /*
+       * books-60: the same sheet view for the 941, for the same reasons, and
+       * exempt from the MENU for the same reasons -- reached from the "View just
+       * the form" link in the header of /admin/books/form-941, which IS in the
+       * menu.
+       *
+       * Worth recording WHY the 941 was second rather than the 940 or the W-3.
+       * The W-2 has zero untaught boxes, so the sheet's "not taught yet" marker
+       * was unreachable on the only form that had a sheet -- an untested guard
+       * by rule 40. The 941 has three untaught boxes (12, 13, 14), so this route
+       * is the first place both affordances render on one screen.
+       */
+      "/admin/books/form-941/sheet",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

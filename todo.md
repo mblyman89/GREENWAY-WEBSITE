@@ -2880,3 +2880,87 @@ building the matcher twice.
        (e) The confirmation number, filing period, frequency and preparer are
            part of the evidence. Pin them in the fixture so the fixture can
            always be traced back to a specific real filing.
+
+116. **AN IMPORT SATISFIES A GREP. A GUARD DOES NOT. NEVER ASSERT A CALL BY
+     SEARCHING FOR ITS NAME (books-60, THIRD RECURRENCE OF THE "PASSED FOR THE
+     WRONG REASON" CLASS).** A gate on the 941 sheet read
+     `expect(sheetPage).toMatch(/requireBooksAccess/)`. A mutation deleted the
+     `await requireBooksAccess();` call from the body of the page -- leaving a
+     screen of tax data with no access check at all -- and the suite stayed
+     GREEN, because the `import { requireBooksAccess } from ...` line at the top
+     of the file still matched the pattern. The test had never been testing the
+     guard. It was testing the import.
+       (a) This is the SAME CLASS as the books-59 escape, where a refusal test
+           passed because a different guard's message happened to contain the
+           word being grepped for, and the same class as the prose-matching that
+           rule 24/35 exist to stop. A test that matches TEXT rather than
+           BEHAVIOUR will eventually match the wrong text. Three recurrences
+           now. Treat any `toMatch` on an identifier as suspect by default.
+       (b) THE FIX IS NEVER A BETTER REGEX. It is to assert the SHAPE: a call,
+           with its parentheses, in code, with comments stripped. In this repo
+           `extractPageGuard` in `src/lib/auth/nav-gate-core.ts` already did
+           exactly that, and already carried a comment explaining this hazard.
+           A helper that exists and is not used is worse than no helper, because
+           the next person assumes the check is being done.
+       (c) When you find one instance, FIX EVERY INSTANCE (rule 23). The W-2
+           sheet's identical assertion was repaired in the same commit, and a
+           mutant was run against the W-2 too, to prove the repair reached it
+           rather than only the file being worked on.
+       (d) WHEN A SOURCE-TEXT ASSERTION IS UNAVOIDABLE, MUTATE IT THE SAME HOUR
+           YOU WRITE IT. Every one of these escapes was found by deleting the
+           real thing from the real file and watching the suite. None of them
+           was found by reading the test.
+
+117. **A GATE WRITTEN FOR ONE FORM PROTECTS ONE FORM. DISCOVER THE POPULATION,
+     DO NOT LIST IT (books-60).** `form-sheet-core.test.ts` pinned the W-2's
+     sheet route by name, which was correct when one existed. Adding the 941's
+     sheet showed the cost: the second route could have shipped with no door, no
+     access guard, no specimen fallback and no honesty line, and every test would
+     still have been green, because nothing was looking at it.
+       (a) Walk the filesystem (or the vocabulary, or the registry) for the
+           population, then hold every member to the same promises. A third
+           member should inherit the guarantees BY EXISTING.
+       (b) ASSERT THE DISCOVERY FOUND SOMETHING, and assert it found the members
+           you already know about. A glob that silently matches nothing is a
+           gate that parses nothing (rule 39) and it passes forever. Naming the
+           known members also makes DELETING one a decision somebody makes,
+           rather than a quiet reduction in coverage.
+       (c) This is the same finding as the books-55 correction, where "56 ties"
+           was a count over four lesson sets while six existed. Reporting or
+           checking a subset while describing the whole is the recurring shape.
+
+118. **A DELIBERATE OMISSION NEEDS A TEST MORE THAN A DELIBERATE ADDITION DOES
+     (books-60).** Michael asked for lessons only where they would "really truly
+     benefit" him and said plainly that some boxes do not apply to him. Acting on
+     that instruction PRODUCES GAPS -- Form 940 boxes 16a-16d have a specimen and
+     no lesson, on purpose. A gap is indistinguishable from an oversight, so the
+     obvious, helpful, wrong thing for a future reader to do is fill it.
+       (a) Make the REASON executable, not just commented. The reason those four
+           boxes are untaught is that his filed 2025 return shows line 12 at
+           $420.00 and Part 5 says to report by quarter "only if line 12 is more
+           than $500". That is a measurement, so it can be a test.
+       (b) PIN THE FIGURE, NOT THE CONCLUSION. The gate asserts $420 < $500 and
+           reads the $500 sentence out of the mirrored return. If his payroll
+           grows past the threshold the test fails and TELLS us the four lessons
+           are now worth writing. It defends the omission for exactly as long as
+           the figure justifies it, and not one day longer.
+       (c) The failure message must argue with the reader: say what measurement
+           says otherwise, and what to do if the measurement has changed. A bare
+           red test invites deletion.
+
+119. **A REPORT ALREADY DELIVERED IS EVIDENCE. CORRECT IT IN PLACE, ADDITIVELY,
+     AND PIN BOTH NUMBERS (books-60).** books-58's owner report told Michael his
+     teaching to-do list was "17 boxes across two federal forms", and its gate
+     pinned 17. books-60 taught four of them, so the gate went red -- correctly.
+     The tempting repair is to edit the 17 to a 13.
+       (a) DO NOT. He has the PDF. Silently rewriting the markdown leaves him
+           holding a document that disagrees with the repository and no way to
+           tell which one lied to him.
+       (b) Leave the original sentence standing, add a dated correction beneath
+           it, and require BOTH in the gate: the historical figure must survive,
+           the correction must exist, and the corrected number must equal what
+           the engine actually produces. All three, or the record is not a
+           record.
+       (c) State WHY the number moved, in the same place. "Four of the seven were
+           taught and three were deliberately left" is the useful sentence; "13"
+           on its own teaches nothing.

@@ -84,7 +84,13 @@ describe("books-58 owner report: the coverage table matches the engine", () => {
   }[] = [
     { formId: "form_w2", total: 26, taught: 26, untaught: 0 },
     { formId: "form_w3", total: 31, taught: 31, untaught: 0 },
-    { formId: "form_941", total: 27, taught: 20, untaught: 7 },
+    // books-60 moved this row: four of the seven untaught boxes (5e, 6, 7, 10)
+    // were taught. The books-58 table is NOT edited to hide that -- it is left
+    // standing as the historical figure and the report carries a dated
+    // correction beneath it, which the tests below pin. What is asserted here
+    // is TODAY'S engine output, because that is what the reader will see if he
+    // opens the page.
+    { formId: "form_941", total: 27, taught: 24, untaught: 3 },
     { formId: "form_940", total: 30, taught: 20, untaught: 10 },
     { formId: "esd_5208a", total: 3, taught: 3, untaught: 0 },
     { formId: "esd_5208b", total: 4, taught: 4, untaught: 0 },
@@ -109,23 +115,51 @@ describe("books-58 owner report: the coverage table matches the engine", () => {
     });
   }
 
-  it("the report's headline figure of 17 untaught boxes is the real total", () => {
-    const total = ALL_TAUGHT_FORM_IDS.reduce((n, f) => n + coverageOf(f).untaught, 0);
-    expect(total).toBe(17);
+  /**
+   * THE HISTORICAL FIGURE AND THE CURRENT FIGURE ARE BOTH PINNED.
+   *
+   * books-58 reported 17 untaught boxes and that was true. books-60 taught four
+   * of them. The temptation is to edit the 17 to a 13 and move on, which would
+   * leave Michael holding a printed PDF that disagrees with the repository and
+   * no way to tell which one lied to him.
+   *
+   * So this gate now requires THREE things at once: the original sentence must
+   * still be in the document, a dated correction must sit with it, and the
+   * corrected number must equal what the engine actually produces. Delete any
+   * one of the three and this goes red.
+   */
+  it("keeps the books-58 figure of 17 on the record rather than overwriting it", () => {
     expect(md).toMatch(/\*\*17 boxes across two federal forms\.\*\*/);
   });
 
-  it("the 941's named untaught boxes are exactly what the report lists", () => {
-    expect(coverageOf("form_941").untaughtBoxes).toEqual([
-      "5e",
-      "6",
-      "7",
-      "10",
-      "12",
-      "13",
-      "14",
-    ]);
+  it("carries a books-60 correction whose number is the engine's real total", () => {
+    const total = ALL_TAUGHT_FORM_IDS.reduce((n, f) => n + coverageOf(f).untaught, 0);
+    expect(total).toBe(13);
+    // The correction must state the new total in words he will read, not just
+    // exist as a heading. A heading with no figure under it corrects nothing.
+    expect(md).toMatch(/Updated in books-60/);
+    expect(md).toMatch(/\*\*13 boxes, not 17\.\*\*/);
+  });
+
+  it("the 941's named untaught boxes are exactly what both tables claim", () => {
+    // The historical list of seven must survive verbatim...
     expect(md).toMatch(/5e, 6, 7, 10, 12, 13, 14/);
+    // ...and the three that are still untaught must be the real three, named.
+    expect(coverageOf("form_941").untaughtBoxes).toEqual(["12", "13", "14"]);
+    expect(md).toMatch(/3 not taught \(12, 13, 14\)/);
+  });
+
+  /**
+   * WHY THOSE THREE WERE LEFT ALONE HAS TO BE WRITTEN DOWN.
+   *
+   * Michael's instruction was to add a lesson "only ... if it will really truly
+   * benefit me". A later reader (including me, after a compaction) must be able
+   * to tell a deliberate omission from a forgotten one, or the three boxes get
+   * "fixed" by someone adding the exact lessons he asked not to have.
+   */
+  it("states in the report WHY 12, 13 and 14 were deliberately not taught", () => {
+    expect(md).toMatch(/subtraction of zero/);
+    expect(md).toMatch(/EFTPS/);
   });
 
   it("the report's claim that the W-2 has zero untaught boxes is true", () => {

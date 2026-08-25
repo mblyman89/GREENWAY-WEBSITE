@@ -660,9 +660,30 @@ function Shell({ quarter, children }: { quarter: QuarterRef; children: React.Rea
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--admin-text)]">
-          Form 941 &mdash; {formatQuarter(quarter)}
-        </h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-xl font-semibold text-[var(--admin-text)]">
+            Form 941 &mdash; {formatQuarter(quarter)}
+          </h1>
+          {/*
+            THE DOOR (books-60).
+
+            The sheet view is deliberately not a menu item -- it is one form's
+            alternative view, and five more top-level links for "another way to
+            look at a page the menu already has" would bury the pages that
+            matter. But a page with no way in is a page that cannot be tested,
+            and books-58 learned that the hard way: the W-2 sheet shipped with a
+            link back and nothing linking forward, and nav-gate-core caught it.
+
+            So this link is not decoration. It is the only route in, and
+            form-sheet-core.test.ts asserts it exists.
+          */}
+          <Link
+            href={`/admin/books/form-941/sheet?year=${quarter.year}&q=${quarter.quarter}`}
+            className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+          >
+            View just the form &rarr;
+          </Link>
+        </div>
         <p className="mt-1 max-w-3xl text-sm text-[var(--admin-text-muted)]">
           The quarterly federal employment tax return. This screen reads the pay runs whose
           pay date falls inside the quarter, adds them up, and shows the return line by line

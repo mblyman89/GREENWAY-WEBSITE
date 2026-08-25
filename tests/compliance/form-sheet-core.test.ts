@@ -47,7 +47,7 @@
  * through every assertion here without anybody remembering to.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -61,6 +61,7 @@ import {
 import type { BoxLesson } from "@/lib/payroll/form-box-core";
 import { ALL_TAUGHT_FORM_IDS, FORM_ID_W2 } from "@/lib/payroll/form-box-adapters";
 import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
+import { extractPageGuard } from "@/lib/auth/nav-gate-core";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
 import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
@@ -198,7 +199,18 @@ describe("form-sheet-core: the 'not taught yet' marker is reachable", () => {
   it("the 941 really does have untaught boxes today", () => {
     const cov = sheetCoverage(sheetGroups(teachingBoxes("form_941"), ALL_LESSONS));
     expect(cov.untaught).toBeGreaterThan(0);
-    expect(cov.untaughtBoxes).toEqual(["5e", "6", "7", "10", "12", "13", "14"]);
+    /*
+     * books-60 moved this list from seven to three. Lines 5e, 6, 7 and 10 were
+     * taught; 12, 13 and 14 were left alone on purpose, because for Greenway
+     * line 12 is a subtraction of zero, line 13 is a transcription of the EFTPS
+     * record and line 14 is arithmetic on the two -- Michael asked for a lesson
+     * "only ... if it will really truly benefit me".
+     *
+     * The list stays PINNED rather than loosened to `.length > 0`, because the
+     * useful failure is not "some box is untaught" but "the set changed and
+     * nobody said why".
+     */
+    expect(cov.untaughtBoxes).toEqual(["12", "13", "14"]);
   });
 
   it("the 940 really does have untaught boxes today", () => {
@@ -357,7 +369,10 @@ describe("form-sheet-core: the page keeps its promises", () => {
   });
 
   it("the new route is additive and guards access like every other books page", () => {
-    expect(pageSrc).toMatch(/requireBooksAccess/);
+    // Was `toMatch(/requireBooksAccess/)`, which an import satisfies. See the
+    // per-route block below for the mutation that proved it. Rule 23: the fix
+    // belongs on every instance of the class, including this one.
+    expect(extractPageGuard(pageSrc)).toEqual({ kind: "books-access" });
     expect(pageSrc).toMatch(/FormSheet/);
   });
 
@@ -403,5 +418,172 @@ describe("form-sheet-core: the page keeps its promises", () => {
     );
     expect(oldPage).not.toMatch(/FormSheet/);
     expect(explorer).not.toMatch(/FormSheet|form-sheet-core/);
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EVERY SHEET ROUTE, NOT JUST THE ONE THAT EXISTED WHEN THIS WAS WRITTEN
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The block above pins the W-2 sheet by name. That was right for books-58, when
+ * there was one. books-60 added the 941's sheet and immediately exposed the
+ * shape of the problem: a per-form gate protects the form it names and nothing
+ * else, so the second sheet could have shipped with no door, no access guard and
+ * no specimen fallback and every test would still have been green.
+ *
+ * Standing rule 23: fix the class, not the instance. So this block DISCOVERS
+ * sheet routes by walking the filesystem and holds each one to the same
+ * promises. A third sheet gets these guarantees by existing.
+ *
+ * Standing rule 43: walk the vocabulary. The discovery is asserted to have found
+ * something, and to have found the routes we know about -- because a glob that
+ * silently matches nothing is a gate that parses nothing (rule 39), and it would
+ * pass forever.
+ */
+describe("form-sheet-core: every sheet route keeps the same promises", () => {
+  const BOOKS = join(ROOT, "src/app/admin/books");
+
+  /** Discovered, not listed: `<form dir>` for every `<form dir>/sheet/page.tsx`. */
+  const sheetForms: string[] = readdirSync(BOOKS, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .filter((e) => existsSync(join(BOOKS, e.name, "sheet", "page.tsx")))
+    .map((e) => e.name)
+    .sort();
+
+  it("finds the sheet routes, so nothing below can pass over an empty list", () => {
+    // Rule 66d / 39. If this ever returns [] the whole block becomes vacuous.
+    expect(sheetForms.length).toBeGreaterThanOrEqual(2);
+    // Named explicitly as well, so DELETING a sheet is a decision somebody
+    // makes rather than a quiet reduction in what is being checked.
+    expect(sheetForms).toContain("form-w2");
+    expect(sheetForms).toContain("form-941");
+  });
+
+  for (const form of sheetForms) {
+    describe(form, () => {
+      const sheetPage = readFileSync(join(BOOKS, form, "sheet", "page.tsx"), "utf8");
+      const parentPath = join(BOOKS, form, "page.tsx");
+
+      it("has a parent screen to be a view OF", () => {
+        // A sheet with no parent is not an alternative view of anything, and
+        // the nav-gate exemption ("reached from the parent's header") would be
+        // an excuse with nothing behind it.
+        expect(existsSync(parentPath), `${form} has a sheet but no page.tsx`).toBe(true);
+      });
+
+      it("guards access like every other books page", () => {
+        /*
+         * ═══ THIS ASSERTION USED TO BE `toMatch(/requireBooksAccess/)` ═══
+         *
+         * A mutation run in books-60 deleted the `await requireBooksAccess();`
+         * CALL from the body of this very page and the suite stayed green,
+         * because the import statement at the top of the file still matched the
+         * pattern. The test was passing on the strength of an import while the
+         * page it was protecting had no guard at all.
+         *
+         * That is the same class as the escape recorded in books-59, where a
+         * refusal test passed because a different guard's message happened to
+         * contain the word it was grepping for: a test that matches TEXT rather
+         * than BEHAVIOUR eventually matches the wrong text.
+         *
+         * `extractPageGuard` already exists for precisely this, strips comments
+         * first, and requires a call shape -- `requireBooksAccess(` -- not a
+         * mention. Rule 23: fix the class. So this uses it, and so does the
+         * W-2's own assertion above.
+         */
+        expect(extractPageGuard(sheetPage)).toEqual({ kind: "books-access" });
+      });
+
+      it("renders through the shared FormSheet rather than its own markup", () => {
+        expect(sheetPage).toMatch(/FormSheet/);
+        expect(sheetPage).toMatch(/@\/components\/admin\/books\/FormSheet/);
+      });
+
+      it("falls back to the teaching specimen so it is not blank for a year", () => {
+        // books-49, in his words: "I am unable to see or use the tab system."
+        // The cause was a teaching surface gated on data that will not exist
+        // until 2027.
+        expect(sheetPage).toMatch(/teachingBoxes\(/);
+      });
+
+      it("does NOT fall back to the specimen when the read failed", () => {
+        // The distinction that matters: "no payroll yet" is honest, "the
+        // database broke" must never be dressed up as a specimen, because the
+        // specimen's figures are not his.
+        expect(sheetPage).toMatch(/readFailed/);
+      });
+
+      it("says which of the two a reader is looking at", () => {
+        // A reader who cannot tell a blank specimen from his own computed
+        // return is one step from typing invented figures into a government
+        // portal.
+        expect(sheetPage).toMatch(/not computed yet/);
+      });
+
+      it("is reachable: the parent screen carries a door to it", () => {
+        // THE GATE THAT EXISTS BECAUSE ANOTHER GATE CAUGHT ME. See the W-2
+        // block above -- this is the same assertion, made for every form
+        // instead of for one.
+        const parent = readFileSync(parentPath, "utf8");
+        expect(
+          parent,
+          `${form}/page.tsx has no link to ${form}/sheet. The sheet is exempt from the ` +
+            `menu in nav-gate-core's known list, and that exemption is only honest while ` +
+            `a door exists somewhere.`,
+        ).toMatch(new RegExp(`/admin/books/${form}/sheet`));
+        expect(parent).toMatch(/View just the form/);
+      });
+
+      it("carries a link back, so the sheet is not a dead end", () => {
+        expect(sheetPage).toMatch(new RegExp(`/admin/books/${form}\\b`));
+      });
+
+      it("leaves the parent screen's explorer alone", () => {
+        // "Rather than updating or changing any of it." Proved by absence: the
+        // parent must not import the sheet renderer.
+        const parent = readFileSync(parentPath, "utf8");
+        expect(parent).not.toMatch(/FormSheet/);
+      });
+    });
+  }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE "NOT TAUGHT YET" MARKER IS FINALLY REACHABLE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * books-58 shipped the marker and said so honestly in the owner report: it
+ * could not be proved on the only form with a sheet, because the W-2 has zero
+ * untaught boxes. Rule 40 -- an unreachable guard is an untested guard.
+ *
+ * The 941's sheet closes that. This asserts the closure rather than assuming it,
+ * because "the 941 has untaught boxes" is a fact about today's lesson set and
+ * will stop being true the day somebody teaches lines 12, 13 and 14.
+ */
+describe("books-60: a sheet now renders BOTH affordances", () => {
+  it("the 941 sheet has taught boxes and untaught boxes on the same screen", () => {
+    const groups = sheetGroups(teachingBoxes("form_941"), FORM_941_LESSONS);
+    const cells = groups.flatMap((g) => g.cells);
+    const teachable = cells.filter((c) => c.affordance === "teachable");
+    const untaught = cells.filter((c) => c.affordance === "untaught");
+
+    expect(teachable.length).toBeGreaterThan(0);
+    expect(
+      untaught.length,
+      "no untaught box on the 941 sheet, so the 'not taught yet' marker is unreachable " +
+        "again. If lines 12, 13 and 14 were taught deliberately, this test should move to " +
+        "whichever form still has an untaught box -- not be deleted.",
+    ).toBeGreaterThan(0);
+
+    // And the two sets must be disjoint and exhaustive: every cell is one or
+    // the other. A third state would render as neither and be invisible.
+    expect(teachable.length + untaught.length).toBe(cells.length);
+  });
+
+  it("the untaught boxes on the 941 are the three left untaught on purpose", () => {
+    const cov = sheetCoverage(sheetGroups(teachingBoxes("form_941"), FORM_941_LESSONS));
+    expect(cov.untaughtBoxes).toEqual(["12", "13", "14"]);
   });
 });

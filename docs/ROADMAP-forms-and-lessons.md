@@ -147,19 +147,58 @@ books-55 figure is kept in the right-hand columns rather than overwritten,
 because the movement is the interesting part and a table that only ever shows
 today's number cannot be audited against the slice that produced it:
 
-| lesson set | lessons | ties | was (books-55) |
-| --- | --- | --- | --- |
-| `form-box-lessons-941.ts` | 20 | 19 | 20 / 19 |
-| `form-box-lessons-940.ts` | 20 | 20 | 20 / 20 |
-| `form-box-lessons-wa.ts` | 14 | 11 | 8 / 4 |
-| `form-box-lessons-w2.ts` | 26 | 20 | 20 / 13 |
-| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 |
-| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 |
-| **total** | **115** | **110** | **103 / 96** |
+| lesson set | lessons | ties | was (books-56) | was (books-55) |
+| --- | --- | --- | --- | --- |
+| `form-box-lessons-941.ts` | 24 | 25 | 20 / 19 | 20 / 19 |
+| `form-box-lessons-940.ts` | 20 | 20 | 20 / 20 | 20 / 20 |
+| `form-box-lessons-wa.ts` | 14 | 11 | 14 / 11 | 8 / 4 |
+| `form-box-lessons-w2.ts` | 26 | 20 | 26 / 20 | 20 / 13 |
+| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 | 31 / 34 |
+| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 | 4 / 6 |
+| **total** | **119** | **116** | **115 / 110** | **103 / 96** |
 
-Every one of the 110 resolves to a box that exists. The W-3 is the first set
+Every one of the 116 resolves to a box that exists. The W-3 is the first set
 with more ties than lessons, which is what a transmittal should look like: most
 of its boxes have to agree with something on another form.
+
+### What moved in books-60, and the four boxes deliberately left untaught
+
+Michael asked, in books-59, for lessons to be added to the federal forms only
+where they would "really truly benefit" him, and said plainly that "there are
+some boxes that dont apply to me and so we dont need to waste time learning
+something that does not apply to us." So the selection was made by measurement
+rather than by completeness.
+
+Form 941 had seven boxes carrying a specimen and no teaching: 5e, 6, 7, 10, 12,
+13 and 14. Four were taught and three were not, and the reasons are recorded in
+the header of `form-box-lessons-941.ts` so a later reader cannot mistake the
+omission for an oversight:
+
+Taught, because each one hides a judgement or a trap. Line 5e is the FICA total
+that is double what any employee ever saw, and nothing on the form says so.
+Line 6 is the first "everything so far" line, so it is the first place a wrong
+figure upstream becomes a wrong figure that gets paid. Line 7 is fractions of
+cents, which is the one box on the form that *should* be non-zero for Greenway
+and is the box most likely to be left blank by someone in a hurry. Line 10 is
+the number the deposits are measured against, which makes it the number that
+decides whether there is a penalty.
+
+Not taught, and this is the deliberate part. Line 12 is arithmetically identical
+to line 10 for Greenway because no credits are claimed, so a lesson would teach
+a subtraction of zero. Line 13 is a transcription of the EFTPS record with no
+judgement in it at all. Line 14 is arithmetic on 12 and 13. Teaching those three
+would add words without adding understanding, which is the outcome he asked to
+avoid.
+
+Form 940 has ten untaught boxes and four of them were settled by reading his own
+filed return rather than by opinion. His 2025 Form 940 shows line 3 total
+payments of $332,975.44, line 6 exempt-and-excess of $262,975.44 and line 7
+taxable FUTA wages of $70,000.00, which produces $420.00 of FUTA tax. The
+deposit-schedule boxes 16a through 16d only come into play once the liability
+passes $500, so at $420 they do not apply to him and no lesson was written for
+them. That is a measurement from an authoritative document, not an assumption,
+and it is the kind of thing that changes if his payroll grows — so it is stated
+here with the figure attached rather than as a conclusion on its own.
 
 ### What moved in books-56, and which of it was not planned
 

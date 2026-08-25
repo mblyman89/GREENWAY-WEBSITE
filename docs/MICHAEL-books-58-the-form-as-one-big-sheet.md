@@ -87,6 +87,16 @@ The marker is proved working on the 941 and the 940. The W-2's zero is *also* pi
 
 That table is also your real to-do list for teaching: **17 boxes across two federal forms.** Everything else we teach is complete.
 
+### Updated in books-60 — four of those seventeen are now taught
+
+The table above was true the day it was written and I am leaving it exactly as it was, because a report that silently rewrites itself is a report you cannot check. Here is what changed afterwards.
+
+You told me to add lessons only where they would "really truly benefit" you, and you said plainly that some boxes do not apply to you and we should not waste time on those. I took that literally. Of the 941's seven untaught boxes I taught four — 5e, 6, 7 and 10 — and deliberately left 12, 13 and 14 alone, because for Greenway line 12 is a subtraction of zero, line 13 is copying a number off your EFTPS record, and line 14 is arithmetic on the two. There is nothing in them to learn.
+
+So the current figures are **Form 941: 27 boxes, 24 taught, 3 not taught (12, 13, 14)** and the standing to-do total is **13 boxes, not 17.**
+
+The 940's ten are unchanged so far, but four of those ten I can already tell you do not apply to you, and I know it from your own filed return rather than from an opinion. Your 2025 Form 940 shows total payments of $332,975.44 on line 3, exempt and excess payments of $262,975.44 on line 6, and taxable FUTA wages of $70,000.00 on line 7 — which comes to $420.00 of FUTA tax for the year. Boxes 16a through 16d are the quarterly deposit-schedule boxes, and they only start to matter once the liability crosses $500. At $420 you are under it, so those four boxes are not yours to learn. If your payroll grows enough to push that figure over $500 the answer changes, which is exactly why I am giving you the number and not just the conclusion.
+
 ---
 
 ## A pre-existing gate caught me building a room with no door

@@ -1290,4 +1290,304 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     ],
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // books-59 ADDITIONS — the running-total spine, and the one adjustment that
+  // is supposed to be there.
+  //
+  // Michael's instruction for this batch, verbatim: "there are some boxes that
+  // dont apply to me and so we dont need to waste time learning something that
+  // does not apply to us. only add the lesson if it will really truly benefit
+  // me."
+  //
+  // So these were chosen by MEASUREMENT, not by filling in the blanks. Seven
+  // 941 boxes had no lesson; four are taught here and three are deliberately
+  // left alone:
+  //
+  //   TAUGHT   5e  the FICA total that is DOUBLE what employees saw
+  //   TAUGHT   6   the first "everything so far" line
+  //   TAUGHT   7   fractions of cents — the box that SHOULD be non-zero
+  //   TAUGHT   10  the number the deposits get compared against
+  //
+  //   NOT TAUGHT 12  identical to 10 for Greenway (no credits claimed), and a
+  //                  lesson saying "same as line 10" teaches nothing
+  //   NOT TAUGHT 13  a transcription of the EFTPS record, with no judgement in
+  //                  it — the box-10 lesson covers what happens when it differs
+  //   NOT TAUGHT 14  balance due is arithmetic on 12 and 13; taught inside the
+  //                  box-10 lesson where it actually matters
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  {
+    formId: "form_941",
+    box: "5e",
+    headline: "The FICA total — and it is roughly DOUBLE what your staff saw deducted",
+    plainEnglish:
+      "Social Security and Medicare added together, both halves of each. This is the box where the " +
+      "doubling stops being an abstraction and turns into a number, and it is the single most " +
+      "misread figure on the form. If an employee looked at their own pay stubs for the quarter and " +
+      "added up the Social Security and Medicare withheld, they would see roughly HALF of this. The " +
+      "other half is Greenway's own money, matched dollar for dollar.",
+    whereItComesFrom:
+      "Line 5a plus line 5c — and each of those was already computed at the DOUBLE rate (12.4% for " +
+      "Social Security, 2.9% for Medicare) rather than the 6.2% and 1.45% that came off the " +
+      "cheques. So the doubling happened upstream; 5e is only the addition.",
+    howToReadIt:
+      "Read it as the true cost of FICA for the quarter, not as what you withheld. Half of this " +
+      "number is money you held in trust for your employees; the other half is an employer tax " +
+      "that came out of Greenway. If you are budgeting payroll, the employer half of this box is " +
+      "the part that is genuinely yours to fund, and it is easy to forget it exists because it " +
+      "never appears on anyone's pay stub.",
+    commonMistake:
+      "Reconciling this box against the FICA column of your payroll register and concluding the " +
+      "form is wrong because it is twice as big. It is supposed to be twice as big. The opposite " +
+      "mistake is worse: entering the employee half only, which understates the return and creates " +
+      "a deposit shortfall the IRS will notice.",
+    whatToDo:
+      "Add lines 5a and 5c. Then, as a sanity check, halve the result and compare THAT against " +
+      "what your payroll register shows as withheld. Those two should be close — within the " +
+      "fractions of cents that line 7 exists to absorb.",
+    examples: [
+      {
+        title: "Why halving it is the right sanity check",
+        steps: [
+          "Suppose line 5a (Social Security, taxable wages x 0.124) comes to 12,400.00.",
+          "And line 5c (Medicare, taxable wages x 0.029) comes to 2,900.00.",
+          "Line 5e is 12,400.00 + 2,900.00 = 15,300.00.",
+          "Half of that is 7,650.00 — and that is roughly what the employees actually saw withheld.",
+          "The other 7,650.00 is Greenway's employer share, which no pay stub ever showed.",
+        ],
+        answer: "15,300.00",
+        moral:
+          "Half of line 5e is trust money you were holding. The other half is a tax on Greenway. " +
+          "The form does not distinguish them, and your books must.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 5e",
+        quote: "5e. Total social security and Medicare taxes. Add the\ncolumn 2 amounts on lines 5a–5d. Enter the result on\nline 5e.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "It is pure addition of the column 2 figures. Every bit of the doubling was already " +
+          "built into those lines by their own multipliers.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "6",
+        why:
+          "Line 6 is line 3 plus this box. 5e is the FICA half of the quarter's total tax, and " +
+          "line 3 is the income-tax half.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "6",
+    headline: "The first line that says \u201Ceverything so far\u201D",
+    plainEnglish:
+      "Income tax withheld plus all of FICA, both halves. This is the first point on the form where " +
+      "you can look at one number and say: that is what this quarter generated in federal payroll " +
+      "tax, before any adjustment. Nothing has been subtracted yet and nothing has been credited.",
+    whereItComesFrom:
+      "Line 3 (federal income tax withheld) plus line 5e (all of Social Security and Medicare). " +
+      "Two very different kinds of money added into one figure — see the warning below.",
+    howToReadIt:
+      "Read it as the gross obligation for the quarter. It is worth pausing here because this box " +
+      "mixes two things your books must never mix: line 3 is money you took out of employees' pay " +
+      "and are holding in trust, and part of line 5e is Greenway's own employer tax. The form is " +
+      "happy to add them because the IRS only cares about the total that must be deposited. Your " +
+      "general ledger has to keep them apart — trust liability on one side, employer payroll " +
+      "expense on the other.",
+    commonMistake:
+      "Treating this whole number as a business expense at close. A large part of it was never " +
+      "Greenway's money. Expensing the trust portion overstates costs and understates the " +
+      "liability, and it is the same error pattern as booking sales tax to the P&L.",
+    whatToDo:
+      "Add lines 3 and 5e. Then, when this quarter is journalised, split it: the employee " +
+      "withholding and employee FICA to a trust liability, the employer FICA to payroll tax " +
+      "expense. One number on the form, two very different lines in the books.",
+    examples: [
+      {
+        title: "One box, two kinds of money",
+        steps: [
+          "Line 3 — federal income tax withheld from employees: 9,000.00. Trust money.",
+          "Line 5e — all FICA, both halves: 15,300.00. Half trust, half Greenway's own tax.",
+          "Line 6 is 9,000.00 + 15,300.00 = 24,300.00.",
+          "Of that, roughly 9,000.00 + 7,650.00 = 16,650.00 was never Greenway's.",
+          "And roughly 7,650.00 is a genuine employer expense.",
+        ],
+        answer: "24,300.00",
+        moral:
+          "The IRS wants one total. Your books need the split. Line 6 is where the two views of " +
+          "the same money part company.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 6",
+        quote: "6. Total Taxes Before Adjustments\nAdd the total federal income tax withheld from wages, tips,\nand other compensation (line 3); the total social security\nand Medicare taxes before adjustments (line 5e); and any\ntax due under a Section 3121(q) Notice and Demand\n(line 5f). Enter the result on line 6.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "Three lines added, one of which (5f) only exists if the IRS has served a notice about " +
+          "unreported tips. For Greenway it is lines 3 and 5e.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "5e",
+        why: "Line 6 is line 3 plus 5e. This is the box 5e feeds.",
+      },
+      {
+        formId: "form_941",
+        box: "10",
+        why:
+          "Line 10 is this figure after the fractions-of-cents adjustment on line 7 — the total " +
+          "the deposits are finally measured against.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "7",
+    headline: "The box that is SUPPOSED to be a few cents, and suspicious when it is zero",
+    plainEnglish:
+      "A tiny correction for rounding. Every paycheque has its Social Security and Medicare rounded " +
+      "to the nearest cent on its own. Add up a quarter of individually-rounded cheques and the " +
+      "total will differ by a few cents from the exact percentage of the quarterly wage total. This " +
+      "box is where that difference goes. It is the one line on Form 941 where a small number is " +
+      "the correct answer and a clean zero is worth a second look.",
+    whereItComesFrom:
+      "The difference between what was actually withheld across every cheque in the quarter and " +
+      "what the statutory percentage of the quarterly total comes to. The system derives it by " +
+      "comparing those two figures — never by plugging whatever makes the return balance.",
+    howToReadIt:
+      "Read it as a rounding artefact, and read its SIZE as a diagnostic. A few cents, positive or " +
+      "negative, is normal and healthy. Dollars is not: that says something real is wrong " +
+      "upstream — a wrong rate, a missed wage-base cap, a cheque calculated by hand. The IRS " +
+      "expects this line to be small, so a large figure here is exactly the kind of thing that " +
+      "invites a letter.",
+    commonMistake:
+      "Using this box as a plug to force the return to balance. It is the most tempting box on the " +
+      "form for exactly that, because a small number here looks unremarkable. That is precisely " +
+      "the LAZY ENTRY pattern that put a multi-million-dollar plug in Greenway's inventory: a " +
+      "difference nobody could explain got written into whichever box would swallow it. If this " +
+      "box has to be dollars to make the form foot, the error is somewhere else and this box is " +
+      "hiding it.",
+    whatToDo:
+      "Let it be computed from the two totals, then look at the size. Cents: file it. Dollars: " +
+      "stop and find out why before filing, because the return is telling you something.",
+    examples: [
+      {
+        title: "Why individually-rounded cheques cannot add up exactly",
+        steps: [
+          "Take three paycheques with Social Security of 62.005, 62.005 and 62.005 before rounding.",
+          "Each cheque is rounded on its own, so each withholds 62.01 \u2014 total 186.03.",
+          "But the quarterly wage total x 6.2% comes to 186.015, which rounds to 186.02.",
+          "The difference is one cent, and it is nobody's mistake \u2014 it is what rounding does.",
+          "That one cent goes on line 7.",
+        ],
+        answer: "0.01",
+        moral:
+          "The adjustment exists because the law rounds every cheque separately. Small is correct; " +
+          "large means look elsewhere.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 7",
+        quote: "7. Current quarter’s adjustment for fractions of\ncents. Enter adjustments for fractions of cents (due to\nrounding) relating to the employee share of social security\nand Medicare taxes withheld. The employee share of\namounts shown in column 2 of lines 5a–5d may differ\nslightly from amounts actually withheld from employees’\npay due to the rounding of social security and Medicare\ntaxes based on statutory rates. This adjustment may be a\npositive or a negative adjustment.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "The IRS says the cause outright \u2014 rounding at the level of each cheque \u2014 and says it " +
+          "may go either way. \u201CSlightly\u201D is the operative word: this is a cents-sized box.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "10",
+        why: "Line 10 is line 6 plus this adjustment. This is the only thing standing between them.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "10",
+    headline: "The number your deposits are measured against",
+    plainEnglish:
+      "The quarter's total tax once the rounding adjustment has been applied. This is the figure " +
+      "that matters most on the whole form, because it is what the IRS compares your actual " +
+      "deposits to. Everything above this line is working out what is owed; everything below is " +
+      "working out whether it was paid.",
+    whereItComesFrom:
+      "Line 6 plus line 7 — the gross tax plus the fractions-of-cents adjustment. Nothing else.",
+    howToReadIt:
+      "Read it against line 13, your deposits, and understand what the gap means. If line 10 is " +
+      "larger, you underdeposited and there is a balance due. That matters far more than the " +
+      "dollar amount suggests, because underdepositing employment tax is not an ordinary debt: " +
+      "this figure contains money you WITHHELD FROM EMPLOYEES. The IRS treats unpaid trust-fund " +
+      "money as the most serious category of tax debt there is, and it can be assessed personally " +
+      "against the individual responsible \u2014 the corporation is not a shield. If line 13 is larger " +
+      "you overdeposited, which is only a cash-flow annoyance.",
+    commonMistake:
+      "Treating a small balance due as something to settle later. Penalties and interest on " +
+      "employment tax compound from the deposit due date, not the filing date, and the trust-fund " +
+      "portion carries personal exposure. A late deposit of withheld tax is a different kind of " +
+      "problem from a late payment of income tax, and it is worth knowing which one you are " +
+      "looking at.",
+    whatToDo:
+      "Add lines 6 and 7, then compare the result with line 13 before filing. If they differ, find " +
+      "out WHY while the quarter is still fresh \u2014 a missed deposit, a deposit posted to the wrong " +
+      "quarter, or a real calculation error all look identical at this line and have completely " +
+      "different remedies.",
+    examples: [
+      {
+        title: "Reading the gap between tax and deposits",
+        steps: [
+          "Line 6 (total before adjustments): 24,300.00.",
+          "Line 7 (fractions of cents): 0.02.",
+          "Line 10 is therefore 24,300.02 \u2014 the quarter's real obligation.",
+          "If line 13 (deposits) shows 24,300.02, the quarter is clean.",
+          "If line 13 shows 20,000.00, there is a 4,300.02 balance due \u2014 and most of it is money " +
+            "withheld from employees, which is the serious kind.",
+        ],
+        answer: "24,300.02",
+        moral:
+          "This box is the pivot of the form. Above it, what you owe. Below it, what you paid. The " +
+          "difference is the only thing the IRS is really looking at.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 10",
+        quote: "10. Total Taxes After Adjustments\nCombine the amounts shown on lines 6–9 and enter the\nresult on line 10.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "\u201CCombine\u201D rather than \u201Cadd\u201D because lines 7 through 9 can be negative. For Greenway, " +
+          "with no sick-pay or tips adjustments, it is line 6 plus line 7.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "6",
+        why: "Line 10 is line 6 plus the rounding adjustment. Line 6 is where it starts.",
+      },
+      {
+        formId: "form_941",
+        box: "7",
+        why: "The only adjustment between line 6 and this box, for Greenway.",
+      },
+    ],
+  },
+
 ];
