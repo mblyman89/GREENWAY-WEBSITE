@@ -65,7 +65,7 @@ import { join } from "node:path";
 
 import { FORM_W2_BOX_LESSONS, FORM_W2_SOURCE_PATH } from "@/lib/payroll/form-box-lessons-w2";
 import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
-import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
+import { FORM_941_LESSONS, FORM_941_SOURCE_PATH } from "@/lib/payroll/form-box-lessons-941";
 import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
 import { FORM_941_CONFIRMATION_LESSONS } from "@/lib/payroll/form-941-confirmation-lessons";
@@ -105,8 +105,66 @@ const SETS: readonly (readonly [string, readonly BoxLesson[]])[] = [
   ["form-941-confirmation-lessons.ts", FORM_941_CONFIRMATION_LESSONS],
 ];
 
+/**
+ * Abbreviations whose full stop does NOT end a sentence.
+ *
+ * ═══ WHY THIS LIST EXISTS, AND WHY IT IS A CLOSED LIST ═══
+ *
+ * `endsASentence` treats a trailing full stop as a sentence boundary, which is
+ * how a quotation ending "...blank space." is correctly accepted. But the
+ * federal corpora are dense with abbreviations, measured rather than guessed:
+ *
+ *      114  Pub.        34  B.        20  S.        19  (Rev.
+ *       11  Proc.        8  Rul.       6  Co.
+ *
+ * counting only the ones followed by a lowercase letter or digit, i.e. where the
+ * period demonstrably did not end the sentence. So a quotation truncated at
+ * "...For more information about exempt wages, see section 15 of Pub." ends with
+ * a full stop, passes `endsASentence`, and is a mid-sentence cut all the same.
+ *
+ * This was not hypothetical. The deleted automatic fixer
+ * (docs/books-56-fixer-audit.md) used the same abbreviation-blind rule to CHOOSE
+ * where to extend quotations to, and its proposed repair for 941 line 4 stopped
+ * at exactly that "Pub." - a fix that would have silenced this gate without
+ * correcting the citation.
+ *
+ * The list is closed and short on purpose. The obvious general rule - "a full
+ * stop followed in the source by a lowercase letter is an abbreviation" - was
+ * tried and MEASURED FIRST, and produced 13 false positives out of 137: real
+ * sentence ends where the source simply continues with a numbered heading the
+ * PDF dump flattened onto the same line ("941.", "15b.", "1b."). Those
+ * quotations are honest and complete, so the general rule is wrong and is not
+ * used. Nothing in the tree currently ends in one of these abbreviations - also
+ * measured, and asserted below so this list cannot silently become decorative.
+ */
+const ABBREVIATIONS_THAT_ARE_NOT_SENTENCE_ENDS: readonly string[] = [
+  "Pub.",
+  "Pubs.",
+  "Rev.",
+  "Proc.",
+  "Rul.",
+  "Sec.",
+  "Reg.",
+  "Regs.",
+  "No.",
+  "Nos.",
+  "Co.",
+  "Inc.",
+  "Corp.",
+  "Dept.",
+];
+
+/** True when `s` ends with one of the abbreviations above, as a whole word. */
+function endsWithAbbreviation(s: string): boolean {
+  const t = s.trimEnd();
+  return ABBREVIATIONS_THAT_ARE_NOT_SENTENCE_ENDS.some(
+    (a) => t.endsWith(a) && /[\s(“"]$|^$/.test(t.slice(0, t.length - a.length).slice(-1) || ""),
+  );
+}
+
 /** Sentence-ending punctuation, plus the semicolon that ends a list item. */
 function endsASentence(s: string): boolean {
+  if (endsWithAbbreviation(s)) return false;
   return /[.;:!?)\]"\u201d\u2019]$/.test(s.trimEnd());
 }
 
@@ -244,17 +302,207 @@ describe("no quotation is cut off mid-sentence", () => {
         "cites, or its sourcePath is wrong, or this gate's matching is too strict for the way " +
         "that set stores its text. All three are findings, not reasons to lower a floor.",
     ).toBe(total);
-    expect(
-      fragments,
-      "every quotation ended at a sentence boundary, so the mid-sentence branch never ran and " +
-        "this gate has not been shown to do anything",
-    ).toBeGreaterThan(0);
+    /*
+     * `fragments` counts quotations that do not end at a sentence boundary, and
+     * an earlier draft asserted it was greater than zero on the reasoning that
+     * if nothing is a fragment then the interesting branch never ran.
+     *
+     * That assertion was WRONG, and it is worth recording why, because it read
+     * as rigour. Repairing the nineteen truncations took the count from 19 to 1,
+     * and extending one further citation would have taken it to 0 - at which
+     * point a gate asserting `fragments > 0` FAILS because the tree got better.
+     * A gate that punishes the fix it asked for is not measuring the code, it is
+     * measuring an accident of today's content, and it would pressure the next
+     * person to leave a citation truncated to keep the suite green.
+     *
+     * Zero fragments is a legitimate and desirable state. What must never be
+     * silently zero is the gate's ABILITY to detect one, and that is proved
+     * directly by the two tests below - which build a truncation and require
+     * this exact rule to refuse it - rather than inferred from live content.
+     */
+    console.log(
+      `quote-truncation: ${fragments} quotation(s) stop mid-passage; each was checked against ` +
+        "the character that follows it in the source",
+    );
 
     expect(offences, offences.join("\n\n")).toEqual([]);
     console.log(
       `quote-truncation: ${checked} quotations checked, ${fragments} are deliberate fragments, ` +
         "none cut mid-sentence",
     );
+  });
+
+  /**
+   * ═══ A QUOTATION MUST IDENTIFY ONE PASSAGE, NOT TWO ═══
+   *
+   * This gate finds the end of a quotation with `lastIndexOf`, so it can only
+   * report what the source "continues" with if the quotation appears in the
+   * source exactly once. A fragment short enough to appear twice is located at
+   * whichever copy comes last, which may not be the passage it cites.
+   *
+   * That is not a theoretical concern. It was a live defect, found while
+   * repairing the truncations: `form-box-lessons-941.ts` cited line 5c with the
+   * sixteen-character quotation
+   *
+   *     "Enter all wages,"
+   *
+   * and those words begin BOTH line 5c ("Taxable Medicare wages & tips") and
+   * line 5d ("...subject to Additional Medicare Tax withholding"). The gate was
+   * therefore reading line 5d's text while the lesson said 5c, and the repair
+   * had to prepend the sentence's own subject to make the citation unambiguous.
+   * Every other gate in the tree was happy, because a substring that occurs
+   * twice is still a substring.
+   *
+   * The three remaining duplicates are all in one RCW mirror and are all
+   * benign, for a specific reason that was checked rather than assumed: leg.wa.gov
+   * serves two effective-date versions of RCW 50A.10.030 on one page - "Effective
+   * until January 1, 2028" and "Effective January 1, 2028" - so the mirror
+   * genuinely contains each subsection twice. Both copies were compared line by
+   * line and are byte-for-byte identical, so which one is located cannot change
+   * what the authority says. They are listed individually below: a NEW ambiguous
+   * quotation fails, and if one of these ever stops being identical the
+   * assertion in this test fails too.
+   */
+  it("no quotation matches two different passages of its source", () => {
+    /** id -> why this duplicate cannot mislead. Anything else is a failure. */
+    const KNOWN_BENIGN_DUPLICATES: Readonly<Record<string, string>> = {
+      "pfml_wa_cares/pfml-employee/RCW 50A.10.030(7)(b)":
+        "leg.wa.gov serves two effective-date versions of RCW 50A.10.030 on one page; both " +
+        "copies of this subsection are byte-for-byte identical.",
+      "pfml_wa_cares/pfml-employer/RCW 50A.10.030(5)(a)":
+        "leg.wa.gov serves two effective-date versions of RCW 50A.10.030 on one page; both " +
+        "copies of this subsection are byte-for-byte identical.",
+      "pfml_wa_cares/pfml-employer/RCW 50A.10.030(7)(c)":
+        "leg.wa.gov serves two effective-date versions of RCW 50A.10.030 on one page; both " +
+        "copies of this subsection are byte-for-byte identical.",
+    };
+
+    const corpora = new Map<string, string>();
+    const ambiguous: string[] = [];
+    const seen = new Set<string>();
+
+    for (const [setName, set] of SETS) {
+      for (const lesson of set) {
+        for (const q of lesson.quotes) {
+          const abs = join(REPO_ROOT, q.sourcePath);
+          if (!existsSync(abs)) continue;
+          if (!corpora.has(abs)) corpora.set(abs, normalise(readFileSync(abs, "utf8")));
+          const flat = corpora.get(abs)!;
+          const segments = quoteSegments(normalise(q.quote));
+          if (segments === null || !matchesInOrder(flat, segments)) continue;
+
+          const last = segments[segments.length - 1];
+          let count = 0;
+          for (let i = flat.indexOf(last); i !== -1; i = flat.indexOf(last, i + 1)) count += 1;
+          if (count <= 1) continue;
+
+          const id = `${lesson.formId}/${lesson.box}/${q.cite}`;
+          seen.add(id);
+          const excuse = KNOWN_BENIGN_DUPLICATES[id];
+          if (excuse !== undefined) {
+            /*
+             * The excuse claims the copies are identical. Prove it here rather
+             * than trusting the comment: take the whole line each copy sits on
+             * and require every one of them to be the same text.
+             */
+            const lines = readFileSync(abs, "utf8")
+              .split("\n")
+              .filter((l) => normalise(l).includes(last));
+            expect(
+              lines.length,
+              `${id} is excused as a duplicate but its text was found on ${lines.length} whole ` +
+                "lines, so the excuse cannot be checked the way it claims",
+            ).toBeGreaterThan(1);
+            expect(
+              new Set(lines).size,
+              `${id} is excused on the grounds that both copies are byte-for-byte identical, and ` +
+                `they are NOT: ${lines.length} lines, ${new Set(lines).size} distinct. The ` +
+                "quotation may now be reading the wrong version of the statute.",
+            ).toBe(1);
+            continue;
+          }
+
+          ambiguous.push(
+            `${setName} ${lesson.formId} box ${lesson.box} (${q.cite}): this quotation's last ` +
+              `segment occurs ${count} times in ${q.sourcePath}, so it does not identify one ` +
+              "passage. Quote enough of the sentence - including its subject if need be - to " +
+              "match only the passage cited. Form 941 line 5c had exactly this defect: " +
+              '"Enter all wages," begins both line 5c and line 5d.',
+          );
+        }
+      }
+    }
+
+    expect(ambiguous, ambiguous.join("\n\n")).toEqual([]);
+
+    /*
+     * Rule 40: an exclusion for something that no longer happens is an accident
+     * waiting to excuse the next real defect. If a duplicate is repaired, its
+     * entry must be deleted here in the same change.
+     */
+    for (const id of Object.keys(KNOWN_BENIGN_DUPLICATES)) {
+      expect(
+        seen.has(id),
+        `${id} is excused as a benign duplicate but is no longer ambiguous at all. Delete the ` +
+          "entry - a dead exclusion silently covers whatever drifts into its place.",
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * THE GATE THAT PROVES THE ABBREVIATION RULE BITES (rule 15).
+   *
+   * The full stop in "Pub." is not a sentence boundary. Without the closed list
+   * above, a quotation truncated there would end in "." and be waved through.
+   * This test fails if that list is emptied or the check is bypassed.
+   */
+  it("does not accept a full stop that is only an abbreviation", () => {
+    const corpus = readFileSync(join(REPO_ROOT, FORM_941_SOURCE_PATH), "utf8");
+
+    // The real 941 line 4 sentence, cut at the abbreviation. Genuinely present,
+    // so every substring-based check in the tree accepts it.
+    const cutAtAbbreviation =
+      "For more information about exempt wages, see\nsection 15 of Pub.";
+    expect(corpus.includes(cutAtAbbreviation)).toBe(true);
+
+    // A naive rule would call this a finished sentence. This gate must not.
+    expect(/[.;:!?]$/.test(cutAtAbbreviation)).toBe(true);
+    expect(endsASentence(cutAtAbbreviation)).toBe(false);
+
+    // And the sentence it really belongs to does end, two clauses later.
+    expect(
+      endsASentence(
+        "For more information about exempt wages, see\nsection 15 of Pub. 15. For religious " +
+          "exemptions, see\nsection 4 of Pub. 15-A.",
+      ),
+    ).toBe(true);
+
+    // "Pub. 15." must NOT be treated as an abbreviation: the token before the
+    // final stop is "15", not "Pub". Guards against over-matching.
+    expect(endsWithAbbreviation("see section 15 of Pub. 15.")).toBe(false);
+  });
+
+  /**
+   * No quotation in the tree currently ends in one of those abbreviations.
+   *
+   * Measured, and pinned. If this ever fails it is not this gate that is wrong:
+   * a citation has been truncated at an abbreviation and needs extending.
+   */
+  it("no live quotation ends at an abbreviation", () => {
+    const offenders: string[] = [];
+    for (const [setName, set] of SETS) {
+      for (const lesson of set) {
+        for (const q of lesson.quotes) {
+          if (endsWithAbbreviation(q.quote)) {
+            offenders.push(
+              `${setName} ${lesson.formId} box ${lesson.box} (${q.cite}) ends at an ` +
+                `abbreviation: "...${q.quote.trimEnd().slice(-50)}"`,
+            );
+          }
+        }
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
   });
 
   /**

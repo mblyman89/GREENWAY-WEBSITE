@@ -928,7 +928,7 @@ export const WA_QUARTERLY_LESSONS: readonly BoxLesson[] = [
       {
         cite: "WAC 192-310-010(3)(b)(iv)",
         quote:
-          "If the employee does not show his or her Social Security card or application for a card within seven days and the employer continues to employ the worker, the employer does not meet the reporting requirements of this section. The department will not allow waiver of the incomplete report penalty",
+          "If the employee does not show his or her Social Security card or application for a card within seven days and the employer continues to employ the worker, the employer does not meet the reporting requirements of this section. The department will not allow waiver of the incomplete report penalty (see WAC 192-310-030);",
         sourcePath: WAC_192_310_010_PATH,
         sourceUrl: WAC_192_310_010_URL,
         soWhat:
