@@ -150,6 +150,49 @@
     costs nothing. Squash is only acceptable when the branch author is already
     the identity you want on main.
 
+    **20b. SET THE IDENTITY IN CONFIG, NOT ONLY ON THE COMMAND LINE (books-59,
+    SECOND RECURRENCE).** Rule 20a says a squash manufactures a new commit and
+    throws the author away. It was written after `gh pr merge --squash` did it.
+    On books-59 I did it AGAIN by a different route: `git merge --squash` +
+    `git commit`, with no `-c user.email=` on that particular invocation. This
+    sandbox had NO `user.email` set at all, so git silently fell back to
+    `root@<container-ip>` and put an IP address on `main`. Michael had to stop
+    the slice to tell me Vercel was refusing the deploy, on a PRIVATE repo where
+    a refused deploy is the whole product not building.
+
+    The lesson is that rule 20 relied on me REMEMBERING the flag on every
+    invocation, which is exactly the kind of guard that holds until the one time
+    it does not. A default that is wrong is worse than no default, because it
+    produces a plausible-looking commit instead of an error.
+
+        git config --local  user.email "dev@greenwaymarijuana.com"
+        git config --local  user.name  "Greenway Dev"
+        git config --global user.email "dev@greenwaymarijuana.com"
+        git config --global user.name  "Greenway Dev"
+
+      (a) Set BOTH local and global at the START of any session that will
+          commit. Local covers this clone; global covers a fresh clone made
+          later in the same session. `git commit` must never be able to guess.
+      (b) `git merge --squash` is squash. So is `gh pr merge --squash`. The
+          rule is about the OPERATION, not the tool that spells it.
+      (c) VERIFY AT THE REMOTE, not just locally. The check that actually
+          proves it is the one that asks GitHub what it stored:
+
+            gh api repos/<owner>/<repo>/commits/main \
+              --jq '.commit.author.email'
+
+      (d) IF IT IS ALREADY PUSHED: `main` here is NOT protected (verified --
+          the protection API returns 403 "Upgrade to GitHub Pro"), so a bad
+          tip that nobody has pulled can be repaired with
+          `commit --amend --reset-author` and a `--force-with-lease` push.
+          PROVE THE TREE IS UNTOUCHED FIRST -- compare `git rev-parse
+          HEAD^{tree}` before and after; if the tree hash moves, the amend
+          did more than relabel an author and must be abandoned.
+      (e) Only the TIP is repairable this way. History is full of older bad
+          addresses (989 bot, 40+ IP-based, measured on books-59) and they
+          stay. Rewriting shared history to tidy them would be a far bigger
+          risk than the untidiness.
+
     VERIFY AFTER MERGING, NOT JUST BEFORE PUSHING:
 
         git log -1 --format='%an <%ae>' main
@@ -2776,3 +2819,64 @@ building the matcher twice.
            reports -- "it helps me learn and understand the system as you do."
            A report that hides the method to look tidy costs him the thing he
            is paying for.
+
+114. **A TAX RATE MAY BE FINER THAN A BASIS POINT. B&O PROVES IT.** Every rate
+     in this system is stored in BASIS POINTS (`stateSalesRateBps: 650`,
+     `localSalesRateBps: 280`), and that unit was adequate for as long as sales
+     tax was the only rate. Washington's B&O Retailing rate breaks it:
+
+         Retailing                        0.004710   = 47.10 basis points
+         Service and Other Activities     0.015000   = 150 basis points
+
+     47.10 is NOT AN INTEGER NUMBER OF BASIS POINTS. Measured against Michael's
+     filed July 2026 return (Confirmation # 0-053-958-352), on a taxable base of
+     $168,465.17:
+
+         DOR's 0.004710  ->  $793.47   <- what he actually filed and paid
+         47 bps (rounded down) -> $791.79   understates by  $1.68/month
+         48 bps (rounded up)   -> $808.63   overstates  by $15.16/month
+
+     A $1.68 monthly error is about $20/year, which is small in dollars and
+     total in meaning: the books would disagree with a filed government return
+     forever, and every reconciliation after that would be chasing a difference
+     that the unit itself created. Rounding a rate is not a rounding error --
+     it is storing the wrong rate.
+
+       (a) B&O rates are stored in MILLIONTHS of the base (rate x 1,000,000):
+           `4710` and `15000`. Both are exact integers. 650/280 bps also
+           convert exactly (65000 / 28000), so the two systems agree wherever
+           they overlap -- no existing figure moves.
+       (b) NEVER widen an existing bps field to a float to make a rate fit.
+           Money and rates stay integers; the UNIT changes, not the type.
+       (c) When a new rate arrives, TEST THAT THE UNIT CAN HOLD IT before
+           writing any calculation. The test is arithmetic, not opinion:
+           does `rate x 1,000,000` come out as a whole number?
+       (d) B&O rates are set by the legislature and DO change. Store them as
+           dated, settable values -- never inline a literal `4710` in a
+           calculation where a future rate change cannot reach it.
+
+115. **A FILED RETURN IS THE BEST AUTHORITY THERE IS, AND IT MUST BE
+     RECONCILED TO THE CENT BEFORE IT IS TRUSTED.** Michael supplied `JULY.pdf`
+     saying "it is the actual return i filed with dor, so it is authoritative."
+     He is right, and that is exactly why it gets checked rather than copied:
+     an authority that is transcribed wrongly is no longer an authority.
+
+     Every line of the July return was recomputed from its own base and rate
+     before a single figure was used, and all six agreed exactly -- the four
+     tax lines, the B&O subtotal ($858.80) and the grand total ($16,526.06).
+     Only then did those numbers earn the right to become test fixtures.
+
+       (a) RECONCILE FIRST: recompute each line from base x rate, then the
+           subtotals, then the grand total. Report each as MATCH or MISMATCH.
+       (b) A MISMATCH IS A FINDING, NOT AN OBSTACLE. If his filed return did
+           not foot, that is something he needs to know before it is copied
+           into the books -- report it, do not silently adopt either number.
+       (c) CORROBORATE WHEN A SECOND COPY EXISTS. `JULY.pdf` and
+           `July 2026 Department of Revenue.pdf` were diffed and proved to be
+           the same return (differing only by a trailing form-feed byte).
+       (d) EXTRACT FRESH. A pre-existing `formstudy/JULY.txt` was already in
+           the workspace; it was NOT trusted as the source. Re-extract from
+           the PDF with `pdftotext -layout` and work from that.
+       (e) The confirmation number, filing period, frequency and preparer are
+           part of the evidence. Pin them in the fixture so the fixture can
+           always be traced back to a specific real filing.
