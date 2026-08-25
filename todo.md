@@ -2739,3 +2739,40 @@ building the matcher twice.
            was withdrawn. Leaving the name is worse than having no test,
            because it spends credibility that has not been earned.
        (d) If the mutant is NOT equivalent, it is a hole; close it.
+
+113. A LONG BATTERY IS NOT A REASON TO GO SILENT, AND POLLING IT IS NOT WORK.
+     Michael stopped this slice to ask why he had heard nothing for hours. The
+     honest answer was that a 40-minute mutation campaign was mutating source
+     files on disk, so tsc, the verifier and any commit were unsafe to run --
+     and I responded by POLLING the job in a loop, spending his money on `date`
+     and `find` to watch a progress bar. The technical judgement was right and
+     the behaviour was indefensible: nothing prevented writing the report at
+     minute one instead of minute forty.
+
+     He then set the policy himself, and it is his call to make, not mine:
+     "keep running the full 40+ minute batteries as they are needed. After you
+     start one however, stop, write me a report about what you can get
+     accomplished safely while it runs, and if we should wait, let's wait. But
+     I'll make that call."
+
+       (a) START the battery. Long batteries are WANTED -- do not shrink,
+           sample or skip one to avoid the wait. Warning 25 and M10 were both
+           found by a full campaign.
+       (b) Then STOP and report, in the same turn the battery is launched.
+           State plainly which work is SAFE while it runs and which is not,
+           and why. "The tree is mutated, so tsc/verifier/commit would read a
+           poisoned tree" is the kind of reason that belongs in the report.
+       (c) The DECISION to wait or to proceed is HIS. Do not pre-empt it in
+           either direction -- neither by idling nor by inventing filler work.
+       (d) NEVER poll a background job as a substitute for reporting. If the
+           only thing left to do is wait, say so and hand the turn back.
+       (e) A slice that GROWS because the work uncovered real defects is a
+           reason to PAUSE AND REFOCUS, not to fix it all in one go: "I would
+           rather we pause and refocus if the scope has expanded due to
+           finding issues during the current slice." books-56 reached 36
+           commits because each detour was individually justified. Justified
+           detours still add up to a broken contract.
+       (f) He is not merely approving; he is LEARNING the system from these
+           reports -- "it helps me learn and understand the system as you do."
+           A report that hides the method to look tidy costs him the thing he
+           is paying for.
