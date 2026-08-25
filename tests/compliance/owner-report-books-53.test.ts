@@ -220,7 +220,19 @@ describe("every figure in the report is re-derived, not remembered", () => {
       readonly note: string | null;
     }[] = [
       { formId: "form_941", claimed: 27, engineNow: 27, note: null },
-      { formId: "form_w2", claimed: 20, engineNow: 20, note: null },
+      {
+        formId: "form_w2",
+        claimed: 20,
+        engineNow: 26,
+        note:
+          "books-56 added the six lettered boxes the paper prints above box 1: a (employee's " +
+          "SSN), b (employer's EIN), c (employer's name and address), d (control number), e " +
+          "(employee's name) and f (employee's address). Unlike the 940 row below, 20 was NOT " +
+          "true when it was written — it was a complete count of an incomplete form. The six " +
+          "were missing because every slice built this form outward from what the W-2 engine " +
+          "computes, and the engine computes money; nothing computes a person's name. Found by " +
+          "assertEveryTieResolves refusing a new ESD 5208B lesson's tie to form_w2 box e.",
+      },
       {
         formId: "form_940",
         claimed: 18,

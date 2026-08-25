@@ -142,21 +142,58 @@ measured was the whole of the thing described, which is the same mistake as the
 gates that checked four of six lesson sets, three of four ownership tables and
 one of two explorers on a shared page.
 
-Counted at books-55, by loading every lesson module and summing `tiesTo`:
+Counted at books-56, by loading every lesson module and summing `tiesTo`. The
+books-55 figure is kept in the right-hand columns rather than overwritten,
+because the movement is the interesting part and a table that only ever shows
+today's number cannot be audited against the slice that produced it:
 
-| lesson set | lessons | ties |
-| --- | --- | --- |
-| `form-box-lessons-941.ts` | 20 | 19 |
-| `form-box-lessons-940.ts` | 20 | 20 |
-| `form-box-lessons-wa.ts` | 8 | 4 |
-| `form-box-lessons-w2.ts` | 20 | 13 |
-| `form-box-lessons-w3.ts` | 31 | 34 |
-| `form-941-confirmation-lessons.ts` | 4 | 6 |
-| **total** | **103** | **96** |
+| lesson set | lessons | ties | was (books-55) |
+| --- | --- | --- | --- |
+| `form-box-lessons-941.ts` | 20 | 19 | 20 / 19 |
+| `form-box-lessons-940.ts` | 20 | 20 | 20 / 20 |
+| `form-box-lessons-wa.ts` | 14 | 11 | 8 / 4 |
+| `form-box-lessons-w2.ts` | 26 | 20 | 20 / 13 |
+| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 |
+| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 |
+| **total** | **115** | **110** | **103 / 96** |
 
-Every one of the 96 resolves to a box that exists. The W-3 is the first set
+Every one of the 110 resolves to a box that exists. The W-3 is the first set
 with more ties than lessons, which is what a transmittal should look like: most
 of its boxes have to agree with something on another form.
+
+### What moved in books-56, and which of it was not planned
+
+The `form-box-lessons-wa.ts` row going 8 → 14 was the plan: six lessons for the
+six Washington boxes that had a specimen and no teaching.
+
+The `form-box-lessons-w2.ts` row going 20 → 26 was **not** planned, and it is
+the more useful finding. Form W-2 prints six lettered boxes above box 1 — a
+(employee's SSN), b (employer's EIN), c (employer's name and address), d
+(control number), e (employee's name), f (employee's address). None of the six
+existed anywhere in this system: not in `FORM_W2_WHOSE`, not in
+`FORM_W2_TEACHING`, and so not teachable at all, because `resolveWhose` throws
+on a box it does not know.
+
+They were missing for a reason worth writing down. Every earlier slice built
+this form outward from what the W-2 **engine computes**, and the engine computes
+money. Nothing computes a person's name, so the name never reached the screen.
+
+The gap was found by a gate, not by reading. One of the six new Washington
+lessons — the ESD 5208B employee row — tied itself to `form_w2` box `e`, since
+that is where the same person's name appears on the federal form.
+`assertEveryTieResolves` refused the tie and printed the twenty boxes the W-2
+had. The tie was right about the paper; the specimen was wrong.
+
+This matters more than a count. Boxes a, e and f are the SSN, the name and the
+address — the three fields the SSA matches on. A wrong figure in box 1 is
+arithmetic and gets queried. A wrong **name** in box e is silent: the filing is
+accepted, nothing on Greenway's side looks wrong, and years later an employee
+finds a year missing from their earnings record. Michael prepared all ten of
+Greenway's 2025 W-2s himself. The boxes with the quietest failure mode were the
+boxes with nothing behind them.
+
+`form_w2` therefore now teaches 26 boxes, not 20, and the two owner reports that
+pinned 20 carry a dated correction rather than a rewrite.
 
 The drift gate `assertSpecimenMatchesTheEngine` runs one way only — every box
 the engine emits must be taught. It does not require that every taught box be

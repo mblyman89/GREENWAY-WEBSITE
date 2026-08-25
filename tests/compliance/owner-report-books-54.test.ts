@@ -317,19 +317,77 @@ describe("the report leaks nothing confidential", () => {
 });
 
 describe("the report's cross-form claims are true", () => {
-  it("is right that the 941 and W-2 were already complete", () => {
+  /*
+   * ═══ CORRECTED IN books-56: "COMPLETE" WAS NEVER TRUE OF THE W-2 ═══
+   *
+   * The books-54 report told Michael the W-2 was "already complete" at 20 boxes.
+   * The sentence stays on the page, because a report is a dated document and
+   * rewriting one is how a record stops being evidence. But the claim about the
+   * CODE has to move, and this one moved for an uncomfortable reason: the word
+   * "complete" was wrong when it was written, not merely outdated.
+   *
+   * Form W-2 prints SIX lettered boxes above box 1 — a, b, c, d, e and f, the
+   * employee's SSN, the employer's EIN, the employer's address, the control
+   * number, the employee's name and the employee's address. At books-54 none of
+   * them existed in `FORM_W2_WHOSE` or `FORM_W2_TEACHING`, so the form could not
+   * list them, and "20 boxes" was a complete count of an incomplete form. That
+   * is the same shape of error as the 56-ties claim below: an accurate
+   * measurement of the wrong subject.
+   *
+   * The reason nobody noticed is recorded in the roadmap: every slice built this
+   * form outward from what the W-2 ENGINE computes, and the engine computes
+   * money. Nothing computes a person's name.
+   *
+   * books-56 added the six, so the form now teaches 26. The old number is
+   * asserted too — as the subtotal of the NUMBERED boxes — so the report's
+   * arithmetic stays checkable and the correction cannot be mistaken for a
+   * renumbering.
+   */
+  it("was wrong that the W-2 was complete: it was missing six lettered boxes", () => {
     expect(teachingBoxes("form_941").length).toBe(27);
-    expect(teachingBoxes("form_w2").length).toBe(20);
+
+    // The sentence the report actually printed, still on the page.
     expect(REPORT).toContain("The 941 (27 lines) and W-2 (20 boxes) were already complete");
+
+    // What the form teaches now.
+    expect(teachingBoxes("form_w2").length).toBe(26);
+
+    // And why the old figure was 20: it counted only the numbered boxes.
+    const boxIds = teachingBoxes("form_w2").map((b) => b.box);
+    const numbered = boxIds.filter((b) => /^[0-9]/.test(b));
+    const lettered = boxIds.filter((b) => !/^[0-9]/.test(b));
+    expect(numbered).toHaveLength(20);
+    expect(lettered).toEqual(["a", "b", "c", "d", "e", "f"]);
   });
 
-  it("is right that the ESD 5208B has boxes but no lessons", () => {
-    // The claim that sets up the NEXT slice. If someone writes those lessons
-    // and forgets this sentence, the report starts lying about the backlog.
+  /*
+   * ═══ CORRECTED IN books-56: THE BACKLOG THIS SENTENCE SET UP IS CLOSED ═══
+   *
+   * The books-54 report told Michael the ESD 5208B "has 4 boxes and zero
+   * lessons", and this test existed to make sure that stayed true until somebody
+   * wrote them, so the report could not start lying about the backlog.
+   *
+   * books-56 wrote them. The sentence stays; the assertion inverts. Asserting
+   * zero here now would be asserting that finished work is unfinished, which is
+   * the failure this test was built to prevent, pointed the other way.
+   *
+   * The count is pinned at 4 — one per box — rather than merely "more than
+   * zero", so a set that loses a lesson still fails.
+   */
+  it("was right that the ESD 5208B had no lessons, and books-56 wrote them", () => {
     expect(teachingBoxes("esd_5208b").length).toBe(4);
-    const lessonsFor5208b = WA_QUARTERLY_LESSONS.filter((l) => l.formId === "esd_5208b");
-    expect(lessonsFor5208b).toHaveLength(0);
+
+    // The promise the report made, still on the page.
     expect(REPORT).toContain("ESD\n  5208B has 4 boxes and **zero lessons**");
+
+    // The promise, kept: one lesson for each of the four boxes.
+    const lessonsFor5208b = WA_QUARTERLY_LESSONS.filter((l) => l.formId === "esd_5208b");
+    expect(lessonsFor5208b).toHaveLength(4);
+    expect(lessonsFor5208b.map((l) => l.box).sort()).toEqual(
+      teachingBoxes("esd_5208b")
+        .map((b) => b.box)
+        .sort(),
+    );
   });
 
   /*
@@ -369,7 +427,36 @@ describe("the report's cross-form claims are true", () => {
    * correction in the books-55 report; a silent renumber here would have been
    * the more comfortable option and the wrong one.
    */
+  /*
+   * ═══ WHY THIS TEST HAD TO CHANGE AGAIN IN books-56 ═══
+   *
+   * The four-set subtotal was 56 at books-54 and is 70 now, because books-56
+   * added ties to two of those four sets (7 to the W-2's new lettered boxes, 7
+   * to the Washington lessons). So the literal 56 could no longer be recomputed
+   * from today's tree.
+   *
+   * The obvious fix — change 56 to 70 — would have destroyed the point of the
+   * test. Its job is to show that the REPORT'S OWN ARITHMETIC was a correct sum
+   * of an incomplete list, and a number that moves every slice cannot demonstrate
+   * that. So the historical figure is now pinned as a CONSTANT stating what was
+   * true on the report's date, and separately the test asserts what the same
+   * four-set subtotal has grown to, and that it grew rather than shrank.
+   *
+   * This is the third time this one test has been rewritten and it is worth
+   * saying why it keeps happening: a test that hard-codes a total of a growing
+   * thing will break on every slice, and each break invites the lazy repair.
+   * Pinning the DATED figure separately from the LIVE figure stops the ratchet.
+   */
   it("counted 56 ties because it counted four of five lesson sets", () => {
+    /** What the four sets summed to on the date the books-54 report was written. */
+    const FOUR_SET_SUBTOTAL_AT_BOOKS_54 = 56;
+    /** And what the fifth set held, which that report never counted. */
+    const FIFTH_SET_AT_BOOKS_54 = 6;
+
+    // The report's figure was an accurate count of an incomplete list.
+    expect(REPORT).toContain("**56, all resolving**");
+    expect(FOUR_SET_SUBTOTAL_AT_BOOKS_54 + FIFTH_SET_AT_BOOKS_54).toBe(62);
+
     const fourSetSubtotal = [
       FORM_940_LESSONS,
       FORM_941_LESSONS,
@@ -377,14 +464,21 @@ describe("the report's cross-form claims are true", () => {
       WA_QUARTERLY_LESSONS,
     ].reduce((n, set) => n + set.reduce((m, l) => m + l.tiesTo.length, 0), 0);
 
-    // The report's figure was an accurate count of an incomplete list.
-    expect(fourSetSubtotal).toBe(56);
-    expect(REPORT).toContain("**56, all resolving**");
+    /*
+     * The same four sets today. books-56 added 7 ties to the W-2 (its six new
+     * lettered boxes cross-reference the W-3, the 941 and the ESD wage detail)
+     * and 7 to the Washington set.
+     */
+    expect(fourSetSubtotal).toBe(70);
+    expect(
+      fourSetSubtotal,
+      "the four-set subtotal fell below its books-54 value, so ties were deleted rather than " +
+        "added and the report's correction no longer describes this tree",
+    ).toBeGreaterThan(FOUR_SET_SUBTOTAL_AT_BOOKS_54);
 
-    // The fifth set, which the report never counted.
+    // The fifth set, which the report never counted, and which has not moved.
     const fifthSet = FORM_941_CONFIRMATION_LESSONS.reduce((m, l) => m + l.tiesTo.length, 0);
-    expect(fifthSet).toBe(6);
-    expect(fourSetSubtotal + fifthSet).toBe(62);
+    expect(fifthSet).toBe(FIFTH_SET_AT_BOOKS_54);
   });
 
   /**
