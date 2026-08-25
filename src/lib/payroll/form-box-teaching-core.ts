@@ -724,6 +724,93 @@ export const FORM_940_TEACHING: readonly TeachingBox[] = [
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 export const FORM_W2_TEACHING: readonly TeachingBox[] = [
+  /*
+   * ═══ THE SIX LETTERED BOXES (books-56) ═══
+   *
+   * WHERE THESE CAPTIONS COME FROM. Read off `/workspace/2025_FORM_W-2_EMPLOYER.pdf`
+   * — Michael's OWN filed 2025 employer copies — with `pdftotext -layout`, so the
+   * captions are the words actually printed above the boxes on the paper he holds.
+   * They are NOT the headings from the instructions, which are worded differently:
+   * the instructions say "Box a—Employee's social security number" while the form
+   * prints "a Employee's SSN". The caption field is defined as the form's own
+   * words, so the form wins. The instructions supply the RULES, quoted verbatim in
+   * the lessons; the paper supplies the LABELS.
+   *
+   * Two details from that extraction are worth recording because they are the
+   * kind of thing a reader would otherwise assume:
+   *
+   *   1. The paper prints boxes e and f as ONE combined block spanning the name
+   *      and address, with "e Employee's first name and initial", "Last name" and
+   *      "Suff." on one line and "f Employee's address and ZIP code" beneath. The
+   *      instructions likewise give them a single joint heading, "Boxes e and
+   *      f—Employee's name and address". They are kept as two boxes here because
+   *      the form prints two letters and the ESD wage detail ties to the NAME
+   *      specifically, not to the address.
+   *
+   *   2. Box f's label prints BELOW its own content on the layout, after box e's
+   *      address lines. That is a quirk of the printed grid, not an error in the
+   *      extraction, and it is why the boxes were read from the labels rather than
+   *      from their vertical order.
+   *
+   * WHY THEY WERE MISSING FOR SEVEN SLICES. Every earlier slice built the
+   * specimen outward from the boxes the W-2 ENGINE emits, and the engine computes
+   * money. Nothing computes a person's name, so nothing put it on the screen.
+   * That is the same shape of defect as books-49's: the form Michael holds has
+   * boxes that the system that teaches the form did not know existed.
+   */
+  {
+    // The first box on the paper, and the one that decides whose year this is.
+    box: "a",
+    caption: "Employee's SSN",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Copied from the employee's social security card — not from a nickname, an old record, or " +
+      "memory. If they have no card yet, the instructions say to enter 'Applied For' on paper, " +
+      "or zeros if e-filing, and never a made-up number. An ITIN must NOT be used here.",
+  },
+  {
+    box: "b",
+    caption: "Employer identification number",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Greenway's own EIN, 46-4217016 on the 2025 forms, and it must be the SAME number used on " +
+      "the quarterly 941s. Not truncated, and never a Social Security number in its place.",
+  },
+  {
+    box: "c",
+    caption: "Employer's name, address, and ZIP code",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Greenway's name and address, matching the 941s. This is the EMPLOYER's block — the " +
+      "employee's address is box f, and confusing the two is easy because they sit adjacent.",
+  },
+  {
+    box: "d",
+    caption: "Control number",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Optional. Your own reference for telling individual W-2s apart. The instructions say you " +
+      "do not have to use this box, and Greenway leaves it empty. Note that the W-3's control " +
+      "number is box a, not box d — the two forms use different letters for the same idea.",
+  },
+  {
+    box: "e",
+    caption: "Employee's first name and initial, Last name, Suff.",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "The name exactly as it appears on the employee's social security card. The last name " +
+      "matters most. Compound names are separated with a hyphen or a space and never joined into " +
+      "one word; titles and degrees are left off; a suffix goes in 'Suff.' only if it is on the " +
+      "card. This is the box the ESD wage detail must agree with, person by person.",
+  },
+  {
+    box: "f",
+    caption: "Employee's address and ZIP code",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Where the employee's own copies are posted. Number, street, and apartment or suite. " +
+      "Distinct from box c, which is Greenway's address.",
+  },
   {
     box: "1",
     caption: "Wages, tips, other compensation",

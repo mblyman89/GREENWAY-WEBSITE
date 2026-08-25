@@ -508,6 +508,86 @@ export const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
  * that reconciliation.
  */
 export const FORM_W2_WHOSE: Readonly<Record<string, WhoseRow>> = {
+  /*
+   * ═══ THE SIX LETTERED BOXES, ADDED IN books-56 ═══
+   *
+   * This table began at box 1 and ended at box 20, so the six lettered boxes the
+   * paper prints ABOVE box 1 did not exist to this system at all. `resolveWhose`
+   * throws for a box that is not in this table, so the W-2 could not even LIST
+   * them, and the ownership question "whose is this?" could not be asked of the
+   * employee's own name and Social Security number.
+   *
+   * HOW THE GAP WAS FOUND, because the method matters more than the fix. It was
+   * not found by reading this file. A lesson written for the ESD 5208B wage
+   * detail tied its employee row to `form_w2` box `e` — the box that carries the
+   * same person's name on the federal form — and `assertEveryTieResolves` refused
+   * it, naming the twenty boxes the W-2 had and the one it did not. The tie was
+   * right about the paper and the specimen was wrong, which is the direction that
+   * matters: a gate written in books-49 for a different purpose caught a
+   * seven-slice-old omission because a NEW cross-reference forced it to answer.
+   *
+   * WHY THIS PARTICULAR GAP IS NOT COSMETIC. Michael has said he prepared all ten
+   * of Greenway's 2025 W-2s and the W-3 himself and believes he may have done it
+   * wrong. Boxes a, e and f are the SSN, the name and the address — the three
+   * fields the SSA matches on. A wrong figure in box 1 is an arithmetic error the
+   * IRS will query. A wrong name in box e is a SILENT error: the return is
+   * accepted, nothing on Greenway's side looks wrong, and an employee's earnings
+   * record is short by a year. Those were the boxes with nothing behind them.
+   *
+   * WHY ALL SIX ARE `not_money`, and why that is a substantive answer rather than
+   * a shrug. `not_money` is load-bearing here: it drives measure "count" instead
+   * of "money" in the teaching layer, so without it box a would render Teri
+   * Becker's SSN as a dollar amount. These boxes carry identifiers and text. The
+   * classification is asking whose MONEY a figure is, and the honest answer for a
+   * name is that it is not money at all.
+   *
+   * ═══ A WARNING FOR WHOEVER READS THE DRIFT GATE NEXT ═══
+   *
+   * `assertW3MoneyBoxesMatchTheirW2Box` compares this table against FORM_W3_WHOSE
+   * by SHARED BOX ID. Adding a-f here makes six new ids shared, and on the two
+   * forms those letters do NOT mean the same box: W-2 box a is the employee's
+   * SSN, W-3 box a is an optional control number. They happen to agree at
+   * `not_money`, so nothing goes red — which is precisely the sort of accidental
+   * green rule 40 exists to refuse. That gate has been taught the difference
+   * rather than left to coincidence; see its own docblock.
+   */
+  a: {
+    whose: "not_money",
+    why:
+      "The employee's Social Security number, copied from their card. An identifier, not an " +
+      "amount — and the field the SSA matches the whole form on, so an error here credits the " +
+      "wages to nobody and shows up nowhere on Greenway's side.",
+  },
+  b: {
+    whose: "not_money",
+    why:
+      "Greenway's nine-digit EIN, which must be the same number used on the 941s. An identifier, " +
+      "not an amount, and the instructions forbid truncating it or substituting an SSN.",
+  },
+  c: {
+    whose: "not_money",
+    why:
+      "Greenway's own name, address and ZIP code, which must match the 941s. Text, not an " +
+      "amount. This is the EMPLOYER's block; the employee's address is box f.",
+  },
+  d: {
+    whose: "not_money",
+    why:
+      "An optional control number for identifying individual W-2s. A filing reference Greenway " +
+      "does not use, and the instructions say plainly you do not have to use this box.",
+  },
+  e: {
+    whose: "not_money",
+    why:
+      "The employee's name as shown on their social security card. Text, not an amount, and the " +
+      "instructions single out the LAST name as especially important to report exactly.",
+  },
+  f: {
+    whose: "not_money",
+    why:
+      "The employee's address and ZIP code — where their copy of this form is posted. Text, not " +
+      "an amount, and distinct from box c, which is Greenway's address.",
+  },
   "1": {
     whose: "tax_base",
     why: "Taxable wages for income tax. A wage figure the employee reports, not an amount owed.",
@@ -1820,8 +1900,116 @@ export function assertW3MoneyBoxesMatchTheirW2Box(): void {
       "employees' money. The number is shared but the box genuinely is not.",
   };
 
-  const shared = Object.keys(FORM_W3_WHOSE).filter((b) =>
+  /*
+   * ═══ THE SIX LETTERS ARE SHARED IDS THAT ARE NOT SHARED BOXES (books-56) ═══
+   *
+   * Until books-56, FORM_W2_WHOSE held boxes 1-20 only, so every id shared with
+   * the W-3 was a NUMBERED box, and for numbered boxes the premise of this whole
+   * function holds: W-3 box 2 is defined by the instructions as the total of
+   * W-2 box 2 across the envelope, and summing money does not change whose it is.
+   *
+   * Adding the W-2's lettered boxes a-f broke that premise without breaking this
+   * gate, which is the dangerous combination. The letters collide but the boxes
+   * do not:
+   *
+   *     letter │ on the W-2                    │ on the W-3
+   *     ───────┼───────────────────────────────┼──────────────────────────────
+   *       a    │ Employee's SSN                │ Control number (optional)
+   *       b    │ Employer's EIN                │ Kind of Payer  (as b-*, so no clash)
+   *       c    │ Employer's name and address   │ Total number of Forms W-2
+   *       d    │ Control number (optional)     │ Establishment number
+   *       e    │ Employee's name               │ Employer's EIN
+   *       f    │ Employee's address            │ Employer's name
+   *
+   * Note box d and box a: the W-2's control number is box d and the W-3's is box
+   * a. The two forms genuinely disagree about which letter means what.
+   *
+   * All twelve classify `not_money`, so `w2 === w3` holds for every one of them
+   * and this gate would have gone green on all six. That green would have been an
+   * ACCIDENT — it would prove only that identifiers are not money, a fact already
+   * known — while implying to a future reader that a total-of relationship had
+   * been verified. Rule 40 refuses a guard that cannot fail for the reason it
+   * claims to be checking.
+   *
+   * So the letters are excluded from the comparison BY NAME and by a stated
+   * reason, and the exclusion is itself gated below: each excluded letter must
+   * actually exist on both forms and must actually mean two different things,
+   * or the exclusion fails as stale. That way the list cannot quietly grow to
+   * cover a numbered box, which is the failure it would be built to hide.
+   */
+  const NOT_THE_SAME_BOX: Readonly<Record<string, string>> = {
+    a: "W-2 box a is the employee's SSN; W-3 box a is an optional control number.",
+    /*
+     * BOX b IS DELIBERATELY ABSENT FROM THIS LIST, and it was absent only after
+     * the list's own staleness guard refused it.
+     *
+     * The first draft listed b, reasoning that the W-2's box b (the employer's
+     * EIN) and the W-3's box b (three checkbox groups) are obviously different
+     * boxes. They are — but the W-3 does not HAVE a box id "b". Its three
+     * checkbox groups are registered as b-kind-of-payer, b-kind-of-employer and
+     * b-third-party-sick-pay precisely because one printed letter carries three
+     * separate rules. So "b" is not a shared id, no comparison on it ever
+     * happens, and an entry here excused nothing while implying it had.
+     *
+     * That is the same defect this file already documents for box 13 in
+     * JUSTIFIED_DIFFERENCES: an exemption for a comparison that does not occur
+     * is not neutral, it is a standing licence for the next real difference on
+     * that id to pass unnoticed. Written down because it is now the second time
+     * the identical mistake has been made in this one function, once in books-55
+     * and once here, and the reason it was caught both times is that the
+     * exemption lists are gated in both directions rather than merely read.
+     */
+    c: "W-2 box c is the employer's name and address; W-3 box c is a count of the Forms W-2 in the envelope.",
+    d: "W-2 box d is an optional control number; W-3 box d is an establishment number. The W-3's control number is box a, so the two forms disagree about which letter means what.",
+    e: "W-2 box e is the employee's name; W-3 box e is the employer's EIN.",
+    f: "W-2 box f is the employee's address; W-3 box f is the employer's name.",
+  };
+
+  const sharedIds = Object.keys(FORM_W3_WHOSE).filter((b) =>
     Object.prototype.hasOwnProperty.call(FORM_W2_WHOSE, b),
+  );
+
+  /*
+   * Both halves of the closed list, applied to the letters as well. An entry
+   * naming a box that is not on both forms excuses a comparison that never
+   * happens; an entry whose two captions are identical is not a real difference.
+   */
+  for (const [letter, why] of Object.entries(NOT_THE_SAME_BOX)) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W2_WHOSE, letter) &&
+        Object.prototype.hasOwnProperty.call(FORM_W3_WHOSE, letter),
+      `Box ${letter} is excluded from the W-2/W-3 total-of comparison as "not the same box", ` +
+        "but it is not present on both forms, so the comparison it excuses never happens. " +
+        "A guard against a comparison that cannot occur hides the next real one. Remove it.",
+    );
+    assert(
+      why.length > 60,
+      `The reason box ${letter} is excluded from the W-2/W-3 comparison is ${why.length} ` +
+        "characters. Say what each form's box actually is, or the exclusion cannot be judged.",
+    );
+    assert(
+      !/^[0-9]/.test(letter),
+      `Box ${letter} is excluded from the W-2/W-3 comparison as "not the same box", but it is ` +
+        "a NUMBERED box. Numbered boxes on the W-3 are defined as the total of the same-numbered " +
+        "box across the W-2s, so they are the same box by definition and must be compared. This " +
+        "list exists only for the lettered header boxes, where the letters collide but the boxes " +
+        "do not.",
+    );
+  }
+
+  const shared = sharedIds.filter((b) => NOT_THE_SAME_BOX[b] === undefined);
+
+  /*
+   * Rule 66d again, one level down: prove the exclusion list actually excluded
+   * something. If FORM_W2_WHOSE ever loses its lettered boxes, every entry above
+   * fails loudly on the existence assertion rather than this filter silently
+   * becoming an identity function.
+   */
+  assert(
+    sharedIds.length - shared.length === Object.keys(NOT_THE_SAME_BOX).length,
+    `${Object.keys(NOT_THE_SAME_BOX).length} lettered boxes are excluded from the W-2/W-3 ` +
+      `comparison but only ${sharedIds.length - shared.length} were actually removed from the ` +
+      "shared set. The exclusion list and the tables have drifted apart.",
   );
 
   /*
