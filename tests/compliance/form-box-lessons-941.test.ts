@@ -92,6 +92,46 @@ describe("the lessons teach, not just cite", () => {
     }
   });
 
+  it("keeps typesetting accidents out of the prose Michael reads", () => {
+    // Found by eye while reviewing books-53, not by any test: four
+    // `whereItComesFrom` fields contained a literal "\n      " -- a newline plus
+    // six spaces of source indentation -- baked into a single-line string,
+    // because the tool that wrapped the prose escaped the wrap instead of
+    // joining it. On screen that renders as a line break and a gap in the
+    // middle of a sentence. Nothing failed, because every length and content
+    // check still passed: the defect was invisible to everything except a human
+    // reading the output.
+    //
+    // Real newlines belong in `quotes[].quote`, where they reproduce the line
+    // breaks of the IRS PDF and the verbatim verifier depends on them byte for
+    // byte. They have no business in prose that this application wrote itself.
+    for (const l of FORM_941_LESSONS) {
+      const proseFields: readonly (readonly [string, string])[] = [
+        ["headline", l.headline],
+        ["plainEnglish", l.plainEnglish],
+        ["whereItComesFrom", l.whereItComesFrom],
+        ["howToReadIt", l.howToReadIt],
+        ["whatToDo", l.whatToDo],
+        ...(l.commonMistake === null
+          ? []
+          : ([["commonMistake", l.commonMistake]] as const)),
+      ];
+      for (const [name, text] of proseFields) {
+        expect(
+          text.includes("\n"),
+          `941 line ${l.box} field ${name} contains a newline. Prose written by this ` +
+            `application must be one flowing string; only verbatim quotes may carry the ` +
+            `line breaks of the source PDF.`,
+        ).toBe(false);
+        expect(
+          /\s{2,}/.test(text),
+          `941 line ${l.box} field ${name} contains a run of two or more spaces, which is ` +
+            `almost always source indentation that leaked into the sentence.`,
+        ).toBe(false);
+      }
+    }
+  });
+
   it("names the characteristic mistake on every line that has one", () => {
     // Not every box has a known failure mode, but most do, and a lesson without
     // one is usually a box nobody has thought hard enough about.
