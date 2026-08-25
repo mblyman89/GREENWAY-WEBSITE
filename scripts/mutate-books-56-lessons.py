@@ -132,7 +132,14 @@ MUTATIONS = [
     ("M10", LESSONS_W2,
      '"Separate parts of a compound name with either a\\nhyphen or a blank space. Do not join them into a single\\nword."',
      '"Separate parts of a compound name with either a\\nhyphen or a blank space."',
-     True, "a quote is TRUNCATED, dropping the prohibition it exists to teach"),
+     True, "a quote is TRUNCATED, dropping the prohibition it exists to teach. "
+           "Was GREEN against prediction until books-56: it survived because the verbatim "
+           "verifier cannot see a SHORTER quote and quote-truncation.test.ts only hunts "
+           "MID-sentence cuts, while this one stops at a clean full stop. Now caught by "
+           "tests/compliance/quote-stops-before-a-prohibition.test.ts, which reads the "
+           "sentence the corpus continues with. Closing it found two real defects: 941 line 1 "
+           "omitted the IRS's list of who NOT to count, and 941 line 5a omitted "
+           "\"Don't include tips on this line.\""),
 
     ("M11", AUTH_WA,
      '"Termination of business. Each employer who stops doing business or whose account is closed " +',
