@@ -2706,3 +2706,36 @@ building the matcher twice.
        (d) Restore and re-run the baseline at the END of the sweep, and print
            `git diff --stat` to prove the tree is clean. A harness that
            leaves a mutation behind poisons every measurement that follows.
+
+112. AN EQUIVALENT MUTANT IS A FINDING ABOUT THE TEST'S NAME, NOT A HOLE IN
+     THE GATE - AND THE DIFFERENCE MUST BE PROVED, NOT ASSERTED.
+
+     books-56. A mutation replaced the omission predicate `hours === 0` with
+     `r.exactHours === 0` in the Paid Leave CSV writer. Predicted RED. It came
+     out GREEN, and the honest question was whether the gate had a hole.
+
+     It did not. The two predicates are EQUIVALENT on every input the writer
+     can reach: `Math.ceil(x) === 0` and `x === 0` differ only for x in
+     (-1, 0), and negative hours are refused by validation before the omission
+     rule ever runs. So there was no behaviour to catch.
+
+     The finding was elsewhere, and it was real. The TEST'S NAME - "judges
+     omission on ROUNDED hours, not exact ones" - asserted a distinction that
+     no test could observe. A suite full of names like that looks stronger
+     than it is, which is the same disease as an unreachable guard (rule 40)
+     wearing a more convincing costume.
+
+       (a) When a mutation survives, first ask whether the mutant is
+           EQUIVALENT before concluding the gate is weak. Do not skip this:
+           "add a test until it goes red" against an equivalent mutant is
+           impossible, and the attempt ends in either a test that asserts an
+           implementation detail or a quiet decision to stop caring.
+       (b) Equivalence must be PROVED over the REACHABLE domain, and the proof
+           must say what makes the rest of the domain unreachable. Here:
+           validation refuses negative hours earlier in the same function.
+           "It's probably the same" is not a proof.
+       (c) If the mutant is equivalent, the fix is to RENAME the test to what
+           it genuinely proves, and to record why the stronger-sounding claim
+           was withdrawn. Leaving the name is worse than having no test,
+           because it spends credibility that has not been earned.
+       (d) If the mutant is NOT equivalent, it is a hole; close it.

@@ -502,11 +502,28 @@ describe("employees with zero hours AND zero wages are omitted — and only thos
     expect(res.csv).toContain(",40,0.00,");
   });
 
-  it("judges omission on ROUNDED hours, not exact ones", () => {
+  it("files a fractional hour with no wages, because it rounds up to 1", () => {
     /*
-     * A quarter of an hour with no wages rounds UP to 1, so the row is filed.
-     * Deciding on exactHours would drop it — which would be a person vanishing
-     * from a filing because of a rounding rule applied in the wrong order.
+     * ─────────────────────────────────────────────────────────────────────────
+     * THIS TEST ONCE CLAIMED SOMETHING IT CANNOT OBSERVE
+     * ─────────────────────────────────────────────────────────────────────────
+     *
+     * It was called "judges omission on ROUNDED hours, not exact ones", and a
+     * mutation replacing `hours === 0` with `r.exactHours === 0` in the writer
+     * SURVIVED it. I had predicted red. Investigating rather than explaining it
+     * away: the two predicates are EQUIVALENT on every input the writer can
+     * reach.
+     *
+     *   `Math.ceil(x) === 0` and `x === 0` disagree only for x in (-1, 0).
+     *   Negative hours are refused by validation before the omission rule runs.
+     *   So on the reachable domain x >= 0 they never disagree.
+     *
+     * An equivalent mutant is not a hole in the gate — there is nothing to
+     * catch. But the test's NAME asserted a distinction that no test could
+     * make, and a name like that is how a suite comes to look stronger than it
+     * is. Renamed to what it actually proves: a quarter of an hour is filed,
+     * with its hours written as 1, which pins the ceiling in the OUTPUT even
+     * though the omission predicate's internal form is unobservable.
      */
     const res = ok(
       buildPaidLeaveCsv([
