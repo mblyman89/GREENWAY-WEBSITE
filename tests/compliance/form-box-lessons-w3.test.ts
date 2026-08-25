@@ -420,26 +420,77 @@ describe("Greenway's 2025 W-3 as filed, measured against the statute", () => {
         "against line 7 of the quarterly 941s, which is where fractions of cents are reported.",
     ).toBe(2);
 
-    // And the lesson for box 6 must actually TELL him this, not bury it.
+    /*
+     * And the lesson for box 6 must actually TELL him this, not bury it.
+     *
+     * ─── THIS CHECK WAS DECORATION ON ITS FIRST DRAFT (rule 15) ───
+     *
+     * It originally joined every field of the lesson into one string and
+     * asserted it contained "fraction". The mutation that exposed it: replacing
+     * "fractions of cents" with "rounding differences" throughout the module
+     * left all 17 tests GREEN. The word survived in two other places — the
+     * `whatToDo` field and one worked-example step — so a single global rename
+     * of the explanation could not make the check fail. Searching a bag of
+     * concatenated prose for one word is close to unfalsifiable: the more
+     * thoroughly a lesson is written, the more places the word hides in.
+     *
+     * Rebuilt to require the three things that actually constitute the
+     * explanation, EACH LOCATED IN A SPECIFIC FIELD rather than anywhere:
+     *   (a) the worked example must show the discrepancy AS A FIGURE;
+     *   (b) some field must name the mechanism (fractions of cents);
+     *   (c) it must point at line 7 of the 941, where the money is reported.
+     * Removing any one of the three now fails.
+     */
     const lesson = FORM_W3_BOX_LESSONS.find((l) => l.box === "6");
     expect(lesson).toBeDefined();
-    const prose = [
+
+    // (a) The figure itself, in the worked example — not merely alluded to in
+    //     prose. A number he can match against his own paperwork.
+    const exampleText = lesson!.examples
+      .flatMap((e) => [...e.steps, e.answer, e.moral])
+      .join(" ");
+    expect(
+      /0\.02|two cents/i.test(exampleText),
+      "box 6's worked example never shows the two-cent difference as a figure, so Michael " +
+        "cannot match it against his own 941",
+    ).toBe(true);
+
+    // (b) The mechanism, named. Checked field by field so that the count of
+    //     places it appears is itself asserted — one rename cannot hide.
+    /*
+     * NOTE ON THE PATTERN: the prose says both "fractions of cents" and
+     * "fractions-of-cents" (the hyphenated adjectival form), and TypeScript
+     * string concatenation splits some of them across source lines. An earlier
+     * draft of this matcher required "fractions of cents" with spaces and
+     * reported the mechanism as ABSENT from a lesson that states it three
+     * times — a false alarm, which is the failure mode that gets a gate
+     * deleted by the next person who trips over it. Matched on the words with
+     * either separator.
+     */
+    const MECHANISM = /fractions?[\s-]+of[\s-]+cents/i;
+    const fieldsMentioningMechanism = [
       lesson!.plainEnglish,
       lesson!.howToReadIt,
       lesson!.commonMistake ?? "",
       lesson!.whatToDo,
-      ...lesson!.examples.flatMap((e) => [...e.steps, e.moral, e.answer]),
-    ]
-      .join(" ")
-      .toLowerCase();
+      exampleText,
+    ].filter((f) => MECHANISM.test(f));
     expect(
-      prose.includes("fraction"),
-      "box 6 is two cents off the statutory rate and its lesson never mentions fractions of " +
-        "cents, so Michael would have no way to know why",
-    ).toBe(true);
+      fieldsMentioningMechanism.length,
+      "box 6 is two cents off the statutory rate and no field names the mechanism " +
+        '("fractions of cents"), so Michael would have no way to know why. This must be ' +
+        "stated in the lesson body AND demonstrated in the example.",
+    ).toBeGreaterThanOrEqual(2);
+
+    // (c) Where it is reported. The tie, and the prose that explains the tie.
+    const tie = lesson!.tiesTo.find((t) => t.formId === "form_941" && t.box === "7");
     expect(
-      lesson!.tiesTo.some((t) => t.formId === "form_941" && t.box === "7"),
+      tie,
       "box 6 carries a two-cent difference that is resolved on 941 line 7, so it must tie there",
+    ).toBeDefined();
+    expect(
+      /fraction|cent/i.test(tie!.why),
+      "the tie from box 6 to 941 line 7 exists but does not say it is about fractions of cents",
     ).toBe(true);
   });
 
