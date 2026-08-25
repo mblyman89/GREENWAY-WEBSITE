@@ -533,4 +533,690 @@ export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
     ],
     tiesTo: [],
   },
+
+  /* ═════════════════════════════════════════════════════════════════════════
+   * §  THE TWELVE BOXES ADDED IN books-52
+   *
+   * Michael, August 2026: "i think there are line items/ boxes i should be
+   * able to click to learn more that are not available yet."
+   *
+   * He was right, and it was measurable: this file taught 8 boxes against 19
+   * numbered boxes on the W-2 he actually holds. The gap was not evenly
+   * distributed either. It was boxes 7 through 15 and 18 through 20 - the
+   * entire middle of the form - plus box 14, which is where his own filed 2025
+   * W-2s carry an entry captioned HEALTH.
+   *
+   * EVERY QUOTE BELOW WAS TRANSCRIBED MECHANICALLY, NOT TYPED. A script read
+   * the mirrored instructions, sliced the exact line ranges, escaped them, and
+   * printed the string literals that appear here. Rule 24 says verbatim must be
+   * mechanically verified rather than carefully typed; the safest way to obey
+   * that is to never let a human hand touch the characters at all.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  {
+    formId: "form_w2",
+    box: "7",
+    headline: "Tips the employee told you about",
+    plainEnglish:
+      "Tips the employee reported to Greenway. Reporting them here does not make them a second " +
+      "kind of pay - the same tips are ALSO included in box 1 and box 5. Box 7 exists so the " +
+      "Social Security Administration can see how much of the wage figure came from tips.",
+    whereItComesFrom:
+      "Tip amounts the employee declared to the employer during the year. Not tips they kept " +
+      "quiet about, and not tips Greenway estimated on their behalf - that is box 8.",
+    howToReadIt:
+      "Add box 3 and box 7 together and compare the total against the Social Security wage base. " +
+      "That combined total is what the ceiling applies to. Reading box 3 alone against the base " +
+      "understates how close an employee is to the cap.",
+    commonMistake:
+      "Treating box 7 as extra wages to be added to box 1. The tips are already in box 1. Adding " +
+      "them again inflates the employee's taxable income and produces a wrong personal return.",
+    whatToDo:
+      "For Greenway this box is normally empty - a cannabis retailer's budtenders are paid wages, " +
+      "not tips. If it is ever not empty, confirm the same amount is inside box 1 and box 5 " +
+      "before the W-2 goes out.",
+    examples: [
+      {
+        title: "Why the ceiling watches boxes 3 and 7 together",
+        steps: [
+          "An employee has $180,000.00 in box 3 and $6,000.00 in box 7.",
+          "Box 3 alone is under the $184,500.00 Social Security wage base, so nothing looks wrong.",
+          "But the instructions cap the TOTAL of boxes 3 and 7, and 180,000 + 6,000 = $186,000.00.",
+          "That is $1,500.00 over the base, so Social Security was over-withheld.",
+        ],
+        answer: "$186,000.00 combined — $1,500.00 above the 2026 wage base",
+        moral:
+          "The box that breaches the ceiling is not always the box you were watching.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 7",
+        quote:
+          "Box 7\u2014Social security tips. Show the tips that the\nemployee reported to you even if you did not have enough\nemployee funds to collect the social security tax for the\ntips. The total of boxes 3 and 7 should not be more than\n$184,500 (the maximum social security wage base for\n2026). Report all tips in box 1 along with wages and other\ncompensation. Also include any tips reported in box 7 in\nbox 5.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The instructions state the wage-base test on boxes 3 AND 7 combined, and they say the " +
+          "same tips go in boxes 1, 5 and 7. One passage settles both the ceiling question and " +
+          "the double-counting question.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "3",
+        why:
+          "Boxes 3 and 7 share one ceiling. Neither can be checked against the wage base on its " +
+          "own, because the limit applies to their sum.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_w2",
+    box: "8",
+    headline: "Tips the employer assigned — and the one box deliberately in nothing else",
+    plainEnglish:
+      "Allocated tips are tips a large food or beverage establishment assigns to an employee " +
+      "because reported tips fell below a threshold. This is the strangest box on the W-2: the " +
+      "instructions explicitly say the amount is NOT included in boxes 1, 3, 5 or 7.",
+    whereItComesFrom:
+      "A tip allocation calculation that only applies to large food or beverage establishments, " +
+      "reported on Form 8027. Greenway is a cannabis retailer and is not one.",
+    howToReadIt:
+      "If this box has a figure at Greenway, something is wrong with the payroll setup rather " +
+      "than with the employee. It should be permanently empty for this business.",
+    commonMistake:
+      "Adding box 8 into box 1 to 'make the wages complete'. The exclusion is deliberate — the " +
+      "employee accounts for allocated tips on their own return. Folding it into box 1 taxes it " +
+      "twice.",
+    whatToDo:
+      "Leave it blank. If payroll software ever populates it, stop and find out why before " +
+      "filing, because it means Greenway has been classified as a food or beverage establishment.",
+    examples: [
+      {
+        title: "The box that feeds nothing",
+        steps: [
+          "Box 1, 3, 5 and 7 are built from wages and reported tips.",
+          "An allocated tip figure of $500.00 is entered in box 8.",
+          "Boxes 1, 3, 5 and 7 do NOT change — the instructions forbid including it.",
+          "The employee resolves the $500.00 on their own Form 1040.",
+        ],
+        answer: "$500.00 in box 8 and no change to any other box",
+        moral:
+          "Most boxes on this form feed a total. This one is quarantined on purpose.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 8",
+        quote:
+          "Box 8\u2014Allocated tips (not applicable to Forms\nW-2AS, W-2CM, W-2GU, or W-2VI). If you operate a\nlarge food or beverage establishment, show the tips\nallocated to the employee. See the Instructions for Form\n8027, Employer\u2019s Annual Information Return of Tip\nIncome and Allocated Tips. Do not include this amount in\nbox 1, 3, 5, or 7.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\"Do not include this amount in box 1, 3, 5, or 7\" is unusually blunt for the " +
+          "instructions, and it is the whole reason this box cannot be reconciled like the others.",
+      },
+    ],
+    tiesTo: [],
+  },
+
+  {
+    formId: "form_w2",
+    box: "9",
+    headline: "The box that must stay empty",
+    plainEnglish:
+      "Box 9 is retired. It once carried an advance Earned Income Credit payment, that programme " +
+      "ended, and the box was left on the form. The instruction for it is a single sentence: do " +
+      "not enter an amount.",
+    whereItComesFrom:
+      "Nowhere. No payroll calculation produces a figure for this box.",
+    howToReadIt:
+      "Any number here is an error, full stop. There is no amount that is correct.",
+    commonMistake:
+      "Putting something in it because a blank box looks unfinished. A form with a deliberately " +
+      "empty box is complete; the emptiness is the content.",
+    whatToDo:
+      "Leave it alone. This is a box to recognise and skip, which is exactly why it is worth " +
+      "teaching — an unexplained blank invites someone to fill it.",
+    examples: [
+      {
+        title: "The shortest instruction in the whole document",
+        steps: [
+          "Look up box 9 in the IRS instructions.",
+          "The entire instruction reads: do not enter an amount in box 9.",
+          "There is no exception, no threshold, and no special case.",
+        ],
+        answer: "(permanently blank)",
+        moral:
+          "Some boxes are answered by knowing there is nothing to answer.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 9",
+        quote: "Box 9. Do not enter an amount in box 9.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "Unambiguous, and short enough to quote in full. There is no judgement to exercise here.",
+      },
+    ],
+    tiesTo: [],
+  },
+
+  {
+    formId: "form_w2",
+    box: "10",
+    headline: "Dependent care benefits, reported in full even above the limit",
+    plainEnglish:
+      "The total value of dependent care assistance Greenway provided or paid for. The important " +
+      "and counter-intuitive part is that you report ALL of it, including any amount above the " +
+      "$5,000 exclusion — you do not report only the taxable excess.",
+    whereItComesFrom:
+      "Amounts paid or incurred under a section 129 dependent care assistance programme, " +
+      "including the fair market value of employer-provided daycare and amounts run through a " +
+      "section 125 cafeteria plan.",
+    howToReadIt:
+      "A figure over $5,000 does not mean a mistake was made. It means part of the benefit is " +
+      "taxable to the employee, which their own return works out.",
+    commonMistake:
+      "Reporting only the portion above the exclusion. The instructions say to report all " +
+      "amounts paid or incurred regardless of forfeitures, including those in excess of the " +
+      "$5,000 exclusion. Reporting the net understates the benefit provided.",
+    whatToDo:
+      "If Greenway ever offers dependent care assistance, report the gross figure and let the " +
+      "employee's own return apply the exclusion. Do not do their arithmetic for them on a form " +
+      "that is not theirs to correct.",
+    examples: [
+      {
+        title: "Why $6,000 of benefit is reported as $6,000",
+        steps: [
+          "Greenway pays $6,000.00 of dependent care assistance for an employee.",
+          "The exclusion is $5,000.00, so $1,000.00 of it is taxable to the employee.",
+          "Box 10 shows $6,000.00 — the whole amount — not the $1,000.00 excess.",
+          "The employee's Form 2441 works out the taxable part.",
+        ],
+        answer: "$6,000.00 in box 10",
+        moral:
+          "Box 10 reports what was provided. It is not a taxable-amount box.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 10",
+        quote:
+          "Box 10\u2014Dependent care benefits (not applicable to\nForms W-2AS, W-2CM, W-2GU, or W-2VI). Show the\ntotal dependent care benefits under a dependent care\nassistance program (section 129) paid or incurred by you",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\"Show the total\" is the operative phrase. The box is a report of benefits provided, " +
+          "not a computation of what is taxable.",
+      },
+    ],
+    tiesTo: [],
+  },
+
+  {
+    formId: "form_w2",
+    box: "11",
+    headline: "Nonqualified plan payouts — a timing signal, not a tax",
+    plainEnglish:
+      "Distributions from a nonqualified deferred compensation plan. This box does not create " +
+      "any tax. It exists so the Social Security Administration can work out whether money paid " +
+      "this year was actually EARNED in an earlier year, which matters for the earnings test " +
+      "applied to people drawing benefits.",
+    whereItComesFrom:
+      "Payments out of a nonqualified plan or a nongovernmental section 457(b) plan. The same " +
+      "money is also reported in box 1.",
+    howToReadIt:
+      "Read it as an annotation on box 1 rather than as an amount in its own right. It tells the " +
+      "SSA that part of this year's box 1 belongs to a different year's work.",
+    commonMistake:
+      "Reporting a governmental section 457(b) distribution here. Those go on Form 1099-R " +
+      "instead, not on the W-2 at all.",
+    whatToDo:
+      "Greenway has no nonqualified plan, so this stays blank. If one is ever set up, make only " +
+      "ONE entry in this box and confirm the same money is in box 1.",
+    examples: [
+      {
+        title: "Why the SSA cares which year the work happened",
+        steps: [
+          "A retired employee draws $20,000.00 from a nonqualified plan this year.",
+          "The work that earned it was done years earlier.",
+          "Box 1 includes the $20,000.00, because it is taxable now.",
+          "Box 11 also shows it, telling the SSA not to treat it as current-year earnings.",
+        ],
+        answer: "$20,000.00 in box 1 and $20,000.00 in box 11",
+        moral:
+          "The same dollars appear twice on purpose, answering two different questions.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 11",
+        quote:
+          "Box 11\u2014Nonqualified plans. The purpose of box 11 is\nfor the SSA to determine if any part of the amount\nreported in box 1 or boxes 3 and/or 5 was earned in a prior\nyear. The SSA uses this information to verify that they\nhave properly applied the social security earnings test and\npaid the correct amount of benefits.\nReport distributions to an employee from a nonqualified\nplan or nongovernmental section 457(b) plan in box 11.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The instructions state the box's PURPOSE outright, which is rare. Knowing it is a " +
+          "timing signal for the earnings test explains why it duplicates box 1 rather than " +
+          "adding to it.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "1",
+        why:
+          "A box 11 distribution is also inside box 1. The two are the same money, described " +
+          "once as taxable and once as earned in an earlier year.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_w2",
+    box: "12",
+    headline: "The coded box — where the letter matters as much as the number",
+    plainEnglish:
+      "A set of up to four coded entries, each a capital letter followed by an amount. The code " +
+      "is not decoration: code D is a 401(k) deferral, code DD is the cost of employer-sponsored " +
+      "health coverage and is purely informational, code W is an HSA contribution. The same " +
+      "dollar figure means completely different things under different letters.",
+    whereItComesFrom:
+      "Payroll deductions and employer-provided benefits, each mapped to the IRS code for that " +
+      "item. The codes run from A through II.",
+    howToReadIt:
+      "Read the letter first. Code DD is the one that alarms people every year: it shows what " +
+      "health coverage COST, is often five figures, and is not taxable to anybody. Code D, by " +
+      "contrast, explains why box 1 is smaller than box 3.",
+    commonMistake:
+      "Assuming the sub-labels 12a, 12b, 12c and 12d mean something. They do not — the " +
+      "instructions say the codes do not relate to where they are entered. Code D can go in 12a " +
+      "or 12c and it is the same report.",
+    whatToDo:
+      "Never put more than four items in box 12 on Copy A. If a fifth is needed, use a second " +
+      "Form W-2. And do not put section 414(h)(2) contributions here — those belong in box 14a.",
+    examples: [
+      {
+        title: "Two codes, two completely different meanings",
+        steps: [
+          "Code D $2,000.00 — a 401(k) deferral. It reduced box 1 but not boxes 3 and 5.",
+          "Code DD $14,000.00 — the cost of health coverage. It reduced nothing and is taxed nowhere.",
+          "Both are amounts in box 12 and only one of them affects a single other figure.",
+          "An employee seeing $14,000.00 often believes they are being taxed on it. They are not.",
+        ],
+        answer: "D 2000.00 and DD 14000.00",
+        moral:
+          "In box 12 the letter carries the meaning. The amount alone tells you nothing.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 12",
+        quote:
+          "Box 12\u2014Codes. Complete and code this box for all\nitems described below. Note that the codes do not relate\nto where they should be entered in boxes 12a through 12d\non Form W-2. For example, if you are only required to\nreport code D in box 12, you can enter code D and the\namount in box 12a of Form W-2. Report in box 12 any\nitems that are listed as codes A through II. Do not report in\nbox 12 section 414(h)(2) contributions (relating to certain",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The instructions dispose of the most common confusion directly: 12a through 12d are " +
+          "just slots, and the code carries the meaning wherever it sits.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "1",
+        why:
+          "A code D deferral is the usual reason box 1 is smaller than box 3. The explanation " +
+          "for a gap between the wage boxes is often sitting in box 12.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_w2",
+    box: "13",
+    headline: "Three checkboxes that change how the whole form is read",
+    plainEnglish:
+      "Not an amount — three tick boxes: Statutory employee, Retirement plan, and Third-party " +
+      "sick pay. Each one changes how the IRS interprets every other figure on the form.",
+    whereItComesFrom:
+      "The employee's classification and benefits, not from any calculation. Somebody has to " +
+      "decide these, and the decision is a legal one.",
+    howToReadIt:
+      "The Retirement plan tick is the one with reach beyond this form: it can limit the " +
+      "employee's ability to deduct an IRA contribution on their personal return. A wrong tick " +
+      "produces a wrong personal deduction, not a payroll error.",
+    commonMistake:
+      "Ticking Statutory employee for a common-law employee. The instructions say not to, in " +
+      "those words. Statutory employees are a narrow list — certain drivers, full-time life " +
+      "insurance agents, homeworkers on employer-supplied materials — and a budtender is not " +
+      "among them.",
+    whatToDo:
+      "Leave Statutory employee unticked for every Greenway employee. Tick Retirement plan only " +
+      "if the employee was genuinely an active participant in one during the year.",
+    examples: [
+      {
+        title: "A tick with no dollar value that still changes a tax return",
+        steps: [
+          "An employee contributes nothing to a retirement plan but the Retirement plan box is ticked in error.",
+          "No figure on the W-2 changes — box 13 holds no amount.",
+          "The employee's ability to deduct a traditional IRA contribution is now restricted by income limits that should not apply.",
+          "They lose a deduction because of a tick mark.",
+        ],
+        answer: "(no dollar amount, and a real tax consequence)",
+        moral:
+          "A box does not need a number in it to be worth getting right.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 13",
+        quote:
+          "Box 13\u2014Checkboxes. Check all boxes that apply.\nStatutory employee. Check this box for statutory\nemployees whose earnings are subject to social security\nand Medicare taxes but not subject to federal income tax\nwithholding. Do not check this box for common-law\nemployees. There are workers who are independent\ncontractors under the common-law rules but are treated\nby statute as employees. They are called \u201cstatutory",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\"Do not check this box for common-law employees\" is the sentence that keeps a normal " +
+          "hourly worker from being mis-tagged. Greenway's staff are common-law employees.",
+      },
+    ],
+    tiesTo: [],
+  },
+
+  {
+    formId: "form_w2",
+    box: "14",
+    headline: "The free-text box — and the one Michael's own W-2s use",
+    plainEnglish:
+      "A labelled, free-form box for anything the employee should know that has no box of its " +
+      "own. The instructions list examples, and health insurance premiums deducted is one of " +
+      "them by name. Washington's Paid Family and Medical Leave and WA Cares withholding belong " +
+      "here too, because they are not income tax.",
+    whereItComesFrom:
+      "Whatever Greenway chooses to disclose, each item labelled. It is the only box on the form " +
+      "where the employer writes the caption as well as the figure.",
+    howToReadIt:
+      "Box 14 explains, it does not compute. Nothing on the form is derived from it, and no tax " +
+      "is calculated from it. But it is often the box that answers 'why is my pay different from " +
+      "my wages'.",
+    commonMistake:
+      "Believing box 14 proves how an amount was TREATED. It does not. The caption is written by " +
+      "the employer and is not authority for the tax treatment of the amount beside it. Whether " +
+      "something was handled correctly is settled by boxes 1, 3 and 5 — never by box 14's label.",
+    whatToDo:
+      "Label every item. And when a box 14 figure represents something with a tax consequence — " +
+      "a shareholder's health premium being the live example at Greenway — confirm the treatment " +
+      "in boxes 1, 3 and 5 with the preparer rather than inferring it from the caption.",
+    examples: [
+      {
+        title: "A real Greenway box 14, and the question it raises",
+        steps: [
+          "On the filed 2025 W-2 for Teri Becker, box 14 is captioned HEALTH with 11,029.32.",
+          "Box 1 on that same W-2 is 11,029.32 — identical to the penny.",
+          "That is consistent with the premium having BEEN the compensation, which is what Michael described.",
+          "It does not by itself establish that the boxes 3 and 5 treatment is right — box 14 is a label, not a determination.",
+        ],
+        answer: "HEALTH 11,029.32 against box 1 of 11,029.32",
+        moral:
+          "Box 14 is where you notice a question. It is not where you answer it.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 14a",
+        quote:
+          "Box 14a\u2014Other. If you included 100% of a vehicle\u2019s\nannual lease value in the employee\u2019s income, it must also\nbe reported here or on a separate statement to your\nemployee.\nYou may also use this box for any other information that",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The box has one mandatory use — the vehicle lease value — and is otherwise open. That " +
+          "openness is why its caption carries no authority.",
+      },
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 14a, examples",
+        quote:
+          "you want to give to your employee. Label each item.\nExamples include state disability insurance taxes\nwithheld, union dues, uniform payments, health insurance\npremiums deducted, nontaxable income, educational\nassistance payments, or a minister\u2019s parsonage allowance\nand utilities. In addition, you may enter the following",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "\"health insurance premiums deducted\" is named in the instructions as an example of a " +
+          "box 14 item, and \"Label each item\" is an instruction rather than a suggestion. This " +
+          "is the authority behind the HEALTH caption on Greenway's own filed W-2s.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "1",
+        why:
+          "A box 14 item may or may not be inside box 1, and which it is cannot be told from " +
+          "box 14 itself. When the two are equal, as on a Greenway W-2, that is worth asking " +
+          "the preparer about rather than assuming.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_w2",
+    box: "15",
+    headline: "The state and the state ID number",
+    plainEnglish:
+      "The two-letter state abbreviation and Greenway's state employer ID number. Not an amount " +
+      "— an identifier that tells the reader which state the boxes beside it refer to.",
+    whereItComesFrom:
+      "The state abbreviation, and the ID number that the individual state assigns to the " +
+      "employer. It is not issued by the IRS.",
+    howToReadIt:
+      "For Greenway this reads WA, with boxes 16 and 17 beside it empty. That combination — a " +
+      "state named, no state wages, no state tax — is correct and permanent in Washington.",
+    commonMistake:
+      "Putting the federal EIN here. Box b already holds the federal EIN; box 15 wants the " +
+      "state's own number, which is a different identifier from a different agency.",
+    whatToDo:
+      "Enter WA. If Greenway ever employs someone in a second state, keep each state's rows " +
+      "separated by the broken line, and use a second W-2 beyond two states.",
+    examples: [
+      {
+        title: "A named state with nothing beside it",
+        steps: [
+          "Box 15 shows WA and the state ID number.",
+          "Box 16, state wages, is blank.",
+          "Box 17, state income tax, is blank.",
+          "All three are correct together, because Washington levies no personal income tax.",
+        ],
+        answer: "WA, with boxes 16 and 17 empty",
+        moral:
+          "Naming the state and reporting nothing for it is the right answer here, not an omission.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes 15 through 20",
+        quote:
+          "Boxes 15 through 20\u2014State and local income tax in-\nformation (not applicable to Forms W-2AS, W-2CM,\nW-2GU, or W-2VI). Use these boxes to report state and\nlocal income tax information. Enter the two-letter\nabbreviation for the name of the state. The employer\u2019s\nstate ID numbers are assigned by the individual states.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The state ID number is assigned by the state, not the IRS — which is why the federal " +
+          "EIN in box b is the wrong number to copy here.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "16",
+        why:
+          "Box 15 names the state that box 16's wages belong to. A wage figure with no state " +
+          "beside it cannot be attributed to any tax authority.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_w2",
+    box: "18",
+    headline: "Local wages — blank in Washington",
+    plainEnglish:
+      "Wages subject to a city or county income tax. Some states have local income taxes layered " +
+      "under the state one. Washington has neither, so this box stays empty for every Greenway " +
+      "employee.",
+    whereItComesFrom:
+      "Nowhere, for Greenway. In a jurisdiction with a local income tax it would be that " +
+      "locality's own wage base, which is not always the same as the state or federal figure.",
+    howToReadIt:
+      "Empty is correct. A figure here would assert that Port Orchard levies an income tax on " +
+      "wages, which it does not.",
+    commonMistake:
+      "Copying box 1 into box 18 to keep the row looking consistent. That claims a local wage " +
+      "base that does not exist.",
+    whatToDo:
+      "Leave blank. Do not confuse this with the Port Orchard LOCAL SALES TAX that appears on " +
+      "Greenway's DOR excise return — that is a tax on sales, has nothing to do with wages, and " +
+      "never touches a W-2.",
+    examples: [
+      {
+        title: "Two different things both called 'local'",
+        steps: [
+          "Greenway's DOR excise return shows a Port Orchard local line at a 0.028 rate on sales.",
+          "That is a local SALES tax, charged on what customers buy.",
+          "Box 18 is for local INCOME tax, charged on what employees earn.",
+          "Washington has the first and not the second, so box 18 stays blank.",
+        ],
+        answer: "(blank)",
+        moral:
+          "A local tax existing does not mean a local INCOME tax exists.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes 15 through 20",
+        quote:
+          "Use these boxes to report state and\nlocal income tax information.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "These boxes are scoped to state and local INCOME tax. A sales tax, however local, is " +
+          "outside their scope entirely.",
+      },
+    ],
+    tiesTo: [],
+  },
+
+  {
+    formId: "form_w2",
+    box: "19",
+    headline: "Local income tax withheld — the employee's money, and none of it here",
+    plainEnglish:
+      "Local income tax actually withheld from the employee's pay. Where it exists it is the " +
+      "employee's own money, held by the employer and passed on. In Washington there is no local " +
+      "income tax, so nothing is withheld and the box is empty.",
+    whereItComesFrom:
+      "Withholding from paycheques in a locality that levies an income tax. Greenway has none.",
+    howToReadIt:
+      "Blank. If a figure ever appeared here it would mean money had been taken from an " +
+      "employee's pay for a tax that does not exist — a real loss to a real person.",
+    commonMistake:
+      "Recording Washington's Paid Family and Medical Leave or WA Cares withholding here because " +
+      "it is a state-level deduction that genuinely came out of pay. Those are not income taxes " +
+      "and belong in box 14.",
+    whatToDo:
+      "Leave blank, and put PFML and WA Cares in box 14 with a label. If this box is ever " +
+      "populated, treat it as an urgent payroll configuration error, not a filing question.",
+    examples: [
+      {
+        title: "Money left the paycheque and this box is still empty",
+        steps: [
+          "WA Cares withholding of $58.00 comes out of an employee's pay across the year.",
+          "It is a long-term care premium, not an income tax.",
+          "Box 19 stays blank because no local income tax was withheld.",
+          "The $58.00 is disclosed in box 14, labelled, so the employee can see it.",
+        ],
+        answer: "(blank in box 19; disclosed in box 14)",
+        moral:
+          "Which box a deduction goes in is decided by what kind of charge it is, not by whether " +
+          "the employee felt it.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes 15 through 20",
+        quote:
+          "The state and local information boxes can be used to\nreport wages and taxes for two states and two localities.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The boxes accommodate two localities for employers who need them. Greenway needs " +
+          "none, so the pair stays empty.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "17",
+        why:
+          "Boxes 17 and 19 are the state and local versions of the same idea, and both are " +
+          "permanently blank in Washington for the same reason.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_w2",
+    box: "20",
+    headline: "The name of the locality",
+    plainEnglish:
+      "The name of the city or district whose local income tax appears in boxes 18 and 19. A " +
+      "label, not an amount. Blank for Greenway because there is no such locality.",
+    whereItComesFrom:
+      "The locality imposing the income tax. There is none for a Washington employer.",
+    howToReadIt:
+      "Empty, and correct. A locality name with no figures beside it would be as odd as figures " +
+      "with no name.",
+    commonMistake:
+      "Writing PORT ORCHARD here because that is where the shop is. Box 20 identifies a taxing " +
+      "locality, not a physical location. The employer's address already lives in box c.",
+    whatToDo:
+      "Leave blank. Boxes 18, 19 and 20 are a set — all three empty, or all three populated.",
+    examples: [
+      {
+        title: "Where the business is, versus which locality taxes it",
+        steps: [
+          "Greenway operates in Port Orchard, Washington.",
+          "The address appears in box c, the employer address box.",
+          "Port Orchard levies no local income tax on wages.",
+          "So box 20 is blank, even though the business plainly has a location.",
+        ],
+        answer: "(blank)",
+        moral:
+          "Having an address is not the same as having a taxing locality.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Boxes 15 through 20",
+        quote:
+          "Keep each state\u2019s and locality\u2019s information separated by\nthe broken line.",
+        sourcePath: FORM_W2_SOURCE_PATH,
+        sourceUrl: FORM_W2_SOURCE_URL,
+        soWhat:
+          "The locality boxes are grouped as a unit, separated per locality. That grouping is why " +
+          "18, 19 and 20 are filled or empty together.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "18",
+        why:
+          "Box 20 names the locality whose wages are in box 18. Neither means anything without " +
+          "the other.",
+      },
+    ],
+  },
 ];
