@@ -339,6 +339,104 @@ export const FORM_W2_WHOSE: Readonly<Record<string, WhoseRow>> = {
     why: "Medicare wages. Uncapped, unlike box 3, which is why the two can differ for a high earner.",
   },
   "6": { whose: "employee_money", why: "The employee's 1.45% of Medicare. Again only their half." },
+  /*
+   * ═══ THE TWELVE BOXES ADDED IN books-52 ═══
+   *
+   * The table stopped at box 6 and then jumped to 16 and 17, because those were
+   * the only boxes the W-2 engine emits. Every box between them existed on the
+   * paper form Michael holds in his hand and was unexplainable by this system:
+   * `resolveWhose` throws for a box that is not in this table, so the teaching
+   * specimen could not even LIST them.
+   *
+   * The gap was not cosmetic. Box 14 is where Michael's own filed 2025 W-2s
+   * carry an entry captioned HEALTH - 11,029.32 for Teri Becker against box 1
+   * of exactly 11,029.32 - and that box could not be clicked, read, or learned
+   * from. The one box on the form that touches the live open question about
+   * shareholder health premiums was the one box with nothing behind it.
+   *
+   * WHY `tax_base` IS THE RIGHT CLASSIFICATION FOR MOST OF THEM. These are
+   * classifications of OWNERSHIP, not of size or importance. `tax_base` means
+   * "a wage or benefit figure that other numbers are computed from, which
+   * nobody owes as a payment". Boxes 7, 8, 10, 11, 12 and 14 are all of that
+   * kind: they report amounts of pay or benefit, and no tax is due BECAUSE of
+   * the box. That is exactly the distinction the `whose` field exists to draw,
+   * and it is why a "contains the word tax" heuristic gets it wrong.
+   *
+   * BOX 9 AND BOX 13 ARE `not_money` AND THAT IS NOT A DODGE. Box 9 is a dead
+   * box the IRS instructs you to leave empty; box 13 holds three checkboxes.
+   * Neither is an amount at all. `not_money` also drives measure "count" rather
+   * than "money" in the teaching layer, so neither will ever be formatted with
+   * a dollar sign - which is the concrete bug this classification prevents.
+   */
+  "7": {
+    whose: "tax_base",
+    why:
+      "Tips the employee told you about. A wage figure, not an amount owed — and boxes 3 and 7 " +
+      "added together are what the Social Security wage base caps, not box 3 alone.",
+  },
+  "8": {
+    whose: "tax_base",
+    why:
+      "Tips YOU allocated to the employee, which only large food or beverage establishments do. " +
+      "Deliberately excluded from boxes 1, 3, 5 and 7, so it is a wage figure that feeds nothing.",
+  },
+  "9": {
+    whose: "not_money",
+    why:
+      "A retired box. The instructions say to enter nothing here, so it is not an amount at all " +
+      "and cannot be anybody's money.",
+  },
+  "10": {
+    whose: "tax_base",
+    why:
+      "Dependent care benefits provided. A benefit figure reported so the employee can work out " +
+      "their own exclusion; Greenway owes no tax because of this box.",
+  },
+  "11": {
+    whose: "tax_base",
+    why:
+      "Nonqualified plan distributions. Reported so the Social Security Administration can tell " +
+      "which year the money was EARNED, which is a timing signal rather than a tax.",
+  },
+  "12": {
+    whose: "tax_base",
+    why:
+      "Coded amounts — retirement deferrals, the cost of employer health coverage, and others. " +
+      "Each is a wage or benefit figure; the code tells the reader how to treat it.",
+  },
+  "13": {
+    whose: "not_money",
+    why:
+      "Three checkboxes, not an amount. Ticked or not ticked, so there is no money here to " +
+      "belong to anyone.",
+  },
+  "14": {
+    whose: "tax_base",
+    why:
+      "A free-text box for anything the employee should know — the instructions name health " +
+      "insurance premiums deducted among the examples. It reports a figure and settles nothing.",
+  },
+  "15": {
+    whose: "not_money",
+    why:
+      "The state's two-letter abbreviation and your state ID number. Identifiers, not an amount.",
+  },
+  "18": {
+    whose: "tax_base",
+    why:
+      "Local wages. A wage figure for a city or county income tax, of which Washington has none, " +
+      "so it stays blank.",
+  },
+  "19": {
+    whose: "employee_money",
+    why:
+      "Local income tax withheld from the employee's pay. Their money — blank in Washington " +
+      "because there is no local income tax to withhold.",
+  },
+  "20": {
+    whose: "not_money",
+    why: "The name of the locality. A label, not an amount.",
+  },
   "16": {
     whose: "tax_base",
     why: "State wages. In Washington there is no state income tax, so this is normally blank.",
@@ -666,9 +764,106 @@ export function assertSocialSecurityIsClassifiedTwice(): void {
   );
 }
 
+/**
+ * The W-2 boxes that report money taken OUT OF an employee's pay.
+ *
+ * Held as data rather than inlined in the loop (rule 43) so the list itself can
+ * be checked for staleness below.
+ *
+ * Why these five and not others: each one reports a withholding. Boxes 2, 4 and
+ * 6 say "withheld" in their printed captions. Boxes 17 and 19 are the state and
+ * local income taxes; their captions read "State income tax" and "Local income
+ * tax" without the word, but the instructions describe the same mechanic --
+ * "state and local income taxes may need to be withheld and" (line 482) -- and
+ * both are already classified `employee_money` with reasons that say "withheld".
+ * They are permanently blank for a Greenway employee because Washington imposes
+ * no personal income tax, but a box that is blank today is still a box that must
+ * never be relabelled as the employer's cost.
+ */
+const W2_BOXES_WITHHELD_FROM_THE_EMPLOYEE = ["2", "4", "6", "17", "19"] as const;
+
+/**
+ * Money withheld from a worker may never be reclassified as the employer's.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS GATE EXISTS -- IT WAS FOUND BY BREAKING THE CODE, NOT BY READING IT
+ * ─────────────────────────────────────────────────────────────────────────────
+ * While mutation-testing books-52 I changed W-2 box 19 from `employee_money` to
+ * `employer_cost` -- that is, I relabelled a tax withheld from a worker as
+ * Greenway's own expense -- and the entire suite still passed, 37 green. Running
+ * the identical mutation on box 17, which shipped long before books-52, also
+ * passed. So the hole was pre-existing and not introduced by that slice
+ * (rule 106), which is exactly why it had survived: nothing had ever probed it.
+ *
+ * The 940 already had `assertFutaIsNeverEmployeeMoney` guarding the mirror-image
+ * error. The W-2 had no counterpart. This is that counterpart.
+ *
+ * The direction matters and is not symmetric with the FUTA gate. There the
+ * danger is charging the employee for the employer's tax; here it is the reverse
+ * bookkeeping lie -- but the reverse lie is the one with the criminal edge.
+ * RCW 51.16.140(2) makes deducting the employer's share of workers' compensation
+ * from a worker's pay a gross misdemeanour. A system that cheerfully calls
+ * withheld money "employer_cost" is a system that will one day render a screen
+ * telling Michael he may recover it from someone's cheque.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS GATE IS NARROW ON PURPOSE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The tempting version -- "no W-2 box is ever employer_cost" -- is FACTUALLY
+ * WRONG, and I checked before writing it. Box 12 code DD is "Cost of
+ * employer-sponsored health coverage": genuinely the employer's money, reported
+ * on the employee's W-2 for information. A blanket rule would have to be
+ * weakened the first time box 12 was modelled properly, and a gate that gets
+ * weakened is a gate that teaches people to edit tests instead of think.
+ *
+ * So this asserts only what is actually true: the five boxes that report money
+ * withheld from the worker are the worker's money. `shared` is refused for the
+ * same reason as `employer_cost` -- withheld income tax has no employer half.
+ */
+export function assertWithheldMoneyIsNeverTheEmployers(): void {
+  // Rule 66d: prove the boxes exist before asserting anything about their
+  // contents. Without this, a renamed or deleted box would empty the loop and
+  // the gate would pass by examining nothing at all (rule 40).
+  assert(
+    W2_BOXES_WITHHELD_FROM_THE_EMPLOYEE.length === 5,
+    `the withholding-box list is meant to name 5 boxes but names ` +
+      `${W2_BOXES_WITHHELD_FROM_THE_EMPLOYEE.length}. If the W-2 gained or lost a ` +
+      `withholding box, update the list and say why in its comment.`,
+  );
+  for (const boxId of W2_BOXES_WITHHELD_FROM_THE_EMPLOYEE) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W2_WHOSE, boxId),
+      `W-2 box ${boxId} is named as a withholding box but is missing from ` +
+        `FORM_W2_WHOSE, so this gate would silently protect nothing.`,
+    );
+  }
+
+  for (const boxId of W2_BOXES_WITHHELD_FROM_THE_EMPLOYEE) {
+    const row = FORM_W2_WHOSE[boxId];
+    assert(
+      row.whose !== "employer_cost",
+      `W-2 box ${boxId} reports money withheld from the employee but is classified as ` +
+        `employer_cost. That inverts who owns the money. Withheld tax is the employee's, ` +
+        `paid toward their own liability through Greenway.`,
+    );
+    assert(
+      row.whose !== "shared",
+      `W-2 box ${boxId} reports money withheld from the employee but is classified as ` +
+        `shared. Withheld income tax has no employer half; the employer's Social Security ` +
+        `and Medicare halves appear on no W-2 anywhere.`,
+    );
+    assert(
+      row.whose === "employee_money",
+      `W-2 box ${boxId} reports money withheld from the employee and must be classified ` +
+        `employee_money, not ${row.whose}.`,
+    );
+  }
+}
+
 export function __runFormBoxAdapterTests(): void {
   assertUnknownBoxIsRefused();
   assertEveryClassificationIsJustified();
   assertFutaIsNeverEmployeeMoney();
   assertSocialSecurityIsClassifiedTwice();
+  assertWithheldMoneyIsNeverTheEmployers();
 }

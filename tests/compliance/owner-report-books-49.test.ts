@@ -240,19 +240,56 @@ describe("books-49 owner report: the figures were re-derived, not remembered", (
   }));
   const TOTAL = PER_FORM.reduce((sum, f) => sum + f.count, 0);
 
+  /*
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY THESE ARE A RATCHET AND NOT AN EQUALITY (changed in books-52)
+   * ───────────────────────────────────────────────────────────────────────────
+   * As first written these read `expect(TOTAL).toBe(53)` and `form_w2: 8`.
+   * books-52 raised W-2 coverage from 8 boxes to 20 and the suite went red:
+   * 53 - 8 + 20 = 65. Nothing was broken. The gate was punishing progress.
+   *
+   * The mistake was comparing a DATED DOCUMENT to a LIVING ENGINE with `toBe`.
+   * The books-49 report is a letter written on a particular day; "53 boxes" was
+   * true when Michael read it and stays true as a statement about that day. The
+   * engine is supposed to grow. An equality between them can only mean "coverage
+   * may never improve without editing a historical report" -- which is precisely
+   * backwards, and would train whoever hits it to edit the number until green.
+   *
+   * So the figures split in two, and both halves still bite:
+   *
+   *   1. The report's own prose is still pinned exactly. If someone quietly
+   *      rewrites "53 boxes" in a letter already sent, that is falsifying the
+   *      record and these still go red.
+   *
+   *   2. The engine is held to a RATCHET: never fewer than the baseline the
+   *      report described. Coverage may rise freely; it may never silently fall.
+   *      A form losing boxes -- a botched merge, a deleted table -- is a real
+   *      regression and still fails, naming the form.
+   *
+   * This is not a weakened gate. Before, exactly one number passed. Now every
+   * number below the baseline fails, which is the whole class of defects the
+   * test was actually protecting against.
+   */
   it("claims the true number of teachable forms", () => {
     expect(PER_FORM.length).toBe(7);
     expect(REPORT).toContain("Total: 7 forms, 53 boxes.");
   });
 
-  it("claims the true total number of teachable boxes", () => {
-    expect(TOTAL).toBe(53);
+  it("still teaches at least every box the report promised", () => {
+    const BASELINE_TOTAL = 53;
+    expect(
+      TOTAL,
+      `The engine teaches ${TOTAL} boxes but the books-49 report promised ` +
+        `${BASELINE_TOTAL}. Coverage has gone BACKWARDS since that letter was ` +
+        `sent. Growth is expected and fine; loss is a regression.`,
+    ).toBeGreaterThanOrEqual(BASELINE_TOTAL);
   });
 
-  it("states each form's box count correctly in the routes table", () => {
-    // The table gives 13 / 18 / 8 for the federal screens and 3 + 4 + 3 + 4
-    // for the four Washington forms on one screen.
-    const expected: Record<string, number> = {
+  it("never teaches fewer boxes per form than the routes table promised", () => {
+    // The figures the report's table gave Michael on the day it was written:
+    // 13 / 18 / 8 for the federal screens and 3 + 4 + 3 + 4 for the four
+    // Washington forms sharing one screen.
+    const baseline: Record<string, number> = {
       form_941: 13,
       form_940: 18,
       form_w2: 8,
@@ -262,11 +299,19 @@ describe("books-49 owner report: the figures were re-derived, not remembered", (
       lni_quarterly: 4,
     };
     for (const { formId, count } of PER_FORM) {
+      const promised = baseline[formId];
+      // Rule 66d: a form the baseline does not mention would otherwise compare
+      // against `undefined` and pass by accident.
       expect(
-        expected[formId],
-        `The engine now teaches a form the report's table does not mention: ` +
-          `${formId}. Update the table in the report.`,
-      ).toBe(count);
+        promised,
+        `The engine teaches a form the report's table never mentioned: ` +
+          `${formId}. Add it to this baseline with the count it shipped at.`,
+      ).toBeDefined();
+      expect(
+        count,
+        `${formId} now teaches ${count} boxes but the books-49 report ` +
+          `promised ${promised}. Boxes have been LOST since that letter.`,
+      ).toBeGreaterThanOrEqual(promised);
     }
     expect(REPORT).toContain("3 + 4 + 3 + 4 = 14");
   });

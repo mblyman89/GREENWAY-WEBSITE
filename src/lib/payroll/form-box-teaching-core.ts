@@ -497,6 +497,101 @@ export const FORM_W2_TEACHING: readonly TeachingBox[] = [
       "Box 5 multiplied by 1.45%, plus Additional Medicare Tax of 0.9% on pay above the " +
       "threshold. The extra 0.9% is the employee's alone — Greenway does not match it.",
   },
+  /*
+   * ═══ BOXES 7 THROUGH 15 AND 18 THROUGH 20 (books-52) ═══
+   *
+   * This specimen stopped at box 6 and resumed at box 16, so the entire middle
+   * of the W-2 was unteachable: `teachingBoxes("form_w2")` returned 8 rows for
+   * a form with 19 numbered boxes. Michael asked for the missing ones by
+   * observation alone - "i think there are line items/ boxes i should be able
+   * to click to learn more that are not available yet" - and counting the boxes
+   * on his own filed 2025 W-2 confirmed it exactly.
+   *
+   * The captions below are the captions as the FORM PRINTS THEM, checked
+   * against the employee copy in `2025_FORM_W-2_EMPLOYEE.pdf` rather than
+   * against the instructions' prose headings, because this string is what a
+   * person reads on the page while trying to match it to the paper in hand.
+   */
+  {
+    box: "7",
+    caption: "Social security tips",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Tips the employee reported to Greenway. The same tips are ALSO inside box 1 and box 5 — " +
+      "this box is not extra pay. Boxes 3 and 7 share one ceiling: their TOTAL is what the " +
+      "Social Security wage base caps, not box 3 alone.",
+  },
+  {
+    box: "8",
+    caption: "Allocated tips",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Tips assigned to an employee by a large food or beverage establishment. Uniquely on this " +
+      "form, the instructions say NOT to include it in boxes 1, 3, 5 or 7. Permanently blank for " +
+      "a cannabis retailer.",
+  },
+  {
+    box: "9",
+    caption: "(not used)",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Nothing. The box is retired and the entire IRS instruction is \u201cdo not enter an amount in " +
+      "box 9\u201d. Any figure here is an error, and there is no correct amount.",
+  },
+  {
+    box: "10",
+    caption: "Dependent care benefits",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "The TOTAL dependent care assistance provided, including any amount above the $5,000 " +
+      "exclusion — not just the taxable excess. The employee's own return works out what part " +
+      "is taxable.",
+  },
+  {
+    box: "11",
+    caption: "Nonqualified plans",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Distributions from a nonqualified deferred compensation plan, which are also inside box 1. " +
+      "It creates no tax; it tells the Social Security Administration that money paid this year " +
+      "was earned in an earlier one.",
+  },
+  {
+    box: "12",
+    caption: "See instructions for box 12",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Up to four coded entries, each a letter plus an amount. The letter carries the meaning: " +
+      "code D is a 401(k) deferral that reduces box 1, code DD is the cost of health coverage " +
+      "and is taxable to nobody. The slots 12a to 12d are just slots.",
+  },
+  {
+    box: "13",
+    caption: "Statutory employee / Retirement plan / Third-party sick pay",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Three checkboxes, not an amount. Tick Statutory employee for nobody at Greenway — the " +
+      "instructions forbid it for common-law employees. The Retirement plan tick can restrict " +
+      "the employee's own IRA deduction, so a wrong tick has a real cost.",
+  },
+  {
+    box: "14",
+    caption: "Other",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "A labelled free-text box. The instructions name \u201chealth insurance premiums deducted\u201d as " +
+      "an example, and Washington's Paid Leave and WA Cares belong here. The caption is written " +
+      "by the employer, so it is NOT authority for how the amount was treated.",
+  },
+  {
+    box: "15",
+    caption: "State / Employer's state ID number",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "The two-letter state abbreviation and the ID number the STATE assigned — not the federal " +
+      "EIN, which is already in box b. Reads WA for Greenway, with boxes 16 and 17 beside it " +
+      "empty.",
+  },
   {
     box: "16",
     caption: "State wages, tips, etc.",
@@ -514,6 +609,32 @@ export const FORM_W2_TEACHING: readonly TeachingBox[] = [
       "your employees paid a tax that does not exist. Paid Family and Medical Leave and WA " +
       "Cares ARE withheld from Washington employees, but they are not income tax — they belong " +
       "in box 14.",
+  },
+  {
+    box: "18",
+    caption: "Local wages, tips, etc.",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Blank for Washington. Some states layer a city or county INCOME tax under the state one; " +
+      "Washington has neither. Not to be confused with the Port Orchard local SALES tax on " +
+      "Greenway's excise return, which taxes sales and never touches a W-2.",
+  },
+  {
+    box: "19",
+    caption: "Local income tax",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Blank for Washington. A figure here would mean money was taken from an employee for a tax " +
+      "that does not exist. Paid Leave and WA Cares DO come out of pay, but they are not income " +
+      "tax and belong in box 14.",
+  },
+  {
+    box: "20",
+    caption: "Locality name",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Blank for Washington. This names a taxing locality, not a place of business — Greenway's " +
+      "address is already in box c. Boxes 18, 19 and 20 are filled or empty as a set.",
   },
 ];
 
