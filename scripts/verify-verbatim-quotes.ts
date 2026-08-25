@@ -680,7 +680,21 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
  * looking protective. If a future quote genuinely needs it, it can come back
  * WITH a failing case that proves it is load-bearing.
  */
-function normalise(text: string): string {
+/*
+ * EXPORTED IN books-55 so a test can ask THIS function, not an imitation of it.
+ *
+ * tests/compliance/authority-routing-completeness.test.ts asks "is this quote
+ * already inside a file we hold?". Its first draft answered that with its own
+ * whitespace-only normalisation, which is a DIFFERENT question from the one the
+ * verifier asks, and the difference produced two false leads immediately: the
+ * FASB Codification reprints Regulation S-X in its S99 sections with editorial
+ * markers spliced into the middle of the regulation's sentences, so a short
+ * prefix matched while the full quote could not.
+ *
+ * A gate that normalises differently from the thing it is gating measures its
+ * own opinion. So this is exported rather than duplicated.
+ */
+export function normalise(text: string): string {
   return text
     // NO DOT-LEADER RULE HERE, DELIBERATELY - see the note below.
     //

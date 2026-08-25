@@ -60,6 +60,9 @@ import { GUIDANCE_AUTHORITIES } from "@/lib/accounting/books-guidance-core";
 import {
   KNOWN_UNMIRRORED_AUTHORITY_IDS,
   expectedCorpusFile,
+  matchesInOrder,
+  normalise,
+  quoteSegments,
   sourceFileFor,
 } from "../../scripts/verify-verbatim-quotes";
 
@@ -79,28 +82,70 @@ function allHeldFiles(dir: string): readonly string[] {
 
 const HELD = allHeldFiles(AUTHORITY_DIR);
 
-/** Whitespace-normalised text of every mirrored file, read once. */
+/**
+ * Every mirrored file, normalised BY THE VERIFIER'S OWN normalise(), read once.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS USES THE VERIFIER'S NORMALISER AND NOT ITS OWN
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The first draft of this test flattened whitespace itself and asked whether
+ * the first 60 characters of a quote appeared anywhere in a held file. That is
+ * a DIFFERENT QUESTION from the one the verifier asks, and asking a different
+ * question is how a gate ends up measuring its own opinion.
+ *
+ * It reported two offenders on its first run, and both were FALSE POSITIVES.
+ * Measured with the verifier's real comparison:
+ *
+ *   REG_SX_210_4_01_NOT_MISLEADING  vs asc-205.txt: segment 0 is 773 chars and
+ *                                   matches for 506 of them, then diverges.
+ *   REG_SX_210_5_02_BALANCE_SHEET_ORDER vs asc-210.txt: segment 1 is 380 chars
+ *                                   and matches for 8.
+ *
+ * The cause is real and worth recording: THE FASB CODIFICATION REPRINTS
+ * REGULATION S-X IN ITS S99 SECTIONS, so the text genuinely is in the building
+ * — but it is reprinted with the Codification's editorial apparatus spliced
+ * into the middle of the regulation's own sentences:
+ *
+ *     ...under which they are made, not misleading. [ SX 210.4-01 (a) 2 ] ]
+ *     [ (1) Financial statements filed with the Commission...
+ *
+ * normalise() strips the brackets but not the marker text inside them, so
+ * "not misleading. (1) Financial statements" does not exist on disk — what
+ * exists is "not misleading. SX 210.4-01 (a) 2 (1) Financial statements".
+ *
+ * That is why these two are NOT routed and must not be: routing them would
+ * make the verifier fail on a quote that is correctly transcribed from the
+ * eCFR. The right source for Regulation S-X is the eCFR, which we do not
+ * mirror. A 60-character probe could not see any of this, so it would have
+ * sent me chasing a routing branch that must never be written.
+ *
+ * Using the verifier's normalise/quoteSegments/matchesInOrder means an offender
+ * reported here is one the verifier COULD ACTUALLY HAVE VERIFIED. Anything less
+ * is a lead, not a finding, and rule 39 applies: a verifier that cannot see
+ * something approves it — but a verifier that cries wolf gets switched off,
+ * which approves everything.
+ */
 const CORPUS: readonly (readonly [string, string])[] = HELD.map(
-  (f) => [f.replace(ROOT + "/", ""), readFileSync(f, "utf8").replace(/\s+/g, " ")] as const,
+  (f) => [f.replace(ROOT + "/", ""), normalise(readFileSync(f, "utf8"))] as const,
 );
 
 const UNMIRRORED = new Set<string>(KNOWN_UNMIRRORED_AUTHORITY_IDS);
 
 /**
- * The probe length used to ask "is this quote in that file".
+ * Would the verifier have succeeded on this quote against this file?
  *
- * 60 characters of normalised text. Long enough that a collision is not
- * credible; short enough to survive a quote that begins with an ellipsis
- * segment or a bracketed editorial insertion. Quotes shorter than this are
- * compared whole.
+ * Exactly the check `verify-verbatim-quotes` performs once it has chosen a
+ * file: split the normalised quote on its ellipses, then require every segment
+ * to appear in order. Returns false for a quote whose segments the verifier
+ * would itself reject as too short to prove anything, because such a quote
+ * could not have been verified against ANY file and so is not evidence of a
+ * routing defect.
  */
-const PROBE = 60;
-
-function probeOf(quote: string): string {
-  const flat = quote.replace(/\s+/g, " ").trim();
-  // Start after a leading ellipsis so the probe is real text, not punctuation.
-  const cleaned = flat.replace(/^\s*(\.\.\.|…)\s*/, "");
-  return cleaned.slice(0, Math.min(PROBE, cleaned.length));
+function verifierWouldMatch(quote: string, haystack: string): boolean {
+  const segs = quoteSegments(normalise(quote));
+  if (segs === null) return false;
+  return matchesInOrder(haystack, segs);
 }
 
 describe("books-55: the verifier's skip list contains nothing it could have checked", () => {
@@ -125,16 +170,16 @@ describe("books-55: the verifier's skip list contains nothing it could have chec
     for (const a of GUIDANCE_AUTHORITIES) {
       if (sourceFileFor(a.cite) !== null) continue; // routed: already verified
       skipped += 1;
-      const probe = probeOf(a.quote);
-      if (probe.length < 25) continue; // too short to attribute safely
       for (const [name, text] of CORPUS) {
-        if (!text.includes(probe)) continue;
+        if (!verifierWouldMatch(a.quote, text)) continue;
         offenders.push(
-          `${a.id} (${a.cite}) is SKIPPED by the verifier, but its quote appears in ` +
-            `${name}. Either the cite-to-file router cannot match this citation - which is ` +
-            `the §280E / CON 8 / "IRS, Instructions" / "§ 31." defect for the fifth time - ` +
-            `or the quote is attributed to the wrong source. Add a routing branch; do not ` +
-            `add this id to KNOWN_UNMIRRORED_AUTHORITY_IDS, because the document IS mirrored.`,
+          `${a.id} (${a.cite}) is SKIPPED by the verifier, but the verifier's OWN ` +
+            `comparison succeeds against ${name}. This is not a near miss: every segment ` +
+            `of the quote appears there, in order, after normalisation. So either the ` +
+            `cite-to-file router cannot match this citation - which is the §280E / CON 8 / ` +
+            `"IRS, Instructions" / "§ 31." defect for the fifth time - or the quote is ` +
+            `attributed to the wrong source. Add a routing branch; do NOT add this id to ` +
+            `KNOWN_UNMIRRORED_AUTHORITY_IDS, because the document IS mirrored.`,
         );
         break;
       }
