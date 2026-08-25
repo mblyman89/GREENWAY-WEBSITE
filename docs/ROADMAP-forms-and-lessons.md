@@ -95,7 +95,7 @@ of Michael's own filed forms. Nothing here is an estimate.
 |---|---|---|---|
 | W-2 | 8 | 19 numbered + 5 lettered | `2025_FORM_W-2_EMPLOYEE.pdf` |
 | 941 | 13 | 25 | `2ND_QTR_FORM_941.pdf` |
-| 940 | 18 | 21 | `2025_FORM_940_-_SAGE.pdf` |
+| 940 | 18 | ~~21~~ **30** | `2025_FORM_940_-_SAGE.pdf` |
 | ESD 5208A | 3 | to count | `1ST_QUARTER_FORM_5208A.pdf` |
 | ESD 5208B | 4 | to count | — |
 | PFML / WA Cares | 3 | to count | — |
@@ -112,6 +112,22 @@ table, because "whose money is this" must have exactly one answer in the
 codebase and the teaching file is deliberately not allowed to hold a second
 copy. Adding a box is therefore always **two** coordinated edits, and the
 classification is the legally consequential half.
+
+**Corrected in books-54: it is THREE edits, not two.** A box that is also to be
+*taught* needs (a) a teaching specimen in `form-box-teaching-core.ts`, (b) a
+classification in the adapters' `FORM_*_WHOSE`, and (c) a `BoxLesson` in the
+relevant `form-box-lessons-*.ts`. Miss (b) and `resolveWhose` throws loudly,
+which is the safe failure. Miss (c) and **nothing fails at all** — the box
+appears on screen, invites a click, and teaches nothing. That is the quiet half
+of the coupling and it is the one worth writing down.
+
+**Also corrected in books-54: a fourth thing that nothing checked.** Every
+lesson carries `tiesTo` cross-references, and no gate verified the target box
+existed. Measured: 56 ties, **2 dead** — both in `form-box-lessons-wa.ts`,
+both pointing at `esd_5208b` box `"wage-detail"`, which has never existed (the
+real columns are `wage-detail-wages`, `-hours` and `-total`). Pre-existing since
+books-47 slice D. Closed by `assertEveryTieResolves`, now applied to all four
+lesson sets.
 
 The drift gate `assertSpecimenMatchesTheEngine` runs one way only — every box
 the engine emits must be taught. It does not require that every taught box be
@@ -134,8 +150,31 @@ allowed, and is exactly what `notComputedYet` exists for.
       reporting it finished, so the count now comes from the PDF and is asserted
       against the engine. **Done in books-53: 20 lessons, 27 classifications, 27
       specimens, 28 quotes verbatim, 27/27 mutations caught.**
-- [ ] **1c. 940: 18 → 21 lines.** Missing 1a, 1b, 2, 4a–4e detail.
-- [ ] **1d. Count and close the four Washington forms.**
+- [x] **1c. 940: 18 → 30 lines. COMPLETE — every line on the printed form is
+      taught.** This entry said **21** and listed the gap as "1a, 1b, 2, 4a–4e
+      detail", which is seven boxes. Both figures were wrong, in the same way
+      the 941 target was wrong: they were written from memory of the form rather
+      than from the form. Reading `2025_FORM_940_-_SAGE.pdf` line by line gives
+      **30**, because line 15 splits five ways (15a–15e) exactly as the 941's
+      does, and line 16 splits four (16a–16d). The real gap was **twelve**: 1a,
+      1b, 2, 4a–4e and 15b–15e.
+
+      A label regex was tried first and could not be trusted — it returned "24"
+      and "25" out of a paragraph of body text and MISSED 4a, 4c, 4d, 4e, 15b
+      and 15d because a lowercase word followed them. Every one of the thirty
+      was confirmed by reading its surrounding line instead.
+
+      **Done in books-54: 20 lessons, 30 classifications, 30 specimens, 13 new
+      verbatim quotes, 30/30 mutations caught.** The mutation figure matters
+      here: before this slice a sweep of four rows caught only three, and the
+      row that survived was **line 17**, the annual total that must equal line
+      12 to the cent. That hole was **pre-existing**, measured before anything
+      was changed (rule 106).
+
+- [ ] **1d. Count and close the four Washington forms.** Next slice
+      (books-55). Weakest point measured: `esd_5208b` has 4 specimens and **0
+      lessons**. Also carries the PFML / WA Cares CSV export against ESD
+      specification v8.1 (2025.08).
 
 ## Step 2 — The form with no teaching at all
 

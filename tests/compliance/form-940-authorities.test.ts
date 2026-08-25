@@ -348,7 +348,76 @@ describe("books-43: the authority set is complete and correctly weighted", () =>
     // 18 from books-43, plus the three line-level passages books-47 added so
     // that the lessons for lines 3, 7 and 17 carry authority of their own
     // rather than teaching on my say-so (standing rule 24).
-    expect(FORM_940_OWN_AUTHORITIES.length).toBe(21);
+    //
+    // books-54 added THIRTEEN more, taking this to 34. Twelve of them are the
+    // lines that were on the printed form with nothing at all behind them --
+    // 1a, 1b, 2, 4a, 4b, 4c, 4d, 4e, 15b, 15c, 15d, 15e -- plus line 4 itself,
+    // which was classified in the ownership table but had never been quoted.
+    //
+    // This count is deliberately a hard number rather than a `toBeGreaterThan`.
+    // A floor would let an authority be DELETED and replaced with two others
+    // while the test stayed green, and the whole point of the number is that
+    // removing a quote should require someone to say so out loud.
+    expect(FORM_940_OWN_AUTHORITIES.length).toBe(34);
+  });
+
+  /**
+   * THE TWELVE LINES THAT HAD NOTHING BEHIND THEM (books-54).
+   *
+   * The count above says "34" but says nothing about WHICH lines are covered,
+   * so on its own it would be satisfied by thirteen more quotes about line 3.
+   * This names the twelve lines the slice existed to close, and asserts each
+   * one now has an authority whose cite mentions it.
+   *
+   * Rule 39: a test that cannot see the thing it approves, approves nothing.
+   * Matching on the cite rather than on an id spelling means renaming a
+   * constant cannot make this pass vacuously.
+   */
+  it("now carries an authority for each of the twelve lines that had none", () => {
+    const LINES_CLOSED_BY_BOOKS_54 = [
+      "1a",
+      "1b",
+      "2",
+      "4a",
+      "4b",
+      "4c",
+      "4d",
+      "4e",
+      "15b",
+      "15c",
+      "15d",
+      "15e",
+    ] as const;
+    const uncovered: string[] = [];
+    for (const line of LINES_CLOSED_BY_BOOKS_54) {
+      // The cite tail begins with the line number followed by ". " for the
+      // lettered lines, or is the named heading for line 2.
+      const found = FORM_940_OWN_AUTHORITIES.some((a) =>
+        new RegExp(`\\(2025\\), ${line}\\. `).test(a.cite),
+      );
+      const namedHeading =
+        line === "2" &&
+        FORM_940_OWN_AUTHORITIES.some((a) =>
+          a.cite.includes("2. If You Paid Wages in a State That Is Subject to Credit Reduction"),
+        );
+      if (!found && !namedHeading) uncovered.push(line);
+    }
+    expect(uncovered).toEqual([]);
+  });
+
+  /**
+   * RULE 15 -- PROVE THE TEST ABOVE CAN FAIL.
+   *
+   * The regexp above is the kind of check that silently matches nothing if the
+   * cite format shifts by one character. So assert a line that is NOT on Form
+   * 940 is reported as uncovered by the identical logic.
+   */
+  it("would notice a line that has no authority", () => {
+    const NOT_ON_THE_FORM = "23";
+    const found = FORM_940_OWN_AUTHORITIES.some((a) =>
+      new RegExp(`\\(2025\\), ${NOT_ON_THE_FORM}\\. `).test(a.cite),
+    );
+    expect(found).toBe(false);
   });
 
   it("has unique ids", () => {

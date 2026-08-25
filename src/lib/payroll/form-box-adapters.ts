@@ -336,6 +336,104 @@ export const FORM_941_WHOSE: Readonly<Record<string, WhoseRow>> = {
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 export const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
+  /*
+   * ═══ THE TWELVE LINES ADDED IN books-54 ═══
+   *
+   * Form 940 has 30 numbered lines on the paper Michael holds. This table had
+   * eighteen. `resolveWhose` THROWS for a box that is not here, so the twelve
+   * below could not be listed, clicked, or taught -- the teaching screen would
+   * have crashed rather than shown them.
+   *
+   * ALL TWELVE ARE `not_money`, AND THAT IS THE POINT OF THE FIELD.
+   *
+   * Ten of them are tickboxes or text: a two-letter state code (1a), a
+   * multi-state tick (1b), a credit-reduction tick (2), five exempt-payment
+   * category ticks (4a-4e), an apply-or-refund tick (15b), an account-type tick
+   * (15d), and two bank strings (15c, 15e). Not one is an amount, so not one
+   * can be owed by anyone.
+   *
+   * `not_money` is load-bearing rather than decorative: in the teaching layer
+   * it drives measure "count" instead of "money", so none of these will ever be
+   * rendered with a dollar sign. The concrete bug it prevents is a box holding
+   * the letters "WA" being printed as "$WA".
+   *
+   * WHY 4a-4e ARE NOT `tax_base`. They describe an amount -- the line 4
+   * subtraction -- but they are not that amount. They are the boxes that say
+   * which KIND of exempt payment it was. The dollars live on line 4, which is
+   * already `tax_base`. Classifying the tickboxes as `tax_base` as well would
+   * double-count the same money in anything that sums by ownership.
+   *
+   * WHY 15c AND 15e ARE NOT MERELY "not_money" BUT ALSO NEVER SPECIMEN-FILLED.
+   * They are a bank routing number and a bank account number. They are
+   * credentials, not figures, and they are the two boxes on this form where a
+   * plausible-looking example value would be actively harmful.
+   */
+  "1a": {
+    whose: "not_money",
+    why:
+      "The two-letter state code for the one state where state unemployment tax was paid. " +
+      "Text, not an amount — for Greenway it reads WA.",
+  },
+  "1b": {
+    whose: "not_money",
+    why:
+      "A tickbox for employers who owe state unemployment tax in more than one state. Ticking " +
+      "it obliges a Schedule A. Greenway is Washington-only, so it stays blank.",
+  },
+  "2": {
+    whose: "not_money",
+    why:
+      "A tickbox for paying wages in a credit-reduction state. Not an amount; the extra tax it " +
+      "leads to is computed on Schedule A and lands on line 11.",
+  },
+  "4a": {
+    whose: "not_money",
+    why:
+      "A tickbox saying the line 4 exemption was fringe benefits. The money is on line 4; this " +
+      "box only names the category.",
+  },
+  "4b": {
+    whose: "not_money",
+    why: "A tickbox saying the line 4 exemption was group-term life insurance.",
+  },
+  "4c": {
+    whose: "not_money",
+    why:
+      "A tickbox saying the line 4 exemption was retirement or pension contributions — the " +
+      "employer's own, not an employee's elective deferral.",
+  },
+  "4d": {
+    whose: "not_money",
+    why: "A tickbox saying the line 4 exemption was dependent care, which is capped at $5,000.",
+  },
+  "4e": {
+    whose: "not_money",
+    why:
+      "A tickbox for the catch-all exemption category. Not a place to park anything that does " +
+      "not fit — if nothing on the IRS list applies, line 4 is blank and this is unticked.",
+  },
+  "15b": {
+    whose: "not_money",
+    why:
+      "A choice between carrying an overpayment forward and taking it back. It directs money " +
+      "already counted on line 15a; it is not itself money.",
+  },
+  "15c": {
+    whose: "not_money",
+    why:
+      "A bank routing number for a refund. Nine digits from the bank, never from the ledger, and " +
+      "not an amount.",
+  },
+  "15d": {
+    whose: "not_money",
+    why: "A tickbox for checking or savings. Exactly one, and only when a refund was requested.",
+  },
+  "15e": {
+    whose: "not_money",
+    why:
+      "A bank account number for a refund. A credential rather than a figure, which is why no " +
+      "specimen value is ever shown for it.",
+  },
   "3": {
     whose: "tax_base",
     why: "Total payments to employees. The starting figure, not an amount owed.",
@@ -1111,6 +1209,147 @@ export function assertEvery941LineOwnershipIsPinned(): void {
   }
 }
 
+/**
+ * ═══ THE SAME HOLE WAS OPEN ON THE 940, AND IT WAS PRE-EXISTING (books-54) ═══
+ *
+ * books-53 found that 20 of the 941's 24 ownership rows could be relabelled
+ * without a single test objecting, and closed it with a pinned table. The
+ * obvious question was whether the 940 had the same hole. Rule 106 says measure
+ * before claiming, so it was MEASURED FIRST, before this slice changed
+ * anything, by mutating four rows that had been in the table since books-47:
+ *
+ *   line 8  employer_cost -> employee_money   CAUGHT
+ *   line 13 employer_cost -> shared           CAUGHT
+ *   line 17 employer_cost -> tax_base         SURVIVED  <-- 274 tests, all green
+ *   line 3  tax_base -> employer_cost         CAUGHT
+ *
+ * So the hole was real, PRE-EXISTING, and narrower than the 941's -- because
+ * the 940 happens to have two gates the 941 lacks:
+ *
+ *   - `assertFutaIsNeverEmployeeMoney` refuses `employee_money` and `shared` on
+ *     EVERY line of this form. That is what caught lines 8 and 13.
+ *   - a named test in form-box-lessons-940.test.ts, "keeps the wage-base lines
+ *     out of the money split", pins lines 3-7 as `tax_base`. That caught line 3.
+ *
+ * What nothing covered was drift AMONG the three remaining values -- exactly
+ * the `employer_cost` <-> `tax_base` <-> `not_money` triangle. Line 17 is the
+ * worst possible place for that to be unguarded: it is the annual total that
+ * must equal line 12 to the cent, and calling it `tax_base` says the year's
+ * FUTA tax is a wage figure nobody owes.
+ *
+ * Note what this means about the FUTA gate: it is a good gate that creates a
+ * false sense of security. It proves no line is the EMPLOYEE's, and it is
+ * silent on whether a line is money at all.
+ *
+ * Same justified duplication as the 941 table above: this is what a human read
+ * off the printed 2025 Form 940 and its instructions, not what the application
+ * believes. A gate that imports its expectation from the thing it checks
+ * asserts nothing (rule 39).
+ */
+const FORM_940_EXPECTED_WHOSE: Readonly<Record<string, WhoseMoney>> = {
+  "1a": "not_money", // State abbreviation -- two letters of text, "WA"
+  "1b": "not_money", // Tickbox: multi-state employer, requires Schedule A
+  "2": "not_money", // Tickbox: paid wages in a credit reduction state
+  "3": "tax_base", // Total payments to all employees
+  "4": "tax_base", // Payments exempt from FUTA tax -- a subtraction
+  "4a": "not_money", // Tickbox: exemption was fringe benefits
+  "4b": "not_money", // Tickbox: exemption was group-term life insurance
+  "4c": "not_money", // Tickbox: exemption was retirement/pension
+  "4d": "not_money", // Tickbox: exemption was dependent care
+  "4e": "not_money", // Tickbox: exemption was some other listed category
+  "5": "tax_base", // Payments to each employee above the $7,000 ceiling
+  "6": "tax_base", // Subtotal of lines 4 and 5
+  "7": "tax_base", // Total taxable FUTA wages
+  "8": "employer_cost", // FUTA tax before adjustments -- never the employee's
+  "9": "employer_cost", // Adjustment: all wages excluded from state unemployment
+  "10": "employer_cost", // Adjustment: some excluded, or state tax paid late
+  "11": "employer_cost", // Credit reduction amount from Schedule A
+  "12": "employer_cost", // Total FUTA tax after adjustments
+  "13": "employer_cost", // FUTA tax deposited for the year
+  "14": "employer_cost", // Balance due
+  "15a": "employer_cost", // Overpayment of Greenway's own tax
+  "15b": "not_money", // Tickbox: apply to next return, or send a refund
+  "15c": "not_money", // Routing number for a refund by direct deposit
+  "15d": "not_money", // Tickbox: checking or savings
+  "15e": "not_money", // Account number for a refund by direct deposit
+  "16a": "employer_cost", // 1st quarter FUTA liability
+  "16b": "employer_cost", // 2nd quarter FUTA liability
+  "16c": "employer_cost", // 3rd quarter FUTA liability
+  "16d": "employer_cost", // 4th quarter FUTA liability
+  "17": "employer_cost", // Total for the year -- must equal line 12
+};
+
+/**
+ * Pin every Form 940 line's ownership, in both directions.
+ *
+ * Both directions matter, and for different reasons. Expected-but-missing means
+ * a line silently stopped having an owner. Actual-but-unpinned means a line was
+ * added to the form without anyone deciding, in writing, whose money it is --
+ * which is exactly how the twelve lines this slice added could have arrived.
+ */
+export function assertEvery940LineOwnershipIsPinned(): void {
+  const expectedIds = Object.keys(FORM_940_EXPECTED_WHOSE);
+  const actualIds = Object.keys(FORM_940_WHOSE);
+
+  assert(
+    expectedIds.length === 30,
+    `The pinned Form 940 ownership table should describe 30 lines but describes ` +
+      `${expectedIds.length}. Form 940 has 30 numbered lines on the printed page ` +
+      "(1a through 17). If the form gained or lost a line, update the table " +
+      "deliberately rather than changing this count to match.",
+  );
+
+  for (const lineId of expectedIds) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_940_WHOSE, lineId),
+      `Form 940 line ${lineId} is pinned in the expected-ownership table but is no longer ` +
+        "classified in FORM_940_WHOSE. A line cannot stop having an owner.",
+    );
+  }
+
+  for (const lineId of actualIds) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_940_EXPECTED_WHOSE, lineId),
+      `Form 940 line ${lineId} is classified in FORM_940_WHOSE but nobody has pinned whose ` +
+        "money it is. Add it to FORM_940_EXPECTED_WHOSE with a comment naming the line, so " +
+        "the classification is a decision on the record and not an accident.",
+    );
+  }
+
+  for (const lineId of expectedIds) {
+    const expected = FORM_940_EXPECTED_WHOSE[lineId];
+    const actual = FORM_940_WHOSE[lineId].whose;
+    assert(
+      actual === expected,
+      `Form 940 line ${lineId} is classified ${actual} but was verified against the printed ` +
+        `2025 Form 940 and its instructions as ${expected}. Either the classification is ` +
+        "wrong, or the law changed and the pinned table needs updating with a source. Do not " +
+        "simply reconcile the two to make this pass.",
+    );
+  }
+}
+
+/**
+ * The line that survived the mutation sweep, pinned by name as well as by table.
+ *
+ * Line 17 is the year's total FUTA liability and must equal line 12 to the cent.
+ * Named separately because the table above protects it by construction, and a
+ * future refactor that weakened the table would take this with it -- whereas a
+ * named assertion about the one line that actually escaped will go red on its
+ * own and carry the reason with it.
+ */
+export function assertForm940AnnualTotalIsTheEmployersCost(): void {
+  for (const lineId of ["12", "17"]) {
+    assert(
+      FORM_940_WHOSE[lineId].whose === "employer_cost",
+      `Form 940 line ${lineId} must be employer_cost. It is the year's federal unemployment ` +
+        "tax, which is Greenway's own cost in full and may never be withheld from anyone. " +
+        `Line 17 is the line that survived books-54's mutation sweep before the pinned table ` +
+        "existed, so it is asserted here by name and not only by table.",
+    );
+  }
+}
+
 export function __runFormBoxAdapterTests(): void {
   assertUnknownBoxIsRefused();
   assertEveryClassificationIsJustified();
@@ -1119,4 +1358,6 @@ export function __runFormBoxAdapterTests(): void {
   assertWithheldMoneyIsNeverTheEmployers();
   assertAdditionalMedicareTaxHasNoEmployerShare();
   assertEvery941LineOwnershipIsPinned();
+  assertEvery940LineOwnershipIsPinned();
+  assertForm940AnnualTotalIsTheEmployersCost();
 }

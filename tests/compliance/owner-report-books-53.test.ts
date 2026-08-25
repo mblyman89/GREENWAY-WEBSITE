@@ -187,24 +187,89 @@ describe("every figure in the report is re-derived, not remembered", () => {
     expect(Number(claimed![1])).toBeLessThanOrEqual(lessons);
   });
 
+  /**
+   * ═══ WHY THIS TEST NOW CARRIES TWO NUMBERS PER FORM (books-54) ═══
+   *
+   * It used to assert one figure per form and use it for both sides: the engine
+   * must teach exactly N boxes, AND the report must contain "| N |". That works
+   * only while coverage is frozen. books-54 took Form 940 from 18 boxes to 30,
+   * and the test failed with `expected 30 to be 18` — correctly, because the
+   * report does say 18.
+   *
+   * The tempting fix is to relax the engine side to `toBeGreaterThanOrEqual`.
+   * That would be a QUIET LOOSENING: the report's figure would then only have
+   * to appear somewhere in the document, and would no longer be checked against
+   * anything at all. The whole point of this file is that the report's numbers
+   * are re-derived rather than remembered.
+   *
+   * So both sides stay exact and are simply named separately:
+   *
+   *   `claimed` — what the books-53 letter told Michael, and must still say.
+   *   `engineNow` — what the engine teaches today.
+   *
+   * When coverage grows, `engineNow` must be edited deliberately, and the diff
+   * shows the growth. When they differ, the comment must say why. A silent
+   * change to either is still a failure.
+   */
   it("states a per-form coverage table that matches the engine", () => {
     // Rule 66d: prove the rows exist before trusting what they say.
-    const expected: readonly (readonly [string, number])[] = [
-      ["form_941", 27],
-      ["form_w2", 20],
-      ["form_940", 18],
-      ["esd_5208a", 3],
-      ["esd_5208b", 4],
-      ["pfml_wa_cares", 3],
-      ["lni_quarterly", 4],
+    const expected: readonly {
+      readonly formId: string;
+      readonly claimed: number;
+      readonly engineNow: number;
+      readonly note: string | null;
+    }[] = [
+      { formId: "form_941", claimed: 27, engineNow: 27, note: null },
+      { formId: "form_w2", claimed: 20, engineNow: 20, note: null },
+      {
+        formId: "form_940",
+        claimed: 18,
+        engineNow: 30,
+        note:
+          "books-54 added the twelve lines that are printed on the paper form but carry no " +
+          "amount: 1a, 1b, 2, 4a-4e and 15b-15e. The books-53 letter said 18 and 18 was true " +
+          "when it was written.",
+      },
+      { formId: "esd_5208a", claimed: 3, engineNow: 3, note: null },
+      { formId: "esd_5208b", claimed: 4, engineNow: 4, note: null },
+      { formId: "pfml_wa_cares", claimed: 3, engineNow: 3, note: null },
+      { formId: "lni_quarterly", claimed: 4, engineNow: 4, note: null },
     ];
-    for (const [formId, count] of expected) {
-      expect(teachingBoxes(formId).length).toBe(count);
+
+    for (const row of expected) {
+      // The engine side: exact, so a box lost anywhere fails here.
       expect(
-        REPORT.includes(`| ${count} |`) || REPORT.includes(`| **${count}** |`),
-        `the report's coverage table should carry the figure ${count} for ${formId}`,
+        teachingBoxes(row.formId).length,
+        `${row.formId} teaches a different number of boxes than this test pins`,
+      ).toBe(row.engineNow);
+
+      // The report side: exact, so the letter cannot be quietly edited either.
+      expect(
+        REPORT.includes(`| ${row.claimed} |`) || REPORT.includes(`| **${row.claimed}** |`),
+        `the report's coverage table should carry the figure ${row.claimed} for ${row.formId}`,
       ).toBe(true);
+
+      // A divergence between the two must be EXPLAINED, not merely allowed.
+      if (row.claimed !== row.engineNow) {
+        expect(
+          row.note,
+          `${row.formId} now teaches ${row.engineNow} boxes but the report says ` +
+            `${row.claimed}, and no reason is recorded`,
+        ).not.toBeNull();
+        // Coverage may grow. It may never shrink below what Michael was told.
+        expect(
+          row.engineNow,
+          `${row.formId} teaches FEWER boxes than the books-53 letter promised`,
+        ).toBeGreaterThan(row.claimed);
+      }
     }
+
+    /*
+     * Rule 39: if `expected` were ever emptied the loop above would pass in
+     * silence. Pinned to the number of forms the engine actually teaches, so
+     * adding a form without adding a row here fails.
+     */
+    expect(expected).toHaveLength(7);
   });
 
   it("is honest that Form W-3 is registered but teaches nothing", () => {
