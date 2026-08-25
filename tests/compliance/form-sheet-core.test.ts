@@ -369,6 +369,30 @@ describe("form-sheet-core: the page keeps its promises", () => {
     expect(pageSrc).toMatch(/readFailed/);
   });
 
+  it("is reachable: the W-2 screen carries a link to the sheet", () => {
+    /*
+     * ═══ THE GATE THAT EXISTS BECAUSE ANOTHER GATE CAUGHT ME ═══
+     *
+     * This route first shipped with a link back to the W-2 screen and NOTHING
+     * linking forward to it. `nav-gate-core` failed within the hour with
+     * exactly the right words: "owner-only pages that are not in the menu...
+     * Each one is a decision nobody made."
+     *
+     * It is on that gate's `known` list now, which exempts it from the MENU.
+     * That exemption is only honest while a door exists somewhere, and the
+     * `known` list cannot tell the difference between "reachable another way"
+     * and "unreachable but excused". So the door is asserted here.
+     *
+     * Without this, the excuse would outlive the link: somebody tidies the W-2
+     * header, the link goes, both gates stay green, and the page Michael asked
+     * for becomes invisible - which is precisely what he reported in books-49,
+     * "I am unable to see or use the tab system".
+     */
+    const oldPage = readFileSync(join(ROOT, "src/app/admin/books/form-w2/page.tsx"), "utf8");
+    expect(oldPage).toMatch(/\/admin\/books\/form-w2\/sheet/);
+    expect(oldPage).toMatch(/View just the form/);
+  });
+
   it("does not modify the existing tabbed explorer or the existing W-2 page", () => {
     // "Rather than updating or changing any of it." Proved by the absence of
     // any import of this new component from the old surfaces.

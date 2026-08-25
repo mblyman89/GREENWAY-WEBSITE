@@ -952,9 +952,38 @@ function Shell({ taxYear, children }: { taxYear: number; children: React.ReactNo
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--admin-text)]">
-          Forms W-2 and W-3 &mdash; {taxYear}
-        </h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="text-xl font-semibold text-[var(--admin-text)]">
+            Forms W-2 and W-3 &mdash; {taxYear}
+          </h1>
+          {/*
+            ═══ THE ONLY DOOR TO THE ONE-BIG-SHEET VIEW (books-58) ═══
+
+            Michael asked for the new page and said of this screen: "rather than
+            updating or changing any of it". This link is the whole of the
+            change, and it is here because the alternative is worse.
+
+            The new route shipped with a link back to this screen and nothing
+            linking forward to it, and `nav-gate-core` caught that within the
+            hour: "owner-only pages that are not in the menu... Each one is a
+            decision nobody made." A page nobody can reach is the exact failure
+            books-49 recorded in his own words - "I am unable to see or use the
+            tab system" - where a finished surface was invisible because nothing
+            led to it.
+
+            It is a link here rather than a fourth tab or a top-level menu item
+            on purpose. A tab would mean editing the tab system he said he likes.
+            A menu item would put a per-form view in a global menu, and would
+            need one for every form as the pattern spreads. A door on the form's
+            own screen is where a person looking for that form already is.
+          */}
+          <Link
+            href={`/admin/books/form-w2/sheet?year=${taxYear}`}
+            className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+          >
+            View just the form &rarr;
+          </Link>
+        </div>
         <p className="mt-1 max-w-3xl text-sm text-[var(--admin-text-muted)]">
           The annual wage report. One W-2 for each person you paid, and one W-3 that totals
           them all. This screen reads the year-to-date figures your posted pay runs produced,

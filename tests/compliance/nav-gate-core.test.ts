@@ -268,6 +268,24 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
       // IS in the menu. Giving "start a new audit" its own top-level link would
       // put the rarest action in the most prominent place.
       "/admin/inventory/audits/new",
+      /*
+       * books-58: the W-2 shown as one large sheet and nothing else, where
+       * clicking a box opens the whole lesson in place.
+       *
+       * Deliberately NOT a menu item. It is one form's alternative view, and
+       * the pattern is meant to spread to the 941, the 940, the W-3 and the
+       * Washington forms - five more top-level links for what is really a way
+       * of looking at a page the menu already has. It is reached from a "View
+       * just the form" link in the header of /admin/books/form-w2, which IS in
+       * the menu.
+       *
+       * This entry was added the same hour this gate earned its keep: the route
+       * first shipped with a link back to the W-2 screen and nothing linking
+       * forward to it, and this test named it. The link exists now, and
+       * form-sheet-core.test.ts asserts the door is there, so this line is an
+       * exemption from the MENU - not from reachability.
+       */
+      "/admin/books/form-w2/sheet",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

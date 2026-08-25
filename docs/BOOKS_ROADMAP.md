@@ -822,8 +822,53 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The law, verbatim | `form-w2-authorities.ts` (31 own + 13 borrowed = 44) | `form-w2-authorities.test.ts` (41) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
-| The screen | `src/app/admin/books/form-w2/page.tsx` (970 lines) | `nav-gate-core.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (999 lines) | `nav-gate-core.test.ts` |
 | The W-3 taught box by box **(books-55)** | `form-box-lessons-w3.ts` | `form-box-lessons-w3.test.ts` (17) |
+| The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (64) |
+
+**books-58 grew the screen row above by 29 lines, and that is the ENTIRE change
+to that file.** Michael asked for "one large page with nothing on it but form",
+where clicking a mapped box brings the whole lesson to him rather than
+redirecting him, and was explicit that the tabbed screen must not be altered:
+"rather than updating or changing any of it". So the sheet is a sibling route
+and those 29 lines are a single link in the header, "View just the form →".
+
+The link is not decoration and was not in the first version. The route shipped
+linking BACK to the W-2 screen with nothing linking forward to it, and
+`nav-gate-core.test.ts` failed naming it: *"owner-only pages that are not in the
+menu... Each one is a decision nobody made."* That is the books-49 failure
+exactly — Michael's own report was "I am unable to see or use the tab system" —
+and it was caught in the same hour rather than by him, a year later.
+
+`/admin/books/form-w2/sheet` is now on that gate's `known` list, which exempts
+it from the MENU and not from reachability; the two are different, and the
+`known` list cannot tell them apart. So `form-sheet-core.test.ts` asserts the
+door exists. Delete the link and it goes red.
+
+Two defects were found by running the new core over forms it had not been
+written against, which is the argument for it being form-agnostic:
+
+- **W-2 box 9 nearly lost its lesson.** Its printed caption is "(not used)", and
+  it HAS a lesson — "The box that must stay empty", explaining that the entire
+  IRS instruction is "do not enter an amount in box 9". A three-state affordance
+  that tested unusedness first made it unclickable, hiding a finished lesson on
+  exactly the kind of box where the instinct to be helpful produces a filing
+  error. Root cause: two orthogonal facts flattened into one enum — "does the
+  form use this box" (about THE FORM) and "has anyone written the lesson" (about
+  THIS PRODUCT). Carried separately now, and neither may overrule the other.
+- **Half the forms sat under a heading that lied.** Grouping on "is the id a
+  single letter" put the W-3's `b-kind-of-payer`, `b-kind-of-employer`,
+  `b-third-party-sick-pay` and `contact` — plus EVERY box on all four Washington
+  forms, which have no numbered boxes at all — under a heading reading "The
+  numbered boxes". Split now keys on whether the id starts with a digit, and an
+  empty group is not emitted.
+
+Rule 40 shaped the whole slice: the W-2 has 26 of 26 boxes taught, so the "not
+taught yet" marker Michael approved is UNREACHABLE on the form he chose. The
+marker is therefore proved on the 941 (7 untaught: 5e, 6, 7, 10, 12, 13, 14) and
+the 940 (10), and the W-2's zero is pinned so adding an untaught box there is a
+deliberate decision. **17 untaught boxes across two federal forms** is the real
+remaining teaching backlog.
 
 **books-55 added the W-3 teaching layer, and the screen row above grew by 37
 lines because of it.** Section 5 of that page already rendered the W-3 as a
