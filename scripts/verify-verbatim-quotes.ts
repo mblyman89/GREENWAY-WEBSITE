@@ -51,10 +51,30 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^FASB Concepts Statement No\. 8/,
     file: () => ["fasb-concepts", "conceptual-framework.txt"],
   },
-  { name: "26 CFR part 1", re: /^26 C\.?F\.?R\.? §(1\.\d+-\d+)/, file: (m) => ["federal", `cfr-${m[1]}.txt`] },
+  /*
+   * books-55. `§\s*` IN BOTH CFR ROWS, and the space is the whole point.
+   *
+   * This table is the RULE 48 side of the check: if a cite belongs to a corpus
+   * listed here but no file is found, the run FAILS LOUDLY instead of skipping.
+   * Both rows previously demanded `§` with no space, exactly like the branch in
+   * sourceFileFor() did, so `26 C.F.R. § 31.3402(f)(2)-1(a)(4)` matched
+   * NEITHER function - and a cite that matches neither is skipped in silence
+   * with no loud failure available to catch it.
+   *
+   * Fixing only sourceFileFor() would have made those three quotes verify
+   * while leaving this table blind, so the next cite of the same shape whose
+   * file was MISSING would go quiet again instead of failing. The two
+   * functions are required to agree (a test asserts it), and they now agree on
+   * the space too.
+   */
+  {
+    name: "26 CFR part 1",
+    re: /^26 C\.?F\.?R\.? §\s*(1\.\d+-\d+)/,
+    file: (m) => ["federal", `cfr-${m[1]}.txt`],
+  },
   {
     name: "26 CFR part 31",
-    re: /^26 C\.?F\.?R\.? §(31\.[\d.]+\([a-z]\)\(\d+\)-\d+)/,
+    re: /^26 C\.?F\.?R\.? §\s*(31\.[\d.]+\([a-z]\)\(\d+\)-\d+)/,
     file: (m) => ["federal", `cfr-${m[1]}.txt`],
   },
   { name: "8 CFR", re: /^8 C\.?F\.?R\.? §(\d+[a-z]?\.\d+)/, file: (m) => ["federal", `cfr-8-${m[1]}.txt`] },
@@ -366,7 +386,36 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   // W-4 validity quotes would have been reported as "no local copy to check
   // against" while their source sat on disk — the exact failure the comment
   // above this describes, repeated one part number to the left.
-  const cfr31 = /^26 C\.?F\.?R\.? §(31\.[\d.]+\([a-z]\)\(\d+\)-\d+)/.exec(cite);
+  /*
+   * books-55. TWO CHARACTERS OF THIS PATTERN WERE WRONG AND THREE QUOTES WENT
+   * UNVERIFIED FOR SEVERAL SLICES.
+   *
+   * As written it demanded `§31.` with NO space, and stopped at the `-1`. The
+   * three W-4 authorities in pay-run-authorities.ts are cited exactly as the
+   * eCFR prints them:
+   *
+   *     26 C.F.R. § 31.3402(f)(2)-1(a)(4)
+   *
+   * A SPACE after the section sign, and a trailing paragraph pinpoint. So the
+   * pattern matched none of them, `sourceFileFor` returned null, and because
+   * the cite also matched no MIRRORED-CORPUS pattern, `expectedCorpusFile`
+   * returned null too - which meant rule 48's loud failure never fired and
+   * they were counted in the harmless-looking "no local copy to check
+   * against" total. Meanwhile `federal/cfr-31.3402(f)(2)-1.txt` was on disk
+   * the whole time and CONTAINS ALL THREE QUOTES verbatim.
+   *
+   * That is the third time this precise defect has occurred in this file -
+   * §280E resolving to usc-280.txt, the three FASB CON 8 quotes, and now
+   * these. The comment above each says "the exact failure the comment above
+   * this describes, repeated one part number to the left." It has now been
+   * repeated one PUNCTUATION MARK to the left.
+   *
+   * The pinpoint is deliberately DISCARDED rather than matched: the whole
+   * regulation section is one mirrored file, so `(a)(4)` locates the sentence
+   * for a human reader and says nothing about which file to open - the same
+   * decision already recorded for the CON 8 chapter pinpoints.
+   */
+  const cfr31 = /^26 C\.?F\.?R\.? §\s*(31\.[\d.]+\([a-z]\)\(\d+\)-\d+)/.exec(cite);
   if (cfr31) {
     const p = join(dir, "federal", `cfr-${cfr31[1]}.txt`);
     return existsSync(p) ? p : null;
