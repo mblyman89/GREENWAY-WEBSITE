@@ -866,11 +866,27 @@ was counted as a harmless skip. Verified quotes went **332 → 335**.
 That is the FOURTH time this one defect has occurred here (`§280E` resolving to
 `usc-280.txt`; the FASB CON 8 chapters; thirteen `IRS, Instructions for Form
 941` comma-form cites; now a space). Standing rule 23 says fix the class, so
-`authority-routing-completeness.test.ts` (5) now asks the question nobody had
+`authority-routing-completeness.test.ts` (6) now asks the question nobody had
 asked: *for every quote the verifier skips, is its text already inside a file we
 hold?* It runs the verifier's own comparison, so an offender it names is one the
 verifier genuinely could have checked. The books-40 Form 941 routing debt was
 re-measured and is **closed** — all thirteen cites route.
+
+**books-57 recorded a FIFTH occurrence, and it defeated the gate above.** The
+`26 U.S.C.` rows in both routers still demanded `§` with no space, so five cites
+written as the government prints them — `26 U.S.C. § 162(f)(1)` — matched
+neither, while `usc-162.txt` and `usc-6651.txt` sat on disk. The books-55 gate
+saw nothing, and was right to: it asks whether a held file *contains* a skipped
+quote, and all three of those quotes turned out to be **editorial
+reconstructions** splicing statutory headings onto bodies, so their text was in
+no file at all. A routing defect and five bad quotations concealed each other.
+Mirroring `§163` and `§6656` rather than parking them as debt exposed two more.
+Verified quotes went **339 → 345**.
+
+The sixth test is the class gate the previous five occurrences needed: *if the
+corpus table can classify a cite and the file is on disk, the router must route
+it* — asserted over the whole registry, not a list of known cases, and
+mutation-proved in both directions (reverting either router's `§\s*` fails).
 
 The gate's first run reported two offenders and **both were false positives**,
 which is recorded in its docblock because following them would have caused real
