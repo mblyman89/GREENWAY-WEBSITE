@@ -852,6 +852,36 @@ rather than by reviewing it:
 The 31 ownership rows were swept exhaustively — each flipped to all four other
 legal `WhoseMoney` values, 124 mutations, all caught.
 
+**books-55 also closed a defect class that had nothing to do with the W-3, and
+it is the most valuable thing in the slice.** While proving the lesson quotes
+were verified, a probe showed the verifier was reporting 465 authorities as
+"332 verified, 99 skipped for want of a local copy" — and three of those 99
+had their source sitting on disk the whole time. The cause was two characters:
+`26 C.F.R. § 31.3402(f)(2)-1(a)(4)` is how the eCFR prints it, with a space
+after the section sign, and both the router and the mirrored-corpus table
+demanded `§31.` with none. Because the cite matched neither, it was not even
+eligible for the loud failure that exists for exactly this situation, so it
+was counted as a harmless skip. Verified quotes went **332 → 335**.
+
+That is the FOURTH time this one defect has occurred here (`§280E` resolving to
+`usc-280.txt`; the FASB CON 8 chapters; thirteen `IRS, Instructions for Form
+941` comma-form cites; now a space). Standing rule 23 says fix the class, so
+`authority-routing-completeness.test.ts` (5) now asks the question nobody had
+asked: *for every quote the verifier skips, is its text already inside a file we
+hold?* It runs the verifier's own comparison, so an offender it names is one the
+verifier genuinely could have checked. The books-40 Form 941 routing debt was
+re-measured and is **closed** — all thirteen cites route.
+
+The gate's first run reported two offenders and **both were false positives**,
+which is recorded in its docblock because following them would have caused real
+harm. The FASB Codification reprints Regulation S-X in its S99 sections, so the
+text really is in the building — but with FASB's editorial markers spliced into
+the middle of the SEC's sentences. Routing those cites there would have made the
+verifier fail on a quote correctly transcribed from the eCFR, and the tempting
+way to silence that failure is to edit the authority text to match FASB's
+reprint. A gate that normalises differently from the thing it gates measures its
+own opinion, so the gate now uses the verifier's exported `normalise`.
+
 **Both W-2 traps are implemented and on screen**, not merely documented: box 1
 exceeding boxes 3 and 5 renders GREEN with the §3121(a)(2)(B) carve-out quoted
 beside it, and box 17 renders grey and labelled *blank on purpose* rather than

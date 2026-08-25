@@ -916,7 +916,7 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
      * Rule 66d: assert presence before checking contents. A regex that matches
      * nothing passes every for-loop ever written.
      *
-     * WENT FROM 3 TO 6 IN books-55, and it went up by hand on purpose.
+     * WENT FROM 3 TO 6 TO 7 IN books-55, and it went up by hand every time.
      *
      * The slice added the W-3 teaching layer and, with it, three more test
      * files that the roadmap now names with their counts:
@@ -925,11 +925,18 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
      * they were documented, which is the whole point of pinning the count of
      * counts: a new claim in the document cannot start life unverified.
      *
-     * Every one of the six is checked against a live `it(` count in the loop
+     * The SEVENTH is authority-routing-completeness.test.ts (5), documented
+     * later in the same slice. It went red again on that edit, and the second
+     * failure is better evidence than the first: the pin is not a one-off
+     * acknowledgement of a known change, it fires on any new count claim
+     * whatever its subject. That one is a repo-wide gate rather than a W-3
+     * one, so nothing about the slice's topic exempted it.
+     *
+     * Every one of the seven is checked against a live `it(` count in the loop
      * below, so raising this number does not weaken anything - it only records
      * that a human looked at the new rows.
      */
-    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(6);
+    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(7);
 
     for (const [, fileName, printedRaw] of rows) {
       const rel = join("tests", "compliance", fileName);
