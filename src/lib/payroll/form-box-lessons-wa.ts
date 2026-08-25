@@ -330,7 +330,7 @@ export const WA_QUARTERLY_LESSONS: readonly BoxLesson[] = [
       {
         cite: "RCW 50A.10.030(7)(c)",
         quote:
-          "On September 30th of each year, the department shall average the number of employees reported by an employer on the last day of each quarter over the last four completed calendar quarters to determine the size of the employer for the next calendar year",
+          "On September 30th of each year, the department shall average the number of employees reported by an employer on the last day of each quarter over the last four completed calendar quarters to determine the size of the employer for the next calendar year for the purposes of this section, RCW 50A.24.010, and 50A.24.030.",
         sourcePath: RCW_50A_10_030_PATH,
         sourceUrl: RCW_50A_10_030_URL,
         soWhat:

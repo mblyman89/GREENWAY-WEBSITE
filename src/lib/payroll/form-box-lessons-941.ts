@@ -350,7 +350,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 5c",
-        quote: "Enter all wages,",
+        quote: "5c. Taxable Medicare wages & tips. Enter all wages,\ntips, sick pay, and taxable fringe benefits that are subject\nto Medicare tax.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -425,7 +425,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 4",
-        quote: "If no wages, tips, and other compensation on line 2 are\nsubject to social security or Medicare tax, check the box\non line 4. If this question doesn\u2019t apply to you, leave the\nbox blank. For more information about exempt wages, see",
+        quote: "If no wages, tips, and other compensation on line 2 are\nsubject to social security or Medicare tax, check the box\non line 4. If this question doesn\u2019t apply to you, leave the\nbox blank. For more information about exempt wages, see\nsection 15 of Pub. 15. For religious exemptions, see\nsection 4 of Pub. 15-A.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -482,7 +482,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 5b",
-        quote: "5b. Taxable social security tips. Enter all tips your\nemployees reported to you during the quarter until the\ntotal of the tips and taxable wages, including wages\nreported on line 5a, for an employee reaches $184,500 for\nthe year. Include all tips your employee reported to you",
+        quote: "5b. Taxable social security tips. Enter all tips your\nemployees reported to you during the quarter until the\ntotal of the tips and taxable wages, including wages\nreported on line 5a, for an employee reaches $184,500 for\nthe year. Include all tips your employee reported to you\neven if you were unable to withhold the employee tax of\n6.2%.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -546,7 +546,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 5d",
-        quote: "withholding Additional Medicare Tax in the pay period in\nwhich you pay wages in excess of $200,000 to an\nemployee and continue to withhold it each pay period until\nthe end of the calendar year. Additional Medicare Tax is\nonly imposed on the employee. There is no employer",
+        quote: "withholding Additional Medicare Tax in the pay period in\nwhich you pay wages in excess of $200,000 to an\nemployee and continue to withhold it each pay period until\nthe end of the calendar year. Additional Medicare Tax is\nonly imposed on the employee. There is no employer\nshare of Additional Medicare Tax.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -555,7 +555,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
       },
       {
         cite: "IRS Instructions for Form 941 (2026), line 5d",
-        quote: "only imposed on the employee. There is no employer\nshare of Additional Medicare Tax. All wages that are\nsubject to Medicare tax are subject to Additional Medicare",
+        quote: "only imposed on the employee. There is no employer\nshare of Additional Medicare Tax. All wages that are\nsubject to Medicare tax are subject to Additional Medicare\nTax withholding if paid in excess of the $200,000\nwithholding threshold.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -610,7 +610,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 5f",
-        quote: "Demand on line 5f. The IRS issues a Section 3121(q)\nNotice and Demand to advise an employer of the amount\nof tips received by employees who failed to report or\nunderreported tips to the employer. An employer isn\u2019t\nliable for the employer share of the social security and",
+        quote: "Demand on line 5f. The IRS issues a Section 3121(q)\nNotice and Demand to advise an employer of the amount\nof tips received by employees who failed to report or\nunderreported tips to the employer. An employer isn\u2019t\nliable for the employer share of the social security and\nMedicare taxes on unreported tips until notice and\ndemand for the taxes is made to the employer by the IRS\nin a Section 3121(q) Notice and Demand.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -619,7 +619,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
       },
       {
         cite: "IRS Instructions for Form 941 (2026), line 5f",
-        quote: "liable for the employer share of the social security and\nMedicare taxes on unreported tips until notice and\ndemand for the taxes is made to the employer by the IRS\nin a Section 3121(q) Notice and Demand. The tax due",
+        quote: "liable for the employer share of the social security and\nMedicare taxes on unreported tips until notice and\ndemand for the taxes is made to the employer by the IRS\nin a Section 3121(q) Notice and Demand. The tax due\nmay have been determined from tips reported to the IRS\non employees\u2019 Forms 4137, Social Security and Medicare\nTax on Unreported Tip Income, or other tips that weren\u2019t\nreported to their employer as determined by the IRS\nduring an examination.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -674,7 +674,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 8",
-        quote: "8. Current quarter\u2019s adjustment for sick pay. If your\nthird-party payer of sick pay that isn\u2019t your agent (for\nexample, an insurance company) transfers the liability for\nthe employer share of the social security and Medicare\ntaxes to you, enter a negative adjustment on line 8 for the\nemployee share of social security and Medicare taxes that\nwere withheld and deposited by your third-party sick pay",
+        quote: "8. Current quarter\u2019s adjustment for sick pay. If your\nthird-party payer of sick pay that isn\u2019t your agent (for\nexample, an insurance company) transfers the liability for\nthe employer share of the social security and Medicare\ntaxes to you, enter a negative adjustment on line 8 for the\nemployee share of social security and Medicare taxes that\nwere withheld and deposited by your third-party sick pay\npayer on the sick pay.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -683,7 +683,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
       },
       {
         cite: "IRS Instructions for Form 941 (2026), line 8",
-        quote: "employer. The sick pay should be included on line 5a,\nline 5c, and, if the withholding threshold is met, line 5d.\nNo adjustment is reported on line 8 for sick pay that is",
+        quote: "employer. The sick pay should be included on line 5a,\nline 5c, and, if the withholding threshold is met, line 5d.\nNo adjustment is reported on line 8 for sick pay that is\npaid through a third party as an employer\u2019s agent.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -950,7 +950,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 16",
-        quote: "on Schedule B (Form 941).\nCaution: The amounts entered on line 16 are a summary\nof your monthly tax liability, not a summary of deposits you\nmade. If you don\u2019t properly report your liabilities when\nrequired or if you\u2019re a semiweekly schedule depositor and\nenter your liabilities on line 16 instead of on Schedule B\n(Form 941), you may be assessed an \u201caveraged\u201d FTD",
+        quote: "on Schedule B (Form 941).\nCaution: The amounts entered on line 16 are a summary\nof your monthly tax liability, not a summary of deposits you\nmade. If you don\u2019t properly report your liabilities when\nrequired or if you\u2019re a semiweekly schedule depositor and\nenter your liabilities on line 16 instead of on Schedule B\n(Form 941), you may be assessed an \u201caveraged\u201d FTD\npenalty.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -1003,7 +1003,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 17",
-        quote: "If you go out of business or stop paying wages, you must\nfile a final return. To tell the IRS that a particular Form 941\nis your final return, check the box on line 17 and enter the\nfinal date you paid wages in the space provided. For\nadditional filing requirements, including information about",
+        quote: "If you go out of business or stop paying wages, you must\nfile a final return. To tell the IRS that a particular Form 941\nis your final return, check the box on line 17 and enter the\nfinal date you paid wages in the space provided. For\nadditional filing requirements, including information about\nattaching a statement to your final return, see If Your\nBusiness Has Closed, earlier.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -1055,7 +1055,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     quotes: [
       {
         cite: "IRS Instructions for Form 941 (2026), line 18",
-        quote: "If you hire employees seasonally\u2014such as for summer or\nwinter only\u2014check the box on line 18. Checking the box\ntells the IRS not to expect four Forms 941 from you\nthroughout the year because you haven\u2019t paid wages\nregularly.\nGenerally, we won\u2019t ask about unfiled returns if at least",
+        quote: "If you hire employees seasonally\u2014such as for summer or\nwinter only\u2014check the box on line 18. Checking the box\ntells the IRS not to expect four Forms 941 from you\nthroughout the year because you haven\u2019t paid wages\nregularly.\nGenerally, we won\u2019t ask about unfiled returns if at least\none taxable return is filed each year.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:
@@ -1149,7 +1149,7 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS Instructions for Form 941 (2026), lost refund caution",
         quote:
-          "Caution: The IRS isn\u2019t responsible for a lost refund if you\nenter the wrong account information. Check with your\nfinancial institution to get the correct routing and account\nnumbers and to make sure your direct deposit will be",
+          "Caution: The IRS isn\u2019t responsible for a lost refund if you\nenter the wrong account information. Check with your\nfinancial institution to get the correct routing and account\nnumbers and to make sure your direct deposit will be\naccepted.",
         sourcePath: FORM_941_SOURCE_PATH,
         sourceUrl: FORM_941_SOURCE_URL,
         soWhat:

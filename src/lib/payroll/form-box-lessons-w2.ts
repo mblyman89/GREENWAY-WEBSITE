@@ -1246,7 +1246,7 @@ export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 10",
         quote:
-          "Box 10\u2014Dependent care benefits (not applicable to\nForms W-2AS, W-2CM, W-2GU, or W-2VI). Show the\ntotal dependent care benefits under a dependent care\nassistance program (section 129) paid or incurred by you",
+          "Box 10\u2014Dependent care benefits (not applicable to\nForms W-2AS, W-2CM, W-2GU, or W-2VI). Show the\ntotal dependent care benefits under a dependent care\nassistance program (section 129) paid or incurred by you\nfor your employee.",
         sourcePath: FORM_W2_SOURCE_PATH,
         sourceUrl: FORM_W2_SOURCE_URL,
         soWhat:
@@ -1357,7 +1357,7 @@ export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 12",
         quote:
-          "Box 12\u2014Codes. Complete and code this box for all\nitems described below. Note that the codes do not relate\nto where they should be entered in boxes 12a through 12d\non Form W-2. For example, if you are only required to\nreport code D in box 12, you can enter code D and the\namount in box 12a of Form W-2. Report in box 12 any\nitems that are listed as codes A through II. Do not report in\nbox 12 section 414(h)(2) contributions (relating to certain",
+          "Box 12\u2014Codes. Complete and code this box for all\nitems described below. Note that the codes do not relate\nto where they should be entered in boxes 12a through 12d\non Form W-2. For example, if you are only required to\nreport code D in box 12, you can enter code D and the\namount in box 12a of Form W-2. Report in box 12 any\nitems that are listed as codes A through II. Do not report in\nbox 12 section 414(h)(2) contributions (relating to certain\nstate or local government plans).",
         sourcePath: FORM_W2_SOURCE_PATH,
         sourceUrl: FORM_W2_SOURCE_URL,
         soWhat:
@@ -1416,7 +1416,7 @@ export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 13",
         quote:
-          "Box 13\u2014Checkboxes. Check all boxes that apply.\nStatutory employee. Check this box for statutory\nemployees whose earnings are subject to social security\nand Medicare taxes but not subject to federal income tax\nwithholding. Do not check this box for common-law\nemployees. There are workers who are independent\ncontractors under the common-law rules but are treated\nby statute as employees. They are called \u201cstatutory",
+          "Box 13\u2014Checkboxes. Check all boxes that apply.\nStatutory employee. Check this box for statutory\nemployees whose earnings are subject to social security\nand Medicare taxes but not subject to federal income tax\nwithholding. Do not check this box for common-law\nemployees. There are workers who are independent\ncontractors under the common-law rules but are treated\nby statute as employees. They are called \u201cstatutory\nemployees.\u201d",
         sourcePath: FORM_W2_SOURCE_PATH,
         sourceUrl: FORM_W2_SOURCE_URL,
         soWhat:
@@ -1469,7 +1469,7 @@ export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 14a",
         quote:
-          "Box 14a\u2014Other. If you included 100% of a vehicle\u2019s\nannual lease value in the employee\u2019s income, it must also\nbe reported here or on a separate statement to your\nemployee.\nYou may also use this box for any other information that",
+          "Box 14a\u2014Other. If you included 100% of a vehicle\u2019s\nannual lease value in the employee\u2019s income, it must also\nbe reported here or on a separate statement to your\nemployee.\nYou may also use this box for any other information that\nyou want to give to your employee.",
         sourcePath: FORM_W2_SOURCE_PATH,
         sourceUrl: FORM_W2_SOURCE_URL,
         soWhat:
@@ -1479,7 +1479,7 @@ export const FORM_W2_BOX_LESSONS: readonly BoxLesson[] = [
       {
         cite: "IRS General Instructions for Forms W-2 and W-3 (2026), Box 14a, examples",
         quote:
-          "you want to give to your employee. Label each item.\nExamples include state disability insurance taxes\nwithheld, union dues, uniform payments, health insurance\npremiums deducted, nontaxable income, educational\nassistance payments, or a minister\u2019s parsonage allowance\nand utilities. In addition, you may enter the following",
+          "you want to give to your employee. Label each item.\nExamples include state disability insurance taxes\nwithheld, union dues, uniform payments, health insurance\npremiums deducted, nontaxable income, educational\nassistance payments, or a minister\u2019s parsonage allowance\nand utilities. In addition, you may enter the following\ncontributions to a pension plan: (a) nonelective employer\ncontributions made on behalf of an employee, (b)\nvoluntary after-tax contributions (but not designated Roth\ncontributions) that are deducted from an employee\u2019s pay,\n(c) required employee contributions, and (d) employer\nmatching contributions.",
         sourcePath: FORM_W2_SOURCE_PATH,
         sourceUrl: FORM_W2_SOURCE_URL,
         soWhat:
