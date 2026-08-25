@@ -307,13 +307,13 @@ def main():
         original = path.read_text(encoding="utf-8")
 
         if find not in original:
-            print(f"{mid}: LITERAL NOT FOUND in {relpath} -- harness bug, not a result")
+            print(f"{mid}: LITERAL NOT FOUND in {relpath} -- harness bug, not a result", flush=True)
             results.append((mid, "NOT-FOUND", predict_red, what))
             continue
 
         mutated = original.replace(find, repl, 1)
         if mutated == original:
-            print(f"{mid}: NO-OP mutation, refused")
+            print(f"{mid}: NO-OP mutation, refused", flush=True)
             results.append((mid, "NO-OP", predict_red, what))
             continue
 
@@ -340,7 +340,18 @@ def main():
         caught = verdict in ("RED", "NO-TESTS")
         agree = caught == predict_red
         flag = "" if agree else "   <== AGAINST PREDICTION"
-        print(f"{mid}: {verdict:9s} (predicted {'RED' if predict_red else 'GREEN'}){flag}  {what}")
+        # flush=True because this run takes ~40 minutes and Python BUFFERS stdout
+        # when it is redirected to a file. Without it, `nohup ... > log` shows
+        # only "Baseline ..." for the entire campaign, so there is no way to tell
+        # a working run from a hung one - measured during books-56, where the log
+        # sat unchanged for 12 minutes while the run was in fact healthy (proved
+        # by watching which .mutbak existed). On a sandbox that crashes often,
+        # a progress log that only appears at the end is a progress log that is
+        # usually lost.
+        print(
+            f"{mid}: {verdict:9s} (predicted {'RED' if predict_red else 'GREEN'}){flag}  {what}",
+            flush=True,
+        )
         results.append((mid, verdict, predict_red, what))
 
     print("\n" + "=" * 72)
