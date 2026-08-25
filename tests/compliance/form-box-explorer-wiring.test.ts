@@ -123,6 +123,30 @@ const TAUGHT_SCREENS: readonly {
       "through the explorer's Check tab. Duplicating it into the tab would show Michael the same " +
       "figures twice and give two places for them to disagree.",
   },
+  {
+    /*
+     * ADDED books-55. The W-3 rendered as a TABLE on this page and nothing
+     * else: the thirty-one W-3 lessons were written, gated and UNREACHABLE
+     * from the interface. A table shows the figures; it cannot say what a box
+     * means, whose money it is, or which line of which 941 must agree with it.
+     *
+     * It shares a page with the W-2 explorer rather than having its own route,
+     * because the W-2 and the W-3 are filed together and reconciled against
+     * each other, and Michael reads them as one job. It is a SEPARATE explorer
+     * on that page rather than a merged box list, because the two forms number
+     * their boxes differently — "box 13" is a row of checkboxes on the W-2 and
+     * a reserved third-party sick pay field on the W-3 — and one list
+     * containing two different box 13s would teach the wrong thing about both.
+     */
+    label: "Form W-3 (annual transmittal)",
+    page: "src/app/admin/books/form-w2/page.tsx",
+    lessonsExport: "FORM_W3_BOX_LESSONS",
+    checksMissingBecause:
+      "The W-3's reconciliation is the same comparison as the W-2's — the annual totals against " +
+      "the four filed 941s — and it is already rendered in this page's own reconciliation card. " +
+      "Putting it in this explorer's Check tab as well would show Michael the same figures " +
+      "twice, in two places that can disagree with each other.",
+  },
 ];
 
 /**
@@ -345,6 +369,7 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
     expect(excused.map((s) => s.label)).toEqual([
       "Washington quarterly returns",
       "Form W-2 (annual wage report)",
+      "Form W-3 (annual transmittal)",
     ]);
     /*
      * WENT FROM 2 TO 1 IN books-48.
@@ -368,8 +393,23 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
      * compares the W-3 against the four filed 941s in its own card. Showing it
      * again in the Check tab would give two places for one answer to disagree
      * with itself.
+     *
+     * WENT FROM 2 TO 3 IN books-55, for the same reason as the W-2 and with
+     * the same caveat. The W-3 gained an explorer in that slice - it had a
+     * TABLE and nothing else, so its thirty-one lessons were unreachable from
+     * the interface. It shares the W-2's excuse because it shares the W-2's
+     * reconciliation: comparing the W-3's totals against the four filed 941s
+     * is ONE comparison, already rendered once on that page. It is counted as
+     * a separate screen here because it is a separate explorer with its own
+     * box list, and a gate that quietly folded it into the W-2's row would be
+     * a gate that stops being able to see it (rule 39).
+     *
+     * READ THIS NUMBER HONESTLY: 3 is not three unsolved problems. Two of the
+     * three are one deliberate design decision counted twice, and the third is
+     * blocked on the PFML and WA Cares accumulators. It goes DOWN when those
+     * accumulators land, and it must never go up without a paragraph here.
      */
-    expect(excused.length).toBe(2);
+    expect(excused.length).toBe(3);
   });
 
   it("proves at least one screen really does reconcile, or the gate is vacuous", () => {

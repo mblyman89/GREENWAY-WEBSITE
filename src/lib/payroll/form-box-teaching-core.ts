@@ -72,11 +72,13 @@ import {
   type WhoseMoney,
   type BoxMeasure,
 } from "@/lib/payroll/form-box-core";
+import { type W3Form } from "@/lib/payroll/form-w2-core";
 import {
   FORM_941_WHOSE,
   FORM_940_WHOSE,
   FORM_W2_WHOSE,
   FORM_W3_WHOSE,
+  FORM_ID_W3,
   type WhoseRow,
 } from "@/lib/payroll/form-box-adapters";
 // Imported so the drift gate can compare this file's claims against a return
@@ -1485,6 +1487,143 @@ export function teachingBoxes(formId: string): readonly FormBox[] {
     };
   });
 }
+
+/*
+ * ═══ WHY THIS ADAPTER LIVES HERE AND NOT IN form-box-adapters.ts ═══
+ *
+ * Every other `*Boxes` adapter is in `form-box-adapters.ts`, so that is where
+ * this one was written first. It could not stay there.
+ *
+ * `w3Boxes` must start from the teaching specimen (see its docblock for why),
+ * which means calling `teachingBoxes` — and `form-box-teaching-core` already
+ * imports `FORM_W3_WHOSE` FROM `form-box-adapters` at module scope, to build
+ * TEACHING_FORMS. Importing back the other way closes the cycle, and this is
+ * not the harmless kind: TEACHING_FORMS is constructed during module
+ * initialisation, so whichever module happened to load second would see
+ * `undefined` for the other's exports. That failure appears as a null-property
+ * crash at import time, in a file that looks unrelated, and it depends on load
+ * order rather than on anything visible in the code.
+ *
+ * So the function goes on the side of the dependency that already holds both
+ * halves. Rule 25 — extend, never duplicate: the WHOSE tables are not copied
+ * here, they are reached through `teachingBoxes`, which already resolves them.
+ */
+/**
+ * ═══ THE W-3'S BOXES, WITH THE COMPUTED FIGURES OVERLAID (books-55) ═══
+ *
+ * The W-3 screen had a table but no explorer, so the thirty-one W-3 lessons
+ * were unreachable: written, tested, and invisible. This is the adapter that
+ * connects them.
+ *
+ * ─── WHY IT STARTS FROM THE SPECIMEN AND NOT FROM THE FORM ───────────────
+ *
+ * `w2Boxes` maps over a W2Form's own `boxes` array, because a W-2 knows all
+ * twenty of its boxes. A `W3Form` does NOT: it carries the nine figures the
+ * engine totals (boxes 1-6, 12a, 16, 17) and nothing else. There is no field on
+ * it for box a, for the kind-of-payer checkboxes, for box e's EIN, or for the
+ * contact block.
+ *
+ * Mapping over what the W3Form carries would therefore have produced an
+ * explorer with nine boxes and silently orphaned twenty-two lessons. That is
+ * the precise defect this system keeps finding: a renderer that shows a subset
+ * looks completely healthy, because nothing anywhere states what the full set
+ * is (rule 39).
+ *
+ * So the SPECIMEN is the spine — it is the one place that lists all thirty-one
+ * boxes with their captions in the form's own words — and the computed figures
+ * are overlaid onto it where they exist. Every box therefore renders, every
+ * lesson is reachable, and a box the engine cannot yet fill keeps saying "not
+ * computed yet" instead of showing a zero.
+ *
+ * ─── WHY A ZERO WOULD BE A LIE, SPECIFICALLY ─────────────────────────────
+ *
+ * `notComputedYet` is cleared ONLY for boxes this function actually overlays. A
+ * $0.00 in box 4 would state that Greenway withheld no social security tax all
+ * year, which is a factual claim about a tax filing, not a blank. The
+ * distinction is the whole reason `notComputedYet` exists.
+ *
+ * Box 12a is overlaid but deliberately keeps the loudest derivation on the
+ * screen, because it is the one box on this form that is NOT a plain total —
+ * only the deferral codes carry up, and summing all of box 12 into it is the
+ * easiest W-3 error a generator can make.
+ */
+export function w3Boxes(w3: W3Form): readonly FormBox[] {
+  /*
+   * Money boxes the engine really computes, in cents. Anything absent from
+   * this map keeps the specimen's "not computed yet", which is the honest
+   * answer for a box nothing populates.
+   *
+   * Rule 62d: no defaults invented here. A box missing from this map is a box
+   * we cannot fill, and it must SAY so rather than resolve to zero.
+   */
+  const computed = new Map<string, number>([
+    ["1", w3.box1Cents],
+    ["2", w3.box2Cents],
+    ["3", w3.box3Cents],
+    ["4", w3.box4Cents],
+    ["5", w3.box5Cents],
+    ["6", w3.box6Cents],
+    ["12a", w3.box12aCents],
+    ["16", w3.box16Cents],
+    ["17", w3.box17Cents],
+  ]);
+
+  return teachingBoxes(FORM_ID_W3).map((b): FormBox => {
+    /*
+     * Box c is the form count, and it is a COUNT, not money. It is overlaid
+     * through `quantity` rather than `amountCents` so the formatter cannot
+     * render ten W-2s as "$0.10" — a wrong answer that looks like a
+     * formatting nit and therefore survives review.
+     */
+    if (b.box === "c") {
+      return {
+        ...b,
+        quantity: w3.formCount,
+        notComputedYet: null,
+        derivation:
+          `${b.derivation} — counted from the W-2s this run produced: ${w3.formCount} ` +
+          `included` +
+          (w3.voidedCount > 0
+            ? `, and ${w3.voidedCount} marked VOID and therefore excluded, which is what the ` +
+              `instructions require`
+            : ``),
+      };
+    }
+
+    const cents = computed.get(b.box);
+    if (cents === undefined) return b;
+
+    /*
+     * Boxes 16 and 17 are the Washington case, and they are handled like the
+     * W-2's: blank BECAUSE Washington has no state income tax, and said so
+     * out loud. The condition is on the VALUE, not on the state, so a
+     * Washington employer with an employee working in Oregon still shows the
+     * figure instead of a hard-coded blank.
+     */
+    const isWaStateBox = (b.box === "16" || b.box === "17") && cents === 0;
+
+    return {
+      ...b,
+      amountCents: cents,
+      notComputedYet: null,
+      emphasise: b.box === "1",
+      blankOnPurpose: isWaStateBox
+        ? "Blank because Washington has no state income tax, so there is nothing for the " +
+          "transmittal to total. This is correct and permanent, not a missing figure. Paid " +
+          "Family and Medical Leave and WA Cares ARE withheld from Washington employees, but " +
+          "they are not income tax and do not belong here."
+        : null,
+      derivation:
+        b.box === "12a"
+          ? `${b.derivation} — FILTERED, not a plain total: only the deferral codes carry up. ` +
+            `Codes DD and C are excluded on purpose, and a naive sum of every box 12 would ` +
+            `have overstated this by ` +
+            `${(w3.box12ExcludedFromW3Cents / 100).toFixed(2)} dollars.`
+          : b.derivation,
+    };
+  });
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §7  SELF-TESTS (rule 5)
