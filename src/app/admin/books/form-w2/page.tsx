@@ -99,9 +99,10 @@ import { loadW2s } from "@/lib/payroll/form-w2-store";
 // The teaching surface (books-49). `w2Boxes` existed and was called by nothing;
 // the box lessons had to be written because FORM_W2_LESSONS is a MentorLesson.
 import { FormBoxExplorer } from "@/components/admin/books/FormBoxExplorer";
-import { w2Boxes, FORM_ID_W2 } from "@/lib/payroll/form-box-adapters";
+import { w2Boxes, FORM_ID_W2, FORM_ID_W3 } from "@/lib/payroll/form-box-adapters";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
-import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
+import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
+import { teachingBoxes, w3Boxes } from "@/lib/payroll/form-box-teaching-core";
 import {
   groupW2Refusals,
   reconRows,
@@ -774,6 +775,42 @@ export default async function FormW2Page({
         lessons={FORM_W2_BOX_LESSONS}
       />
 
+      {/* ── 6b. THE W-3, BOX BY BOX ─────────────────────────────────────────
+          ADDED books-55, and it closes the same class of gap this screen was
+          built to fix in books-49.
+
+          Section 5 above renders the W-3 as a TABLE. A table shows Michael the
+          figures; it cannot tell him what a box means, whose money it is, or
+          which box on which other form has to agree with it. The thirty-one
+          W-3 lessons existed, were gated, and were unreachable from the
+          interface - written, tested, and invisible.
+
+          WHY IT IS NOT GATED ON `w3 !== null`, unlike the table above. The
+          table must be, because a table of figures with no figures is an empty
+          grid. The explorer must NOT be, because its whole purpose is to teach
+          before the numbers exist - and gating teaching on having data is the
+          exact bug that was reported on the 940, 941 and Washington screens
+          and fixed in books-47/48. When no W-3 has been built, the specimen is
+          used and every figure reads "not computed yet" rather than $0.00: a
+          zero in box 4 would state that Greenway withheld no social security
+          tax all year, which is a claim about a tax filing, not a blank.
+
+          The W-3 gets its OWN explorer rather than being folded into the W-2's
+          because they are different forms with different box numbering, and
+          "box 13" means something different on each - a row of checkboxes on
+          the W-2, a reserved third-party sick pay field on the W-3. Merging
+          them would put two different box 13s in one list. */}
+      <FormBoxExplorer
+        title="Form W-3, box by box"
+        subtitle={
+          w3 !== null
+            ? `The transmittal - one page that totals every W-2 above it. Click a box number to be taught it: what belongs there, where the figure comes from, and which line of which 941 has to agree with it. The W-3 is checked by a matching engine rather than read by a person, so a wrong box here produces silence and then a letter.`
+            : "The transmittal - one page that totals every W-2. No W-3 has been built for this year yet, so the amounts are marked as not computed rather than shown as zero. Every box still teaches - click a box number."
+        }
+        boxes={w3 !== null ? w3Boxes(w3) : teachingBoxes(FORM_ID_W3)}
+        lessons={FORM_W3_BOX_LESSONS}
+      />
+
       {/* ── 7. THE CHECKLIST ─────────────────────────────────────────────── */}
       <Card>
         <CardHeader
@@ -915,9 +952,38 @@ function Shell({ taxYear, children }: { taxYear: number; children: React.ReactNo
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--admin-text)]">
-          Forms W-2 and W-3 &mdash; {taxYear}
-        </h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="text-xl font-semibold text-[var(--admin-text)]">
+            Forms W-2 and W-3 &mdash; {taxYear}
+          </h1>
+          {/*
+            ═══ THE ONLY DOOR TO THE ONE-BIG-SHEET VIEW (books-58) ═══
+
+            Michael asked for the new page and said of this screen: "rather than
+            updating or changing any of it". This link is the whole of the
+            change, and it is here because the alternative is worse.
+
+            The new route shipped with a link back to this screen and nothing
+            linking forward to it, and `nav-gate-core` caught that within the
+            hour: "owner-only pages that are not in the menu... Each one is a
+            decision nobody made." A page nobody can reach is the exact failure
+            books-49 recorded in his own words - "I am unable to see or use the
+            tab system" - where a finished surface was invisible because nothing
+            led to it.
+
+            It is a link here rather than a fourth tab or a top-level menu item
+            on purpose. A tab would mean editing the tab system he said he likes.
+            A menu item would put a per-form view in a global menu, and would
+            need one for every form as the pattern spreads. A door on the form's
+            own screen is where a person looking for that form already is.
+          */}
+          <Link
+            href={`/admin/books/form-w2/sheet?year=${taxYear}`}
+            className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+          >
+            View just the form &rarr;
+          </Link>
+        </div>
         <p className="mt-1 max-w-3xl text-sm text-[var(--admin-text-muted)]">
           The annual wage report. One W-2 for each person you paid, and one W-3 that totals
           them all. This screen reads the year-to-date figures your posted pay runs produced,

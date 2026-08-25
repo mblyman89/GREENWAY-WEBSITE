@@ -1,5 +1,5 @@
 SOURCE TEXT — 8 CFR §274a.2
-Retrieved 2026-08-21 from https://www.ecfr.gov/api/renderer/v1/content/enhanced/current/title-8?chapter=I&subchapter=B&part=274a&section=274a.2
+Retrieved 2026-08-25 from https://www.ecfr.gov/api/renderer/v1/content/enhanced/current/title-8?chapter=I&subchapter=B&part=274a&section=274a.2
 Work of the United States Government; not subject to copyright (17 U.S.C. §105).
 ==============================================================================
 

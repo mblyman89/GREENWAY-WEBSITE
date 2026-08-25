@@ -174,6 +174,40 @@ export const FORM_W2_SOURCE_PATH = "docs/authorities/federal/irs-instructions-w-
 export const IRC_6051_SOURCE_PATH = "docs/authorities/federal/usc-6051.txt";
 
 /**
+ * ═══ books-55: THE TWO STATUTES THE BOX-3 CARVE-OUT POINTS AT. ═══
+ *
+ * `IW2W3_2026_BOX_3_SCORP_HEALTH_CARVE_OUT` below has been in this file since
+ * books-43, and it quotes the Instructions saying the premium goes in box 3
+ * "but only if not excludable under section 3121(a)(2)(B)".
+ *
+ * THAT CROSS-REFERENCE WAS A DEAD END FOR TWELVE SLICES. §3121 was not in the
+ * mirrored corpus, so the one clause that actually decides the answer — the
+ * clause the Instructions defer to — was the only clause no script could check.
+ * Everything downstream that relied on it relied on my paraphrase of a statute
+ * nobody had read into the repository. Standing rule 24 was satisfied on the
+ * letter (the Instructions quote verified) and defeated in substance.
+ *
+ * books-55 mirrored both provisions. §3306(b)(2)(B) is here as well because the
+ * SAME premium appears a third time on Form 940, and mirroring only the FICA
+ * half would have left the unemployment half resting on an IRS web page.
+ *
+ * WHY THIS SLICE WENT AND GOT THEM. Michael wrote, in as many words:
+ *
+ *   "it was me that produced all the w-2s and w-3 for my business, not my
+ *    grandfather. It's very likely I did it wrong. Please deep research the
+ *    proper way for me to fill them out so the teaching lessons are accurate
+ *    and the forms are built based on legal authoritative text rather than
+ *    trusting my bad accounting."
+ *
+ * He was right to stop me. The lessons had begun citing HIS FILED FORMS as
+ * though a filed form were a source of law. It is not. A filed form is evidence
+ * of what a taxpayer did. The statute is the only thing that says what he
+ * should have done, and now it is on disk where a machine can check the quote.
+ */
+export const IRC_3121_SOURCE_PATH = "docs/authorities/federal/usc-3121.txt";
+export const IRC_3306_SOURCE_PATH = "docs/authorities/federal/usc-3306.txt";
+
+/**
  * ═══ THE PATH IS NOT THE SOURCE. ═══
  *
  * `GuidanceAuthority.source` is RENDERED AS A CLICKABLE LINK - literally
@@ -204,6 +238,24 @@ export const FORM_W2_SOURCE_URL = "https://www.irs.gov/pub/irs-pdf/iw2w3.pdf";
 
 /** Cornell LII - the same URL `fetch-federal-authority-text.ts` mirrored from. */
 export const IRC_6051_SOURCE_URL = "https://www.law.cornell.edu/uscode/text/26/6051";
+
+/** Same publisher, same fetcher, added books-55. */
+export const IRC_3121_SOURCE_URL = "https://www.law.cornell.edu/uscode/text/26/3121";
+export const IRC_3306_SOURCE_URL = "https://www.law.cornell.edu/uscode/text/26/3306";
+
+/**
+ * The IRS's own plain-language statement of how the two statutes above apply to
+ * an S corporation shareholder-employee, at the page Michael would find first.
+ *
+ * NOT MIRRORED, AND HONEST ABOUT IT. This is a web page, not a numbered
+ * document in the corpus, so `verify-verbatim-quotes.ts` cannot route a cite to
+ * it. That is precisely why the two STATUTES were mirrored instead of leaning on
+ * this page: the load-bearing quotes point at §3121 and §3306, which the
+ * verifier reads on disk, and this URL is offered to Michael as the readable
+ * summary rather than as the authority underneath the code.
+ */
+export const IRS_SCORP_MEDICAL_PAGE_URL =
+  "https://www.irs.gov/businesses/small-businesses-self-employed/s-corporation-compensation-and-medical-insurance-issues";
 
 /**
  * THE EDITION ON DISK IS 2026, AND MICHAEL'S FIRST PAYROLL YEAR IS 2027.
@@ -574,6 +626,117 @@ export const IW2W3_2026_BOX_3_SCORP_HEALTH_CARVE_OUT: GuidanceAuthority = {
   soWhat:
     "This is the other half of the health-insurance rule and you must read it together with the box 1 rule above. The premium goes in box 1, but the words 'only if not excludable under section 3121(a)(2)(B)' mean it generally does NOT go in boxes 3 and 5, because for a 2%-or-more shareholder it is exempt from Social Security and Medicare. The result looks broken and is not: Michael's W-2 will show box 1 HIGHER than box 3 and box 5 by exactly the premium. Do not let anyone 'fix' that. If someone makes the boxes match, they have either overpaid FICA or understated his income.",
   source: FORM_W2_SOURCE_URL,
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * books-55 — THE CONDITION. READ THIS BEFORE BELIEVING ANYTHING ABOVE.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Everything this file said about the health premium before books-55 was
+ * written in the indicative mood: the premium "is" excluded from boxes 3 and 5,
+ * box 1 "will" be higher. Read the statute and that confidence is not there.
+ *
+ * §3121(a)(2) does not exclude medical payments. IT EXCLUDES MEDICAL PAYMENTS
+ * MADE UNDER A PLAN OR SYSTEM — and it says which kind:
+ *
+ *   "...under a plan or system established by an employer which makes
+ *    provision for his employees generally (or for his employees generally and
+ *    their dependents) or for a class or classes of his employees..."
+ *
+ * THAT IS A CONDITION, NOT A DESCRIPTION. The exclusion is available only if
+ * such a plan or system exists. Whether Greenway has one is a QUESTION OF FACT
+ * ABOUT GREENWAY, and it is a fact this software has never been told. Nobody has
+ * shown me a plan document, a written policy, or a defined class of employees.
+ *
+ * So the honest statement of the rule has three parts, and the engine must keep
+ * them separate because collapsing them is how wrong returns get filed:
+ *
+ *   1. THE LAW (this authority, machine-verified): if the plan-or-system
+ *      condition is met, the premium is not FICA wages, so it belongs in box 1
+ *      and not in boxes 3 and 5.
+ *   2. THE FACT NOT IN EVIDENCE: whether that condition is met at Greenway.
+ *   3. WHAT WAS ACTUALLY FILED (an observation, never an authority): on the 2025
+ *      W-2 Michael prepared, boxes 1, 3 and 5 are all $53,530.16, and box 14
+ *      reads HEALTH $30,980.16. The premium was included in the FICA base.
+ *
+ * Part 3 is consistent with EITHER "the condition is not met, so including it
+ * was correct" OR "the condition is met and FICA was overpaid". THE FORM ALONE
+ * CANNOT TELL YOU WHICH, and this software must not pretend otherwise. That is
+ * why `docs/OWNER_STATED_FACTS.md` records it as a question for Nicholas Mullan
+ * and this file does not answer it.
+ *
+ * The dollars are not trivial: $30,980.16 × 15.3% is $4,739.96 of combined
+ * employer-and-employee FICA riding on a plan document nobody has produced.
+ */
+export const IRC_3121_A_2_MEDICAL_EXCLUSION: GuidanceAuthority = {
+  id: "irc-3121-a-2-medical-exclusion",
+  kind: "statute",
+  cite: "26 U.S.C. §3121(a)(2)",
+  quote:
+    "the amount of any payment (including any amount paid by an employer for insurance or annuities, or into a fund, to provide for any such payment) made to, or on behalf of, an employee or any of his dependents under a plan or system established by an employer which makes provision for his employees generally (or for his employees generally and their dependents) or for a class or classes of his employees (or for a class or classes of his employees and their dependents), on account of— ... medical or hospitalization expenses in connection with sickness or accident disability, or",
+  soWhat:
+    "This is the clause the W-2 instructions point at when they say the premium goes in box 3 'only if not excludable under section 3121(a)(2)(B)', and the important word in it is IF. The exclusion is not automatic because the payment is medical. It applies to a payment made 'under a plan or system established by an employer which makes provision for his employees generally... or for a class or classes of his employees'. So there are two questions, not one. First, is there a plan or system covering employees generally or a class of them? Second, only if yes, the premium is not Social Security or Medicare wages, which is what makes box 1 legitimately larger than boxes 3 and 5. Nobody has shown this software a plan document for Greenway, so this software does not assume one exists. On the 2025 W-2 that was actually filed, boxes 1, 3 and 5 are identical and box 14 shows HEALTH $30,980.16 - meaning the premium WAS run through FICA. That is either correct because no qualifying plan exists, or an overpayment of about $4,740 of combined FICA. The form cannot tell you which. Ask Nicholas Mullan for that answer and get it in writing.",
+  source: IRC_3121_SOURCE_URL,
+};
+
+/**
+ * THE FUTA TWIN, AND IT IS HERE BECAUSE OF WHAT THE 940 ACTUALLY SAYS.
+ *
+ * Read §3306(b)(2) beside §3121(a)(2) above. Allowing for "workmen's" against
+ * "workman's" in a subparagraph neither form turns on, THE OPERATIVE WORDS ARE
+ * IDENTICAL — same plan-or-system condition, same medical subparagraph (B).
+ *
+ * ONE CONDITION THEREFORE GOVERNS THREE FORMS: the W-2 boxes 3 and 5, the 941
+ * lines 5a and 5c, and the 940 line 3. This matters because Form 940 has a line
+ * built for exactly this — line 4 "Payments exempt from FUTA tax", with
+ * checkbox 4a "Fringe benefits". On the 2025 Form 940 that was filed, line 3
+ * total payments is $332,975.44, LINE 4 IS $0.00, and 4a is unchecked.
+ *
+ * So the same unanswered question has now been answered in the same direction
+ * three times, consistently, on three different forms. Consistency is worth
+ * noting and is not proof: a plan that does not exist and a plan nobody thought
+ * about produce identical paperwork.
+ */
+export const IRC_3306_B_2_MEDICAL_EXCLUSION: GuidanceAuthority = {
+  id: "irc-3306-b-2-medical-exclusion",
+  kind: "statute",
+  cite: "26 U.S.C. §3306(b)(2)",
+  quote:
+    "the amount of any payment (including any amount paid by an employer for insurance or annuities, or into a fund, to provide for any such payment) made to, or on behalf of, an employee or any of his dependents under a plan or system established by an employer which makes provision for his employees generally (or for his employees generally and their dependents) or for a class or classes of his employees (or for a class or classes of his employees and their dependents), on account of— ... medical or hospitalization expenses in connection with sickness or accident disability, or",
+  soWhat:
+    "This is the unemployment-tax version of the same rule, and the words are the same words - the same plan-or-system condition, the same medical carve-out. That is the useful thing to know: you do not have one health-insurance question for Social Security and a different one for unemployment. You have ONE question that decides three forms. If a qualifying plan exists, the premium is outside FICA on the W-2 and the 941 AND outside FUTA on the 940, where it would be reported on line 4 with box 4a 'Fringe benefits' ticked. On the 2025 Form 940 as filed, line 3 is the full $332,975.44, line 4 is $0.00 and 4a is not ticked - the same treatment as the W-2, applied consistently. Consistent is not the same as verified. Whichever way Nicholas Mullan answers the plan question, the answer moves all three forms together, so fix them together or not at all.",
+  source: IRC_3306_SOURCE_URL,
+};
+
+/**
+ * WHY THE IRS'S OWN SUMMARY IS QUOTED LAST AND NOT FIRST.
+ *
+ * This page is where anyone searching "S corp health insurance W-2" lands, and
+ * it is genuinely the clearest statement of the answer. It is ranked BELOW the
+ * two statutes above for two reasons.
+ *
+ * First, weight: it is `irs_guidance`, the agency's view of the law, persuasive
+ * and not binding — while §3121 and §3306 are the law.
+ *
+ * Second, and more practically: THE PAGE STATES THE CONDITION IN A SUBORDINATE
+ * CLAUSE THAT IS EASY TO READ PAST. "...if the payments of premiums are made to
+ * or on behalf of an employee under a plan or system that makes provision for
+ * all or a class of employees". A reader in a hurry takes away "not subject to
+ * FICA" and drops the "if". I did exactly that earlier in this project, and the
+ * result was teaching material that told Michael his boxes ought to differ
+ * without ever asking whether his facts qualified. Quoting the statute forces
+ * the condition to the front, where it belongs.
+ */
+export const IRS_SCORP_MEDICAL_NOT_FICA_OR_FUTA: GuidanceAuthority = {
+  id: "irs-scorp-medical-not-fica-or-futa",
+  kind: "irs_guidance",
+  cite: "IRS, S corporation compensation and medical insurance issues (Health and accident insurance premiums)",
+  quote:
+    "However, these additional wages are not subject to Social Security, or Medicare (FICA), or Unemployment (FUTA) taxes if the payments of premiums are made to or on behalf of an employee under a plan or system that makes provision for all or a class of employees (or employees and their dependents). Therefore, the additional compensation is included in the shareholder-employee's Box 1 (Wages) of Form W-2, Wage and Tax Statement, but is not included in Boxes 3 and 5 of Form W-2.",
+  soWhat:
+    "This is the IRS saying in plain words what the two statutes say in legal words, and it is the paragraph to hand a bookkeeper who argues. Note where the sentence turns: 'not subject to Social Security, or Medicare (FICA), or Unemployment (FUTA) taxes IF the payments... are made... under a plan or system that makes provision for all or a class of employees'. The conclusion in the second sentence - box 1 yes, boxes 3 and 5 no - depends entirely on that 'if'. This is guidance, not law, so it is quoted here beneath the statutes rather than instead of them; and because it is a web page rather than a numbered publication, it is not in the mirrored corpus, which is why the statutes carry the weight in code.",
+  source: IRS_SCORP_MEDICAL_PAGE_URL,
 };
 
 /**
@@ -952,6 +1115,13 @@ export const FORM_W2_OWN_AUTHORITIES: readonly GuidanceAuthority[] = [
   IW2W3_2026_PAYEE_STATEMENT_PENALTY_6722,
   IW2W3_2026_BOX_1_INCLUDES_SCORP_HEALTH,
   IW2W3_2026_BOX_3_SCORP_HEALTH_CARVE_OUT,
+  // books-55. The two statutes the carve-out above defers to, plus the IRS's own
+  // plain-English summary. Registered directly after it, deliberately: the three
+  // records only make sense read together, and the pair immediately above them
+  // is exactly the pair that misleads when read alone.
+  IRC_3121_A_2_MEDICAL_EXCLUSION,
+  IRC_3306_B_2_MEDICAL_EXCLUSION,
+  IRS_SCORP_MEDICAL_NOT_FICA_OR_FUTA,
   IW2W3_2026_BOX_2_FEDERAL_INCOME_TAX,
   IW2W3_2026_BOX_4_CEILING,
   IW2W3_2026_BOX_6_INCLUDES_ADDITIONAL_MEDICARE,

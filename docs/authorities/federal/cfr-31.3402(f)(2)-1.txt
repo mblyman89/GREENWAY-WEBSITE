@@ -1,5 +1,5 @@
 SOURCE TEXT — 26 CFR §31.3402(f)(2)-1
-Retrieved 2026-08-21 from https://www.ecfr.gov/api/renderer/v1/content/enhanced/current/title-26?chapter=I&subchapter=C&part=31&section=31.3402(f)(2)-1
+Retrieved 2026-08-25 from https://www.ecfr.gov/api/renderer/v1/content/enhanced/current/title-26?chapter=I&subchapter=C&part=31&section=31.3402(f)(2)-1
 Work of the United States Government; not subject to copyright (17 U.S.C. §105).
 ==============================================================================
 

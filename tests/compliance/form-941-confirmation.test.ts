@@ -61,9 +61,16 @@ import {
   type FiledForm941WarningCode,
 } from "@/lib/payroll/form-941-confirmation-core";
 import {
+  AS_FILED_2025_BOX_14_HEALTH_CENTS,
+  AS_FILED_2025_BOX_4_CENTS,
+  AS_FILED_2025_BOX_6_CENTS,
+  AS_FILED_2025_SS_WAGES_CENTS,
   FILED_941_FORM_ID,
   FORM_941_CONFIRMATION_LESSONS,
+  assertAsFiledFiguresReconcile,
   assertForm941ConfirmationLessonsAreWellFormed,
+  checkAsFiledFigures,
+  type AsFiledW2Figures,
 } from "@/lib/payroll/form-941-confirmation-lessons";
 import { filedTotalTax, form941Checks } from "@/lib/payroll/form-941-checks";
 import { FORM_941_SOURCE_PATH } from "@/lib/payroll/form-941-authorities";
@@ -845,6 +852,206 @@ describe("books-48: the confirmation lessons teach, and cite real authority", ()
 /* ═══════════════════════════════════════════════════════════════════════════
  * §8  THE SCREEN AND THE SERVER ACTION
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * books-55 — THE GATE THE books-48 DOCBLOCK PROMISED AND NOBODY WROTE.
+ *
+ * The comment above the figures read off Michael's filed 2025 W-2 said "a gate
+ * multiplies these out and checks the answers". There was no gate.
+ * `grep -rn "MICHAEL_2025" --include=*.ts .` returned three lines: the three
+ * declarations. Nothing imported them. Meanwhile the worked example re-typed the
+ * same amounts as prose inside strings, so the repository held two copies of
+ * every figure and read neither.
+ *
+ * That is standing rule 39 exactly — a verifier that cannot see something has
+ * approved it — with an aggravating feature: the false comment actively told the
+ * next reader to stop checking.
+ *
+ * These tests exist so the replacement gate is not the same promise twice.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+describe("books-55: the as-filed figures are recomputed, not merely restated", () => {
+  /** The real figures, and prose that satisfies every branch. */
+  const GOOD: AsFiledW2Figures = {
+    ssWagesCents: AS_FILED_2025_SS_WAGES_CENTS,
+    box4Cents: AS_FILED_2025_BOX_4_CENTS,
+    box6Cents: AS_FILED_2025_BOX_6_CENTS,
+    box14HealthCents: AS_FILED_2025_BOX_14_HEALTH_CENTS,
+  };
+
+  /**
+   * Built from the module's own real lesson, so these negatives are mutations of
+   * the SHIPPING text rather than of a convenient fixture. A fixture would let
+   * the tests pass while the real prose rotted, which is the whole defect class
+   * under repair here.
+   */
+  function realProse(): string {
+    const doubling = FORM_941_CONFIRMATION_LESSONS.find((l) => l.box === "doubling");
+    expect(doubling, "the doubling lesson carries the worked example").toBeDefined();
+    return doubling!.examples.flatMap((e) => [...e.steps, e.answer, e.moral]).join(" \u0001 ");
+  }
+
+  it("passes on the figures and prose the module actually ships", () => {
+    expect(() => assertAsFiledFiguresReconcile()).not.toThrow();
+    expect(() => checkAsFiledFigures(GOOD, realProse())).not.toThrow();
+  });
+
+  it("recomputes box 4 from box 3 at 6.2% and rejects a mistyped cent", () => {
+    /*
+     * This is the check the false comment claimed existed. $53,530.16 x 6.2% is
+     * $3,318.87 and the filed W-2 says $3,318.87 - they agree to the cent, which
+     * is how we know FICA was computed on the FULL amount including the health
+     * premium. That agreement is a FACT ABOUT WHAT WAS FILED, not a blessing of
+     * it; see the separate open-question tests below.
+     */
+    expect(() =>
+      checkAsFiledFigures({ ...GOOD, box4Cents: GOOD.box4Cents + 1 }, realProse()),
+    ).toThrow(/do not reconcile/);
+  });
+
+  it("recomputes box 6 from box 5 at 1.45%", () => {
+    expect(() =>
+      checkAsFiledFigures({ ...GOOD, box6Cents: GOOD.box6Cents - 19 }, realProse()),
+    ).toThrow(/at 1\.45%/);
+  });
+
+  it("refuses a zeroed health premium, because the whole question rests on it", () => {
+    expect(() => checkAsFiledFigures({ ...GOOD, box14HealthCents: 0 }, realProse())).toThrow(
+      /only exists because the premium is a real, positive amount/,
+    );
+  });
+
+  it("catches a figure that disappears from the prose", () => {
+    const gutted = realProse().replaceAll("$30,980.16", "some amount");
+    expect(() => checkAsFiledFigures(GOOD, gutted)).toThrow(/no longer mentions \$30,980\.16/);
+  });
+
+  it("catches a typo in ONE of the seven places a figure is repeated", () => {
+    /*
+     * ═══ THIS TEST EXISTS BECAUSE THE FIRST VERSION OF THE GATE FAILED IT. ═══
+     *
+     * The gate originally asked only whether each figure appeared SOMEWHERE in
+     * the prose. The wage figure appears seven times in this example, so a
+     * mutation that corrupted one copy left six intact and the gate went green
+     * on a lesson that now contradicted itself on screen, in front of Michael.
+     *
+     * "At least one copy is right" is not the property worth having. The fix was
+     * to check in BOTH directions: every derived figure must appear, and every
+     * dollars-and-cents figure in the prose must be derivable. A typo is then
+     * caught as an UNRECOGNISED figure rather than missed as a surviving one.
+     */
+    const oneTypo = realProse().replace("$53,530.16", "$53,530.99");
+    expect(oneTypo, "the mutation must actually change the text").not.toBe(realProse());
+    expect(oneTypo).toContain("$53,530.16"); // six copies still intact
+    expect(() => checkAsFiledFigures(GOOD, oneTypo)).toThrow(/cannot derive/);
+  });
+
+  it("rejects a plausible but underivable figure rather than trusting it", () => {
+    const invented = `${realProse()} And the total came to $9,999.99.`;
+    expect(() => checkAsFiledFigures(GOOD, invented)).toThrow(/\$9,999\.99, which this gate/);
+  });
+
+  it("ignores round statutory thresholds, which are not computed from his payroll", () => {
+    /*
+     * $200,000 (the Additional Medicare threshold) and $7,000 (the FUTA base)
+     * appear in this teaching material and are NOT derivable from Michael's
+     * figures - they are quoted from statute and verified against the mirrored
+     * corpus elsewhere. The gate deliberately matches only amounts written with
+     * cents, so it must not fire on these.
+     */
+    const withThresholds = `${realProse()} Nobody is near $200,000 and FUTA stops at $7,000.`;
+    expect(() => checkAsFiledFigures(GOOD, withThresholds)).not.toThrow();
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * books-55 — A FILED FORM IS EVIDENCE, NEVER AUTHORITY.
+ *
+ * Michael stopped the previous slice to say this, and he was right to:
+ *
+ *   "it was me that produced all the w-2s and w-3 for my business, not my
+ *    grandfather. It's very likely I did it wrong... I want true accuracy, not
+ *    taking my bad form filling and calling it source material."
+ *
+ * The lesson had been asserting, in the indicative, that his box 1 was larger
+ * than his box 3 because the health premium is "carved out of FICA". On the form
+ * he actually filed, boxes 1, 3 and 5 are all $53,530.16 - the premium went
+ * THROUGH FICA. So the teaching material described a form that does not exist
+ * and, worse, presented the outcome as automatic when §3121(a)(2) makes it
+ * conditional on a plan or system covering employees generally or a class of
+ * them. Nobody has produced such a plan for Greenway.
+ *
+ * These tests keep the question open. They are the only assertions in this file
+ * about MEANING rather than arithmetic, and that is deliberate: the arithmetic
+ * can be settled by multiplication, and this cannot be settled by us at all.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+describe("books-55: the lesson states the law and flags the open question", () => {
+  const GOOD: AsFiledW2Figures = {
+    ssWagesCents: AS_FILED_2025_SS_WAGES_CENTS,
+    box4Cents: AS_FILED_2025_BOX_4_CENTS,
+    box6Cents: AS_FILED_2025_BOX_6_CENTS,
+    box14HealthCents: AS_FILED_2025_BOX_14_HEALTH_CENTS,
+  };
+
+  function realProse(): string {
+    const doubling = FORM_941_CONFIRMATION_LESSONS.find((l) => l.box === "doubling");
+    return doubling!.examples.flatMap((e) => [...e.steps, e.answer, e.moral]).join(" \u0001 ");
+  }
+
+  it("names the statute and its condition, not just the conclusion", () => {
+    const prose = realProse();
+    expect(prose).toContain("3121(a)(2)");
+    expect(prose.toLowerCase()).toContain("plan or system");
+  });
+
+  it("refuses prose that drops the statute, leaving a bare conclusion", () => {
+    const stripped = realProse().replaceAll("3121(a)(2)", "the rules");
+    expect(() => checkAsFiledFigures(GOOD, stripped)).toThrow(
+      /must name section 3121\(a\)\(2\) AND the words "plan or system"/,
+    );
+  });
+
+  it("refuses prose that drops the plan-or-system condition", () => {
+    const stripped = realProse().replaceAll("plan or system", "arrangement");
+    expect(() => checkAsFiledFigures(GOOD, stripped)).toThrow(/plan or system/);
+  });
+
+  it('refuses the old claim that the premium is simply "carved out of FICA"', () => {
+    /*
+     * The exact wording that used to ship. Pinned as a string so that if anyone
+     * reintroduces it - including a future me, tidying - the build stops and
+     * says why.
+     */
+    const regressed = `${realProse()} The premium is income-taxable but carved out of FICA.`;
+    expect(() => checkAsFiledFigures(GOOD, regressed)).toThrow(/It is not a plain fact/);
+  });
+
+  it("reports what the form shows without deciding whether it was right", () => {
+    /*
+     * The lesson must tell Michael the premium WAS run through FICA - that is an
+     * observation off his own paperwork and he needs it. What it must not do is
+     * announce a verdict. So: the observation is required to be present, and the
+     * words that would settle the legal question are required to be absent.
+     */
+    const prose = realProse();
+    expect(prose).toContain("$30,980.16");
+    expect(prose).toMatch(/boxes 1, 3 and 5 are all the same/);
+    expect(prose).toMatch(/Nicholas Mullan/);
+    // No verdict. The condition is a fact about Greenway nobody has evidenced.
+    expect(prose.toLowerCase()).not.toMatch(/you (over)?paid too much|was wrong|is incorrect/);
+    expect(prose).toMatch(/Do not change anything on the strength of this note/);
+  });
+
+  it("warns that the same answer moves the 941s and the 940 too", () => {
+    /*
+     * §3121(a)(2) and §3306(b)(2) carry the same plan-or-system condition, so
+     * one answer governs the W-2 boxes 3 and 5, the 941 lines 5a and 5c, and the
+     * 940 line 3. A lesson that fixed only the W-2 would leave two forms
+     * inconsistent with it - which is a worse position than the one he is in.
+     */
+    const prose = realProse();
+    expect(prose).toMatch(/also moves your 941s and your 940/);
+  });
+});
 
 describe("books-48: the confirmation step is actually reachable on the screen", () => {
   const PAGE = read("src/app/admin/books/form-941/page.tsx");

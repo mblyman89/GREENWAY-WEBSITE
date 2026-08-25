@@ -48,7 +48,29 @@ type Target =
       /** Citation label override, for the same reason. */
       readonly label?: string;
     }
-  | { readonly kind: "usc"; readonly section: string };
+  | { readonly kind: "usc"; readonly section: string }
+  /**
+   * A published IRS web page, added books-55.
+   *
+   * WHY A THIRD KIND WAS NEEDED, AND WHY THE ALTERNATIVE WAS WORSE. books-55
+   * quotes the IRS's own page "S corporation compensation and medical insurance
+   * issues", which is the clearest published statement of how §3121(a)(2) and
+   * §3306(b)(2) apply to a shareholder-employee's health premium. It is not a
+   * numbered publication, so the corpus router had nothing to route its cite to,
+   * and `form-w2-authorities.test.ts` failed with "routes to no mirrored file".
+   *
+   * The cheap fix was an entry in `KNOWN_UNMIRRORED_AUTHORITY_IDS`. The comment
+   * on §6051 above already rejects that reasoning in almost these words: that
+   * list "is honest debt, not a parking space", and declaring "cannot check"
+   * about a work of the United States Government sitting behind a public URL
+   * "would be a choice, not a limitation". Worse, this particular quote is the
+   * one Michael is most likely to act on, since it is the paragraph that decides
+   * roughly $4,740 of FICA on his own return.
+   *
+   * `slug` is explicit rather than derived from the URL, because a page title is
+   * not a filename and guessing one would produce names nobody can predict.
+   */
+  | { readonly kind: "irs-page"; readonly slug: string; readonly url: string; readonly label: string };
 
 /** The sources books-19 and books-20 quote. Extend as later slices need more. */
 const TARGETS: readonly Target[] = [
@@ -92,6 +114,36 @@ const TARGETS: readonly Target[] = [
   // penalty engine reported a year-late 1120-S as costing $0.00. The real floor
   // is $195 (as adjusted) per shareholder per month.
   { kind: "usc", section: "6699" },
+  /*
+   * books-57 — §163 AND §6656, MIRRORED RATHER THAN DECLARED UNCHECKABLE.
+   *
+   * Both were invisible until this slice for the same reason: their cites are
+   * written `26 U.S.C. § 163(a)` WITH a space, and both routers demanded `§`
+   * with none, so neither was ever looked for. Fixing the routers turned the
+   * silence into rule 48's loud failure — "in a corpus we MIRROR, but no file
+   * was found" — which is the correct and useful outcome.
+   *
+   * The cheap answer was two lines in KNOWN_UNMIRRORED_AUTHORITY_IDS. The note
+   * on §6051 above already refuses that reasoning in almost these words: that
+   * list "is honest debt, not a parking space", and calling a work of the United
+   * States Government uncheckable while its text sits behind a public URL "would
+   * be a choice, not a limitation". The list's own docblock is blunter still —
+   * "an entry on this list is not neutral. It is a quote nobody is reading."
+   *
+   * That warning has now been paid out FOUR times: books-26 (RCW 49.46.020),
+   * books-37 (RCW 49.52.050), books-55 (§3306) and books-57 (§162 and §6651)
+   * each found a defective quote the moment the source was actually fetched.
+   *
+   * WHY THESE TWO MATTER TO GREENWAY SPECIFICALLY. §163 is the interest
+   * deduction, which is the rule that decides how much of Michael's mortgage
+   * payment is an expense at all — the app splits that payment three ways and
+   * §163(a) is the authority for the split. §6656 is the FAILURE-TO-DEPOSIT
+   * penalty, the one that fires on a late payroll deposit rather than a late
+   * return, and it is tiered (2/5/10/15%) in a way the penalty engine models
+   * day by day. Both are quoted to the owner as reasons for a number.
+   */
+  { kind: "usc", section: "163" },
+  { kind: "usc", section: "6656" },
   // books-25 — hiring paperwork: the W-4 and the I-9.
   //
   // Michael asked the system to teach him how to answer an employee who asks
@@ -159,9 +211,100 @@ const TARGETS: readonly Target[] = [
   // duty attaches to "every person required to deduct and withhold" — which is
   // why an S corporation paying its owner-employee cannot opt out of it.
   { kind: "usc", section: "6051" },
+  // books-55 — §3121 AND §3306, THE TWO DEFINITIONS OF "WAGES" THAT DECIDE
+  // WHETHER A SHAREHOLDER-EMPLOYEE'S HEALTH PREMIUM IS TAXED TWICE.
+  //
+  // Mirrored because Michael told me, in as many words, that HE prepared the
+  // 2025 W-2s and the W-3 and that it is "very likely I did it wrong" — and
+  // asked that the lessons be built "based on legal authoritative text rather
+  // than trusting my bad accounting."
+  //
+  // Until this slice the codebase had no statute for the rule it was teaching.
+  // `form-w2-authorities.ts` quoted the INSTRUCTIONS' box-3 carve-out, which
+  // says the premium goes in box 1 "but only if not excludable under section
+  // 3121(a)(2)(B)" — a cross-reference to a statute that was not on disk. So
+  // the operative condition, the part that decides the answer, was the one
+  // part no script could check. That is exactly the hole standing rule 24
+  // exists to close, and it was hiding inside a quote that itself passed.
+  //
+  // §3121(a)(2)(B) is the FICA side: Social Security and Medicare, boxes 3
+  // through 6 of the W-2 and lines 5a/5c of the 941.
+  { kind: "usc", section: "3121" },
+  // §3306(b)(2)(B) is the FUTA side, and it is here because the same premium
+  // appears a THIRD time on Form 940 line 3 with line 4a "Fringe benefits"
+  // unchecked. Mirroring only the FICA statute would have taught two thirds of
+  // the question and left the unemployment third resting on an IRS web page.
+  // The two provisions are near-identical in wording, which is itself the
+  // teaching point: one condition governs three forms.
+  { kind: "usc", section: "3306" },
+  // books-55 — the IRS's plain-language application of both statutes above to an
+  // S corporation shareholder-employee. Mirrored rather than exempted; see the
+  // note on the "irs-page" kind for why the exemption was refused.
+  {
+    kind: "irs-page",
+    slug: "irs-scorp-compensation-and-medical-insurance",
+    url: "https://www.irs.gov/businesses/small-businesses-self-employed/s-corporation-compensation-and-medical-insurance-issues",
+    label: "IRS, S corporation compensation and medical insurance issues",
+  },
 ];
 
+/**
+ * Mirror only the targets a slice actually needs.
+ *
+ * Every run before books-55 re-fetched all forty sources and rewrote all forty
+ * files. That is fine the first time and harmful afterwards: a slice about the
+ * FICA treatment of health premiums would have shown up in review as forty
+ * changed authority files, with the two that mattered buried among thirty-eight
+ * whose only difference was a new "Retrieved" date. Reviewing a diff nobody
+ * can read is not reviewing it.
+ *
+ * Usage:  npx tsx scripts/fetch-federal-authority-text.ts --only=usc-3121.txt,usc-3306.txt
+ *
+ * With no `--only` the behaviour is exactly as before, so re-mirroring the
+ * whole corpus is still one command.
+ */
+function selectedTargets(argv: readonly string[]): readonly Target[] {
+  const flag = argv.find((a) => a.startsWith("--only="));
+  if (flag === undefined) return TARGETS;
+  const wanted = new Set(
+    flag
+      .slice("--only=".length)
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  );
+  if (wanted.size === 0) {
+    throw new Error("--only was given with no filenames; refusing to fetch nothing silently");
+  }
+  const picked = TARGETS.filter((t) => wanted.has(fileNameFor(t)));
+  // A typo'd filename must not quietly mirror less than asked. Naming a file
+  // that is not a target is a mistake, and a mistake that prints "wrote 1
+  // file" and exits 0 is the kind standing rule 39 is about.
+  const missing = [...wanted].filter((w) => !TARGETS.some((t) => fileNameFor(t) === w));
+  if (missing.length > 0) {
+    throw new Error(
+      `--only named ${missing.length} file(s) that are not declared targets: ${missing.join(", ")}. ` +
+        `Add the target to TARGETS first.`,
+    );
+  }
+  return picked;
+}
+
+/**
+ * The on-disk filename for a target.
+ *
+ * Extracted from `main` in books-55 so `--only` and the writer cannot disagree
+ * about what a target is called. When two places compute the same name from the
+ * same shape, one of them eventually stops matching the other.
+ */
+function fileNameFor(t: Target): string {
+  if (t.kind === "cfr") return t.file ?? `cfr-${t.section}.txt`;
+  if (t.kind === "irs-page") return `${t.slug}.txt`;
+  return `usc-${t.section}.txt`;
+}
+
 function urlFor(t: Target): string {
+  if (t.kind === "irs-page") return t.url;
   if (t.kind === "cfr") {
     const title = t.title ?? 26;
     const part = t.part ?? "1";
@@ -230,7 +373,9 @@ async function main(): Promise<void> {
 
   const stamp = new Date().toISOString().slice(0, 10);
 
-  for (const t of TARGETS) {
+  const targets = selectedTargets(process.argv.slice(2));
+
+  for (const t of targets) {
     const url = urlFor(t);
     const res = await fetch(url);
     if (!res.ok) {
@@ -243,9 +388,12 @@ async function main(): Promise<void> {
       );
     }
     const label =
-      t.kind === "cfr" ? (t.label ?? `26 CFR §${t.section}`) : `26 U.S.C. §${t.section}`;
-    const name =
-      t.kind === "cfr" ? (t.file ?? `cfr-${t.section}.txt`) : `usc-${t.section}.txt`;
+      t.kind === "cfr"
+        ? (t.label ?? `26 CFR §${t.section}`)
+        : t.kind === "irs-page"
+          ? t.label
+          : `26 U.S.C. §${t.section}`;
+    const name = fileNameFor(t);
     const header =
       `SOURCE TEXT — ${label}\n` +
       `Retrieved ${stamp} from ${url}\n` +

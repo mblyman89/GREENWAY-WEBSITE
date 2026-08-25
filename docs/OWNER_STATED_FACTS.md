@@ -113,6 +113,41 @@ insurance plan and paying their premium for them as their compensation."*
   3121(a)(2)(B)"* — and `form-w2-authorities.ts` already records that reading box
   1 and box 3 together is the trap. Whether the FICA treatment shown is correct
   depends on facts I do not have. **This is a question for Nicholas Mullan.**
+- **books-55 UPGRADE — WHO PREPARED THESE, AND WHAT THE STATUTE ACTUALLY SAYS.**
+  Michael told me directly that **he** prepared the 2025 W-2s and the W-3, not
+  his grandfather, and that *"it's very likely I did it wrong."* That changes
+  nothing about the figures above and everything about their status: they are
+  evidence of what was filed and are not a source of law. Standing rule 109 now
+  says so structurally, and the three constants in
+  `form-941-confirmation-lessons.ts` were renamed `AS_FILED_*` to enforce it.
+  The cross-reference the box 3 instruction defers to is no longer a dead end.
+  **26 U.S.C. §3121 and §3306 are now mirrored** at
+  `docs/authorities/federal/usc-3121.txt` and `usc-3306.txt`, so the operative
+  words are machine-verified rather than paraphrased:
+
+  > *"...under a plan or system established by an employer which makes provision
+  > for his employees generally (or for his employees generally and their
+  > dependents) or **for a class or classes of his employees**..."*
+
+  **That is a condition, not a description.** The FICA exclusion is available
+  only if such a plan or system exists. Nobody has shown this software a plan
+  document, a written policy, or a defined class of employees for Greenway, so
+  the software does not assume one — and equally does not assume there is none.
+  What is filed is consistent with **either** answer:
+
+  | If a qualifying plan or system… | Then the filed treatment is… | And the exposure is… |
+  |---|---|---|
+  | **exists** | overstated — premium should have been outside boxes 3 & 5, outside 941 lines 5a/5c, and on 940 line 4 with 4a ticked | 30,980.16 × 15.3% = **4,739.96** of combined FICA overpaid, plus the FUTA effect, plus Teri's 11,029.32 on the same footing |
+  | **does not exist** | **correct as filed** — nothing to change | none |
+
+  **The same condition appears verbatim in §3306(b)(2), so one answer governs
+  three forms** — the W-2, the four 941s and the 940. The 2025 Form 940 as filed
+  reports line 3 total payments of 332,975.44 with **line 4 "Payments exempt from
+  FUTA tax" = 0.00 and checkbox 4a "Fringe benefits" unticked**, i.e. the same
+  treatment applied consistently. Consistency is worth noting and is not proof:
+  a plan that does not exist and a plan nobody considered produce identical
+  paperwork. **Get the answer from Nicholas Mullan in writing, once, and apply
+  it to all three forms together or to none of them.**
 - **THE 2025 W-2 SET FOOTS TO THE W-3 EXACTLY**, which is what makes the reading
   above trustworthy rather than a guess at OCR output. Cross-footed by column
   position, not by eye:

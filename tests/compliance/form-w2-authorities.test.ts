@@ -128,9 +128,51 @@ function normalise(s: string): string {
 const INSTRUCTIONS = normalise(readFileSync(join(process.cwd(), FORM_W2_SOURCE_PATH), "utf8"));
 const STATUTE = normalise(readFileSync(join(process.cwd(), IRC_6051_SOURCE_PATH), "utf8"));
 
-/** The corpus an authority's quote must be found in, chosen the way the verifier chooses. */
+/**
+ * ═══ books-55 REWROTE THIS, AND THE OLD VERSION IS WORTH KEEPING IN VIEW. ═══
+ *
+ * It used to be one line:
+ *
+ *   return cite.startsWith("26 U.S.C.") ? STATUTE : INSTRUCTIONS;
+ *
+ * Two corpora, hardcoded, because when books-43 wrote it there were exactly two
+ * and both were §6051. books-55 added quotes from §3121 and §3306 — and this
+ * function cheerfully checked them against §6051, where of course they are not
+ * found. Five tests in this file failed at once with messages like "segment not
+ * found" and "expected ... to contain 'usc-6051.txt'".
+ *
+ * THE FAILURES WERE THE GOOD OUTCOME. Note which way this broke: it did not
+ * skip the new quotes, it checked them against the WRONG BOOK and said so
+ * loudly. The comment above these constants had made that choice deliberately —
+ * "'check against the wrong file' fails loudly while 'skip' does not" — and
+ * two slices later that decision is what stopped three unverified statutory
+ * quotes from shipping behind a green tick. Had the original taken the softer
+ * option, this file would still be reporting 28 verified authorities.
+ *
+ * The replacement stops hardcoding the corpus list. It asks the REAL router
+ * where a cite goes, reads that file, and caches it. So the next slice to quote
+ * a fourth statute needs no edit here — and if the router cannot place a cite,
+ * that is a hard failure rather than a default (rule 62d: never invent a
+ * default; the old `: INSTRUCTIONS` fallback was exactly that).
+ */
+const CORPUS_CACHE = new Map<string, string>();
+
 function corpusFor(cite: string): string {
-  return cite.startsWith("26 U.S.C.") ? STATUTE : INSTRUCTIONS;
+  const routed = sourceFileFor(cite);
+  if (routed === null) {
+    throw new Error(
+      `form-w2-authorities.test: cite "${cite}" routes to no mirrored corpus file, so there is ` +
+        `nothing to verify the quote against. This function used to fall back to the W-2 ` +
+        `instructions for any cite it did not recognise, which meant an unroutable statute cite ` +
+        `was silently checked against the wrong book. Add a router entry in ` +
+        `scripts/verify-verbatim-quotes.ts, or mirror the source.`,
+    );
+  }
+  const cached = CORPUS_CACHE.get(routed);
+  if (cached !== undefined) return cached;
+  const text = normalise(readFileSync(routed, "utf8"));
+  CORPUS_CACHE.set(routed, text);
+  return text;
 }
 
 describe("books-43: both W-2 corpora are real and non-trivial", () => {
@@ -224,16 +266,43 @@ describe("books-43: every W-2 quote is verbatim", () => {
    * instruction cites must reach the instructions.
    */
   it("routes statute cites and instruction cites to different files", () => {
+    /*
+     * books-55 GENERALISED THIS. It used to assert that every "26 U.S.C." cite
+     * routes to `usc-6051.txt`, which was true when §6051 was the only statute
+     * quoted here and became false the moment §3121 and §3306 were added. The
+     * assertion was really two claims wearing one coat: "statutes go to the
+     * statute corpus" (durable) and "the statute is §6051" (an inventory fact
+     * that changes every time the module learns something).
+     *
+     * Now it derives the expected filename FROM THE CITE - §3121 must land in
+     * usc-3121.txt, not merely in some file under federal/ - so it still fails
+     * if the router truncates a section number, which is the books-20 §280E bug
+     * this test exists to prevent.
+     */
     for (const a of FORM_W2_OWN_AUTHORITIES) {
       const routed = sourceFileFor(a.cite) as string;
-      if (a.cite.startsWith("26 U.S.C.")) {
-        expect(routed, `${a.id}`).toContain("usc-6051.txt");
-      } else {
-        expect(a.cite, `${a.id} cite must be routable`).toMatch(
-          /^IRS Instructions for Forms W-2 and W-3 \(2026\), /,
+      const usc = /^26 U\.S\.C\. §(\d+[A-Z]?)/.exec(a.cite);
+      if (usc) {
+        expect(routed, `${a.id} must reach the statute it cites, not another statute`).toContain(
+          `usc-${usc[1]}.txt`,
         );
-        expect(routed, `${a.id}`).toContain("irs-instructions-w-2-w-3-2026.txt");
+        continue;
       }
+      if (a.cite.startsWith("IRS, ")) {
+        /*
+         * An IRS WEB PAGE rather than a numbered publication. books-55 mirrored
+         * one - the S corporation medical insurance page - instead of exempting
+         * it from verification, because the alternative was to leave the single
+         * quote Michael is most likely to act on as the only unchecked one.
+         */
+        expect(routed, `${a.id} routes to a mirrored page`).toMatch(/^.+\.txt$/);
+        expect(routed, `${a.id}`).not.toContain("irs-instructions-w-2-w-3-2026.txt");
+        continue;
+      }
+      expect(a.cite, `${a.id} cite must be routable`).toMatch(
+        /^IRS Instructions for Forms W-2 and W-3 \(2026\), /,
+      );
+      expect(routed, `${a.id}`).toContain("irs-instructions-w-2-w-3-2026.txt");
     }
   });
 
@@ -356,7 +425,76 @@ describe("books-43: every W-2 quote is verbatim", () => {
 
 describe("books-43: the authority set is complete and correctly weighted", () => {
   it("carries every authority this slice researched", () => {
-    expect(FORM_W2_OWN_AUTHORITIES.length).toBe(28);
+    /*
+     * books-43 pinned 28. books-55 added three - §3121(a)(2), §3306(b)(2) and
+     * the IRS S-corporation medical insurance page - and the pin failed, which
+     * is the pin working.
+     *
+     * A RATCHET RATHER THAN AN EXACT COUNT, deliberately. An exact figure has to
+     * be edited by every slice that learns something, and a number that is
+     * routinely edited stops being read: the edit becomes reflex. The property
+     * actually worth defending is that authorities are never LOST, and a floor
+     * defends exactly that while staying silent about growth. The named checks
+     * below are what pin the specific records.
+     */
+    expect(FORM_W2_OWN_AUTHORITIES.length).toBeGreaterThanOrEqual(31);
+  });
+
+  /**
+   * books-55. THE THREE RECORDS THAT MAKE THE HEALTH-PREMIUM RULE CHECKABLE.
+   *
+   * Pinned by id rather than by count, because losing any one of them
+   * reintroduces a specific defect this slice repaired:
+   *
+   *   - drop §3121(a)(2) and the box 3 instruction's "only if not excludable
+   *     under section 3121(a)(2)(B)" points at nothing again - the condition
+   *     that decides the answer becomes the one part no script can check;
+   *   - drop §3306(b)(2) and the 940 side of the same question loses its law,
+   *     leaving Form 940 line 4a resting on a web page;
+   *   - drop the IRS page and the plain-English statement Michael would actually
+   *     read is gone from the panel.
+   */
+  it("carries the statutes and guidance behind the S-corp health premium", () => {
+    for (const id of [
+      "irc-3121-a-2-medical-exclusion",
+      "irc-3306-b-2-medical-exclusion",
+      "irs-scorp-medical-not-fica-or-futa",
+    ]) {
+      expect(
+        FORM_W2_OWN_AUTHORITIES.some((a) => a.id === id),
+        `${id} has gone; the premium rule loses the source that makes it checkable`,
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * books-55. THE CONDITION MUST SURVIVE IN THE QUOTED TEXT ITSELF.
+   *
+   * §3121(a)(2) does not exclude medical payments. It excludes medical payments
+   * made "under a plan or system established by an employer which makes
+   * provision for his employees generally... or for a class or classes of his
+   * employees". A quote trimmed to the medical subparagraph alone would read as
+   * an unconditional exclusion and would be worse than no quote, because it
+   * would carry a verbatim tick while teaching the opposite of the statute.
+   *
+   * This is the defect Michael caught in prose form, moved into a gate.
+   */
+  it("quotes the plan-or-system condition, not just the medical carve-out", () => {
+    for (const id of ["irc-3121-a-2-medical-exclusion", "irc-3306-b-2-medical-exclusion"]) {
+      const a = FORM_W2_OWN_AUTHORITIES.find((x) => x.id === id);
+      expect(a, id).toBeDefined();
+      expect(a!.quote, `${id} must carry the condition`).toContain("under a plan or system");
+      expect(a!.quote, `${id} must carry the class-of-employees limb`).toContain(
+        "class or classes of his employees",
+      );
+      expect(a!.quote, `${id} must carry the medical subparagraph`).toContain(
+        "medical or hospitalization expenses",
+      );
+      // And the soWhat must not turn a condition into a conclusion.
+      expect(a!.soWhat.toLowerCase(), `${id} soWhat must keep the question open`).toMatch(
+        /if |only if|question|depends/,
+      );
+    }
   });
 
   it("has unique ids", () => {
@@ -374,9 +512,39 @@ describe("books-43: the authority set is complete and correctly weighted", () =>
   it("classifies the statute as statute and the instructions as IRS guidance", () => {
     expect(IRC_6051_A_REQUIREMENT.kind).toBe("statute");
     expect(IRC_6051_A_ITEMS.kind).toBe("statute");
+    /*
+     * books-55 MADE THE THIRD CASE EXPLICIT INSTEAD OF LETTING IT FALL THROUGH.
+     *
+     * The old ternary was "starts with 26 U.S.C. ? statute : irs_guidance", so
+     * when this slice added a cite beginning "IRS, S corporation compensation
+     * and medical insurance issues", it landed in the else branch and was
+     * required to be `irs_guidance` - which it is. THE TEST PASSED FOR THE WRONG
+     * REASON. It passed because the default happened to be right, not because
+     * anything had classified the new shape.
+     *
+     * That is the same defect as a missing case in a switch that returns a
+     * plausible value: it is invisible exactly until the day the default is
+     * wrong. So each of the three cite shapes is now named, and an unrecognised
+     * shape FAILS rather than inheriting a guess (rule 62d).
+     */
     for (const a of FORM_W2_OWN_AUTHORITIES) {
-      const expected = a.cite.startsWith("26 U.S.C.") ? "statute" : "irs_guidance";
-      expect(a.kind, `${a.id}`).toBe(expected);
+      if (a.cite.startsWith("26 U.S.C.")) {
+        expect(a.kind, `${a.id}: a statute cite must be weighted as statute`).toBe("statute");
+      } else if (a.cite.startsWith("IRS Instructions for Forms W-2 and W-3")) {
+        expect(a.kind, `${a.id}: form instructions are the agency's view, not law`).toBe(
+          "irs_guidance",
+        );
+      } else if (a.cite.startsWith("IRS, ")) {
+        expect(a.kind, `${a.id}: a published IRS page is guidance, not law`).toBe("irs_guidance");
+      } else {
+        throw new Error(
+          `form-w2-authorities.test: ${a.id} has cite shape "${a.cite}", which this test does ` +
+            `not recognise, so its WEIGHT is unchecked. Weight is what the screen renders as ` +
+            `"statute" or "IRS guidance" beside the quote - getting it wrong misstates to Michael ` +
+            `how much the source binds him. Add the shape here deliberately rather than letting ` +
+            `it inherit a default.`,
+        );
+      }
     }
   });
 
@@ -412,9 +580,34 @@ describe("books-43: the authority set is complete and correctly weighted", () =>
    * than a broken one because nobody would notice.
    */
   it("links each quote to the document it was actually taken from", () => {
+    /*
+     * books-55 DERIVED THE EXPECTED URL FROM THE CITE instead of hardcoding one
+     * statute. The previous form said "26 U.S.C. cites link to the §6051 URL",
+     * so once §3121 was added the test demanded that a §3121 quote link to
+     * §6051 - it would have enforced precisely the defect its own docblock warns
+     * about: "a working link to the wrong text, which is worse than a broken one
+     * because nobody would notice."
+     *
+     * Cornell mirrors one page per section, so the section number in the cite
+     * IS the last path segment of the URL. Deriving it means a fourth statute
+     * needs no edit here and a mismatched link still fails.
+     */
     for (const a of FORM_W2_OWN_AUTHORITIES) {
-      const expected = a.cite.startsWith("26 U.S.C.") ? IRC_6051_SOURCE_URL : FORM_W2_SOURCE_URL;
-      expect(a.source, `${a.id}`).toBe(expected);
+      const usc = /^26 U\.S\.C\. §(\d+[A-Z]?)/.exec(a.cite);
+      if (usc) {
+        expect(a.source, `${a.id}: a §${usc[1]} quote must link to §${usc[1]}`).toBe(
+          `https://www.law.cornell.edu/uscode/text/26/${usc[1]}`,
+        );
+      } else if (a.cite.startsWith("IRS, ")) {
+        // A published IRS page links to the page. Asserted as a prefix because
+        // irs.gov path segments are not derivable from a page title.
+        expect(a.source, `${a.id}: an IRS page quote must link to irs.gov`).toMatch(
+          /^https:\/\/www\.irs\.gov\//,
+        );
+        expect(a.source, `${a.id}`).not.toBe(FORM_W2_SOURCE_URL);
+      } else {
+        expect(a.source, `${a.id}`).toBe(FORM_W2_SOURCE_URL);
+      }
     }
     expect(FORM_W2_SOURCE_URL).toBe("https://www.irs.gov/pub/irs-pdf/iw2w3.pdf");
     expect(IRC_6051_SOURCE_URL).toBe("https://www.law.cornell.edu/uscode/text/26/6051");
@@ -478,14 +671,32 @@ describe("books-43: the authority set is complete and correctly weighted", () =>
   });
 
   /**
-   * THE COUNT THAT WOULD HAVE CAUGHT DEFECT 1 ON ITS OWN: 28 + 7 + 6 = 41.
-   * The probe that found the bug returned 40.
+   * THE COUNT THAT WOULD HAVE CAUGHT DEFECT 1 ON ITS OWN: own + 7 + 6.
+   * The probe that found the bug returned one fewer than the sum.
+   *
+   * books-55 REPLACED THE LITERAL WITH THE ARITHMETIC. It used to read
+   * `toBe(41)` beside `toBe(28)` for the own-count, so adding three authorities
+   * failed here with "expected 44 to be 41" - a message that tells you a number
+   * moved and nothing about whether anything is wrong.
+   *
+   * The property this test was actually built to defend is a CROSS-FOOT: the
+   * one call must return every own authority plus every borrowed one, with
+   * nothing lost to deduplication. Computing the expected total from its three
+   * parts defends that at any size, and it still fails for the original bug -
+   * a borrowed id silently dropped makes the sum disagree by one, exactly as it
+   * did when the probe returned 40.
    */
   it("returns own plus borrowed, deduplicated, from one call", () => {
     const all = formW2Authorities();
     expect(FORM_W2_REUSED_YTD_AUTHORITY_IDS.length).toBe(7);
     expect(FORM_W2_REUSED_IDENTITY_AUTHORITY_IDS.length).toBe(6);
-    expect(all.length).toBe(41);
+    const expectedTotal =
+      FORM_W2_OWN_AUTHORITIES.length +
+      FORM_W2_REUSED_YTD_AUTHORITY_IDS.length +
+      FORM_W2_REUSED_IDENTITY_AUTHORITY_IDS.length;
+    expect(all.length, `own ${FORM_W2_OWN_AUTHORITIES.length} + 7 borrowed YTD + 6 borrowed identity`).toBe(
+      expectedTotal,
+    );
     const ids = all.map((a) => a.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of [
@@ -703,7 +914,20 @@ describe("books-43: elision discipline", () => {
   it("uses the same elision marker the verifier splits on", () => {
     expect(FORM_W2_ELISION).toBe(" ... ");
     const usesElision = FORM_W2_OWN_AUTHORITIES.filter((a) => a.quote.includes("..."));
-    expect(usesElision.length).toBe(2);
+    /*
+     * books-43 had two elided quotes; books-55 added two more, both eliding the
+     * same thing for the same reason. §3121(a)(2) and §3306(b)(2) each have a
+     * preamble stating the plan-or-system condition, then subparagraphs (A)
+     * sickness, (B) medical, (C) death. The premium rule is the preamble plus
+     * (B); (A) and (C) are about workers' compensation and group-term life and
+     * would only pad the quote. So the elision joins the preamble to (B).
+     *
+     * A FLOOR RATHER THAN AN EXACT COUNT. What matters is that elisions use the
+     * marker the verifier splits on and never a unicode ellipsis - which the
+     * loop below checks for every one of them, however many there are. Pinning
+     * the exact number just guarantees an edit per slice.
+     */
+    expect(usesElision.length).toBeGreaterThanOrEqual(4);
     for (const a of usesElision) {
       expect(a.quote, `${a.id} must not use a unicode ellipsis`).not.toContain("\u2026");
     }

@@ -1,0 +1,162 @@
+SOURCE NOTE — READ THIS FIRST
+═══════════════════════════════════════════════════════════════════════════════
+
+This file mirrors the two PLAIN-TEXT SAMPLE FILES that the Washington State
+Employment Security Department prints on page 3 of:
+
+    Paid Leave & WA Cares — .CSV File Specifications (v8)
+    "Updated May 2024"
+    distributed as: Paid-Leave-and-WA-Cares-CSV-File-Specifications-v8.1-2025.08.pdf
+
+WHY THIS FILE EXISTS SEPARATELY FROM
+`esd-paid-leave-wa-cares-csv-spec-v8.txt`:
+
+The prose of the specification extracts as text. These two samples DO NOT. On
+page 3, under the sentences
+
+    "If opened in a plain text editor, your final .csv file should look like
+     this:"
+
+and
+
+    "Some programs might include quotation marks as text qualifiers when
+     exporting as a .csv file. This file format is acceptable and will look like
+     this:"
+
+the document places SCREENSHOTS — bitmap images of a Notepad window — not text.
+`pdftotext` therefore emits blank space at both points, which is exactly what the
+mirrored prose file shows.
+
+That matters more than it sounds. These two images are the only place in the
+entire specification where ESD shows the FINISHED BYTES: the actual
+comma-delimited line, with its actual delimiters, in its actual field order. The
+column-by-column table earlier in the document is laid out with whitespace
+padding, so it cannot tell you where the commas go or whether an empty field is
+written as `,,` or dropped.
+
+So the images were extracted with `pdfimages -png -f 3 -l 3`, enlarged 4× with
+Lanczos resampling, and read. The transcription below is that reading.
+
+HONEST LIMITATION, STATED PLAINLY (standing rule: never guess, never assume):
+This is a TRANSCRIPTION OF AN IMAGE, not an extraction of text. It is evidence of
+the highest quality available for this content — it is ESD's own picture of its
+own file — but a human transcribing pixels is a weaker instrument than
+`pdftotext`. The specific characters that a transcription could plausibly get
+wrong are recorded at the bottom of this file, together with which of them are
+corroborated by the extractable prose elsewhere in the document.
+
+The extracted images are retained at `formstudy/esdcsv/p3-006.png` (unquoted
+sample) and `formstudy/esdcsv/p3-007.png` (quoted sample) so any future reader
+can check this transcription against the source rather than trusting it.
+
+═══════════════════════════════════════════════════════════════════════════════
+SAMPLE 1 — the unquoted form
+   Window title: "*Q3 2023 Wage Report - Notepad"
+   Status bar:   "Ln 6, Col 1"   "100%"   "Windows (CRLF)"   "ANSI"
+═══════════════════════════════════════════════════════════════════════════════
+
+SSN,LastName,FirstName,MiddleInitial,Hours,Wages,WACaresExempt(Y/N),DOB (MMDDYYYY)
+123-33-1234,Doe,John,B,1200,45322.22,Y,01011990
+034-35-4567,Smith,Jane,,4,70.00,N,12112000
+143556786,O’Brian,Robert,H,1300,5000.50,,08181989
+
+═══════════════════════════════════════════════════════════════════════════════
+SAMPLE 2 — the quoted form, which ESD says is "acceptable"
+   Window title: "*Q3 2023 Wage Report - Notepad"
+   Status bar:   "Ln 6, Col 1"   "100%"   "Windows (CRLF)"   "ANSI"
+═══════════════════════════════════════════════════════════════════════════════
+
+"SSN","LastName","FirstName","MiddleInitial","Hours","Wages","WACaresExempt(Y/N)","DOB (MMDDYYYY)"
+"123-33-1234","Doe","John","B","1200","45322.22","Y","01011990"
+"034-35-4567","Smith","Jane","","4","70.00","N","12112000"
+"143556786","O’Brian","Robert","H","1300","5000.50","","08181989"
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT THESE SAMPLES SETTLE THAT THE PROSE DOES NOT
+═══════════════════════════════════════════════════════════════════════════════
+
+1. THE HEADER ROW, AS ONE STRING, WITH ITS INCONSISTENT SPACING.
+   `...,Wages,WACaresExempt(Y/N),DOB (MMDDYYYY)`
+   `WACaresExempt(Y/N)` has no internal spaces. `DOB (MMDDYYYY)` has one, before
+   the parenthesis. That is inconsistent, and it is what ESD prints in BOTH
+   samples and in the padded table. It must not be tidied.
+
+2. AN EMPTY OPTIONAL FIELD IS WRITTEN AS AN EMPTY FIELD, NOT DROPPED.
+   Row 2 has no middle initial and reads `...,Smith,Jane,,4,70.00,...` — two
+   commas together. Row 3 has no WA Cares value and reads
+   `...,5000.50,,08181989` — again `,,`. Every row therefore carries seven commas
+   and eight fields. This corroborates the extractable prose on page 4: "All
+   columns must have a label, even if there is no data in that column."
+
+3. THE ZERO-OMISSION RULE IS `AND`, NOT `OR`.
+   Row 2 is a real filed row with 4 hours and 70.00 in wages. The prose says "Do
+   not include employees who have zero hours and zero wages." A reader who
+   implemented that as OR would still keep row 2 — but the sample also shows the
+   spec is comfortable with tiny values, and the prose separately says "If there
+   are no hours to report enter '0'", which only makes sense if a row with zero
+   hours and non-zero wages is FILED rather than dropped.
+
+4. DOB IS WRITTEN UNPUNCTUATED IN THE FINISHED FILE — ALL THREE ROWS.
+   `01011990`, `12112000`, `08181989`.
+   THIS IS THE CORRECTION THAT MATTERS MOST. The padded table earlier in the
+   document shows row 2's date of birth as `12/11/2000`, with slashes, and that
+   led to an earlier reading that the sample was "inconsistent" and therefore
+   that all three punctuation styles were equally expected in output. The
+   finished-bytes samples show otherwise: in the actual .csv, row 2 is
+   `12112000`. The slashed form in the table demonstrates an ACCEPTED INPUT
+   style, per the prose "Format DOB using MMDDYYYY or MM/DD/YYY or MM-DD-YYYY";
+   the unpunctuated form is what the file itself contains.
+
+5. NO TOTALS ROW, AND NO TRAILING BLANK-FIELD ROW.
+   Both samples end with the last employee. Corroborated by the prose: "Ensure
+   there are no column totals in the file." The status bar reads "Ln 6, Col 1",
+   which is consistent with a cursor resting after a final newline below four
+   content lines; it is NOT evidence of a fifth data row, and is not treated as
+   any.
+
+6. THE SSN COLUMN MIXES HYPHENATED AND BARE NINE-DIGIT FORMS.
+   Rows 1 and 2 are hyphenated; row 3 is `143556786`, bare. Corroborated by the
+   prose: "9-digit number, hyphens are optional. Format: ######### or
+   ###-##-####." Note that row 2's SSN, `034-35-4567`, begins with a zero and is
+   hyphenated — which is precisely the protection the "How to fix common errors"
+   page describes when it warns that "When an SSN starts with zeros, the zeros
+   are sometimes removed."
+
+7. CRLF LINE ENDINGS AND ANSI ENCODING ARE WHAT ESD DEPICTS.
+   The Notepad status bar in both samples reads "Windows (CRLF)" and "ANSI". The
+   specification's PROSE never states a line-ending or encoding requirement. So
+   this is depicted, not required, and is recorded here as depiction only.
+
+═══════════════════════════════════════════════════════════════════════════════
+TRANSCRIPTION RISK REGISTER — what a pixel-reading could get wrong
+═══════════════════════════════════════════════════════════════════════════════
+
+Recorded so that a later reader knows exactly how much to trust each character.
+
+(a) THE APOSTROPHE IN `O’Brian`. Transcribed as U+2019 RIGHT SINGLE QUOTATION
+    MARK, because the glyph is unmistakably curled in the 4× enlargement. This is
+    CORROBORATED INDEPENDENTLY: the padded table on page 2 extracts as text, and
+    that text contains U+2019 in `O’Brian`. Two independent instruments agree.
+    Note the irony that a real Notepad file saved as ANSI is an odd place for a
+    curly apostrophe — this is a document produced in Word, so the sample is
+    almost certainly a mock-up rather than a genuine screenshot. That does not
+    change what ESD published.
+
+(b) `1200` vs `1,200` IN HOURS. Transcribed without a separator. Corroborated by
+    the prose instruction to uncheck "Use 1000 Separator".
+
+(c) `45322.22` — the digits are legible at 4× and match the padded table on page
+    2 exactly. Corroborated.
+
+(d) `12112000` vs `12/11/2000` IN ROW 2. This is the one character sequence where
+    the image and the padded table DISAGREE, and it is the disagreement that
+    finding 4 above turns on. The image is the authority for what the FILE
+    contains, because that is what the image is captioned as showing: "If opened
+    in a plain text editor, your final .csv file should look like this". Both
+    readings are recorded rather than one being suppressed.
+
+(e) WHETHER ROW 3'S WA CARES FIELD IS EMPTY OR A SPACE. Transcribed as empty
+    (`,,`). A single space is not distinguishable from empty at this resolution.
+    Treated as empty because the prose permits "leave blank", and because the
+    quoted sample renders it as `""` — an empty string, with no space between the
+    quotation marks — which is the stronger evidence of the two.

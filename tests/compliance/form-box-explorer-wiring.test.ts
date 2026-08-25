@@ -62,7 +62,7 @@ const ROOT = process.cwd();
  * Held as DATA rather than as a list of hand-written `it` blocks (rule 43), so
  * adding a form to the teaching system means adding one row here.
  */
-const TAUGHT_SCREENS: readonly {
+interface TaughtScreen {
   readonly label: string;
   readonly page: string;
   readonly lessonsExport: string;
@@ -72,7 +72,9 @@ const TAUGHT_SCREENS: readonly {
    * has to be deleted when the gap is closed.
    */
   readonly checksMissingBecause: string | null;
-}[] = [
+}
+
+const TAUGHT_SCREENS: readonly TaughtScreen[] = [
   {
     label: "Form 940 (annual FUTA)",
     page: "src/app/admin/books/form-940/page.tsx",
@@ -123,6 +125,30 @@ const TAUGHT_SCREENS: readonly {
       "through the explorer's Check tab. Duplicating it into the tab would show Michael the same " +
       "figures twice and give two places for them to disagree.",
   },
+  {
+    /*
+     * ADDED books-55. The W-3 rendered as a TABLE on this page and nothing
+     * else: the thirty-one W-3 lessons were written, gated and UNREACHABLE
+     * from the interface. A table shows the figures; it cannot say what a box
+     * means, whose money it is, or which line of which 941 must agree with it.
+     *
+     * It shares a page with the W-2 explorer rather than having its own route,
+     * because the W-2 and the W-3 are filed together and reconciled against
+     * each other, and Michael reads them as one job. It is a SEPARATE explorer
+     * on that page rather than a merged box list, because the two forms number
+     * their boxes differently — "box 13" is a row of checkboxes on the W-2 and
+     * a reserved third-party sick pay field on the W-3 — and one list
+     * containing two different box 13s would teach the wrong thing about both.
+     */
+    label: "Form W-3 (annual transmittal)",
+    page: "src/app/admin/books/form-w2/page.tsx",
+    lessonsExport: "FORM_W3_BOX_LESSONS",
+    checksMissingBecause:
+      "The W-3's reconciliation is the same comparison as the W-2's — the annual totals against " +
+      "the four filed 941s — and it is already rendered in this page's own reconciliation card. " +
+      "Putting it in this explorer's Check tab as well would show Michael the same figures " +
+      "twice, in two places that can disagree with each other.",
+  },
 ];
 
 /**
@@ -151,6 +177,33 @@ function read(rel: string): string {
   const path = join(ROOT, rel);
   expect(existsSync(path), `${rel} does not exist`).toBe(true);
   return readFileSync(path, "utf8");
+}
+
+/**
+ * How many explorer blocks a page ACTUALLY renders.
+ *
+ * Comments are stripped first. Without that, the count is wrong: form-940's
+ * page has one explorer and a comment that quotes `<FormBoxExplorer .../>`
+ * while explaining the books-49 bug, and a naive grep reports two. A gate that
+ * miscounts upward is worse than no gate, because it can be satisfied by
+ * writing prose.
+ */
+function explorerCount(rel: string): number {
+  return (stripComments(read(rel)).match(/<FormBoxExplorer/g) ?? []).length;
+}
+
+/**
+ * Rows grouped by the file they live in, because TWO taught screens can share
+ * one page. See the docblock on the "own explorer block" test below.
+ */
+function rowsByPage(): Map<string, readonly TaughtScreen[]> {
+  const byPage = new Map<string, TaughtScreen[]>();
+  for (const screen of TAUGHT_SCREENS) {
+    const list = byPage.get(screen.page) ?? [];
+    list.push(screen);
+    byPage.set(screen.page, list);
+  }
+  return byPage;
 }
 
 describe("books-47: every taught screen actually renders the tab system", () => {
@@ -185,6 +238,112 @@ describe("books-47: every taught screen actually renders the tab system", () => 
       // the exact shape of shipped-but-empty teaching.
       expect(src).not.toContain("lessons={[]}");
     }
+  });
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * EVERY ROW OWNS AN EXPLORER BLOCK OF ITS OWN
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * FOUND IN books-55 BY MUTATION, NOT BY REVIEW.
+   *
+   * The mutation: delete the entire `<FormBoxExplorer title="Form W-3, box by
+   * box" ... />` block from the W-2 page. That is the whole feature the slice
+   * was for — the thirty-one W-3 lessons become unreachable from the interface
+   * again, which is precisely the defect Michael reported in his own words
+   * ("the form pages are still just walls of text").
+   *
+   * THE SUITE STAYED GREEN. Eleven of eleven.
+   *
+   * WHY, EXACTLY. Every assertion above is keyed on `screen.page`, and the
+   * W-2 row and the W-3 row name THE SAME FILE. So:
+   *   - `toContain("<FormBoxExplorer")` was satisfied by the W-2's explorer;
+   *   - `toContain("FORM_W3_BOX_LESSONS")` was satisfied by the surviving
+   *     IMPORT statement, because `noUnusedLocals` is not enabled in this
+   *     repo's tsconfig and the CI eslint scope does not cover `src/app`, so
+   *     an import with no remaining use is not an error anywhere;
+   *   - the reachability gate iterated the explorers that were still there.
+   *
+   * Each assertion asked "does this FILE contain X" when the question was
+   * "does this SCREEN render X". With one row per file those two questions
+   * have the same answer, which is why the gate looked sound for four slices.
+   * The W-3 was the first time two rows shared a file, and the flaw became
+   * load-bearing the moment it existed.
+   *
+   * THIS IS THE SAME CLASS OF HOLE ALREADY FIXED ONCE IN THIS SLICE (rule 23:
+   * fix the class, not the instance). In form-box-teaching-core.test.ts the
+   * source-tree gate compared lesson-set FILE NAMES through a Set, so a second
+   * lesson set added to an existing file was invisible. Same shape: a
+   * file-level identity standing in for a thing-level identity, and a dedupe
+   * silently absorbing the second thing. Two independent gates in one slice
+   * had it. It is a pattern in how I write these, not an accident.
+   *
+   * THE FIX IS COUNTING, WHICH IS WHY IT CANNOT BE SATISFIED BY PROSE:
+   *   (a) a page shared by N rows must render AT LEAST N explorer blocks;
+   *   (b) every row's lessons export must appear as an actual `lessons={...}`
+   *       PROP, not merely somewhere in the file.
+   * Deleting the W-3 block now fails (a) — 1 block for 2 rows — and fails (b)
+   * — the import survives but the prop does not.
+   */
+  it("gives every taught screen its own explorer block, not a shared one", () => {
+    for (const [page, rows] of rowsByPage()) {
+      const rendered = explorerCount(page);
+      expect(
+        rendered,
+        `${page} is listed as the page for ${rows.length} taught screen(s) ` +
+          `(${rows.map((r) => r.label).join(", ")}) but renders only ${rendered} ` +
+          `<FormBoxExplorer> block(s). One block cannot teach two different forms: ` +
+          `the W-2 and the W-3 both have a "box 13" and it means a different thing ` +
+          `on each. A missing block here means real lessons exist and are ` +
+          `unreachable from the screen.`,
+      ).toBeGreaterThanOrEqual(rows.length);
+    }
+  });
+
+  it("passes each screen's lessons as a prop, not merely as a stale import", () => {
+    let checked = 0;
+    for (const screen of TAUGHT_SCREENS) {
+      const code = stripComments(read(screen.page));
+      /*
+       * Deliberately matching the PROP, `lessons={THE_EXPORT}`, and allowing
+       * whitespace because a formatter may wrap it. An import statement can
+       * never match this shape, which is the entire point: the import is what
+       * made the deletion invisible.
+       */
+      const asProp = new RegExp(`lessons=\\{\\s*${screen.lessonsExport}\\s*\\}`);
+      expect(
+        asProp.test(code),
+        `${screen.label}: ${screen.lessonsExport} appears in ${screen.page} but never as ` +
+          `a lessons={...} prop on an explorer. An unused import satisfies a ` +
+          `toContain() check and teaches Michael nothing — this repo has ` +
+          `noUnusedLocals off and does not lint src/app in CI, so nothing else ` +
+          `would ever report it.`,
+      ).toBe(true);
+      checked += 1;
+    }
+    // Rule 39 / 66d: existence before absence.
+    expect(checked).toBe(TAUGHT_SCREENS.length);
+  });
+
+  /**
+   * The counting gate above is a FLOOR (`>=`), so it cannot notice an explorer
+   * block that belongs to no row at all — a sixth explorer wired to a lessons
+   * module nobody registered here. That is the mirror-image absence (rule 66b:
+   * check both directions), and it is how a taught screen gets built without
+   * ever being reconciled or excused.
+   */
+  it("has no explorer block that belongs to no registered screen", () => {
+    const byPage = rowsByPage();
+    let totalRendered = 0;
+    for (const page of byPage.keys()) totalRendered += explorerCount(page);
+    expect(
+      totalRendered,
+      `the taught pages render ${totalRendered} explorer blocks but only ` +
+        `${TAUGHT_SCREENS.length} screens are registered in TAUGHT_SCREENS. An ` +
+        `unregistered explorer is a screen that is never checked for ` +
+        `reconciliations and never counted in the honest gap total below. Add a ` +
+        `row for it.`,
+    ).toBe(TAUGHT_SCREENS.length);
   });
 
   it("passes real boxes rather than an empty array", () => {
@@ -345,6 +504,7 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
     expect(excused.map((s) => s.label)).toEqual([
       "Washington quarterly returns",
       "Form W-2 (annual wage report)",
+      "Form W-3 (annual transmittal)",
     ]);
     /*
      * WENT FROM 2 TO 1 IN books-48.
@@ -368,8 +528,23 @@ describe("books-47: the Check tab is either wired or honestly declared empty", (
      * compares the W-3 against the four filed 941s in its own card. Showing it
      * again in the Check tab would give two places for one answer to disagree
      * with itself.
+     *
+     * WENT FROM 2 TO 3 IN books-55, for the same reason as the W-2 and with
+     * the same caveat. The W-3 gained an explorer in that slice - it had a
+     * TABLE and nothing else, so its thirty-one lessons were unreachable from
+     * the interface. It shares the W-2's excuse because it shares the W-2's
+     * reconciliation: comparing the W-3's totals against the four filed 941s
+     * is ONE comparison, already rendered once on that page. It is counted as
+     * a separate screen here because it is a separate explorer with its own
+     * box list, and a gate that quietly folded it into the W-2's row would be
+     * a gate that stops being able to see it (rule 39).
+     *
+     * READ THIS NUMBER HONESTLY: 3 is not three unsolved problems. Two of the
+     * three are one deliberate design decision counted twice, and the third is
+     * blocked on the PFML and WA Cares accumulators. It goes DOWN when those
+     * accumulators land, and it must never go up without a paragraph here.
      */
-    expect(excused.length).toBe(2);
+    expect(excused.length).toBe(3);
   });
 
   it("proves at least one screen really does reconcile, or the gate is vacuous", () => {

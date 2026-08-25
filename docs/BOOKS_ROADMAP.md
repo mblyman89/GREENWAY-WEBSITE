@@ -819,10 +819,129 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The engine (boxes 1–6, 12, 14, 15–20, W-3 totals, reconciliation) | `form-w2-core.ts` | `form-w2-core.test.ts` |
 | The reader | `form-w2-store.ts` | `form-w2-store.test.ts` (69) |
 | The screen logic | `form-w2-ui-core.ts` | `form-w2-ui-core.test.ts` (63) |
-| The law, verbatim | `form-w2-authorities.ts` (28 own + 13 borrowed = 41) | `form-w2-authorities.test.ts` (39) |
+| The law, verbatim | `form-w2-authorities.ts` (31 own + 13 borrowed = 44) | `form-w2-authorities.test.ts` (41) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
-| The screen | `src/app/admin/books/form-w2/page.tsx` (933 lines) | `nav-gate-core.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (999 lines) | `nav-gate-core.test.ts` |
+| The W-3 taught box by box **(books-55)** | `form-box-lessons-w3.ts` | `form-box-lessons-w3.test.ts` (17) |
+| The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (64) |
+
+**books-58 grew the screen row above by 29 lines, and that is the ENTIRE change
+to that file.** Michael asked for "one large page with nothing on it but form",
+where clicking a mapped box brings the whole lesson to him rather than
+redirecting him, and was explicit that the tabbed screen must not be altered:
+"rather than updating or changing any of it". So the sheet is a sibling route
+and those 29 lines are a single link in the header, "View just the form →".
+
+The link is not decoration and was not in the first version. The route shipped
+linking BACK to the W-2 screen with nothing linking forward to it, and
+`nav-gate-core.test.ts` failed naming it: *"owner-only pages that are not in the
+menu... Each one is a decision nobody made."* That is the books-49 failure
+exactly — Michael's own report was "I am unable to see or use the tab system" —
+and it was caught in the same hour rather than by him, a year later.
+
+`/admin/books/form-w2/sheet` is now on that gate's `known` list, which exempts
+it from the MENU and not from reachability; the two are different, and the
+`known` list cannot tell them apart. So `form-sheet-core.test.ts` asserts the
+door exists. Delete the link and it goes red.
+
+Two defects were found by running the new core over forms it had not been
+written against, which is the argument for it being form-agnostic:
+
+- **W-2 box 9 nearly lost its lesson.** Its printed caption is "(not used)", and
+  it HAS a lesson — "The box that must stay empty", explaining that the entire
+  IRS instruction is "do not enter an amount in box 9". A three-state affordance
+  that tested unusedness first made it unclickable, hiding a finished lesson on
+  exactly the kind of box where the instinct to be helpful produces a filing
+  error. Root cause: two orthogonal facts flattened into one enum — "does the
+  form use this box" (about THE FORM) and "has anyone written the lesson" (about
+  THIS PRODUCT). Carried separately now, and neither may overrule the other.
+- **Half the forms sat under a heading that lied.** Grouping on "is the id a
+  single letter" put the W-3's `b-kind-of-payer`, `b-kind-of-employer`,
+  `b-third-party-sick-pay` and `contact` — plus EVERY box on all four Washington
+  forms, which have no numbered boxes at all — under a heading reading "The
+  numbered boxes". Split now keys on whether the id starts with a digit, and an
+  empty group is not emitted.
+
+Rule 40 shaped the whole slice: the W-2 has 26 of 26 boxes taught, so the "not
+taught yet" marker Michael approved is UNREACHABLE on the form he chose. The
+marker is therefore proved on the 941 (7 untaught: 5e, 6, 7, 10, 12, 13, 14) and
+the 940 (10), and the W-2's zero is pinned so adding an untaught box there is a
+deliberate decision. **17 untaught boxes across two federal forms** is the real
+remaining teaching backlog.
+
+**books-55 added the W-3 teaching layer, and the screen row above grew by 37
+lines because of it.** Section 5 of that page already rendered the W-3 as a
+table of figures. A table cannot say what a box means, whose money it is, or
+which line of which Form 941 has to agree with it, so the transmittal got its
+own `FormBoxExplorer` — 31 boxes, 31 lessons, 34 cross-references, every one
+resolving.
+
+Three things are worth recording because they were found by attacking the work
+rather than by reviewing it:
+
+- **The W-3 explorer could be deleted with the whole suite staying green.** The
+  wiring gate keyed every assertion on the page FILE, and the W-2 and W-3 rows
+  name the same file, so the W-2's explorer satisfied the W-3's checks and the
+  surviving import satisfied the lessons check. Closed by counting blocks per
+  page and requiring each lessons module to appear as a real prop
+  (`form-box-explorer-wiring.test.ts` (14)).
+- **`ALL_WHOSE_TABLES` had a docblock claiming a completeness gate that did not
+  exist.** Now built, and it reads the adapters' own source
+  (`form-box-adapters.test.ts` (31)).
+- **The W-3 is NOT gated on `w3 !== null`.** With no W-3 built, every figure
+  reads *not computed yet* rather than `$0.00`, because a zero in box 4 asserts
+  that Greenway withheld no social security tax all year. That is a claim about
+  a filing, not a blank.
+
+The 31 ownership rows were swept exhaustively — each flipped to all four other
+legal `WhoseMoney` values, 124 mutations, all caught.
+
+**books-55 also closed a defect class that had nothing to do with the W-3, and
+it is the most valuable thing in the slice.** While proving the lesson quotes
+were verified, a probe showed the verifier was reporting 465 authorities as
+"332 verified, 99 skipped for want of a local copy" — and three of those 99
+had their source sitting on disk the whole time. The cause was two characters:
+`26 C.F.R. § 31.3402(f)(2)-1(a)(4)` is how the eCFR prints it, with a space
+after the section sign, and both the router and the mirrored-corpus table
+demanded `§31.` with none. Because the cite matched neither, it was not even
+eligible for the loud failure that exists for exactly this situation, so it
+was counted as a harmless skip. Verified quotes went **332 → 335**.
+
+That is the FOURTH time this one defect has occurred here (`§280E` resolving to
+`usc-280.txt`; the FASB CON 8 chapters; thirteen `IRS, Instructions for Form
+941` comma-form cites; now a space). Standing rule 23 says fix the class, so
+`authority-routing-completeness.test.ts` (6) now asks the question nobody had
+asked: *for every quote the verifier skips, is its text already inside a file we
+hold?* It runs the verifier's own comparison, so an offender it names is one the
+verifier genuinely could have checked. The books-40 Form 941 routing debt was
+re-measured and is **closed** — all thirteen cites route.
+
+**books-57 recorded a FIFTH occurrence, and it defeated the gate above.** The
+`26 U.S.C.` rows in both routers still demanded `§` with no space, so five cites
+written as the government prints them — `26 U.S.C. § 162(f)(1)` — matched
+neither, while `usc-162.txt` and `usc-6651.txt` sat on disk. The books-55 gate
+saw nothing, and was right to: it asks whether a held file *contains* a skipped
+quote, and all three of those quotes turned out to be **editorial
+reconstructions** splicing statutory headings onto bodies, so their text was in
+no file at all. A routing defect and five bad quotations concealed each other.
+Mirroring `§163` and `§6656` rather than parking them as debt exposed two more.
+Verified quotes went **339 → 345**.
+
+The sixth test is the class gate the previous five occurrences needed: *if the
+corpus table can classify a cite and the file is on disk, the router must route
+it* — asserted over the whole registry, not a list of known cases, and
+mutation-proved in both directions (reverting either router's `§\s*` fails).
+
+The gate's first run reported two offenders and **both were false positives**,
+which is recorded in its docblock because following them would have caused real
+harm. The FASB Codification reprints Regulation S-X in its S99 sections, so the
+text really is in the building — but with FASB's editorial markers spliced into
+the middle of the SEC's sentences. Routing those cites there would have made the
+verifier fail on a quote correctly transcribed from the eCFR, and the tempting
+way to silence that failure is to edit the authority text to match FASB's
+reprint. A gate that normalises differently from the thing it gates measures its
+own opinion, so the gate now uses the verifier's exported `normalise`.
 
 **Both W-2 traps are implemented and on screen**, not merely documented: box 1
 exceeding boxes 3 and 5 renders GREEN with the §3121(a)(2)(B) carve-out quoted

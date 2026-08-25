@@ -128,7 +128,7 @@ export const W2_BOX5_NO_MEDICARE_LIMIT: YtdAuthority = {
   kind: "irs_guidance",
   cite: "IRS Instructions for Forms W-2 and W-3 (2026), Box 5—Medicare wages and tips",
   quote:
-    "Box 5—Medicare wages and tips. The wages and tips subject to Medicare tax are the same as those subject to social security tax (boxes 3 and 7) except that there is no wage base limit for Medicare tax. Enter the total Medicare",
+    "Box 5—Medicare wages and tips. The wages and tips subject to Medicare tax are the same as those subject to social security tax (boxes 3 and 7) except that there is no wage base limit for Medicare tax. Enter the total Medicare wages and tips in box 5.",
   soWhat:
     "Medicare never stops. Social Security does. If the system kept a single running total called 'wages' it would be right for one of these and wrong for the other from the moment an employee crossed the wage base - so it keeps them apart, permanently, in separate columns.",
   source: W2_SOURCE_URL,

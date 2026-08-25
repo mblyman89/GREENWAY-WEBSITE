@@ -220,7 +220,19 @@ describe("every figure in the report is re-derived, not remembered", () => {
       readonly note: string | null;
     }[] = [
       { formId: "form_941", claimed: 27, engineNow: 27, note: null },
-      { formId: "form_w2", claimed: 20, engineNow: 20, note: null },
+      {
+        formId: "form_w2",
+        claimed: 20,
+        engineNow: 26,
+        note:
+          "books-56 added the six lettered boxes the paper prints above box 1: a (employee's " +
+          "SSN), b (employer's EIN), c (employer's name and address), d (control number), e " +
+          "(employee's name) and f (employee's address). Unlike the 940 row below, 20 was NOT " +
+          "true when it was written — it was a complete count of an incomplete form. The six " +
+          "were missing because every slice built this form outward from what the W-2 engine " +
+          "computes, and the engine computes money; nothing computes a person's name. Found by " +
+          "assertEveryTieResolves refusing a new ESD 5208B lesson's tie to form_w2 box e.",
+      },
       {
         formId: "form_940",
         claimed: 18,
@@ -272,14 +284,30 @@ describe("every figure in the report is re-derived, not remembered", () => {
     expect(expected).toHaveLength(7);
   });
 
-  it("is honest that Form W-3 is registered but teaches nothing", () => {
-    // The report calls this out as a pre-existing warning. If someone fills the
-    // W-3 in, this gate fails and the report must stop calling it empty --
-    // which is the correct outcome, not a nuisance.
-    expect(ALL_TAUGHT_FORM_IDS).toContain("form_w3");
-    expect(() => teachingBoxes("form_w3")).toThrow();
+  /*
+   * ═══ CLOSED IN books-55. THE PREDICTION IN THE OLD COMMENT CAME TRUE. ═══
+   *
+   * The original comment on this test read: "If someone fills the W-3 in, this
+   * gate fails and the report must stop calling it empty -- which is the
+   * correct outcome, not a nuisance." That is exactly what happened, so the
+   * assertion is being changed deliberately and the reason is recorded here
+   * rather than in a commit message nobody re-reads.
+   *
+   * What is NOT being changed is the books-53 report itself. It said the W-3
+   * taught nothing, and at books-53 that was true. A report is a statement
+   * about a date. Editing it to match today would destroy the only record of
+   * what was known then, so the report text is still asserted verbatim below —
+   * only the claim about TODAY'S code is updated.
+   */
+  it("was honest that Form W-3 taught nothing, a hole now closed", () => {
+    // The report's own words, unchanged, because they were true when written.
     expect(REPORT).toContain("Form W-3");
     expect(REPORT.toLowerCase()).toContain("teaches nothing");
+
+    // And the state of the code TODAY: the hole is closed, not merely renamed.
+    expect(ALL_TAUGHT_FORM_IDS).toContain("form_w3");
+    expect(() => teachingBoxes("form_w3")).not.toThrow();
+    expect(teachingBoxes("form_w3").length).toBe(31);
   });
 
   it("counts the mutation experiments as one per printed line", () => {

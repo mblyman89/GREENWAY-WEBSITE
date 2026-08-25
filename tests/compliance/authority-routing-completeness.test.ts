@@ -1,0 +1,432 @@
+/**
+ * tests/compliance/authority-routing-completeness.test.ts   (books-55)
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NO QUOTE MAY GO UNVERIFIED WHILE ITS SOURCE SITS ON DISK
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * THE DEFECT THIS EXISTS TO END, WHICH HAS NOW HAPPENED FOUR TIMES.
+ *
+ * `scripts/verify-verbatim-quotes.ts` maps a citation to a mirrored text file
+ * and compares the quote against it. When the mapping does not match, it
+ * returns null, and null means "we hold no local copy" — a legitimate, common
+ * state, since most authorities here are statutes and cases whose text lives at
+ * a URL. Those are counted and reported as skipped.
+ *
+ * So a BROKEN MAPPING and a DOCUMENT WE DELIBERATELY DO NOT HOLD are the same
+ * observation. Every occurrence of this defect has been the same: the file was
+ * on disk, the pattern did not match, the quote was silently unverified behind
+ * a passing run.
+ *
+ *   1. §280E resolved to `usc-280.txt` — wrong file, four slices.
+ *   2. Three FASB CON 8 quotes — no pattern for "FASB Concepts Statement No. 8".
+ *   3. Thirteen Form 941 instruction cites — written "IRS, Instructions for
+ *      Form 941" with a comma the router's regex could not match (books-40,
+ *      recorded in books-43, fixed later). Re-measured in books-55: all 13
+ *      now route.
+ *   4. books-55, found by probe: THREE W-4 authorities cited exactly as the
+ *      eCFR prints them, `26 C.F.R. § 31.3402(f)(2)-1(a)(4)`, with A SPACE
+ *      AFTER THE SECTION SIGN. Both the router branch and the mirrored-corpora
+ *      table demanded `§31.` with no space, so the cite matched NEITHER — which
+ *      also meant rule 48's loud failure could not fire. Meanwhile
+ *      `federal/cfr-31.3402(f)(2)-1.txt` held all three quotes verbatim.
+ *      Verified count went 332 → 335 on fixing two characters.
+ *
+ * Each previous fix was a new branch plus a comment saying the same thing had
+ * happened one part number to the left. Four occurrences is not bad luck, it is
+ * a missing gate: nothing ever asked the question "is there a file on disk that
+ * contains this quote, which the router failed to find?"
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * WHY THIS IS NOT SIMPLY "EVERY AUTHORITY MUST ROUTE"
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * Because that would be false, and forcing it true would mean either
+ * downloading 130 more documents or — far worse — inventing a mapping to a file
+ * that does not contain the text, which is exactly defect (1). Most skipped
+ * authorities are genuinely unmirrored: Tax Court opinions, Chief Counsel
+ * Advice, agency web pages, ISA and PCAOB standards.
+ *
+ * So the assertion is narrower and provable: FOR EVERY AUTHORITY THE ROUTER
+ * SKIPS, no file we already hold may contain its quote. If one does, either the
+ * router is broken or the quote is misattributed. Both are defects, and neither
+ * can be argued away.
+ */
+import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
+import { GUIDANCE_AUTHORITIES } from "@/lib/accounting/books-guidance-core";
+import {
+  KNOWN_UNMIRRORED_AUTHORITY_IDS,
+  expectedCorpusFile,
+  matchesInOrder,
+  normalise,
+  quoteSegments,
+  sourceFileFor,
+} from "../../scripts/verify-verbatim-quotes";
+
+const ROOT = process.cwd();
+const AUTHORITY_DIR = join(ROOT, "docs", "authorities");
+
+function allHeldFiles(dir: string): readonly string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...allHeldFiles(full));
+    else if (entry.name.endsWith(".txt")) out.push(full);
+  }
+  return out;
+}
+
+const HELD = allHeldFiles(AUTHORITY_DIR);
+
+/**
+ * Every mirrored file, normalised BY THE VERIFIER'S OWN normalise(), read once.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS USES THE VERIFIER'S NORMALISER AND NOT ITS OWN
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The first draft of this test flattened whitespace itself and asked whether
+ * the first 60 characters of a quote appeared anywhere in a held file. That is
+ * a DIFFERENT QUESTION from the one the verifier asks, and asking a different
+ * question is how a gate ends up measuring its own opinion.
+ *
+ * It reported two offenders on its first run, and both were FALSE POSITIVES.
+ * Measured with the verifier's real comparison:
+ *
+ *   REG_SX_210_4_01_NOT_MISLEADING  vs asc-205.txt: segment 0 is 773 chars and
+ *                                   matches for 506 of them, then diverges.
+ *   REG_SX_210_5_02_BALANCE_SHEET_ORDER vs asc-210.txt: segment 1 is 380 chars
+ *                                   and matches for 8.
+ *
+ * The cause is real and worth recording: THE FASB CODIFICATION REPRINTS
+ * REGULATION S-X IN ITS S99 SECTIONS, so the text genuinely is in the building
+ * — but it is reprinted with the Codification's editorial apparatus spliced
+ * into the middle of the regulation's own sentences:
+ *
+ *     ...under which they are made, not misleading. [ SX 210.4-01 (a) 2 ] ]
+ *     [ (1) Financial statements filed with the Commission...
+ *
+ * normalise() strips the brackets but not the marker text inside them, so
+ * "not misleading. (1) Financial statements" does not exist on disk — what
+ * exists is "not misleading. SX 210.4-01 (a) 2 (1) Financial statements".
+ *
+ * That is why these two are NOT routed and must not be: routing them would
+ * make the verifier fail on a quote that is correctly transcribed from the
+ * eCFR. The right source for Regulation S-X is the eCFR, which we do not
+ * mirror. A 60-character probe could not see any of this, so it would have
+ * sent me chasing a routing branch that must never be written.
+ *
+ * Using the verifier's normalise/quoteSegments/matchesInOrder means an offender
+ * reported here is one the verifier COULD ACTUALLY HAVE VERIFIED. Anything less
+ * is a lead, not a finding, and rule 39 applies: a verifier that cannot see
+ * something approves it — but a verifier that cries wolf gets switched off,
+ * which approves everything.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MEASURED, NOT ASSUMED: WHAT THE STRONG NORMALISER ACTUALLY BUYS
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * My first instinct was that a weak normaliser would BLIND this gate, and the
+ * mutation sweep proved that wrong. Swapping normalise() for a whitespace-only
+ * flatten, with the real §-spacing defect reintroduced at the same time (R14),
+ * still turns the gate RED. So the strong normaliser does not stop the gate
+ * from catching defects.
+ *
+ * What it stops is FALSE ALARMS. And the direction of that error matters more
+ * than it looks: a false alarm here does not merely waste time, it points at a
+ * fix that MUST NOT BE MADE. Both Reg S-X reports would have had me add a
+ * routing branch to the FASB Codification files, after which the verifier would
+ * have failed on a quote that is correctly transcribed from the eCFR — and the
+ * obvious way to make that failure go away is to edit the quote to match
+ * FASB's reprint, including its editorial markers. That would have corrupted
+ * the authority text itself to satisfy a broken test.
+ *
+ * Measured with the verifier's real comparison, of the nine part-31 W-4
+ * authorities the weak normaliser misses one outright
+ * (pay-run-cfr-31-3402-f2-1-furnish-on-hire), so it is also strictly less
+ * capable, not merely noisier.
+ */
+const CORPUS: readonly (readonly [string, string])[] = HELD.map(
+  (f) => [f.replace(ROOT + "/", ""), normalise(readFileSync(f, "utf8"))] as const,
+);
+
+const UNMIRRORED = new Set<string>(KNOWN_UNMIRRORED_AUTHORITY_IDS);
+
+/**
+ * Would the verifier have succeeded on this quote against this file?
+ *
+ * Exactly the check `verify-verbatim-quotes` performs once it has chosen a
+ * file: split the normalised quote on its ellipses, then require every segment
+ * to appear in order. Returns false for a quote whose segments the verifier
+ * would itself reject as too short to prove anything, because such a quote
+ * could not have been verified against ANY file and so is not evidence of a
+ * routing defect.
+ */
+function verifierWouldMatch(quote: string, haystack: string): boolean {
+  const segs = quoteSegments(normalise(quote));
+  if (segs === null) return false;
+  return matchesInOrder(haystack, segs);
+}
+
+describe("books-55: the verifier's skip list contains nothing it could have checked", () => {
+  it("holds a corpus at all, so this gate is not vacuous", () => {
+    // Rule 66d. With no files read, every "is this quote in a held file" test
+    // answers no, and the suite passes by searching nothing.
+    expect(HELD.length, "no mirrored authority files were found on disk").toBeGreaterThan(50);
+    expect(GUIDANCE_AUTHORITIES.length).toBeGreaterThan(400);
+  });
+
+  /**
+   * THE CORE ASSERTION.
+   *
+   * For every authority the router skips, no held file may contain its quote.
+   * The failure message names the file, so the fix is a routing branch and
+   * never a guess.
+   */
+  it("never skips a quote whose text is already in a file we hold", () => {
+    const offenders: string[] = [];
+    let skipped = 0;
+
+    for (const a of GUIDANCE_AUTHORITIES) {
+      if (sourceFileFor(a.cite) !== null) continue; // routed: already verified
+      skipped += 1;
+      for (const [name, text] of CORPUS) {
+        if (!verifierWouldMatch(a.quote, text)) continue;
+        offenders.push(
+          `${a.id} (${a.cite}) is SKIPPED by the verifier, but the verifier's OWN ` +
+            `comparison succeeds against ${name}. This is not a near miss: every segment ` +
+            `of the quote appears there, in order, after normalisation. So either the ` +
+            `cite-to-file router cannot match this citation - which is the §280E / CON 8 / ` +
+            `"IRS, Instructions" / "§ 31." defect for the fifth time - or the quote is ` +
+            `attributed to the wrong source. Add a routing branch; do NOT add this id to ` +
+            `KNOWN_UNMIRRORED_AUTHORITY_IDS, because the document IS mirrored.`,
+        );
+        break;
+      }
+    }
+
+    // Existence before absence: if nothing is skipped the loop proves nothing.
+    expect(skipped, "no authorities are skipped at all - has the registry emptied?").toBeGreaterThan(
+      0,
+    );
+    expect(offenders, offenders.join("\n\n")).toEqual([]);
+  });
+
+  /**
+   * THE ROUTER AND THE RULE-48 TABLE MUST AGREE ABOUT SHAPE.
+   *
+   * `sourceFileFor` decides where to look; `expectedCorpusFile` decides whether
+   * a miss is LOUD or silent. books-55 fixed a case where both were wrong in
+   * the same way, and fixing only the first would have left the second blind:
+   * the three quotes would verify today, and the next cite of the same shape
+   * whose file was genuinely missing would go quiet again.
+   *
+   * So: any citation that routes must also be recognised as belonging to a
+   * mirrored corpus. A cite that resolves to a file while the corpus table
+   * denies knowing it is a cite whose future failures will be silent.
+   */
+  it("recognises every routable citation as belonging to a mirrored corpus", () => {
+    const disagreements: string[] = [];
+    let routed = 0;
+    for (const a of GUIDANCE_AUTHORITIES) {
+      if (sourceFileFor(a.cite) === null) continue;
+      routed += 1;
+      if (expectedCorpusFile(a.cite) === null) {
+        disagreements.push(
+          `${a.id} (${a.cite}) routes to a mirrored file, but expectedCorpusFile() does not ` +
+            `recognise its corpus. Today it verifies. The day that file is renamed or moved, ` +
+            `this quote will be SKIPPED IN SILENCE instead of failing loudly, because rule ` +
+            `48's guard only fires for citations it can classify.`,
+        );
+      }
+    }
+    expect(routed, "nothing routes at all").toBeGreaterThan(300);
+    expect(disagreements, disagreements.join("\n")).toEqual([]);
+  });
+
+  /**
+   * THE `§\s*` IN BOTH CFR ROWS MUST BE LOAD-BEARING, NOT DECORATION.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY THIS TEST EXISTS: A MUTATION CAME OUT GREEN AND IT WAS RIGHT TO
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * books-55 fixed `§` to `§\s*` in BOTH the part-31 and part-1 corpus rows,
+   * on the argument that the two must agree. The mutation sweep then reverted
+   * each one separately:
+   *
+   *   part 31 reverted -> gate went RED. The guard is load-bearing.
+   *   part 1  reverted -> gate stayed GREEN.
+   *
+   * I expected red and got green, so I measured instead of arguing. Of 75
+   * CFR authorities, exactly THREE are cited with a space after the section
+   * sign, and all three are part 31:
+   *
+   *   26 C.F.R. § 31.3402(f)(2)-1(a)(1)
+   *   26 C.F.R. § 31.3402(f)(2)-1(a)(4)
+   *   26 C.F.R. § 31.3402(f)(2)-1(e)(1)(ii)
+   *
+   * Zero part-1 cites use a space. So the `\s*` I added to the part-1 row is
+   * UNREACHABLE by any citation in the repository today, and standing rule 40
+   * says an unreachable guard is an untested guard - it was the rule that
+   * deleted the dot-leader normalisation for exactly this reason.
+   *
+   * Two honest options: delete the part-1 `\s*`, or make it reachable by
+   * testing it directly. Deleting it would reinstate the asymmetry that caused
+   * the defect, and the next person to cite § 1.471-2 the way the eCFR prints
+   * it would land straight back in it. So it stays and this test EXERCISES it,
+   * which is what rule 40 actually demands: not "no unused guards" but "no
+   * guard without a case that proves it works".
+   *
+   * Both spacings, both parts, asserted here. Reverting either row now fails.
+   */
+  it("recognises CFR citations written with or without a space after the section sign", () => {
+    const cases: readonly (readonly [string, string])[] = [
+      // [cite, the file the corpus table must name]
+      ["26 C.F.R. §31.3402(f)(2)-1(a)(1)", "cfr-31.3402(f)(2)-1.txt"],
+      ["26 C.F.R. § 31.3402(f)(2)-1(a)(1)", "cfr-31.3402(f)(2)-1.txt"],
+      ["26 C.F.R. §1.471-2(a)", "cfr-1.471-2.txt"],
+      ["26 C.F.R. § 1.471-2(a)", "cfr-1.471-2.txt"],
+      /*
+       * books-57. THE US CODE ROWS, ADDED BECAUSE THE CFR FIX ABOVE WAS NOT THE
+       * CLASS FIX IT CLAIMED TO BE.
+       *
+       * The comment on the CFR rows in verify-verbatim-quotes.ts argued that
+       * "the two functions are required to agree ... and they now agree on the
+       * space too". True, for CFR. Four lines below it the `26 U.S.C.` row still
+       * demanded `§` with no space, and five citations are written the way the
+       * government prints them:
+       *
+       *   26 U.S.C. § 162(f)(1), (f)(4)     usc-162.txt   HELD (110,114 bytes)
+       *   26 U.S.C. § 6651(a)(1)            usc-6651.txt  HELD ( 24,284 bytes)
+       *   26 U.S.C. § 6651(a)(2), (c)(1)    usc-6651.txt  HELD
+       *   26 U.S.C. § 163(a), (h)(1)        not held at the time
+       *   26 U.S.C. § 6656(a), (b)(1)       not held at the time
+       *
+       * Three quotes therefore sat unverified with their source in the
+       * repository. Two characters. And when the comparison finally ran, all
+       * three FAILED - they had spliced statutory headings onto bodies - which
+       * is why the sibling test above ("never skips a quote whose text is
+       * already in a file we hold") reported nothing: it asks whether a held
+       * file CONTAINS the skipped quote, and a RECONSTRUCTED quote is not in any
+       * file. The router defect and the quote defect hid each other.
+       *
+       * Both spacings for both corpora are pinned here, so reverting either
+       * `§\s*` fails. Unlike the part-1 CFR row - which rule 40 flagged as
+       * unreachable by any cite in the repo - the US Code space form IS in live
+       * use by five authorities today.
+       */
+      ["26 U.S.C. §162(f)(1)", "usc-162.txt"],
+      ["26 U.S.C. § 162(f)(1), (f)(4)", "usc-162.txt"],
+      ["26 U.S.C. §6651(a)(1)", "usc-6651.txt"],
+      ["26 U.S.C. § 6651(a)(2), (c)(1)", "usc-6651.txt"],
+    ];
+    for (const [cite, expectedFile] of cases) {
+      const got = expectedCorpusFile(cite);
+      expect(
+        got,
+        `expectedCorpusFile(${JSON.stringify(cite)}) returned null. The eCFR prints a ` +
+          `space after the section sign, so a citation copied from it must still be ` +
+          `classified. If this row stops matching, rule 48's loud failure goes blind for ` +
+          `the whole corpus and future missing files are skipped in silence.`,
+      ).not.toBeNull();
+      expect(got?.path, `wrong file for ${cite}`).toContain(expectedFile);
+    }
+  });
+
+  /**
+   * THE RECORDED DEBT MUST STILL BE DEBT.
+   *
+   * An id in KNOWN_UNMIRRORED_AUTHORITY_IDS is a written admission that a
+   * source is not held. Once it IS held, the entry stops being an admission and
+   * becomes a licence to skip a checkable quote. books-55 already deleted one
+   * such entry (`irc-3306-futa-wage-base`); this makes that a rule rather than
+   * a good habit.
+   */
+  /**
+   * THE CLASS GATE: A CITATION MUST NOT SIT ON THE WRONG SIDE OF ITS OWN CORPUS.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY THE FOUR TESTS ABOVE WERE NOT ENOUGH, MEASURED
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * Every gate in this file so far asks a question about SPECIFIC citations or
+   * about quotes that are FINDABLE ON DISK. books-57 slipped through all of
+   * them at once, and it is worth being precise about how, because the shape
+   * recurs:
+   *
+   *   - "never skips a quote whose text is in a file we hold" saw nothing,
+   *     because the three quotes were editorial reconstructions. Their text was
+   *     in NO file. The gate was correct and blind simultaneously.
+   *   - "recognises every routable citation as belonging to a mirrored corpus"
+   *     checks the direction router -> table. These cites routed NOWHERE, so
+   *     they were never examined.
+   *   - the spacing test enumerated CFR cases only, and enumeration cannot warn
+   *     you about the corpus you forgot to enumerate.
+   *
+   * So this test asks the question none of them ask, in the other direction:
+   * FOR EVERY AUTHORITY, IF `expectedCorpusFile` CAN CLASSIFY ITS CITE AND THE
+   * FILE IS ON DISK, THEN `sourceFileFor` MUST ROUTE IT. No exceptions, no list.
+   *
+   * That is the invariant the §280E, CON 8, "IRS, Instructions", "§ 31." and
+   * "§ 162" defects all violated - five occurrences, five different corpora,
+   * one shape. It cannot be satisfied by adding a branch for today's five
+   * citations, which is precisely why it is written over the whole registry
+   * rather than over a table of known cases (rule 43: walk the vocabulary, do
+   * not hand-list it).
+   *
+   * WHAT IT DOES NOT DEMAND. It says nothing about cites the table cannot
+   * classify - those are the honest unmirrored majority - and nothing about a
+   * classified cite whose file is genuinely absent, which is rule 48's loud
+   * failure and is already asserted by the verifier itself. Only the
+   * contradiction is forbidden: "we know which corpus this is, we have the
+   * file, and we still are not looking at it."
+   */
+  it("routes every citation whose corpus it can classify and whose file is held", () => {
+    const contradictions: string[] = [];
+    let classifiedAndHeld = 0;
+
+    for (const a of GUIDANCE_AUTHORITIES) {
+      const expected = expectedCorpusFile(a.cite);
+      if (expected === null) continue; // unmirrored corpus: nothing is claimed
+      if (!existsSync(expected.path)) continue; // rule 48's case, asserted elsewhere
+      classifiedAndHeld += 1;
+      if (sourceFileFor(a.cite) !== null) continue;
+      contradictions.push(
+        `${a.id} (${a.cite}) — expectedCorpusFile() classifies this as ${expected.corpus} ` +
+          `and the file EXISTS at ${expected.path.replace(ROOT, ".")}, but sourceFileFor() ` +
+          `returns null, so the verifier reports "no local copy to check against" about a ` +
+          `document sitting in this repository. That is the §280E / CON 8 / "IRS, Instructions" ` +
+          `/ "§ 31." / "§ 162" defect. Fix the router pattern for the CLASS, not for this cite.`,
+      );
+    }
+
+    // Rule 66d: existence before absence. If nothing is classified-and-held the
+    // loop proves nothing, and a renamed corpus directory would make this gate
+    // pass by examining zero authorities.
+    expect(
+      classifiedAndHeld,
+      "no authority has a classifiable cite AND a held file - the corpus has moved or emptied",
+    ).toBeGreaterThan(300);
+    expect(contradictions, contradictions.join("\n\n")).toEqual([]);
+  });
+
+  it("keeps no stale entry in the recorded-debt list", () => {
+    const stale: string[] = [];
+    for (const id of UNMIRRORED) {
+      const a = GUIDANCE_AUTHORITIES.find((x) => x.id === id);
+      if (!a) continue; // the verifier itself already fails on unknown ids
+      if (sourceFileFor(a.cite) !== null) {
+        stale.push(
+          `${id} is listed as unmirrored debt, but its citation now routes to a file on disk. ` +
+            `Delete the entry so the quote is actually checked.`,
+        );
+      }
+    }
+    expect(stale, stale.join("\n")).toEqual([]);
+  });
+});

@@ -1,0 +1,151 @@
+
+Importing wage files in the Employer Account Management System (EAMS)
+Employers use EAMS to file quarterly tax and wage reports. Instead of entering data manually, use the EAMS import feature to report wages for one employer at a time.
+When to import wage files
+The import feature works best when you import records for no more than 5,000 employees in a single file.
+If you are:
+Filing wage records for more than 5,000 employees, consider bulk filing instead.
+Filing for more than 1 employer at a time, use bulk filing.
+If you are reporting wages for Paid Family & Medical Leave (Paid Leave), do not use EAMS. Find reporting instructions on the Paid Leave website.
+File formats EAMS accepts
+Comma-delineated file (.csv). We prefer this format.
+Tab-delineated text file (.txt).
+Excel spreadsheet (.xls or .xlsx).
+
+File formats EAMS does not accept
+The Social Security Administration's Magnetic Media Reporting and Electronic Filing (MMREF) format.
+American Standard Code for Information Interchange (ASCII) delimited format.
+Washington state wage format.
+Federal wage format.
+
+Preparing your file
+If you are preparing your own wage data file, it is likely easiest to use Microsoft Excel, Google Sheets or another spreadsheet tool.
+Required columns
+Your spreadsheet must have the 8 columns listed here, and in this order. Do not label the columns. Also do not add any extra columns, headers, footers, totals, notes or comments.
+Start listing information for your first employee in row 1.
+You must enter data in each completed row of:
+Column B: Last name
+Column F: Hours
+Column G: Gross wages
+
+Column A: Social Security number (SSN) or Individual Taxpayer Identification Number (ITIN)
+Must be a number. You can either:
+Format it with or without dashes. Example: 123-45-6789 and 123456789 are both OK.
+Leave it blank. But don't add any spaces.
+An ITIN is a 9-digit number the IRS issues. It identifies someone who is not eligible to get an SSN.
+Column B: Last name
+Cannot be blank. Up to 30 characters. No special characters except hyphens, apostrophes and spaces.
+Column C: First name
+Up to 30 characters. No special characters except hyphens, apostrophes and spaces.
+Column D: Middle name
+Up to 20 characters. Can be a name or initial. No special characters except hyphens, apostrophes and spaces. Leave this cell blank when it doesn't apply to someone.
+Column E: Suffix
+Up to 4 characters. Examples: Jr, Sr, 1st, III. Leave this cell blank when it doesn't apply to someone.
+Column F: Hours
+Requires a positive whole number instead of a decimal. Round up partial hours or fractions. Cannot be blank or more than 2,208.
+Column G: Gross wages
+Cannot be blank. Requires a positive number. Do not enter a negative value.
+Decimals are OK. If you enter a decimal, you can include up to 2 digits to the right of the decimal. Example: 12345.67.
+If you do not enter a decimal, EAMS will assume that the amount you entered is a whole number. It will add a decimal point followed by two zeros. Example: EAMS will interpret 12345 as $12,345.00.
+Column H: Standard Occupational Classification code
+Can be only 6 digits or blank. Learn more about the requirement to provide Standard Occupation Classification (SOC) codes. 
+If you import an amended file, EAMS will not display or save any SOC codes. SOC codes are not amendable.
+Saving your file
+You need to save your file in one of these formats.
+Comma-delimited (.csv) format
+To convert your data from a spreadsheet into a .csv file:
+From the menu bar of the spreadsheet tool, choose "File > Save As." The "Save As" screen opens.
+Choose "Browse." The "Save As > Windows Explorer" opens as a secondary window.
+In the left pane, choose the folder where you want to save the file.
+Enter the name of the file in the "File name" field. We have no rules about how you name your files.
+Choose the "Save as Type" dropdown and choose "CSV (comma delimited) (*.csv)."
+Choose "Save." Excel converts your spreadsheet to a .csv file. The "Save As > Windows Explorer" secondary window closes.
+Comma-delimited (.csv) format example
+Your .csv file will look something like this:
+400-11-1111,Oak,Janet,A,Jr,400,98765,111021
+402-22-2222,Pine,John,B,,456,87654.01,439199
+403-33-3333,Cedar,James,C,Sr,500,76543.15
+404-44-4444,Alder,Joe,D,,501,65432.20
+405555555,Fir,Jill,,III,502,44444
+Excel (.xlsx) format
+To save your data as an Excel spreadsheet:
+From the menu bar of the spreadsheet tool, select "File > Save As." The "Save As" screen opens.
+Choose "Browse." The "Save As > Windows Explorer" opens as a secondary window.
+In the left pane, choose the folder where you want to save the file.
+Enter the name of the file in the "File name" field. We have no rules about how you name your files.
+Choose "Save." Excel saves your spreadsheet as an Excel file. The "Save As > Windows Explorer" secondary window closes.
+Excel (.xlsx) format example
+Your Excel file will look something like this.
+Remember, do not label the columns. We have labeled them here to make the example easier to read.
+
+Row
+A: SSN or ITIN
+B: Last name
+C: First name
+D: Middle name or initial
+E: Suffix
+F: Hours
+G: Gross wages
+H: SOC Code
+1
+400-11-1111
+Oak
+Janet
+A
+Jr
+400
+98765
+111021
+2
+402-22-2222
+Pine
+John
+B
+ 
+456
+87654.01
+439199
+3
+403-33-3333
+Cedar
+James
+C
+Sr
+500
+76543.15
+123456
+4
+404-44-4444
+Alder
+Joe
+D
+ 
+501
+65432.20
+987654
+5
+405555555
+Fir
+Jill
+ 
+III
+502
+44444
+481516
+
+
+Tab-delimited text (.txt) format
+To convert your data from a spreadsheet into a tab-delimited text file:
+From the menu bar of the spreadsheet tool, select "File > Save As." The "Save As" screen opens.
+Choose "Browse." The "Save As > Windows Explorer" opens as a secondary window.
+In the left pane, select the folder where you want to save the file.
+Enter the name of the file in the "File name" field. We have no rules about how you name your files.
+Choose the "Save as type" dropdown and choose "Text (Tab delimited) (*.txt)."
+Choose "Save." Excel converts your spreadsheet to a .txt file. The "Save As > Windows Explorer" secondary window closes.
+Tab-delimited text (.txt) format example
+Your .txt file will look something like this:
+400-11-1111 Oak Janet A Jr 400 98765 111021
+402-22-2222 Pine John B 456 87654.01 439199
+403-33-3332 Cedar James C Sr 500 76543.15
+404-44-4444 Alder Joe D 501 65432.20
+405555555 Fir Jill III 502 44444

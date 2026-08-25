@@ -1,0 +1,167 @@
+ .CSV File Specifications (v8)
+
+ Paid Leave & WA Cares - Quarterly Wage Reporting
+ Updated May 2024
+
+ Use these file specifications for all wage reports and amendments for all quarters. Your .csv file can be
+ created in Excel or other spreadsheet editing tools.
+
+ Your file format must include employee date of birth and WA Cares exemption status. Download the
+ .CSV Template (v8) at paidleave.wa.gov/reporting.
+
+ Which specifications do I use?
+2019 Specifications (v6)             2021 Specifications (v7)              2023 Specifications (v8)
+
+                                     7-column format                       8-column format
+6-column format
+                                     Added column for WA Cares             Added column for Employee Date of
+Original format
+                                     Exemption                             Birth
+Accepted through Sept. 30, 2023
+                                     Accepted through Sept. 30, 2023       Required starting Oct. 1, 2023
+
+ Employers of any size and employer agents (third-party administrator) with full account access can file
+ quarterly wage reports using a comma separated values file (.csv). File specifications may be adjusted
+ due to changes in the law, by request of a third-party, or for any other reason by the Employment
+ Security Department. The (v8) specifications meet Washington state’s Paid Family and Medical Leave
+ and WA Cares Fund reporting requirements.
+
+ Data submitted in quarterly wage files must follow Chapter 50A.05 RCW, Chapter 50B.04 RCW and
+ related WACs. These requirements are different than what is required for Employment Security
+ Department’s Unemployment Insurance.
+
+
+ More information
+ Download the Employer Toolkit - Reporting and Premiums for more information about due dates, the
+ submission process and making payments: paidleave.wa.gov/help-center/employers.
+
+
+
+
+                                                                                         .CSV FILE SPECIFICATIONS (v8)
+                                                                                                            MAY 2024
+                                                                                                        Page 1 of 4
+  How to format your .csv file
+  Required— Your file format must include employee date of birth and WA Cares exemption status.
+  Download the .CSV Template (v8) at paidleave.wa.gov/reporting or set up your own file.
+
+  Ensure that the data is formatted correctly for each column. When formatting your .csv file, list each
+  employee in a separate row with the headers in the order shown below.
+
+SSN           LastName   FirstName   MiddleInitial   Hours    Wages      WACaresExempt(Y/N)     DOB (MMDDYYYY)
+123-33-1234   Doe        John        B               1200     45322.22   Y                      01011990
+034-35-4567   Smith      Jane                        4        70.00      N                      12/11/2000
+143556786     O’Brian    Robert      H               1300     5000.50                           08181989
+
+
+  SSN: Required.
+     • Employee’s Social Security number (SSN) or Individual Tax Identification Number (ITIN).
+     • 9-digit number, hyphens are optional. Format: ######### or ###-##-####.
+
+  Last Name: Required.
+      • Employee’s last name. May contain letters, spaces, hyphens, and/or apostrophes.
+
+  First Name: Required.
+      • Employee’s first name. May contain letters, spaces, hyphens, and/or apostrophes.
+
+  Middle Initial: Optional.
+     • Employee’s middle initial, if available. A single alphabetical character only.
+
+  Hours: Required.
+     • Employee’s total number of hours worked in relation to the employee’s gross reported wages
+          for the quarter. If there are no hours to report enter “0”.
+     • Must be a whole number. Round fractional hours up to the nearest whole number. Format: 164
+
+  Wages: Required.
+     • Employee’s total gross wages paid to them this quarter. Gross wages do not include tips.
+     • Do not include employees who have zero hours and zero wages.
+     • Must include a decimal mark and two decimal places. Do not include a comma. Format: 1234.00
+
+  WA Cares Exempt: Required.
+     • Is the employee exempt from WA Cares for this quarter? If an employee has provided you with a
+        copy of their WA Cares Exemption approval letter for the reporting quarter, enter ‘Y’ for yes.
+        Otherwise enter ‘N’ for no or leave blank.
+
+  DOB (MMDDYYYY): Required.
+     • Employee’s date of birth (DOB). Format DOB using MMDDYYYY or MM/DD/YYY or MM-DD-YYYY.
+
+
+
+
+                                                                                        .CSV FILE SPECIFICATIONS (v8)
+                                                                                                           MAY 2024
+                                                                                                       Page 2 of 4
+How to save your file as .csv
+When your file is ready, go to File and click Save As. Change the file type to “CSV (Comma delimited)
+(*.csv)” and save the file. Saving the file as a .csv separates (delimits) the columns with commas (“,”)
+instead of vertical lines.
+
+If opened in a plain text editor, your final .csv file should look like this:
+
+
+
+
+Some programs might include quotation marks as text qualifiers when exporting as a .csv file. This file
+format is acceptable and will look like this:
+
+
+
+
+Test your .csv file
+Test your file to make sure it’s formatted correctly: resources.paidleave.wa.gov/single-employer-filing
+
+Do not include actual employee data in your file when testing formatting.
+
+
+
+
+                                                                                        .CSV FILE SPECIFICATIONS (v8)
+                                                                                                           MAY 2024
+                                                                                                       Page 3 of 4
+How to fix common errors
+Column Labels: Make sure your file has all eight columns in the order above. All columns must have a
+label, even if there is no data in that column.
+
+Column Mismatch: Ensure there are no column totals in the file.
+
+SSN: Social Security numbers must be in correct format. When an SSN starts with zeros, the zeros are
+sometimes removed. Example: If “012345678” is changed to “12345678”, the SSN is invalid because it
+has only eight digits.
+
+    In Excel, select the SSN column and change the format to “Social Security Number”:
+      • Right click on the selected area and select Format Cells.
+      • Under “Category”, choose Special.
+      • Change “Type” from ZIP Code to Social Security Number. Click OK.
+
+
+Hours: All hours must be reported as whole numbers. Round up to the nearest whole number. 152.25
+hours should be reported as 153 hours. If there are no hours to report enter “0”.
+    In Excel, select the Hours column and change the format to “Number”:
+      • Right click on the selected area and select Format Cells.
+      • Under “Category”, choose Number.
+      • Change “Decimal places” to 0 and uncheck “Use 1000 Separator”. Click OK.
+
+Wages: All wages must be reported with two decimals, but no commas.
+    In Excel, select the Wages column and change the format to “Number”:
+      • Right click on the selected area and select Format Cells.
+      • Under “Category”, choose Number.
+      • Uncheck “Use 1000 Separator”. Click OK.
+
+DOB: Date of birth can be formatted as text or “Short Date”.
+
+    To format as text in Excel: before inputting data, select the DOB column and change the format to
+    “Text”:
+      • Right click on the selected area and select Format Cells.
+      • Under “Category”, choose Text. Click OK.
+
+    To format as “Short Date” in Excel: select the DOB column and change the format to “Short Date”:
+      • Right click on the selected area and select Format Cells.
+      • Under “Category”, choose Short Date. Click OK.
+
+
+
+
+                                                                                    .CSV FILE SPECIFICATIONS (v8)
+                                                                                                       MAY 2024
+                                                                                                   Page 4 of 4
+

@@ -72,10 +72,13 @@ import {
   type WhoseMoney,
   type BoxMeasure,
 } from "@/lib/payroll/form-box-core";
+import { type W3Form } from "@/lib/payroll/form-w2-core";
 import {
   FORM_941_WHOSE,
   FORM_940_WHOSE,
   FORM_W2_WHOSE,
+  FORM_W3_WHOSE,
+  FORM_ID_W3,
   type WhoseRow,
 } from "@/lib/payroll/form-box-adapters";
 // Imported so the drift gate can compare this file's claims against a return
@@ -147,6 +150,7 @@ export type WhoseSource =
 const FED_941: WhoseSource = { kind: "federal", table: FORM_941_WHOSE };
 const FED_940: WhoseSource = { kind: "federal", table: FORM_940_WHOSE };
 const FED_W2: WhoseSource = { kind: "federal", table: FORM_W2_WHOSE };
+const FED_W3: WhoseSource = { kind: "federal", table: FORM_W3_WHOSE };
 
 /** A Washington row states its classification AND its unit; both are gated. */
 function wa(whose: WhoseMoney, measure: BoxMeasure = "money"): WhoseSource {
@@ -720,6 +724,93 @@ export const FORM_940_TEACHING: readonly TeachingBox[] = [
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 export const FORM_W2_TEACHING: readonly TeachingBox[] = [
+  /*
+   * ═══ THE SIX LETTERED BOXES (books-56) ═══
+   *
+   * WHERE THESE CAPTIONS COME FROM. Read off `/workspace/2025_FORM_W-2_EMPLOYER.pdf`
+   * — Michael's OWN filed 2025 employer copies — with `pdftotext -layout`, so the
+   * captions are the words actually printed above the boxes on the paper he holds.
+   * They are NOT the headings from the instructions, which are worded differently:
+   * the instructions say "Box a—Employee's social security number" while the form
+   * prints "a Employee's SSN". The caption field is defined as the form's own
+   * words, so the form wins. The instructions supply the RULES, quoted verbatim in
+   * the lessons; the paper supplies the LABELS.
+   *
+   * Two details from that extraction are worth recording because they are the
+   * kind of thing a reader would otherwise assume:
+   *
+   *   1. The paper prints boxes e and f as ONE combined block spanning the name
+   *      and address, with "e Employee's first name and initial", "Last name" and
+   *      "Suff." on one line and "f Employee's address and ZIP code" beneath. The
+   *      instructions likewise give them a single joint heading, "Boxes e and
+   *      f—Employee's name and address". They are kept as two boxes here because
+   *      the form prints two letters and the ESD wage detail ties to the NAME
+   *      specifically, not to the address.
+   *
+   *   2. Box f's label prints BELOW its own content on the layout, after box e's
+   *      address lines. That is a quirk of the printed grid, not an error in the
+   *      extraction, and it is why the boxes were read from the labels rather than
+   *      from their vertical order.
+   *
+   * WHY THEY WERE MISSING FOR SEVEN SLICES. Every earlier slice built the
+   * specimen outward from the boxes the W-2 ENGINE emits, and the engine computes
+   * money. Nothing computes a person's name, so nothing put it on the screen.
+   * That is the same shape of defect as books-49's: the form Michael holds has
+   * boxes that the system that teaches the form did not know existed.
+   */
+  {
+    // The first box on the paper, and the one that decides whose year this is.
+    box: "a",
+    caption: "Employee's SSN",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Copied from the employee's social security card — not from a nickname, an old record, or " +
+      "memory. If they have no card yet, the instructions say to enter 'Applied For' on paper, " +
+      "or zeros if e-filing, and never a made-up number. An ITIN must NOT be used here.",
+  },
+  {
+    box: "b",
+    caption: "Employer identification number",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Greenway's own EIN, 46-4217016 on the 2025 forms, and it must be the SAME number used on " +
+      "the quarterly 941s. Not truncated, and never a Social Security number in its place.",
+  },
+  {
+    box: "c",
+    caption: "Employer's name, address, and ZIP code",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Greenway's name and address, matching the 941s. This is the EMPLOYER's block — the " +
+      "employee's address is box f, and confusing the two is easy because they sit adjacent.",
+  },
+  {
+    box: "d",
+    caption: "Control number",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Optional. Your own reference for telling individual W-2s apart. The instructions say you " +
+      "do not have to use this box, and Greenway leaves it empty. Note that the W-3's control " +
+      "number is box a, not box d — the two forms use different letters for the same idea.",
+  },
+  {
+    box: "e",
+    caption: "Employee's first name and initial, Last name, Suff.",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "The name exactly as it appears on the employee's social security card. The last name " +
+      "matters most. Compound names are separated with a hyphen or a space and never joined into " +
+      "one word; titles and degrees are left off; a suffix goes in 'Suff.' only if it is on the " +
+      "card. This is the box the ESD wage detail must agree with, person by person.",
+  },
+  {
+    box: "f",
+    caption: "Employee's address and ZIP code",
+    whoseSource: FED_W2,
+    howItGetsFilled:
+      "Where the employee's own copies are posted. Number, street, and apartment or suite. " +
+      "Distinct from box c, which is Greenway's address.",
+  },
   {
     box: "1",
     caption: "Wages, tips, other compensation",
@@ -905,6 +996,317 @@ export const FORM_W2_TEACHING: readonly TeachingBox[] = [
     howItGetsFilled:
       "Blank for Washington. This names a taxing locality, not a place of business — Greenway's " +
       "address is already in box c. Boxes 18, 19 and 20 are filled or empty as a set.",
+  },
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * §4b  FORM W-3 — the transmittal that goes on top of the W-2s (books-55)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ═══ WHERE THESE CAPTIONS COME FROM ═══
+ *
+ * Read off `/workspace/2025_FORM_W-3.pdf` — Michael's OWN filed 2025
+ * transmittal, ten W-2s, box 1 of $332,975.44 — extracted with `pdftotext
+ * -layout` so the boxes appear in their printed positions. Not from memory, and
+ * not with a label regex: the regex approach has now failed on the 940, the 941
+ * AND this form, and on this one it failed in the worst way available, reporting
+ * "measurement complete, parser hit no problems" while seeing ZERO boxes on all
+ * seven registered forms. Rule 39 committed by a measuring tool. Every count in
+ * this slice was therefore taken by importing the real modules and asking them.
+ *
+ * ═══ THE THREE BOXES ALL PRINTED AS "b" ═══
+ *
+ * The paper prints one lettered box "b" containing THREE separate checkbox
+ * groups: Kind of Payer, Kind of Employer, and Third-party sick pay. The
+ * instructions give each its own heading — "Box b—Kind of Payer", "Box b—Kind of
+ * Employer", "Box b—Third-party sick pay" — so there are three different rules
+ * hiding behind one letter.
+ *
+ * They are given three distinct ids here rather than one. A single "b" box would
+ * have to teach three unrelated rules in one lesson, and the reason they are
+ * separate is not tidiness: the instructions say to check only ONE Kind of Payer
+ * box, only ONE Kind of Employer box, and that Third-party sick pay is
+ * explicitly NOT a kind of payer and may be checked as well as one of the
+ * others. Collapsing them would make that distinction unteachable.
+ *
+ * ═══ BOX 9 HAS NO CAPTION ON THE PAPER, AND THAT IS DELIBERATE ═══
+ *
+ * The layout shows a bare "9" with no label at all, then box 10's label. The
+ * instructions explain it: "Box 9. Do not enter an amount in box 9." It is a
+ * retired box the SSA has stopped naming. The caption below says exactly that,
+ * rather than inventing a label the form does not print.
+ *
+ * ═══ BOX 12b IS PRINTED AND UNDOCUMENTED ═══
+ *
+ * The paper prints "12b" under "12a Deferred compensation", with no label. There
+ * is NO "Box 12b" heading anywhere in the 4,216 lines of the mirrored General
+ * Instructions. Its caption records that, because a caption invented for it
+ * would be the one thing on this screen that no authority backs.
+ */
+export const FORM_W3_TEACHING: readonly TeachingBox[] = [
+  {
+    box: "a",
+    caption: "Control number",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Optional. Your own reference for numbering the whole transmittal, if you number them at " +
+      "all. The SSA does not require it and Greenway leaves it empty.",
+  },
+  {
+    box: "b-kind-of-payer",
+    caption: "Kind of Payer (Check one)",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Tick the one return you file. Greenway files quarterly 941s, so the 941 box is ticked " +
+      "and the other six — Military, 943, 944, CT-1, Hshld. emp., Medicare govt. emp. — are " +
+      "left alone. If you had two kinds of W-2, each kind needs its own separate W-3.",
+  },
+  {
+    box: "b-kind-of-employer",
+    caption: "Kind of Employer (Check one)",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Tick what sort of organisation you are. Greenway is an ordinary for-profit company, so " +
+      "'None apply' is the correct tick — the other four are for tax-exempt bodies and " +
+      "government entities. 'None apply' being right is not the same as nothing being ticked.",
+  },
+  {
+    box: "b-third-party-sick-pay",
+    caption: "Third-party sick pay (Check if applicable)",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Left unticked unless you are a third-party sick pay payer, or are reporting sick pay a " +
+      "third party made. The instructions say this is NOT a kind of payer, which is why it can " +
+      "be ticked as well as one of the boxes above rather than instead of one.",
+  },
+  {
+    box: "c",
+    caption: "Total number of Forms W-2",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Count the completed W-2s inside this envelope. Do NOT count any marked VOID. A count of " +
+      "forms, not of people and not of dollars — Michael's 2025 transmittal says ten.",
+  },
+  {
+    box: "d",
+    caption: "Establishment number",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Optional, and only useful if you split one EIN across several sites and want to file a " +
+      "separate transmittal for each. Greenway files one, so this stays empty.",
+  },
+  {
+    box: "e",
+    caption: "Employer identification number (EIN)",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "The nine-digit EIN, formatted 00-0000000, and it must be the SAME number as on the " +
+      "941s. Never truncated, and never a Social Security number — if you have applied for an " +
+      "EIN but not yet received it, the instructions say to write 'Applied For' here.",
+  },
+  {
+    box: "f",
+    caption: "Employer's name",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "The same name as on the 941s, character for character. The SSA matches on name and EIN " +
+      "together, so a trading name here against a legal name there is enough to break the " +
+      "match.",
+  },
+  {
+    box: "g",
+    caption: "Employer's address and ZIP code",
+    whoseSource: FED_W3,
+    howItGetsFilled: "Greenway's address. Plain text, and it must be a real deliverable address.",
+  },
+  {
+    box: "h",
+    caption: "Other EIN used this year",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Only filled if you used a DIFFERENT EIN on a 941 this year — most often after buying a " +
+      "business and using the previous owner's number for part of the year. Blank for Greenway.",
+  },
+  {
+    box: "1",
+    caption: "Wages, tips, other compensation",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 1 from every W-2 in the envelope, excluding any marked VOID. Nothing is " +
+      "computed here that was not already computed on a W-2 — this is arithmetic on the forms " +
+      "underneath, which is why it can be checked with a calculator.",
+  },
+  {
+    box: "2",
+    caption: "Federal income tax withheld",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 2 from every W-2. This is one of the four figures the IRS compares against " +
+      "your four 941s automatically — it must equal line 3 of the four returns added together.",
+  },
+  {
+    box: "3",
+    caption: "Social security wages",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 3 from every W-2 — each already capped at that year's Social Security wage " +
+      "base on its own form. Must equal line 5a column 1 of the four 941s added together.",
+  },
+  {
+    box: "4",
+    caption: "Social security tax withheld",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 4 from every W-2. Only the employees' 6.2% halves — Greenway's matching half " +
+      "appears on no W-2, so it appears here nowhere either. Against the 941s this should be " +
+      "about HALF what they show, because they carry both halves.",
+  },
+  {
+    box: "5",
+    caption: "Medicare wages and tips",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 5 from every W-2. Uncapped, so this can exceed box 3 once anyone earns above " +
+      "the Social Security wage base. Must equal line 5c column 1 of the four 941s.",
+  },
+  {
+    box: "6",
+    caption: "Medicare tax withheld",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 6 from every W-2 — the 1.45% halves, plus any Additional Medicare Tax on pay " +
+      "above $200,000. That extra 0.9% has no employer match, which is why the 941 comparison " +
+      "is 'approximately twice' rather than exactly twice.",
+  },
+  {
+    box: "7",
+    caption: "Social security tips",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 7 from every W-2. Blank for Greenway, which has no reported tips. It is still " +
+      "one of the four boxes the IRS reconciles, so a figure appearing here unexpectedly is " +
+      "worth chasing before the SSA does.",
+  },
+  {
+    box: "8",
+    caption: "Allocated tips",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 8 from every W-2. Only large food or beverage establishments ever fill this, " +
+      "so it is blank for Greenway.",
+  },
+  {
+    box: "9",
+    caption: "(no caption — the form prints only the number 9)",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Nothing. The instructions say 'Do not enter an amount in box 9', and the printed form " +
+      "does not even give it a label any more. Leaving it empty is the correct entry, not an " +
+      "omission — which is exactly why it is listed here rather than skipped.",
+  },
+  {
+    box: "10",
+    caption: "Dependent care benefits",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 10 from every W-2. Blank for Greenway, which provides no dependent care " +
+      "benefit.",
+  },
+  {
+    box: "11",
+    caption: "Nonqualified plans",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 11 from every W-2. Blank for Greenway, which has no nonqualified deferred " +
+      "compensation plan.",
+  },
+  {
+    box: "12a",
+    caption: "Deferred compensation",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "The ONE box on this form that is not a straight total. Add up only the box 12 amounts " +
+      "coded D through H, S, Y, AA, BB and EE — the retirement deferrals — and enter no code. " +
+      "Everything else in box 12, including code DD for the cost of health coverage, is " +
+      "deliberately left out.",
+  },
+  {
+    box: "12b",
+    caption: "12b (printed on the form with no label and no instruction)",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Left empty. The form prints a second slot under 12a, but the General Instructions " +
+      "contain no 'Box 12b' heading at all — so there is no rule saying what goes here, and " +
+      "this system will not invent one. If a payroll bureau ever fills it, ask them which " +
+      "instruction they are following.",
+  },
+  {
+    box: "13",
+    caption: "For third-party sick pay use only",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Left blank. The instructions say so in those words, and point to Form 8922 for anyone " +
+      "who actually needs to report third-party sick pay.",
+  },
+  {
+    box: "14",
+    caption: "Income tax withheld by payer of third-party sick pay",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Only filled if a third party withheld federal income tax on sick pay for your " +
+      "employees. That money is ALREADY inside the box 2 total; this box shows it separately " +
+      "as well. Blank for Greenway.",
+  },
+  {
+    box: "15",
+    caption: "State / Employer's state ID number",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "The two-letter state code and your state-assigned ID. Greenway is Washington only, so " +
+      "'WA'. If the W-2s in one envelope covered more than one state you would put an 'X' here " +
+      "instead and leave the ID number off entirely.",
+  },
+  {
+    box: "16",
+    caption: "State wages, tips, etc.",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 16 from every W-2. Blank for Greenway because Washington levies no state " +
+      "income tax, so there are no state wages to total.",
+  },
+  {
+    box: "17",
+    caption: "State income tax",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 17 from every W-2. Blank in Washington. Paid Leave and WA Cares ARE withheld " +
+      "from Washington employees but are not income tax and belong in box 14 of the W-2.",
+  },
+  {
+    box: "18",
+    caption: "Local wages, tips, etc.",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 18 from every W-2. Blank for Washington, which has no city or county income " +
+      "tax. Not to be confused with local SALES tax, which never touches a wage form.",
+  },
+  {
+    box: "19",
+    caption: "Local income tax",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Add up box 19 from every W-2. Blank for Washington. A figure here would mean money was " +
+      "taken from employees for a tax that does not exist.",
+  },
+  {
+    box: "contact",
+    caption: "Employer's contact person, telephone number, fax number, and email address",
+    whoseSource: FED_W3,
+    howItGetsFilled:
+      "Whoever the SSA should ring if something is wrong with the filing. Michael's own name, " +
+      "number and email are on the 2025 form. The instructions warn payroll service providers " +
+      "to enter the CLIENT's details here — so if a bureau puts their own contact in, a " +
+      "problem with Greenway's wage report gets resolved without Greenway ever hearing of it.",
   },
 ];
 
@@ -1107,6 +1509,14 @@ export const TEACHING_FORMS: Readonly<Record<string, readonly TeachingBox[]>> = 
   form_941: FORM_941_TEACHING,
   form_940: FORM_940_TEACHING,
   form_w2: FORM_W2_TEACHING,
+  // The transmittal. Registered in books-55. Before that, `form_w3` was already
+  // named in ALL_TAUGHT_FORM_IDS and already had a working title, but asking it
+  // for its boxes THREW. That combination is worse than a plain absence: three
+  // cross-references from the Form 941 confirmation panel pointed at a screen
+  // that could not render, and nothing failed, because the only gate that could
+  // have noticed was never handed that lesson set. See
+  // assertEveryLessonSetWasHandedOver below.
+  form_w3: FORM_W3_TEACHING,
   esd_5208a: ESD_5208A_TEACHING,
   // The wage detail. Present here precisely because it emits no engine lines
   // and would otherwise be the one form with no tab (see its own docblock).
@@ -1164,6 +1574,143 @@ export function teachingBoxes(formId: string): readonly FormBox[] {
     };
   });
 }
+
+/*
+ * ═══ WHY THIS ADAPTER LIVES HERE AND NOT IN form-box-adapters.ts ═══
+ *
+ * Every other `*Boxes` adapter is in `form-box-adapters.ts`, so that is where
+ * this one was written first. It could not stay there.
+ *
+ * `w3Boxes` must start from the teaching specimen (see its docblock for why),
+ * which means calling `teachingBoxes` — and `form-box-teaching-core` already
+ * imports `FORM_W3_WHOSE` FROM `form-box-adapters` at module scope, to build
+ * TEACHING_FORMS. Importing back the other way closes the cycle, and this is
+ * not the harmless kind: TEACHING_FORMS is constructed during module
+ * initialisation, so whichever module happened to load second would see
+ * `undefined` for the other's exports. That failure appears as a null-property
+ * crash at import time, in a file that looks unrelated, and it depends on load
+ * order rather than on anything visible in the code.
+ *
+ * So the function goes on the side of the dependency that already holds both
+ * halves. Rule 25 — extend, never duplicate: the WHOSE tables are not copied
+ * here, they are reached through `teachingBoxes`, which already resolves them.
+ */
+/**
+ * ═══ THE W-3'S BOXES, WITH THE COMPUTED FIGURES OVERLAID (books-55) ═══
+ *
+ * The W-3 screen had a table but no explorer, so the thirty-one W-3 lessons
+ * were unreachable: written, tested, and invisible. This is the adapter that
+ * connects them.
+ *
+ * ─── WHY IT STARTS FROM THE SPECIMEN AND NOT FROM THE FORM ───────────────
+ *
+ * `w2Boxes` maps over a W2Form's own `boxes` array, because a W-2 knows all
+ * twenty of its boxes. A `W3Form` does NOT: it carries the nine figures the
+ * engine totals (boxes 1-6, 12a, 16, 17) and nothing else. There is no field on
+ * it for box a, for the kind-of-payer checkboxes, for box e's EIN, or for the
+ * contact block.
+ *
+ * Mapping over what the W3Form carries would therefore have produced an
+ * explorer with nine boxes and silently orphaned twenty-two lessons. That is
+ * the precise defect this system keeps finding: a renderer that shows a subset
+ * looks completely healthy, because nothing anywhere states what the full set
+ * is (rule 39).
+ *
+ * So the SPECIMEN is the spine — it is the one place that lists all thirty-one
+ * boxes with their captions in the form's own words — and the computed figures
+ * are overlaid onto it where they exist. Every box therefore renders, every
+ * lesson is reachable, and a box the engine cannot yet fill keeps saying "not
+ * computed yet" instead of showing a zero.
+ *
+ * ─── WHY A ZERO WOULD BE A LIE, SPECIFICALLY ─────────────────────────────
+ *
+ * `notComputedYet` is cleared ONLY for boxes this function actually overlays. A
+ * $0.00 in box 4 would state that Greenway withheld no social security tax all
+ * year, which is a factual claim about a tax filing, not a blank. The
+ * distinction is the whole reason `notComputedYet` exists.
+ *
+ * Box 12a is overlaid but deliberately keeps the loudest derivation on the
+ * screen, because it is the one box on this form that is NOT a plain total —
+ * only the deferral codes carry up, and summing all of box 12 into it is the
+ * easiest W-3 error a generator can make.
+ */
+export function w3Boxes(w3: W3Form): readonly FormBox[] {
+  /*
+   * Money boxes the engine really computes, in cents. Anything absent from
+   * this map keeps the specimen's "not computed yet", which is the honest
+   * answer for a box nothing populates.
+   *
+   * Rule 62d: no defaults invented here. A box missing from this map is a box
+   * we cannot fill, and it must SAY so rather than resolve to zero.
+   */
+  const computed = new Map<string, number>([
+    ["1", w3.box1Cents],
+    ["2", w3.box2Cents],
+    ["3", w3.box3Cents],
+    ["4", w3.box4Cents],
+    ["5", w3.box5Cents],
+    ["6", w3.box6Cents],
+    ["12a", w3.box12aCents],
+    ["16", w3.box16Cents],
+    ["17", w3.box17Cents],
+  ]);
+
+  return teachingBoxes(FORM_ID_W3).map((b): FormBox => {
+    /*
+     * Box c is the form count, and it is a COUNT, not money. It is overlaid
+     * through `quantity` rather than `amountCents` so the formatter cannot
+     * render ten W-2s as "$0.10" — a wrong answer that looks like a
+     * formatting nit and therefore survives review.
+     */
+    if (b.box === "c") {
+      return {
+        ...b,
+        quantity: w3.formCount,
+        notComputedYet: null,
+        derivation:
+          `${b.derivation} — counted from the W-2s this run produced: ${w3.formCount} ` +
+          `included` +
+          (w3.voidedCount > 0
+            ? `, and ${w3.voidedCount} marked VOID and therefore excluded, which is what the ` +
+              `instructions require`
+            : ``),
+      };
+    }
+
+    const cents = computed.get(b.box);
+    if (cents === undefined) return b;
+
+    /*
+     * Boxes 16 and 17 are the Washington case, and they are handled like the
+     * W-2's: blank BECAUSE Washington has no state income tax, and said so
+     * out loud. The condition is on the VALUE, not on the state, so a
+     * Washington employer with an employee working in Oregon still shows the
+     * figure instead of a hard-coded blank.
+     */
+    const isWaStateBox = (b.box === "16" || b.box === "17") && cents === 0;
+
+    return {
+      ...b,
+      amountCents: cents,
+      notComputedYet: null,
+      emphasise: b.box === "1",
+      blankOnPurpose: isWaStateBox
+        ? "Blank because Washington has no state income tax, so there is nothing for the " +
+          "transmittal to total. This is correct and permanent, not a missing figure. Paid " +
+          "Family and Medical Leave and WA Cares ARE withheld from Washington employees, but " +
+          "they are not income tax and do not belong here."
+        : null,
+      derivation:
+        b.box === "12a"
+          ? `${b.derivation} — FILTERED, not a plain total: only the deferral codes carry up. ` +
+            `Codes DD and C are excluded on purpose, and a naive sum of every box 12 would ` +
+            `have overstated this by ` +
+            `${(w3.box12ExcludedFromW3Cents / 100).toFixed(2)} dollars.`
+          : b.derivation,
+    };
+  });
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * §7  SELF-TESTS (rule 5)
@@ -1252,6 +1799,230 @@ export function assertEveryTieResolves(lessons: readonly BoxLesson[]): void {
   assert(
     checked > 0,
     `no ties were checked across ${lessons.length} lessons, so this proves nothing`,
+  );
+}
+
+/**
+ * ═══ THE GATE THAT WATCHES THE GATES (books-55) ═══
+ *
+ * `assertEveryTieResolves` and `assertEveryTaughtBoxHasASpecimen` were both
+ * correct at books-54. They still found nothing wrong with three dead
+ * cross-references, because the test that called them listed FOUR lesson sets
+ * by hand and the repository contained FIVE. The fifth,
+ * `FORM_941_CONFIRMATION_LESSONS`, held three ties into `form_w3` — a form that
+ * threw when asked for its boxes. Nobody was lying and nothing was broken; the
+ * verifier was simply never shown a fifth of the material, so it approved it.
+ *
+ * That is the same failure the books-54 gate was written to prevent, committed
+ * by the slice that wrote it. Fixing the one test would leave a sixth set free
+ * to repeat it, so the class is closed here instead of the instance.
+ *
+ * The mechanism is to make the caller state a NUMBER. A number cannot be
+ * satisfied by adding a file: whoever adds a sixth lesson module must either
+ * hand it over or edit this count and explain why, in the diff, where a reader
+ * will see it. The companion gate in the test file goes further and reads the
+ * count out of the repository's own source, so the number itself cannot rot.
+ *
+ * `sets` is named rather than anonymous so a failure says which file to open.
+ * Both per-set gates are run here as well, so a caller cannot hand over the
+ * full list and then forget to check half of it.
+ */
+/**
+ * Whether a lesson set teaches boxes that exist on PAPER.
+ *
+ * This distinction was forced by the fifth set and is worth recording, because
+ * the obvious version of this gate is wrong in a dangerous direction.
+ *
+ * `FORM_941_CONFIRMATION_LESSONS` uses formId "filed_941" and boxes "why",
+ * "doubling", "5d" and "source". Those are not lines of a return. They are the
+ * four questions the confirmation SCREEN raises, and the module says so
+ * explicitly: the id is deliberately not "form_941" so these lessons cannot
+ * shadow the real line lessons. There is no printed W-3-style specimen for them
+ * because there is no printed page.
+ *
+ * So `assertEveryTaughtBoxHasASpecimen` cannot apply to it — and when the gate
+ * was first pointed at all five sets, it threw. The tempting fixes were both
+ * bad: silently skip the set (which is how it came to be missed in the first
+ * place), or invent a specimen table for a screen, which would put four
+ * fabricated "captions" into a system whose whole claim is that every caption
+ * is the form's own words (rule 62d).
+ *
+ * The honest fix is to make the set STATE which kind it is, and then to check
+ * the statement. A set that claims "screen-only" while its formId is in fact a
+ * printed form registered in TEACHING_FORMS is a stale exemption, and a stale
+ * exemption is a standing licence for a real gap to pass unnoticed. So that
+ * claim is verified in both directions below.
+ */
+export type LessonSetKind = "printed-form" | "screen-only";
+
+/**
+ * The smallest number of lesson sets this repository has ever had since the
+ * gate below was written. A BACKSTOP, not the expected count.
+ *
+ * The expected count is supplied by the caller, which reads it off the source
+ * tree, so this number does not need to track growth. It exists only so that a
+ * caller which hard-codes `assertEveryLessonSetWasHandedOver(sets, 1)` cannot
+ * switch the gate off. Raising it is fine; LOWERING it means a lesson module
+ * was deleted, and that must be a deliberate, commented act.
+ *
+ * MEASURED at books-56: 940, 941, W-2, W-3, WA, 941-confirmation = 6.
+ */
+export const MIN_LESSON_SETS = 6;
+
+/**
+ * How many lesson sets may be exempt from the printed-specimen check.
+ *
+ * books-55 wrote the companion floor as `printed >= 4`, naming the four
+ * printed sets of the day in the failure message. That number goes stale in the
+ * same direction as the one above: with six sets, `printed >= 4` would accept
+ * TWO unexplained screen-only exemptions, and a mislabelled set is exactly how
+ * a real form stops being checked against its own paper.
+ *
+ * Expressing it as a cap on exemptions instead of a floor on printed sets makes
+ * it self-adjusting: every set added must be printed-form, or must argue for a
+ * raise to this constant in its own commit. Today exactly one set is exempt —
+ * `FORM_941_CONFIRMATION_LESSONS`, which teaches a screen and has no paper.
+ */
+export const MAX_SCREEN_ONLY_LESSON_SETS = 1;
+
+export type NamedLessonSet = {
+  readonly name: string;
+  readonly lessons: readonly BoxLesson[];
+  readonly kind: LessonSetKind;
+};
+
+export function assertEveryLessonSetWasHandedOver(
+  sets: readonly NamedLessonSet[],
+  expectedSetCount: number,
+): void {
+  /*
+   * Rule 66d: assert existence before absence. Called with an empty array and
+   * an expected count of zero, every loop below is a no-op and the function
+   * would certify that the repository's cross-references are sound while having
+   * read none of them. So a floor comes first.
+   *
+   * books-55 wrote this floor as the literal `5`, being the number of sets that
+   * existed that day. books-56 added the W-3 set and the floor was instantly
+   * one short of the truth — it would have accepted a list of five when six
+   * exist, which is the precise defect the whole function was written to stop.
+   * A floor that must be hand-edited every time the thing it measures grows is
+   * a floor that is wrong between edits (rule 23: fix the class).
+   *
+   * So the floor is now the count the CALLER derived from the source tree, and
+   * the caller's job is to derive it rather than type it. `MIN_LESSON_SETS` is
+   * only a backstop against a caller that hard-codes something tiny; it is
+   * deliberately the count at the slice that introduced this comment, and if it
+   * ever needs raising the source-tree gate in
+   * `form-box-teaching-core.test.ts` will have failed first and by name.
+   */
+  assert(
+    expectedSetCount >= MIN_LESSON_SETS,
+    `this repository has had at least ${MIN_LESSON_SETS} lesson sets since books-56, so an ` +
+      `expected count of ${expectedSetCount} means either a set was deleted — say so ` +
+      `deliberately, and lower ${MIN_LESSON_SETS} in the same commit — or this call is not ` +
+      `checking what it claims to check`,
+  );
+  assert(
+    sets.length === expectedSetCount,
+    `handed ${sets.length} lesson sets but ${expectedSetCount} were expected. If a lesson ` +
+      `module was added, hand it over here too: the books-54 dead-tie gate was correct and ` +
+      `still missed three dead ties, purely because one of five sets was never passed to it. ` +
+      `Sets handed over: ${sets.map((s) => s.name).join(", ")}`,
+  );
+
+  const seenNames = new Set<string>();
+  for (const s of sets) {
+    assert(
+      !seenNames.has(s.name),
+      `lesson set "${s.name}" was handed over twice, which inflates the count and lets a ` +
+        `genuinely missing set hide behind a duplicate`,
+    );
+    seenNames.add(s.name);
+    /*
+     * An empty set satisfies both gates below vacuously. If a module is
+     * gutted, that must fail here rather than read as a clean pass.
+     */
+    assert(
+      s.lessons.length > 0,
+      `lesson set "${s.name}" is empty, so checking it proves nothing about it`,
+    );
+
+    /*
+     * Ties are checked for EVERY set regardless of kind. A screen-only panel
+     * still points Michael at boxes on real forms, and those three ties into
+     * `form_w3` are exactly the ones that were dead from books-48 to books-55.
+     */
+    assertEveryTieResolves(s.lessons);
+
+    if (s.kind === "printed-form") {
+      assertEveryTaughtBoxHasASpecimen(s.lessons);
+    } else {
+      /*
+       * The exemption is verified, not taken on trust, in both directions.
+       *
+       * Forward: a set calling itself screen-only must genuinely have no
+       * registered specimen. The day somebody registers `filed_941` in
+       * TEACHING_FORMS, this exemption becomes a hole and must be deleted, so
+       * the build says so instead of quietly skipping a set that could now be
+       * checked properly.
+       */
+      for (const l of s.lessons) {
+        assert(
+          TEACHING_FORMS[l.formId] === undefined,
+          `lesson set "${s.name}" is declared screen-only, but form "${l.formId}" now HAS a ` +
+            `teaching specimen. The exemption is stale: change its kind to "printed-form" so ` +
+            `its boxes are checked against the specimen instead of skipped`,
+        );
+      }
+      /*
+       * Backward: a screen-only set must still be internally coherent. Without
+       * this, "screen-only" would mean "unchecked", which is a worse hole than
+       * the one this whole function exists to close. Every lesson must carry
+       * the teaching fields the panel actually renders, so a gutted lesson
+       * cannot hide behind the exemption.
+       */
+      for (const l of s.lessons) {
+        assert(
+          l.headline.length > 0 && l.plainEnglish.length > 0 && l.whatToDo.length > 0,
+          `lesson set "${s.name}" box ${l.box} is screen-only and therefore exempt from the ` +
+            `specimen check, so it must at least be a complete lesson; this one has an empty ` +
+            `headline, plain-English body or next step`,
+        );
+      }
+    }
+  }
+
+  /*
+   * Rule 66d again, one level up: the loop above would be satisfied by every
+   * set calling itself screen-only, in which case the specimen gate ran zero
+   * times and this function's most important check did nothing.
+   *
+   * Stated as a CAP ON EXEMPTIONS rather than a floor on printed sets, so it
+   * tightens automatically as sets are added instead of loosening. See
+   * MAX_SCREEN_ONLY_LESSON_SETS.
+   */
+  const screenOnly = sets.filter((s) => s.kind === "screen-only");
+  assert(
+    screenOnly.length <= MAX_SCREEN_ONLY_LESSON_SETS,
+    `${screenOnly.length} of ${sets.length} lesson sets claim to be screen-only ` +
+      `(${screenOnly.map((s) => s.name).join(", ")}), but at most ` +
+      `${MAX_SCREEN_ONLY_LESSON_SETS} may be. A screen-only set is NOT checked against the ` +
+      `form's printed captions, so mislabelling one is how a real form silently stops being ` +
+      `verified. If a genuinely new screen panel has been added, raise ` +
+      `MAX_SCREEN_ONLY_LESSON_SETS in the same commit and say why`,
+  );
+  /*
+   * And the positive form of the same statement, because a cap alone is
+   * satisfied by a list of zero sets, which the length check above already
+   * refuses but only as long as it stays above the cap.
+   */
+  const printed = sets.length - screenOnly.length;
+  assert(
+    printed >= MIN_LESSON_SETS - MAX_SCREEN_ONLY_LESSON_SETS,
+    `only ${printed} of ${sets.length} lesson sets were checked against a printed specimen, ` +
+      `and at least ${MIN_LESSON_SETS - MAX_SCREEN_ONLY_LESSON_SETS} teach real forms ` +
+      `(940, 941, W-2, W-3, WA), so a lower number means a set was mislabelled screen-only ` +
+      `and its boxes are no longer being checked`,
   );
 }
 

@@ -212,7 +212,8 @@ export const I9_REVERIFICATION_BEFORE_EXPIRY: GuidanceAuthority = {
     "fee must reverify on the Form I-9 to reflect that the individual is still authorized to work " +
     "in the United States; otherwise, the individual may no longer be employed, recruited, or " +
     "referred. Reverification on the Form I-9 must occur not later than the date work authorization " +
-    "expires",
+    "expires and must comply with the applicable document presentation and examination procedures " +
+    "in paragraphs (b)(1)(ii)(A) and (b)(1)(ix) of this section, and form instructions.",
   soWhat:
     "If an employee's work authorization has an expiration date, that date is a deadline for YOU. " +
     "Miss it and the rule does not say 'fix it soon' — it says they may no longer be employed. This " +
@@ -397,7 +398,9 @@ export const W4_CHANGE_OF_STATUS_TEN_DAYS: GuidanceAuthority = {
     "If, on any day during the calendar year, the employee experiences a change of status that " +
     "reduces the employee's withholding allowance or withholding allowances, in the manner described " +
     "in paragraph (b)(2) of this section, the employee must, within 10 days after the change occurs, " +
-    "furnish the employer with a new withholding allowance certificate",
+    "furnish the employer with a new withholding allowance certificate claiming the withholding " +
+    "allowance to which the employee is entitled under \u00a7 31.3402(f)(1)-1(b), unless paragraph " +
+    "(b)(3) of this section applies to the employee.",
   soWhat:
     "A W-4 is not filed once and forgotten. If something changes that should INCREASE an employee's " +
     "withholding — a divorce, a child who no longer qualifies, a second job in the household — they " +

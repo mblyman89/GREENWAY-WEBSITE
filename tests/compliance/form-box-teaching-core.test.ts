@@ -40,6 +40,10 @@ import {
   assertNoSpecimenClaimsAFigure,
   assertEveryTieResolves,
   assertEveryTaughtBoxHasASpecimen,
+  assertEveryLessonSetWasHandedOver,
+  MIN_LESSON_SETS,
+  MAX_SCREEN_ONLY_LESSON_SETS,
+  type NamedLessonSet,
   __runFormBoxTeachingCoreTests,
 } from "@/lib/payroll/form-box-teaching-core";
 import { formatBoxValue, boxIsEmpty, boxTone } from "@/lib/payroll/form-box-core";
@@ -47,7 +51,45 @@ import type { BoxLesson } from "@/lib/payroll/form-box-core";
 import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
+import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
+import { FORM_941_CONFIRMATION_LESSONS } from "@/lib/payroll/form-941-confirmation-lessons";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * ═══ THE LIST OF LESSON SETS IS READ OUT OF THE REPOSITORY (books-55) ═══
+ *
+ * MEASURED, not assumed: at books-54 this file listed FOUR lesson sets and the
+ * repository contained FIVE. The fifth was `FORM_941_CONFIRMATION_LESSONS`, and
+ * it held THREE dead cross-references into `form_w3` — a form that threw when
+ * asked for its boxes. The dead-tie gate added in books-54 was correct and
+ * found nothing, because it was handed four fifths of the material.
+ *
+ * A hand-maintained list of files cannot be trusted to stay complete: whoever
+ * adds the sixth module has no reason to know this test exists. So the list is
+ * derived from the source tree, and the hand-written table below is checked
+ * AGAINST it. The hand-written table still exists because it carries the one
+ * thing the source cannot state — whether a set teaches boxes that exist on
+ * paper — but it can no longer be short without failing.
+ *
+ * Rule 39: a verifier that cannot see something approves it. This makes the
+ * verifier see the whole tree.
+ */
+const PAYROLL_SRC = join(process.cwd(), "src", "lib", "payroll");
+
+/** Every `export const X: readonly BoxLesson[]` in the payroll library. */
+function lessonSetDeclarationsInSource(): readonly { readonly file: string; readonly symbol: string }[] {
+  const found: { file: string; symbol: string }[] = [];
+  for (const file of readdirSync(PAYROLL_SRC)) {
+    if (!file.endsWith(".ts")) continue;
+    const text = readFileSync(join(PAYROLL_SRC, file), "utf8");
+    const re = /export const (\w+)\s*:\s*readonly BoxLesson\[\]\s*=/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) found.push({ file, symbol: m[1] });
+  }
+  return found;
+}
 
 describe("the teaching specimen agrees with the engine", () => {
   it("runs every pure self-test in the module", () => {
@@ -147,48 +189,317 @@ describe("every cross-reference between forms goes somewhere real", () => {
     ).not.toThrow();
   });
 
-  it("resolves every tie in all four lesson sets", () => {
-    /*
-     * Held as data with the set NAME attached, so a failure says which file to
-     * open. Iterating anonymous arrays would report "expected not to throw"
-     * and leave the reader to find which of four modules was at fault.
-     */
-    const SETS: readonly { readonly name: string; readonly lessons: readonly BoxLesson[] }[] = [
-      { name: "form-box-lessons-940.ts", lessons: FORM_940_LESSONS },
-      { name: "form-box-lessons-941.ts", lessons: FORM_941_LESSONS },
-      { name: "form-box-lessons-w2.ts", lessons: FORM_W2_BOX_LESSONS },
-      { name: "form-box-lessons-wa.ts", lessons: WA_QUARTERLY_LESSONS },
-    ];
+  /**
+   * The five sets, with the one fact the source tree cannot tell us.
+   *
+   * `kind` is why this table still exists. `FORM_941_CONFIRMATION_LESSONS`
+   * teaches the four questions the 941 CONFIRMATION SCREEN raises — its boxes
+   * are "why", "doubling", "5d" and "source" — so it has no printed specimen
+   * and cannot have one. Inventing captions for a screen would put four
+   * fabricated "form's own words" into a system whose entire claim is that
+   * every caption is quoted from paper (rule 62d). The exemption is declared
+   * here and then VERIFIED in both directions inside
+   * `assertEveryLessonSetWasHandedOver`, so it cannot go stale.
+   */
+  const SETS: readonly NamedLessonSet[] = [
+    { name: "form-box-lessons-940.ts", lessons: FORM_940_LESSONS, kind: "printed-form" },
+    { name: "form-box-lessons-941.ts", lessons: FORM_941_LESSONS, kind: "printed-form" },
+    { name: "form-box-lessons-w2.ts", lessons: FORM_W2_BOX_LESSONS, kind: "printed-form" },
+    { name: "form-box-lessons-w3.ts", lessons: FORM_W3_BOX_LESSONS, kind: "printed-form" },
+    { name: "form-box-lessons-wa.ts", lessons: WA_QUARTERLY_LESSONS, kind: "printed-form" },
+    {
+      name: "form-941-confirmation-lessons.ts",
+      lessons: FORM_941_CONFIRMATION_LESSONS,
+      kind: "screen-only",
+    },
+  ];
 
+  /**
+   * THE TEST THAT WOULD HAVE CAUGHT THE BOOKS-54 MISS.
+   *
+   * It does not read the lessons at all. It reads the SOURCE TREE, counts the
+   * `readonly BoxLesson[]` declarations, and asserts the table above accounts
+   * for every one of them. A sixth lesson module fails this immediately, by
+   * name, without anybody having had to remember this file exists.
+   */
+  it("hands over every lesson set that exists in the source tree", () => {
+    const declared = lessonSetDeclarationsInSource();
+
+    // Rule 66d: assert existence before absence. A regex that matched nothing
+    // would make this test certify completeness having found no sets at all.
+    expect(
+      declared.length,
+      "found no lesson-set declarations in src/lib/payroll — the pattern this test greps for " +
+        "has changed, so it is now proving nothing",
+    ).toBeGreaterThanOrEqual(MIN_LESSON_SETS);
+
+    /*
+     * ═══ THE FILE-LEVEL DEDUPE HOLE, FOUND IN books-56 ═══
+     *
+     * This comparison was written on FILE NAMES, deduped with a Set. That is
+     * one assumption away from being wrong: it assumes one lesson set per file.
+     * Nothing enforces that. The moment somebody declares a second
+     * `readonly BoxLesson[]` inside an existing module — the cheapest possible
+     * way to add lessons, and the obvious thing to do for, say, a second WA
+     * form — the two declarations collapse into one file name, this gate stays
+     * green, and the new set is never handed to the tie checker. That is the
+     * books-54 defect wearing a different hat.
+     *
+     * The table below hands over SYMBOLS, one row per set, so the honest
+     * comparison is symbol-to-symbol. File names are still reported because
+     * they are what a human needs in order to open the right file.
+     *
+     * MEASURED at books-56, before this was rewritten: six declarations in six
+     * files, so the old comparison happened to be right — by luck, not by
+     * design. Rule 39: it could not see the case it would have approved.
+     */
+    const perFile = new Map<string, number>();
+    for (const d of declared) perFile.set(d.file, (perFile.get(d.file) ?? 0) + 1);
+    const crowded = [...perFile.entries()].filter(([, n]) => n > 1);
+    expect(
+      crowded.map(([f, n]) => `${f} declares ${n}`),
+      "a source file declares more than one BoxLesson set. That is allowed, but this gate " +
+        "compares FILE NAMES, so the extra set would be invisible here and would never reach " +
+        "the tie checker. Either split it into its own module, or rewrite this comparison " +
+        "over symbols before adding it to the table below.",
+    ).toEqual([]);
+
+    const filesInSource = [...new Set(declared.map((d) => d.file))].sort();
+    const filesHandedOver = [...new Set(SETS.map((s) => s.name))].sort();
+
+    // With one set per file proven above, counting rows must equal counting
+    // files. If it does not, the table has a duplicate row (rule 66b).
+    expect(
+      SETS.length,
+      `the table hands over ${SETS.length} rows but only ${filesHandedOver.length} distinct ` +
+        `file names, so a row is duplicated and is padding the count`,
+    ).toBe(filesHandedOver.length);
+
+    expect(
+      filesHandedOver,
+      `the source tree declares BoxLesson sets in ${filesInSource.length} files but this test ` +
+        `hands over ${filesHandedOver.length}. Missing: ` +
+        `${filesInSource.filter((f) => !filesHandedOver.includes(f)).join(", ") || "(none)"}. ` +
+        `Extra: ${filesHandedOver.filter((f) => !filesInSource.includes(f)).join(", ") || "(none)"}. ` +
+        `This is the exact defect that let three dead ties survive books-54.`,
+    ).toEqual(filesInSource);
+
+    console.log(
+      `form-box-teaching-core: ${declared.length} lesson sets in source ` +
+        `(${declared.map((d) => `${d.symbol}@${d.file}`).join(", ")}), all handed over`,
+    );
+  });
+
+  it("resolves every tie in every lesson set", () => {
     let ties = 0;
     for (const s of SETS) {
       expect(() => assertEveryTieResolves(s.lessons), `dead tie in ${s.name}`).not.toThrow();
-      ties += s.lessons.reduce((n, l) => n + l.tiesTo.length, 0);
+      const own = s.lessons.reduce((n, l) => n + l.tiesTo.length, 0);
+      /*
+       * Rule 66d per set, not just in total. A total floor is satisfied by one
+       * fat module while another is emptied to zero, and a set with no ties at
+       * all is a set this test approved without following a single reference.
+       */
+      expect(own, `lesson set ${s.name} has no cross-references at all`).toBeGreaterThan(0);
+      ties += own;
     }
 
     /*
      * A floor on the total, so this cannot pass by the lesson modules being
-     * emptied. 56 is the measured count at books-54; it may only grow.
+     * emptied.
+     *
+     * MEASURED at books-56: 96 = the 62 counted at books-55 across five sets,
+     * plus 34 in the new W-3 set. The books-54 figure of 56 was measured across
+     * four of the five sets that existed and was reported to Michael as a
+     * total, which it was not; that error is recorded in his books-55/56 owner
+     * report rather than quietly corrected.
      */
-    expect(ties, "far fewer ties than expected; a lesson module lost its content").toBeGreaterThanOrEqual(56);
+    expect(
+      ties,
+      "far fewer ties than expected; a lesson module lost its content",
+    ).toBeGreaterThanOrEqual(96);
+    console.log(`form-box-teaching-core: ${ties} cross-references, all resolving`);
   });
 
   /**
-   * The companion check, applied to all four sets rather than the one.
+   * The combined gate, plus proof that it refuses every way of being fooled.
+   *
+   * Rule 15: a gate nobody has watched fail is a decoration.
+   */
+  it("refuses a short list, a duplicate, a gutted set and a stale exemption", () => {
+    /*
+     * Every number below is DERIVED from SETS, not typed.
+     *
+     * books-55 wrote this block with the literals `5` and `slice(0, 4)`. When
+     * books-56 added the W-3 set, six of the seven cases silently stopped
+     * testing what their comments claimed: `slice(0, 4)` was no longer "one
+     * short", it was two short, and case 6 reached for `SETS[4]` expecting the
+     * screen-only set and got the W-3 set instead — so the "stale exemption"
+     * case would have been exercising a completely different code path while
+     * still going green. A test whose meaning depends on the ORDER of a table
+     * somebody else edits is a test that quietly changes subject.
+     */
+    const N = SETS.length;
+    const screenOnlyIndex = SETS.findIndex((s) => s.kind === "screen-only");
+    // Rule 66d: the cases below are built out of this index. If it is -1 the
+    // whole block would test nothing while appearing to test everything.
+    expect(
+      screenOnlyIndex,
+      "no screen-only set found, so the stale-exemption cases below would be built from " +
+        "SETS[-1] === undefined and would throw for the wrong reason",
+    ).toBeGreaterThanOrEqual(0);
+    const oneShort = SETS.filter((_, i) => i !== screenOnlyIndex);
+    expect(oneShort.length).toBe(N - 1);
+
+    expect(() => assertEveryLessonSetWasHandedOver(SETS, N)).not.toThrow();
+
+    // 1. the books-54 defect itself: one set fewer handed over than exist
+    expect(() => assertEveryLessonSetWasHandedOver(oneShort, N)).toThrow(
+      new RegExp(`handed ${N - 1}`),
+    );
+
+    // 2. and it cannot be silenced by lowering the expected count to match
+    expect(() => assertEveryLessonSetWasHandedOver(oneShort, N - 1)).toThrow(
+      /at least \d+ lesson sets/,
+    );
+
+    // 3. nothing to check is not a pass
+    expect(() => assertEveryLessonSetWasHandedOver([], 0)).toThrow(/at least \d+ lesson sets/);
+
+    // 3b. and the backstop cannot be walked down one at a time
+    expect(() =>
+      assertEveryLessonSetWasHandedOver(SETS.slice(0, MIN_LESSON_SETS - 1), MIN_LESSON_SETS - 1),
+    ).toThrow(/at least \d+ lesson sets/);
+
+    // 4. a duplicate must not pad the count in place of a missing set
+    expect(() => assertEveryLessonSetWasHandedOver([...oneShort, SETS[0]], N)).toThrow(/twice/);
+
+    // 5. an emptied module must not read as a clean pass
+    expect(() =>
+      assertEveryLessonSetWasHandedOver(
+        [...oneShort, { name: "gutted.ts", lessons: [], kind: "printed-form" }],
+        N,
+      ),
+    ).toThrow(/is empty/);
+
+    // 6. a screen-only exemption over a form that DOES have a specimen is
+    //    stale, and a stale exemption is a licence for a real gap. Built from
+    //    the located screen-only row, so it cannot drift onto another set.
+    expect(() =>
+      assertEveryLessonSetWasHandedOver(
+        [...oneShort, { ...SETS[screenOnlyIndex], lessons: FORM_940_LESSONS }],
+        N,
+      ),
+    ).toThrow(/exemption is stale/);
+
+    // 7. declaring everything screen-only must not switch the specimen check
+    //    off. With the cap now expressed over exemptions this is refused twice
+    //    over, which is the point.
+    expect(() =>
+      assertEveryLessonSetWasHandedOver(
+        SETS.map((s) => ({ ...s, kind: "screen-only" as const })),
+        N,
+      ),
+    ).toThrow(/exemption is stale|printed specimen|claim to be screen-only/);
+
+    /*
+     * 8. NEW at books-56 — and the first draft of this case was WRONG, which
+     *    is worth recording because it is the subtlest kind of bad test.
+     *
+     *    The first draft flipped SETS[0] (the 940 lessons) to screen-only and
+     *    accepted a throw matching /claim to be screen-only|exemption is
+     *    stale/. It went green — but via the SECOND alternative, because
+     *    `form_940` is registered in TEACHING_FORMS so the stale-exemption
+     *    check fires first and the cap is never reached. The mutation that
+     *    proves it: raising MAX_SCREEN_ONLY_LESSON_SETS from 1 to 2 left all
+     *    nineteen tests green. The cap was decoration (rule 15).
+     *
+     *    To reach the cap the extra set must be LEGITIMATELY screen-only —
+     *    a formId with no printed specimen — so the stale check stays silent
+     *    and only the cap can object. `filed_941` is such an id: it is the
+     *    confirmation screen and is deliberately not in TEACHING_FORMS.
+     */
+    const secondScreenPanel: NamedLessonSet = {
+      name: "hypothetical-second-screen-panel.ts",
+      lessons: FORM_941_CONFIRMATION_LESSONS,
+      kind: "screen-only",
+    };
+    // Guard the premise: if `filed_941` ever gains a specimen this case stops
+    // testing the cap and silently reverts to testing the stale check.
+    for (const l of secondScreenPanel.lessons) {
+      expect(
+        TEACHING_FORMS[l.formId],
+        `form "${l.formId}" now has a printed specimen, so this case no longer reaches the ` +
+          `screen-only cap and must be rebuilt on a form that genuinely has no paper`,
+      ).toBeUndefined();
+    }
+    const withTwoPanels: readonly NamedLessonSet[] = [
+      ...SETS.filter((s) => s.kind === "printed-form").slice(1),
+      SETS[screenOnlyIndex],
+      secondScreenPanel,
+    ];
+    expect(withTwoPanels.length).toBe(N);
+    expect(withTwoPanels.filter((s) => s.kind === "screen-only").length).toBe(2);
+    expect(() => assertEveryLessonSetWasHandedOver(withTwoPanels, N)).toThrow(
+      /claim to be screen-only/,
+    );
+  });
+
+  /**
+   * ═══ THE CAP MUST BE EXACTLY AS LOOSE AS REALITY (books-56) ═══
+   *
+   * Both constants are hand-written numbers, and a hand-written number with
+   * SLACK in it is a permission slip nobody remembers granting. If
+   * MAX_SCREEN_ONLY_LESSON_SETS is 2 while only one set is genuinely a screen
+   * panel, then one printed form may be mislabelled and skipped, and — proved
+   * by mutation — every test above stays green.
+   *
+   * So the constants are pinned to the measured table. This is the only test
+   * that reads them as data rather than using them as a threshold, and it is
+   * what makes raising either of them a deliberate act with a visible failure
+   * rather than a quiet loosening.
+   */
+  it("keeps both hand-written lesson-set constants pinned to the measured truth", () => {
+    expect(
+      MAX_SCREEN_ONLY_LESSON_SETS,
+      "the screen-only cap has slack in it: it permits more exempt sets than actually exist, " +
+        "so a printed form could be mislabelled screen-only and skip the specimen check with " +
+        "every gate still green. Lower it to the real count, or add the screen panel that " +
+        "justifies it in the same commit.",
+    ).toBe(SETS.filter((s) => s.kind === "screen-only").length);
+
+    expect(
+      MIN_LESSON_SETS,
+      "the lesson-set backstop no longer matches the number of sets that exist. Raised too " +
+        "high it fails every honest call; left too low it stops being a backstop at all.",
+    ).toBe(SETS.length);
+  });
+
+  /**
+   * The companion check, applied to every set that teaches a printed form.
    *
    * `assertEveryTaughtBoxHasASpecimen` has existed since books-49 but was
-   * called for the W-2 lessons ONLY. It passes for all four — measured, not
-   * assumed — so the other three were correct by luck rather than by gate.
+   * called for the W-2 lessons ONLY. It passes for all five printed sets —
+   * measured, not assumed — so the other four were correct by luck rather
+   * than by gate. The one screen-only set is checked differently; see the
+   * `kind` field above.
    */
-  it("gives every taught box a specimen, in all four lesson sets", () => {
-    for (const lessons of [
-      FORM_940_LESSONS,
-      FORM_941_LESSONS,
-      FORM_W2_BOX_LESSONS,
-      WA_QUARTERLY_LESSONS,
-    ]) {
-      expect(() => assertEveryTaughtBoxHasASpecimen(lessons)).not.toThrow();
+  it("gives every taught box a specimen, in every printed-form lesson set", () => {
+    let checkedSets = 0;
+    for (const s of SETS) {
+      if (s.kind !== "printed-form") continue;
+      expect(() => assertEveryTaughtBoxHasASpecimen(s.lessons), s.name).not.toThrow();
+      checkedSets += 1;
     }
+    /*
+     * Rule 66d: prove the loop had something to inspect. Derived rather than
+     * typed — the literal `4` here was already one short the moment the W-3 set
+     * landed, and a floor below the truth accepts a set being skipped.
+     */
+    expect(checkedSets, "no printed-form lesson set was checked").toBe(
+      SETS.filter((s) => s.kind === "printed-form").length,
+    );
+    expect(checkedSets).toBeGreaterThanOrEqual(MIN_LESSON_SETS - MAX_SCREEN_ONLY_LESSON_SETS);
 
     // Rule 15: and it must still refuse a box that has no specimen.
     expect(() =>
@@ -275,13 +586,25 @@ describe("every form Michael can open has a tab", () => {
    * Michael, verbatim: "There should be a visual form for every single form in
    * its own tab." Pinned as a list so a form cannot be dropped silently.
    */
-  it("covers all seven forms, including the 5208B that has no boxes", () => {
+  /*
+   * UPDATED DELIBERATELY IN books-55, from seven forms to eight.
+   *
+   * `form_w3` is the addition. It was already named in ALL_TAUGHT_FORM_IDS and
+   * already returned a title, but it was NOT in this registry, so asking it for
+   * its boxes threw. That is why this pin read seven: the list was accurate
+   * about what was registered and silent about the gap.
+   *
+   * This assertion FAILED when the W-3 was registered, which is the pin working
+   * as designed — a roster change must be stated, not absorbed. Rule 89.
+   */
+  it("covers all eight forms, including the 5208B that has no boxes", () => {
     expect(Object.keys(TEACHING_FORMS).sort()).toEqual([
       "esd_5208a",
       "esd_5208b",
       "form_940",
       "form_941",
       "form_w2",
+      "form_w3",
       "lni_quarterly",
       "pfml_wa_cares",
     ]);

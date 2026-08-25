@@ -508,6 +508,86 @@ export const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
  * that reconciliation.
  */
 export const FORM_W2_WHOSE: Readonly<Record<string, WhoseRow>> = {
+  /*
+   * ═══ THE SIX LETTERED BOXES, ADDED IN books-56 ═══
+   *
+   * This table began at box 1 and ended at box 20, so the six lettered boxes the
+   * paper prints ABOVE box 1 did not exist to this system at all. `resolveWhose`
+   * throws for a box that is not in this table, so the W-2 could not even LIST
+   * them, and the ownership question "whose is this?" could not be asked of the
+   * employee's own name and Social Security number.
+   *
+   * HOW THE GAP WAS FOUND, because the method matters more than the fix. It was
+   * not found by reading this file. A lesson written for the ESD 5208B wage
+   * detail tied its employee row to `form_w2` box `e` — the box that carries the
+   * same person's name on the federal form — and `assertEveryTieResolves` refused
+   * it, naming the twenty boxes the W-2 had and the one it did not. The tie was
+   * right about the paper and the specimen was wrong, which is the direction that
+   * matters: a gate written in books-49 for a different purpose caught a
+   * seven-slice-old omission because a NEW cross-reference forced it to answer.
+   *
+   * WHY THIS PARTICULAR GAP IS NOT COSMETIC. Michael has said he prepared all ten
+   * of Greenway's 2025 W-2s and the W-3 himself and believes he may have done it
+   * wrong. Boxes a, e and f are the SSN, the name and the address — the three
+   * fields the SSA matches on. A wrong figure in box 1 is an arithmetic error the
+   * IRS will query. A wrong name in box e is a SILENT error: the return is
+   * accepted, nothing on Greenway's side looks wrong, and an employee's earnings
+   * record is short by a year. Those were the boxes with nothing behind them.
+   *
+   * WHY ALL SIX ARE `not_money`, and why that is a substantive answer rather than
+   * a shrug. `not_money` is load-bearing here: it drives measure "count" instead
+   * of "money" in the teaching layer, so without it box a would render Teri
+   * Becker's SSN as a dollar amount. These boxes carry identifiers and text. The
+   * classification is asking whose MONEY a figure is, and the honest answer for a
+   * name is that it is not money at all.
+   *
+   * ═══ A WARNING FOR WHOEVER READS THE DRIFT GATE NEXT ═══
+   *
+   * `assertW3MoneyBoxesMatchTheirW2Box` compares this table against FORM_W3_WHOSE
+   * by SHARED BOX ID. Adding a-f here makes six new ids shared, and on the two
+   * forms those letters do NOT mean the same box: W-2 box a is the employee's
+   * SSN, W-3 box a is an optional control number. They happen to agree at
+   * `not_money`, so nothing goes red — which is precisely the sort of accidental
+   * green rule 40 exists to refuse. That gate has been taught the difference
+   * rather than left to coincidence; see its own docblock.
+   */
+  a: {
+    whose: "not_money",
+    why:
+      "The employee's Social Security number, copied from their card. An identifier, not an " +
+      "amount — and the field the SSA matches the whole form on, so an error here credits the " +
+      "wages to nobody and shows up nowhere on Greenway's side.",
+  },
+  b: {
+    whose: "not_money",
+    why:
+      "Greenway's nine-digit EIN, which must be the same number used on the 941s. An identifier, " +
+      "not an amount, and the instructions forbid truncating it or substituting an SSN.",
+  },
+  c: {
+    whose: "not_money",
+    why:
+      "Greenway's own name, address and ZIP code, which must match the 941s. Text, not an " +
+      "amount. This is the EMPLOYER's block; the employee's address is box f.",
+  },
+  d: {
+    whose: "not_money",
+    why:
+      "An optional control number for identifying individual W-2s. A filing reference Greenway " +
+      "does not use, and the instructions say plainly you do not have to use this box.",
+  },
+  e: {
+    whose: "not_money",
+    why:
+      "The employee's name as shown on their social security card. Text, not an amount, and the " +
+      "instructions single out the LAST name as especially important to report exactly.",
+  },
+  f: {
+    whose: "not_money",
+    why:
+      "The employee's address and ZIP code — where their copy of this form is posted. Text, not " +
+      "an amount, and distinct from box c, which is Greenway's address.",
+  },
   "1": {
     whose: "tax_base",
     why: "Taxable wages for income tax. A wage figure the employee reports, not an amount owed.",
@@ -642,6 +722,258 @@ export const FORM_W2_WHOSE: Readonly<Record<string, WhoseRow>> = {
     why:
       "State income tax withheld. Always blank in Washington. Paid Leave and WA Cares are " +
       "withheld from Washington employees but are not income tax and belong in box 14.",
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * §4b  FORM W-3 — WHOSE MONEY, BOX BY BOX (books-55)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ═══ WHAT WAS HERE BEFORE: NOTHING, AND THAT WAS WORSE THAN ABSENT ═══
+ *
+ * `form_w3` has been in `ALL_TAUGHT_FORM_IDS` and has had a working
+ * `taughtFormTitle()` entry — "Form W-3 — Transmittal of Wage and Tax
+ * Statements (SSA)" — since the registry was written. It had NO teaching
+ * specimen, NO ownership table, and NO lessons. `teachingBoxes("form_w3")`
+ * threw.
+ *
+ * That combination is the worst of the three possible states. A form that is
+ * absent is honestly absent. A form that is NAMED on the surface, appears in the
+ * id list, and renders a title, but explodes the moment anything asks for its
+ * boxes, is a form that looks finished from every angle except the one that
+ * matters.
+ *
+ * ═══ THE THING THIS UNBLOCKS, WHICH IS NOT COSMETIC ═══
+ *
+ * `FORM_941_CONFIRMATION_LESSONS` — the panel where Michael types what he
+ * ACTUALLY filed on each 941 so the system can compare it against what it
+ * computed — carries three cross-references to W-3 boxes 2, 3 and 5. Those are
+ * three of the four figures the IRS reconciles automatically, and the
+ * instructions say "you will be contacted", not "may be". All three ties were
+ * DEAD: they pointed Michael at a screen that threw. Measured, not assumed:
+ * 62 ties across five lesson sets, 3 dead, all three of them these.
+ *
+ * ═══ WHY MOST OF THIS FORM IS `not_money`, AND WHY THAT IS THE HONEST ANSWER
+ *
+ * The W-3 is a TRANSMITTAL. It is the cover sheet on an envelope of W-2s. It
+ * creates no liability, computes no tax, and is never accompanied by a payment —
+ * the form itself says "Do not send any payment (cash, checks, money orders,
+ * etc.) with Forms W-2 and W-3."
+ *
+ * So the lettered boxes a-h, the contact block, and boxes 9, 13 and 15 are
+ * identifiers, counts, checkboxes and dead boxes. `not_money` is not a dodge for
+ * them: it is the only true answer, and it is load-bearing, because `not_money`
+ * drives measure "count" rather than "money" in the teaching layer. Without it,
+ * box 15 would render as "$WA" and box c's headcount of ten W-2s would render as
+ * "$0.10".
+ *
+ * ═══ WHY THE MONEY BOXES KEEP THE SAME OWNERSHIP AS THEIR W-2 BOX ═══
+ *
+ * Every money box on the W-3 is defined by the instructions as the TOTAL of the
+ * same-numbered box across the W-2s in the envelope. Summing does not change
+ * whose money something is: ten employees' withheld federal income tax is still
+ * ten employees' money. So box 2 here is `employee_money` exactly as box 2 of
+ * the W-2 is, and box 1 is `tax_base` exactly as box 1 of the W-2 is.
+ *
+ * This is CHECKED, not asserted: `assertW3MoneyBoxesMatchTheirW2Box` compares
+ * every shared box id against FORM_W2_WHOSE and fails on any divergence that is
+ * not named and justified. That is the gate that would have caught a
+ * hand-written table drifting from the form it totals — which is the exact
+ * failure books-49 found in the W-2 specimen.
+ */
+export const FORM_W3_WHOSE: Readonly<Record<string, WhoseRow>> = {
+  /* ---- the lettered header boxes: identifiers and counts, never money ---- */
+  a: {
+    whose: "not_money",
+    why:
+      "An optional control number for numbering the whole transmittal. A filing reference, " +
+      "not an amount, and the instructions say you may leave it empty.",
+  },
+  "b-kind-of-payer": {
+    whose: "not_money",
+    why:
+      "A row of checkboxes saying which return you file — Greenway ticks 941. Ticked or not " +
+      "ticked, so there is no money here to belong to anyone.",
+  },
+  "b-kind-of-employer": {
+    whose: "not_money",
+    why:
+      "A second row of checkboxes for the kind of organisation. Greenway ticks 'None apply', " +
+      "which is the correct answer for an ordinary for-profit company, not a gap.",
+  },
+  "b-third-party-sick-pay": {
+    whose: "not_money",
+    why:
+      "A single checkbox for third-party sick pay payers. A flag, not an amount, and the " +
+      "instructions are explicit that it is not a kind of payer.",
+  },
+  c: {
+    whose: "not_money",
+    why:
+      "A count of the W-2s in the envelope — ten on Greenway's 2025 transmittal. A number of " +
+      "FORMS, not a number of dollars, which is exactly why it must never be money-formatted.",
+  },
+  d: {
+    whose: "not_money",
+    why:
+      "An optional establishment number for splitting one EIN across sites. An identifier " +
+      "Greenway does not use, because it files one transmittal for one location.",
+  },
+  e: {
+    whose: "not_money",
+    why:
+      "The nine-digit EIN. An identifier that must match the 941s exactly; getting it wrong " +
+      "makes the whole wage report unmatchable, but it is not an amount.",
+  },
+  f: {
+    whose: "not_money",
+    why:
+      "The employer's name, which must be the same name as on the 941s. Text, not an amount.",
+  },
+  g: {
+    whose: "not_money",
+    why: "The employer's address and ZIP code. Text, not an amount.",
+  },
+  h: {
+    whose: "not_money",
+    why:
+      "Another EIN used during the year, including a prior owner's. Blank for Greenway, " +
+      "because the EIN has not changed. An identifier either way.",
+  },
+  /* ---- boxes 1-8: straight totals of the same box on every W-2 ---- */
+  "1": {
+    whose: "tax_base",
+    why:
+      "Total wages, tips and other compensation across every W-2 in the envelope. A wage " +
+      "figure other numbers are computed from, which nobody owes as a payment.",
+  },
+  "2": {
+    whose: "employee_money",
+    why:
+      "Total federal income tax withheld from every employee. Summing ten people's withheld " +
+      "tax does not make it Greenway's money — it is still the employees', paid toward their " +
+      "own tax bills through Greenway.",
+  },
+  "3": {
+    whose: "tax_base",
+    why:
+      "Total Social Security wages, each already capped at the annual wage base on its own " +
+      "W-2. A wage figure, and one of the four the IRS reconciles against the 941s.",
+  },
+  "4": {
+    whose: "employee_money",
+    why:
+      "Total Social Security tax withheld — only the employees' 6.2% halves added up. " +
+      "Greenway's matching half appears on no W-2 and therefore on no W-3.",
+  },
+  "5": {
+    whose: "tax_base",
+    why:
+      "Total Medicare wages and tips. Uncapped, unlike box 3, which is why the two can differ " +
+      "once anyone is paid above the Social Security wage base.",
+  },
+  "6": {
+    whose: "employee_money",
+    why:
+      "Total Medicare tax withheld — the employees' 1.45% halves, plus any Additional Medicare " +
+      "Tax, which has no employer match at all.",
+  },
+  "7": {
+    whose: "tax_base",
+    why:
+      "Total Social Security tips reported by employees. A wage figure, and the fourth of the " +
+      "four boxes the IRS reconciles against the 941s. Blank for Greenway, which has no tips.",
+  },
+  "8": {
+    whose: "tax_base",
+    why:
+      "Total allocated tips, which only large food or beverage establishments report. " +
+      "Deliberately excluded from boxes 1, 3, 5 and 7, so it is a wage figure that feeds " +
+      "nothing.",
+  },
+  /* ---- 9 through 19 ---- */
+  "9": {
+    whose: "not_money",
+    why:
+      "A retired box. The instructions say 'Do not enter an amount in box 9', so it is not an " +
+      "amount at all and cannot be anybody's money. The printed form leaves it unlabelled.",
+  },
+  "10": {
+    whose: "tax_base",
+    why:
+      "Total dependent care benefits. A benefit figure reported so employees can work out " +
+      "their own exclusion; Greenway owes no tax because of this box.",
+  },
+  "11": {
+    whose: "tax_base",
+    why:
+      "Total nonqualified plan distributions. Reported so the SSA can tell which year the " +
+      "money was EARNED — a timing signal rather than a tax.",
+  },
+  "12a": {
+    whose: "tax_base",
+    why:
+      "Total deferred compensation, and the ONE money box on this form that is a filtered " +
+      "subset rather than a straight total: only codes D-H, S, Y, AA, BB and EE are carried " +
+      "up. A benefit figure, not an amount owed.",
+  },
+  "12b": {
+    whose: "not_money",
+    why:
+      "A second slot printed under 12a that the IRS instructions never describe — there is no " +
+      "'Box 12b' heading anywhere in the General Instructions. Classified not_money because " +
+      "we have no authority saying an amount belongs here, and inventing one would be a guess.",
+  },
+  "13": {
+    whose: "not_money",
+    why:
+      "For third-party sick pay use only. The instructions say 'Leave this box blank', so for " +
+      "Greenway it holds nothing at all.",
+  },
+  "14": {
+    whose: "employee_money",
+    why:
+      "Income tax withheld by a third-party payer of sick pay. Still the employees' money — it " +
+      "is already inside the box 2 total and is shown again here separately.",
+  },
+  "15": {
+    whose: "not_money",
+    why:
+      "The state's two-letter abbreviation and the employer's state ID number. Identifiers, " +
+      "not an amount — and the reason this must be not_money is that 'WA' would otherwise " +
+      "render as a dollar figure.",
+  },
+  "16": {
+    whose: "tax_base",
+    why:
+      "Total state wages across the W-2s. Washington levies no state income tax, so this is " +
+      "blank on Greenway's transmittal by operation of law, not by oversight.",
+  },
+  "17": {
+    whose: "employee_money",
+    why:
+      "Total state income tax withheld. The employees' money where a state levies it; always " +
+      "blank in Washington. Paid Leave and WA Cares are withheld here but are not income tax.",
+  },
+  "18": {
+    whose: "tax_base",
+    why:
+      "Total local wages. A wage figure for a city or county income tax, of which Washington " +
+      "has none, so it stays blank.",
+  },
+  "19": {
+    whose: "employee_money",
+    why:
+      "Total local income tax withheld from employees' pay. Their money — blank in Washington " +
+      "because there is no local income tax to withhold.",
+  },
+  /* ---- the contact block, which the instructions treat as one unit ---- */
+  contact: {
+    whose: "not_money",
+    why:
+      "The contact person, telephone, fax and email the SSA uses if a question arises in " +
+      "processing. Contact details, not an amount — and the one part of this form that " +
+      "determines whether a problem reaches Michael or a payroll bureau.",
   },
 };
 
@@ -899,13 +1231,62 @@ export function assertUnknownBoxIsRefused(): void {
  * A category with no reason is unfalsifiable. This also catches the copy-paste
  * failure where a new row is added with a placeholder that nobody ever revisits.
  */
+/**
+ * EVERY ownership table in this module, in one place, so a gate cannot check
+ * three of four and report success (books-55).
+ *
+ * ═══ WHY THIS EXISTS, AND WHAT IT IS FIXING ═══
+ *
+ * `assertEveryClassificationIsJustified` used to build this list inline, by
+ * hand, inside its own body. That works only for as long as somebody remembers
+ * to add a line to it — and books-55 proved that memory is not a mechanism, in
+ * the most embarrassing way available: the books-54 slice added a gate
+ * specifically to close standing rule 39 ("a verifier that cannot see something
+ * approves it"), and then pointed that new gate at four of the FIVE lesson sets
+ * in the repository, leaving three dead cross-references green.
+ *
+ * The identical hole existed right here. Adding FORM_W3_WHOSE without touching
+ * this list would have left thirty-one new LEGAL classifications unchecked for
+ * prose quality, silently, with nothing anywhere going red.
+ *
+ * So the list is a named export, and `tests/compliance/form-box-adapters.test.ts`
+ * reads THIS FILE'S OWN SOURCE and asserts that every `export const *_WHOSE`
+ * declaration in it appears here. A fifth table cannot be added without the gate
+ * naming it.
+ *
+ * The form NAME travels with the table because assertion messages have to say
+ * "Form W-3 box 12b", not "table[3] key 12b". A failure that does not name the
+ * form is a failure Michael cannot act on.
+ */
+export const ALL_WHOSE_TABLES: readonly (readonly [
+  string,
+  Readonly<Record<string, WhoseRow>>,
+])[] = [
+  ["Form 941", FORM_941_WHOSE],
+  ["Form 940", FORM_940_WHOSE],
+  ["Form W-2", FORM_W2_WHOSE],
+  ["Form W-3", FORM_W3_WHOSE],
+];
+
 export function assertEveryClassificationIsJustified(): void {
-  const tables: readonly [string, Readonly<Record<string, WhoseRow>>][] = [
-    ["Form 941", FORM_941_WHOSE],
-    ["Form 940", FORM_940_WHOSE],
-    ["Form W-2", FORM_W2_WHOSE],
-  ];
+  const tables = ALL_WHOSE_TABLES;
+  /*
+   * Rule 66d: assert existence before absence. An empty or shortened registry
+   * would make the loop below a no-op, and this function would report success
+   * having justified nothing at all.
+   */
+  assert(
+    tables.length >= 4,
+    `ALL_WHOSE_TABLES holds ${tables.length} tables. There are at least four ownership tables ` +
+      "in this module (941, 940, W-2, W-3), so a shorter list means one was dropped and its " +
+      "classifications are no longer being checked at all.",
+  );
   for (const [name, table] of tables) {
+    assert(
+      Object.keys(table).length > 0,
+      `${name}'s ownership table is empty. An empty table makes every check below vacuous, ` +
+        "so it is refused here rather than passing quietly.",
+    );
     for (const [boxId, row] of Object.entries(table)) {
       assert(row.why.length > 30, `${name} box ${boxId} has no real reason: "${row.why}"`);
       assert(
@@ -1350,6 +1731,358 @@ export function assertForm940AnnualTotalIsTheEmployersCost(): void {
   }
 }
 
+/**
+ * What a human read off Michael's OWN filed 2025 Form W-3, box by box (books-55).
+ *
+ * Source of truth for this table: `/workspace/2025_FORM_W-3.pdf`, Michael's real
+ * 2025 transmittal covering ten W-2s, extracted with `pdftotext -layout` so the
+ * boxes appear in their PRINTED positions rather than in a regex's idea of
+ * order. Cross-checked against
+ * `docs/authorities/federal/irs-instructions-w-2-w-3-2026.txt` lines 2867-3055,
+ * which is the "Specific Instructions for Form W-3" section.
+ *
+ * Same justified duplication as the 941 and 940 tables above: this is what the
+ * PAPER says, not what the application believes. A gate that imports its
+ * expectation from the thing it checks asserts nothing (rule 39).
+ *
+ * ═══ THE TWO BOXES WHERE THE PAPER AND THE INSTRUCTIONS DISAGREE ═══
+ *
+ * `12b` is printed on the form, bottom right, directly under 12a. There is NO
+ * "Box 12b" heading anywhere in the 4,216 lines of the mirrored General
+ * Instructions — a grep for "12b" across the whole corpus returns nothing. It is
+ * therefore pinned `not_money`, because we have no authority saying an amount
+ * belongs there, and classifying it `tax_base` would be asserting a rule that
+ * nobody wrote.
+ *
+ * `9` is printed with NO CAPTION AT ALL on the 2025 form — the layout shows a
+ * bare "9" followed immediately by box 10's label. The instructions explain why:
+ * "Box 9. Do not enter an amount in box 9." An unlabelled box is not an
+ * oversight here; it is a retired box the SSA has stopped naming.
+ */
+const FORM_W3_EXPECTED_WHOSE: Readonly<Record<string, WhoseMoney>> = {
+  a: "not_money", // Control number -- optional filing reference
+  "b-kind-of-payer": "not_money", // 941 / Military / 943 / 944 / CT-1 / Hshld. / Medicare govt.
+  "b-kind-of-employer": "not_money", // None apply / 501c non-govt / State-local / Federal govt
+  "b-third-party-sick-pay": "not_money", // One checkbox, explicitly NOT a kind of payer
+  c: "not_money", // Total number of Forms W-2 -- a COUNT of forms; ten for 2025
+  d: "not_money", // Establishment number -- optional, unused by Greenway
+  e: "not_money", // Employer identification number -- an identifier
+  f: "not_money", // Employer's name -- text
+  g: "not_money", // Employer's address and ZIP code -- text
+  h: "not_money", // Other EIN used this year -- an identifier, blank for Greenway
+  "1": "tax_base", // Wages, tips, other compensation -- total of W-2 box 1
+  "2": "employee_money", // Federal income tax withheld -- total of W-2 box 2
+  "3": "tax_base", // Social security wages -- total of W-2 box 3
+  "4": "employee_money", // Social security tax withheld -- employees' 6.2% halves only
+  "5": "tax_base", // Medicare wages and tips -- total of W-2 box 5
+  "6": "employee_money", // Medicare tax withheld -- employees' 1.45% halves only
+  "7": "tax_base", // Social security tips -- total of W-2 box 7
+  "8": "tax_base", // Allocated tips -- total of W-2 box 8
+  "9": "not_money", // Retired box. "Do not enter an amount in box 9."
+  "10": "tax_base", // Dependent care benefits -- total of W-2 box 10
+  "11": "tax_base", // Nonqualified plans -- total of W-2 box 11
+  "12a": "tax_base", // Deferred compensation -- a FILTERED subset of W-2 box 12
+  "12b": "not_money", // Printed on the form; NO instruction text exists for it
+  "13": "not_money", // For third-party sick pay use only -- "Leave this box blank."
+  "14": "employee_money", // Income tax withheld by payer of third-party sick pay
+  "15": "not_money", // State abbreviation and state ID number -- identifiers
+  "16": "tax_base", // State wages -- blank in Washington
+  "17": "employee_money", // State income tax -- blank in Washington
+  "18": "tax_base", // Local wages -- blank in Washington
+  "19": "employee_money", // Local income tax -- blank in Washington
+  contact: "not_money", // Contact person, telephone, fax, email
+};
+
+/**
+ * Pin every Form W-3 box's ownership, in both directions.
+ *
+ * Both directions matter for the same reasons they do on the 940:
+ * expected-but-missing means a box silently stopped having an owner;
+ * actual-but-unpinned means a box was added to the form without anyone deciding,
+ * in writing, whose money it is.
+ */
+export function assertEveryW3BoxOwnershipIsPinned(): void {
+  const expectedIds = Object.keys(FORM_W3_EXPECTED_WHOSE);
+  const actualIds = Object.keys(FORM_W3_WHOSE);
+
+  assert(
+    expectedIds.length === 31,
+    `The pinned Form W-3 ownership table should describe 31 boxes but describes ` +
+      `${expectedIds.length}. The printed 2025 Form W-3 carries box a, THREE separate ` +
+      "checkbox groups all printed as b, boxes c through h, boxes 1 through 19 with 12 split " +
+      "into 12a and 12b, and the contact block. If the form gained or lost a box, update the " +
+      "table deliberately rather than changing this count to match.",
+  );
+
+  for (const boxId of expectedIds) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W3_WHOSE, boxId),
+      `Form W-3 box ${boxId} is pinned in the expected-ownership table but is no longer ` +
+        "classified in FORM_W3_WHOSE. A box cannot stop having an owner.",
+    );
+  }
+
+  for (const boxId of actualIds) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W3_EXPECTED_WHOSE, boxId),
+      `Form W-3 box ${boxId} is classified in FORM_W3_WHOSE but nobody has pinned whose ` +
+        "money it is. Add it to FORM_W3_EXPECTED_WHOSE with a comment naming the box, so the " +
+        "classification is a decision on the record and not an accident.",
+    );
+  }
+
+  for (const boxId of expectedIds) {
+    const expected = FORM_W3_EXPECTED_WHOSE[boxId];
+    const actual = FORM_W3_WHOSE[boxId].whose;
+    assert(
+      actual === expected,
+      `Form W-3 box ${boxId} is classified ${actual} but was verified against Michael's own ` +
+        `filed 2025 Form W-3 and the General Instructions as ${expected}. Either the ` +
+        "classification is wrong, or the law changed and the pinned table needs updating with " +
+        "a source. Do not simply reconcile the two to make this pass.",
+    );
+  }
+}
+
+/**
+ * THE CLASS-LEVEL GATE FOR A TRANSMITTAL: totalling money cannot change who owns
+ * it.
+ *
+ * ═══ WHY THIS IS THE RIGHT SHAPE OF CHECK FOR THIS PARTICULAR FORM ═══
+ *
+ * Every money box on the W-3 is defined by the instructions as the total of the
+ * same-numbered box across the W-2s in the envelope: "Boxes 1 through 8. Enter
+ * the totals reported in boxes 1 through 8 on the Forms W-2."
+ *
+ * Addition does not transfer ownership. Ten employees' withheld federal income
+ * tax, added together, is still ten employees' money. So for every box id the two
+ * forms SHARE, the classification must be identical — and rather than
+ * hand-checking that once and hoping, this DERIVES the expectation from
+ * FORM_W2_WHOSE, so the two tables cannot drift apart silently.
+ *
+ * ═══ WHY THE EXCEPTIONS ARE NAMED RATHER THAN SKIPPED ═══
+ *
+ * Some shared ids legitimately differ, and each is named with its reason. A
+ * blanket "skip anything that disagrees" would let a real drift hide behind the
+ * exception list. So the list is CLOSED IN BOTH DIRECTIONS: an id not in it must
+ * match exactly, and every id in it must still exist and still carry a real
+ * reason. An exemption that has outlived its purpose is dead weight that hides
+ * the next genuine difference.
+ */
+export function assertW3MoneyBoxesMatchTheirW2Box(): void {
+  /*
+   * The closed exception list. Each entry says what each form's box actually is,
+   * so the difference can be judged rather than merely tolerated.
+   */
+  const JUSTIFIED_DIFFERENCES: Readonly<Record<string, string>> = {
+    /*
+     * BOX 13 IS DELIBERATELY NOT LISTED HERE, and that is worth recording.
+     *
+     * The two forms' box 13 really are different boxes: on the W-2 it is three
+     * checkboxes about the EMPLOYEE (statutory employee, retirement plan,
+     * third-party sick pay), and on the W-3 it is a money box reserved for
+     * third-party sick pay payers which Greenway must leave blank.
+     *
+     * The first draft of this function listed it, on the reasoning that
+     * "different box, therefore exempt". But they both classify `not_money`, so
+     * they do not disagree, and an exemption for a box that does not disagree is
+     * a hole: it would silently absorb a future change classifying W-3 box 13 as
+     * employee_money. Found by printing the real difference set rather than by
+     * reading — the set has exactly ONE member, box 14.
+     *
+     * So the rule is now enforced in both directions below: an entry in this
+     * list must ACTUALLY differ, or it fails as stale.
+     */
+    "14":
+      "W-2 box 14 is a free-text 'Other' box, classified tax_base because it reports a figure " +
+      "such as the health insurance premiums on Michael's own W-2. W-3 box 14 is a specific " +
+      "money box — income tax withheld by a payer of third-party sick pay — which is the " +
+      "employees' money. The number is shared but the box genuinely is not.",
+  };
+
+  /*
+   * ═══ THE SIX LETTERS ARE SHARED IDS THAT ARE NOT SHARED BOXES (books-56) ═══
+   *
+   * Until books-56, FORM_W2_WHOSE held boxes 1-20 only, so every id shared with
+   * the W-3 was a NUMBERED box, and for numbered boxes the premise of this whole
+   * function holds: W-3 box 2 is defined by the instructions as the total of
+   * W-2 box 2 across the envelope, and summing money does not change whose it is.
+   *
+   * Adding the W-2's lettered boxes a-f broke that premise without breaking this
+   * gate, which is the dangerous combination. The letters collide but the boxes
+   * do not:
+   *
+   *     letter │ on the W-2                    │ on the W-3
+   *     ───────┼───────────────────────────────┼──────────────────────────────
+   *       a    │ Employee's SSN                │ Control number (optional)
+   *       b    │ Employer's EIN                │ Kind of Payer  (as b-*, so no clash)
+   *       c    │ Employer's name and address   │ Total number of Forms W-2
+   *       d    │ Control number (optional)     │ Establishment number
+   *       e    │ Employee's name               │ Employer's EIN
+   *       f    │ Employee's address            │ Employer's name
+   *
+   * Note box d and box a: the W-2's control number is box d and the W-3's is box
+   * a. The two forms genuinely disagree about which letter means what.
+   *
+   * All twelve classify `not_money`, so `w2 === w3` holds for every one of them
+   * and this gate would have gone green on all six. That green would have been an
+   * ACCIDENT — it would prove only that identifiers are not money, a fact already
+   * known — while implying to a future reader that a total-of relationship had
+   * been verified. Rule 40 refuses a guard that cannot fail for the reason it
+   * claims to be checking.
+   *
+   * So the letters are excluded from the comparison BY NAME and by a stated
+   * reason, and the exclusion is itself gated below: each excluded letter must
+   * actually exist on both forms and must actually mean two different things,
+   * or the exclusion fails as stale. That way the list cannot quietly grow to
+   * cover a numbered box, which is the failure it would be built to hide.
+   */
+  const NOT_THE_SAME_BOX: Readonly<Record<string, string>> = {
+    a: "W-2 box a is the employee's SSN; W-3 box a is an optional control number.",
+    /*
+     * BOX b IS DELIBERATELY ABSENT FROM THIS LIST, and it was absent only after
+     * the list's own staleness guard refused it.
+     *
+     * The first draft listed b, reasoning that the W-2's box b (the employer's
+     * EIN) and the W-3's box b (three checkbox groups) are obviously different
+     * boxes. They are — but the W-3 does not HAVE a box id "b". Its three
+     * checkbox groups are registered as b-kind-of-payer, b-kind-of-employer and
+     * b-third-party-sick-pay precisely because one printed letter carries three
+     * separate rules. So "b" is not a shared id, no comparison on it ever
+     * happens, and an entry here excused nothing while implying it had.
+     *
+     * That is the same defect this file already documents for box 13 in
+     * JUSTIFIED_DIFFERENCES: an exemption for a comparison that does not occur
+     * is not neutral, it is a standing licence for the next real difference on
+     * that id to pass unnoticed. Written down because it is now the second time
+     * the identical mistake has been made in this one function, once in books-55
+     * and once here, and the reason it was caught both times is that the
+     * exemption lists are gated in both directions rather than merely read.
+     */
+    c: "W-2 box c is the employer's name and address; W-3 box c is a count of the Forms W-2 in the envelope.",
+    d: "W-2 box d is an optional control number; W-3 box d is an establishment number. The W-3's control number is box a, so the two forms disagree about which letter means what.",
+    e: "W-2 box e is the employee's name; W-3 box e is the employer's EIN.",
+    f: "W-2 box f is the employee's address; W-3 box f is the employer's name.",
+  };
+
+  const sharedIds = Object.keys(FORM_W3_WHOSE).filter((b) =>
+    Object.prototype.hasOwnProperty.call(FORM_W2_WHOSE, b),
+  );
+
+  /*
+   * Both halves of the closed list, applied to the letters as well. An entry
+   * naming a box that is not on both forms excuses a comparison that never
+   * happens; an entry whose two captions are identical is not a real difference.
+   */
+  for (const [letter, why] of Object.entries(NOT_THE_SAME_BOX)) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W2_WHOSE, letter) &&
+        Object.prototype.hasOwnProperty.call(FORM_W3_WHOSE, letter),
+      `Box ${letter} is excluded from the W-2/W-3 total-of comparison as "not the same box", ` +
+        "but it is not present on both forms, so the comparison it excuses never happens. " +
+        "A guard against a comparison that cannot occur hides the next real one. Remove it.",
+    );
+    assert(
+      why.length > 60,
+      `The reason box ${letter} is excluded from the W-2/W-3 comparison is ${why.length} ` +
+        "characters. Say what each form's box actually is, or the exclusion cannot be judged.",
+    );
+    assert(
+      !/^[0-9]/.test(letter),
+      `Box ${letter} is excluded from the W-2/W-3 comparison as "not the same box", but it is ` +
+        "a NUMBERED box. Numbered boxes on the W-3 are defined as the total of the same-numbered " +
+        "box across the W-2s, so they are the same box by definition and must be compared. This " +
+        "list exists only for the lettered header boxes, where the letters collide but the boxes " +
+        "do not.",
+    );
+  }
+
+  const shared = sharedIds.filter((b) => NOT_THE_SAME_BOX[b] === undefined);
+
+  /*
+   * Rule 66d again, one level down: prove the exclusion list actually excluded
+   * something. If FORM_W2_WHOSE ever loses its lettered boxes, every entry above
+   * fails loudly on the existence assertion rather than this filter silently
+   * becoming an identity function.
+   */
+  assert(
+    sharedIds.length - shared.length === Object.keys(NOT_THE_SAME_BOX).length,
+    `${Object.keys(NOT_THE_SAME_BOX).length} lettered boxes are excluded from the W-2/W-3 ` +
+      `comparison but only ${sharedIds.length - shared.length} were actually removed from the ` +
+      "shared set. The exclusion list and the tables have drifted apart.",
+  );
+
+  /*
+   * Rule 66d: assert existence before absence. A filter that matched nothing
+   * would make every assertion below vacuous, and this function would report
+   * success having compared no boxes at all.
+   */
+  assert(
+    shared.length >= 15,
+    `Only ${shared.length} box ids are shared between FORM_W2_WHOSE and FORM_W3_WHOSE. The ` +
+      "two forms share boxes 1-11 and 13-19 at minimum, so a number this low means one of the " +
+      "tables was renamed or emptied and this comparison is no longer comparing anything.",
+  );
+
+  let compared = 0;
+  for (const boxId of shared) {
+    const w2 = FORM_W2_WHOSE[boxId].whose;
+    const w3 = FORM_W3_WHOSE[boxId].whose;
+    if (JUSTIFIED_DIFFERENCES[boxId] !== undefined) continue;
+
+    assert(
+      w2 === w3,
+      `Form W-3 box ${boxId} is ${w3} but the same box on the W-2 is ${w2}. Every money box ` +
+        "on the W-3 is the TOTAL of that box across the W-2s in the envelope, and adding money " +
+        "up does not change whose it is. Either one of the two classifications is wrong, or " +
+        "this box is a genuine exception and belongs in JUSTIFIED_DIFFERENCES with a written " +
+        "reason. Do not add it to that list merely to silence this.",
+    );
+    compared += 1;
+  }
+
+  assert(
+    compared >= 17,
+    `Only ${compared} boxes were actually compared after exceptions. The two forms share 18 ` +
+      "box ids and exactly one of them (box 14) genuinely differs, so anything below 17 means " +
+      "the exception list has grown and this gate has stopped checking the form.",
+  );
+
+  /*
+   * THE OTHER HALF OF A CLOSED LIST. Three ways an exemption can rot, all
+   * refused: the box stops existing on either form, the reason decays to a stub,
+   * or — the one that actually caught me here — the two forms come to AGREE and
+   * the exemption is left behind, sitting ready to absorb the next real
+   * difference on that box id.
+   */
+  for (const [boxId, why] of Object.entries(JUSTIFIED_DIFFERENCES)) {
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W3_WHOSE, boxId),
+      `Box ${boxId} is excused in JUSTIFIED_DIFFERENCES but is not in FORM_W3_WHOSE at all. ` +
+        "An exemption for a box that does not exist is dead weight that hides the next real " +
+        "difference. Remove it.",
+    );
+    assert(
+      Object.prototype.hasOwnProperty.call(FORM_W2_WHOSE, boxId),
+      `Box ${boxId} is excused in JUSTIFIED_DIFFERENCES but is not in FORM_W2_WHOSE, so the ` +
+        "comparison it claims to excuse never happens. Remove the stale exemption.",
+    );
+    assert(
+      FORM_W2_WHOSE[boxId].whose !== FORM_W3_WHOSE[boxId].whose,
+      `Box ${boxId} is excused in JUSTIFIED_DIFFERENCES, but the W-2 and the W-3 both ` +
+        `classify it ${FORM_W3_WHOSE[boxId].whose} — they AGREE, so there is nothing to ` +
+        "excuse. Delete the entry. An exemption on a box that does not disagree is not " +
+        "harmless: it is a standing licence for a future divergence on that box to pass " +
+        "unnoticed, which is exactly how box 13 nearly slipped through this slice.",
+    );
+    assert(
+      why.length > 80,
+      `The justification for Form W-3 box ${boxId} differing from the W-2 is ${why.length} ` +
+        "characters. That is too short to be a reason. Say what each form's box actually is.",
+    );
+  }
+}
+
 export function __runFormBoxAdapterTests(): void {
   assertUnknownBoxIsRefused();
   assertEveryClassificationIsJustified();
@@ -1360,4 +2093,6 @@ export function __runFormBoxAdapterTests(): void {
   assertEvery941LineOwnershipIsPinned();
   assertEvery940LineOwnershipIsPinned();
   assertForm940AnnualTotalIsTheEmployersCost();
+  assertEveryW3BoxOwnershipIsPinned();
+  assertW3MoneyBoxesMatchTheirW2Box();
 }

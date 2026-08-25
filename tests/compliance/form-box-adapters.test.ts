@@ -29,9 +29,12 @@
  * adapters against data no agency has ever seen.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   ALL_TAUGHT_FORM_IDS,
+  ALL_WHOSE_TABLES,
   FORM_ID_940,
   FORM_ID_941,
   FORM_ID_W2,
@@ -665,5 +668,119 @@ describe("every translated box can actually be drawn", () => {
     const ret = waReturn();
     for (const b of waBoxes(ret, "lni_quarterly")) expect(b.formId).toBe("lni_quarterly");
     for (const b of waBoxes(ret, "pfml_wa_cares")) expect(b.formId).toBe("pfml_wa_cares");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE OWNERSHIP REGISTRY IS COMPLETE — CHECKED AGAINST THE SOURCE FILE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ADDED books-55. AND IT IS OVERDUE, WHICH IS THE INTERESTING PART.
+ *
+ * `ALL_WHOSE_TABLES` was introduced in this slice with a docblock in
+ * form-box-adapters.ts that says, in as many words:
+ *
+ *   "So the list is a named export, and `tests/compliance/form-box-adapters
+ *    .test.ts` reads THIS FILE'S OWN SOURCE and asserts that every
+ *    `export const *_WHOSE` declaration in it appears here."
+ *
+ * THAT SENTENCE WAS FALSE WHEN IT WAS WRITTEN. Measured before writing this
+ * block: `grep -rc ALL_WHOSE_TABLES tests/` found NOTHING ANYWHERE, and
+ * `grep -c readFileSync` in this file returned 0. The registry existed, the
+ * runtime assertion `assertEveryClassificationIsJustified` iterated it, and
+ * the promised completeness gate did not exist. So a fifth `*_WHOSE` table
+ * could have been added and left out of the registry exactly as before, with
+ * a comment nearby confidently explaining why that was impossible.
+ *
+ * A comment describing a gate is not a gate. This is standing rule 39 turned
+ * on its author: a verifier that cannot see something approves it, and a
+ * verifier that does not exist approves everything. The docblock was doing
+ * the work of reassurance while doing none of the work of checking, which is
+ * strictly worse than no comment at all, because it stops the next reader
+ * from looking.
+ *
+ * WHY THE CHECK MUST READ SOURCE TEXT. The failure mode is a DECLARATION that
+ * exists and is not REGISTERED. At runtime the unregistered table is simply
+ * an object nobody passed anywhere; there is no reflective way to ask a
+ * TypeScript module "what did you export that I did not import". So the file
+ * is read as text and the `export const *_WHOSE` declarations are counted.
+ * This is the same justified exception the wiring gate uses: an absence in a
+ * module cannot be detected from inside that module.
+ */
+describe("books-55: every ownership table is in the registry that gates them", () => {
+  const ADAPTERS = "src/lib/payroll/form-box-adapters.ts";
+
+  /**
+   * Deliberately NOT stripping comments here.
+   *
+   * The pattern requires `export const NAME_WHOSE` at the START of a line,
+   * and every comment line in this repo's style is indented or begins with
+   * `*`, `//` or `/*`. A commented-out declaration therefore does not match,
+   * and a real one always does. Verified by the mutation that comments a
+   * table out: it must NOT make this gate pass by making the table vanish
+   * from the count while the registry still lists it — which is why the two
+   * directions below are separate assertions.
+   */
+  function declaredWhoseTables(): readonly string[] {
+    const src = readFileSync(join(process.cwd(), ADAPTERS), "utf8");
+    return [...src.matchAll(/^export const ([A-Z0-9_]*_WHOSE)\b/gm)].map((m) => m[1]);
+  }
+
+  it("finds the ownership tables at all, so this gate is not vacuous", () => {
+    // Rule 66d / rule 39: existence before absence. If the regex silently
+    // stopped matching — a rename to `export const whose941`, a formatter
+    // that indents top-level declarations — every assertion below would pass
+    // by comparing two empty things.
+    const declared = declaredWhoseTables();
+    expect(
+      declared.length,
+      `no "export const *_WHOSE" declarations were found in ${ADAPTERS}. Either they were ` +
+        `renamed, or this gate's pattern has gone stale and is now checking nothing.`,
+    ).toBeGreaterThanOrEqual(4);
+    expect(declared).toContain("FORM_W3_WHOSE");
+  });
+
+  it("registers every declared ownership table, so none escapes the prose checks", () => {
+    const declared = declaredWhoseTables();
+    // The registry holds [displayName, table] pairs and NOT the identifier, so
+    // identity is established by object reference: import the module's own
+    // exports and match each declared name to the object the registry carries.
+    const registeredTables = new Set(ALL_WHOSE_TABLES.map(([, table]) => table));
+    expect(
+      registeredTables.size,
+      "two entries in ALL_WHOSE_TABLES point at the SAME object, so one form's ownership " +
+        "rows are being checked twice and another form's not at all.",
+    ).toBe(ALL_WHOSE_TABLES.length);
+    expect(
+      ALL_WHOSE_TABLES.length,
+      `${ADAPTERS} declares ${declared.length} ownership tables (${declared.join(", ")}) but ` +
+        `ALL_WHOSE_TABLES holds ${ALL_WHOSE_TABLES.length}. Every table not in that list has ` +
+        `its ownership classifications - whose money each box is, and why - checked by ` +
+        `nothing. That is how thirty-one W-3 rows nearly shipped unverified.`,
+    ).toBe(declared.length);
+  });
+
+  it("gives every registered table a form name a person can act on", () => {
+    for (const [name, table] of ALL_WHOSE_TABLES) {
+      // "table[3] box 12b" is not a failure message anybody can use. The name
+      // is the difference between a red test and a red test that tells
+      // Michael which of his forms is wrong.
+      expect(name, "a registry entry has no form name").toMatch(/^(Form|Washington)\b/);
+      expect(name.length).toBeGreaterThan(5);
+      expect(Object.keys(table).length, `${name} has an empty ownership table`).toBeGreaterThan(0);
+    }
+    const names = ALL_WHOSE_TABLES.map(([n]) => n);
+    expect(new Set(names).size, `duplicate form names in the registry: ${names.join(", ")}`).toBe(
+      names.length,
+    );
+  });
+
+  it("runs the runtime justification pass over all of them, W-3 included", () => {
+    // assertEveryClassificationIsJustified() is already exercised by the
+    // embedded suite, but nothing tied it to the W-3's 31 rows specifically.
+    const w3 = ALL_WHOSE_TABLES.find(([n]) => n === "Form W-3");
+    expect(w3, "Form W-3 is missing from the ownership registry").toBeDefined();
+    expect(Object.keys(w3![1]).length).toBe(31);
   });
 });

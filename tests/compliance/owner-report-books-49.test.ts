@@ -270,8 +270,28 @@ describe("books-49 owner report: the figures were re-derived, not remembered", (
    * number below the baseline fails, which is the whole class of defects the
    * test was actually protecting against.
    */
-  it("claims the true number of teachable forms", () => {
-    expect(PER_FORM.length).toBe(7);
+  /*
+   * ─────────────────────────────────────────────────────────────────────────
+   * books-55: THE FORM COUNT BECOMES A RATCHET TOO, FOR THE STATED REASON
+   * ─────────────────────────────────────────────────────────────────────────
+   * The long comment above diagnoses this exact defect — "the mistake was
+   * comparing a DATED DOCUMENT to a LIVING ENGINE with `toBe`" — and then fixed
+   * it for the BOX totals while leaving the FORM count as `toBe(7)`. books-55
+   * registered Form W-3 as the eighth teachable form and this went red, on a
+   * slice that added coverage. Same class of defect, one line down; rule 23 says
+   * fix the class, so the ratchet now covers both numbers.
+   *
+   * The report's prose stays pinned character for character. "Total: 7 forms,
+   * 53 boxes." was true on the day Michael read it and must never be quietly
+   * rewritten to match today.
+   */
+  it("claims the true number of teachable forms, and never fewer", () => {
+    const BASELINE_FORMS = 7;
+    expect(
+      PER_FORM.length,
+      `The engine teaches ${PER_FORM.length} forms but the books-49 report described ` +
+        `${BASELINE_FORMS}. A form has been LOST since that letter was sent.`,
+    ).toBeGreaterThanOrEqual(BASELINE_FORMS);
     expect(REPORT).toContain("Total: 7 forms, 53 boxes.");
   });
 
@@ -297,6 +317,17 @@ describe("books-49 owner report: the figures were re-derived, not remembered", (
       esd_5208b: 4,
       pfml_wa_cares: 3,
       lni_quarterly: 4,
+      /*
+       * Added in books-55, exactly as the failure message above instructs:
+       * "Add it to this baseline with the count it shipped at."
+       *
+       * It ships at 31, which is every box printed on the 2025 Form W-3 Michael
+       * filed. The books-49 report never mentioned this form because at that
+       * date `teachingBoxes("form_w3")` threw, so 31 is a new floor rather than
+       * a promise being restated. Rule 66d made this a failure instead of an
+       * accidental pass against `undefined` — the gate worked.
+       */
+      form_w3: 31,
     };
     for (const { formId, count } of PER_FORM) {
       const promised = baseline[formId];
