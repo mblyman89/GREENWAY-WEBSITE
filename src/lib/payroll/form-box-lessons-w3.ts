@@ -1564,7 +1564,9 @@ export const FORM_W3_BOX_LESSONS: readonly BoxLesson[] = [
       "Reserved for third-party sick pay filers. The instruction to everyone else is two words: " +
       "leave blank. Greenway leaves it blank.",
     whereItComesFrom:
-      "Nothing. No Greenway figure maps to it.",
+      "Nothing in Greenway's payroll maps to this box. It would be fed by a statement from an " +
+      "insurer or other third party who paid sick pay on Greenway's behalf, and no such party " +
+      "exists, so there is no figure to carry here.",
     howToReadIt:
       "Blank is the instructed value. Note that this is a different box from the third-party sick " +
       "pay CHECKBOX in the box b group — one is a tick, this one is a reserved field.",
