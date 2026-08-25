@@ -822,7 +822,35 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The law, verbatim | `form-w2-authorities.ts` (31 own + 13 borrowed = 44) | `form-w2-authorities.test.ts` (41) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
-| The screen | `src/app/admin/books/form-w2/page.tsx` (933 lines) | `nav-gate-core.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (970 lines) | `nav-gate-core.test.ts` |
+| The W-3 taught box by box **(books-55)** | `form-box-lessons-w3.ts` | `form-box-lessons-w3.test.ts` (17) |
+
+**books-55 added the W-3 teaching layer, and the screen row above grew by 37
+lines because of it.** Section 5 of that page already rendered the W-3 as a
+table of figures. A table cannot say what a box means, whose money it is, or
+which line of which Form 941 has to agree with it, so the transmittal got its
+own `FormBoxExplorer` — 31 boxes, 31 lessons, 34 cross-references, every one
+resolving.
+
+Three things are worth recording because they were found by attacking the work
+rather than by reviewing it:
+
+- **The W-3 explorer could be deleted with the whole suite staying green.** The
+  wiring gate keyed every assertion on the page FILE, and the W-2 and W-3 rows
+  name the same file, so the W-2's explorer satisfied the W-3's checks and the
+  surviving import satisfied the lessons check. Closed by counting blocks per
+  page and requiring each lessons module to appear as a real prop
+  (`form-box-explorer-wiring.test.ts` (14)).
+- **`ALL_WHOSE_TABLES` had a docblock claiming a completeness gate that did not
+  exist.** Now built, and it reads the adapters' own source
+  (`form-box-adapters.test.ts` (31)).
+- **The W-3 is NOT gated on `w3 !== null`.** With no W-3 built, every figure
+  reads *not computed yet* rather than `$0.00`, because a zero in box 4 asserts
+  that Greenway withheld no social security tax all year. That is a claim about
+  a filing, not a blank.
+
+The 31 ownership rows were swept exhaustively — each flipped to all four other
+legal `WhoseMoney` values, 124 mutations, all caught.
 
 **Both W-2 traps are implemented and on screen**, not merely documented: box 1
 exceeding boxes 3 and 5 renders GREEN with the §3121(a)(2)(B) carve-out quoted

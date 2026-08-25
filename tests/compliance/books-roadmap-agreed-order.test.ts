@@ -912,9 +912,24 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
   it("prints the true test count for every test file it names", () => {
     const rows = [...roadmap.matchAll(/`([a-z0-9.-]+\.test\.ts)` \((\d+)\)/g)];
 
-    // Rule 66d: assert presence before checking contents. A regex that matches
-    // nothing passes every for-loop ever written.
-    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(3);
+    /*
+     * Rule 66d: assert presence before checking contents. A regex that matches
+     * nothing passes every for-loop ever written.
+     *
+     * WENT FROM 3 TO 6 IN books-55, and it went up by hand on purpose.
+     *
+     * The slice added the W-3 teaching layer and, with it, three more test
+     * files that the roadmap now names with their counts:
+     * form-box-lessons-w3.test.ts (17), form-box-explorer-wiring.test.ts (14)
+     * and form-box-adapters.test.ts (31). This assertion went red the moment
+     * they were documented, which is the whole point of pinning the count of
+     * counts: a new claim in the document cannot start life unverified.
+     *
+     * Every one of the six is checked against a live `it(` count in the loop
+     * below, so raising this number does not weaken anything - it only records
+     * that a human looked at the new rows.
+     */
+    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(6);
 
     for (const [, fileName, printedRaw] of rows) {
       const rel = join("tests", "compliance", fileName);
