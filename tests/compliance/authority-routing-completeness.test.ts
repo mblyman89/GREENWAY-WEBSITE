@@ -125,6 +125,30 @@ const HELD = allHeldFiles(AUTHORITY_DIR);
  * is a lead, not a finding, and rule 39 applies: a verifier that cannot see
  * something approves it — but a verifier that cries wolf gets switched off,
  * which approves everything.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MEASURED, NOT ASSUMED: WHAT THE STRONG NORMALISER ACTUALLY BUYS
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * My first instinct was that a weak normaliser would BLIND this gate, and the
+ * mutation sweep proved that wrong. Swapping normalise() for a whitespace-only
+ * flatten, with the real §-spacing defect reintroduced at the same time (R14),
+ * still turns the gate RED. So the strong normaliser does not stop the gate
+ * from catching defects.
+ *
+ * What it stops is FALSE ALARMS. And the direction of that error matters more
+ * than it looks: a false alarm here does not merely waste time, it points at a
+ * fix that MUST NOT BE MADE. Both Reg S-X reports would have had me add a
+ * routing branch to the FASB Codification files, after which the verifier would
+ * have failed on a quote that is correctly transcribed from the eCFR — and the
+ * obvious way to make that failure go away is to edit the quote to match
+ * FASB's reprint, including its editorial markers. That would have corrupted
+ * the authority text itself to satisfy a broken test.
+ *
+ * Measured with the verifier's real comparison, of the nine part-31 W-4
+ * authorities the weak normaliser misses one outright
+ * (pay-run-cfr-31-3402-f2-1-furnish-on-hire), so it is also strictly less
+ * capable, not merely noisier.
  */
 const CORPUS: readonly (readonly [string, string])[] = HELD.map(
   (f) => [f.replace(ROOT + "/", ""), normalise(readFileSync(f, "utf8"))] as const,
@@ -222,6 +246,63 @@ describe("books-55: the verifier's skip list contains nothing it could have chec
     }
     expect(routed, "nothing routes at all").toBeGreaterThan(300);
     expect(disagreements, disagreements.join("\n")).toEqual([]);
+  });
+
+  /**
+   * THE `§\s*` IN BOTH CFR ROWS MUST BE LOAD-BEARING, NOT DECORATION.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * WHY THIS TEST EXISTS: A MUTATION CAME OUT GREEN AND IT WAS RIGHT TO
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * books-55 fixed `§` to `§\s*` in BOTH the part-31 and part-1 corpus rows,
+   * on the argument that the two must agree. The mutation sweep then reverted
+   * each one separately:
+   *
+   *   part 31 reverted -> gate went RED. The guard is load-bearing.
+   *   part 1  reverted -> gate stayed GREEN.
+   *
+   * I expected red and got green, so I measured instead of arguing. Of 75
+   * CFR authorities, exactly THREE are cited with a space after the section
+   * sign, and all three are part 31:
+   *
+   *   26 C.F.R. § 31.3402(f)(2)-1(a)(1)
+   *   26 C.F.R. § 31.3402(f)(2)-1(a)(4)
+   *   26 C.F.R. § 31.3402(f)(2)-1(e)(1)(ii)
+   *
+   * Zero part-1 cites use a space. So the `\s*` I added to the part-1 row is
+   * UNREACHABLE by any citation in the repository today, and standing rule 40
+   * says an unreachable guard is an untested guard - it was the rule that
+   * deleted the dot-leader normalisation for exactly this reason.
+   *
+   * Two honest options: delete the part-1 `\s*`, or make it reachable by
+   * testing it directly. Deleting it would reinstate the asymmetry that caused
+   * the defect, and the next person to cite § 1.471-2 the way the eCFR prints
+   * it would land straight back in it. So it stays and this test EXERCISES it,
+   * which is what rule 40 actually demands: not "no unused guards" but "no
+   * guard without a case that proves it works".
+   *
+   * Both spacings, both parts, asserted here. Reverting either row now fails.
+   */
+  it("recognises CFR citations written with or without a space after the section sign", () => {
+    const cases: readonly (readonly [string, string])[] = [
+      // [cite, the file the corpus table must name]
+      ["26 C.F.R. §31.3402(f)(2)-1(a)(1)", "cfr-31.3402(f)(2)-1.txt"],
+      ["26 C.F.R. § 31.3402(f)(2)-1(a)(1)", "cfr-31.3402(f)(2)-1.txt"],
+      ["26 C.F.R. §1.471-2(a)", "cfr-1.471-2.txt"],
+      ["26 C.F.R. § 1.471-2(a)", "cfr-1.471-2.txt"],
+    ];
+    for (const [cite, expectedFile] of cases) {
+      const got = expectedCorpusFile(cite);
+      expect(
+        got,
+        `expectedCorpusFile(${JSON.stringify(cite)}) returned null. The eCFR prints a ` +
+          `space after the section sign, so a citation copied from it must still be ` +
+          `classified. If this row stops matching, rule 48's loud failure goes blind for ` +
+          `the whole corpus and future missing files are skipped in silence.`,
+      ).not.toBeNull();
+      expect(got?.path, `wrong file for ${cite}`).toContain(expectedFile);
+    }
   });
 
   /**
