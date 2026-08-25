@@ -43,7 +43,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { teachingBoxes } from "../../src/lib/payroll/form-box-teaching-core";
+import {
+  teachingBoxes,
+  assertEveryTieResolves,
+} from "../../src/lib/payroll/form-box-teaching-core";
 import {
   FORM_940_WHOSE,
   assertEvery940LineOwnershipIsPinned,
@@ -54,6 +57,7 @@ import { FORM_940_OWN_AUTHORITIES } from "../../src/lib/payroll/form-940-authori
 import { WA_QUARTERLY_LESSONS } from "../../src/lib/payroll/form-box-lessons-wa";
 import { FORM_941_LESSONS } from "../../src/lib/payroll/form-box-lessons-941";
 import { FORM_W2_BOX_LESSONS } from "../../src/lib/payroll/form-box-lessons-w2";
+import { FORM_941_CONFIRMATION_LESSONS } from "../../src/lib/payroll/form-941-confirmation-lessons";
 
 const ROOT = process.cwd();
 const REPORT_PATH = join(ROOT, "docs", "MICHAEL-books-54-the-940-is-finished.md");
@@ -328,22 +332,74 @@ describe("the report's cross-form claims are true", () => {
     expect(REPORT).toContain("ESD\n  5208B has 4 boxes and **zero lessons**");
   });
 
-  it("is right that Form W-3 still throws", () => {
-    expect(() => teachingBoxes("form_w3")).toThrow();
+  /*
+   * ═══ UPDATED DELIBERATELY IN books-55 ═══
+   *
+   * The books-54 report told Michael "Form W-3 has zero boxes ... It is small
+   * and I can close it in a future slice." books-55 is that slice. The report
+   * text is left exactly as written — it was true on its date — but the claim
+   * about the CURRENT code has to be inverted, or this test would be asserting
+   * that a fixed defect is still broken.
+   */
+  it("was right that Form W-3 threw, and books-55 closed it", () => {
+    // The promise the report made, still on the page.
+    expect(REPORT).toContain("Form W-3 has zero boxes");
+    // The promise, kept.
+    expect(() => teachingBoxes("form_w3")).not.toThrow();
+    expect(teachingBoxes("form_w3").length).toBe(31);
   });
 
-  it("is right that every cross-reference now resolves", () => {
-    /*
-     * The report states 56 ties, all resolving. Counted here rather than
-     * trusted, across the same four lesson sets the gate covers.
-     */
-    const ties = [
+  /*
+   * ═══ THE NUMBER IN THE books-54 REPORT WAS WRONG. books-55 SAYS SO. ═══
+   *
+   * The books-54 report told Michael "Cross-references checked: 56, all
+   * resolving". Both halves were wrong, and this very test is why the error
+   * went unnoticed: it counted ties across the SAME FOUR lesson sets the gate
+   * was pointed at, so it confirmed the gate's own blind spot instead of
+   * checking it. A test that reuses the subject's assumptions cannot audit it.
+   *
+   * The repository contained FIVE lesson sets. The fifth,
+   * FORM_941_CONFIRMATION_LESSONS, held 6 more ties, of which THREE WERE DEAD —
+   * all pointing into `form_w3`, which threw when asked for its boxes. So the
+   * truth at books-54 was 62 ties, 3 dead.
+   *
+   * This test now asserts BOTH numbers: the four-set subtotal of 56, so the old
+   * report text remains verifiable as the arithmetic it actually was, and the
+   * five-set total of 62 read from the whole tree. Michael is told about the
+   * correction in the books-55 report; a silent renumber here would have been
+   * the more comfortable option and the wrong one.
+   */
+  it("counted 56 ties because it counted four of five lesson sets", () => {
+    const fourSetSubtotal = [
       FORM_940_LESSONS,
       FORM_941_LESSONS,
       FORM_W2_BOX_LESSONS,
       WA_QUARTERLY_LESSONS,
     ].reduce((n, set) => n + set.reduce((m, l) => m + l.tiesTo.length, 0), 0);
-    expect(ties).toBe(56);
+
+    // The report's figure was an accurate count of an incomplete list.
+    expect(fourSetSubtotal).toBe(56);
     expect(REPORT).toContain("**56, all resolving**");
+
+    // The fifth set, which the report never counted.
+    const fifthSet = FORM_941_CONFIRMATION_LESSONS.reduce((m, l) => m + l.tiesTo.length, 0);
+    expect(fifthSet).toBe(6);
+    expect(fourSetSubtotal + fifthSet).toBe(62);
+  });
+
+  /**
+   * And the claim the books-54 report SHOULD have made, asserted against the
+   * whole repository rather than against a hand-picked list.
+   */
+  it("now really does resolve every cross-reference, across all five sets", () => {
+    for (const set of [
+      FORM_940_LESSONS,
+      FORM_941_LESSONS,
+      FORM_W2_BOX_LESSONS,
+      WA_QUARTERLY_LESSONS,
+      FORM_941_CONFIRMATION_LESSONS,
+    ]) {
+      expect(() => assertEveryTieResolves(set)).not.toThrow();
+    }
   });
 });

@@ -819,7 +819,7 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The engine (boxes 1–6, 12, 14, 15–20, W-3 totals, reconciliation) | `form-w2-core.ts` | `form-w2-core.test.ts` |
 | The reader | `form-w2-store.ts` | `form-w2-store.test.ts` (69) |
 | The screen logic | `form-w2-ui-core.ts` | `form-w2-ui-core.test.ts` (63) |
-| The law, verbatim | `form-w2-authorities.ts` (28 own + 13 borrowed = 41) | `form-w2-authorities.test.ts` (39) |
+| The law, verbatim | `form-w2-authorities.ts` (31 own + 13 borrowed = 44) | `form-w2-authorities.test.ts` (41) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
 | The screen | `src/app/admin/books/form-w2/page.tsx` (933 lines) | `nav-gate-core.test.ts` |

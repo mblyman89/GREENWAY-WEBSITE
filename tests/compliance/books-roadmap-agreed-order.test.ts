@@ -878,6 +878,68 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
   });
 
   /**
+   * THE TEST COUNTS THE ROADMAP PRINTS, WHICH NOTHING HAD EVER READ (rule 39).
+   *
+   * books-55 found this by accident. Mirroring §3121 and §3306 added three
+   * authorities, so the row above went from `28 own + 13 borrowed = 41` to
+   * `31 own + 13 borrowed = 44` and the cross-foot went red — correctly. But
+   * the SAME ROW also printed `form-w2-authorities.test.ts (39)`, and that
+   * figure was stale too: the file had 41 tests. Nothing went red for it,
+   * because no gate had ever read a test count. Rule 39 exactly: a verifier
+   * that cannot see something approves it.
+   *
+   * Two design choices worth stating, because the obvious implementations are
+   * both wrong:
+   *
+   * 1. THE LIST IS DISCOVERED, NOT DECLARED. The regex finds every
+   *    `` `x.test.ts` (N) `` the document prints. A hand-built list of the
+   *    three known rows would be the same defect one layer up — a fourth row
+   *    added tomorrow would be unguarded, and the gate would still be green.
+   *    So the assertion is "every count the roadmap prints is true", and the
+   *    count of counts is itself pinned so the regex silently matching NOTHING
+   *    cannot pass as success.
+   *
+   * 2. `it.each` IS REFUSED, NOT COUNTED. This gate counts `it(` in the
+   *    SOURCE, which ties to the runtime figure only while every test is a
+   *    literal `it(`. One `it.each([...])` breaks that equivalence: source
+   *    says one, the runner reports many, and the gate would start lying in
+   *    the safe-looking direction. Rather than attempt to evaluate the table
+   *    (which needs the module loaded and is a different kind of fragile),
+   *    the gate FAILS LOUDLY on `it.each`/`describe.each` and says what to do
+   *    about it. Verified at the time of writing: zero `it.` forms in all
+   *    three files, and the static counts 63/69/41 match the runner exactly.
+   */
+  it("prints the true test count for every test file it names", () => {
+    const rows = [...roadmap.matchAll(/`([a-z0-9.-]+\.test\.ts)` \((\d+)\)/g)];
+
+    // Rule 66d: assert presence before checking contents. A regex that matches
+    // nothing passes every for-loop ever written.
+    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(3);
+
+    for (const [, fileName, printedRaw] of rows) {
+      const rel = join("tests", "compliance", fileName);
+      const abs = join(ROOT, rel);
+      expect(existsSync(abs), `roadmap names ${fileName}, which does not exist`).toBe(true);
+
+      const src = readFileSync(abs, "utf8");
+
+      // The equivalence this gate depends on, checked rather than assumed.
+      expect(
+        /^\s*(it|describe)\.each/m.test(src),
+        `${fileName} uses .each — a source count of \`it(\` no longer equals the ` +
+          `number of tests the runner reports. Count them at runtime instead of ` +
+          `deleting this assertion.`,
+      ).toBe(false);
+
+      const actual = (src.match(/^\s*it\(/gm) ?? []).length;
+      const printed = Number(printedRaw);
+
+      expect(actual, `${fileName} has no tests at all`).toBeGreaterThan(0);
+      expect(actual, `roadmap says ${fileName} has ${printed} tests`).toBe(printed);
+    }
+  });
+
+  /**
    * THE DEAD-LINK FIX, ASSERTED OVER THE WHOLE PANEL AND NOT ONE HALF OF IT.
    *
    * This is the defect the slice found: `form-w2-authorities.ts` fixed its own

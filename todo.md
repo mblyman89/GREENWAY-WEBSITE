@@ -2602,3 +2602,72 @@ building the matcher twice.
     this repository, so the fringe-benefit and family-attribution consequences
     are flagged for the preparer and computed by nothing. An answer that only
     ever closes things is an answer nobody thought about.
+
+109. THE OWNER'S FILED DOCUMENTS ARE EVIDENCE. THEY ARE NEVER AUTHORITY.
+    Michael stopped a slice mid-flight to say: "it was me that produced all the
+    w-2s and w-3 for my business, not my grandfather. It's very likely I did it
+    wrong... I want true accuracy, not taking my bad form filling and calling it
+    source material."
+    He had caught something I had not. Figures read off his 2025 W-2 had been
+    stored as `MICHAEL_2025_SS_WAGES_CENTS` and used in teaching material, and a
+    bare name like that permits a silent three-step slide: "what he reported"
+    becomes "what he was paid" becomes "what the correct figure is". Nothing in
+    the code marks the moment it happens. Worse, when the lesson and the form
+    disagreed - the lesson said box 1 exceeds box 3 by the health premium, the
+    form has boxes 1, 3 and 5 all equal - I diagnosed it as "the lesson text is
+    wrong about his form" rather than the real fault, which was that his
+    paperwork had been quietly promoted to a source of law and so the question
+    "does the form agree with the statute" was never asked at all.
+    THE RULE: a figure read off a document the owner prepared is stored under a
+    name beginning `AS_FILED_`, and every use site must be legible as one of
+    three separate things - (a) THE LAW, quoted from mirrored authority; (b) THE
+    FACT NOT IN EVIDENCE, named explicitly as unknown; (c) WHAT WAS FILED, an
+    observation. Where the three do not resolve to one answer, the software
+    REPORTS the discrepancy and flags the CPA question. It does not rule.
+    Concretely, here: §3121(a)(2) removes a shareholder-employee's health
+    premium from FICA wages only where it is paid "under a plan or system
+    established by an employer which makes provision for his employees generally
+    ... or for a class or classes of his employees". Whether Greenway has such a
+    plan is a fact about Greenway that no filing can establish and nobody has
+    produced. $30,980.16 x 15.3% = $4,739.96 turns on it, and the identical
+    condition in §3306(b)(2) moves the 940 as well - so one unanswered question
+    governs three forms and must be answered once, in writing, by the preparer.
+    COROLLARY, learned the same day: mirroring a previously-skipped authority
+    retroactively audits every quote the skip was covering. §3306 went into the
+    corpus for the FUTA half of this question and the first verifier run failed
+    an unrelated quote that had carried a sixteen-character elision for many
+    slices. Three for three now (books-26, books-37, books-55). An entry in
+    KNOWN_UNMIRRORED_AUTHORITY_IDS is not neutral; it is a quote nobody reads.
+
+110. WORK THAT EXISTS ONLY IN THE SANDBOX DOES NOT EXIST. PUSH IT.
+    ORIGIN: Michael, after several sandbox crashes mid-slice: "Because the
+    sandbox keeps crashing, we need to commit work frequently throughout the
+    slice so we don't have to start over from square one when it happens.
+    Please add it to the standing rules. When you begin again, commit your work
+    so far, don't merge to main yet, just keep the work safe."
+    THE CORRECTION THAT MATTERS, AND IT IS THE WHOLE RULE: a local `git commit`
+    does NOT keep work safe. The sandbox that crashes takes the working tree AND
+    the .git directory with it. A commit that has never left the machine is
+    exactly as lost as an uncommitted file. Twice now a slice has had to be
+    rebuilt from a conversation summary because the only copy was local.
+    THE RULE: durable safety is a PUSH to a remote branch, and it happens
+    EARLY and REPEATEDLY inside a slice, not once at the end.
+      (a) Open a slice branch at the START of the slice, never work on `main`.
+      (b) Push a WIP commit whenever a leg of the work reaches a state that
+          would be expensive to retype - a new module that type-checks, a gate
+          that has been proven to fail, a passing suite - and at minimum
+          whenever the diff since the last push exceeds roughly an hour of work.
+      (c) A WIP push is NOT a claim of correctness. Say `wip:` in the subject
+          and say what is unproven. The end-of-slice commit is the one that
+          claims green.
+      (d) Pushing a branch is not merging. It opens nothing, requests nothing
+          and changes nothing on `main`. "Commit only, do not push" in a slice
+          instruction means DO NOT OPEN A PULL REQUEST / DO NOT MERGE; it must
+          never be read as "leave the only copy on a machine that keeps dying",
+          because the instruction's purpose is to control what reaches `main`,
+          not to put the work at risk.
+      (e) Before pushing, verify `git diff --numstat todo.md` shows 0 deletions,
+          and never push a scratch file - see the deletion list a slice keeps.
+      (f) Frequent pushes are also a bisect trail. When a gate goes red twenty
+          files later, the WIP commits are what turn "something broke" into a
+          single small diff.

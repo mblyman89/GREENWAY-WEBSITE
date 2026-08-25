@@ -171,24 +171,86 @@ function f941Quote(
 }
 
 /**
- * Michael's REAL 2025 W-2, used in the doubling example below.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * WHAT MICHAEL'S 2025 W-2 ACTUALLY SAYS. EVIDENCE, NOT AUTHORITY.
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * These are not illustrative round numbers. They were read off the PDF he
- * uploaded this slice, and they are held as named constants for one reason:
- * the prose in the lesson and the arithmetic in the worked example must not be
- * able to drift apart. A gate multiplies these out and checks the answers, so
- * changing a figure here without changing the example breaks the build.
+ * These figures were read off the PDF he uploaded. Every name below begins with
+ * `AS_FILED_` and that prefix is doing real work — books-55 renamed all three
+ * constants after Michael stopped the previous slice mid-flight to say:
  *
- * Box 3 (social security wages) is used rather than box 1, because box 1
- * INCLUDES the $30,980.16 of shareholder health insurance and box 3 does not —
- * that carve-out is the §3121(a)(2)(B) trap documented at length in
- * `form-w2-authorities.ts`. Using box 1 here would produce a FICA figure that
- * is simply wrong, and it is the exact mistake the doubling check is meant to
- * catch, so getting it wrong in the teaching material would be unfortunate.
+ *   "it was me that produced all the w-2s and w-3 for my business, not my
+ *    grandfather. It's very likely I did it wrong... I want true accuracy, not
+ *    taking my bad form filling and calling it source material."
+ *
+ * He had spotted something I had not. The old names were bare
+ * (`MICHAEL_2025_SS_WAGES_CENTS`), and bare names invite a fatal slip: a figure
+ * off a filed return starts as "what he reported", becomes "what he was paid",
+ * and ends up as "what the correct figure is". Nothing in the code marks the
+ * moment that happens. A FILED FORM IS EVIDENCE OF WHAT A TAXPAYER DID. It is
+ * never evidence of what the law required. The prefix makes each use site
+ * declare which of the two it means.
+ *
+ * WHAT THE FORM SHOWS, and it is unusual: boxes 1, 3 and 5 are ALL $53,530.16,
+ * and box 14 reads HEALTH $30,980.16. So the shareholder health premium was run
+ * through the Social Security and Medicare bases along with everything else.
+ * 53,530.16 × 6.2% = 3,318.87 and × 1.45% = 776.19, both matching boxes 4 and 6
+ * to the cent — confirming FICA was computed on the full amount.
+ *
+ * WHETHER THAT IS RIGHT IS NOT A QUESTION THIS FILE ANSWERS. §3121(a)(2) takes
+ * the premium out of FICA wages only when it is paid "under a plan or system...
+ * which makes provision for his employees generally... or for a class or classes
+ * of his employees". Nobody has shown this software such a plan. If one exists,
+ * about $4,740 of combined FICA was overpaid; if none exists, the return is
+ * right as filed. See `IRC_3121_A_2_MEDICAL_EXCLUSION` in
+ * `form-w2-authorities.ts` and the open question in `docs/OWNER_STATED_FACTS.md`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A DOCBLOCK THAT LIED, AND WHAT REPLACED IT (books-55)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The text that used to sit here said, of these three constants:
+ *
+ *   "A gate multiplies these out and checks the answers, so changing a figure
+ *    here without changing the example breaks the build."
+ *
+ * THERE WAS NO SUCH GATE. `grep -rn "MICHAEL_2025" --include=*.ts .` returned
+ * exactly three lines: these three declarations. Nothing imported them, no test
+ * read them, and the worked example below re-typed the same figures as prose
+ * inside a string. The constants were dead code and the sentence describing
+ * them was false — which is worse than either alone, because a reader who
+ * believed the comment would conclude the arithmetic was machine-checked and
+ * stop checking it themselves. That is standing rule 39 in its purest form: a
+ * verifier that cannot see something has approved it.
+ *
+ * `assertAsFiledFiguresReconcile()` at the foot of this file is the gate the
+ * comment promised. It recomputes the FICA from the wage figure at the statutory
+ * rates and compares against the withheld amounts as filed, and it also parses
+ * the dollar figures back OUT of the worked example's step strings so the prose
+ * and the constants cannot drift. It is wired into
+ * `assertForm941ConfirmationLessonsAreWellFormed()`, which the test suite calls.
  */
-export const MICHAEL_2025_SS_WAGES_CENTS = 5_353_016;
-export const MICHAEL_2025_BOX_4_CENTS = 331_887;
-export const MICHAEL_2025_BOX_6_CENTS = 77_619;
+export const AS_FILED_2025_SS_WAGES_CENTS = 5_353_016;
+export const AS_FILED_2025_BOX_4_CENTS = 331_887;
+export const AS_FILED_2025_BOX_6_CENTS = 77_619;
+
+/**
+ * The premium in box 14 of the same W-2. Held here because it is the amount the
+ * unanswered plan-or-system question is worth, and the lesson below now names
+ * that figure as an open item rather than as a settled carve-out.
+ */
+export const AS_FILED_2025_BOX_14_HEALTH_CENTS = 3_098_016;
+
+/**
+ * Statutory rates, as basis points, so the gate below computes rather than
+ * asserts. 6.2% employee OASDI (§3101(a)), 1.45% employee HI (§3101(b)).
+ *
+ * Written as constants rather than inline numbers because the gate must fail if
+ * a rate is edited, and a magic number inside an expression is not a thing
+ * anyone edits deliberately.
+ */
+const OASDI_EMPLOYEE_BPS = 620;
+const MEDICARE_EMPLOYEE_BPS = 145;
 
 export const FORM_941_CONFIRMATION_LESSONS: readonly BoxLesson[] = [
   /* ══════════════════════════════════════════════════════════════════════
@@ -356,7 +418,7 @@ export const FORM_941_CONFIRMATION_LESSONS: readonly BoxLesson[] = [
       {
         title: "Your own 2025 W-2, run through the doubling",
         steps: [
-          "These are your real figures, off the W-2 you uploaded.",
+          "These are the figures exactly as they appear on the W-2 you filed for yourself.",
           "Box 3, social security wages:            $53,530.16",
           "Box 4, the employee half withheld:       $53,530.16 x 6.2%  = $3,318.87",
           "Greenway's matching half:                $53,530.16 x 6.2%  = $3,318.87",
@@ -366,15 +428,31 @@ export const FORM_941_CONFIRMATION_LESSONS: readonly BoxLesson[] = [
           "Medicare, on the same wages:",
           "Box 6, the employee half:                $53,530.16 x 1.45% = $776.19",
           "What the four 941s report:               $53,530.16 x 2.9%  = $1,552.37",
-          "Note box 3 is used, NOT box 1. Box 1 is larger because it includes the " +
-            "$30,980.16 of shareholder health insurance, which is income-taxable but " +
-            "carved out of FICA. Using box 1 here would overstate the tax.",
+          "Always take this figure from box 3, never from box 1. On most W-2s those two " +
+            "boxes hold different numbers, because income tax and Social Security use two " +
+            "different legal definitions of the word 'wages' - Congress wrote it that way, " +
+            "section 3401(a) for box 1 and section 3121(a) for box 3.",
+          "SOMETHING TO ASK YOUR CPA ABOUT, ON THIS FORM, THIS YEAR. On your 2025 W-2 " +
+            "boxes 1, 3 and 5 are all the same $53,530.16, and box 14 shows HEALTH " +
+            "$30,980.16. That means the health premium was included in the Social Security " +
+            "and Medicare wages. Whether it should have been depends on one fact about " +
+            "Greenway that this software has not been told: section 3121(a)(2) leaves the " +
+            "premium out of FICA only when it is paid under a plan or system covering your " +
+            "employees generally, or a class of them. If Greenway has such a plan, then " +
+            "$30,980.16 x 15.3% = $4,739.96 of combined FICA was paid that did not have to " +
+            "be - your half and the company's half together. If it does not, the " +
+            "form is right as filed. Do not change anything on the strength of this note - " +
+            "get the answer in writing from Nicholas Mullan first, because the same answer " +
+            "also moves your 941s and your 940.",
         ],
         answer: "$6,637.74 social security and $1,552.37 Medicare, against $3,318.87 and $776.19",
         moral:
-          "Both figures were verified against your actual filed W-2 to the cent. The doubling is " +
-          "not an approximation for ordinary wages - it is exact, and the one thing that breaks " +
-          "it is Additional Medicare Tax, which is the next lesson.",
+          "The doubling itself is exact rather than approximate for ordinary wages, and the one " +
+          "thing that breaks it is Additional Medicare Tax, which is the next lesson. Notice what " +
+          "this example did and did not do: it took your filed figures as a description of what " +
+          "you reported, checked the arithmetic inside them, and then flagged one number as a " +
+          "question rather than blessing it. A filed return is proof of what you did. It is never " +
+          "proof that what you did was right.",
       },
     ],
     quotes: [
@@ -554,6 +632,224 @@ export const FORM_941_CONFIRMATION_LESSONS: readonly BoxLesson[] = [
   },
 ];
 
+/** Render integer cents the way the worked example writes them: $53,530.16 */
+function centsToDollarString(cents: number): string {
+  const whole = Math.trunc(cents / 100);
+  const frac = String(Math.abs(cents % 100)).padStart(2, "0");
+  return `$${whole.toLocaleString("en-US")}.${frac}`;
+}
+
+/**
+ * Cents at a basis-point rate, rounded half-up — the rule the payroll engine
+ * uses and the rule the withheld figures on the filed W-2 actually follow.
+ */
+function centsAtBps(cents: number, bps: number): number {
+  return Math.round((cents * bps) / 10_000);
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE GATE THE DOCBLOCK PROMISED AND NOBODY WROTE (books-55).
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Until this slice, the comment above the `AS_FILED_*` constants claimed "a gate
+ * multiplies these out and checks the answers". No such gate existed and the
+ * constants were referenced nowhere. This is it, and it checks three distinct
+ * things, because the interesting failures are different in each case.
+ *
+ * 1. THE ARITHMETIC IS RECOMPUTED, NOT RESTATED. The gate multiplies the wage
+ *    figure by the statutory rates and compares the result against the withheld
+ *    amounts as filed. If either disagrees, then the figures transcribed from
+ *    the PDF are internally inconsistent and one of them was mistyped.
+ *
+ * 2. THE PROSE IS PARSED BACK OUT OF THE LESSON. The worked example writes its
+ *    dollar amounts inside strings, which is what let the constants rot unread
+ *    in the first place: two copies of a figure, only one of which anything
+ *    looked at. So the gate scans the step strings for the rendered forms of
+ *    each constant and requires them to be present. Edit a constant without
+ *    editing the prose and the build stops.
+ *
+ * 3. THE LESSON MUST NOT SAY IT KNOWS WHAT IT DOES NOT KNOW. This is the part
+ *    that exists because of Michael's correction, and it is the only assertion
+ *    here about MEANING rather than arithmetic. The premium's FICA treatment
+ *    turns on a plan-or-system condition nobody has evidenced, so the lesson is
+ *    required to name that open question and forbidden to describe the premium
+ *    as simply "carved out of FICA". A previous draft did exactly that, in the
+ *    indicative, next to a form where the opposite had been filed.
+ *
+ * Throws rather than returning a boolean (rule 48).
+ */
+export function assertAsFiledFiguresReconcile(): void {
+  const doubling = FORM_941_CONFIRMATION_LESSONS.find((l) => l.box === "doubling");
+  if (!doubling) {
+    throw new Error(
+      `form-941-confirmation-lessons: the "doubling" lesson has gone. It is the lesson that ` +
+        `carries the worked example built from the AS_FILED_* constants, so its removal would ` +
+        `leave those constants unread again - which is the exact defect books-55 fixed.`,
+    );
+  }
+  checkAsFiledFigures(
+    {
+      ssWagesCents: AS_FILED_2025_SS_WAGES_CENTS,
+      box4Cents: AS_FILED_2025_BOX_4_CENTS,
+      box6Cents: AS_FILED_2025_BOX_6_CENTS,
+      box14HealthCents: AS_FILED_2025_BOX_14_HEALTH_CENTS,
+    },
+    doubling.examples.flatMap((e) => [...e.steps, e.answer, e.moral]).join(" \u0001 "),
+  );
+}
+
+/** The four figures read off the filed 2025 W-2, as integer cents. */
+export type AsFiledW2Figures = {
+  readonly ssWagesCents: number;
+  readonly box4Cents: number;
+  readonly box6Cents: number;
+  readonly box14HealthCents: number;
+};
+
+/**
+ * ═══ THE GATE ITSELF, TAKING ITS INPUTS AS ARGUMENTS. ═══
+ *
+ * SPLIT OUT FROM THE WRAPPER ABOVE FOR ONE REASON, AND IT IS STANDING RULE 15.
+ *
+ * The first draft of this gate read the module's own constants directly. It
+ * passed, and there was no way to make it fail without editing the shipping
+ * source file, running the suite, and editing it back. I did exactly that nine
+ * times while writing it — and two of those nine "mutations" turned out to have
+ * struck a DOCBLOCK COMMENT rather than the lesson text, so they proved nothing
+ * while appearing to prove the gate was weak. One of them sent me looking for a
+ * hole that was not there; the other hid a hole that WAS.
+ *
+ * A gate whose failure modes can only be demonstrated by temporarily breaking
+ * the product is a gate whose failure modes are not in the test suite. So the
+ * logic takes its figures and its prose as parameters, the wrapper supplies the
+ * real ones, and `form-941-confirmation.test.ts` supplies deliberately broken
+ * ones. Every branch below has a test that watches it throw.
+ */
+export function checkAsFiledFigures(f: AsFiledW2Figures, prose: string): void {
+  // ---- 1. recompute ------------------------------------------------------
+  const expectedBox4 = centsAtBps(f.ssWagesCents, OASDI_EMPLOYEE_BPS);
+  if (expectedBox4 !== f.box4Cents) {
+    throw new Error(
+      `form-941-confirmation-lessons: the figures transcribed from the filed 2025 W-2 do not ` +
+        `reconcile. Box 3 of ${centsToDollarString(f.ssWagesCents)} at 6.2% is ` +
+        `${centsToDollarString(expectedBox4)}, but box 4 was transcribed as ` +
+        `${centsToDollarString(f.box4Cents)}. Either a figure was mistyped from the ` +
+        `PDF, or the filed return itself does not foot - and those are very different problems. ` +
+        `Re-read the PDF before changing a constant.`,
+    );
+  }
+  const expectedBox6 = centsAtBps(f.ssWagesCents, MEDICARE_EMPLOYEE_BPS);
+  if (expectedBox6 !== f.box6Cents) {
+    throw new Error(
+      `form-941-confirmation-lessons: box 5 of ` +
+        `${centsToDollarString(f.ssWagesCents)} at 1.45% is ` +
+        `${centsToDollarString(expectedBox6)}, but box 6 was transcribed as ` +
+        `${centsToDollarString(f.box6Cents)}.`,
+    );
+  }
+  // The premium is a fact off the form, so it gets the same treatment: it must
+  // be positive, because the whole open question is meaningless at zero and a
+  // silently-zeroed constant would make the lesson's flag read as boilerplate.
+  if (f.box14HealthCents <= 0) {
+    throw new Error(
+      `form-941-confirmation-lessons: the box 14 health premium is ` +
+        `${f.box14HealthCents} cents. The section 3121(a)(2) question this module ` +
+        `raises only exists because the premium is a real, positive amount.`,
+    );
+  }
+
+  // ---- 2. the prose must carry the same figures --------------------------
+
+  /**
+   * EVERY money figure the example is allowed to contain, each DERIVED here
+   * rather than transcribed.
+   *
+   * The first version of this check asked only whether each figure appeared
+   * SOMEWHERE in the prose, and a mutation test broke it in seconds: the wage
+   * figure is written seven times in this example, so corrupting one copy left
+   * six intact and the gate went green on a lesson that now contradicted
+   * itself on screen. "At least one copy is right" is not the property worth
+   * having when Michael is reading all seven.
+   *
+   * So the check runs in BOTH directions. Every figure below must appear, and
+   * every dollars-and-cents figure in the prose must be one of these. A typo in
+   * any copy is then caught, because the typo is itself an unrecognised figure.
+   */
+  const derived: readonly (readonly [string, number])[] = [
+    ["box 3 / box 5 social security and Medicare wages, as filed", f.ssWagesCents],
+    ["box 4 social security withheld = wages x 6.2%", f.box4Cents],
+    ["box 6 Medicare withheld = wages x 1.45%", f.box6Cents],
+    ["box 14 health premium, as filed", f.box14HealthCents],
+    ["both halves of social security = wages x 12.4%", centsAtBps(f.ssWagesCents, OASDI_EMPLOYEE_BPS * 2)],
+    ["both halves of Medicare = wages x 2.9%", centsAtBps(f.ssWagesCents, MEDICARE_EMPLOYEE_BPS * 2)],
+    [
+      "combined FICA riding on the plan-or-system question = premium x 15.3%",
+      centsAtBps(f.box14HealthCents, (OASDI_EMPLOYEE_BPS + MEDICARE_EMPLOYEE_BPS) * 2),
+    ],
+  ];
+
+  const allowed = new Map<string, string>();
+  for (const [label, cents] of derived) allowed.set(centsToDollarString(cents), label);
+
+  for (const [rendered, label] of allowed) {
+    if (!prose.includes(rendered)) {
+      throw new Error(
+        `form-941-confirmation-lessons: the worked example no longer mentions ${rendered} ` +
+          `(${label}). The constant and the prose are two copies of one fact, and this gate ` +
+          `exists precisely because they were allowed to drift once already. Update both.`,
+      );
+    }
+  }
+
+  // The other direction. A figure with cents that this gate cannot derive is
+  // either a new fact that belongs in `derived` above with a label saying where
+  // it came from, or it is a typo. Both must stop the build; neither may be
+  // guessed at here (rule 62d).
+  //
+  // Deliberately requires the decimal cents. Round figures like "$200,000" and
+  // "$7,000" are thresholds quoted from statute, not amounts computed from
+  // Michael's payroll, so they are not this gate's business - and the statutory
+  // ones are verified where they belong, against the mirrored source text.
+  for (const m of prose.matchAll(/\$\d[\d,]*\.\d{2}/g)) {
+    const found = m[0];
+    if (!allowed.has(found)) {
+      throw new Error(
+        `form-941-confirmation-lessons: the worked example contains ${found}, which this gate ` +
+          `cannot derive from the AS_FILED_* constants at statutory rates. Either it is a typo in ` +
+          `one of the several places a figure is repeated - the exact failure this direction of ` +
+          `the check was added to catch - or it is a genuinely new figure, in which case add it to ` +
+          `\`derived\` with a label stating how it is computed. Do not delete the figure to make ` +
+          `this pass. Derivable amounts: ${[...allowed.keys()].join(", ")}.`,
+      );
+    }
+  }
+
+  // ---- 3. the open question must stay open -------------------------------
+  //
+  // A filed form is evidence, never authority. The lesson may report what the
+  // W-2 shows; it may not decide the legal question the form leaves open. These
+  // two checks pin both halves of that.
+  const lower = prose.toLowerCase();
+  if (!lower.includes("3121(a)(2)") || !lower.includes("plan or system")) {
+    throw new Error(
+      `form-941-confirmation-lessons: the worked example must name section 3121(a)(2) AND the ` +
+        `words "plan or system". The premium's FICA treatment depends entirely on that condition, ` +
+        `and a lesson that omits it teaches a conclusion in place of a rule. Michael filed these ` +
+        `forms himself and asked for the law rather than a description of his paperwork.`,
+    );
+  }
+  if (lower.includes("carved out of fica")) {
+    throw new Error(
+      `form-941-confirmation-lessons: the worked example says the premium is "carved out of FICA" ` +
+        `as a plain statement of fact. It is not a plain fact. Section 3121(a)(2) removes the ` +
+        `premium from FICA wages only where a qualifying plan or system exists, no such plan has ` +
+        `been evidenced for Greenway, and the 2025 W-2 as filed put the premium THROUGH FICA. ` +
+        `State the condition or state nothing.`,
+    );
+  }
+}
+
 /**
  * Self-check: no duplicate box keys, nothing structurally empty.
  *
@@ -561,6 +857,11 @@ export const FORM_941_CONFIRMATION_LESSONS: readonly BoxLesson[] = [
  * would otherwise be asserting that a list it never exercised is well-formed.
  */
 export function assertForm941ConfirmationLessonsAreWellFormed(): void {
+  // books-55: run the figure reconciliation FIRST. If the numbers underneath the
+  // teaching are wrong, the structural checks below are checking the shape of
+  // something untrue, and a well-formed lesson full of wrong arithmetic is the
+  // most dangerous artefact this module could produce.
+  assertAsFiledFiguresReconcile();
   const seen = new Set<string>();
   for (const l of FORM_941_CONFIRMATION_LESSONS) {
     if (l.formId !== FILED_941_FORM_ID) {

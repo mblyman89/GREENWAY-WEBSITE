@@ -407,7 +407,28 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
       "irc-3111-employer-fica",
       "irc-3301-futa-rate",
       "irc-3302-futa-credit",
-      "irc-3306-futa-wage-base",
+      // books-55 PAID THIS ONE OFF, and paying it found a defect \u2014 for the
+      // THIRD time. "irc-3306-futa-wage-base" used to sit here.
+      //
+      // Michael told us he prepared his own W-2s and W-3 and that he may have
+      // filled them in wrong, and asked for the lessons to be built on
+      // authoritative text rather than on his paperwork (rule 109). The FICA
+      // and FUTA medical-payment exclusions live in \u00a73121(a)(2) and
+      // \u00a73306(b)(2), so both sections had to be mirrored to quote the
+      // CONDITION they impose \u2014 "under a plan or system established by an
+      // employer which makes provision for his employees generally\u2026" \u2014 rather
+      // than paraphrase it.
+      //
+      // Mirroring \u00a73306 retroactively audited the one quote we already had
+      // from it, which had been sitting behind this skip entry unread for many
+      // slices. It was defective: FOUR elisions, one of them only sixteen
+      // characters ("any remuneration"), single quotes where the statute
+      // prints typographic doubles, and "(b) Wages \u2014" where the source has a
+      // full stop. Replaced with an elision-free machine-derived quote.
+      //
+      // That is books-26, books-37 and now books-55: every single time a debt
+      // on this list has been paid, the quote behind it turned out to be
+      // wrong. An unverified quote is not a quote that happens to be fine.
       // Washington paid leave and long-term care
       //
       // books-45 PAID OFF "rcw-50a-10-030-pfml", which used to sit here. Two
@@ -448,12 +469,13 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
       (id) => id.startsWith("rcw-5") || id.startsWith("irc-33") || id.startsWith("irc-31"),
     );
     expect([...actual].sort()).toEqual([...expectedPayrollDebt].sort());
-    // Stated plainly for the record: FIFTEEN payroll authorities are quoted
+    // Stated plainly for the record: FOURTEEN payroll authorities are quoted
     // from a URL rather than from mirrored text. Their quotes may be perfect —
     // §280E's were — but "may be" is what rule 35 exists to replace.
     //
     // Seventeen until books-37 mirrored RCW 51.16.140; sixteen until books-45
-    // mirrored RCW 50A.10.030. The count is asserted separately from the list
+    // mirrored RCW 50A.10.030; fifteen until books-55 mirrored IRC §3306. The
+    // count is asserted separately from the list
     // on purpose: the list catches a SUBSTITUTION (one id quietly swapped for
     // another leaves the length unchanged), and the count catches a silent
     // ADDITION to the debt pile.
@@ -462,7 +484,7 @@ describe("KNOWN_UNMIRRORED_AUTHORITY_IDS is honest debt, not a loophole", () => 
     // If a future slice needs to raise it, that is a new unverifiable quote
     // entering the payroll engine and it must be argued for in the pull
     // request, not absorbed by editing this line.
-    expect(actual.length).toBe(15);
+    expect(actual.length).toBe(14);
   });
 });
 

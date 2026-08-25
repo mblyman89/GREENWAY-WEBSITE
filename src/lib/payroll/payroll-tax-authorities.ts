@@ -332,20 +332,60 @@ export const IRC_3301_FUTA_RATE: GuidanceAuthority = {
   source: "https://www.law.cornell.edu/uscode/text/26/3301",
 };
 
+/**
+ * ═══ books-55 REWROTE THIS QUOTE, AND THE REASON IS WORTH RECORDING. ═══
+ *
+ * The previous version of the text below had FOUR elisions and read, in part,
+ * "...any remuneration ... paid (or considered under this paragraph...". It sat
+ * in the codebase unchecked for many slices because `irc-3306-futa-wage-base`
+ * was listed in `KNOWN_UNMIRRORED_AUTHORITY_IDS` — §3306 was not on disk, so
+ * the verifier skipped it and printed a clean run.
+ *
+ * books-55 mirrored §3306 for an unrelated reason (the health-premium question
+ * has a FUTA half). The moment the file appeared, the verifier stopped skipping
+ * and failed immediately: one elided segment was sixteen characters long, below
+ * the forty-character floor that stops "..." from joining fragments that would
+ * match almost any statute. The old quote also wrote 'wages' in single quotes
+ * where the statute has typographic double quotes, and rendered "(b) Wages —"
+ * with an em dash where the source has a full stop.
+ *
+ * NONE OF THAT CHANGED THE MEANING, AND THAT IS EXACTLY WHY IT MATTERS. Every
+ * discrepancy was cosmetic, which is how a paraphrase becomes indistinguishable
+ * from a quote: nobody objects to a small liberty, and the liberties accumulate
+ * behind a green tick. This replacement was produced by reading the mirrored
+ * file and concatenating subsection (b)'s preamble with paragraph (1) — no
+ * elisions at all, so there is nothing left to be approximately right about.
+ *
+ * THE GENERAL LESSON, which books-26 and books-37 both learned the same way:
+ * paying down a mirroring skip does not merely add a check, it retroactively
+ * audits everything the skip was covering. Two of the three times this
+ * repository has mirrored a previously-skipped source, the very first run found
+ * a defective quote.
+ */
 export const IRC_3306_FUTA_WAGE_BASE: GuidanceAuthority = {
   id: "irc-3306-futa-wage-base",
   kind: "statute",
   cite: "26 U.S.C. §3306(b)(1)",
   quote:
-    "(b) Wages — For purposes of this chapter, the term 'wages' means all remuneration for employment " +
-    "... except that such term shall not include— (1) that part of the remuneration which, after " +
-    "remuneration ... equal to $7,000 with respect to employment has been paid to an individual by an " +
+    "(b) Wages. For purposes of this chapter, the term “wages” means all remuneration for employment," +
+    " including the cash value of all remuneration (including benefits) paid in any medium other than" +
+    " cash; except that such term shall not include— (1) that part of the remuneration which, after " +
+    "remuneration (other than remuneration referred to in the succeeding paragraphs of this " +
+    "subsection) equal to $7,000 with respect to employment has been paid to an individual by an " +
     "employer during any calendar year, is paid to such individual by such employer during such " +
-    "calendar year. If an employer (hereinafter referred to as successor employer) during any calendar " +
-    "year acquires substantially all the property used in a trade or business of another employer ... " +
-    "any remuneration ... paid (or considered under this paragraph as having been paid) to such " +
-    "individual by such predecessor during such calendar year and prior to such acquisition shall be " +
-    "considered as having been paid by such successor employer;",
+    "calendar year. If an employer (hereinafter referred to as successor employer) during any " +
+    "calendar year acquires substantially all the property used in a trade or business of another " +
+    "employer (hereinafter referred to as a predecessor), or used in a separate unit of a trade or " +
+    "business of a predecessor, and immediately after the acquisition employs in his trade or " +
+    "business an individual who immediately prior to the acquisition was employed in the trade or " +
+    "business of such predecessor, then, for the purpose of determining whether the successor " +
+    "employer has paid remuneration (other than remuneration referred to in the succeeding paragraphs" +
+    " of this subsection) with respect to employment equal to $7,000 to such individual during such " +
+    "calendar year, any remuneration (other than remuneration referred to in the succeeding " +
+    "paragraphs of this subsection) with respect to employment paid (or considered under this " +
+    "paragraph as having been paid) to such individual by such predecessor during such calendar year " +
+    "and prior to such acquisition shall be considered as having been paid by such successor " +
+    "employer;",
   soWhat:
     "FUTA only applies to the first $7,000 you pay each person all year, and that figure is written " +
     "into the statute — it does not adjust for inflation. The second half matters for your " +

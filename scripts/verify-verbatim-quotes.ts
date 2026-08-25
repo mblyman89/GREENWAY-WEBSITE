@@ -59,6 +59,22 @@ const MIRRORED_CORPORA: ReadonlyArray<{
   },
   { name: "8 CFR", re: /^8 C\.?F\.?R\.? §(\d+[a-z]?\.\d+)/, file: (m) => ["federal", `cfr-8-${m[1]}.txt`] },
   { name: "26 U.S.C.", re: /^26 U\.S\.C\. §(\d+[A-Z]?)/, file: (m) => ["federal", `usc-${m[1]}.txt`] },
+  // books-55. An IRS WEB PAGE, as distinct from a numbered publication.
+  //
+  // Mapped explicitly rather than by pattern, for the same reason the WAC
+  // entries below are explicit: "which mirrored file holds this page" is a fact
+  // about how we chose to store it, not something a regex can infer from a page
+  // title. An unmapped IRS page therefore falls through to null and is reported,
+  // which is the behaviour we want - a new page must be mirrored deliberately.
+  //
+  // Note the leading "IRS," WITH a comma. The 941 cites carry a books-40 debt
+  // caused by exactly that comma failing to match a router expecting "IRS
+  // Instructions for...". This entry is written to match the cite that exists.
+  {
+    name: "IRS S corporation medical insurance page",
+    re: /^IRS, S corporation compensation and medical insurance issues/,
+    file: () => ["federal", "irs-scorp-compensation-and-medical-insurance.txt"],
+  },
   { name: "Rev. Proc.", re: /^Rev\. Proc\. (\d{4})-(\d+)/, file: (m) => ["federal", `revproc-${m[1]}-${m[2]}.txt`] },
   // books-45. THE CHAPTER LETTER IS PART OF THE CHAPTER NUMBER. See the long
   // note on the RCW branch of `sourceFileFor` - this entry carried the same
@@ -391,6 +407,32 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
     return existsSync(p) ? p : null;
   }
 
+  // IRS, S corporation compensation and medical insurance issues  ->
+  //   federal/irs-scorp-compensation-and-medical-insurance.txt
+  //
+  // books-55. THIS BRANCH IS HERE BECAUSE ADDING THE OTHER ONE WAS NOT ENOUGH,
+  // AND THAT IS THE INTERESTING PART.
+  //
+  // This file holds TWO routers - `MIRRORED_CORPORA`, which answers "is this
+  // cite in a corpus we mirror?", and this function, which answers "where is
+  // the file?". I added the new entry to the first and not the second. The
+  // result was not a skip and not a silent pass: the run failed with "this
+  // citation is in the ... corpus, which this repository MIRRORS, but no file
+  // was found at ./docs/authorities/federal/irs-scorp-...txt", while the file
+  // was sitting at exactly that path.
+  //
+  // That message is confusing until you realise the two routers had disagreed,
+  // and it is the rule-48 guard above doing precisely its job: it exists to
+  // catch a broken mapping rather than accept a missing file as "nothing to
+  // check". The comment on this function already warns that "the two must agree,
+  // and a test asserts they do for every authority in the registry" - and today
+  // the guard caught the disagreement before the test did.
+  const irsPage = /^IRS, S corporation compensation and medical insurance issues/.exec(cite);
+  if (irsPage) {
+    const p = join(dir, "federal", "irs-scorp-compensation-and-medical-insurance.txt");
+    return existsSync(p) ? p : null;
+  }
+
   // Rev. Proc. 2015-13, §8.01  ->  federal/revproc-2015-13.txt
   // books-20. The method-change procedure is quoted from the official Internal
   // Revenue Bulletin, which is mirrored here in full, so these quotes are
@@ -704,7 +746,20 @@ export const KNOWN_UNMIRRORED_AUTHORITY_IDS: readonly string[] = [
   "irc-3111-employer-fica",
   "irc-3301-futa-rate",
   "irc-3302-futa-credit",
-  "irc-3306-futa-wage-base",
+  // "irc-3306-futa-wage-base" WAS HERE, and books-55 deleted it because the
+  // debt is paid: §3306 is now mirrored at docs/authorities/federal/usc-3306.txt.
+  //
+  // WORTH READING BEFORE ADDING THE NEXT ENTRY TO THIS LIST. The verifier
+  // refused to let the exemption stay once the file existed - it failed the run
+  // with "the debt is paid, and leaving it here would exempt a future
+  // regression". And it was right to insist, because the SAME run also failed
+  // the quote itself: the text carried four elisions, one of them sixteen
+  // characters long, and had been sitting unexamined for as long as the skip
+  // did. See the note above IRC_3306_FUTA_WAGE_BASE in payroll-tax-authorities.ts.
+  //
+  // That is the third time paying down this list immediately turned up a bad
+  // quote (books-26 on RCW 49.46.020, books-37 on RCW 49.52.050, books-55 here).
+  // An entry on this list is not neutral. It is a quote nobody is reading.
   "irc-6672-trust-fund-penalty-payroll",
   "irc-7501-trust-fund-payroll",
   "IRC_6672_TRUST_PENALTY",
