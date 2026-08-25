@@ -67,6 +67,19 @@
 
 import type { BoxLesson } from "./form-box-core";
 
+/**
+ * WAC 192-310-010, mirrored in books-56.
+ *
+ * Until this slice the rule was cited by four authority records with no held
+ * text behind it, so no gate could confirm those quotes were accurate. All four
+ * were checked against the newly mirrored file and all four verify byte for
+ * byte — but that was luck rather than proof until the file existed, which is
+ * the whole point of holding the text.
+ */
+export const WAC_192_310_010_PATH = "docs/authorities/state-wa/wac-192-310-010.txt";
+export const WAC_192_310_010_URL =
+  "https://app.leg.wa.gov/WAC/default.aspx?cite=192-310-010";
+
 export const RCW_50_24_010_PATH = "docs/authorities/state-wa/rcw-50.24.010.txt";
 export const RCW_50A_10_030_PATH = "docs/authorities/state-wa/rcw-50A.10.030.txt";
 export const RCW_51_16_140_PATH = "docs/authorities/state-wa/rcw-51.16.140.txt";
@@ -544,5 +557,475 @@ export const WA_QUARTERLY_LESSONS: readonly BoxLesson[] = [
     ],
     quotes: [],
     tiesTo: [],
+  },
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+   * books-56 — THE SIX BOXES THAT HAD NO LESSON
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Measured before writing anything, rather than assumed: of the fourteen
+   * boxes across the four Washington specimens, eight were taught and six were
+   * not. `pfml_wa_cares` was complete at 3 of 3. The gap was `esd-total` on the
+   * 5208A, `lni-premium` on the L&I return, and ALL FOUR boxes of the 5208B —
+   * a whole form with no lesson on any box.
+   *
+   * The 5208B gap deserves its own note, because it explains itself. The 5208B
+   * produces no engine lines: it computes no tax, so it emits no amounts. A
+   * form that emits nothing is easy for a teaching layer to skip silently, and
+   * that is exactly what had happened. It is also the form that carries every
+   * employee's name, number, hours and wages — the one Michael actually has to
+   * get right person by person, and the one the ESD .csv writer built in this
+   * same slice exists to produce.
+   */
+
+  /* ═════════════════════ ESD 5208A — the total line ═════════════════════ */
+  {
+    formId: "esd_5208a",
+    box: "esd-total",
+    headline: "Total due — two funds added AFTER each is rounded, never before",
+    plainEnglish:
+      "What Greenway owes Employment Security for the quarter: the unemployment tax plus the " +
+      "Employment Administration Fund tax. It looks like a box that just adds two numbers up, " +
+      "and it is — but the ORDER of the adding and the rounding is set by two different statutes, " +
+      "and doing it in the natural order gives the wrong answer often enough to matter. Both " +
+      "funds are entirely Greenway's cost; none of this may be deducted from anyone's pay.",
+    whereItComesFrom:
+      "The UI line plus the EAF line from this same return. Each of those is computed on the " +
+      "quarter's ESD-taxable wages at its own rate and rounded to the cent on its own figure " +
+      "FIRST. This total is the sum of two already-rounded amounts, which is why the engine " +
+      "stores them as separate integer-cent values rather than as one blended rate.",
+    howToReadIt:
+      "This is the single number that has to arrive at ESD, and it is the one to reconcile " +
+      "against the bank. Divide it by the quarter's taxable wages and you have Greenway's true " +
+      "combined unemployment cost as a percentage — useful because the UI rate is " +
+      "experience-rated and moves every year, while the EAF portion does not.",
+    commonMistake:
+      "Collapsing the two rates into one and multiplying once — or adding the two exact amounts " +
+      "and rounding at the end. Both feel more accurate and both are wrong: each statute " +
+      "commands rounding for its own section, so the rounding happens twice, before the " +
+      "addition. The error is a cent or two per quarter, which is small in money and awkward in " +
+      "kind, because it makes the return disagree with the agency's own arithmetic.",
+    whatToDo:
+      "Compute UI and EAF separately, round each to the cent, then add. Check this total against " +
+      "the amount actually paid, and confirm not a penny of it was withheld from any employee.",
+    examples: [
+      {
+        title: "Why the rounding order changes the answer",
+        steps: [
+          "Take a quarter's ESD-taxable wages of $68,923.45.",
+          "UI at an illustrative 1.00%: $689.2345, which rounds to $689.23.",
+          "EAF at the statutory 0.03%: $20.677035, which rounds to $20.68.",
+          "Correct total: $689.23 + $20.68 = $709.91.",
+          "Now the tempting shortcut — one blended rate of 1.03%: $709.911535, rounding to $709.91.",
+          "Here they agree. Change the wages to $68,923.55 and they do not: " +
+            "$689.24 + $20.68 = $709.92, but the blended rate gives $709.9126 → $709.91.",
+        ],
+        answer: "$709.91 — but by two roundings, not one",
+        moral:
+          "A method that happens to agree on this quarter's figures is not a correct method. It " +
+          "is a method that has not been caught yet. Round each fund, then add.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "RCW 50.24.010",
+        quote:
+          "Contributions shall become due and be paid by each employer to the treasurer for the unemployment compensation fund in accordance with such regulations as the commissioner may prescribe, and shall not be deducted, in whole or in part, from the remuneration of individuals in employment of the employer. Any deduction in violation of the provisions of this section shall be unlawful.",
+        sourcePath: RCW_50_24_010_PATH,
+        sourceUrl: RCW_50_24_010_URL,
+        soWhat:
+          "This total is the sum of two employer-only taxes, so the no-deduction rule governs the " +
+          "whole of it and not merely the UI line. \u201cIn whole or in part\u201d leaves no room for " +
+          "recovering even the EAF pennies from a worker.",
+      },
+      {
+        cite: "WAC 192-310-010(3)(a)",
+        quote:
+          "Tax report. Each calendar quarter, every employer must file a tax report with the commissioner. The report must list the total wages paid to every employee during that quarter.",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "The rule asks for total wages and nothing else — no names, no hours. Everything on this " +
+          "return, including this total, is a percentage of that one figure, which is why an error " +
+          "in the wage total is more expensive than an error in any single person's line.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208b",
+        box: "wage-detail-total",
+        why:
+          "This tax is charged on the wages the 5208B lists person by person. The detail rows must " +
+          "add up to the wage figure this tax was computed on; if they do not, one of the two " +
+          "halves of the same filing is wrong and ESD can see it immediately.",
+      },
+    ],
+  },
+
+  /* ═════════════════════ ESD 5208B — the whole form ═════════════════════ */
+  {
+    formId: "esd_5208b",
+    box: "employee",
+    headline: "Name and Social Security number — the box where a mismatch credits nobody",
+    plainEnglish:
+      "One row for every person Greenway paid in the quarter, identified by full name and Social " +
+      "Security number. No money is calculated here and no tax is charged on it, which is why it " +
+      "is easy to treat as paperwork. It is not paperwork: this is the box that decides WHOSE " +
+      "earnings record gets the credit for the wages reported beside it.",
+    whereItComesFrom:
+      "The employee record, spelled exactly as the Social Security Administration has it — not as " +
+      "the person signs their emails, and not a nickname. The rule also accepts an ITIN in place " +
+      "of a Social Security number, and it says what to do when a new hire has neither yet.",
+    howToReadIt:
+      "Count the rows. That count is the size of Greenway's workforce for the quarter as the state " +
+      "sees it, and it should match the number of W-2s issued for the year once you allow for " +
+      "starters and leavers. Ten people appear on Greenway's Q2 2026 detail.",
+    commonMistake:
+      "A name that does not match the number. It is the most common reason a wage report is " +
+      "rejected, and the damage is quiet: the wages credit nobody, so the employee's benefit " +
+      "record is short and nothing on Greenway's side looks wrong. Married names changed with the " +
+      "employer but never with the Social Security Administration are the usual cause.",
+    whatToDo:
+      "Match every name and number to the Social Security card, not to the payroll nickname. When " +
+      "a new hire has no card yet, follow the seven-day rule in the regulation rather than " +
+      "inventing a placeholder number — and never file a made-up SSN.",
+    examples: [
+      {
+        title: "What the state asks for, and what the federal return asks for",
+        steps: [
+          "WAC 192-310-010(3)(b) requires five facts per person: full name, Social Security " +
+            "number, occupational code or job title, total hours worked, wages paid.",
+          "Form 941 asks for none of the five. It reports one company-wide set of totals.",
+          "So the federal return can be right while this one is wrong about every person on it.",
+          "And the wage detail is half of one filing: the 5208A carries the money, this carries " +
+            "the people. Sending one without the other is an incomplete report with its own penalty.",
+        ],
+        answer: "Five facts per person, versus none",
+        moral:
+          "This is the form that knows who works at Greenway. That is why the time clock and the " +
+          "employee records are compliance systems and not merely conveniences.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "WAC 192-310-010(3)(b)",
+        quote:
+          "Report of employees' wages. Each calendar quarter, every employer must file a report of employees' wages with the commissioner. This report must list each employee by full name, Social Security number, standard occupational classification code or job title, and total hours worked and wages paid during that quarter.",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "Five facts, per person, every quarter. Read it beside the 941 and the difference is the " +
+          "single most useful fact about Washington payroll: the state wants to know who, and the " +
+          "federal return does not.",
+      },
+      {
+        cite: "WAC 192-310-010(3)(b)(v)",
+        quote:
+          /*
+           * Ends with a SEMICOLON, not a full stop. It is item (v) in a list,
+           * and the published text punctuates it as one. I first wrote a full
+           * stop and the gate caught it, which is exactly the silent alteration
+           * rule 24/35 exists to prevent: a quote that reads correctly and is
+           * not what the regulation says.
+           */
+          "For the purposes of this section, if an employee does not have a Social Security number but does have an individual taxpayer identification number (ITIN), the ITIN qualifies as a Social Security number. If the employee later obtains a Social Security number, the employer should use the Social Security number when filing the report of employees' wages;",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "An ITIN is a lawful answer here, so \u201cno SSN\u201d is not a reason to leave somebody off the " +
+          "report. Note the second sentence: once a real number arrives, it replaces the ITIN on " +
+          "future reports.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_w2",
+        box: "e",
+        why:
+          "The same name and number appear on that person's W-2. If the two disagree, at least one " +
+          "of the two filings is crediting the wrong record, and the employee is the one who " +
+          "discovers it years later.",
+      },
+    ],
+  },
+
+  {
+    formId: "esd_5208b",
+    box: "wage-detail-wages",
+    headline: "One person's gross wages — and these rows must add to the 5208A's total",
+    plainEnglish:
+      "That one employee's gross pay for the quarter. No tax is computed on this box; it is a wage " +
+      "amount, not a bill. Its job is to say how much of the company-wide total on the 5208A " +
+      "belongs to this particular person, so the state knows whose earnings to credit if they " +
+      "later claim unemployment.",
+    whereItComesFrom:
+      "Gross wages paid to that person during the quarter, from the payroll register. Gross means " +
+      "before any deduction — before withholding, before their Paid Leave premium, before their " +
+      "share of medical aid.",
+    howToReadIt:
+      "Add every row up and compare the sum to the single wage figure on the 5208A. Those two " +
+      "numbers are the same money counted two ways and they must agree exactly. This is the " +
+      "cheapest reconciliation in the whole quarter and it catches a whole class of error before " +
+      "the agency does.",
+    commonMistake:
+      "Reporting NET pay, or reporting taxable wages after the excess over the wage base has been " +
+      "removed. Both understate the row. The taxable-wage ceiling belongs on the tax computation, " +
+      "not on this detail line — this box reports what the person was actually paid.",
+    whatToDo:
+      "Report gross pay per person and prove the rows sum to the 5208A total before filing. If " +
+      "they differ by even a cent, find it now: one of the two returns is wrong.",
+    examples: [
+      {
+        title: "The reconciliation that has to hold",
+        steps: [
+          "Greenway's Q2 2026 wage total on the 5208A: $68,923.45.",
+          "The 5208B lists ten people, each with their own gross for the quarter.",
+          "Add the ten rows. The sum must be $68,923.45 exactly.",
+          "If it is not, the error is in one place or the other and it is findable in minutes.",
+          "Note what is NOT relevant here: the taxable wage base. A person past the base still " +
+            "shows their full gross on this row; the ceiling only affects the tax on the 5208A.",
+        ],
+        answer: "The rows must total $68,923.45",
+        moral:
+          "Two halves of one filing, cross-footing to the penny. A preparer who checks this " +
+          "finds their own mistakes; one who does not waits for a notice.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "WAC 192-310-010(3)(a)",
+        quote:
+          "Tax report. Each calendar quarter, every employer must file a tax report with the commissioner. The report must list the total wages paid to every employee during that quarter.",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "The 5208A carries the TOTAL wages; this box carries one person's share of it. The same " +
+          "regulation demands both, one sentence apart, which is why they have to agree.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208a",
+        box: "esd-total",
+        why:
+          "The tax on the 5208A is charged on the wages these rows describe. The detail must sum " +
+          "to the total the tax was computed on.",
+      },
+      {
+        formId: "pfml_wa_cares",
+        box: "pfml-employee",
+        why:
+          "The Paid Leave return reports wages for the same people over the same quarter, and the " +
+          "ESD .csv wage file carries this same per-person gross figure. If the two disagree about " +
+          "what somebody earned, at least one filing is wrong.",
+      },
+    ],
+  },
+
+  {
+    formId: "esd_5208b",
+    box: "wage-detail-hours",
+    headline: "Hours worked, per person — required even though no tax is charged on them here",
+    plainEnglish:
+      "The total hours that one person actually worked during the quarter. Nothing on this return " +
+      "is charged on hours, which is why this box gets treated as optional. It is not optional: " +
+      "the regulation lists total hours worked as one of the five facts required for every " +
+      "employee, and the same hour count is what the L&I premium is actually billed on.",
+    whereItComesFrom:
+      "The time clock, per person, for the quarter. Salaried people still generate reportable " +
+      "hours — a salary is a way of paying somebody, not an exemption from counting their time.",
+    howToReadIt:
+      "Add the rows and compare the total to the hours on the L&I return for the same quarter. " +
+      "Greenway's Q2 2026 hours add to 3,558. Two agencies are being told the same fact, and if " +
+      "the two returns disagree about it, both are visible to both.",
+    commonMistake:
+      "Reporting PAID hours instead of hours WORKED. Vacation, holiday and paid sick leave are " +
+      "hours paid for where no work was performed. Including them overstates this box and, on the " +
+      "L&I return, makes Greenway pay premium on exposure that never happened.",
+    whatToDo:
+      "Report hours actually worked, per person, and reconcile the total against the L&I return " +
+      "before either is filed. Keep paid-leave hours out of both.",
+    examples: [
+      {
+        title: "Why hours are a compliance figure and not a payroll convenience",
+        steps: [
+          "The regulation requires \u201ctotal hours worked\u201d for every employee, every quarter.",
+          "No tax on this return is computed from them.",
+          "But L&I charges premium PER HOUR, on the same hours: 3,558 for Greenway's Q2 2026.",
+          "So an hours error is free on this form and expensive on the next one.",
+          "And the two returns are filed with different agencies from the same underlying record, " +
+            "which is what makes a disagreement between them hard to explain.",
+        ],
+        answer: "3,558 hours, on both returns",
+        moral:
+          "The box that charges nothing is the box that proves the box that charges something. " +
+          "That is why it is required.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "WAC 192-310-010(3)(b)",
+        quote:
+          "This report must list each employee by full name, Social Security number, standard occupational classification code or job title, and total hours worked and wages paid during that quarter.",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "\u201cTotal hours worked\u201d is in the list of required facts, with no exception for salaried " +
+          "staff and no relief for a form that charges no tax on them.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "lni_quarterly",
+        box: "lni-hours",
+        why:
+          "L&I charges premium on hours, and these are the same hours. If the ESD wage detail and " +
+          "the L&I return disagree, one of the two is wrong and the agencies can each see it.",
+      },
+    ],
+  },
+
+  {
+    formId: "esd_5208b",
+    box: "wage-detail-total",
+    headline: "Report total — the form that bills nothing, and reconciles everything",
+    plainEnglish:
+      "The sum of every row on the wage detail. This form computes no tax and produces no bill of " +
+      "its own, so this total is not an amount owed. It is the reconciliation point: the figure " +
+      "that has to equal the total wages on the 5208A, penny for penny.",
+    whereItComesFrom:
+      "Adding up the per-person gross wages on this form. Nothing else feeds it; if it disagrees " +
+      "with the 5208A, the cause is in the rows or in the other return, never in this box.",
+    howToReadIt:
+      "Read it as a checksum rather than as information. It answers one question — do the two " +
+      "halves of this quarter's ESD filing agree? — and that question is worth asking before " +
+      "filing rather than after a notice arrives.",
+    commonMistake:
+      "Filing the tax report and not the wage detail, on the reasoning that the money has been " +
+      "paid so the obligation is met. It is not met: the two reports are separate requirements in " +
+      "the same regulation, and an incomplete report carries its own penalty even when the payment " +
+      "was correct and on time.",
+    whatToDo:
+      "Prove this total equals the 5208A wage total, then file BOTH halves together. If a quarter " +
+      "ends the business, file both immediately rather than waiting for the normal due date.",
+    examples: [
+      {
+        title: "Two reports, one filing",
+        steps: [
+          "The regulation states the tax report requirement in (3)(a) and the wage report " +
+            "requirement in (3)(b) — separate sentences, separate duties.",
+          "Greenway's Q2 2026: the 5208A says $68,923.45 of wages; the 5208B's rows must total the " +
+            "same $68,923.45.",
+          "The 5208A produces a bill. The 5208B produces none.",
+          "Paying the bill does not satisfy (3)(b). Filing (3)(b) does not satisfy (3)(a).",
+        ],
+        answer: "$68,923.45 on both, and both filed",
+        moral:
+          "A form with no total due is still a form with a penalty for not filing it.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "WAC 192-310-010(3)(b)(iv)",
+        quote:
+          "If the employee does not show his or her Social Security card or application for a card within seven days and the employer continues to employ the worker, the employer does not meet the reporting requirements of this section. The department will not allow waiver of the incomplete report penalty",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "Proof that this form carries a penalty of its own despite computing no tax — and note " +
+          "the last clause: for this particular failure the department will NOT waive it.",
+      },
+      {
+        cite: "WAC 192-310-010(3)(e)",
+        quote:
+          "Termination of business. Each employer who stops doing business or whose account is closed by the department must immediately file:",
+        sourcePath: WAC_192_310_010_PATH,
+        sourceUrl: WAC_192_310_010_URL,
+        soWhat:
+          "\u201cImmediately\u201d replaces the ordinary due date if Greenway ever closes or sells. Both " +
+          "reports are named in the sentences that follow, so both are due at once.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208a",
+        box: "esd-total",
+        why:
+          "These two boxes are the two halves of one ESD filing. The wage detail total must equal " +
+          "the wage total the tax was computed on.",
+      },
+    ],
+  },
+
+  /* ═════════════════════ L&I — the amount owed ═════════════════════ */
+  {
+    formId: "lni_quarterly",
+    box: "lni-premium",
+    headline: "Amount owed — the only payroll bill in Washington charged on time, not money",
+    plainEnglish:
+      "The total workers' compensation premium for the quarter: Greenway's own share plus the part " +
+      "lawfully deducted from workers, added together. It is billed on HOURS WORKED at a rate per " +
+      "hour for the risk class, so wages never enter the calculation at all. A raise does not " +
+      "change it. An hour of overtime does.",
+    whereItComesFrom:
+      `Reportable hours multiplied by the combined employee and employer rate per hour for risk ` +
+      `class ${GREENWAY_LNI_RISK_CLASS}. The engine computes it on the combined rate because that ` +
+      "is how the L&I notice quotes it and how L&I bills it — but it holds the two sides " +
+      "separately as well, because only one of them may lawfully be deducted.",
+    howToReadIt:
+      "Divide it by the hours and you have the true premium cost of an hour of labour at Greenway, " +
+      "on top of the wage. Then read the employee and employer lines beside it: the employee share " +
+      "should be roughly a quarter to a third of this total, never half. If it approaches half, " +
+      "the medical-aid rule has been misapplied.",
+    commonMistake:
+      "Treating this total as the thing to split in two. The lawful employee deduction is one-half " +
+      "of the MEDICAL AID amount, not half of this figure — and RCW 51.16.140(2) makes taking any " +
+      "part of the premium Greenway is required to pay a gross misdemeanour. The other frequent " +
+      "error is including paid leave hours, which buys premium on exposure that never happened.",
+    whatToDo:
+      `Confirm the risk class is ${GREENWAY_LNI_RISK_CLASS} and the rates match the current L&I ` +
+      "rate notice, report hours actually worked, and take the employee deduction from the " +
+      "published employee rate per hour — never by dividing this total.",
+    examples: [
+      {
+        title: "The quarter actually filed, and the two ways to get it wrong",
+        steps: [
+          "Reportable hours: 3,558.00.",
+          "Published rates: employee $0.16445 per hour, employer $0.39485 per hour.",
+          "Combined: $0.55930 per hour. 3,558 x $0.55930 = $1,989.99 — the figure filed for " +
+            "Q2 2026 under confirmation 12616784.",
+          "Lawful employee deduction: 3,558 x $0.16445 = $585.11, which is 29.4% of the total.",
+          "Error one — deducting half of this total: $995.00, over-deducting $409.89, and a crime.",
+          "Error two — including 200 hours of paid vacation: 3,758 x $0.55930 = $2,101.85, or " +
+            "$111.86 of premium bought for hours nobody worked.",
+        ],
+        answer: "$1,989.99",
+        moral:
+          "One box, two expensive mistakes: one that overcharges the workers and is criminal, one " +
+          "that overcharges Greenway and is merely wasteful.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "RCW 51.16.140(2)",
+        quote:
+          "It shall be unlawful for the employer, unless specifically authorized by this title, to deduct or obtain any part of the premium or other costs required to be by him or her paid from the wages or earnings of any of his or her workers, and the making of or attempt to make any such deduction shall be a gross misdemeanor.",
+        sourcePath: RCW_51_16_140_PATH,
+        sourceUrl: RCW_51_16_140_URL,
+        soWhat:
+          "This is the sentence that makes \u201chalf the premium\u201d dangerous rather than merely " +
+          "inaccurate. Any part of the employer's required premium taken from a worker is a gross " +
+          "misdemeanour, and the attempt alone completes the offence.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208b",
+        box: "wage-detail-hours",
+        why:
+          "This premium is charged on the same hours the ESD wage detail reports person by person. " +
+          "The two returns go to different agencies from one time record, so they must agree.",
+      },
+    ],
   },
 ];

@@ -150,6 +150,28 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^WAC 296-128-(6[2-8]0|755)/,
     file: () => ["state-wa", "wac-296-128-paid-sick-leave.txt"],
   },
+  /*
+   * WAC 192-310-010 — the ESD quarterly reporting rule. Added books-56.
+   *
+   * FOUND BY THE ROUTING GATE BUILT IN books-55, WITHOUT A HUMAN LOOKING.
+   *
+   * The moment the rule was mirrored, `authority-routing-completeness` failed
+   * and named all three authorities whose quotes the verifier was skipping even
+   * though its own comparison succeeded against the newly held file. That is
+   * the §280E / CON 8 / "IRS, Instructions" / "§ 31." defect for the FIFTH
+   * time, and this is the first time it was caught by a test rather than by
+   * noticing a number looked wrong.
+   *
+   * The pattern matches only -010, the section actually mirrored. A citation to
+   * another WAC 192-310 section — -030's penalties, say, which we do not hold —
+   * falls through to null and is reported as unmirrored debt rather than being
+   * checked against the wrong file. Rule 48.
+   */
+  {
+    name: "WAC 192-310-010 ESD quarterly reports",
+    re: /^WAC 192-310-010/,
+    file: () => ["state-wa", "wac-192-310-010.txt"],
+  },
   {
     name: "IRS Publication",
     re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
@@ -582,6 +604,24 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   // input has to say so rather than guess.
   if (/^WAC 296-128-(6[2-8]0|755)/.test(cite)) {
     const p = join(dir, "state-wa", "wac-296-128-paid-sick-leave.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  /*
+   * WAC 192-310-010(3)(a)  ->  state-wa/wac-192-310-010.txt
+   *
+   * books-56. MUST AGREE WITH THE MIRRORED_CORPORA ROW ABOVE. This is the exact
+   * two-place structure that produced the "§ 31." defect: the table row and
+   * this branch answer two different questions — "is this citation routable?"
+   * and "which file holds it?" — and if they disagree, rule 48's loud-failure
+   * path goes blind, because a citation the table calls routable and this
+   * branch cannot place is silently skipped rather than reported.
+   *
+   * Narrow on purpose: only -010 is mirrored. Anything else in WAC 192-310
+   * falls through to null and is reported as debt.
+   */
+  if (/^WAC 192-310-010/.test(cite)) {
+    const p = join(dir, "state-wa", "wac-192-310-010.txt");
     return existsSync(p) ? p : null;
   }
 

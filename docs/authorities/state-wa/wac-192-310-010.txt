@@ -1,0 +1,96 @@
+SOURCE TEXT - WAC 192-310-010
+Retrieved 2026-08-25 from https://app.leg.wa.gov/WAC/default.aspx?cite=192-310-010
+Washington State regulation. Edicts of government are not copyrightable; see
+Georgia v. Public.Resource.Org, 590 U.S. 255 (2020).
+==============================================================================
+WAC 192-310-010
+
+What reports are required from an employer?
+
+MIRRORED IN books-56, AND WHY IT MATTERS THAT IT WAS NOT MIRRORED BEFORE:
+Four authority records cited this rule before this slice with no held text
+behind it, so the gate that checks quotes against their source could not check
+them at all. The rule is now held. The first thing done with it was to re-check
+all four pre-existing quotes; all four verify byte for byte. That was luck
+rather than proof until the file existed, which is the argument for holding the
+text of everything we quote.
+
+FORMATTING NOTE - READ BEFORE REFLOWING THIS FILE:
+Each provision is stored on ONE UNWRAPPED LINE, matching the other Washington
+mirrors in this directory. That is not a style preference. The lesson gate in
+tests/compliance/form-box-lessons-wa.test.ts compares quotes with a raw
+`includes` - byte for byte, newlines and all - so a wrapped paragraph makes a
+correct quote unverifiable. The first version of this file was wrapped at 79
+columns and the gate rejected an accurate quote, exactly as it should have.
+Long lines here are load-bearing.
+
+Reproduced in full rather than trimmed to the quoted sentences, because
+(3)(b) is unintelligible without (b)(i)-(vii) - they govern what to do when a
+worker has no Social Security number - and (3)(d)'s due date changes answer
+depending on the weekend and postmark sentences that follow it.
+==============================================================================
+
+TEXT
+
+(1) Business license application. Every person or unit with one or more individuals performing services for it in the state of Washington must file a business license application with the department of revenue.
+
+(2) Employer registration:
+
+(2)(a) Every employer shall register with the department and obtain an employment security account number. Registration shall include the names, Social Security numbers, mailing addresses, telephone numbers, and the effective dates in that role of natural persons who are spouses or domestic partners of owners and owners, partners, members, or corporate officers of an employer. Registration of corporations shall include the percentage of stock ownership for each corporate officer, delineated as zero percent, less than 10 percent, or 10 percent or more, and the family relationship of corporate officers to other corporate officers who own 10 percent or more. Every employer shall report changes in owners, partners, members, corporate officers, and percentage of ownership of the outstanding stock of the corporation by corporate officers. The report of changes is due each calendar quarter at the same time that the quarterly tax and wage report is due.
+
+(2)(b) A nonprofit corporation that is an employer shall register with the department, but is not required to provide names, Social Security numbers, mailing addresses, or telephone numbers for corporate officers who receive no compensation from the nonprofit corporation with respect to their services for the nonprofit corporation.
+
+(2)(c) An employer who omits required information when registering with the department, or fails to provide the department with the required information within 30 days of registration, must pay a penalty of $25 for each violation unless the penalty is waived by the department.
+
+(2)(d) For purposes of this subsection:
+
+(2)(d)(i) "Owner" means the owner of an employer operated as a sole proprietorship;
+
+(2)(d)(ii) "Partner" means a general partner of an employer organized as a partnership, other than limited partners of a limited partnership who are not also general partners of the partnership;
+
+(2)(d)(iii) "Member" means a member of an employer organized as a limited liability company, other than members who, pursuant to applicable law or the terms of the limited liability company's operating agreement or other governing documents, have no right to participate in the management of the limited liability company; and
+
+(2)(d)(iv) "Corporate officer" means an officer described in the bylaws or appointed or elected by the board of directors in accordance with the bylaws or articles or certificates of incorporation of an employer organized as a for-profit or nonprofit corporation.
+
+(3) Quarterly tax and wage reports:
+
+(3)(a) Tax report. Each calendar quarter, every employer must file a tax report with the commissioner. The report must list the total wages paid to every employee during that quarter.
+
+(3)(b) Report of employees' wages. Each calendar quarter, every employer must file a report of employees' wages with the commissioner. This report must list each employee by full name, Social Security number, standard occupational classification code or job title, and total hours worked and wages paid during that quarter.
+
+(3)(b)(i) Social Security numbers are required for persons working in the United States;
+
+(3)(b)(ii) If an individual has a Social Security card, the individual must present the card to the employer at the time of hire or shortly after that. This does not apply to agricultural workers who, under federal rules, may show their Social Security card on the first day they are paid;
+
+(3)(b)(iii) If the individual does not have a Social Security card, Internal Revenue Service rules allow an employer to hire the individual with the clear understanding that the individual will apply for a Social Security number within seven calendar days of starting work for the employer. The individual must give the employer a document showing the individual has applied for a Social Security card. When the card is received, the individual must give the employer a copy of the card itself. An employer should keep copies of the document(s) for their records;
+
+(3)(b)(iv) If the employee does not show his or her Social Security card or application for a card within seven days and the employer continues to employ the worker, the employer does not meet the reporting requirements of this section. The department will not allow waiver of the incomplete report penalty (see WAC 192-310-030);
+
+(3)(b)(v) For the purposes of this section, if an employee does not have a Social Security number but does have an individual taxpayer identification number (ITIN), the ITIN qualifies as a Social Security number. If the employee later obtains a Social Security number, the employer should use the Social Security number when filing the report of employees' wages;
+
+(3)(b)(vi) An Indian tribe, as defined in 26 U.S.C. § 3306, may, but is not required to, report the standard occupational classifications codes or job titles of workers; and
+
+(3)(b)(vii) The United States Bureau of Labor Statistics Standard Occupational Classification system is used by federal agencies to classify workers into standard occupational categories for the purpose of collecting, calculating or disseminating data. These standard occupational categories are identified by a six-digit numerical code.
+
+(3)(c) Format. Employers must file the quarterly tax and wage reports in one of the following formats:
+
+(3)(c)(i) Electronically, using programs or services authorized by the department; or
+
+(3)(c)(ii) Paper forms supplied by the department (or an approved version of those forms). Agency forms include "drop-out ink" that cannot be copied. Therefore, photocopies are considered incorrectly formatted reports and forms.
+
+(3)(d) Due dates. The quarterly tax and wage reports are due by the last day of the month following the end of the calendar quarter being reported. Calendar quarters end on March 31st, June 30th, September 30th and December 31st of each year. So, reports are due by April 30th, July 31st, October 31st, and January 31st, in that order. If these dates fall on a Saturday, Sunday, or a legal holiday, the reports will be due on the next business day. Reports submitted by mail will be considered filed on the postmarked date. The commissioner must approve exceptions to the time and method of filing in advance.
+
+(3)(e) Termination of business. Each employer who stops doing business or whose account is closed by the department must immediately file:
+
+(3)(e)(i) A tax report for the current calendar quarter which covers tax payments due on the date the account is closed; and
+
+(3)(e)(ii) A report of employees' wages for the current calendar quarter which includes all wages paid as of the date the account is closed.
+
+
+==============================================================================
+STATUTORY AUTHORITY AND HISTORY, AS PUBLISHED (most recent amendment first)
+
+Statutory Authority: RCW 50.12.010, 50.12.040, and 50.12.070. WSR 23-22-076, § 192-310-010, filed 10/26/23, effective 11/26/23. Statutory Authority: RCW 50.12.010, 50.12.040, 50.12.070, and 50.12.220. WSR 22-21-094, § 192-310-010, filed 10/17/22, effective 11/17/22. Statutory Authority: RCW 50.12.010 and 50.12.040. WSR 17-17-128, § 192-310-010, filed 8/22/17, effective 9/22/17; WSR 13-23-008, § 192-310-010, filed 11/7/13, effective 12/8/13; WSR 11-21-015, § 192-310-010, filed 10/7/11, effective 11/7/11; WSR 10-23-064, § 192-310-010, filed 11/12/10, effective 12/13/10; WSR 07-23-127, § 192-310-010, filed 11/21/07, effective 1/1/08. Statutory Authority: RCW 50.12.010, 50.12.040, and 50.12.042. WSR 05-19-017, § 192-310-010, filed 9/9/05, effective 10/10/05; WSR 04-23-058, § 192-310-010, filed 11/15/04, effective 12/16/04. Statutory Authority: RCW 50.12.070. WSR 98-14-068, § 192-310-010, filed 6/30/98, effective 7/31/98.
+
+The operative version for Greenway's 2026 quarters is the one effective
+11/26/23, which is the text above.

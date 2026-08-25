@@ -21,6 +21,7 @@ import {
   RCW_50A_10_030_PATH,
   RCW_50_24_010_PATH,
   RCW_51_16_140_PATH,
+  WAC_192_310_010_PATH,
   WA_QUARTERLY_LESSONS,
 } from "@/lib/payroll/form-box-lessons-wa";
 import { lessonFor, lessonsForForm } from "@/lib/payroll/form-box-core";
@@ -32,6 +33,17 @@ const corpora = new Map<string, string>([
   [RCW_50_24_010_PATH, readFileSync(RCW_50_24_010_PATH, "utf8")],
   [RCW_50A_10_030_PATH, readFileSync(RCW_50A_10_030_PATH, "utf8")],
   [RCW_51_16_140_PATH, readFileSync(RCW_51_16_140_PATH, "utf8")],
+  /*
+   * Added in books-56, when the six untaught Washington boxes were taught.
+   *
+   * WAC 192-310-010 was cited by four authority records before this slice with
+   * NO held text behind it, so this gate could not check those quotes at all.
+   * The rule is now mirrored, and the first thing done with the mirror was to
+   * re-check all four pre-existing quotes: all four verify byte for byte. That
+   * was luck rather than proof until the file existed, which is the argument
+   * for holding the text of anything we quote.
+   */
+  [WAC_192_310_010_PATH, readFileSync(WAC_192_310_010_PATH, "utf8")],
 ]);
 
 describe("every RCW quote is really in the statute", () => {
