@@ -309,7 +309,33 @@ describe("every lesson is reachable from the real engine", () => {
    * and text lines.
    */
   it("emits only real lines, and the gap is exactly the twelve non-amount lines", () => {
-    const emitted = form940Boxes(builtReturn()).map((b) => b.box);
+    /*
+     * ═══ WIDENED IN books-63, AND WHY IT IS NOT A LOOSENING ═══
+     *
+     * `form940Boxes` now also emits the employer ENTITY area - the EIN, legal
+     * name, trade name, address and city/state/ZIP that fill the top of page 1
+     * and are repeated at the top of page 2. Before books-63 it did not, so a
+     * live 940 printed its whole FUTA arithmetic under an anonymous header on
+     * both pages. See D-09.
+     *
+     * Those five are NOT numbered lines, so they must not be added to
+     * `LINES_ON_THE_PRINTED_940` - that list is what proves the form has thirty
+     * lines and that the twelve tickbox/text lines are the exact gap. Adding
+     * text boxes to it would corrupt the very thing this file measures.
+     *
+     * So they are named, asserted PRESENT, and then excluded before the
+     * line-level check. Naming them is what stops this being a hole: a sixth
+     * unexpected box id still fails, and an entity box that stopped being
+     * emitted fails too - which is the defect D-09 actually was.
+     */
+    const ENTITY_BOXES = ["ein", "name", "tradeName", "address", "cityStateZip"] as const;
+
+    const emittedAll = form940Boxes(builtReturn()).map((b) => b.box);
+    for (const e of ENTITY_BOXES) {
+      expect(emittedAll, `the 940 stopped emitting entity box ${e} - this is D-09`).toContain(e);
+    }
+
+    const emitted = emittedAll.filter((b) => !ENTITY_BOXES.includes(b as (typeof ENTITY_BOXES)[number]));
     const onPaper = new Set(LINES_ON_THE_PRINTED_940);
     for (const box of emitted) {
       expect(onPaper.has(box), `engine emits line ${box}, which is not on the form`).toBe(true);

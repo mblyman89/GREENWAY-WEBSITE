@@ -36,6 +36,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALL_PAGE_KEYS,
+  centsMaxLenFor,
   facsimileBoxes,
   nine41IdentityText,
   copiesOnSheet,
@@ -54,6 +56,15 @@ type Geo = Readonly<
     {
       readonly width: number;
       readonly height: number;
+      /**
+       * WHICH SHEET of the source PDF the widgets were taken from. Declared
+       * here because the page number is the one geometry fact that is wrong
+       * SILENTLY: page 1 of fw3.pdf is the SSA's notice and page 3 of f940.pdf
+       * is the 940-V voucher, and a deriver pointed at either finds no widgets
+       * and reports success. Measured: 940-p1 1, 940-p2 2, 941-p1 1, 941-p2 2,
+       * 941sb 1, w2-copyb 4, w3 2.
+       */
+      readonly page: number;
       readonly fields: readonly {
         readonly name: string;
         readonly comb: boolean;
@@ -76,8 +87,25 @@ type Map_ = Readonly<
 const GEO = geometry as unknown as Geo;
 const MAP = boxMap as unknown as Map_;
 
-/** The three pages this slice renders. */
-const PAGES = ["941-p1", "941-p2", "w2-copyb"] as const;
+/**
+ * EVERY page with artwork, DISCOVERED rather than listed.
+ *
+ * ═══ WHY THIS STOPPED BEING A LIST IN books-63 ═══
+ *
+ * It was `["941-p1", "941-p2", "w2-copyb"]` - the three pages that existed when
+ * it was written. books-62 added Schedule B and books-63 added two 940 pages and
+ * the W-3, and NONE of them were covered by the rule-123 gate below, because a
+ * hand-written list protects the pages it names and nothing else.
+ *
+ * That is exactly the failure this file's own header describes: "18 of page 1's
+ * 70 rectangles and 32 of page 2's 35 were going unplaced, and nobody had
+ * noticed, because the specimen screenshots looked complete." A gate that would
+ * have caught it, scoped to a list that excludes the new work, catches nothing.
+ *
+ * Rule 23: fix the class. `ALL_PAGE_KEYS` is derived from the geometry the
+ * deriver wrote, so a page gets these gates by EXISTING.
+ */
+const PAGES = ALL_PAGE_KEYS;
 
 /**
  * His registered details, read off his filed Q2 941 with `pdftotext -layout`.
@@ -109,9 +137,21 @@ describe("form geometry: measured from the agency PDFs, not typed in", () => {
    * DELIBERATELY, in a commit that says so.
    */
   it("pins the rectangle count of each page as measured", () => {
-    expect(GEO["941-p1"].fields.length).toBe(70);
-    expect(GEO["941-p2"].fields.length).toBe(35);
-    expect(GEO["w2-copyb"].fields.length).toBe(94);
+    /*
+     * Every page, so a page cannot be added without its count being stated -
+     * `Object.fromEntries` over the DISCOVERED list rather than a stack of
+     * per-page assertions, because a stack of assertions is silent about a page
+     * nobody added one for.
+     */
+    expect(Object.fromEntries(PAGES.map((k) => [k, GEO[k].fields.length]))).toEqual({
+      "940-p1": 59,
+      "940-p2": 31,
+      "941-p1": 70,
+      "941-p2": 35,
+      "941sb": 212,
+      "w2-copyb": 94,
+      w3: 46,
+    });
   });
 
   it("pins the page sizes measured with pdfinfo", () => {
@@ -119,6 +159,47 @@ describe("form geometry: measured from the agency PDFs, not typed in", () => {
     expect(GEO["941-p1"].width).toBeCloseTo(611.976, 2);
     expect(GEO["941-p1"].height).toBeCloseTo(791.968, 2);
     expect(GEO["w2-copyb"].width).toBeCloseTo(612, 2);
+    // f940.pdf is 610.976 wide - ONE POINT NARROWER than f941.pdf, which is the
+    // kind of difference that would be invisible until a facsimile built on a
+    // shared constant printed every 940 box a point out.
+    expect(GEO["940-p1"].width).toBeCloseTo(610.976, 2);
+    expect(GEO["940-p2"].width).toBeCloseTo(610.976, 2);
+    expect(GEO["w3"].width).toBeCloseTo(612, 2);
+  });
+
+  it("takes the W-3 from page 2 of fw3.pdf, where the widgets actually are", () => {
+    /*
+     * THE TRAP THIS PINS. Page 1 of fw3.pdf is the SSA's "Attention" notice and
+     * carries ZERO widgets. A deriver pointed at page 1 finds nothing and
+     * reports success - a blank form that looks finished, which is this file's
+     * whole subject.
+     */
+    expect(GEO["w3"].page).toBe(2);
+    // And page 3 of f940.pdf is Form 940-V, a payment voucher that is NOT part
+    // of the return. Neither 940 page may be it.
+    expect(GEO["940-p1"].page).toBe(1);
+    expect(GEO["940-p2"].page).toBe(2);
+  });
+
+  it("splits money into dollars and cents per form, never once for all of them", () => {
+    /*
+     * D-04. MEASURED, and they genuinely differ - which is why this cannot be a
+     * constant: 941 = 3, Schedule B = 2, 940 = 2.
+     */
+    expect(centsMaxLenFor("941-p1")).toBe(3);
+    expect(centsMaxLenFor("941sb")).toBe(2);
+    expect(centsMaxLenFor("940-p1")).toBe(2);
+    expect(centsMaxLenFor("940-p2")).toBe(2);
+
+    /*
+     * The W-3 does NOT split at all. Its money boxes are single 152.8pt
+     * /MaxLen 16 fields, and the only /MaxLen 2 rect on the whole form is box
+     * 15's state code. So a cents rule must never be applied to this page -
+     * asserted by measuring the form rather than by trusting the map.
+     */
+    const w3MaxLens = new Set(GEO["w3"].fields.map((f) => f.maxLen));
+    expect(w3MaxLens.has(3)).toBe(false);
+    expect(GEO["w3"].fields.filter((f) => f.maxLen === 16).length).toBe(15);
   });
 
   /*
@@ -130,14 +211,38 @@ describe("form geometry: measured from the agency PDFs, not typed in", () => {
    * refuses it rather than guessing one.
    */
   it("finds exactly the comb fields measured, each with a cell count", () => {
+    /*
+     * MEASURED per page in books-63, when this stopped being a 3-page list:
+     *
+     *     941-p1   4   EIN prefix, EIN body, routing, account
+     *     941-p2   2
+     *     940-p1   4   the same four - the 940 has a deposit block too
+     *     940-p2   1
+     *     941sb    0
+     *     w2-copyb 0
+     *     w3       0
+     *
+     * Pinned per page rather than as one total, because a total of 11 stays 11
+     * when a page gains a comb and another loses one - and the two pages this
+     * matters most on are the two that print an EIN.
+     */
+    const perPage = Object.fromEntries(
+      PAGES.map((k) => [k, GEO[k].fields.filter((f) => f.comb).length]),
+    );
+    expect(perPage).toEqual({
+      "940-p1": 4,
+      "940-p2": 1,
+      "941-p1": 4,
+      "941-p2": 2,
+      "941sb": 0,
+      "w2-copyb": 0,
+      w3: 0,
+    });
+
     const combs = PAGES.flatMap((k) =>
       GEO[k].fields.filter((f) => f.comb).map((f) => `${k}:${f.name}`),
     );
-    // 4 on 941 page 1 (EIN prefix, EIN body, routing, account), 2 on page 2.
-    expect(combs.length).toBe(6);
-    // The W-2 has none: measured, and asserted so a future regeneration that
-    // invents some is noticed.
-    expect(GEO["w2-copyb"].fields.some((f) => f.comb)).toBe(false);
+    expect(combs.length).toBe(11);
 
     for (const key of PAGES) {
       for (const f of GEO[key].fields) {

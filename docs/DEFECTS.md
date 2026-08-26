@@ -182,3 +182,75 @@ the single-rectangle path cannot diverge again.
 `form-941-schedule-b-core.test.ts` asserts that a day with no payday emits no
 text in either of its two rectangles, and that the count of filled slots equals
 the paydays plus the totals plus the header.
+
+---
+
+## D-08 — `normaliseEinInput` exists, is correct, and is wired to nothing
+
+**Found:** books-63, during the rule-130(c) visual check, by probing
+`paperEin("46-4217016")` and getting `null`.
+
+**Severity: low, and the null was RIGHT.** `company_profile.ein` carries a
+database constraint `check (ein = '' or ein ~ '^[0-9]{9}$')`, so the stored
+shape is nine bare digits and `paperEin` refusing a hyphenated string is the
+correct behaviour on the read path. Every form renders the EIN correctly from a
+stored value. Nothing filed is wrong. This is recorded rather than fixed
+because it costs money to fix and files nothing incorrectly today.
+
+**The actual gap is on the WRITE path.** `normaliseEinInput` in
+`company-identity-core.ts` strips hyphens and spaces and then insists on nine
+digits — written precisely because, in its own words, "someone copying from a
+CP 575 letter will include" them. It is referenced in exactly two places: its
+own definition and its mentor-gate entry. `saveCompanyProfile` does not call
+it; it calls `.trim()` and hands the string to Postgres.
+
+So pasting `46-4217016` — the shape the IRS itself prints on the CP 575 — fails
+the CHECK constraint, and the owner is shown a raw Postgres constraint-violation
+message. That is the exact failure mode this whole system exists to avoid:
+being stopped without being told anything useful. The fix is one call in
+`saveCompanyProfile` plus an assertion that a hyphenated EIN round-trips.
+
+---
+
+## D-09 — a live Form 940 printed with no EIN, no name and no address
+
+**Found:** books-63, by the rule-130(c) visual check, on the LIVE adapter rather
+than the teaching specimen. This is D-01 recurring on a third form.
+
+**What it was:** `form940Boxes` mapped `ret.lines` and returned only those. The
+engine computes numbered lines, so a real Form 940 produced its whole FUTA
+arithmetic — payments, the $7,000 excess, taxable wages, tax, line 12, line 17
+— under a **completely anonymous header**, on BOTH pages. Page 2 of the 940
+repeats the name and EIN precisely because the sheets get separated in handling,
+so both halves of the return were unidentifiable.
+
+**Why it survived a green suite of 11,555 tests.** The assertion in
+`form-box-adapters.test.ts` read:
+
+```
+expect(form940Boxes(ret).length).toBe(ret.lines.length);
+```
+
+An exact equality, which made the absence of the entity area a **requirement**.
+The sibling assertions for the 941 and the W-2 were both upgraded in books-61
+when this identical defect was found on those two forms. The 940's was not. So
+the test suite actively defended the bug on the one form that had not been
+looked at.
+
+**Why it was invisible on screen.** The teaching specimen has no entity boxes
+either, so the sheet renders identically with and without the defect until a
+year is closed and real figures arrive — at which point the form is filed. Rule
+23's exact failure mode: the instance was fixed twice and the class never was.
+
+**Fix:** the block moved out of `form941Boxes` into a shared
+`employerEntityBoxes(formId, formLabel)`, called by both adapters. The 941's
+`FORM_940_WHOSE`-equivalent table is not extended, because
+`assertEvery940LineOwnershipIsPinned` pins that table to exactly the 30 numbered
+lines; the entity facts are not per-form facts — Greenway has one EIN, and the
+IRS reconciles the year's 940 against the four 941s filed under it.
+
+**Gate:** the 940 assertion now checks the RELATIONSHIP (every engine line
+survives, five entity boxes present, nothing else appears) exactly as the 941's
+does; a test asserts both adapters route through the one shared builder; and a
+third test discovers from the generated box map that every entity box has a
+rectangle on the 940's paper, page 2 included.

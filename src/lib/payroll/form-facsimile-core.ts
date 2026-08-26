@@ -1110,6 +1110,99 @@ export function nine41IdentityText(
 }
 
 /**
+ * The Form 940's entity area.
+ *
+ * ═══ WHY THIS DELEGATES INSTEAD OF BEING WRITTEN OUT ═══
+ *
+ * Because the 940 asks the same five questions in the same five box ids, and
+ * the box map proves it rather than my memory asserting it: `940-p1` binds
+ * `ein`, `name`, `tradeName`, `address` and `cityStateZip`, and `940-p2` binds
+ * `ein` and `name` for its repeated header - the identical set the 941 uses.
+ *
+ * So the 940 gets the 941's function, and every rule that function enforces
+ * comes with it for free: the EIN split across a 2-cell and a 7-cell comb with
+ * no hyphen passed in, a malformed EIN printing NOTHING rather than printing
+ * what was stored, the legal name and the trade name kept in their own boxes,
+ * and the city row filled positionally so a missing city cannot slide the ZIP
+ * into the state box.
+ *
+ * Re-typing those five rules for a second form is how two forms come to
+ * disagree about one EIN. If the IRS ever changes the 940's entity area, the
+ * box map's caption check fails at build time and this alias is where the fork
+ * belongs - not before there is a measured difference to fork on.
+ */
+export const nine40IdentityText = nine41IdentityText;
+
+/**
+ * The Form W-3's identity boxes.
+ *
+ * ═══ WHAT THE TRANSMITTAL ASKS THAT THE W-2 DOES NOT ═══
+ *
+ * The W-3 is the cover sheet for a batch of W-2s, so its identity boxes are
+ * about the EMPLOYER only - there is no employee on this form at all. Four of
+ * them carry text, and each is a different question:
+ *
+ *   e  the EIN. ONE box here, not the 941's two combs - measured: `f1_04[0]` is
+ *      a single 228.4pt field of /MaxLen 10, which is exactly nine digits plus
+ *      the hyphen. So this form DOES want the hyphen, and it is the W-2's
+ *      treatment rather than the 941's. `paperEin` still does the formatting,
+ *      so a malformed EIN prints nothing on all three forms alike.
+ *
+ *   f  the employer's NAME. The legal name, not the trade name - the SSA
+ *      matches this against the name the EIN was issued to, and Greenway's
+ *      differ ("LYMAN'S MARIJUANA" against "GREENWAY MARIJUANA").
+ *
+ *   g  the employer's address and ZIP, as a BLOCK. Measured: this rectangle is
+ *      36.01pt tall where every other text field on the page is 12pt, which is
+ *      the artwork itself saying it expects three printed lines. So the street
+ *      and the city line are joined with a newline, and `drawnCells` already
+ *      declines to comb any text containing one.
+ *
+ *   h  "Other EIN used this year". DELIBERATELY OMITTED, not forgotten. It is
+ *      asking whether wages were reported under a DIFFERENT EIN this year -
+ *      typically after an acquisition or a payroll-agent change. Filling it
+ *      with Greenway's own EIN would tell the SSA to go looking for a second
+ *      set of returns that does not exist. Correctly blank, and the box still
+ *      teaches: it has a lesson of its own.
+ *
+ * Box 15's state code is NOT an identity box here. It is a state-reporting box
+ * that the W-3 engine fills from the W-2 batch, and Washington has no state
+ * income tax, so treating it as identity would print a state code onto a form
+ * whose boxes 16 and 17 are correctly empty.
+ */
+export function w3IdentityText(
+  employer: W2Employer,
+): Readonly<Record<string, readonly string[]>> {
+  const out: Record<string, readonly string[]> = {};
+
+  if (employer.ein !== null) {
+    const ein = paperEin(employer.ein);
+    if (ein !== null) out["e"] = [ein];
+  }
+
+  if (employer.legalName !== null && employer.legalName.trim() !== "") {
+    out["f"] = [employer.legalName.trim()];
+  }
+
+  /*
+   * The address block WITHOUT the name line. `paperEmployerBlock` leads with
+   * the legal name, which is right for the W-2's box c - one box holding
+   * "employer's name, address, and ZIP code" - and wrong here, where the name
+   * has its own box f directly above. Reusing it would print the name twice.
+   */
+  const cityLine = [employer.city, employer.state]
+    .filter((x): x is string => x !== null && x.trim() !== "")
+    .join(", ");
+  const block = [employer.street ?? "", [cityLine, employer.zip ?? ""].filter((x) => x.trim() !== "").join(" ")]
+    .map((x) => x.trim())
+    .filter((x) => x !== "")
+    .join("\n");
+  if (block !== "") out["g"] = [block];
+
+  return out;
+}
+
+/**
  * The order his own filing prints a run in: sort key first, then the label.
  *
  * ═══ MEASURED AGAINST HIS FILED W-2 RUN, NOT CHOSEN ═══

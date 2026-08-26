@@ -53,6 +53,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   COMPANY_FIELDS,
   allFormReadiness,
+  normaliseEinInput,
   type CompanyProfileValues,
   type FormReadiness,
 } from "./company-identity-core";
@@ -140,7 +141,7 @@ export type SaveResult =
   | { readonly ok: true; readonly readiness: readonly FormReadiness[] }
   | {
       readonly ok: false;
-      readonly code: "NOT_CONFIGURED" | "UNKNOWN_FIELD" | "WRITE_FAILED";
+      readonly code: "NOT_CONFIGURED" | "UNKNOWN_FIELD" | "INVALID_EIN" | "WRITE_FAILED";
       readonly message: string;
       readonly field?: string;
     };
@@ -185,6 +186,52 @@ export async function saveCompanyProfile(values: CompanyProfileValues): Promise<
       };
     }
     const value = typeof raw === "string" ? raw.trim() : "";
+
+    /*
+     * ═══ THE EIN IS NORMALISED BEFORE IT IS STORED. See D-08. ═══
+     *
+     * `company_profile.ein` carries a database constraint of `^[0-9]{9}$`, so
+     * nine bare digits is the only storable shape, and every form's read path
+     * (`paperEin`, `formatEin`) correctly refuses anything else.
+     *
+     * The IRS prints the EIN as `46-4217016` on the CP 575 notice, on every
+     * notice after it, and at the top of every return already filed. So the
+     * shape a human being will type or paste is precisely the shape the column
+     * rejects — and before this, that rejection surfaced as a raw Postgres
+     * constraint-violation message. Being stopped without being told anything
+     * useful is Michael's entire complaint about Sage, and the one thing this
+     * file's docblock says it must never do.
+     *
+     * `normaliseEinInput` was written for exactly this and called nowhere; it
+     * strips hyphens and spaces and then INSISTS on nine digits. It does not
+     * strip letters, so "EIN 46-4217016" is refused rather than silently turned
+     * into a number harvested from a label.
+     *
+     * Refused rather than dropped: a rejected EIN must not be stored as blank,
+     * because a blank EIN reads as "not filled in yet" and the owner would
+     * believe the save worked. The empty string is still allowed through, since
+     * a half-finished profile is storable by design (see above) — clearing the
+     * field is a legitimate act, and only a NON-EMPTY unparseable value is an
+     * error.
+     */
+    if (key === "ein" && value !== "") {
+      const nine = normaliseEinInput(value);
+      if (nine === null) {
+        return {
+          ok: false,
+          code: "INVALID_EIN",
+          field: "ein",
+          message:
+            `"${value}" is not an EIN. An EIN is exactly nine digits — the IRS writes yours as ` +
+            `46-4217016, and hyphens or spaces are fine to type or paste. Nothing was saved, ` +
+            `rather than saving a blank EIN that would look like a field you had not reached yet. ` +
+            `Check it against your CP 575 notice or the top of any return already filed.`,
+        };
+      }
+      row[key] = nine;
+      continue;
+    }
+
     // Empty string rather than null: the migration's format constraints all
     // permit '' precisely so that a half-finished profile is storable, and a
     // consistent empty representation means readiness never has to ask which

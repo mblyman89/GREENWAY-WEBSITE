@@ -132,6 +132,13 @@ import {
   onOrAfterBusinessDay,
 } from "@/lib/payroll/payroll-deposit-schedule-core";
 import type { ScreenTone } from "@/lib/ui/screen-tone-core";
+import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
+import {
+  readScope,
+  scopeHref,
+  scopeYears,
+  type FormScope,
+} from "@/lib/payroll/form-scope-core";
 
 export const dynamic = "force-dynamic";
 
@@ -176,9 +183,7 @@ const BADGE: Record<ScreenTone, "green" | "gold" | "orange" | "danger" | "neutra
  * is a wrong answer with a long fuse - it would silently show the wrong year's
  * wages, which is a form of the exact error the page exists to catch.
  */
-function mostRecentlyClosedYear(today: Date): number {
-  return today.getUTCFullYear() - 1;
-}
+/* Moved to form-scope-core.ts in books-63 - it was the third copy of three. */
 
 /**
  * When the W-2s are due, and whether a weekend or holiday moved the date.
@@ -208,17 +213,15 @@ function dueDatesFor(taxYear: number): {
 export default async function FormW2Page({
   searchParams,
 }: {
-  searchParams?: Promise<{ year?: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   await requireBooksAccess();
 
   const sp = (await searchParams) ?? {};
   const now = new Date();
-  const parsed = Number.parseInt(sp.year ?? "", 10);
-  const taxYear =
-    Number.isInteger(parsed) && parsed >= 2020 && parsed <= 2100
-      ? parsed
-      : mostRecentlyClosedYear(now);
+  // Grain "year": the W-2 reports a whole calendar year.
+  const scope: FormScope = readScope(sp, now, "year");
+  const taxYear = scope.year;
 
   const today = now.toISOString().slice(0, 10);
   const due = dueDatesFor(taxYear);
@@ -226,7 +229,7 @@ export default async function FormW2Page({
 
   if (!loaded.ok) {
     return (
-      <Shell taxYear={taxYear}>
+      <Shell taxYear={taxYear} scope={scope} now={now}>
         <Card>
           <CardHeader title="This year could not be read" />
           <p className="text-sm text-[var(--admin-danger)]">{loaded.message}</p>
@@ -262,7 +265,7 @@ export default async function FormW2Page({
   const empty = w2EmptyStateFor(taxYear);
 
   return (
-    <Shell taxYear={taxYear}>
+    <Shell taxYear={taxYear} scope={scope} now={now}>
       {/* ── 1. THE ONE NEXT ACTION ───────────────────────────────────────── */}
       <section className={`rounded-[var(--admin-radius)] border p-5 ${PANEL[action.tone]}`}>
         <div className="flex flex-wrap items-center gap-3">
@@ -948,7 +951,17 @@ function Labelled({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function Shell({ taxYear, children }: { taxYear: number; children: React.ReactNode }) {
+function Shell({
+  taxYear,
+  scope,
+  now,
+  children,
+}: {
+  taxYear: number;
+  scope: FormScope;
+  now: Date;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -978,7 +991,7 @@ function Shell({ taxYear, children }: { taxYear: number; children: React.ReactNo
             own screen is where a person looking for that form already is.
           */}
           <Link
-            href={`/admin/books/form-w2/sheet?year=${taxYear}`}
+            href={scopeHref("/admin/books/form-w2/sheet", scope)}
             className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
           >
             View just the form &rarr;
@@ -992,6 +1005,21 @@ function Shell({ taxYear, children }: { taxYear: number; children: React.ReactNo
           nothing is written to your books &mdash; where a figure cannot be produced honestly,
           it says so instead of guessing.
         </p>
+
+        {/*
+          The year picker, shared with every other form page. Employees are null
+          HERE and non-null on the sheet route, deliberately: this screen shows
+          the whole batch and its W-3 reconciliation, which is a statement about
+          all of them at once. Filtering it to one person would leave a W-3 on
+          screen whose totals describe somebody else.
+        */}
+        <FormScopeBar
+          basePath="/admin/books/form-w2"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={null}
+          employees={null}
+        />
       </div>
       {children}
     </div>

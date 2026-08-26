@@ -197,6 +197,45 @@ describe("the ACH pipeline is connected, not merely mentioned", () => {
     expect(src).toContain("ach.agrees");
   });
 
+  /**
+   * ═══ D-08: `normaliseEinInput` MUST NOT BE DEAD CODE ═══
+   *
+   * Michael, on being shown the finding: "Please include in this slice the fix
+   * to wire normaliseEinInput so it is not dead code."
+   *
+   * It was correct, tested in isolation, and reachable from nothing but its own
+   * test — the exact shape rule 23's docblock in this very file warns about,
+   * "a module that only its own test imports is dead". Meanwhile the column
+   * constraint is `^[0-9]{9}$` and the IRS itself prints the number hyphenated,
+   * so pasting the EIN off a CP 575 produced a raw Postgres error.
+   *
+   * Asserted on the STORE rather than on the function: the function was never
+   * the problem.
+   */
+  it("normalises a hyphenated EIN on the way in rather than letting Postgres refuse it", () => {
+    const src = read(STORE);
+    expect(src).toContain("normaliseEinInput");
+    // Called, not merely imported. An unused import is dead code with a
+    // reference, which is how this defect would come back.
+    expect(src).toMatch(/normaliseEinInput\(/);
+  });
+
+  it("refuses an unparseable EIN instead of storing it blank", () => {
+    /*
+     * The dangerous fix is `row.ein = normaliseEinInput(value) ?? ""`, which
+     * makes the save SUCCEED with an empty EIN. A blank EIN reads as a field
+     * not reached yet, so the owner is told the profile saved and every form
+     * then prints with no EIN at all - which is D-01's failure, arriving by a
+     * new route. It must be a named refusal that names the value.
+     */
+    const src = read(STORE);
+    expect(src).toContain("INVALID_EIN");
+    expect(src).toMatch(/Nothing was saved/);
+    // And clearing the field stays legal: a half-finished profile is storable
+    // by design, so only a NON-EMPTY unparseable value is an error.
+    expect(src).toMatch(/key === "ein" && value !== ""/);
+  });
+
   it("reports 'not checked' rather than 'agrees' when either side is absent", () => {
     // Rule 48. An unconfigured ACH setup is not an agreeing ACH setup, and a
     // green tick against missing data is the most dangerous output available.

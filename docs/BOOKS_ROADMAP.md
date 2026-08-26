@@ -872,12 +872,12 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The law, verbatim | `form-w2-authorities.ts` (31 own + 13 borrowed = 44) | `form-w2-authorities.test.ts` (41) |
 | The teaching | `form-w2-mentor.ts` | `form-w2-mentor-gates.ts` |
 | The filed-941 table | `0204_filed_form_941_totals.sql` | `migration-execution-gate.test.ts` |
-| The screen | `src/app/admin/books/form-w2/page.tsx` (999 lines) | `nav-gate-core.test.ts` |
+| The screen | `src/app/admin/books/form-w2/page.tsx` (1027 lines) | `nav-gate-core.test.ts` |
 | The W-3 taught box by box **(books-55)** | `form-box-lessons-w3.ts` | `form-box-lessons-w3.test.ts` (17) |
 | The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (85) |
 | The 941 as one big sheet **(books-60)** | `form-941/sheet/page.tsx`, one link added to `form-941/page.tsx` | `form-sheet-core.test.ts` (85), `owner-report-books-60.test.ts` (25) |
 | The filed 940 as an authority **(books-60)** | `docs/authorities/federal/filed-form-940-2025-greenway.txt`, `scripts/mirror-filed-940.py` | `filed-940-threshold.test.ts` (10) |
-| The actual printed form **(books-61)** | `form-facsimile-core.ts`, `FormFacsimile.tsx`, `FormPrintBar.tsx`, `scripts/derive-form-geometry.py`, `scripts/derive-form-box-map.py` | `form-facsimile-core.test.ts` (18) |
+| The actual printed form **(books-61)** | `form-facsimile-core.ts`, `FormFacsimile.tsx`, `FormPrintBar.tsx`, `scripts/derive-form-geometry.py`, `scripts/derive-form-box-map.py` | `form-facsimile-core.test.ts` (20) |
 
 **books-58 grew the screen row above by 29 lines, and that is the ENTIRE change
 to that file.** Michael asked for "one large page with nothing on it but form",
@@ -953,6 +953,67 @@ marker is therefore proved on the 941 (7 untaught: 5e, 6, 7, 10, 12, 13, 14) and
 the 940 (10), and the W-2's zero is pinned so adding an untaught box there is a
 deliberate decision. **17 untaught boxes across two federal forms** is the real
 remaining teaching backlog.
+
+### books-63: Form 940 and the W-3 on paper, and one period selector for every form page
+
+Michael: *"Yes please complete 940 and w-3 this next slice, with lessons on boxes
+that bite only please."* And, in the same message: *"sorting and filtering per
+period/ employee/ qtr/ yr, etc would be really handy on the forms pages in some
+way. I am not sure the smart industry standard or professional way to do it ...
+Please make sure you are building these features so I can sort and filter that
+works with the full form workflow and all its tabs and pages."*
+
+**The paper.** Form 940 renders both pages of the return - 59 and 31 measured
+rectangles - and NOT page 3, which is Form 940-V, a payment voucher Greenway
+should never use because it pays by EFTPS. Page 2 is not optional: it carries
+Part 5, the four quarterly FUTA liabilities whose total must equal line 12, and
+a one-page 940 would look finished while omitting the only self-checking
+arithmetic on the form. The whole form carries a gold banner saying every cent
+on it is the employer's money, because no part of FUTA is ever withheld.
+
+**The W-3 has no route of its own, deliberately.** It is a TRANSMITTAL: every
+figure on it is a sum of the W-2s behind it, and `buildW3` takes the W-2 batch
+as its only input. So it renders at the top of the W-2 sheet, above the forms it
+sums, where the addition can be checked by eye - and it is HIDDEN when one
+employee is selected, because batch totals sitting above a single W-2 read as
+that person's figures. Its money boxes do not split cents at all: 15 single
+`/MaxLen 16` fields, measured, which is why D-04's per-page rule matters.
+
+**The answer to "the professional way to do it"**: in filing software the period
+selector is a PERSISTENT BAR, in the same place on every screen, with the
+selection in the ADDRESS. That way a link to "the Q2 941" can be sent to a CPA,
+Back means what it looks like, and the period is visible while the figures are
+on screen. `form-scope-core.ts` + `FormScopeBar.tsx` do this for all seven form
+surfaces, with no client JS - a `<select>` needing hydration is a picker that
+does nothing while the page loads. On a quarterly form the year row is labelled
+*"Same quarter, another year:"* and jumps a year KEEPING the quarter: one click
+for the comparison an owner actually makes, where it used to take four.
+
+**"all its tabs and pages" is a GATE, not a hope.** A shared selector is
+trivially easy to bypass, so `form-scope-core.test.ts` DISCOVERS every books
+page that both teaches boxes and reads `searchParams` (7 today) and holds each
+to five promises, including that it does not keep a private copy of the
+closed-period rule.
+
+Writing it measured four latent defects, none of which any test was failing on:
+
+- The closed-period rule was written out **six times**, and `?year=` was
+  validated three different ways. Two pages - `wa-quarterly` and the tabbed 941
+  - checked only `Number.isFinite`, so `?year=1&q=1` was accepted and would
+  compute a Washington return for **the year 1**.
+- The W-2 sheet's year links silently CLEARED the employee filter.
+- A substituted period was shown under a self-consistent heading, with nothing
+  saying a substitution had happened. It is now recorded and said out loud.
+- The rule-123 rectangle-coverage gate - the one that exists to prove no
+  rectangle goes unplaced - had been scoped to a **hand-written 3-page list**.
+  Schedule B and both 940 pages and the W-3 were never covered by it. It now
+  reads `ALL_PAGE_KEYS`, and per-page counts are pinned as one object equality
+  so a new page cannot arrive without stating its count.
+
+Two more were caught by the gates during the slice: my own new "Show everybody
+to see the W-3" link was hardcoded `?year=` - exactly the class of bug the slice
+exists to close - and `tsc` refused an `/s` regex flag that vitest had happily
+accepted, which is a green test that fails the build.
 
 ### books-62: Schedule B, and three defects a green test suite could not see
 
@@ -1070,7 +1131,7 @@ rather than by reviewing it:
   (`form-box-explorer-wiring.test.ts` (14)).
 - **`ALL_WHOSE_TABLES` had a docblock claiming a completeness gate that did not
   exist.** Now built, and it reads the adapters' own source
-  (`form-box-adapters.test.ts` (31)).
+  (`form-box-adapters.test.ts` (33)).
 - **The W-3 is NOT gated on `w3 !== null`.** With no W-3 built, every figure
   reads *not computed yet* rather than `$0.00`, because a zero in box 4 asserts
   that Greenway withheld no social security tax all year. That is a claim about

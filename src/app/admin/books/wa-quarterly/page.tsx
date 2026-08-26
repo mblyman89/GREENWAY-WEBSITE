@@ -116,6 +116,14 @@ import {
 import { loadWaQuarter } from "@/lib/payroll/wa-quarterly-store";
 import { GREENWAY_RATES } from "@/lib/payroll/payroll-rates-2026";
 import { type QuarterRef } from "@/lib/payroll/payroll-deposit-schedule-core";
+import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
+import {
+  mostRecentlyClosedQuarter,
+  readScope,
+  scopeQuarters,
+  scopeYears,
+  type FormScope,
+} from "@/lib/payroll/form-scope-core";
 
 export const dynamic = "force-dynamic";
 
@@ -155,34 +163,35 @@ const FORM_ORDER: readonly WaQuarterFormId[] = [
   "lni_quarterly",
 ];
 
-/** The quarter that most recently ENDED, which is the one normally being filed. */
-function mostRecentlyClosedQuarter(today: Date): QuarterRef {
-  const y = today.getUTCFullYear();
-  const q = Math.floor(today.getUTCMonth() / 3) + 1;
-  if (q === 1) return { year: y - 1, quarter: 4 };
-  return { year: y, quarter: (q - 1) as 1 | 2 | 3 | 4 };
-}
+/*
+ * THE LOCAL QUARTER RULE MOVED TO form-scope-core.ts IN books-63.
+ *
+ * It was the third copy of the same seven lines. It also had a REAL defect the
+ * other two did not: the year was validated with `Number.isFinite(parsedYear)`
+ * and nothing else, so `?year=1&q=1` was accepted and this screen would happily
+ * compute a Washington return for the year 1. `readScope` bounds it.
+ */
 
 export default async function WaQuarterlyPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ year?: string; q?: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   await requireBooksAccess();
 
   const sp = (await searchParams) ?? {};
   const now = new Date();
 
-  // The quarter comes from the URL when present, and otherwise defaults to the
-  // one that has most recently closed. NOT hardcoded: this screen will still be
-  // here in 2031, and a hardcoded quarter is a wrong answer with a long fuse.
-  const parsedYear = Number.parseInt(sp.year ?? "", 10);
-  const parsedQ = Number.parseInt(sp.q ?? "", 10);
-  const fallback = mostRecentlyClosedQuarter(now);
-  const quarter: QuarterRef =
-    Number.isFinite(parsedYear) && parsedQ >= 1 && parsedQ <= 4
-      ? { year: parsedYear, quarter: parsedQ as 1 | 2 | 3 | 4 }
-      : fallback;
+  /*
+   * The quarter comes from the URL when present and otherwise defaults to the
+   * one that most recently closed. NOT hardcoded: this screen will still be here
+   * in 2031, and a hardcoded quarter is a wrong answer with a long fuse.
+   */
+  const scope: FormScope = readScope(sp, now, "quarter");
+  const quarter: QuarterRef = {
+    year: scope.year,
+    quarter: scope.quarter ?? mostRecentlyClosedQuarter(now).quarter,
+  };
 
   const today = now.toISOString().slice(0, 10);
   const due = waQuarterDueDate(quarter);
@@ -197,7 +206,7 @@ export default async function WaQuarterlyPage({
 
   if (!resolved.ok) {
     return (
-      <Shell quarter={quarter}>
+      <Shell quarter={quarter} scope={scope} now={now}>
         <Card>
           <CardHeader
             title="The rates for this quarter are not on file yet"
@@ -237,7 +246,7 @@ export default async function WaQuarterlyPage({
 
   if (!loaded.ok) {
     return (
-      <Shell quarter={quarter}>
+      <Shell quarter={quarter} scope={scope} now={now}>
         <Card>
           <CardHeader title="This quarter could not be read" />
           <p className="text-sm text-[var(--admin-danger)]">{loaded.message}</p>
@@ -259,7 +268,7 @@ export default async function WaQuarterlyPage({
   const empty = waEmptyStateFor(quarter);
 
   return (
-    <Shell quarter={quarter}>
+    <Shell quarter={quarter} scope={scope} now={now}>
       {/* ── 1. THE ONE NEXT ACTION ─────────────────────────────────────── */}
       <section className={`rounded-[var(--admin-radius)] border p-5 ${PANEL[action.tone]}`}>
         <div className="flex flex-wrap items-center gap-3">
@@ -741,7 +750,27 @@ function DueDate({
   );
 }
 
-function Shell({ quarter, children }: { quarter: QuarterRef; children: React.ReactNode }) {
+/*
+ * THE BAR LIVES IN THE SHELL, DELIBERATELY.
+ *
+ * This screen returns EARLY in several places - an unresolved rate registry, a
+ * read failure - and each of those returns wraps itself in `Shell`. Putting the
+ * period picker in the shell means a reader who lands on the refusal branch can
+ * still change quarter. Putting it beside the happy-path content instead would
+ * strand them: the one screen state where you most want to try another quarter
+ * would be the one with no way to.
+ */
+function Shell({
+  quarter,
+  scope,
+  now,
+  children,
+}: {
+  quarter: QuarterRef;
+  scope: FormScope;
+  now: Date;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -755,6 +784,14 @@ function Shell({ quarter, children }: { quarter: QuarterRef; children: React.Rea
           Security or to Labor &amp; Industries and nothing is written to your books &mdash; where
           a figure cannot be produced honestly, it says so instead of guessing.
         </p>
+
+        <FormScopeBar
+          basePath="/admin/books/wa-quarterly"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={scopeQuarters(scope, now)}
+          employees={null}
+        />
       </div>
       {children}
     </div>

@@ -83,22 +83,40 @@ import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { FormSheet } from "@/components/admin/books/FormSheet";
 import { FormFacsimile } from "@/components/admin/books/FormFacsimile";
 import { FormPrintBar } from "@/components/admin/books/FormPrintBar";
+import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
-import { w2Boxes, FORM_ID_W2 } from "@/lib/payroll/form-box-adapters";
-import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
+import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
+import { w2Boxes, FORM_ID_W2, FORM_ID_W3 } from "@/lib/payroll/form-box-adapters";
+import { teachingBoxes, w3Boxes } from "@/lib/payroll/form-box-teaching-core";
 import { loadW2s } from "@/lib/payroll/form-w2-store";
 import type { W2Form } from "@/lib/payroll/form-w2-core";
 import {
   byPaperOrder,
   paginateRun,
   w2IdentityText,
+  w3IdentityText,
   type W2Employer,
 } from "@/lib/payroll/form-facsimile-core";
+import {
+  readScope,
+  scopeHref,
+  scopeYears,
+  type FormScope,
+} from "@/lib/payroll/form-scope-core";
 import { loadCompanyProfile } from "@/lib/accounting/company-profile-store";
 
 export const metadata = { title: "Form W-2 — the form itself" };
 
 const W2_PAGE_KEY = "w2-copyb";
+
+/**
+ * The W-3's artwork key. MEASURED: 46 widgets on page 2 of fw3.pdf.
+ *
+ * Page 2, not page 1 - page 1 of that file is the SSA's "Attention" notice and
+ * carries zero widgets. A deriver pointed at page 1 would have found nothing and
+ * reported success.
+ */
+const W3_PAGE_KEY = "w3";
 
 /**
  * The most recent year a W-2 can exist for.
@@ -108,24 +126,30 @@ const W2_PAGE_KEY = "w2-copyb";
  * as a small local rule rather than imported from the tabbed page, which does
  * not export it - and exporting it would mean editing that file.
  */
-function mostRecentlyClosedYear(now: Date): number {
-  return now.getUTCFullYear() - 1;
-}
-
 export default async function FormW2SheetPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ year?: string; employee?: string; sheet?: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   await requireBooksAccess();
 
+  /*
+   * ═══ THE LOCAL YEAR RULE MOVED OUT IN books-63, AND WHY ═══
+   *
+   * This file used to carry its own `mostRecentlyClosedYear` and its own
+   * `>= 2020 && <= 2100` bounds check. So did five other form pages, and the
+   * bounds were spelled THREE different ways across them - the 940 used
+   * `> 2000 && < 2100`. Three spellings of one rule means at least two are
+   * wrong and nobody can say which.
+   *
+   * `readScope` is now the single answer, and the grain is stated: a W-2 reports
+   * a whole calendar year, so a `?q=` in the address is refused out loud rather
+   * than quietly ignored.
+   */
   const sp = (await searchParams) ?? {};
   const now = new Date();
-  const parsed = Number.parseInt(sp.year ?? "", 10);
-  const taxYear =
-    Number.isInteger(parsed) && parsed >= 2020 && parsed <= 2100
-      ? parsed
-      : mostRecentlyClosedYear(now);
+  const scope: FormScope = readScope(sp, now, "year");
+  const taxYear = scope.year;
 
   const loaded = await loadW2s(taxYear);
 
@@ -197,7 +221,7 @@ export default async function FormW2SheetPage({
    * person prints on - so what is on screen is still a real sheet of paper, in
    * its real position, rather than a form lifted out of context.
    */
-  const wanted = (sp.employee ?? "").trim();
+  const wanted = scope.employee ?? "";
   const focusSheet =
     wanted === ""
       ? null
@@ -261,41 +285,36 @@ export default async function FormW2SheetPage({
         </p>
 
         {/*
-          One person, straight to their sheet. This is the question a CPA asks
-          most often, and typing an employee id into a URL is not an answer.
+          ═══ THE AD-HOC PILL ROW BECAME THE SHARED BAR IN books-63 ═══
+
+          One person, straight to their sheet - still his most-asked question,
+          now answered by the component every form page uses, so the year and the
+          employee are ONE selection rather than two that can contradict.
+
+          The old row had a real defect: its "Show all" link was
+          `?year=${taxYear}`, which cleared the employee as a SIDE EFFECT of
+          setting the year. Every year link was therefore also a hidden
+          clear-the-filter link, and a person who filtered to one employee and
+          then changed year silently got the whole run back. `scopeHref` keeps
+          every dimension the caller did not ask to change.
+
+          `unmatchedEmployee` is passed because only this page knows the roster:
+          an id matching nobody used to show the whole run with no explanation.
         */}
-        {live && run.totalSubjects > 1 ? (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
-            <span className="mr-1 text-white/40">Go to one employee:</span>
-            {focusSheet !== null ? (
-              <Link
-                href={`/admin/books/form-w2/sheet?year=${taxYear}`}
-                className="rounded border border-white/20 px-2 py-0.5 text-white/70 hover:bg-white/10"
-              >
-                Show all {run.totalSubjects}
-              </Link>
-            ) : null}
-            {run.sheets.flatMap((s) =>
-              s.subjects.map((x) => {
-                const isFocus = x.value.employeeId === wanted;
-                return (
-                  <Link
-                    key={x.value.employeeId}
-                    href={`/admin/books/form-w2/sheet?year=${taxYear}&employee=${encodeURIComponent(x.value.employeeId)}`}
-                    className={[
-                      "rounded border px-2 py-0.5",
-                      isFocus
-                        ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)] text-white"
-                        : "border-white/15 text-white/60 hover:bg-white/10",
-                    ].join(" ")}
-                  >
-                    {x.label}
-                  </Link>
-                );
-              }),
-            )}
-          </div>
-        ) : null}
+        <FormScopeBar
+          basePath="/admin/books/form-w2/sheet"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={null}
+          employees={
+            live
+              ? run.sheets.flatMap((s) =>
+                  s.subjects.map((x) => ({ id: x.value.employeeId, label: x.label })),
+                )
+              : null
+          }
+          unmatchedEmployee={wanted !== "" && focusSheet === null}
+        />
 
         {focusName !== null ? (
           <p className="mt-2 text-xs text-white/45">
@@ -407,6 +426,75 @@ export default async function FormW2SheetPage({
           />
         </div>
       ))}
+
+      {/* THE W-3, WHICH IS THE COVER SHEET FOR EVERYTHING ABOVE
+
+          WHY THE W-3 IS ON THIS ROUTE AND NOT ON ITS OWN
+
+          Because that is what it IS. The W-3 is a TRANSMITTAL: it carries no
+          fact of its own, every figure on it is the sum of the W-2s behind it,
+          and it is meaningless separated from them. `buildW3` takes the W-2
+          batch as its only input, and the tabbed W-2 screen already renders
+          `w3Boxes` for the same reason.
+
+          Putting it on its own route would also break the arithmetic he is
+          meant to be able to check: the whole point of a transmittal is that
+          you can add the forms up and compare. On one route, with the run above
+          it, that is a scroll. On two routes it is two tabs and a memory.
+
+          WHY IT IS FILTERED OUT WHEN ONE EMPLOYEE IS SELECTED
+
+          A W-3 shown above ONE W-2 while reading `formCount 10` invites the
+          reader to believe those totals belong to that person. The totals are
+          the whole batch's, always. So when the run is narrowed to one
+          employee, the transmittal is hidden and says why, rather than sitting
+          there being true about something other than what is on screen. */}
+      {focusSheet === null ? (
+        <div className="facsimile-sheet-wrap">
+          <p className="admin-chrome mx-auto w-full max-w-[900px] px-4 pt-4 text-[11px] uppercase tracking-wider text-white/35 print:hidden">
+            Form W-3 &mdash; the transmittal that covers{" "}
+            {live ? `all ${run.totalSubjects}` : "every"} W-2 above
+          </p>
+
+          <FormFacsimile
+            pageKey={W3_PAGE_KEY}
+            lessons={FORM_W3_BOX_LESSONS}
+            copies={[
+              {
+                subject: null,
+                /*
+                 * `loaded.w3` is null when no form was built, which is NOT the
+                 * same as a zeroed W-3. A transmittal reading 0.00 across the
+                 * board is a statement to the SSA that ten people earned
+                 * nothing; the specimen reads "not computed yet" instead.
+                 */
+                boxes:
+                  loaded.ok && loaded.w3 !== null ? w3Boxes(loaded.w3) : teachingBoxes(FORM_ID_W3),
+                /*
+                 * Boxes e, f and g only. Box h - "Other EIN used this year" -
+                 * is deliberately left blank by `w3IdentityText`: filling it
+                 * with Greenway's own EIN would tell the SSA to go looking for
+                 * a second set of returns that does not exist.
+                 */
+                identity: w3IdentityText(employer),
+              },
+            ]}
+          />
+        </div>
+      ) : (
+        <p className="admin-chrome mx-auto mt-4 w-full max-w-[900px] rounded-md border border-white/10 px-4 py-3 text-xs text-white/45 print:hidden">
+          The Form W-3 transmittal is hidden while one employee is selected. Its totals cover
+          the whole batch, and showing them above a single W-2 would read as though they were
+          that person&rsquo;s.{" "}
+          <Link
+            href={scopeHref("/admin/books/form-w2/sheet", scope, { employee: null })}
+            className="underline hover:text-white"
+          >
+            Show everybody to see the W-3
+          </Link>
+          .
+        </p>
+      )}
 
       {/* ══ THE SAME BOXES AS A LIST ══════════════════════════════════════
           The books-58 sheet, kept and kept working. It is better than the paper

@@ -63,6 +63,8 @@ import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { form940Checks } from "@/lib/payroll/form-940-checks";
 import { loadForm940 } from "@/lib/payroll/form-940-store";
 import { formatCents } from "@/lib/payroll/payroll-deposit-schedule-core";
+import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
+import { readScope, scopeHref, scopeYears, type FormScope } from "@/lib/payroll/form-scope-core";
 
 export const dynamic = "force-dynamic";
 
@@ -74,22 +76,26 @@ export const dynamic = "force-dynamic";
  * this screen will still be here in 2035 and a hardcoded year is a wrong
  * answer with a long fuse.
  */
-function mostRecentlyClosedYear(today: Date): number {
-  return today.getUTCFullYear() - 1;
-}
+/*
+ * THE LOCAL YEAR RULE MOVED TO form-scope-core.ts IN books-63.
+ *
+ * This copy also had the loosest bounds of the six: `> 2000 && < 2100`, where
+ * both W-2 screens used `>= 2020 && <= 2100`. One of those was wrong and neither
+ * file could tell you which. There is now one answer.
+ */
 
 export default async function Form940Page({
   searchParams,
 }: {
-  searchParams?: Promise<{ readonly year?: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   await requireBooksAccess();
 
   const sp = (await searchParams) ?? {};
-  const parsed = Number.parseInt(sp.year ?? "", 10);
-  const year = Number.isFinite(parsed) && parsed > 2000 && parsed < 2100
-    ? parsed
-    : mostRecentlyClosedYear(new Date());
+  const now = new Date();
+  // Grain "year": the 940 is the ANNUAL FUTA return. A `?q=` is refused out loud.
+  const scope: FormScope = readScope(sp, now, "year");
+  const year = scope.year;
 
   const loaded = await loadForm940(year);
 
@@ -99,6 +105,14 @@ export default async function Form940Page({
         <Card>
           <CardHeader title={`Form 940 - ${year}`} />
           <p className="text-sm text-[var(--admin-text-muted)]">{loaded.message}</p>
+        <FormScopeBar
+          basePath="/admin/books/form-940"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={null}
+          employees={null}
+        />
+
         </Card>
       </div>
     );
@@ -114,9 +128,32 @@ export default async function Form940Page({
           title={`Form 940 - ${year}`}
           subtitle="Employer's Annual Federal Unemployment (FUTA) Tax Return. Due 31 January for the year just ended."
           action={
-            <Badge tone={result.ok ? "green" : "gold"}>
-              {result.ok ? "figures assembled" : "waiting on facts"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge tone={result.ok ? "green" : "gold"}>
+                {result.ok ? "figures assembled" : "waiting on facts"}
+              </Badge>
+              {/*
+                THE DOOR TO THE PAPER (books-63).
+
+                Not decoration and not optional. `form-sheet-core.test.ts`
+                DISCOVERS sheet routes by walking the filesystem and requires
+                each one's parent to carry a link, because the sheet is exempt
+                from the global menu and that exemption is only honest while a
+                door exists. The W-2's sheet shipped without one in books-58 and
+                nav-gate-core caught it inside the hour.
+
+                The href is built by `scopeHref`, so walking to the paper KEEPS
+                the year you were looking at. A hardcoded `?year=` here would
+                send a reader viewing 2024 to the paper for last year, which is
+                the whole class of bug this slice is closing.
+              */}
+              <Link
+                href={scopeHref("/admin/books/form-940/sheet", scope)}
+                className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+              >
+                View just the form &rarr;
+              </Link>
+            </div>
           }
         />
         <div className="mt-3 rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] p-3">
@@ -138,6 +175,15 @@ export default async function Form940Page({
           counted by PAY DATE. Nothing here is transmitted to the IRS; you file the form
           yourself.
         </p>
+
+        <FormScopeBar
+          basePath="/admin/books/form-940"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={null}
+          employees={null}
+        />
+
       </Card>
 
       {/* ── 2. what is missing, and who alone can supply it ──────────── */}

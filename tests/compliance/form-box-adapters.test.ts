@@ -345,11 +345,91 @@ describe("every line the engines actually emit is classified", () => {
     expect(boxes.length).toBe(ret.lines.length + entity.length);
   });
 
-  it("Form 940: classifies every line the engine produces", () => {
+  it("Form 940: classifies every line the engine produces AND names the employer", () => {
+    /*
+     * ═══ THIS ASSERTION USED TO PIN THE DEFECT, books-63 ═══
+     *
+     * It read `expect(form940Boxes(ret).length).toBe(ret.lines.length)` — an
+     * exact equality that made the absence of the entity area a REQUIREMENT.
+     * The 941 test directly above and the W-2 test directly below were both
+     * upgraded in books-61 when this same defect was found on those two forms.
+     * This one was not, so a live Form 940 printed its FUTA arithmetic under a
+     * completely anonymous header on both of its pages, and the suite defended
+     * that.
+     *
+     * The lesson is rule 23 arriving as a test rather than as code: two of
+     * three sibling assertions were fixed, and the third went on certifying the
+     * bug. Both adapters now call one shared `employerEntityBoxes`.
+     */
     const ret = form940Return();
     expect(ret.lines.length).toBeGreaterThan(15);
     expect(() => form940Boxes(ret)).not.toThrow();
-    expect(form940Boxes(ret).length).toBe(ret.lines.length);
+
+    const boxes = form940Boxes(ret);
+    const ids = boxes.map((b) => b.box);
+    const entity = ["ein", "name", "tradeName", "address", "cityStateZip"];
+    for (const e of entity) expect(ids, `940 lost entity box ${e}`).toContain(e);
+    for (const l of ret.lines) expect(ids, `940 lost line ${l.line}`).toContain(l.line);
+    expect(boxes.length).toBe(ret.lines.length + entity.length);
+  });
+
+  /**
+   * THE CLASS, not the three instances.
+   *
+   * The 941, the 940 and the W-2 each lost their identity area in turn, and
+   * each was fixed separately. This asserts the shared builder exists and that
+   * BOTH employment-tax adapters route through it, so a fourth return cannot be
+   * written with an inline copy that drifts.
+   */
+  it("the 941 and the 940 get their entity area from ONE shared builder", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src", "lib", "payroll", "form-box-adapters.ts"),
+      "utf8",
+    );
+    expect(src).toMatch(/function employerEntityBoxes\(/);
+    expect(src).toMatch(/employerEntityBoxes\(FORM_ID_941, "Form 941"\)/);
+    expect(src).toMatch(/employerEntityBoxes\(FORM_ID_940, "Form 940"\)/);
+
+    // And the identity text both forms print comes from one place too: the 940
+    // delegates to the 941's builder because the EIN splits identically on
+    // both page 2s. A second copy could disagree about the hyphen.
+    const facs = readFileSync(
+      join(process.cwd(), "src", "lib", "payroll", "form-facsimile-core.ts"),
+      "utf8",
+    );
+    expect(facs).toMatch(/nine40IdentityText = nine41IdentityText/);
+  });
+
+  /**
+   * Every box the shared builder emits must be MAPPED on both forms' paper.
+   *
+   * Discovered from the box map rather than listed here: a box that exists in
+   * the adapter and not in the map places nowhere, and `facsimileBoxes` skips
+   * it silently as "lives on another page".
+   */
+  it("every entity box the 940 emits has a rectangle on the 940's paper", () => {
+    const ret = form940Return();
+    const ids = new Set(form940Boxes(ret).map((b) => b.box));
+    const map = JSON.parse(
+      readFileSync(
+        join(process.cwd(), "src", "lib", "payroll", "form-box-map.generated.json"),
+        "utf8",
+      ),
+    ) as Record<string, { copies: Record<string, string[]>[] }>;
+
+    const mappedAnywhere = new Set<string>([
+      ...Object.keys(map["940-p1"].copies[0]),
+      ...Object.keys(map["940-p2"].copies[0]),
+    ]);
+    for (const e of ["ein", "name", "tradeName", "address", "cityStateZip"]) {
+      expect(ids, `the adapter stopped emitting ${e}`).toContain(e);
+      expect(mappedAnywhere, `940 entity box ${e} has no rectangle`).toContain(e);
+    }
+    // Page 2 repeats exactly the name and the EIN, because the sheets get
+    // separated in handling. Measured, and pinned so a re-derivation that
+    // dropped them would fail here rather than print an anonymous page 2.
+    expect(Object.keys(map["940-p2"].copies[0])).toContain("ein");
+    expect(Object.keys(map["940-p2"].copies[0])).toContain("name");
   });
 
   it("Form W-2: classifies every box the engine produces", () => {

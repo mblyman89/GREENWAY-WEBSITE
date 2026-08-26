@@ -1368,6 +1368,747 @@ def derive_schedule_b(key: str, page_geo: dict, pdf: Path) -> dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FORM 940 — A 941 THAT WRAPS, AND TWO LABELS THE 941'S SCAN CANNOT READ
+#
+# ═══ WHY THE 941'S OWN SCAN IS NOT REUSED WHOLESALE ═══
+#
+# The 940 looks like the 941: numbered lines down a left margin, money in the
+# right. Two MEASURED differences broke the 941's scanner when it was pointed at
+# this form, and both were found by running it rather than by reading it.
+#
+#   1. THE 940 PRINTS SOME LABELS AS TWO GLYPH RUNS. `pdftotext` reports line
+#      1b as the words "1" and "b", and line 15a as "15" and "a", because the
+#      artwork sets the digits and the letter as separate runs sitting flush
+#      against each other. The 941 does not do this on any line.
+#
+#      Fed to the 941's scanner, that produced labels "1" and "15" - two lines
+#      THAT DO NOT EXIST ON THE FORM - and lost 1b and 15a entirely. Line 15a
+#      is the overpayment. A form that cannot place its overpayment box is a
+#      form that silently drops a refund.
+#
+#      Runs are therefore re-joined when they sit on one baseline with no gap
+#      between them. Verified against the 941 as well: joining changes NOTHING
+#      on either 941 page (same 22 and 3 labels before and after), so this is
+#      an addition to what the scanner can read, not a change to what it does.
+#
+#   2. THE 940'S ROWS WRAP, SO A LABEL'S BAND IS NOT ITS LABEL'S HEIGHT. Line
+#      14 reads "Balance due. If line 12 is more than line 13..." and continues
+#      over two more printed lines of bullets before line 15a starts. Its money
+#      rects sit on the LAST of those lines, 17pt below the label - well outside
+#      the 941's 8pt band, which is why line 14's two rects were unplaced.
+#
+#      So a label's band here runs from the label down to THE NEXT STOP: the
+#      next margin label, or the next "Part N:" heading. That is how the paper
+#      itself is divided, and it leaves no gaps for a rect to fall through.
+#
+# ═══ WHY THAT BAND RULE IS NOT RETRO-FITTED TO THE 941 ═══
+#
+# Measured: applying it to 941 page 2 makes line 16's band swallow the entire
+# monthly-liability grid, which this product deliberately leaves BLANK because
+# `Form941Return` carries no monthly breakdown (see NINE41_UNCLAIMED, and D-06).
+# The wider rule is right for the 940 and wrong for the 941, so each form keeps
+# the rule that its own artwork justifies.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Measured: the 940's margin labels print at x=38.47 ("17") through x=57.62
+# ("16a" on page 2, indented because it is a sub-line of 16). The 941's 48pt
+# cut-off would drop every one of 16a..16d, which are the four quarterly
+# liabilities the engine computes.
+NINE40_MARGIN_MAX_X = 60.0
+
+# Where the margin scan STOPS on a page that has one.
+#
+# Measured: page 2 prints "Page 2" in the footer as the runs "Page" (x=36.00,
+# y=698.47) and "2" (x=54.02, y=695.39). Different baselines, so they are not
+# joined - and a bare "2" inside the margin is label-shaped. Left alone it
+# invented a "line 2" on a page whose lines are 16 and 17.
+#
+# Rather than special-case a footer, the scan stops where the form stops asking
+# for figures: "Part 6:" opens the third-party designee block and "Part 7:" the
+# signature block, and this product fills neither (same stance as the 941 - see
+# NINE41_UNCLAIMED categories A and C). Page 1 prints no Part 6, so nothing is
+# cut there and line 15e at y=727 still places.
+NINE40_LABEL_FLOOR_HEADING = "Part 6:"
+
+# Line 4's five exempt-payment ticks, bound by the caption the IRS prints beside
+# each one.
+#
+# ═══ WHY CAPTION AND NOT THE "4a" TOKEN ═══
+#
+# The obvious route is the mid-line label pass used for the 941's 15b/15d: find
+# the printed "4a", claim the rects to its right. MEASURED, IT MISBINDS. The
+# five ticks sit on two rows 12pt apart while the labels are ~10pt tall, so with
+# any workable slack row 1's band overlaps row 2's, and 4a and 4b both claim
+# both ticks. The rightmost-label tie-break cannot separate them either: 4a and
+# 4b are printed at the SAME x (144.00).
+#
+# The captions do separate them, because each names one thing and is printed
+# once. This is D-06's lesson applied before it could bite: bind a tick by the
+# words next to it, never by its index or its neighbourhood.
+NINE40_EXEMPT_TICKS: dict[str, str] = {
+    "4a": "Fringe benefits",
+    "4b": "Group-term life insurance",
+    "4c": "Retirement/Pension",
+    "4d": "Dependent care",
+    "4e": "Other",
+}
+
+# Measured gap from a tick's RIGHT edge to the start of its caption: 5.2, 5.2,
+# 3.6, 3.6 and 3.2pt. 12pt covers all five without reaching the next tick,
+# whose nearest neighbour is over 130pt away.
+NINE40_TICK_CAPTION_GAP_PT = 12.0
+
+# A tick and its caption share a printed row. Measured: all five within 0.2pt.
+NINE40_TICK_ROW_SLACK_PT = 6.0
+
+# Mid-line labels, as on the 941: "15b Check one:" and "15d Type:" are
+# continuations of the 15a and 15c rows rather than rows of their own.
+# Measured at x=414.36 and x=284.80 on page 1.
+NINE40_MIDLINE: dict[str, list[str]] = {
+    "940-p1": ["15b", "15d"],
+}
+
+# Mid-line bands use the label's OWN printed height with NO slack.
+#
+# Measured, and the reason is specific: 15b's band is y=697.28..707.42 and the
+# two ticks it owns are centred at y=701. Line 15a's money rects are centred at
+# y=699 - also inside that band - and are kept out only by the x test, which is
+# what the rightmost-label rule is for. Adding the 941's 8pt slack would pull
+# 15d's "Checking/Savings" ticks (centred y=717) into 15b's reach as well, and
+# then the deposit-type answer would land under the apply-or-refund question.
+NINE40_MIDLINE_SLACK_PT = 0.0
+
+# The 940's word-labelled boxes, in the same verified-against-the-caption form
+# as NINE41_ENTITY. Corroborated against Michael's own filed return,
+# `2025_FORM_940_-_SAGE.pdf`.
+#
+# NOTE THE TWO PAGES DISAGREE ABOUT THE EIN CAPTION, and it is measured rather
+# than assumed: page 1 sets it over two printed lines, so the line beside the
+# rect reads "Employer identification number" with "(EIN)" underneath, while
+# page 2 sets the whole thing on one line. Written from page 1 alone, page 2's
+# EIN would not have bound; written from page 2 alone, page 1's would not.
+NINE40_ENTITY: dict[str, dict] = {
+    "940-p1": {
+        "ein": {
+            "fields": ["EntityArea[0].f1_1[0]", "EntityArea[0].f1_2[0]"],
+            "caption": "Employer identification number",
+        },
+        "name": {
+            "fields": ["EntityArea[0].f1_3[0]"],
+            "caption": "Name (not your trade name)",
+        },
+        "tradeName": {
+            "fields": ["EntityArea[0].f1_4[0]"],
+            "caption": "Trade name (if any)",
+        },
+        "address": {
+            "fields": ["EntityArea[0].f1_5[0]"],
+            "caption": "Address",
+        },
+        "cityStateZip": {
+            "fields": [
+                "EntityArea[0].f1_6[0]",
+                "EntityArea[0].f1_7[0]",
+                "EntityArea[0].f1_8[0]",
+            ],
+            "caption": "City",
+        },
+    },
+    "940-p2": {
+        "name": {
+            "fields": ["Page2[0].f1_3[0]"],
+            "caption": "Name (not your trade name)",
+        },
+        "ein": {
+            "fields": ["Page2[0].f1_1[0]", "Page2[0].f1_2[0]"],
+            "caption": "Employer identification number (EIN)",
+        },
+    },
+}
+
+# Rectangles deliberately left blank, each with a reason that survives being
+# read aloud. Same three categories as the 941: a choice only Michael can make,
+# a figure the engine does not compute, or a signature.
+NINE40_UNCLAIMED: dict[str, dict[str, str]] = {
+    "940-p1": {
+        # ── A: choices only he can make ──────────────────────────────────────
+        "TypeReturn[0].c1_1[0]": (
+            "'a. Amended'. Whether this return corrects an earlier one is a statement about "
+            "his filing history, not a figure. Ticking it for him would tell the IRS a return "
+            "already on file was wrong."
+        ),
+        "TypeReturn[0].c1_2[0]": (
+            "'b. Successor employer'. True only if he took over another employer's business "
+            "during the year. Nothing in the books can establish that, and it changes how the "
+            "$7,000 wage base is applied."
+        ),
+        "TypeReturn[0].c1_3[0]": (
+            "'c. No payments to employees'. The engine can see that wages WERE paid, so this "
+            "box is correctly blank - but it is left to him rather than argued from data, "
+            "because a year with no payroll is a year with no 940 rows to read."
+        ),
+        "TypeReturn[0].c1_4[0]": (
+            "'d. Final: Business closed or stopped paying wages'. A declaration that Greenway "
+            "has ceased paying wages. Ticking this on his behalf would close his account with "
+            "the IRS."
+        ),
+        "AggregateReturn[0].c1_5[0]": (
+            "'Section 3504 Agent'. Aggregate filers only. Greenway files for itself, so all "
+            "three of these are correctly blank."
+        ),
+        "AggregateReturn[0].c1_5[1]": (
+            "'Certified Professional Employer Organization (CPEO)'. Aggregate filers only; "
+            "Greenway is not one."
+        ),
+        "AggregateReturn[0].c1_5[2]": (
+            "'Other Third Party'. Aggregate filers only; Greenway is not one."
+        ),
+        # ── B: figures the engine does not hold ──────────────────────────────
+        "EntityArea[0].f1_9[0]": (
+            "'Foreign country name'. Greenway's address is in Port Orchard, Washington, and "
+            "the paper asks for a foreign address INSTEAD of a domestic one, not as well as. "
+            "Correctly blank on every return Greenway will ever file."
+        ),
+        "EntityArea[0].f1_10[0]": "'Foreign province/county'. See the foreign country note above.",
+        "EntityArea[0].f1_11[0]": "'Foreign postal code'. See the foreign country note above.",
+    },
+    "940-p2": {
+        # ── A: a choice only he can make ─────────────────────────────────────
+        "Page2[0].f2_11[0]": (
+            "Part 6, the third-party designee's name. Naming someone who may discuss the "
+            "return with the IRS is an authorisation, and software cannot grant it."
+        ),
+        "Page2[0].f2_12[0]": "Part 6, the designee's phone number. See the designee note above.",
+        "Page2[0].f2_13[0]": (
+            "Part 6, the 5-digit PIN the designee would use with the IRS. A credential, and "
+            "one this product neither holds nor should invent."
+        ),
+        "Page2[0].c2_1[0]": (
+            "Part 6 'Yes'. Whether to allow a third party to discuss the return is his "
+            "decision to make and sign for."
+        ),
+        "Page2[0].c2_1[1]": "Part 6 'No'. See the note on the 'Yes' tick above.",
+        # ── C: a signature under penalties of perjury ────────────────────────
+        "Page2[0].f2_14[0]": (
+            "Part 7, 'Print your name here'. The company profile does hold a signer name, and "
+            "his filed 940 prints MICHAEL LYMAN here - but this sits under a declaration made "
+            "under penalties of perjury, and pre-filling a perjury block is the worst possible "
+            "place for software to be helpful. Left blank deliberately, and surfaced in the "
+            "owner report so the omission is his to overrule."
+        ),
+        "Page2[0].f2_15[0]": "Part 7, 'Print your title here'. See the perjury note above.",
+        "Page2[0].f2_16[0]": "Part 7, 'Best daytime phone'. Part of the signature block.",
+        "Page2[0].c2_2[0]": (
+            "Paid Preparer 'Check if you are self-employed'. A statement about a preparer this "
+            "product is not."
+        ),
+        "Page2[0].f2_17[0]": (
+            "Paid Preparer's name. Greenway's 940 is prepared in-house; the whole preparer "
+            "block is correctly blank, and it is listed rather than dropped so a reader can "
+            "see the boxes exist."
+        ),
+        "Page2[0].f2_18[0]": "Paid Preparer's PTIN. See the preparer note above.",
+        "Page2[0].f2_19[0]": "Paid Preparer's firm name. See the preparer note above.",
+        "Page2[0].f2_20[0]": "Paid Preparer's firm EIN. See the preparer note above.",
+        "Page2[0].f2_21[0]": "Paid Preparer's address. See the preparer note above.",
+        "Page2[0].f2_22[0]": "Paid Preparer's phone. See the preparer note above.",
+        "Page2[0].f2_23[0]": "Paid Preparer's city. See the preparer note above.",
+        "Page2[0].f2_24[0]": "Paid Preparer's state. See the preparer note above.",
+        "Page2[0].f2_25[0]": "Paid Preparer's ZIP code. See the preparer note above.",
+    },
+}
+
+# MEASURED from f940.pdf: the cents half of every money pair is /MaxLen 2, on
+# both pages. The 941 uses 3 and Schedule B uses 2 - see D-04, which is why
+# this is read off the artwork per form instead of shared.
+#
+# Page 1 has fifteen /MaxLen 2 rectangles and only thirteen of them are cents:
+# the other two are the EIN's leading 2-digit comb and the 2-letter state. Both
+# are identity boxes, which take the identity path in `slotsFor` and never reach
+# the cents logic, so the collision is real but harmless. Recorded here so the
+# next person does not have to rediscover it.
+NINE40_CENTS_MAX_LEN = 2
+
+
+def glue_runs(words: list[dict]) -> list[dict]:
+    """
+    Re-join glyph runs the artwork sets flush against each other on one baseline.
+
+    "1" + "b" -> "1b". Necessary because the 940 sets some of its own line
+    numbers as two runs; see difference 1 in the note above. Verified to be a
+    no-op on both 941 pages.
+    """
+    ws = sorted((w for w in words if w["t"].strip()), key=lambda w: (round(w["y0"], 1), w["x0"]))
+    out: list[dict] = []
+    i = 0
+    while i < len(ws):
+        t, x0, x1 = ws[i]["t"], ws[i]["x0"], ws[i]["x1"]
+        y0, y1 = ws[i]["y0"], ws[i]["y1"]
+        j = i + 1
+        # Same baseline (within half a point) and no gap (within one point).
+        while j < len(ws) and abs(ws[j]["y0"] - y0) < 0.5 and abs(ws[j]["x0"] - x1) < 1.0:
+            t += ws[j]["t"]
+            x1 = ws[j]["x1"]
+            y1 = max(y1, ws[j]["y1"])
+            j += 1
+        out.append({"t": t, "x0": x0, "y0": y0, "x1": x1, "y1": y1})
+        i = j
+    return out
+
+
+def nine40_bands(key: str, pdf: Path, page_no: int) -> dict[str, tuple[float, float]]:
+    """Line number -> the band running from its label down to the next stop."""
+    words = words_of(pdf, page_no)
+    glued = glue_runs(words)
+
+    parts = [p for p in printed_phrases(pdf, page_no) if re.match(r"^Part \d+:", p["t"])]
+    floor = min(
+        (p["y0"] for p in parts if p["t"].startswith(NINE40_LABEL_FLOOR_HEADING)),
+        default=float("inf"),
+    )
+
+    tops: dict[str, float] = {}
+    for w in glued:
+        if w["x0"] >= NINE40_MARGIN_MAX_X or not LINE_LABEL_RE.fullmatch(w["t"]):
+            continue
+        if w["y0"] >= floor:
+            continue
+        if w["t"] in tops:
+            sys.exit(
+                f"derive-form-box-map: {key} line label {w['t']!r} is printed twice in the "
+                f"left margin above the signature block, so the band it names is ambiguous. "
+                f"Refusing to pick one."
+            )
+        tops[w["t"]] = w["y0"]
+
+    if not tops:
+        sys.exit(
+            f"derive-form-box-map: {key} found no line labels in the left margin. The 940 is "
+            f"a column of numbered lines; finding none means the scan is looking in the wrong "
+            f"place, and every money box would silently go unplaced."
+        )
+
+    # A band ends at the next thing that starts a new row: another label, or a
+    # Part heading. Both are stops, so no rect can fall between two bands.
+    stops = sorted([*tops.values(), *(p["y0"] for p in parts), floor])
+    return {
+        name: (top, next((s for s in stops if s > top + 0.5), float("inf")))
+        for name, top in tops.items()
+    }
+
+
+def nine40_exempt_tick_placements(
+    key: str, page_geo: dict, phrases: list[dict]
+) -> dict[str, list[str]]:
+    """Line 4's five exempt-payment ticks, each bound by its printed caption."""
+    if key != "940-p1":
+        return {}
+    checks = [f for f in page_geo["fields"] if f["kind"] == "check"]
+    out: dict[str, list[str]] = {}
+    for box_id, caption in NINE40_EXEMPT_TICKS.items():
+        hits = [p for p in phrases if p["t"] == caption]
+        if len(hits) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} expects the caption {caption!r} printed exactly "
+                f"once beside line 4's tick boxes and found {len(hits)}. Refusing to guess "
+                f"which exemption a tick claims."
+            )
+        cap = hits[0]
+        cap_centre = (cap["y0"] + cap["y1"]) / 2
+        near = [
+            f
+            for f in checks
+            if abs(f["y"] + f["h"] / 2 - cap_centre) <= NINE40_TICK_ROW_SLACK_PT
+            and f["x"] + f["w"] <= cap["x0"]
+            and cap["x0"] - (f["x"] + f["w"]) <= NINE40_TICK_CAPTION_GAP_PT
+        ]
+        if len(near) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} box {box_id!r} expects exactly one tick box "
+                f"immediately left of the caption {caption!r} and found {len(near)}. A "
+                f"mis-bound tick here claims an exemption from FUTA that was never taken."
+            )
+        out[box_id] = [near[0]["name"]]
+    return out
+
+
+def derive_940(key: str, page_geo: dict, pdf: Path) -> dict:
+    bands = nine40_bands(key, pdf, page_geo["page"])
+    phrases = printed_phrases(pdf, page_geo["page"])
+    midline = midline_label_positions(
+        glue_runs(words_of(pdf, page_geo["page"])), NINE40_MIDLINE.get(key, [])
+    )
+
+    placed: dict[str, list[str]] = {}
+    for field in page_geo["fields"]:
+        centre = field["y"] + field["h"] / 2
+        hits = [name for name, (top, bottom) in bands.items() if top <= centre < bottom]
+        if len(hits) > 1:
+            sys.exit(
+                f"derive-form-box-map: {key} field {field['name']!r} sits in the bands of "
+                f"lines {sorted(hits)}. Bands run label-to-next-stop and cannot overlap, so "
+                f"this means the artwork changed."
+            )
+        if not hits:
+            continue
+        owner = hits[0]
+
+        # A mid-line label steals the rects to its right - the same rule the 941
+        # uses for 15b/15d, and for the same reason: one printed row carries two
+        # different questions.
+        claimants = [
+            (lx, name)
+            for name, (lx, ly0, ly1) in midline.items()
+            if ly0 - NINE40_MIDLINE_SLACK_PT <= centre <= ly1 + NINE40_MIDLINE_SLACK_PT
+            and field["x"] >= lx
+        ]
+        if claimants:
+            owner = max(claimants)[1]
+
+        placed.setdefault(owner, []).append(field["name"])
+
+    # Line 4's ticks land in line 4's band by position; re-home them onto the
+    # five boxes the paper actually labels, each confirmed by caption.
+    for box_id, names in nine40_exempt_tick_placements(key, page_geo, phrases).items():
+        for n in names:
+            for owner, owned in placed.items():
+                if n in owned and owner != box_id:
+                    owned.remove(n)
+        placed.setdefault(box_id, []).extend(names)
+
+    for box_id, names in entity_placements_940(key, page_geo, phrases).items():
+        if box_id in placed:
+            sys.exit(
+                f"derive-form-box-map: {key} box {box_id!r} was claimed by both the margin "
+                f"scan and the entity table. Two sources disagreeing about one box is exactly "
+                f"the ambiguity this script refuses to resolve silently."
+            )
+        placed[box_id] = names
+
+    # Rule 123: every rectangle placed, or listed with a reason.
+    claimed = {n for names in placed.values() for n in names}
+    unclaimed: dict[str, str] = {}
+    for field in page_geo["fields"]:
+        if field["name"] in claimed:
+            continue
+        reason = next(
+            (r for suffix, r in NINE40_UNCLAIMED.get(key, {}).items() if field["name"].endswith(suffix)),
+            None,
+        )
+        if reason is None:
+            sys.exit(
+                f"derive-form-box-map: {key} rectangle {field['name']!r} at x={field['x']} "
+                f"y={field['y']} is neither placed nor listed as deliberately unclaimed. "
+                f"Rule 123 - every rect on the page must be accounted for, or part of a tax "
+                f"form goes unfilled and looks fine."
+            )
+        unclaimed[field["name"]] = reason
+
+    copies, pitch, _ = copy_partition(page_geo)
+    if copies != 1:
+        sys.exit(
+            f"derive-form-box-map: {key} measured as {copies} copies of the form on one page. "
+            f"The 940 has always been one form per page; if that changed, the placement below "
+            f"fills only the first of them."
+        )
+
+    return {
+        "labels": sorted(bands),
+        "midline": sorted(midline),
+        "placed": {k: sorted(v) for k, v in placed.items()},
+        "copies": [{k: sorted(v) for k, v in placed.items()}],
+        "copyPitchPt": round(pitch, 3),
+        "unclaimed": sorted(unclaimed),
+        "unclaimedReasons": dict(sorted(unclaimed.items())),
+        "centsMaxLen": NINE40_CENTS_MAX_LEN,
+    }
+
+
+def entity_placements_940(key: str, page_geo: dict, phrases: list[dict]) -> dict[str, list[str]]:
+    """
+    The 940's word-labelled boxes, each verified against its printed caption.
+
+    Same contract as `entity_placements`: the rect must exist, and the caption
+    the table claims is printed beside it must be found on the page within
+    ENTITY_CAPTION_SLACK_PT of it. Matched against whole printed LINES rather
+    than single words, because page 1's EIN caption wraps.
+    """
+    by_name = {f["name"]: f for f in page_geo["fields"]}
+    out: dict[str, list[str]] = {}
+
+    for box_id, spec in NINE40_ENTITY.get(key, {}).items():
+        names: list[str] = []
+        for fragment in spec["fields"]:
+            matches = [n for n in by_name if n.endswith(fragment)]
+            if len(matches) != 1:
+                sys.exit(
+                    f"derive-form-box-map: {key} entity box {box_id!r} names the field ending "
+                    f"{fragment!r}, which matches {len(matches)} rectangles "
+                    f"{sorted(matches)[:4]}. Exactly one is required."
+                )
+            names.append(matches[0])
+
+        caption = spec["caption"]
+        rect_top = min(by_name[n]["y"] for n in names)
+        hits = [
+            p
+            for p in phrases
+            if p["t"] == caption and abs(p["y0"] - rect_top) <= ENTITY_CAPTION_SLACK_PT
+        ]
+        if len(hits) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} entity box {box_id!r} expects the caption "
+                f"{caption!r} printed within {ENTITY_CAPTION_SLACK_PT}pt of y={rect_top}, and "
+                f"found {len(hits)}. Refusing to fill a box whose label cannot be confirmed "
+                f"on the paper."
+            )
+        out[box_id] = names
+
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FORM W-3 — THE W-2'S GRID, ONE COPY, AND MONEY THAT DOES NOT SPLIT
+#
+# The W-3 is laid out like the W-2: a boxed grid, letters down the left and
+# numbers on the right, each label printed ABOVE the area it heads. So the
+# W-2's reading rules apply, with three measured differences.
+#
+#   1. ONE COPY, NOT TWO. `fw3.pdf` page 2 carries 46 widgets and no
+#      `CopyB_Top`/`CopyB_Bottom` split - the transmittal is filed once.
+#      `derive_w2` refuses this page outright, which is the correct behaviour
+#      for a function whose first act is to select the top of two copies.
+#
+#   2. MONEY DOES NOT SPLIT. MEASURED /MaxLen distribution across all 46
+#      widgets: 28 unset, 15 at 16, 2 at 10, 1 at 2. Every money box is a
+#      SINGLE 152.8pt field of /MaxLen 16 - there is no cents rectangle
+#      anywhere on the form, and the lone /MaxLen 2 field is box 15's
+#      two-letter state code. So no `centsMaxLen` is emitted, exactly as for
+#      the W-2, and `slotsFor` prints the whole figure including cents. D-04 is
+#      the reason this is measured per form: had 2 been inherited from the 940,
+#      the state code would have been treated as a cents box.
+#
+#   3. PAGE 1 IS NOT THE FORM. It is the SSA's "Attention" notice and carries
+#      zero widgets. The transmittal is page 2 - recorded in the geometry
+#      script, and worth repeating here because "page 1" is the natural guess
+#      and it yields an empty form rather than an error.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Box b is three separate questions sharing one letter, and our lessons treat
+# them as three boxes because a reader clicking "941" wants the payer lesson,
+# not the employer-type lesson. The IRS's own subform names carry the split, so
+# this routes on the agency's naming rather than on position.
+#
+# Order matters: `c1_3` is nested UNDER `bKindOfEmployer_ReadOrder` but is the
+# third-party sick pay tick printed far to the right, so it must be tested
+# before the employer-checkbox group that encloses it.
+W3_CHECK_GROUPS: list[tuple[str, str, int]] = [
+    ("bKindOfEmployer_ReadOrder[0].c1_3[0]", "b-third-party-sick-pay", 1),
+    ("EmployerCheckboxes", "b-kind-of-employer", 5),
+    ("bKind_ReadOrder", "b-kind-of-payer", 7),
+]
+
+W3_LABEL_RE = re.compile(r"^([a-h]|[0-9]{1,2}[a-d]?)$")
+
+# Below this the sheet has left the boxed grid and is into the signature block
+# and the SSA's instructions. Measured: the last grid row is y=312 and the
+# contact block begins at y=336.
+W3_GRID_BOTTOM_PT = 400.0
+
+# How far a label may sit RIGHT of the rect it heads, and how far ABOVE it.
+# Measured across all 24 label-bound rects: insets 0.0-9.0pt, drops 2.6-3.0pt.
+W3_LABEL_INSET_SLACK_PT = 10.0
+W3_LABEL_DROP_MAX_PT = 12.0
+
+# Boxes whose label is NOT above their rect, each bound by caption instead.
+#
+# Box g is the same trap as the W-2's box f: "g Employer's address and ZIP code"
+# is printed BELOW the area you write the address in (label y=240.68, rect spans
+# y=204..240.01). A nearest-label-above rule hands that rect to box f - the
+# employer's NAME - and prints the address where the name belongs.
+#
+# The contact block's four fields are inset 11-14pt from their captions, wider
+# than the grid's 10pt. Widening the general slack to reach them would let a
+# label reach into the next column, so they are named here instead.
+W3_CAPTIONED: dict[str, dict] = {
+    "g": {
+        "fields": ["BoxesC-H[0].f1_06[0]"],
+        "captions": ["g Employer\u2019s address and ZIP code"],
+    },
+    "contact": {
+        "fields": ["Page1[0].f1_29[0]", "Page1[0].f1_30[0]", "Page1[0].f1_31[0]", "Page1[0].f1_32[0]"],
+        "captions": [
+            "Employer\u2019s contact person",
+            "Employer\u2019s telephone number",
+            "Employer\u2019s fax number",
+            "Employer\u2019s email address",
+        ],
+    },
+}
+
+W3_CAPTION_SLACK_PT = 24.0
+
+W3_UNCLAIMED: dict[str, str] = {
+    "Page1[0].f1_33[0]": (
+        "The 'Title:' field in the signature block. The W-3 is signed under penalties of "
+        "perjury - 'I declare that I have examined this return... they are true, correct, and "
+        "complete' - and this product does not sign returns. The company profile does hold a "
+        "signer title, and his filed W-3 prints OWNER here, but pre-filling a perjury block is "
+        "the one place software must not be helpful. Left blank deliberately. Note the "
+        "Signature and Date lines carry no widget at all: the SSA expects those in ink."
+    ),
+}
+
+
+def derive_w3(key: str, page_geo: dict, pdf: Path) -> dict:
+    fields = page_geo["fields"]
+    words = words_of(pdf, page_geo["page"])
+    phrases = printed_phrases(pdf, page_geo["page"])
+    by_name = {f["name"]: f for f in fields}
+
+    placed: dict[str, list[str]] = {}
+    named: set[str] = set()
+
+    # ── PASS 1 ── The 13 ticks, by the IRS's own subform names.
+    for f in fields:
+        if f["kind"] != "check":
+            continue
+        for fragment, box_id, _ in W3_CHECK_GROUPS:
+            if fragment in f["name"]:
+                placed.setdefault(box_id, []).append(f["name"])
+                named.add(f["name"])
+                break
+        else:
+            sys.exit(
+                f"derive-form-box-map: {key} tick box {f['name']!r} belongs to none of the "
+                f"three groups box b is made of. An unrouted tick on a transmittal is a "
+                f"question about the kind of payer or employer that nobody can answer."
+            )
+    for _, box_id, expected in W3_CHECK_GROUPS:
+        got = len(placed.get(box_id, []))
+        if got != expected:
+            sys.exit(
+                f"derive-form-box-map: {key} box {box_id!r} collected {got} tick boxes; "
+                f"{expected} were measured on the artwork. A different count means the "
+                f"question changed, and folding a new tick into an old group would answer it."
+            )
+
+    # ── PASS 2 ── Boxes named by caption, because their label is not above them.
+    for box_id, spec in W3_CAPTIONED.items():
+        names: list[str] = []
+        for fragment, caption in zip(spec["fields"], spec["captions"], strict=True):
+            matches = [n for n in by_name if n.endswith(fragment)]
+            if len(matches) != 1:
+                sys.exit(
+                    f"derive-form-box-map: {key} box {box_id!r} names the field ending "
+                    f"{fragment!r}, which matches {len(matches)} rectangles. One is required."
+                )
+            rect = by_name[matches[0]]
+            hits = [
+                p
+                for p in phrases
+                if p["t"] == caption
+                and min(abs(p["y0"] - rect["y"]), abs(p["y0"] - (rect["y"] + rect["h"])))
+                <= W3_CAPTION_SLACK_PT
+            ]
+            if len(hits) != 1:
+                sys.exit(
+                    f"derive-form-box-map: {key} box {box_id!r} expects the caption "
+                    f"{caption!r} printed within {W3_CAPTION_SLACK_PT}pt of the rectangle at "
+                    f"y={rect['y']} and found {len(hits)}. Refusing to fill a box whose label "
+                    f"cannot be confirmed on the paper."
+                )
+            names.append(matches[0])
+            named.add(matches[0])
+        placed[box_id] = names
+
+    # ── PASS 3 ── The grid: each label heads the area printed below it.
+    labels: dict[str, tuple[float, float, float]] = {}
+    for w in glue_runs(words):
+        if not W3_LABEL_RE.fullmatch(w["t"]):
+            continue
+        if w["y1"] - w["y0"] < W2_MIN_LABEL_HEIGHT_PT or w["y0"] > W3_GRID_BOTTOM_PT:
+            continue
+        if w["t"] in labels:
+            sys.exit(
+                f"derive-form-box-map: {key} label {w['t']!r} is printed twice inside the "
+                f"grid, so the area it heads is ambiguous. Refusing to pick one."
+            )
+        labels[w["t"]] = (w["x0"], w["y0"], w["y1"])
+
+    for f in sorted(fields, key=lambda f: (f["y"], f["x"])):
+        if f["name"] in named or f["kind"] == "check":
+            continue
+        owners = [
+            box
+            for box, (lx, _ly0, ly1) in labels.items()
+            if abs(lx - f["x"]) <= W3_LABEL_INSET_SLACK_PT and 0 <= f["y"] - ly1 <= W3_LABEL_DROP_MAX_PT
+        ]
+        if len(owners) > 1:
+            sys.exit(
+                f"derive-form-box-map: {key} rectangle {f['name']!r} sits under labels "
+                f"{sorted(owners)}. Two boxes cannot share one input area."
+            )
+        if owners:
+            placed.setdefault(owners[0], []).append(f["name"])
+            named.add(f["name"])
+
+    # ── PASS 4 ── A rect with no label of its own joins the box to its LEFT on
+    # the same row. Measured need: box 15 is "15 State | Employer's state ID
+    # number" - two rectangles, one label, and our box 15 covers both.
+    for f in sorted(fields, key=lambda f: (f["y"], f["x"])):
+        if f["name"] in named or f["kind"] == "check":
+            continue
+        left = [
+            (o["x"], box)
+            for box, owned in placed.items()
+            for o in (by_name[n] for n in owned)
+            if round(o["y"], 1) == round(f["y"], 1) and o["x"] < f["x"]
+        ]
+        if left:
+            placed[max(left)[1]].append(f["name"])
+            named.add(f["name"])
+
+    unclaimed: dict[str, str] = {}
+    for f in fields:
+        if f["name"] in named:
+            continue
+        reason = next(
+            (r for suffix, r in W3_UNCLAIMED.items() if f["name"].endswith(suffix)), None
+        )
+        if reason is None:
+            sys.exit(
+                f"derive-form-box-map: {key} rectangle {f['name']!r} at x={f['x']} y={f['y']} "
+                f"is neither placed nor listed as deliberately unclaimed. Rule 123."
+            )
+        unclaimed[f["name"]] = reason
+
+    copies, pitch, _ = copy_partition(page_geo)
+    if copies != 1:
+        sys.exit(
+            f"derive-form-box-map: {key} measured as {copies} copies on one page. The W-3 is "
+            f"a transmittal filed once; if that changed, only the first would be filled."
+        )
+
+    if any(f.get("maxLen") == 3 for f in fields):
+        sys.exit(
+            f"derive-form-box-map: {key} now has a /MaxLen 3 rectangle. The W-3 was measured "
+            f"as a form that does NOT split money, so no centsMaxLen is emitted and the "
+            f"default of 3 would start splitting figures into a box that is not a cents box."
+        )
+
+    return {
+        "labels": sorted(labels),
+        "midline": [],
+        "placed": {k: sorted(v) for k, v in placed.items()},
+        "copies": [{k: sorted(v) for k, v in placed.items()}],
+        "copyPitchPt": round(pitch, 3),
+        "unclaimed": sorted(unclaimed),
+        "unclaimedReasons": dict(sorted(unclaimed.items())),
+    }
+
+
 def main() -> int:
     if not GEOMETRY.exists():
         sys.exit("derive-form-box-map: run derive-form-geometry.py first")
@@ -1509,6 +2250,31 @@ def main() -> int:
             f"{sum(1 for b in derived['placed'] if b.startswith('m') and 'd' in b)} day cells), "
             f"{len(derived['unclaimed'])} blank with a recorded reason, "
             f"cents /MaxLen {derived['centsMaxLen']}"
+        )
+
+    # ── FORM 940 ─────────────────────────────────────────────────────────────
+    for key in ("940-p1", "940-p2"):
+        page_geo = geometry[key]
+        derived = derive_940(key, page_geo, REPO / page_geo["pdf"])
+        result[key] = derived
+        print(
+            f"  {key}: {len(derived['labels'])} margin labels + "
+            f"{len(derived['midline'])} mid-line, {len(derived['placed'])} boxes received "
+            f"rects, {sum(len(v) for v in derived['placed'].values())} of "
+            f"{len(page_geo['fields'])} rects filled, {len(derived['unclaimed'])} blank with "
+            f"a recorded reason, cents /MaxLen {derived['centsMaxLen']}"
+        )
+
+    # ── FORM W-3 ─────────────────────────────────────────────────────────────
+    for key in ("w3",):
+        page_geo = geometry[key]
+        derived = derive_w3(key, page_geo, REPO / page_geo["pdf"])
+        result[key] = derived
+        print(
+            f"  {key}: {len(derived['labels'])} labels, {len(derived['placed'])} boxes "
+            f"received rects, {sum(len(v) for v in derived['placed'].values())} of "
+            f"{len(page_geo['fields'])} rects filled, {len(derived['unclaimed'])} blank with "
+            f"a recorded reason, money does not split"
         )
 
     # ── FORM W-2 ─────────────────────────────────────────────────────────────

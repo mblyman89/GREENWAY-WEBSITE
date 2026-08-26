@@ -299,6 +299,19 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * is the first place both affordances render on one screen.
        */
       "/admin/books/form-941/sheet",
+      /*
+       * books-63: the 940 on paper, both pages. Same exemption for the same
+       * reason - reached from the "View just the form" door in the header of
+       * /admin/books/form-940, which IS in the menu, and that door is asserted
+       * by form-sheet-core.test.ts's filesystem-discovered block rather than by
+       * a list somebody has to remember to update.
+       *
+       * The W-3 deliberately has NO route of its own. It is a transmittal whose
+       * every figure is a sum of the W-2s behind it, so it renders on
+       * /admin/books/form-w2/sheet underneath the run it totals - which is also
+       * the only arrangement in which the arithmetic can be checked by eye.
+       */
+      "/admin/books/form-940/sheet",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

@@ -87,6 +87,15 @@ import {
   type Form941Tone,
 } from "@/lib/payroll/form-941-ui-core";
 import { formatCents, formatQuarter, type QuarterRef } from "@/lib/payroll/payroll-deposit-schedule-core";
+import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
+import {
+  mostRecentlyClosedQuarter,
+  readScope,
+  scopeHref,
+  scopeQuarters,
+  scopeYears,
+  type FormScope,
+} from "@/lib/payroll/form-scope-core";
 
 export const dynamic = "force-dynamic";
 
@@ -119,41 +128,36 @@ const BADGE: Record<Form941Tone, "green" | "gold" | "orange" | "danger" | "neutr
   neutral: "neutral",
 };
 
-/** The quarter that most recently ENDED, which is the one normally being filed. */
-function mostRecentlyClosedQuarter(today: Date): QuarterRef {
-  const y = today.getUTCFullYear();
-  const q = Math.floor(today.getUTCMonth() / 3) + 1;
-  if (q === 1) return { year: y - 1, quarter: 4 };
-  return { year: y, quarter: (q - 1) as 1 | 2 | 3 | 4 };
-}
+/* Moved to form-scope-core.ts in books-63. This copy shared wa-quarterly's
+ * defect: the year was checked with `Number.isFinite` and no bounds. */
 
 export default async function Form941Page({
   searchParams,
 }: {
-  searchParams?: Promise<{ year?: string; q?: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   await requireBooksAccess();
 
   const sp = (await searchParams) ?? {};
   const now = new Date();
 
-  // The quarter comes from the URL when present, and otherwise defaults to the
-  // one that has most recently closed. NOT hardcoded: this screen will still be
-  // here in 2031, and a hardcoded quarter is a wrong answer with a long fuse.
-  const parsedYear = Number.parseInt(sp.year ?? "", 10);
-  const parsedQ = Number.parseInt(sp.q ?? "", 10);
-  const fallback = mostRecentlyClosedQuarter(now);
-  const quarter: QuarterRef =
-    Number.isFinite(parsedYear) && parsedQ >= 1 && parsedQ <= 4
-      ? { year: parsedYear, quarter: parsedQ as 1 | 2 | 3 | 4 }
-      : fallback;
+  /*
+   * The quarter comes from the URL when present and otherwise defaults to the
+   * one that most recently closed. NOT hardcoded: this screen will still be here
+   * in 2031, and a hardcoded quarter is a wrong answer with a long fuse.
+   */
+  const scope: FormScope = readScope(sp, now, "quarter");
+  const quarter: QuarterRef = {
+    year: scope.year,
+    quarter: scope.quarter ?? mostRecentlyClosedQuarter(now).quarter,
+  };
 
   const today = now.toISOString().slice(0, 10);
   const loaded = await loadForm941(quarter);
 
   if (!loaded.ok) {
     return (
-      <Shell quarter={quarter}>
+      <Shell quarter={quarter} scope={scope} now={now}>
         <Card>
           <CardHeader title="This quarter could not be read" />
           <p className="text-sm text-[var(--admin-danger)]">{loaded.message}</p>
@@ -196,7 +200,7 @@ export default async function Form941Page({
   const empty = emptyStateFor(quarter);
 
   return (
-    <Shell quarter={quarter}>
+    <Shell quarter={quarter} scope={scope} now={now}>
       {/* ── 1. THE ONE NEXT ACTION ─────────────────────────────────────── */}
       <section className={`rounded-[var(--admin-radius)] border p-5 ${PANEL[action.tone]}`}>
         <div className="flex flex-wrap items-center gap-3">
@@ -656,7 +660,17 @@ function DueDate({
   );
 }
 
-function Shell({ quarter, children }: { quarter: QuarterRef; children: React.ReactNode }) {
+function Shell({
+  quarter,
+  scope,
+  now,
+  children,
+}: {
+  quarter: QuarterRef;
+  scope: FormScope;
+  now: Date;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -678,7 +692,7 @@ function Shell({ quarter, children }: { quarter: QuarterRef; children: React.Rea
             form-sheet-core.test.ts asserts it exists.
           */}
           <Link
-            href={`/admin/books/form-941/sheet?year=${quarter.year}&q=${quarter.quarter}`}
+            href={scopeHref("/admin/books/form-941/sheet", scope)}
             className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
           >
             View just the form &rarr;
@@ -691,6 +705,14 @@ function Shell({ quarter, children }: { quarter: QuarterRef; children: React.Rea
           is written to your books &mdash; where a figure cannot be produced honestly, it says
           so instead of guessing.
         </p>
+
+        <FormScopeBar
+          basePath="/admin/books/form-941"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={scopeQuarters(scope, now)}
+          employees={null}
+        />
       </div>
       {children}
     </div>

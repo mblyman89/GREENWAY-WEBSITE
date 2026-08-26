@@ -1105,6 +1105,67 @@ const NINE41_ENTITY_NOT_A_FIGURE =
   "this return under. It is filled from the company profile, not computed from payroll, so it " +
   "is never a zero.";
 
+/**
+ * The employer's entity area as boxes, for ANY employment tax return that
+ * prints it. Shared by Form 941 and Form 940.
+ *
+ * ═══ THE DEFECT THIS EXISTS TO CLOSE, MEASURED IN books-63 ═══
+ *
+ * books-61 found that `form941Boxes` returned only numbered lines, so a live
+ * 941 printed no EIN, no name and no address. It was fixed there — for the 941
+ * alone, by an entity block written inside that one function. `form940Boxes`
+ * was written the same way and never got the fix, so a live Form 940 printed
+ * its FUTA arithmetic under a completely anonymous header, on BOTH pages: the
+ * 940 repeats the name and EIN at the top of page 2 because the sheets get
+ * separated in handling.
+ *
+ * That is the same defect twice, which by rule 23 means the instance was fixed
+ * and the class was not. So the block moves here and both adapters call it. A
+ * third return that prints an entity area cannot now be written without it.
+ *
+ * Why it looked fine: the teaching specimen has no entity boxes either, so the
+ * sheet renders identically whether or not this bug is present until the year
+ * is closed and real figures arrive. A form with empty name boxes reads as a
+ * blank form, not a broken one — this file's standing warning.
+ *
+ * ═══ WHY THE 941'S OWNERSHIP TABLE ANSWERS FOR BOTH ═══
+ *
+ * `FORM_940_WHOSE` is gated by `assertEvery940LineOwnershipIsPinned` to exactly
+ * the 30 NUMBERED LINES of the printed form, cross-checked against a pinned
+ * table. Adding five text boxes to it would make that gate's own count wrong
+ * and would put "whose money is the EIN" into a table about money.
+ *
+ * The entity facts are not per-form facts. Greenway has one EIN, one legal
+ * name, one trade name and one address, and the IRS reconciles a year's 940
+ * against the four 941s filed under that same EIN — so if these two forms could
+ * disagree about any of it, the disagreement would arrive as a notice months
+ * later. One table, one answer, and `whose` is `not_money` on every row of it.
+ */
+function employerEntityBoxes(formId: string, formLabel: string): readonly FormBox[] {
+  return NINE41_ENTITY_BOXES.map(({ box, caption }): FormBox => {
+    const row = whoseFor(FORM_941_WHOSE, formLabel, box);
+    return {
+      formId,
+      box,
+      caption,
+      // "count" with a null quantity, exactly as the W-2's identity boxes are
+      // modelled. `BoxMeasure` has no "text" member, and adding one would touch
+      // every form in the system - a larger change than this slice should make.
+      measure: "count",
+      amountCents: 0,
+      quantity: null,
+      whose: row.whose,
+      derivation: `${NINE41_ENTITY_NOT_A_FIGURE} — ${row.why}`,
+      blankOnPurpose: null,
+      emphasise: false,
+      // Flagged not-computed so `paperText` refuses to print a figure for it.
+      // The actual text arrives separately, via `nine41IdentityText` /
+      // `nine40IdentityText`, because a FormBox cannot carry a name.
+      notComputedYet: NINE41_ENTITY_NOT_A_FIGURE,
+    };
+  });
+}
+
 export function form941Boxes(ret: Form941Return): readonly FormBox[] {
   /*
    * ═══ THE DEFECT THESE FIVE BOXES EXIST TO FIX ═══
@@ -1121,30 +1182,10 @@ export function form941Boxes(ret: Form941Return): readonly FormBox[] {
    * Found by asking the same question of the 941 that had just been asked of
    * the W-2, rather than by re-checking the W-2 fix. Rule 23: fix the class.
    */
-  const entity: readonly FormBox[] = NINE41_ENTITY_BOXES.map(({ box, caption }): FormBox => {
-    const row = whoseFor(FORM_941_WHOSE, "Form 941", box);
-    return {
-      formId: FORM_ID_941,
-      box,
-      caption,
-      // "count" with a null quantity, exactly as the W-2's identity boxes are
-      // modelled. `BoxMeasure` has no "text" member, and adding one would touch
-      // every form in the system - a larger change than this slice should make.
-      // It is recorded as an open question in the owner report rather than done
-      // quietly.
-      measure: "count",
-      amountCents: 0,
-      quantity: null,
-      whose: row.whose,
-      derivation: `${NINE41_ENTITY_NOT_A_FIGURE} — ${row.why}`,
-      blankOnPurpose: null,
-      emphasise: false,
-      // Flagged not-computed so `paperText` refuses to print a figure for it.
-      // The actual text arrives separately, via `nine41IdentityText`, because a
-      // FormBox cannot carry a name.
-      notComputedYet: NINE41_ENTITY_NOT_A_FIGURE,
-    };
-  });
+  // The shared block. See `employerEntityBoxes`: this was written inline here
+  // in books-61 and the 940 adapter never got the same fix, which is the
+  // instance-not-the-class failure rule 23 names.
+  const entity = employerEntityBoxes(FORM_ID_941, "Form 941");
 
   const lines = ret.lines.map((l: Form941Line): FormBox => {
     const row = whoseFor(FORM_941_WHOSE, "Form 941", l.line);
@@ -1199,7 +1240,16 @@ export function form941Boxes(ret: Form941Return): readonly FormBox[] {
  * and labelled rather than either invisible or falsely showing a zero.
  */
 export function form940Boxes(ret: Form940Return): readonly FormBox[] {
-  return ret.lines.map((l: Form940Line): FormBox => {
+  /*
+   * Entity first, in paper order: the EIN, name, trade name and address fill
+   * the top of page 1 above line 1a, and the name and EIN are repeated at the
+   * top of page 2. Those repeats are the SAME two boxes placed twice by the
+   * geometry, not two more entries here - a box is a fact about the return,
+   * and the return has exactly one EIN.
+   */
+  const entity = employerEntityBoxes(FORM_ID_940, "Form 940");
+
+  const lines = ret.lines.map((l: Form940Line): FormBox => {
     const row = whoseFor(FORM_940_WHOSE, "Form 940", l.line);
     return {
       formId: FORM_ID_940,
@@ -1222,6 +1272,8 @@ export function form940Boxes(ret: Form940Return): readonly FormBox[] {
       notComputedYet: null,
     };
   });
+
+  return [...entity, ...lines];
 }
 
 /**

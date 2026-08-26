@@ -157,3 +157,62 @@ breaks verbatim substring verification.
 
 17 U.S.C. §105 - works of the United States Government are not subject to
 copyright, so the blank form and its instructions may be redistributed.
+
+────────────────────────────────────────────────────────────────────────────────
+FORM 940 AND FORM W-3 - ADDED books-63
+────────────────────────────────────────────────────────────────────────────────
+
+Michael, 26 Aug 2026: "Yes please complete 940 and w-3 this next slice, with
+lessons on boxes that bite only please."
+
+  public/forms/irs/f940.pdf
+    URL     https://www.irs.gov/pub/irs-pdf/f940.pdf
+    bytes   833678
+    sha256  575bb0d645ff613574c9b58506c6e0f7cbdc757c85ebc3e766ffc59fd5709d7c
+    human   Form 940 for 2025 - Employer's Annual Federal Unemployment Return
+    art     public/forms/art/940-p1.svg  (566784 bytes, pdftocairo -svg)
+            public/forms/art/940-p2.svg  (295344 bytes, pdftocairo -svg)
+
+  MEASURED, not assumed: 610.976 x 791.968 pt on both pages.
+    page 1   59 widgets, maxLen {None:38, 2:15, 1:2, 7:1, 9:1, 10:1, 17:1}
+    page 2   31 widgets, maxLen {None:19, 2:7, 10:2, 5:1, 7:1, 11:1}
+    page 3   NOT USED. It is Form 940-V, the payment voucher - 7 widgets, a
+             separate form the instructions say to detach and send with a
+             cheque. Greenway pays by EFTPS. Same stance as the 941-V: a
+             payment voucher nobody should use would invite somebody to use it.
+
+  The cents boxes are /MaxLen 2, NOT 3. Measured per form, because they differ:
+  941 = 3, Schedule B = 2, 940 = 2. See D-04.
+
+  public/forms/irs/fw3.pdf
+    URL     https://www.irs.gov/pub/irs-pdf/fw3.pdf
+    bytes   491312
+    sha256  2df15f40431bd52814cbac85d9843102b09a640b6fe558f201e5214ff1890656
+    human   Form W-3 (2026) - Transmittal of Wage and Tax Statements
+    art     public/forms/art/w3.svg  (454610 bytes, pdftocairo -svg)
+
+  MEASURED: 612.0 x 792.0 pt, PAGE 2, 46 widgets,
+  maxLen {None:28, 16:15, 10:2, 2:1}.
+
+  PAGE 2, and that is the whole trap. Page 1 of fw3.pdf is the SSA's
+  "Attention" notice and carries ZERO widgets. A deriver pointed at page 1
+  finds nothing and reports success - a blank form that looks finished.
+
+  The W-3's money boxes do NOT split into dollars and cents. They are single
+  152.8pt /MaxLen 16 fields, and the only /MaxLen 2 field on the whole form is
+  box 15's state code. So `centsMaxLenFor` is not consulted for this page, and
+  a guard in derive_w3 refuses any future /MaxLen 3 rect rather than silently
+  treating it as a cents box.
+
+Instruction PDFs read for the quotes (not committed):
+    https://www.irs.gov/pub/irs-pdf/i940.pdf
+    bytes   301331
+    sha256  e2085d60827d25e899ef486e640a9dc7845ff72e4becac58992b6c23d18fbc61
+
+    https://www.irs.gov/pub/irs-pdf/iw2w3.pdf
+    bytes   527838
+    sha256  d16b9f506f039f5af24f01fad699b0b60d392ac7920fcff528c7d97740c792b6
+    mirror  docs/authorities/federal/irs-instructions-w-2-w-3-2026.txt
+
+17 U.S.C. §105 - works of the United States Government are not subject to
+copyright, so the blank forms and their instructions may be redistributed.

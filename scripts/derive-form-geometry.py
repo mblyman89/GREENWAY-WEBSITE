@@ -136,6 +136,31 @@ SOURCES: list[Source] = [
         url="https://www.irs.gov/pub/irs-pdf/fw2.pdf",
         human="Form W-2 (2026), Copy B",
     ),
+    # MEASURED: f940.pdf page 3 is the PAYMENT VOUCHER (7 widgets), not part of
+    # the return. Pages 1-2 carry the 59 and 31 widgets that are the form.
+    Source(
+        key="940-p1",
+        pdf="public/forms/irs/f940.pdf",
+        page=1,
+        url="https://www.irs.gov/pub/irs-pdf/f940.pdf",
+        human="Form 940 for 2025, page 1",
+    ),
+    Source(
+        key="940-p2",
+        pdf="public/forms/irs/f940.pdf",
+        page=2,
+        url="https://www.irs.gov/pub/irs-pdf/f940.pdf",
+        human="Form 940 for 2025, page 2",
+    ),
+    # MEASURED: fw3.pdf page 1 is the SSA's "Attention" notice and carries zero
+    # widgets. The transmittal itself is page 2.
+    Source(
+        key="w3",
+        pdf="public/forms/irs/fw3.pdf",
+        page=2,
+        url="https://www.irs.gov/pub/irs-pdf/fw3.pdf",
+        human="Form W-3 (2026), transmittal",
+    ),
 ]
 
 

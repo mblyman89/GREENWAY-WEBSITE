@@ -106,6 +106,14 @@ import { form941Boxes, FORM_ID_941 } from "@/lib/payroll/form-box-adapters";
 import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
 import { loadForm941 } from "@/lib/payroll/form-941-store";
 import { formatQuarter, type QuarterRef } from "@/lib/payroll/payroll-deposit-schedule-core";
+import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
+import {
+  mostRecentlyClosedQuarter,
+  readScope,
+  scopeQuarters,
+  scopeYears,
+  type FormScope,
+} from "@/lib/payroll/form-scope-core";
 
 export const metadata = { title: "Form 941 — the form itself" };
 
@@ -131,83 +139,54 @@ const NINE41_PAGE_KEYS = ["941-p1", "941-p2"] as const;
  */
 const SCHEDULE_B_PAGE_KEY = "941sb";
 
-/**
- * The quarter that most recently ENDED.
+/*
+ * BOTH LOCAL HELPERS MOVED TO form-scope-core.ts IN books-63.
  *
- * A 941 reports a CLOSED quarter, so "today's quarter" is never the right
- * default: on 5 May the return a person wants is Q1's. Deliberately duplicated
- * as a small local rule rather than imported from ../page.tsx, which does not
- * export it -- and exporting it would mean editing the file he asked me not to
- * touch. The duplication is three lines and is pinned by a test that requires
- * both copies to agree.
+ * `mostRecentlyClosedQuarter` and `recentQuarters` lived here, and this file's
+ * own comment admitted the problem: "Deliberately duplicated as a small local
+ * rule ... The duplication is three lines and is pinned by a test that requires
+ * both copies to agree."
+ *
+ * It was not two copies. It was SIX - three of the quarter rule and three of the
+ * year rule, across six form pages - and the `?year=` bounds check was spelled
+ * three different ways between them. Michael asked for filtering that "works
+ * with the full form workflow and all its tabs and pages", and six copies of the
+ * period rule is the thing that makes that impossible to promise.
+ *
+ * `recentQuarters(from, 8)` is now `scopeQuarters(scope, now)`, which keeps the
+ * eight-quarter window AND its reasoning (two years = the IRS lookback period),
+ * and additionally guarantees the SELECTED quarter is in the list - so a link to
+ * Q1 2021 no longer renders a picker that cannot show where you are.
  */
-function mostRecentlyClosedQuarter(today: Date): QuarterRef {
-  const y = today.getUTCFullYear();
-  const q = Math.floor(today.getUTCMonth() / 3) + 1;
-  if (q === 1) return { year: y - 1, quarter: 4 };
-  return { year: y, quarter: (q - 1) as 1 | 2 | 3 | 4 };
-}
-
-/**
- * The eight most recently closed quarters, newest first.
- *
- * ═══ WHY EIGHT, AND WHY THIS IS A LIST OF LINKS AT ALL ═══
- *
- * Michael: "We have multiple quarters, so that means needing forms that can
- * produce those quarters or those data and such." A route that reads `?year=` and
- * `?q=` technically produces any quarter - but only for somebody willing to
- * type a URL, and rule 125(d) is explicit that a run needs a way in that is not
- * a URL.
- *
- * Eight because that is TWO YEARS, and two years is the window the IRS itself
- * uses: the lookback period that decides whether a business deposits monthly or
- * semiweekly is the four quarters ending 30 June of the preceding year, so
- * anybody checking their own deposit schedule needs to see two years of returns
- * at once. `lookbackQuartersFor` in the deposit-schedule core works on exactly
- * that window. Eight links is also small enough to read without a dropdown.
- */
-function recentQuarters(from: QuarterRef, count = 8): readonly QuarterRef[] {
-  const out: QuarterRef[] = [];
-  let { year, quarter } = from;
-  for (let i = 0; i < count; i += 1) {
-    out.push({ year, quarter });
-    if (quarter === 1) {
-      year -= 1;
-      quarter = 4;
-    } else {
-      quarter = (quarter - 1) as 1 | 2 | 3 | 4;
-    }
-  }
-  return out;
-}
 
 export default async function FormNine41SheetPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ year?: string; q?: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   await requireBooksAccess();
 
   const sp = (await searchParams) ?? {};
   const now = new Date();
-  const parsedYear = Number.parseInt(sp.year ?? "", 10);
-  const parsedQ = Number.parseInt(sp.q ?? "", 10);
-  const fallback = mostRecentlyClosedQuarter(now);
+  /*
+   * Grain "quarter", stated and not defaulted. `readScope` keeps this page's own
+   * both-halves-or-neither rule - see its docblock, which quotes the reasoning
+   * from this file - and adds the half it was missing: it now RECORDS the
+   * substitution so `FormScopeBar` can say it out loud. `?year=2025&q=7` used to
+   * render Q2 2026 under a heading reading "Q2 2026", self-consistent and wrong.
+   */
+  const scope: FormScope = readScope(sp, now, "quarter");
 
   /*
-   * Both halves of the quarter must be valid or NEITHER is used. Accepting a
-   * good year with a nonsense quarter would silently show a different period
-   * than the URL asked for, and the heading would agree with itself while
-   * being wrong -- the hardest kind of error to notice.
+   * `scope.quarter` is non-null because the grain is "quarter" - readScope
+   * guarantees it and a gate pins it. Narrowed explicitly rather than asserted
+   * with `!`, because a non-null assertion here would be a promise the compiler
+   * cannot keep if the grain above is ever changed.
    */
-  const quarter: QuarterRef =
-    Number.isInteger(parsedYear) &&
-    parsedYear >= 2020 &&
-    parsedYear <= 2100 &&
-    parsedQ >= 1 &&
-    parsedQ <= 4
-      ? { year: parsedYear, quarter: parsedQ as 1 | 2 | 3 | 4 }
-      : fallback;
+  const quarter: QuarterRef = {
+    year: scope.year,
+    quarter: scope.quarter ?? mostRecentlyClosedQuarter(now).quarter,
+  };
 
   const loaded = await loadForm941(quarter);
 
@@ -308,7 +287,7 @@ export default async function FormNine41SheetPage({
       ? scheduleBBoxes(scheduleB, employer)
       : scheduleBTeachingBoxes(quarter);
 
-  const quarters = recentQuarters(fallback);
+  const quarters = scopeQuarters(scope, now);
 
   return (
     <main className="min-h-screen bg-[var(--admin-bg)] text-[var(--admin-text)] print:bg-white">
@@ -363,32 +342,25 @@ export default async function FormNine41SheetPage({
         </p>
 
         {/*
-          ═══ ONE PERIOD, DIRECTLY ═══
+          ONE PERIOD, DIRECTLY - now through the shared bar.
 
-          Rule 125(d): a run needs three ways in, and on the 941 the period IS
-          the run. Two years of quarters, because two years is the IRS's own
-          lookback window for deciding a deposit schedule.
+          Rule 125(d): a run needs a way in that is not a URL, and on the 941 the
+          period IS the run. This was an ad-hoc pill row; it is now the same
+          component the 940 and W-2 sheets use, so the eight-quarter window, the
+          highlighting and the refusal notice cannot drift between them.
+
+          `scopeYears` is also passed, which the old row had no equivalent of: it
+          jumps a whole year while KEEPING the quarter, so "same quarter, last
+          year" is one click. That is the comparison an owner actually makes, and
+          it was four clicks before.
         */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="mr-1 text-white/40">Go to a quarter:</span>
-          {quarters.map((q) => {
-            const isNow = q.year === quarter.year && q.quarter === quarter.quarter;
-            return (
-              <Link
-                key={`${q.year}-${q.quarter}`}
-                href={`/admin/books/form-941/sheet?year=${q.year}&q=${q.quarter}`}
-                className={[
-                  "rounded border px-2 py-0.5",
-                  isNow
-                    ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)] text-white"
-                    : "border-white/15 text-white/60 hover:bg-white/10",
-                ].join(" ")}
-              >
-                {formatQuarter(q)}
-              </Link>
-            );
-          })}
-        </div>
+        <FormScopeBar
+          basePath="/admin/books/form-941/sheet"
+          scope={scope}
+          years={scopeYears(scope, now)}
+          quarters={quarters}
+          employees={null}
+        />
       </div>
 
       {/*
