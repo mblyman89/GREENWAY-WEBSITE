@@ -916,24 +916,27 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
   {
     formId: "form_941",
     box: "16",
-    headline: "Your deposit schedule \u2014 liability, NOT deposits",
+    headline: "Your deposit schedule \u2014 for Greenway, the semiweekly tick and nothing else",
     plainEnglish:
-      "You tick whether you are a monthly or semiweekly depositor, and if monthly you enter the " +
-      "tax liability for each of the three months. The single most misread instruction on the " +
-      "form: these are amounts you BECAME LIABLE for, not amounts you PAID.",
+      "Three mutually exclusive choices: under $2,500, monthly schedule depositor, or " +
+      "semiweekly schedule depositor. Greenway is a SEMIWEEKLY depositor, so the third tick is " +
+      "the one that applies and the three monthly liability boxes beside it stay EMPTY. The " +
+      "liability detail goes on Schedule B instead, one figure per payday.",
     whereItComesFrom:
-      "Payroll dates and amounts \u2014 liability arises when wages are paid. Deposits are a separate " +
-      "record and belong on line 13.",
+      "Michael, 26 Aug 2026: \u201cI am a schedule b filer, so we don't need to compute the monthly " +
+      "payment.\u201d Confirmed against his filed Q2 2026 return, where the monthly grid is blank " +
+      "and the semiweekly box is ticked.",
     howToReadIt:
-      "The three months must add to line 12, not to line 13. If your months add to your deposits " +
-      "instead, the line is filled in wrongly even when the total looks plausible.",
+      "Read it as a declaration of which schedule you are on, not as a figure. The amounts " +
+      "themselves \u2014 whether here or on Schedule B \u2014 are what you BECAME LIABLE for, never what " +
+      "you PAID, and they must total line 12 rather than line 13.",
     commonMistake:
-      "Entering deposits made in each month. The instruction warns about it directly, and " +
-      "getting it wrong can bring an averaged failure-to-deposit penalty even when every dollar " +
-      "was paid on time.",
+      "A semiweekly depositor entering liabilities in the monthly boxes here instead of on " +
+      "Schedule B. The instruction names the consequence directly: an averaged " +
+      "failure-to-deposit penalty, even when every dollar was paid on time.",
     whatToDo:
-      "Fill this from the payroll register by pay date, then check the three months sum to line " +
-      "12. Never fill it from the bank statement.",
+      "Tick semiweekly, leave the three monthly boxes blank, and attach Schedule B. Then check " +
+      "that Schedule B's quarter total equals line 12. Never fill either from the bank statement.",
     examples: [
       {
         title: "Liability and deposit fall in different months",
@@ -945,6 +948,19 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
         ],
         answer: "March liability, April deposit \u2014 both correct",
         moral: "Line 16 follows pay dates. Line 13 follows bank dates. Do not merge them.",
+      },
+      {
+        title: "Why Greenway's monthly boxes are blank and that is correct",
+        steps: [
+          "Greenway is a semiweekly schedule depositor, so the third tick applies.",
+          "The three monthly liability boxes are left empty on purpose.",
+          "Schedule B carries the detail instead, one figure per payday.",
+          "Schedule B's quarter total is checked against line 12.",
+        ],
+        answer: "Semiweekly ticked, monthly grid blank, Schedule B attached",
+        moral:
+          "An empty monthly grid on this return is not an omission. Filling it in would " +
+          "report the wrong deposit schedule to the IRS.",
       },
     ],
     quotes: [

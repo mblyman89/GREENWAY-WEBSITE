@@ -40,6 +40,7 @@ import {
   assertNoSpecimenClaimsAFigure,
   assertEveryTieResolves,
   assertEveryTaughtBoxHasASpecimen,
+  assertGeneratedSpecimenCoversItsLessons,
   assertEveryLessonSetWasHandedOver,
   MIN_LESSON_SETS,
   MAX_SCREEN_ONLY_LESSON_SETS,
@@ -54,6 +55,10 @@ import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
 import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
 import { FORM_941_CONFIRMATION_LESSONS } from "@/lib/payroll/form-941-confirmation-lessons";
+import {
+  SCHEDULE_B_LESSONS,
+  scheduleBTeachingBoxes,
+} from "@/lib/payroll/form-941-schedule-b-boxes";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -201,6 +206,13 @@ describe("every cross-reference between forms goes somewhere real", () => {
    * here and then VERIFIED in both directions inside
    * `assertEveryLessonSetWasHandedOver`, so it cannot go stale.
    */
+  /*
+   * A 31-day-February-free quarter with a leap-year February in it, so the
+   * generated specimen exercises both a 30-day and a 29-day month rather than
+   * only 31s. Q1 2028: January 31, February 29, March 31.
+   */
+  const SPECIMEN_QUARTER = { year: 2028, quarter: 1 as const };
+
   const SETS: readonly NamedLessonSet[] = [
     { name: "form-box-lessons-940.ts", lessons: FORM_940_LESSONS, kind: "printed-form" },
     { name: "form-box-lessons-941.ts", lessons: FORM_941_LESSONS, kind: "printed-form" },
@@ -211,6 +223,17 @@ describe("every cross-reference between forms goes somewhere real", () => {
       name: "form-941-confirmation-lessons.ts",
       lessons: FORM_941_CONFIRMATION_LESSONS,
       kind: "screen-only",
+    },
+    /*
+     * The seventh set, added books-62. PRINTED paper, so it takes no
+     * screen-only exemption, but its specimen is generated: 93 day cells, four
+     * totals and three header boxes. See `generatedSpecimenBoxes`.
+     */
+    {
+      name: "form-941-schedule-b-boxes.ts",
+      lessons: SCHEDULE_B_LESSONS,
+      kind: "printed-form",
+      generatedSpecimenBoxes: scheduleBTeachingBoxes(SPECIMEN_QUARTER).map((b) => b.box),
     },
   ];
 
@@ -290,10 +313,20 @@ describe("every cross-reference between forms goes somewhere real", () => {
     );
   });
 
+  /** Forms whose specimen is generated, so a tie into one can be resolved. */
+  const GENERATED_FORMS: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
+    SETS.filter((s) => s.generatedSpecimenBoxes !== undefined).flatMap((s) =>
+      [...new Set(s.lessons.map((l) => l.formId))].map((id) => [id, s.generatedSpecimenBoxes!]),
+    ),
+  );
+
   it("resolves every tie in every lesson set", () => {
     let ties = 0;
     for (const s of SETS) {
-      expect(() => assertEveryTieResolves(s.lessons), `dead tie in ${s.name}`).not.toThrow();
+      expect(
+        () => assertEveryTieResolves(s.lessons, GENERATED_FORMS),
+        `dead tie in ${s.name}`,
+      ).not.toThrow();
       const own = s.lessons.reduce((n, l) => n + l.tiesTo.length, 0);
       /*
        * Rule 66d per set, not just in total. A total floor is satisfied by one
@@ -488,7 +521,17 @@ describe("every cross-reference between forms goes somewhere real", () => {
     let checkedSets = 0;
     for (const s of SETS) {
       if (s.kind !== "printed-form") continue;
-      expect(() => assertEveryTaughtBoxHasASpecimen(s.lessons), s.name).not.toThrow();
+      // A generated specimen is checked against the boxes it renders; the
+      // table-based check would look for it in TEACHING_FORMS and not find it.
+      if (s.generatedSpecimenBoxes !== undefined) {
+        expect(
+          () =>
+            assertGeneratedSpecimenCoversItsLessons(s.name, s.lessons, s.generatedSpecimenBoxes!),
+          s.name,
+        ).not.toThrow();
+      } else {
+        expect(() => assertEveryTaughtBoxHasASpecimen(s.lessons), s.name).not.toThrow();
+      }
       checkedSets += 1;
     }
     /*

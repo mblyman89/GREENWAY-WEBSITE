@@ -179,6 +179,16 @@ const PLACED = BOX_MAP as unknown as Record<
      */
     readonly unclaimed?: readonly string[];
     readonly unclaimedReasons?: Readonly<Record<string, string>>;
+    /**
+     * The /MaxLen this form's CENTS boxes carry, or absent when it does not
+     * split money into two rectangles.
+     *
+     * Measured per form, because it is not the same for all of them (D-04):
+     * Schedule B uses 2, both 941 pages use 3, and the W-2 does not split at
+     * all. The single global constant this replaces would have left all 97 of
+     * Schedule B's cents boxes empty.
+     */
+    readonly centsMaxLen?: number;
   }
 >;
 
@@ -257,8 +267,23 @@ const MONEY_SLOT_IS_LAST = true;
  * field per box and the filed specimen prints `11029.32` whole. So "is there a
  * cents box" is a fact about a particular form's layout, and it is read from
  * that form rather than assumed from a width.
+ *
+ * D-04, THE SEQUEL: this used to be a single global `3`, which was true of the
+ * only two forms then rendered. Schedule B (Form 941) uses `/MaxLen` **2**, so
+ * under the constant all 97 of its cents boxes would have found no match and
+ * stayed empty while the dollars box held the whole figure. Widening it to
+ * "2 or 3" is also wrong - W-2 box 12 uses `/MaxLen` 2 for its CODE boxes, and
+ * a global widening would start splitting box 12's amounts into a code box.
+ *
+ * So it is measured per form by the derivation script and read from the box
+ * map. `null` means "this form does not split money", which is the W-2.
  */
-const CENTS_MAX_LEN = 3;
+const DEFAULT_CENTS_MAX_LEN = 3;
+
+/** The cents `/MaxLen` for one page, from the measured box map. */
+export function centsMaxLenFor(pageKey: string): number {
+  return PLACED[pageKey]?.centsMaxLen ?? DEFAULT_CENTS_MAX_LEN;
+}
 
 /**
  * How money is printed ON THE PAPER.
@@ -447,7 +472,10 @@ export function facsimileBoxes(
       slots: slotsFor(
         rects,
         paperText(r.box),
-        r.box.notComputedYet !== null,
+        // Either reason to print nothing. `paperText` already honours both;
+        // the SPLIT path did not, so a correctly-blank money box printed
+        // "0 00" in its two rectangles. See D-07.
+        r.box.notComputedYet !== null || r.box.blankOnPurpose !== null,
         r.box.measure === "money",
         r.box.amountCents,
         Object.prototype.hasOwnProperty.call(columnOne, r.box.box)
@@ -456,6 +484,7 @@ export function facsimileBoxes(
         Object.prototype.hasOwnProperty.call(identity, r.box.box)
           ? identity[r.box.box]
           : null,
+        centsMaxLenFor(pageKey),
       ),
       hit: unionOf(rects),
     });
@@ -498,11 +527,19 @@ function checkSlots(checks: readonly FieldRect[]): FacsimileSlot[] {
 function slotsFor(
   rects: readonly FieldRect[],
   printed: string,
+  /**
+   * This box prints NOTHING: the figure is unknown, or it is correctly empty.
+   *
+   * Both reasons collapse here because the paper cannot tell them apart - a
+   * blank space is a blank space. Keeping them separate is what let D-07
+   * through: only the first was checked on the dollars/cents split path.
+   */
   notComputed: boolean,
   isMoney: boolean,
   amountCents: number,
   columnOneCents: number | null,
   identityText: readonly string[] | null,
+  centsMaxLen: number,
 ): readonly FacsimileSlot[] {
   const ordered = [...rects].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 
@@ -552,10 +589,10 @@ function slotsFor(
   if (texts.length === 0) return checkSlots(checks);
 
   // Does THIS form split money into dollars and cents? The agency says so per
-  // field, via /MaxLen. See the note on CENTS_MAX_LEN: the 941 splits, the W-2
-  // does not, and neither fact is inferred from a width.
-  const centsRects = texts.filter((r) => r.maxLen === CENTS_MAX_LEN);
-  const wholeRects = texts.filter((r) => r.maxLen !== CENTS_MAX_LEN);
+  // field, via /MaxLen - and the length differs BY FORM (D-04): 3 on the 941,
+  // 2 on Schedule B, and the W-2 does not split at all.
+  const centsRects = texts.filter((r) => r.maxLen === centsMaxLen);
+  const wholeRects = texts.filter((r) => r.maxLen !== centsMaxLen);
 
   // On a two-column row the engine's figure is the RESULT of the row, so it
   // belongs in the LAST slot - see the note at the top of this file about line
@@ -619,7 +656,7 @@ function slotsFor(
       // row, the wage base. Left EMPTY on purpose: see the note at the top of
       // this file. Still emitted, so the reader can see the form has a box
       // there and that we have deliberately not filled it.
-      slots.push({ rect, text: "", role: rect.maxLen === CENTS_MAX_LEN ? "cents" : "dollars" });
+      slots.push({ rect, text: "", role: rect.maxLen === centsMaxLen ? "cents" : "dollars" });
     }
   }
   return [...slots, ...checkSlots(checks)];

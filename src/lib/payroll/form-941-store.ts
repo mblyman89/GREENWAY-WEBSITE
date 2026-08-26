@@ -76,6 +76,7 @@ import {
   type Form941Subject,
 } from "@/lib/payroll/form-941-core";
 import { quarterDateRange, type QuarterRef } from "@/lib/payroll/payroll-deposit-schedule-core";
+import type { ScheduleBPayday } from "@/lib/payroll/form-941-schedule-b-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
@@ -136,6 +137,15 @@ export type Form941Loaded = {
   readonly runCount: number;
   /** The pay dates that fed it, so Michael can tick them off against his diary. */
   readonly payDates: readonly string[];
+  /**
+   * The same lines regrouped BY PAY DATE, for Schedule B.
+   *
+   * Schedule B is a daily form, so it needs the one dimension the return itself
+   * throws away: which payday each figure landed on. Built from the same
+   * `usableLines` the return is built from, joined run_id -> pay_date, so the
+   * two cannot disagree about the quarter's totals.
+   */
+  readonly paydays: readonly ScheduleBPayday[];
   /**
    * Lines that predate migration 0199 and therefore do not know their own tax
    * split. Excluded from the return and reported, never treated as zero.
@@ -325,6 +335,47 @@ export async function loadForm941(quarter: QuarterRef): Promise<Form941LoadResul
     buckets.set(key, bucket);
   }
 
+  /* ── 4b. sum per PAYDAY, for Schedule B ─────────────────────────────────── */
+
+  const payDateOf = new Map(runs.map((r) => [r.id, r.pay_date]));
+  const perPayday = new Map<string, ScheduleBPayday>();
+
+  for (const l of usableLines) {
+    const payDate = payDateOf.get(l.run_id);
+    // A line whose run is not in `runs` cannot happen - the lines were read BY
+    // those run ids - but a silent `?? ""` would put a whole payday on a date
+    // Schedule B has no space for.
+    if (payDate === undefined) continue;
+    const prior = perPayday.get(payDate);
+    const add: ScheduleBPayday = {
+      payDate,
+      federalIncomeTaxCents: cents(l.federal_income_tax_cents),
+      employeeFicaWithheldCents:
+        cents(l.oasdi_employee_cents) +
+        cents(l.medicare_employee_cents) +
+        cents(l.addl_medicare_employee_cents),
+      oasdiWagesCents: cents(l.oasdi_wages_cents),
+      medicareWagesCents: cents(l.medicare_wages_cents),
+    };
+    perPayday.set(
+      payDate,
+      prior === undefined
+        ? add
+        : {
+            payDate,
+            federalIncomeTaxCents: prior.federalIncomeTaxCents + add.federalIncomeTaxCents,
+            employeeFicaWithheldCents:
+              prior.employeeFicaWithheldCents + add.employeeFicaWithheldCents,
+            oasdiWagesCents: prior.oasdiWagesCents + add.oasdiWagesCents,
+            medicareWagesCents: prior.medicareWagesCents + add.medicareWagesCents,
+          },
+    );
+  }
+
+  const paydays = [...perPayday.values()].sort((a, b) =>
+    a.payDate < b.payDate ? -1 : a.payDate > b.payDate ? 1 : 0,
+  );
+
   const subjects: Form941Subject[] = [...buckets.entries()].map(([subjectId, b]) => ({
     subjectId,
     displayName: b.displayName,
@@ -356,6 +407,7 @@ export async function loadForm941(quarter: QuarterRef): Promise<Form941LoadResul
     result: buildForm941(request),
     runCount: runs.length,
     payDates: runs.map((r) => r.pay_date),
+    paydays,
     linesMissingTaxDetail,
     twelfthDay: { date: twelfth, periodFound },
     voidedRunsExcluded,

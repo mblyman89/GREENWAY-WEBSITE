@@ -123,3 +123,37 @@ first four characters of the name the EIN was issued to. Greenway trades as
 GREENWAY MARIJUANA but the EIN belongs to LYMAN'S MARIJUANA, so printing the
 trading name in the name box is a mismatch, and a mismatched return does not
 post to the right account.
+
+────────────────────────────────────────────────────────────────────────────
+SCHEDULE B (FORM 941) - ADDED books-62
+────────────────────────────────────────────────────────────────────────────
+
+Michael, 26 Aug 2026: "I am a schedule b filer, so we don't need to compute
+the monthly payment." His filed Q2 2026 return confirms it: line 16's monthly
+grid is blank and the semiweekly tick is the one that applies.
+
+  public/forms/irs/f941sb.pdf
+    URL     https://www.irs.gov/pub/irs-pdf/f941sb.pdf
+    bytes   97028
+    sha256  95a62159c8367fc50e6b5445f7d80f9a00ac7cdf56d224240fc2776cb545ab63
+    human   Schedule B (Form 941) (Rev. March 2024)
+    art     public/forms/art/941sb.svg  (420859 bytes, pdftocairo -svg)
+
+  MEASURED, not assumed: 610.976 x 791.968 pt, 212 widgets (208 text +
+  4 check), maxLen distribution {None:102, 2:97, 1:13}, 0 comb fields.
+  The cents boxes are /MaxLen 2, NOT 3 - see D-04.
+
+Instruction PDFs read for the quotes (not committed; mirrored as text):
+    https://www.irs.gov/pub/irs-pdf/i941sb.pdf
+    sha256  c0d4a090da22df63019c679d518f5779b2f024c4964494ce898c37a2ab8b033a
+    mirror  docs/authorities/federal/irs-instructions-941-schedule-b-2025.txt
+
+    https://www.irs.gov/pub/irs-pdf/i941.pdf
+    sha256  f4a13d6cab661428e1109f83df14400f80e33accd984b4fde47feb5f68068e77
+
+The mirror was generated with PLAIN `pdftotext` rather than `-layout`: the
+instructions are set in two columns, and -layout interleaves them, which
+breaks verbatim substring verification.
+
+17 U.S.C. §105 - works of the United States Government are not subject to
+copyright, so the blank form and its instructions may be redistributed.

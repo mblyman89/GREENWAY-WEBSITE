@@ -954,6 +954,50 @@ the 940 (10), and the W-2's zero is pinned so adding an untaught box there is a
 deliberate decision. **17 untaught boxes across two federal forms** is the real
 remaining teaching backlog.
 
+### books-62: Schedule B, and three defects a green test suite could not see
+
+Michael: *"I am a schedule b filer, so we don't need to compute the monthly
+payment, we need to compute the bi weekly payment figure and add it to that form
+next."* Confirmed against his filed Q2 2026 return: line 16's monthly grid is
+blank, the semiweekly tick is the one that applies, and Schedule B is required.
+
+One correction he should know: Schedule B is a **daily** liability form - 31
+numbered spaces per month - not a fortnightly one. The figure is computed per
+payday as asked; the form files it by pay date. His cycle fills 7 of 93 spaces.
+
+The reconciliation is the whole job. `scheduleBLiability` derives the employer
+share as the RESIDUAL the 941 implies (line 5a + 5c minus employee FICA by
+statutory rate), allocates it by largest remainder, and then REFUSES rather
+than drawing a schedule whose total is not line 12 - see D-05. His Q2 ties at
+14,204.57.
+
+Three defects, in `docs/DEFECTS.md`:
+
+- **D-04**, caught one step before shipping: `CENTS_MAX_LEN` was a single global
+  3. Schedule B uses 2, and W-2 box 12 uses 2 for its CODE boxes, so neither
+  the constant nor a widened constant is right. The value is now measured per
+  page and carried in the box map.
+- **D-06**: only 1 of line 16's 3 ticks was bound to a box. The unreachable
+  ones included the **semiweekly** tick - the one that declares this schedule
+  is attached. They are now bound by the SENTENCE the IRS prints beside each,
+  never by field index: `c2_1[1]` and `c2_1[2]` are indistinguishable by name
+  and transposing them tells the IRS a semiweekly depositor is monthly.
+- **D-07**, and it is the lesson of the slice: every deliberately-blank money
+  box printed `0 00` on any form that splits cents - **86 of the 93 day cells**.
+  `paperText` honoured `blankOnPurpose`; the dollars/cents SPLIT path did not.
+  On a daily liability form 86 zeros assert that wages were paid on 86 days.
+  **Every arithmetic test was green and stayed green.** It was found by LOOKING
+  at the rendered page once (rule 130(c)), and it would not have been found by
+  reading the figures as text either, because `0 00` reads as a real entry.
+
+Also this slice: a seventh lesson set had to be handed to the books-54/55
+cross-reference gates, and Schedule B is printed paper - so labelling it
+`screen-only` would have created exactly the stale exemption those gates warn
+about. Instead a set may now declare a GENERATED specimen and is checked
+bidirectionally against the boxes it really renders. That immediately caught two
+dead ties in the new lessons, pointing at `form_941` boxes `ein` and `name`
+which do not exist on a line-organised specimen.
+
 ### books-61: the form as it would look if you were holding it
 
 Michael, after seeing books-60: *"When I had asked for the physical form to be

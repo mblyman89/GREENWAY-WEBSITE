@@ -300,7 +300,9 @@
   "copies": [
    {
     "16": [
-     "topmostSubform[0].Page2[0].c2_1[0]"
+     "topmostSubform[0].Page2[0].c2_1[0]",
+     "topmostSubform[0].Page2[0].c2_1[1]",
+     "topmostSubform[0].Page2[0].c2_1[2]"
     ],
     "17": [
      "topmostSubform[0].Page2[0].c2_2[0]"
@@ -326,7 +328,9 @@
   "midline": [],
   "placed": {
    "16": [
-    "topmostSubform[0].Page2[0].c2_1[0]"
+    "topmostSubform[0].Page2[0].c2_1[0]",
+    "topmostSubform[0].Page2[0].c2_1[1]",
+    "topmostSubform[0].Page2[0].c2_1[2]"
    ],
    "17": [
     "topmostSubform[0].Page2[0].c2_2[0]"
@@ -343,8 +347,6 @@
    ]
   },
   "unclaimed": [
-   "topmostSubform[0].Page2[0].c2_1[1]",
-   "topmostSubform[0].Page2[0].c2_1[2]",
    "topmostSubform[0].Page2[0].c2_4[0]",
    "topmostSubform[0].Page2[0].c2_4[1]",
    "topmostSubform[0].Page2[0].c2_5[0]",
@@ -374,8 +376,6 @@
    "topmostSubform[0].Page2[0].f2_9[0]"
   ],
   "unclaimedReasons": {
-   "topmostSubform[0].Page2[0].c2_1[1]": "Line 16 'monthly schedule depositor' tick. The profile records a deposit schedule, but ticking it here would also assert the monthly liability grid below it, which we do not compute.",
-   "topmostSubform[0].Page2[0].c2_1[2]": "Line 16 'semiweekly schedule depositor' tick. Not ticked, for the reason given on the monthly tick.",
    "topmostSubform[0].Page2[0].c2_4[0]": "Third-party designee 'Yes' tick. His decision, not a computation.",
    "topmostSubform[0].Page2[0].c2_4[1]": "Third-party designee 'No' tick. His decision, not a computation.",
    "topmostSubform[0].Page2[0].c2_5[0]": "Paid preparer 'check if self-employed'. Greenway uses no paid preparer.",
@@ -403,6 +403,947 @@
    "topmostSubform[0].Page2[0].f2_7[0]": "Line 16 total liability for the quarter, dollars. This one IS known - the paper says it must equal line 12 - but it is the total of three figures above that we are refusing to invent, and printing a total under three blank rows would look like the rows had been missed rather than declined.",
    "topmostSubform[0].Page2[0].f2_8[0]": "Line 16 total liability for the quarter, cents. See the total dollars box.",
    "topmostSubform[0].Page2[0].f2_9[0]": "Line 17 final date wages were paid. Only entered when the business has closed, which is a fact about the business that no payroll figure implies."
+  }
+ },
+ "941sb": {
+  "centsMaxLen": 2,
+  "copies": [
+   {
+    "calendarYear": [
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_11[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_12[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_13[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_14[0]"
+    ],
+    "ein": [
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_01[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_02[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_03[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_04[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_05[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_06[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_07[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_08[0]",
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_09[0]"
+    ],
+    "m1Total": [
+     "topmostSubform[0].Page1[0].f1_77[0]",
+     "topmostSubform[0].Page1[0].f1_78[0]"
+    ],
+    "m1d1": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_15[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_16[0]"
+    ],
+    "m1d10": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_33[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_34[0]"
+    ],
+    "m1d11": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_35[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_36[0]"
+    ],
+    "m1d12": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_37[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_38[0]"
+    ],
+    "m1d13": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_39[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_40[0]"
+    ],
+    "m1d14": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_41[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_42[0]"
+    ],
+    "m1d15": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_43[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_44[0]"
+    ],
+    "m1d16": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_45[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_46[0]"
+    ],
+    "m1d17": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_47[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_48[0]"
+    ],
+    "m1d18": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_49[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_50[0]"
+    ],
+    "m1d19": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_51[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_52[0]"
+    ],
+    "m1d2": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_17[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_18[0]"
+    ],
+    "m1d20": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_53[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_54[0]"
+    ],
+    "m1d21": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_55[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_56[0]"
+    ],
+    "m1d22": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_57[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_58[0]"
+    ],
+    "m1d23": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_59[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_60[0]"
+    ],
+    "m1d24": [
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_61[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_62[0]"
+    ],
+    "m1d25": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_63[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_64[0]"
+    ],
+    "m1d26": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_65[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_66[0]"
+    ],
+    "m1d27": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_67[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_68[0]"
+    ],
+    "m1d28": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_69[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_70[0]"
+    ],
+    "m1d29": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_71[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_72[0]"
+    ],
+    "m1d3": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_19[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_20[0]"
+    ],
+    "m1d30": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_73[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_74[0]"
+    ],
+    "m1d31": [
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_75[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_76[0]"
+    ],
+    "m1d4": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_21[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_22[0]"
+    ],
+    "m1d5": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_23[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_24[0]"
+    ],
+    "m1d6": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_25[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_26[0]"
+    ],
+    "m1d7": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_27[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_28[0]"
+    ],
+    "m1d8": [
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_29[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_30[0]"
+    ],
+    "m1d9": [
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_31[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_32[0]"
+    ],
+    "m2Total": [
+     "topmostSubform[0].Page1[0].f1_141[0]",
+     "topmostSubform[0].Page1[0].f1_142[0]"
+    ],
+    "m2d1": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_79[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_80_[0]"
+    ],
+    "m2d10": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_97[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_98[0]"
+    ],
+    "m2d11": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_99[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_100[0]"
+    ],
+    "m2d12": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_101[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_102[0]"
+    ],
+    "m2d13": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_103[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_104[0]"
+    ],
+    "m2d14": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_105[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_106[0]"
+    ],
+    "m2d15": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_107[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_108[0]"
+    ],
+    "m2d16": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_109[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_110[0]"
+    ],
+    "m2d17": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_111[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_112[0]"
+    ],
+    "m2d18": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_113[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_114[0]"
+    ],
+    "m2d19": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_115[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_116[0]"
+    ],
+    "m2d2": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_81[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_82[0]"
+    ],
+    "m2d20": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_117[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_118[0]"
+    ],
+    "m2d21": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_119[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_120[0]"
+    ],
+    "m2d22": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_121[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_122[0]"
+    ],
+    "m2d23": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_123[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_124[0]"
+    ],
+    "m2d24": [
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_125[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_126[0]"
+    ],
+    "m2d25": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_127[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_128[0]"
+    ],
+    "m2d26": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_129[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_130[0]"
+    ],
+    "m2d27": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_131[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_132[0]"
+    ],
+    "m2d28": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_133[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_134[0]"
+    ],
+    "m2d29": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_135[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_136[0]"
+    ],
+    "m2d3": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_83[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_84[0]"
+    ],
+    "m2d30": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_137[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_138[0]"
+    ],
+    "m2d31": [
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_139[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_140[0]"
+    ],
+    "m2d4": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_85[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_86[0]"
+    ],
+    "m2d5": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_87[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_88[0]"
+    ],
+    "m2d6": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_89[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_90[0]"
+    ],
+    "m2d7": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_91[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_92[0]"
+    ],
+    "m2d8": [
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_93[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_94[0]"
+    ],
+    "m2d9": [
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_95[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_96[0]"
+    ],
+    "m3Total": [
+     "topmostSubform[0].Page1[0].f1_205[0]",
+     "topmostSubform[0].Page1[0].f1_206[0]"
+    ],
+    "m3d1": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_143[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_144[0]"
+    ],
+    "m3d10": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_161[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_162[0]"
+    ],
+    "m3d11": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_163[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_164[0]"
+    ],
+    "m3d12": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_165[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_166[0]"
+    ],
+    "m3d13": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_167[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_168[0]"
+    ],
+    "m3d14": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_169[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_170[0]"
+    ],
+    "m3d15": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_171[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_172[0]"
+    ],
+    "m3d16": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_173[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_174[0]"
+    ],
+    "m3d17": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_175[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_176[0]"
+    ],
+    "m3d18": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_177[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_178[0]"
+    ],
+    "m3d19": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_179[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_180[0]"
+    ],
+    "m3d2": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_145[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_146[0]"
+    ],
+    "m3d20": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_181[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_182[0]"
+    ],
+    "m3d21": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_183[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_184[0]"
+    ],
+    "m3d22": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_185[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_186[0]"
+    ],
+    "m3d23": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_187[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_188[0]"
+    ],
+    "m3d24": [
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_189[0]",
+     "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_190[0]"
+    ],
+    "m3d25": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_191[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_192[0]"
+    ],
+    "m3d26": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_193[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_194[0]"
+    ],
+    "m3d27": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_195[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_196[0]"
+    ],
+    "m3d28": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_197[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_198[0]"
+    ],
+    "m3d29": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_199[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_200[0]"
+    ],
+    "m3d3": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_147[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_148[0]"
+    ],
+    "m3d30": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_201[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_202[0]"
+    ],
+    "m3d31": [
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_203[0]",
+     "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_204[0]"
+    ],
+    "m3d4": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_149[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_150[0]"
+    ],
+    "m3d5": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_151[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_152[0]"
+    ],
+    "m3d6": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_153[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_154[0]"
+    ],
+    "m3d7": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_155[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_156[0]"
+    ],
+    "m3d8": [
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_157[0]",
+     "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_158[0]"
+    ],
+    "m3d9": [
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_159[0]",
+     "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_160[0]"
+    ],
+    "name": [
+     "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_10[0]"
+    ],
+    "quarterTotal": [
+     "topmostSubform[0].Page1[0].f1_207[0]",
+     "topmostSubform[0].Page1[0].f1_208[0]"
+    ]
+   }
+  ],
+  "copyPitchPt": 791.968,
+  "labels": [
+   "calendarYear",
+   "ein",
+   "m1Total",
+   "m1d1",
+   "m1d10",
+   "m1d11",
+   "m1d12",
+   "m1d13",
+   "m1d14",
+   "m1d15",
+   "m1d16",
+   "m1d17",
+   "m1d18",
+   "m1d19",
+   "m1d2",
+   "m1d20",
+   "m1d21",
+   "m1d22",
+   "m1d23",
+   "m1d24",
+   "m1d25",
+   "m1d26",
+   "m1d27",
+   "m1d28",
+   "m1d29",
+   "m1d3",
+   "m1d30",
+   "m1d31",
+   "m1d4",
+   "m1d5",
+   "m1d6",
+   "m1d7",
+   "m1d8",
+   "m1d9",
+   "m2Total",
+   "m2d1",
+   "m2d10",
+   "m2d11",
+   "m2d12",
+   "m2d13",
+   "m2d14",
+   "m2d15",
+   "m2d16",
+   "m2d17",
+   "m2d18",
+   "m2d19",
+   "m2d2",
+   "m2d20",
+   "m2d21",
+   "m2d22",
+   "m2d23",
+   "m2d24",
+   "m2d25",
+   "m2d26",
+   "m2d27",
+   "m2d28",
+   "m2d29",
+   "m2d3",
+   "m2d30",
+   "m2d31",
+   "m2d4",
+   "m2d5",
+   "m2d6",
+   "m2d7",
+   "m2d8",
+   "m2d9",
+   "m3Total",
+   "m3d1",
+   "m3d10",
+   "m3d11",
+   "m3d12",
+   "m3d13",
+   "m3d14",
+   "m3d15",
+   "m3d16",
+   "m3d17",
+   "m3d18",
+   "m3d19",
+   "m3d2",
+   "m3d20",
+   "m3d21",
+   "m3d22",
+   "m3d23",
+   "m3d24",
+   "m3d25",
+   "m3d26",
+   "m3d27",
+   "m3d28",
+   "m3d29",
+   "m3d3",
+   "m3d30",
+   "m3d31",
+   "m3d4",
+   "m3d5",
+   "m3d6",
+   "m3d7",
+   "m3d8",
+   "m3d9",
+   "name",
+   "quarterTotal"
+  ],
+  "midline": [],
+  "placed": {
+   "calendarYear": [
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_11[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_12[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_13[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_14[0]"
+   ],
+   "ein": [
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_01[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_02[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_03[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_04[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_05[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_06[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_07[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_08[0]",
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_09[0]"
+   ],
+   "m1Total": [
+    "topmostSubform[0].Page1[0].f1_77[0]",
+    "topmostSubform[0].Page1[0].f1_78[0]"
+   ],
+   "m1d1": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_15[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_16[0]"
+   ],
+   "m1d10": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_33[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_34[0]"
+   ],
+   "m1d11": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_35[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_36[0]"
+   ],
+   "m1d12": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_37[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_38[0]"
+   ],
+   "m1d13": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_39[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_40[0]"
+   ],
+   "m1d14": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_41[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_42[0]"
+   ],
+   "m1d15": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_43[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_44[0]"
+   ],
+   "m1d16": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_45[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_46[0]"
+   ],
+   "m1d17": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_47[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_48[0]"
+   ],
+   "m1d18": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_49[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_50[0]"
+   ],
+   "m1d19": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_51[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_52[0]"
+   ],
+   "m1d2": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_17[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_18[0]"
+   ],
+   "m1d20": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_53[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_54[0]"
+   ],
+   "m1d21": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_55[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_56[0]"
+   ],
+   "m1d22": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_57[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_58[0]"
+   ],
+   "m1d23": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_59[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_60[0]"
+   ],
+   "m1d24": [
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_61[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month1[0].f1_62[0]"
+   ],
+   "m1d25": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_63[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_64[0]"
+   ],
+   "m1d26": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_65[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_66[0]"
+   ],
+   "m1d27": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_67[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_68[0]"
+   ],
+   "m1d28": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_69[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_70[0]"
+   ],
+   "m1d29": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_71[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_72[0]"
+   ],
+   "m1d3": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_19[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_20[0]"
+   ],
+   "m1d30": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_73[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_74[0]"
+   ],
+   "m1d31": [
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_75[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month1[0].f1_76[0]"
+   ],
+   "m1d4": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_21[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_22[0]"
+   ],
+   "m1d5": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_23[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_24[0]"
+   ],
+   "m1d6": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_25[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_26[0]"
+   ],
+   "m1d7": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_27[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_28[0]"
+   ],
+   "m1d8": [
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_29[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month1[0].f1_30[0]"
+   ],
+   "m1d9": [
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_31[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month1[0].f1_32[0]"
+   ],
+   "m2Total": [
+    "topmostSubform[0].Page1[0].f1_141[0]",
+    "topmostSubform[0].Page1[0].f1_142[0]"
+   ],
+   "m2d1": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_79[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_80_[0]"
+   ],
+   "m2d10": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_97[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_98[0]"
+   ],
+   "m2d11": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_99[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_100[0]"
+   ],
+   "m2d12": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_101[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_102[0]"
+   ],
+   "m2d13": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_103[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_104[0]"
+   ],
+   "m2d14": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_105[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_106[0]"
+   ],
+   "m2d15": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_107[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_108[0]"
+   ],
+   "m2d16": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_109[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_110[0]"
+   ],
+   "m2d17": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_111[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_112[0]"
+   ],
+   "m2d18": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_113[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_114[0]"
+   ],
+   "m2d19": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_115[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_116[0]"
+   ],
+   "m2d2": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_81[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_82[0]"
+   ],
+   "m2d20": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_117[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_118[0]"
+   ],
+   "m2d21": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_119[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_120[0]"
+   ],
+   "m2d22": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_121[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_122[0]"
+   ],
+   "m2d23": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_123[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_124[0]"
+   ],
+   "m2d24": [
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_125[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month2[0].f1_126[0]"
+   ],
+   "m2d25": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_127[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_128[0]"
+   ],
+   "m2d26": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_129[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_130[0]"
+   ],
+   "m2d27": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_131[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_132[0]"
+   ],
+   "m2d28": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_133[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_134[0]"
+   ],
+   "m2d29": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_135[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_136[0]"
+   ],
+   "m2d3": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_83[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_84[0]"
+   ],
+   "m2d30": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_137[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_138[0]"
+   ],
+   "m2d31": [
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_139[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month2[0].f1_140[0]"
+   ],
+   "m2d4": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_85[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_86[0]"
+   ],
+   "m2d5": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_87[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_88[0]"
+   ],
+   "m2d6": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_89[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_90[0]"
+   ],
+   "m2d7": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_91[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_92[0]"
+   ],
+   "m2d8": [
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_93[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month2[0].f1_94[0]"
+   ],
+   "m2d9": [
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_95[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month2[0].f1_96[0]"
+   ],
+   "m3Total": [
+    "topmostSubform[0].Page1[0].f1_205[0]",
+    "topmostSubform[0].Page1[0].f1_206[0]"
+   ],
+   "m3d1": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_143[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_144[0]"
+   ],
+   "m3d10": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_161[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_162[0]"
+   ],
+   "m3d11": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_163[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_164[0]"
+   ],
+   "m3d12": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_165[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_166[0]"
+   ],
+   "m3d13": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_167[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_168[0]"
+   ],
+   "m3d14": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_169[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_170[0]"
+   ],
+   "m3d15": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_171[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_172[0]"
+   ],
+   "m3d16": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_173[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_174[0]"
+   ],
+   "m3d17": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_175[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_176[0]"
+   ],
+   "m3d18": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_177[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_178[0]"
+   ],
+   "m3d19": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_179[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_180[0]"
+   ],
+   "m3d2": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_145[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_146[0]"
+   ],
+   "m3d20": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_181[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_182[0]"
+   ],
+   "m3d21": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_183[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_184[0]"
+   ],
+   "m3d22": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_185[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_186[0]"
+   ],
+   "m3d23": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_187[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_188[0]"
+   ],
+   "m3d24": [
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_189[0]",
+    "topmostSubform[0].Page1[0].Day17-24_Month3[0].f1_190[0]"
+   ],
+   "m3d25": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_191[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_192[0]"
+   ],
+   "m3d26": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_193[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_194[0]"
+   ],
+   "m3d27": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_195[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_196[0]"
+   ],
+   "m3d28": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_197[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_198[0]"
+   ],
+   "m3d29": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_199[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_200[0]"
+   ],
+   "m3d3": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_147[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_148[0]"
+   ],
+   "m3d30": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_201[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_202[0]"
+   ],
+   "m3d31": [
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_203[0]",
+    "topmostSubform[0].Page1[0].Day25-31_Month3[0].f1_204[0]"
+   ],
+   "m3d4": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_149[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_150[0]"
+   ],
+   "m3d5": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_151[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_152[0]"
+   ],
+   "m3d6": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_153[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_154[0]"
+   ],
+   "m3d7": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_155[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_156[0]"
+   ],
+   "m3d8": [
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_157[0]",
+    "topmostSubform[0].Page1[0].Day1-8_Month3[0].f1_158[0]"
+   ],
+   "m3d9": [
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_159[0]",
+    "topmostSubform[0].Page1[0].Day9-16_Month3[0].f1_160[0]"
+   ],
+   "name": [
+    "topmostSubform[0].Page1[0].Header-Entity[0].Entity[0].f1_10[0]"
+   ],
+   "quarterTotal": [
+    "topmostSubform[0].Page1[0].f1_207[0]",
+    "topmostSubform[0].Page1[0].f1_208[0]"
+   ]
+  },
+  "unclaimed": [
+   "topmostSubform[0].Page1[0].c1_1[0]",
+   "topmostSubform[0].Page1[0].c1_1[1]",
+   "topmostSubform[0].Page1[0].c1_1[2]",
+   "topmostSubform[0].Page1[0].c1_1[3]"
+  ],
+  "unclaimedReasons": {
+   "topmostSubform[0].Page1[0].c1_1[0]": "Schedule B 'Report for this Quarter' tick, quarter 1. The quarter is printed in the page heading and in the calendar-year box, both filled from the period being viewed. Ticking a box on a schedule filed under penalties of perjury is his signature, not our computation.",
+   "topmostSubform[0].Page1[0].c1_1[1]": "Quarter 2 tick. Same reason as quarter 1.",
+   "topmostSubform[0].Page1[0].c1_1[2]": "Quarter 3 tick. Same reason as quarter 1.",
+   "topmostSubform[0].Page1[0].c1_1[3]": "Quarter 4 tick. Same reason as quarter 1."
   }
  },
  "w2-copyb": {

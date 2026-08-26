@@ -1772,10 +1772,30 @@ export function assertEveryTaughtBoxHasASpecimen(lessons: readonly BoxLesson[]):
  * lesson modules, or the teaching specimen — the thing that is supposed to be
  * checkable on its own — would depend on the material it checks.
  */
-export function assertEveryTieResolves(lessons: readonly BoxLesson[]): void {
+export function assertEveryTieResolves(
+  lessons: readonly BoxLesson[],
+  /**
+   * Box ids of forms whose specimen is GENERATED, keyed by formId.
+   *
+   * Without this, a tie between two boxes of the SAME generated form - the
+   * month totals of Schedule B point at its quarter total - reads as a tie to
+   * a form with no specimen, which is the one thing this gate exists to catch.
+   */
+  generatedForms: Readonly<Record<string, readonly string[]>> = {},
+): void {
   let checked = 0;
   for (const l of lessons) {
     for (const t of l.tiesTo) {
+      const generated = generatedForms[t.formId];
+      if (generated !== undefined) {
+        assert(
+          generated.includes(t.box),
+          `${l.formId} box ${l.box} ties to ${t.formId} box ${t.box}, which that form's ` +
+            `generated specimen does not render. Its boxes are: ${generated.join(", ")}`,
+        );
+        checked += 1;
+        continue;
+      }
       const spec = TEACHING_FORMS[t.formId];
       assert(
         spec !== undefined,
@@ -1865,9 +1885,10 @@ export type LessonSetKind = "printed-form" | "screen-only";
  * switch the gate off. Raising it is fine; LOWERING it means a lesson module
  * was deleted, and that must be a deliberate, commented act.
  *
- * MEASURED at books-56: 940, 941, W-2, W-3, WA, 941-confirmation = 6.
+ * MEASURED at books-62: 940, 941, W-2, W-3, WA, 941-confirmation,
+ * 941-schedule-B = 7.
  */
-export const MIN_LESSON_SETS = 6;
+export const MIN_LESSON_SETS = 7;
 
 /**
  * How many lesson sets may be exempt from the printed-specimen check.
@@ -1889,7 +1910,58 @@ export type NamedLessonSet = {
   readonly name: string;
   readonly lessons: readonly BoxLesson[];
   readonly kind: LessonSetKind;
+  /**
+   * Box ids of a specimen that is GENERATED rather than typed as a table.
+   *
+   * Schedule B is printed paper, so it is not `screen-only`; but its specimen
+   * is 93 calendar cells plus four totals plus three header boxes, produced by
+   * `scheduleBTeachingBoxes`. Typing 100 `TeachingBox` rows whose captions are
+   * "4" through "31" would add no information and could drift from the grid.
+   * The trap this closes: a set supplying its own box list could name a
+   * convenient subset, so the check below runs in BOTH directions.
+   */
+  readonly generatedSpecimenBoxes?: readonly string[];
 };
+
+/**
+ * Every lesson matches a box the generated specimen really renders, and every
+ * rendered box has a lesson. Bidirectional because a set that supplies its own
+ * box list would otherwise be free to hand over only the boxes it has covered.
+ */
+export function assertGeneratedSpecimenCoversItsLessons(
+  name: string,
+  lessons: readonly BoxLesson[],
+  specimenBoxes: readonly string[],
+): void {
+  assert(
+    specimenBoxes.length > 0,
+    `lesson set "${name}" declares a generated specimen but handed over no boxes, so the ` +
+      `specimen check would pass having compared nothing`,
+  );
+  const inSpecimen = new Set(specimenBoxes);
+  assert(
+    inSpecimen.size === specimenBoxes.length,
+    `lesson set "${name}" generated a specimen with duplicate box ids, which lets a missing ` +
+      `box hide behind a repeated one`,
+  );
+  const taught = new Set<string>();
+  for (const l of lessons) {
+    assert(
+      inSpecimen.has(l.box),
+      `lesson set "${name}" teaches box ${l.box}, which its generated specimen does not ` +
+        `render, so the lesson cannot be reached before payroll exists`,
+    );
+    assert(!taught.has(l.box), `lesson set "${name}" teaches box ${l.box} twice`);
+    taught.add(l.box);
+  }
+  for (const box of specimenBoxes) {
+    assert(
+      taught.has(box),
+      `lesson set "${name}" renders box ${box} with no lesson behind it, so clicking it ` +
+        `opens an empty overlay`,
+    );
+  }
+}
 
 export function assertEveryLessonSetWasHandedOver(
   sets: readonly NamedLessonSet[],
@@ -1930,6 +2002,16 @@ export function assertEveryLessonSetWasHandedOver(
       `Sets handed over: ${sets.map((s) => s.name).join(", ")}`,
   );
 
+  /*
+   * Collected across ALL sets before any is checked, so a tie from one form
+   * into another form's generated specimen resolves regardless of table order.
+   */
+  const generatedForms: Record<string, readonly string[]> = {};
+  for (const s of sets) {
+    if (s.generatedSpecimenBoxes === undefined) continue;
+    for (const l of s.lessons) generatedForms[l.formId] = s.generatedSpecimenBoxes;
+  }
+
   const seenNames = new Set<string>();
   for (const s of sets) {
     assert(
@@ -1952,11 +2034,25 @@ export function assertEveryLessonSetWasHandedOver(
      * still points Michael at boxes on real forms, and those three ties into
      * `form_w3` are exactly the ones that were dead from books-48 to books-55.
      */
-    assertEveryTieResolves(s.lessons);
+    assertEveryTieResolves(s.lessons, generatedForms);
 
     if (s.kind === "printed-form") {
-      assertEveryTaughtBoxHasASpecimen(s.lessons);
+      /*
+       * A generated specimen is checked against the boxes it really renders,
+       * not against TEACHING_FORMS. It is still PRINTED paper, so it earns no
+       * exemption from the cap below - see `generatedSpecimenBoxes`.
+       */
+      if (s.generatedSpecimenBoxes !== undefined) {
+        assertGeneratedSpecimenCoversItsLessons(s.name, s.lessons, s.generatedSpecimenBoxes);
+      } else {
+        assertEveryTaughtBoxHasASpecimen(s.lessons);
+      }
     } else {
+      assert(
+        s.generatedSpecimenBoxes === undefined,
+        `lesson set "${s.name}" is screen-only yet supplies generated specimen boxes; a screen ` +
+          `has no paper, so one of the two claims is wrong`,
+      );
       /*
        * The exemption is verified, not taken on trust, in both directions.
        *

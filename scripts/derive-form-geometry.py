@@ -119,6 +119,16 @@ SOURCES: list[Source] = [
         url="https://www.irs.gov/pub/irs-pdf/f941.pdf",
         human="Form 941 (Rev. March 2026), page 2",
     ),
+    # Schedule B is a SEPARATE artifact, not a page of f941.pdf. Michael is a
+    # semiweekly depositor, so for Greenway this schedule is mandatory and the
+    # line-16 monthly grid must stay blank. See D-05.
+    Source(
+        key="941sb",
+        pdf="public/forms/irs/f941sb.pdf",
+        page=1,
+        url="https://www.irs.gov/pub/irs-pdf/f941sb.pdf",
+        human="Schedule B (Form 941) (Rev. March 2024)",
+    ),
     Source(
         key="w2-copyb",
         pdf="public/forms/irs/fw2.pdf",

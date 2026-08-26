@@ -1,0 +1,477 @@
+Instructions for Schedule B
+(Form 941)
+(Rev. June 2025)
+
+Use with the March 2024 revision of Schedule B (Form 941)
+Report of Tax Liability for Semiweekly Schedule Depositors
+Section references are to the Internal Revenue Code
+unless otherwise noted.
+
+Future Developments
+For the latest information about developments related to
+Schedule B and its instructions, such as legislation
+enacted after they were published, go to IRS.gov/
+Form941.
+
+Reminders
+The COVID-19 related credit for qualified sick and
+family leave wages is limited to leave taken after
+March 31, 2020, and before October 1, 2021, and may
+no longer be claimed on Form 941. Effective for tax
+periods beginning after December 31, 2023, the lines
+used to claim the credit for qualified sick and family leave
+wages have been removed from Form 941 because it
+would be extremely rare for an employer to pay wages
+after December 31, 2023, for qualified sick and family
+leave taken after March 31, 2020, and before October 1,
+2021. Therefore, the instructions on adjusting your tax
+liability for the nonrefundable portion of this credit have
+been removed from these instructions. If you're eligible to
+claim the credit for qualified sick and family leave wages
+because you paid the wages after December 31, 2023, for
+an earlier applicable leave period, file Form 941-X,
+Adjusted Employer's QUARTERLY Federal Tax Return or
+Claim for Refund, to claim the credit for qualified sick and
+family leave wages for the quarter that you paid the wages
+after you file Form 941. See the Instructions for Form
+941-X for more information. Also see the March 2023
+revision of these instructions for information on adjusting
+tax liability for the nonrefundable portion of the credit for
+qualified sick and family leave wages, which you may
+need to do when filing Form 941-X.
+Qualified small business payroll tax credit for increasing research activities. For tax years beginning
+before January 1, 2023, a qualified small business may
+elect to claim up to $250,000 of its credit for increasing
+research activities as a payroll tax credit. The Inflation
+Reduction Act of 2022 (the IRA) increases the election
+amount to $500,000 for tax years beginning after
+December 31, 2022. The payroll tax credit election must
+be made on or before the due date of the originally filed
+income tax return (including extensions). The portion of
+the credit used against payroll taxes is allowed in the first
+calendar quarter beginning after the date that the qualified
+small business filed its income tax return. The election
+and determination of the credit amount that will be used
+Feb 18, 2025
+
+against the employer’s payroll taxes are made on Form
+6765, Credit for Increasing Research Activities. The
+amount from Form 6765 must then be reported on Form
+8974, Qualified Small Business Payroll Tax Credit for
+Increasing Research Activities.
+Starting in the first quarter of 2023, the payroll tax credit
+is first used to reduce the employer share of social
+security tax up to $250,000 per quarter and any remaining
+credit reduces the employer share of Medicare tax for the
+quarter. Any remaining credit, after reducing the employer
+share of social security tax and the employer share of
+Medicare tax, is then carried forward to the next quarter.
+Form 8974 is used to determine the amount of the credit
+that can be used in the current quarter. For more
+information about the payroll tax credit, see IRS.gov/
+ResearchPayrollTC. Also see Adjusting tax liability for the
+qualified small business payroll tax credit for increasing
+research activities (Form 941, line 11), later.
+Reporting prior period adjustments. Prior period
+adjustments are reported on Form 941-X or Form 944-X,
+Adjusted Employer's ANNUAL Federal Tax Return or
+Claim for Refund, and aren’t taken into account when
+figuring the tax liability for the current quarter.
+When you file Schedule B with your Form 941, don’t
+change your current quarter tax liability by adjustments
+reported on any Form 941-X or 944-X.
+Amended Schedule B. If you have been assessed a
+failure-to-deposit (FTD) penalty, you may be able to file an
+amended Schedule B. See Correcting Previously
+Reported Tax Liability, later.
+
+General Instructions
+Purpose of Schedule B
+These instructions tell you about Schedule B. To
+determine if you’re a semiweekly schedule depositor, see
+section 11 of Pub. 15, Employer's Tax Guide.
+Federal law requires you, as an employer, to withhold
+certain taxes from your employees’ pay. Each time you
+pay wages, you must withhold—or take out of your
+employees’ pay—certain amounts for federal income tax,
+social security tax, and Medicare tax. You must also
+withhold Additional Medicare Tax from wages you pay to
+an employee in excess of $200,000 in a calendar year.
+Under the withholding system, taxes withheld from your
+employees are credited to your employees in payment of
+their tax liabilities.
+
+Instructions for Schedule B (Form 941) (Rev. 6-2025) Catalog Number 38683X
+Department of the Treasury Internal Revenue Service www.irs.gov
+
+Federal law also requires employers to pay any liability
+for the employer share of social security and Medicare
+taxes. This share of social security and Medicare taxes
+isn’t withheld from employees.
+On Schedule B, list your tax liability for each day. Your
+tax liability is based on the dates wages were paid. Your
+liability includes:
+• The federal income tax you withheld from your
+employees' pay, and
+• Both the employer and employee share of social
+security and Medicare taxes.
+Don’t use Schedule B to show federal tax deposits. The
+IRS gets deposit data from electronic funds transfers.
+The IRS uses Schedule B to determine if you’ve
+deposited your federal employment tax liabilities
+CAUTION on time. If you're a semiweekly schedule depositor
+and you don’t properly complete and file your Schedule B
+with Form 941, the IRS may propose an “averaged” FTD
+penalty. See Deposit Penalties in section 11 of Pub. 15.
+
+!
+
+Who Must File?
+File Schedule B if you’re a semiweekly schedule
+depositor. You’re a semiweekly schedule depositor if you
+reported more than $50,000 of employment taxes in the
+lookback period or accumulated a tax liability of $100,000
+or more on any given day in the current or prior calendar
+year. If you became a semiweekly schedule depositor
+during the quarter, you must complete Schedule B for the
+entire quarter. See section 11 of Pub. 15. The $100,000
+tax liability threshold requiring a next-day deposit is
+determined before you consider any reduction of your
+liability for nonrefundable credits.
+Don’t complete Schedule B if you have a tax
+liability on Form 941, line 12, that is less than
+CAUTION $2,500 during the quarter.
+
+!
+
+When Must You File?
+Schedule B is filed with Form 941. Therefore, the due date
+of Schedule B is the same as the due date for the
+applicable Form 941. In some situations, Schedule B may
+be filed with Form 941-X. See Form 941-X, later, for
+details.
+Don’t file Schedule B as an attachment to Form 944,
+Employer's ANNUAL Federal Tax Return. Instead, if you’re
+a semiweekly schedule depositor that is required to file a
+report of tax liability with Form 944, use Form 945-A,
+Annual Record of Federal Tax Liability.
+
+Specific Instructions
+Completing Schedule B
+Enter Your Business Information
+
+Carefully enter your employer identification number (EIN)
+and name at the top of the schedule. Make sure that they
+exactly match the name of your business and the EIN that
+the IRS assigned to your business and also agree with the
+name and EIN shown on the attached Form 941 or 941-X.
+
+2
+
+Calendar Year
+
+Enter the calendar year that applies to the quarter
+checked.
+
+Check the Box for the Quarter
+
+Under Report for this Quarter at the top of Schedule B,
+check the appropriate box of the quarter for which you’re
+filing this schedule. Make sure the quarter checked on the
+top of the Schedule B matches the quarter checked on
+your Form 941 or 941-X.
+
+Enter Your Tax Liability by Month
+
+Schedule B is divided into the 3 months that make up a
+quarter of a year. Each month has 31 numbered spaces
+that correspond to the dates of a typical month. Enter your
+tax liabilities in the spaces that correspond to the dates
+you paid wages to your employees, not the date payroll
+liabilities were accrued or deposits were made.
+For example, if your payroll period ended on December
+31, 2025, and you paid the wages for that period on
+January 6, 2026, you would:
+• Go to Month 1 (because January is the first month of
+the quarter), and
+• Enter your tax liability on line 6 (because line 6
+represents the sixth day of the month).
+Make sure you have checked the appropriate box
+
+TIP in Part 2 of Form 941 to show that you’re a
+semiweekly schedule depositor.
+
+Example 1. Cedar Co. is a semiweekly schedule
+depositor that pays wages for each month on the last day
+of the month. On December 24, 2025, Cedar Co. also
+paid its employees year-end bonuses (subject to
+employment taxes). Cedar Co. must report employment
+tax liabilities on Schedule B for the fourth quarter
+(October, November, December) as follows.
+Month
+1 (October)
+2 (November)
+3 (December)
+3 (December)
+
+Lines for dates wages were paid
+line 31 (payday, last day of the month)
+line 30 (payday, last day of the month)
+line 24 (bonus paid December 24, 2025)
+line 31 (payday, last day of the month)
+
+Example 2. Fir Co. is a semiweekly schedule depositor
+that pays employees every other Friday. Fir Co.
+accumulated a $20,000 employment tax liability on each
+of these pay dates: April 4, 2025; April 18, 2025; May 2,
+2025; May 16, 2025; May 30, 2025; June 13, 2025; and
+June 27, 2025. Fir Co. must report employment tax
+liabilities on Schedule B as follows.
+Month
+1 (April)
+2 (May)
+3 (June)
+
+Lines for dates wages were paid
+lines 4 and 18
+lines 2, 16, and 30
+lines 13 and 27
+
+Example 3. Elm Co. is a new business and monthly
+schedule depositor for 2025. Elm Co. paid wages every
+Friday and accumulated a $2,000 employment tax liability
+on April 18, 2025. On April 25, 2025, and on every
+subsequent Friday during 2025, Elm Co. accumulated a
+Instructions for Schedule B (Form 941) (Rev. 6-2025)
+
+$110,000 employment tax liability. Under the deposit
+rules, employers become semiweekly schedule
+depositors on the day after any day they accumulate
+$100,000 or more of employment tax liability in a deposit
+period. Elm Co. became a semiweekly schedule depositor
+on April 26, 2025, because Elm Co. had a total
+accumulated employment tax liability of $112,000 on April
+25, 2025. For more information, see section 11 of Pub. 15.
+Elm Co. must complete Schedule B as shown next and
+file it with Form 941. Elm Co. won’t check the second box
+on Form 941, line 16, even though Elm Co. was a monthly
+schedule depositor until April 26, 2025. Instead, Elm Co.
+must check the third box on Form 941, line 16.
+Month
+1 (April)
+1 (April)
+2 (May)
+3 (June)
+
+Lines for dates wages were paid
+line 18
+line 25
+lines 2, 9, 16, 23, and 30
+lines 6, 13, 20, and 27
+
+Amount to report
+$2,000
+$110,000
+$110,000
+$110,000
+
+Total Liability for the Quarter
+
+To find your total liability for the quarter, add your monthly
+tax liabilities.
+Tax Liability for Month 1
++ Tax Liability for Month 2
++ Tax Liability for Month 3
+Total Liability for the Quarter
+
+!
+
+Your total liability for the quarter must equal line 12
+on Form 941.
+
+CAUTION
+
+Adjusting tax liability for the qualified small business
+payroll tax credit for increasing research activities
+(Form 941, line 11). Semiweekly schedule depositors
+must account for the qualified small business payroll tax
+credit for increasing research activities claimed on Form
+941, line 11, when reporting their tax liabilities on
+Schedule B. The total tax liability for the quarter must
+equal the amount reported on Form 941, line 12. Failure to
+account for the qualified small business payroll tax credit
+for increasing research activities on Schedule B may
+cause Schedule B to report more than the total tax liability
+reported on Form 941, line 12. Don't reduce your daily tax
+liability reported on Schedule B below zero.
+Beginning with the first quarter of 2023, the qualified
+small business payroll tax credit for increasing research
+activities is first used to reduce the employer share of
+social security tax (up to $250,000) for the quarter and any
+remaining credit is then used to reduce the employer
+share of Medicare tax for the quarter until it reaches zero.
+In completing Schedule B, you take into account the
+payroll tax credit against the liability for the employer
+share of social security tax starting with the first payroll
+payment of the quarter that includes payments of wages
+subject to social security tax to your employees until you
+use up to $250,000 of credit against the employer share of
+social security tax and you then take into account any
+remaining payroll tax credit against the liability for the
+Instructions for Schedule B (Form 941) (Rev. 6-2025)
+
+employer share of Medicare tax starting with the first
+payroll payment of the quarter that includes payments of
+wages subject to Medicare tax to employees. Consistent
+with the entries on Schedule B, the payroll tax credit
+should be taken into account in making deposits of
+employment tax. If any payroll tax credit is remaining at
+the end of the quarter that hasn't been used completely
+because it exceeds $250,000 of the employer share of
+social security tax and the employer share of Medicare tax
+for the quarter, the excess credit may be carried forward to
+the succeeding quarter and allowed as a payroll tax credit
+for the succeeding quarter. The payroll tax credit may not
+be taken as a credit against income tax withholding, the
+employee share of social security tax, or the employee
+share of Medicare tax. Also, the remaining payroll tax
+credit may not be carried back and taken as a credit
+against wages paid from preceding quarters. For more
+information about the payroll tax credit, go to IRS.gov/
+ResearchPayrollTC.
+Example. Rose Co. is an employer with a calendar tax
+year that filed its timely 2024 income tax return on April
+15, 2025. Rose Co. elected to take the qualified small
+business payroll tax credit for increasing research
+activities on Form 6765. The third quarter of 2025 is the
+first quarter that begins after Rose Co. filed the income tax
+return making the payroll tax credit election. Therefore, the
+payroll tax credit applies against Rose Co.'s share of
+social security tax (up to $250,000) and Medicare tax on
+wages paid to employees in the third quarter of 2025.
+Rose Co. is a semiweekly schedule depositor. Rose Co.
+completes Schedule B by reducing the amount of liability
+entered for the first payroll payment in the third quarter of
+2025 that includes wages subject to social security tax by
+the lesser of (1) its share of social security tax (up to
+$250,000) on the wages, or (2) the available payroll tax
+credit. If the payroll tax credit elected is more than Rose
+Co.'s share of social security tax on the first payroll
+payment of the quarter, the excess payroll tax credit would
+be carried forward to succeeding payroll payments in the
+third quarter until it is used against up to $250,000 of Rose
+Co.'s share of social security tax for the quarter. If the
+amount of the payroll tax credit exceeds Rose Co.'s share
+of social security tax (up to $250,000) on wages paid to its
+employees in the third quarter, any remaining credit is
+used against Rose Co.'s share of Medicare tax on the first
+payroll payment of the quarter and then the excess payroll
+tax credit would be carried forward to succeeding payroll
+payments in the third quarter until it is used against Rose
+Co.'s share of Medicare tax for the quarter. If Rose Co. still
+has credit remaining after reducing its share of social
+security tax (up to $250,000) and Medicare tax for the
+third quarter, the remainder would be treated as a payroll
+tax credit against its share of social security tax (up to
+$250,000) and Medicare tax on wages paid in the fourth
+quarter. If the amount of the payroll tax credit remaining
+exceeded Rose Co.'s share of social security tax (up to
+$250,000) and Medicare tax on wages paid in the fourth
+quarter, it could be carried forward and treated as a payroll
+tax credit for the first quarter of 2026.
+
+Correcting Previously Reported Tax Liability
+Semiweekly schedule depositors. If you’ve been
+assessed an FTD penalty for a quarter and you made an
+3
+
+error on Schedule B and the correction won’t change the
+total liability for the quarter you reported on Schedule B,
+you may be able to reduce your penalty by filing an
+amended Schedule B.
+
+amended Schedule B, unless you were assessed an FTD
+penalty caused by an incorrect, incomplete, or missing
+Schedule B. If you’re filing an amended Schedule B, don’t
+include the tax increase reported on Form 941-X.
+
+Example. You reported a liability of $3,000 on day 1 of
+month 1. However, the liability was actually for month 3.
+Prepare an amended Schedule B showing the $3,000
+liability on day 1 of month 3. Also, you must enter the
+liabilities previously reported for the quarter that didn’t
+change. Write “Amended” at the top of Schedule B. The
+IRS will refigure the penalty and notify you of any change
+in the penalty.
+
+Tax increase—Form 941-X filed late. If you owe tax and
+are filing a late Form 941-X, that is, after the due date of
+the return for the return period in which you discovered the
+error, you must file an amended Schedule B with Form
+941-X. Otherwise, the IRS may assess an “averaged” FTD
+penalty.
+
+Monthly schedule depositors. You can file a
+Schedule B if you have been assessed an FTD penalty for
+a quarter and you made an error on the monthly tax
+liability section of Form 941. When completing Schedule B
+for this situation, only enter the monthly totals. The daily
+entries aren’t required.
+Where to file. File your amended Schedule B, or, for
+monthly schedule depositors, your original Schedule B at
+the address provided in the penalty notice you received. If
+you're filing an amended Schedule B, you don’t have to
+submit your original Schedule B.
+
+Form 941-X
+
+You may need to file an amended Schedule B with Form
+941-X to avoid or reduce an FTD penalty.
+
+Tax decrease. If you’re filing Form 941-X for a quarter,
+you can file an amended Schedule B with Form 941-X if
+both of the following apply.
+1. You have a tax decrease.
+2. You were assessed an FTD penalty.
+File your amended Schedule B with Form 941-X. The total
+liability for the quarter reported on your amended
+Schedule B must equal the corrected amount of tax
+reported on Form 941-X. If your penalty is decreased, the
+IRS will include the penalty decrease with your tax
+decrease.
+
+The total tax reported on the “Total liability for the
+quarter” line of the amended Schedule B must match the
+corrected tax (Form 941, line 12, combined with any
+correction reported on Form 941-X, line 23) for the
+quarter, less any previous abatements and interest-free
+tax assessments.
+Paperwork Reduction Act Notice. We ask for the
+information on Schedule B to carry out the Internal
+Revenue laws of the United States. You’re required to give
+us the information. We need it to ensure that you’re
+complying with these laws and to allow us to figure and
+collect the right amount of tax.
+You’re not required to provide the information requested
+on a form that is subject to the Paperwork Reduction Act
+unless the form displays a valid OMB control number.
+Books or records relating to a form or its instructions must
+be retained as long as their contents may become
+material in the administration of any Internal Revenue law.
+Generally, tax returns and return information are
+confidential, as required by Code section 6103.
+The time needed to complete and file Schedule B will
+vary depending on individual circumstances. The
+estimated burden for employers filing Schedule B is
+approved under OMB control number 1545-0029 and is
+included in the estimates shown in the Instructions for
+Form 941.
+
+Tax increase—Form 941-X filed timely. If you’re filing a
+timely Form 941-X showing a tax increase, don’t file an
+
+4
+
+Instructions for Schedule B (Form 941) (Rev. 6-2025)
+
+

@@ -95,6 +95,13 @@ import { FormFacsimile } from "@/components/admin/books/FormFacsimile";
 import { FormPrintBar } from "@/components/admin/books/FormPrintBar";
 import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { nine41IdentityText, type W2Employer } from "@/lib/payroll/form-facsimile-core";
+import { scheduleBLiability } from "@/lib/payroll/form-941-schedule-b-core";
+import {
+  SCHEDULE_B_LESSONS,
+  scheduleBBoxes,
+  scheduleBIdentityText,
+  scheduleBTeachingBoxes,
+} from "@/lib/payroll/form-941-schedule-b-boxes";
 import { form941Boxes, FORM_ID_941 } from "@/lib/payroll/form-box-adapters";
 import { teachingBoxes } from "@/lib/payroll/form-box-teaching-core";
 import { loadForm941 } from "@/lib/payroll/form-941-store";
@@ -110,6 +117,19 @@ export const metadata = { title: "Form 941 — the form itself" };
  * complete.
  */
 const NINE41_PAGE_KEYS = ["941-p1", "941-p2"] as const;
+
+/**
+ * Schedule B is a SEPARATE FORM, not a third page of the 941.
+ *
+ * It has its own lessons, its own box ids (a 93-cell calendar rather than
+ * numbered lines) and its own artwork, so it is rendered from its own boxes
+ * below the return rather than folded into the loop above.
+ *
+ * Michael: "I am a schedule b filer, so we don't need to compute the monthly
+ * payment." So the 941's own monthly grid on line 16 stays blank and this
+ * schedule carries the liability - which is what his filed Q2 return does.
+ */
+const SCHEDULE_B_PAGE_KEY = "941sb";
 
 /**
  * The quarter that most recently ENDED.
@@ -265,6 +285,29 @@ export default async function FormNine41SheetPage({
         }
       : {};
 
+  /*
+   * ═══ SCHEDULE B ═══
+   *
+   * Built from the SAME read, and anchored on the SAME line 12, so it cannot
+   * disagree with the return above it. `scheduleBLiability` refuses rather than
+   * returning an approximate schedule - see D-05 - and a refusal is shown as a
+   * refusal, because a blank Schedule B beside a filled 941 reads as a form
+   * that has not been started.
+   */
+  const scheduleB =
+    live && loaded.ok && loaded.result.ok
+      ? scheduleBLiability({
+          quarter,
+          paydays: loaded.paydays,
+          line12Cents: loaded.result.totalTaxCents,
+        })
+      : null;
+
+  const scheduleBBoxList =
+    scheduleB !== null && scheduleB.ok
+      ? scheduleBBoxes(scheduleB, employer)
+      : scheduleBTeachingBoxes(quarter);
+
   const quarters = recentQuarters(fallback);
 
   return (
@@ -363,7 +406,7 @@ export default async function FormNine41SheetPage({
       {NINE41_PAGE_KEYS.map((pageKey, index) => (
         <div key={pageKey} className="facsimile-sheet-wrap">
           <p className="admin-chrome mx-auto w-full max-w-[900px] px-4 pt-4 text-[11px] uppercase tracking-wider text-white/35 print:hidden">
-            Page {index + 1} of {NINE41_PAGE_KEYS.length}
+            Page {index + 1} of {NINE41_PAGE_KEYS.length} &mdash; then Schedule B
           </p>
 
           <FormFacsimile
@@ -387,6 +430,56 @@ export default async function FormNine41SheetPage({
           />
         </div>
       ))}
+
+      {/* ══ SCHEDULE B ═════════════════════════════════════════════════════════
+          Its own form, its own lessons, its own artwork. Printed after the
+          return because that is the order it is filed in. */}
+      <div className="facsimile-sheet-wrap">
+        <div className="admin-chrome mx-auto w-full max-w-[900px] px-4 pt-4 print:hidden">
+          <p className="text-[11px] uppercase tracking-wider text-white/35">
+            Schedule B (Form 941) &mdash; required, because Greenway is a semiweekly depositor
+          </p>
+
+          {scheduleB !== null && !scheduleB.ok ? (
+            <p className="mt-2 rounded-md border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] p-3 text-xs">
+              <strong>This Schedule B was not produced.</strong> {scheduleB.explanation} The
+              schedule below is blank &mdash; no figure on it is yours. Fix the disagreement
+              rather than filing a schedule that does not tie.
+            </p>
+          ) : null}
+
+          {scheduleB !== null && scheduleB.ok ? (
+            <p className="mt-2 text-xs text-white/45">{scheduleB.plain}</p>
+          ) : null}
+
+          {scheduleB === null ? (
+            <p className="mt-2 text-xs text-white/45">
+              No {formatQuarter(quarter)} payroll exists yet, so every numbered space is
+              blank. A zero on a Schedule B would state that a payday happened and produced
+              no tax.
+            </p>
+          ) : null}
+        </div>
+
+        <FormFacsimile
+          pageKey={SCHEDULE_B_PAGE_KEY}
+          lessons={SCHEDULE_B_LESSONS}
+          /*
+           * No `columnOne`: Schedule B has no two-column rows. Every money box
+           * is one figure split into its own dollars and cents rectangles.
+           */
+          copies={[
+            {
+              subject: null,
+              boxes: scheduleBBoxList,
+              identity:
+                scheduleB !== null && scheduleB.ok
+                  ? scheduleBIdentityText(employer, quarter)
+                  : {},
+            },
+          ]}
+        />
+      </div>
 
       {/* ══ THE SAME BOXES AS A LIST ════════════════════════════════════════
           The books-60 sheet, kept and kept working. It is better than the paper

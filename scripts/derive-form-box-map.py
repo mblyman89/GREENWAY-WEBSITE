@@ -365,15 +365,9 @@ NINE41_UNCLAIMED: dict[str, dict[str, str]] = {
         ),
         "f2_8[0]": "Line 16 total liability for the quarter, cents. See the total dollars box.",
         # ── A: choices only he can make ──────────────────────────────────────
-        "c2_1[1]": (
-            "Line 16 'monthly schedule depositor' tick. The profile records a deposit "
-            "schedule, but ticking it here would also assert the monthly liability grid "
-            "below it, which we do not compute."
-        ),
-        "c2_1[2]": (
-            "Line 16 'semiweekly schedule depositor' tick. Not ticked, for the reason given "
-            "on the monthly tick."
-        ),
+        # NOTE: line 16's monthly and semiweekly ticks used to sit here as
+        # "not ticked". They are now PLACED under box "16" by
+        # NINE41_LINE16_TICKS, so a reader can click either one. See D-06.
         "f2_9[0]": (
             "Line 17 final date wages were paid. Only entered when the business has closed, "
             "which is a fact about the business that no payroll figure implies."
@@ -571,6 +565,55 @@ def entity_placements(key: str, page_geo: dict, words: list[dict]) -> dict[str, 
 
         out[box_id] = names
 
+    return out
+
+
+# Line 16's three ticks, bound by the sentence the IRS prints beside each.
+#
+# D-06: only c2_1[0] was placed, so the two ticks that decide whether Schedule B
+# is required at all were unreachable on the page. Michael is a semiweekly
+# filer, so the tick that matters most was the one nobody could click.
+#
+# Bound by CAPTION, not by index: c2_1[1] and c2_1[2] are indistinguishable by
+# name, and swapping them would mark a semiweekly depositor as monthly.
+NINE41_LINE16_TICKS: dict[str, str] = {
+    "c2_1[0]": "Line 12 on this return is less than $2,500 or line 12 on the return for the prior quarter was less than $2,500,",
+    "c2_1[1]": "You were a monthly schedule depositor for the entire quarter. Enter your tax liability for each month and total",
+    "c2_1[2]": "You were a semiweekly schedule depositor for any part of this quarter. Complete Schedule B (Form 941),",
+}
+
+# A line-16 tick's caption starts on the tick's own printed row. Measured: all
+# three sit within 3pt of their sentence's top.
+LINE16_CAPTION_SLACK_PT = 6.0
+
+
+def line16_tick_placements(key: str, page_geo: dict, phrases: list[dict]) -> list[str]:
+    """Rect names for line 16's ticks, in printed order, each caption confirmed."""
+    if key != "941-p2":
+        return []
+    by_name = {f["name"]: f for f in page_geo["fields"]}
+    out: list[str] = []
+    for fragment, caption in NINE41_LINE16_TICKS.items():
+        matches = [n for n in by_name if n.endswith(fragment)]
+        if len(matches) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} line 16 tick {fragment!r} matches "
+                f"{len(matches)} rectangles; exactly one is required."
+            )
+        rect = by_name[matches[0]]
+        centre = rect["y"] + rect["h"] / 2
+        hits = [
+            p
+            for p in phrases
+            if p["t"] == caption and abs((p["y0"] + p["y1"]) / 2 - centre) <= LINE16_CAPTION_SLACK_PT
+        ]
+        if len(hits) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} line 16 tick {fragment!r} expects the caption "
+                f"{caption[:40]!r}... printed beside it and found {len(hits)}. Ticking the "
+                f"wrong one would tell the IRS a semiweekly depositor is a monthly one."
+            )
+        out.append(matches[0])
     return out
 
 
@@ -1109,6 +1152,222 @@ def derive_w2(key: str, page_geo: dict, pdf: Path) -> dict:
     }
 
 
+SCHEDULE_B_LABELLED: dict[str, dict] = {
+    # The EIN is NINE separate one-character rectangles here, not the 941's two
+    # combs. Bound as one box because the EIN is one fact.
+    "ein": {"fields": [f"Entity[0].f1_{n:02d}[0]" for n in range(1, 10)]},
+    "name": {"fields": ["Entity[0].f1_10[0]"]},
+    # Calendar year: four one-character rectangles.
+    "calendarYear": {"fields": [f"Entity[0].f1_{n}[0]" for n in (11, 12, 13, 14)]},
+    "m1Total": {"fields": ["Page1[0].f1_77[0]", "Page1[0].f1_78[0]"]},
+    "m2Total": {"fields": ["Page1[0].f1_141[0]", "Page1[0].f1_142[0]"]},
+    "m3Total": {"fields": ["Page1[0].f1_205[0]", "Page1[0].f1_206[0]"]},
+    "quarterTotal": {"fields": ["Page1[0].f1_207[0]", "Page1[0].f1_208[0]"]},
+}
+
+# The four quarter ticks. Not filled, for the reason `checkSlots` gives: we
+# compute figures, we do not tick boxes on a signed return. Recorded so a
+# reader can see the tick exists and that we deliberately left it.
+SCHEDULE_B_UNCLAIMED: dict[str, str] = {
+    "c1_1[0]": (
+        "Schedule B 'Report for this Quarter' tick, quarter 1. The quarter is printed in "
+        "the page heading and in the calendar-year box, both filled from the period being "
+        "viewed. Ticking a box on a schedule filed under penalties of perjury is his "
+        "signature, not our computation."
+    ),
+    "c1_1[1]": "Quarter 2 tick. Same reason as quarter 1.",
+    "c1_1[2]": "Quarter 3 tick. Same reason as quarter 1.",
+    "c1_1[3]": "Quarter 4 tick. Same reason as quarter 1.",
+}
+
+
+def schedule_b_unclaimed_reason(field_name: str) -> str | None:
+    for suffix, reason in SCHEDULE_B_UNCLAIMED.items():
+        if field_name.endswith(suffix):
+            return reason
+    return None
+
+
+"""
+SCHEDULE B (FORM 941) - 93 DAY CELLS, BOUND TO THE DAY THE IRS PRINTS
+
+Every cell is bound to the NUMBER PRINTED BESIDE IT, not to its position in the
+column order. The columns run down-then-across (1-8, 9-16, 17-24, 25-31), which
+is not the order a reader assumes, and a schedule whose liability lands on the
+wrong day is a late-deposit penalty (D-05).
+"""
+
+# Rightmost edge of a day label may sit this far left of its cell, and this far
+# off its vertical centre. Measured: all 93 bind uniquely inside these bounds.
+SB_LABEL_MAX_GAP_PT = 28.0
+SB_LABEL_MAX_DY_PT = 7.0
+
+# The three month blocks, split at the y of the "Month 2" and "Month 3"
+# headings. Measured from the printed headings rather than hard-coded.
+SB_MONTH_HEADING = "Month"
+
+
+def derive_schedule_b(key: str, page_geo: dict, pdf: Path) -> dict:
+    words = words_of(pdf, page_geo["page"])
+    fields = page_geo["fields"]
+    by_name = {f["name"]: f for f in fields}
+
+    # Where each month block starts, from the printed headings.
+    #
+    # "Month" appears EIGHT times on this page: three block headings at the left
+    # margin, three "Tax liability for Month N" labels at x=505, and twice in
+    # the footer sentence "(Month 1 + Month 2 + Month 3)". Only the left-margin
+    # ones head a block, and that is the property matched - measured, not
+    # counted off. The gate below caught the naive version.
+    bands = sorted(
+        round(w["y0"], 1)
+        for w in words
+        if w["t"] == SB_MONTH_HEADING and w["x0"] < LEFT_MARGIN_MAX_X
+    )
+    if len(bands) != 3:
+        sys.exit(
+            f"derive-form-box-map: {key} found {len(bands)} 'Month' headings, expected 3. "
+            f"The month a liability lands in decides its deposit due date, so a mis-split "
+            f"grid is a penalty, not a cosmetic error."
+        )
+
+    # The day cells: dollar halves (no /MaxLen) inside the grid's x columns.
+    col_x = sorted({round(f["x"], 1) for f in fields if f["maxLen"] is None and f["kind"] != "check"})
+    grid_x = [x for x in col_x if x < 440.0]
+    grid = [
+        f
+        for f in fields
+        if f["maxLen"] is None
+        and f["kind"] != "check"
+        and round(f["x"], 1) in grid_x
+        and bands[0] <= f["y"] < 700
+    ]
+
+    day_words = [w for w in words if w["t"].isdigit() and 1 <= int(w["t"]) <= 31]
+
+    placed: dict[str, list[str]] = {}
+    for f in grid:
+        centre = f["y"] + f["h"] / 2
+        hits = [
+            w
+            for w in day_words
+            if w["x1"] <= f["x"] + 1
+            and f["x"] - w["x1"] < SB_LABEL_MAX_GAP_PT
+            and abs((w["y0"] + w["y1"]) / 2 - centre) < SB_LABEL_MAX_DY_PT
+        ]
+        if len(hits) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} cell {f['name']!r} at x={f['x']} y={f['y']} has "
+                f"{len(hits)} day numbers printed beside it. Exactly one is required - "
+                f"guessing which day a liability belongs to is guessing a deposit due date."
+            )
+        day = int(hits[0]["t"])
+        month = 1 if f["y"] < bands[1] else (2 if f["y"] < bands[2] else 3)
+        box_id = f"m{month}d{day}"
+
+        # The cents half sits immediately right of the dollars half on the same
+        # row. Paired by geometry, so a revision that moves them cannot leave a
+        # figure split across two different days' boxes.
+        cents = [
+            c
+            for c in fields
+            if c["maxLen"] is not None
+            and c["kind"] != "check"
+            and abs(c["y"] - f["y"]) < 1.5
+            and 0 <= c["x"] - (f["x"] + f["w"]) <= 12
+        ]
+        if len(cents) != 1:
+            sys.exit(
+                f"derive-form-box-map: {key} cell {f['name']!r} has {len(cents)} cents boxes "
+                f"beside it, expected 1. Printing dollars without their cents understates a "
+                f"tax liability by up to 99 cents - see D-03."
+            )
+        if box_id in placed:
+            sys.exit(
+                f"derive-form-box-map: {key} box {box_id!r} claimed twice. Two cells for one "
+                f"day means one day's liability would overwrite another's."
+            )
+        placed[box_id] = [f["name"], cents[0]["name"]]
+
+    if len(placed) != 93:
+        sys.exit(
+            f"derive-form-box-map: {key} bound {len(placed)} day cells, expected 93 "
+            f"(31 days x 3 months). A missing day is a payday with nowhere to land."
+        )
+
+    # ── The four totals and the header ────────────────────────────────────────
+    #
+    # Bound by the caption the IRS prints beside each, exactly as the 941's
+    # entity boxes are, because the field names carry no meaning.
+    for box_id, spec in SCHEDULE_B_LABELLED.items():
+        names: list[str] = []
+        for fragment in spec["fields"]:
+            matches = [n for n in by_name if n.endswith(fragment)]
+            if len(matches) != 1:
+                sys.exit(
+                    f"derive-form-box-map: {key} box {box_id!r} names the field ending "
+                    f"{fragment!r}, which matches {len(matches)} rectangles. Exactly one is "
+                    f"required."
+                )
+            names.append(matches[0])
+        if box_id in placed:
+            sys.exit(f"derive-form-box-map: {key} box {box_id!r} was claimed twice.")
+        placed[box_id] = names
+
+    claimed = {n for names in placed.values() for n in names}
+    unclaimed: dict[str, str] = {}
+    for f in fields:
+        if f["name"] in claimed:
+            continue
+        reason = schedule_b_unclaimed_reason(f["name"])
+        if reason is None:
+            sys.exit(
+                f"derive-form-box-map: {key} rectangle {f['name']!r} at x={f['x']} "
+                f"y={f['y']} is neither placed nor listed as deliberately unclaimed. "
+                f"Rule 123."
+            )
+        unclaimed[f["name"]] = reason
+
+    copies, pitch, _succ = copy_partition(page_geo)
+    if copies != 1:
+        sys.exit(
+            f"derive-form-box-map: {key} measured as {copies} copies on one page. "
+            f"Schedule B has always been one form per page."
+        )
+
+    # ── D-04: the cents /MaxLen is a fact about THIS form ─────────────────────
+    #
+    # Schedule B uses 2; both 941 pages use 3; the W-2 does not split money at
+    # all. A single global constant would have left all 97 of this form's cents
+    # boxes empty. Measured here, carried in the data.
+    # Measured over the MONEY boxes only. The EIN and calendar-year cells also
+    # carry a /MaxLen (1, one character per printed square) and including them
+    # would make this look ambiguous when it is not.
+    money_boxes = [b for b in placed if b.startswith("m") or b == "quarterTotal"]
+    cents_lens = {
+        by_name[n]["maxLen"]
+        for b in money_boxes
+        for n in placed[b]
+        if by_name[n]["maxLen"] is not None
+    }
+    if len(cents_lens) != 1:
+        sys.exit(
+            f"derive-form-box-map: {key} cents boxes report /MaxLen {sorted(cents_lens)}. "
+            f"One value is required - see D-04."
+        )
+
+    return {
+        "labels": sorted(placed),
+        "midline": [],
+        "placed": placed,
+        "copies": [placed],
+        "copyPitchPt": round(pitch, 3),
+        "unclaimed": sorted(unclaimed),
+        "unclaimedReasons": dict(sorted(unclaimed.items())),
+        "centsMaxLen": cents_lens.pop(),
+    }
+
+
 def main() -> int:
     if not GEOMETRY.exists():
         sys.exit("derive-form-box-map: run derive-form-geometry.py first")
@@ -1169,9 +1428,15 @@ def main() -> int:
         # being dropped by the `continue` above - among them every box that says
         # WHO the return is for. Each binding is verified against the caption
         # the IRS prints beside it; see NINE41_ENTITY.
-        for box_id, names in entity_placements(
-            key, page_geo, printed_phrases(pdf, page_geo["page"])
-        ).items():
+        phrases = printed_phrases(pdf, page_geo["page"])
+
+        # Line 16's monthly/semiweekly ticks, added to the box the margin scan
+        # already found. See D-06 and NINE41_LINE16_TICKS.
+        for name in line16_tick_placements(key, page_geo, phrases):
+            if name not in placed.get("16", []):
+                placed.setdefault("16", []).append(name)
+
+        for box_id, names in entity_placements(key, page_geo, phrases).items():
             if box_id in placed:
                 sys.exit(
                     f"derive-form-box-map: {key} box {box_id!r} was claimed by both the "
@@ -1232,6 +1497,18 @@ def main() -> int:
             f"{len(placed)} boxes received rects, {copies_941} copy on the page, "
             f"{len(claimed)} of {len(page_geo['fields'])} rects filled, "
             f"{len(unclaimed)} blank with a recorded reason"
+        )
+
+    # ── SCHEDULE B (FORM 941) ────────────────────────────────────────────────
+    for key in ("941sb",):
+        page_geo = geometry[key]
+        derived = derive_schedule_b(key, page_geo, REPO / page_geo["pdf"])
+        result[key] = derived
+        print(
+            f"  {key}: {len(derived['placed'])} boxes ("
+            f"{sum(1 for b in derived['placed'] if b.startswith('m') and 'd' in b)} day cells), "
+            f"{len(derived['unclaimed'])} blank with a recorded reason, "
+            f"cents /MaxLen {derived['centsMaxLen']}"
         )
 
     # ── FORM W-2 ─────────────────────────────────────────────────────────────
