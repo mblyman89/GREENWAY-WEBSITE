@@ -3116,3 +3116,102 @@ building the matcher twice.
        (e) A gate that fires on LINE-WRAPPING is testing the formatter, not the
            promise. Normalise whitespace and ask the question the reader
            experiences. Reflowing working code to please a regex is backwards.
+
+════════════════════════════════════════════════════════════════════════════
+  RULES 128-132: THE BUDGET AMENDMENT (books-62)
+════════════════════════════════════════════════════════════════════════════
+
+Michael, 26 Aug 2026: "Every slice is taking up hours and spending tens of
+thousands of tokens. We need to find a fair balance between having perfect code
+verse acceptable code within budget... We need to adjust the standing rules to
+cut out some of the over padding and over testing and such... we won't ever
+finish this thing at this rate, and we are so incredibly close to the finish
+line."
+
+He is right, and it is MEASURABLE rather than a matter of taste. Measured at
+books-61: form-facsimile-core.ts is 59% comment lines. form-box-adapters.ts is
+40%. The test suite is 148,472 lines across 468 files for a codebase whose
+src/ is a fraction of that. The cost is not in the thinking or in the code. It
+is in PROSE ABOUT the code and in tests that re-prove what a neighbouring test
+already proved.
+
+Rules 1-127 stay in force. 128-132 govern HOW MUCH, not WHETHER. Where an
+earlier rule's LETTER demands volume, these win; where its SPIRIT demands
+correctness, the earlier rule wins. Nothing here licenses a guess.
+
+128. **THE THREE-LINE DOCBLOCK. Prose is capped, not banned.**
+     A comment earns its keep only by saying something the code cannot. Default
+     to THREE LINES: what this is, the one non-obvious fact, and the trap.
+       (a) The ONLY things that may exceed three lines: (i) a MEASURED figure
+           and where it was measured from, (ii) a REFUSAL and why, (iii) a
+           DEFECT FOUND and how it hid, (iv) a quote from him or from an
+           authority. These are the four things that cost real money to
+           rediscover.
+       (b) BANNED as comment content: restating the function signature;
+           narrating what the next line does; "═══" banner art around a
+           three-word heading; the same reason repeated at both its definition
+           and its call site; an explanation of a general programming concept.
+       (c) Do NOT write the reasoning-out-loud commentary that convinces a
+           reader I was careful. Being careful is the job; performing it is
+           billable padding. One sentence stating the conclusion is enough.
+       (d) The DEFECT REGISTER (rule 131) is now where discovered-defect prose
+           belongs. Do not tell the same defect story in the module, the test,
+           the commit and the report. Once, in the register; a one-line pointer
+           elsewhere.
+
+129. **ONE ASSERTION PER RISK. Test the risk, not the surface.**
+     A test exists to catch a WAY THIS BREAKS IN THE REAL WORLD. If no such way
+     can be named, the test is decoration and must not be written.
+       (a) Before writing a test, name the failure in one line: "without this,
+           X ships and Y happens to Michael." If that sentence cannot be
+           written, delete the test.
+       (b) MERGE aggressively. One `it()` may carry several `expect()`s about
+           the SAME risk. Do not split into separate cases for the pleasure of
+           a longer green list. A file of 18 focused tests beats 85 that
+           restate each other.
+       (c) DO NOT re-prove a neighbour's work. If the derivation script exits
+           on a bad geometry, the test does not also re-derive the geometry.
+           Trust the gate that already exists and test the thing that has none.
+       (d) NEVER count-pin what a loop can discover. Rule 117 discovers the
+           population; a hand-written total is a line item that must be edited
+           by hand on every slice. Where a pin already exists, prefer widening
+           it to a discovered assertion over bumping the number.
+       (e) STILL MANDATORY, no exceptions: money and rounding; anything filed
+           with a government; refusals actually refusing; access guards; a
+           defect the register records (rule 131). Cheap where cheap is safe,
+           never cheap here.
+
+130. **MEASURE ONCE, IN CODE. No probe-then-test.**
+     books-61 wrote throwaway probes to measure a thing, read the output, then
+     wrote a test asserting the same thing, then deleted the probe. That is
+     paying twice for one fact.
+       (a) Write the assertion FIRST and let it fail. The failure message is
+           the measurement. Then make it pass.
+       (b) A temporary probe is allowed ONLY to answer a question no assertion
+           can phrase (what does this render look like). Screenshot to LOOK at
+           a thing: yes, once. To extract a number: no - assert it.
+       (c) One visual check per surface, at the end. Not per iteration.
+
+131. **THE DEFECT REGISTER: docs/DEFECTS.md. Write the finding once.**
+     Every real defect gets ONE numbered entry: what broke, how it stayed
+     hidden, the gate that now catches it. Then it is CITED by number
+     ("see D-07") from code, test, commit and owner report - never retold.
+     This is the single biggest saving available: books-61 told the
+     missing-EIN story four times at length.
+
+132. **SLICE SHAPE AND THE STOP RULE.**
+       (a) The owner report is ONE PAGE: what you can now do; what I found;
+           what is deliberately not done; the four open questions. It is a
+           STATUS REPORT, not a narrative essay. Cap the prose; keep the
+           tables.
+       (b) FULL SUITE ONCE, at the end. Not after each edit. Run the touched
+           files while working (seconds) and the battery once (~2 min).
+       (c) BATCH the like-for-like. Four forms sharing one proven mechanism is
+           ONE slice, not four. The mechanism was paid for at books-61; the
+           remaining forms are geometry plus a wiring line each.
+       (d) THE STOP RULE, and it binds hardest: when the deliverable works and
+           the mandatory gates in 129(e) are green, STOP. Do not keep going
+           because more could be proved. Additional certainty past that point
+           is spending his money to reassure me.
+       (e) A rule may now be satisfied by a POINTER instead of a paragraph.
+           Citing D-07 discharges the duty to explain the defect in full.
