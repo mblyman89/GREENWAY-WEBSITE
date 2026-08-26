@@ -84,6 +84,18 @@ export const RCW_50_24_010_PATH = "docs/authorities/state-wa/rcw-50.24.010.txt";
 export const RCW_50A_10_030_PATH = "docs/authorities/state-wa/rcw-50A.10.030.txt";
 export const RCW_51_16_140_PATH = "docs/authorities/state-wa/rcw-51.16.140.txt";
 
+/**
+ * RCW 50.12.070, added in books-64 for the 12th-day headcount lesson.
+ *
+ * Exported as a constant rather than written inline at the quote, because the
+ * verbatim gate in tests/compliance/form-box-lessons-wa.test.ts builds its
+ * corpus map from THESE exports. An inline path string compiles, renders, and
+ * silently escapes the byte-for-byte check - which is exactly what happened on
+ * the first attempt, and exactly what the gate refused.
+ */
+export const RCW_50_12_070_PATH = "docs/authorities/state-wa/rcw-50.12.070.txt";
+export const RCW_50_12_070_URL = "https://app.leg.wa.gov/rcw/default.aspx?cite=50.12.070";
+
 export const RCW_50_24_010_URL = "https://app.leg.wa.gov/rcw/default.aspx?cite=50.24.010";
 export const RCW_50A_10_030_URL = "https://app.leg.wa.gov/rcw/default.aspx?cite=50A.10.030";
 export const RCW_51_16_140_URL = "https://app.leg.wa.gov/rcw/default.aspx?cite=51.16.140";
@@ -1025,6 +1037,209 @@ export const WA_QUARTERLY_LESSONS: readonly BoxLesson[] = [
         why:
           "This premium is charged on the same hours the ESD wage detail reports person by person. " +
           "The two returns go to different agencies from one time record, so they must agree.",
+      },
+    ],
+  },
+  /* ---------------------------------------------------------------------------
+   * books-64 - THE TWO BOXES THAT BITE ON THE 5208A
+   * ---------------------------------------------------------------------------
+   *
+   * Michael asked for "lessons on boxes that bite". These are the two that bite
+   * on the unemployment return, and neither is an engine line - which is
+   * exactly why they bite. The engine computes the taxes; the FORM asks for two
+   * things the engine does not compute, and a box nobody computes is a box
+   * nobody checks.
+   *
+   *   Line 14, EXCESS WAGES  - cumulative across the YEAR, on a return that is
+   *                            otherwise entirely about the QUARTER.
+   *   Line 12, THE 12TH-DAY  - a headcount on three specific dates, not a count
+   *     HEADCOUNT              of the people paid during the quarter.
+   *
+   * Both were found by reading Michael's own filed Q1 and Q2 rather than the
+   * blank form: the filed return proved the line numbers moved (2011 artwork
+   * says 13 and 11) and proved the headcount is NOT the payroll count
+   * (10 / 11 / 9 against 11 people paid).
+   */
+
+  {
+    formId: "esd_5208a",
+    box: "esd-excess-wages",
+    headline:
+      "Excess wages - the only box on this return that counts from January, not from the quarter",
+    plainEnglish:
+      "Unemployment tax is not charged on everything Greenway pays somebody. It is charged on the " +
+      "first slice of each person's pay each YEAR, and once a person has earned past that ceiling, " +
+      "the rest of their pay for the rest of the year is free of unemployment tax. This box is " +
+      "where that already-taxed-enough pay goes. Everything else on this return is about three " +
+      "months; this one box looks back to the first of January, and that mismatch is the whole " +
+      "difficulty of it.",
+    whereItComesFrom:
+      "Gross wages for the quarter minus the wages that are still taxable. The worksheet derives it " +
+      "by SUBTRACTION rather than by adding up overages person by person, so it can never disagree " +
+      "with the figure the tax was actually charged on. The ceiling itself is not a number this " +
+      "system chooses - it is set annually by statutory formula and arrives on Greenway's own rate " +
+      "notice from Employment Security.",
+    howToReadIt:
+      "A zero here means nobody at Greenway has yet earned past the annual ceiling, which is the " +
+      "normal state of affairs early in the year and was true on both Q1 and Q2 2026. A number " +
+      "that suddenly appears in Q3 or Q4 is not an error - it is the higher earners crossing the " +
+      "ceiling, and from that point on the taxable figure stops tracking gross pay. If excess " +
+      "wages ever exceed gross wages, the arithmetic is broken and the worksheet refuses to build.",
+    commonMistake:
+      "Treating the ceiling as a per-quarter allowance. It is a per-person, per-YEAR ceiling, so a " +
+      "person paid evenly all year crosses it in the autumn and not once per quarter. The second " +
+      "mistake is subtler and costs real money: carrying the wrong ceiling. The blank 5208A sitting " +
+      "in Greenway's own files prints a taxable wage base of $37,300 from 2011, and the Sage record " +
+      "copy of Q1 2026 prints $72,800 - while the ceiling Employment Security actually applied to " +
+      "Greenway for 2026 was $78,200. Copy any of the stale figures and this box is wrong by tens " +
+      "of thousands of dollars, which makes the taxable line wrong, which makes the tax wrong.",
+    whatToDo:
+      "Read the ceiling off the current year's rate notice, not off the form artwork and not off " +
+      "last year's return. Then check one thing every quarter: gross minus excess must equal " +
+      "taxable, to the penny. If it does, this box cannot be lying, whatever the ceiling is.",
+    examples: [
+      {
+        title: "Greenway's Q1 2026 - and why the zero is the right answer",
+        steps: [
+          "Gross wages paid in Q1 2026: $61,531.21, across eleven people.",
+          "The highest-paid person on the detail earned $13,996.50 for the quarter.",
+          "The 2026 ceiling is $78,200 per person for the whole year.",
+          "Nobody is within $64,000 of the ceiling, so nothing is excess: $0.00.",
+          "Taxable wages therefore equal gross wages exactly: $61,531.21.",
+          "Check: $61,531.21 gross minus $0.00 excess equals $61,531.21 taxable. It ties.",
+        ],
+        answer: "$0.00 excess wages - correct, not missing",
+        moral:
+          "An empty box is an assertion, not a blank. It says nobody crossed the ceiling, and the " +
+          "subtraction check is what turns that assertion into something provable.",
+      },
+      {
+        title: "The same person, later in the year, when the box stops being zero",
+        steps: [
+          "Suppose one employee earns $28,000 in each of the four quarters of a year.",
+          "By the end of Q3 they have been paid $84,000, which is past the $78,200 ceiling.",
+          "Q1 and Q2: nothing excess - cumulative pay of $28,000 and $56,000 are both under.",
+          "Q3: cumulative pay reaches $84,000, which is $5,800 over the ceiling, " +
+            "so $5,800 of that quarter's $28,000 is excess and $22,200 is taxable.",
+          "Q4: the ceiling was already reached, so the entire $28,000 is excess and $0 is taxable.",
+          "Total taxable for the year: $28,000 + $28,000 + $22,200 + $0 = $78,200 - the ceiling exactly.",
+        ],
+        answer: "The year's taxable wages for one person can never exceed the ceiling",
+        moral:
+          "That total is the test. If a person's taxable wages across four returns add up to more " +
+          "than the annual ceiling, Greenway has overpaid unemployment tax on that person.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "RCW 50.24.010",
+        quote:
+          // STRAIGHT quotes around "average annual wage for contributions
+          // purposes", NOT typographic ones. The first draft of this lesson used
+          // curly quotes to match the prose style of the rest of the file and the
+          // verbatim gate rejected it, naming this box. The statute as mirrored
+          // uses ASCII quotation marks; a verbatim quote matches the source's
+          // bytes, not the file's house style.
+          "In each rate year, the amount of wages subject to tax for each individual shall be one hundred fifteen percent of the amount of wages subject to tax for the previous year rounded to the next lower one hundred dollars, except that the amount of wages subject to tax in any rate year shall not exceed eighty percent of the \"average annual wage for contributions purposes\" for the second preceding calendar year rounded to the next lower one hundred dollars.",
+        sourcePath: RCW_50_24_010_PATH,
+        sourceUrl: RCW_50_24_010_URL,
+        soWhat:
+          "Three things in one sentence. \u201cFor each individual\u201d is why this is a per-person ceiling " +
+          "and not a company allowance. \u201cIn each rate year\u201d is why it counts from January rather " +
+          "than from the start of the quarter. And because the figure is recomputed every single " +
+          "year by formula, a ceiling printed on a form is stale the moment the year turns - which " +
+          "is precisely how the $37,300 on the 2011 artwork and the $72,800 on the Sage copy came " +
+          "to disagree with the $78,200 that Employment Security actually charged.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208b",
+        box: "wage-detail-wages",
+        why:
+          "The ceiling applies to each person separately, so excess wages can only be justified " +
+          "person by person off the wage detail. The 5208A shows one company-wide excess figure; " +
+          "the only place to see WHO went over is the detail form beside it.",
+      },
+    ],
+  },
+
+  {
+    formId: "esd_5208a",
+    box: "esd-headcount-12th",
+    headline:
+      "The 12th-day headcount - three counts of who was there, not one count of who was paid",
+    plainEnglish:
+      "Three small boxes asking how many people were on Greenway's payroll during the pay period " +
+      "containing the 12th day of each month of the quarter. No tax is charged on it and no money " +
+      "depends on it, so it gets filled in from memory or copied from the number of rows on the " +
+      "wage detail. That is the bite: it is a different question from every other question on the " +
+      "return. This system does NOT compute it, and says so on the worksheet, because the figure " +
+      "depends on who was on the payroll on three particular dates - which is a fact about the " +
+      "roster, not about the quarter's wages.",
+    whereItComesFrom:
+      "The payroll register for the pay period that contains the 12th, in each of the three months - " +
+      "counted three separate times. The wage detail form carries a per-employee column marked " +
+      "\u201cpay period including 12th day of the month\u201d, so the count can be built up person by " +
+      "person from the same source rather than estimated.",
+    howToReadIt:
+      "Read it as a staffing picture, not as an amount. Three numbers that rise across the quarter " +
+      "mean Greenway was hiring; three that fall mean turnover. The count is also how federal and " +
+      "state statistics agencies measure Washington employment, so it is the one figure on this " +
+      "return that leaves the tax system entirely and turns into published data.",
+    commonMistake:
+      "Using the number of people paid during the quarter for all three months. Those are different " +
+      "numbers and Greenway's own Q1 2026 return proves it: eleven people appear on the wage " +
+      "detail, but the three monthly counts filed were 10, 11 and 9. Anyone who started after the " +
+      "12th, left before it, or was on unpaid leave across it is paid during the quarter yet " +
+      "absent from that month's count. The second mistake is filling in one number and repeating " +
+      "it three times because the months \u201cwere about the same\u201d - the boxes are asked separately " +
+      "because they are answered separately.",
+    whatToDo:
+      "Open the payroll register three times, once per month, find the pay period containing the " +
+      "12th, and count the people in it. Expect the three numbers to differ, and expect them to " +
+      "differ from the number of rows on the wage detail. If all three equal the headcount, verify " +
+      "that nobody started or left mid-quarter before accepting it.",
+    examples: [
+      {
+        title: "Greenway's filed Q1 2026 - four numbers where a guess would have given one",
+        steps: [
+          "Eleven people appear on the Q1 2026 wage detail, having been paid during the quarter.",
+          "The three monthly counts actually filed were: 1st month 10, 2nd month 11, 3rd month 9.",
+          "Not one of the three equals eleven, and no two of the three equal each other.",
+          "So copying the wage-detail row count would have mis-stated all three boxes.",
+          "Q2 2026 filed 9, 8 and 8 - a different shape again, and again not the payroll count.",
+        ],
+        answer: "10 / 11 / 9 - three answers to three questions",
+        moral:
+          "The wage detail answers \u201cwho did Greenway pay this quarter\u201d. These boxes answer \u201cwho " +
+          "was here on the 12th\u201d, three times. Borrowing one answer for the other is the mistake.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "RCW 50.12.070(1)(a)",
+        quote:
+          "The commissioner may require from any employing unit any sworn or unsworn reports with respect to persons employed by it, which he or she deems necessary for the effective administration of this title.",
+        sourcePath: RCW_50_12_070_PATH,
+        sourceUrl: RCW_50_12_070_URL,
+        soWhat:
+          "This is the authority under which a box can ask for a fact that carries no tax. The " +
+          "headcount is a report \u201cwith respect to persons employed\u201d rather than a computation on " +
+          "wages, which is why nothing in the statute or in this system derives it - and why " +
+          "answering it truthfully is still required. Note what the sentence does NOT contain: any " +
+          "mention of the 12th day. That instruction lives in the form's own caption, which is why " +
+          "this lesson cites the form for the date and the statute only for the duty to report.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "esd_5208b",
+        box: "employee",
+        why:
+          "The wage detail is the tempting shortcut and the honest source at once. Its row count is " +
+          "the wrong answer to this question, but it carries a per-person 12th-day column, so the " +
+          "same form that invites the mistake also holds the material for the correct count.",
       },
     ],
   },

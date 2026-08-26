@@ -113,6 +113,8 @@ import {
   waUrgencyMeaning,
   waWageDetailRows,
 } from "@/lib/payroll/wa-quarterly-ui-core";
+import { build5208aWorksheet } from "@/lib/payroll/esd-5208-worksheet-core";
+import { EsdWorksheetTable } from "@/components/admin/books/EsdWorksheetTable";
 import { loadWaQuarter } from "@/lib/payroll/wa-quarterly-store";
 import { GREENWAY_RATES } from "@/lib/payroll/payroll-rates-2026";
 import { type QuarterRef } from "@/lib/payroll/payroll-deposit-schedule-core";
@@ -524,6 +526,90 @@ export default async function WaQuarterlyPage({
             </Card>
           );
         })
+      ) : null}
+
+      {/* -- 6b. THE 5208A WORKSHEET, BY FILED LINE NUMBER (books-64) ----------
+           Michael asked to "see the form as it would look if I were holding it
+           in my hand". For the ESD returns that is the ONE thing this system
+           must not do, and the reason is an authority rather than a preference:
+           WAC 192-310-010(3)(c)(ii) says agency forms carry drop-out ink and
+           that photocopies "are considered incorrectly formatted reports". A
+           facsimile of a 5208A is therefore a penalty waiting to be posted, and
+           his own filed copies are stamped THIS REPORT IS EFILE ONLY.
+
+           So this is the honest version of what he asked for: his real figures
+           beside the LINE NUMBERS AND CAPTIONS AS THEY APPEAR ON THE RETURN HE
+           ACTUALLY FILED, so that transcribing into EAMS is reading across a
+           row. The numbering was taken from his filed Q1 and Q2 2026 - not from
+           the blank 5208A in the workspace, which is 2011 artwork and numbers
+           these same lines 12, 13, 14, 15, 16 and prints a wage base of
+           $37,300. Laying our figures onto that would have put every amount one
+           to two lines above its own caption (defect D-13). --------------- */}
+      {result.ok && result.value.lines.length > 0
+        ? (() => {
+            const ws = build5208aWorksheet(result.value);
+            return (
+              <Card>
+                <CardHeader
+                  title={`${ws.officialName} \u2014 worksheet`}
+                  subtitle="Your figures against the line numbers on the return you actually file."
+                />
+                <EsdWorksheetTable worksheet={ws} />
+              </Card>
+            );
+          })()
+        : null}
+
+      {/* -- 6c. THE TWO UPLOAD FILES (books-64) ------------------------------
+           Michael: "When we go to do the pdf exports, we will need an export
+           .csv for esd and pfml/ wa cares." Both writers already existed and
+           neither had a way in that was not a hand-typed URL, which is rule
+           125(d) and was logged as defect D-11.
+
+           The two files are eight columns each and are NOT interchangeable -
+           different column order, and one carries a header row while the other
+           must not. A gate exists purely to prove they can never converge. Two
+           separate buttons, each naming its portal, is the whole defence
+           against uploading one to the other's screen. ------------------- */}
+      {result.ok ? (
+        <Card>
+          <CardHeader
+            title="Upload files"
+            subtitle="Two different eight-column files for two different portals. They are not interchangeable."
+          />
+          <div className="space-y-3">
+            <div className="rounded-[var(--admin-radius-sm)] border border-white/12 bg-white/[0.03] p-4">
+              <a
+                className="text-sm font-semibold text-[var(--admin-gold)] underline"
+                href={`/admin/books/wa-quarterly/esd-upload?kind=eams_unemployment&year=${quarter.year}&quarter=${quarter.quarter}`}
+              >
+                Download the EAMS wage file (unemployment)
+              </a>
+              <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+                For the Employer Account Management System, where the 5208A and 5208B are filed.
+                This file carries full Social Security numbers, so it is served with caching
+                switched off and should be deleted from your downloads folder once uploaded.
+              </p>
+            </div>
+            <div className="rounded-[var(--admin-radius-sm)] border border-white/12 bg-white/[0.03] p-4">
+              <a
+                className="text-sm font-semibold text-[var(--admin-gold)] underline"
+                href={`/admin/books/wa-quarterly/esd-upload?kind=paid_leave_wa_cares&year=${quarter.year}&quarter=${quarter.quarter}`}
+              >
+                Download the Paid Leave &amp; WA Cares file
+              </a>
+              <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+                For the Paid Leave portal, which takes Paid Family &amp; Medical Leave and WA Cares
+                in one file. Different column order from the EAMS file, and it requires the header
+                row that the EAMS file must not have.
+              </p>
+            </div>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              If either file cannot be built, the download does not produce a partial file. It
+              returns a page listing what is missing, by name.
+            </p>
+          </div>
+        </Card>
       ) : null}
 
       {/* ── TAKE ME TO SCHOOL (books-47 slice D) ───────────────────────────

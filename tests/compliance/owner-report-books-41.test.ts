@@ -127,6 +127,59 @@ function money(cents: number): string {
  * 0. GUARD THE GUARD (rule 39)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
+/*
+ * COUNT THE TESTS A SUITE ACTUALLY DEFINES.
+ *
+ * Hoisted to module scope in books-64 so that BOTH tests below can call it.
+ * It was previously declared inside one test, which left the "can the counter
+ * tell the difference" guard with no way to reach it -- so that guard compared
+ * the naive count against a HARDCODED 72. A literal has to be re-edited every
+ * time a test is added, which is precisely how a guard goes stale. Now the real
+ * count is measured on both sides and the GAP is the invariant (rule 25:
+ * extend, never duplicate).
+ */
+const countTests = (src: string, label: string): number => {
+  const lines = src.split("\n");
+  let total = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*it\(/.test(lines[i])) continue;
+    // Walk backwards to the nearest enclosing statement that could
+    // multiply this it(). We only look at the block opener directly above
+    // the it(), which is the only generating shape this repo uses.
+    const opener = lines[i - 1] ?? "";
+    const loop = opener.match(/^\s*for \(const \w+ of (\w+)\) \{\s*$/);
+    if (!loop) {
+      // Guard the guard: if a loop-ish opener appears that we did not
+      // match, refuse instead of counting it as a plain single test.
+      if (/^\s*(for|while)\s*\(/.test(opener) || /\.forEach\(/.test(opener)) {
+        throw new Error(
+          `${label}: unrecognised generating construct above it() at line ${i + 1}: ${opener.trim()}`,
+        );
+      }
+      total += 1;
+      continue;
+    }
+    // Resolve `const <name>: readonly string[] = [ ... ];` and count its
+    // string entries. Anything else is a refusal, not a guess.
+    const decl = new RegExp(
+      `const ${loop[1]}\\s*:[^=]*=\\s*\\[([\\s\\S]*?)\\];`,
+      "m",
+    ).exec(src);
+    if (!decl) {
+      throw new Error(`${label}: cannot resolve the array "${loop[1]}" driving a test loop`);
+    }
+    const entries = (decl[1].match(/"[^"]+"/g) ?? []).length;
+    if (entries === 0) {
+      throw new Error(`${label}: the array "${loop[1]}" resolved to zero entries`);
+    }
+    total += entries;
+  }
+  return total;
+};
+
+const countTestsOf = (fileName: string): number =>
+  countTests(readFileSync(join(__dirname, fileName), "utf8"), fileName);
+
 describe("the report was actually read", () => {
   it("the document exists and has real content", () => {
     expect(report.length).toBeGreaterThan(20000);
@@ -490,51 +543,31 @@ describe("the counts the report states are the counts the code has", () => {
     // it() calls at any indent, then finds every generating for-loop, resolves
     // the array it iterates, and adds one test per element. If it meets a loop
     // shape it does not understand, it THROWS rather than guessing low.
-    const countTests = (src: string, label: string): number => {
-      const lines = src.split("\n");
-      let total = 0;
-      for (let i = 0; i < lines.length; i++) {
-        if (!/^\s*it\(/.test(lines[i])) continue;
-        // Walk backwards to the nearest enclosing statement that could
-        // multiply this it(). We only look at the block opener directly above
-        // the it(), which is the only generating shape this repo uses.
-        const opener = lines[i - 1] ?? "";
-        const loop = opener.match(/^\s*for \(const \w+ of (\w+)\) \{\s*$/);
-        if (!loop) {
-          // Guard the guard: if a loop-ish opener appears that we did not
-          // match, refuse instead of counting it as a plain single test.
-          if (/^\s*(for|while)\s*\(/.test(opener) || /\.forEach\(/.test(opener)) {
-            throw new Error(
-              `${label}: unrecognised generating construct above it() at line ${i + 1}: ${opener.trim()}`,
-            );
-          }
-          total += 1;
-          continue;
-        }
-        // Resolve `const <name>: readonly string[] = [ ... ];` and count its
-        // string entries. Anything else is a refusal, not a guess.
-        const decl = new RegExp(
-          `const ${loop[1]}\\s*:[^=]*=\\s*\\[([\\s\\S]*?)\\];`,
-          "m",
-        ).exec(src);
-        if (!decl) {
-          throw new Error(`${label}: cannot resolve the array "${loop[1]}" driving a test loop`);
-        }
-        const entries = (decl[1].match(/"[^"]+"/g) ?? []).length;
-        if (entries === 0) {
-          throw new Error(`${label}: the array "${loop[1]}" resolved to zero entries`);
-        }
-        total += entries;
-      }
-      return total;
-    };
 
+    /*
+     * THE REPORT SAID 72 AND 72 WAS TRUE. IT IS NOW 77.
+     *
+     * books-64 added five tests to the engine suite for the 5208A worksheet -
+     * the filed line numbering, the amounts ESD actually billed, the deliberate
+     * absence of line 24, the refusal to slip back to the 2011 numbering, and
+     * the notice living in the data.
+     *
+     * The books-41 sentence is NOT edited. It stays as the historical claim and
+     * is still asserted to be present, so the report and the repository can be
+     * reconciled by anyone reading either. Today's count is pinned exactly (a
+     * deletion still fails) and floored at 72 (coverage may never fall below
+     * what Michael was told).
+     */
     const engineSuite = readFileSync(join(__dirname, "wa-quarterly.test.ts"), "utf8");
     const engineTests = countTests(engineSuite, "wa-quarterly.test.ts");
     expect(flat, "the report's claim about the engine test count is missing").toContain(
       "72 tests of its own",
     );
-    expect(engineTests, `wa-quarterly.test.ts defines ${engineTests} tests`).toBe(72);
+    expect(engineTests, `wa-quarterly.test.ts defines ${engineTests} tests`).toBe(77);
+    expect(
+      engineTests,
+      "the engine suite has shrunk below the 72 tests the books-41 report promised",
+    ).toBeGreaterThanOrEqual(72);
 
     const registrySuite = readFileSync(
       join(__dirname, "payroll-rate-registry-core.test.ts"),
@@ -545,15 +578,26 @@ describe("the counts the report states are the counts the code has", () => {
     expect(registryTests, `the registry suite defines ${registryTests} tests`).toBe(108);
   });
 
-  it("the test counter itself can tell the difference between 65 and 72", () => {
+  it("the test counter itself can tell the difference between 70 and 77", () => {
     // Rule 16: prove the gate fires. If countTests were still the naive
-    // two-space regex, the engine suite would score 65. This test pins the
+    // two-space regex, the engine suite would score 70. This test pins the
     // gap so the counter can never silently regress to the broken version.
+    //
+    // books-64 moved both numbers by exactly five, because all five tests added
+    // to the worksheet describe block sit at two-space indent and so are visible
+    // to BOTH counters: 65 -> 70 naive, 72 -> 77 real. The GAP of seven is the
+    // thing that matters and it is unchanged - those seven are the loop-generated
+    // tests the naive regex cannot see. Measured, not assumed: `grep -c "^  it("`
+    // on the suite returns 70.
     const engineSuite = readFileSync(join(__dirname, "wa-quarterly.test.ts"), "utf8");
     const naive = (engineSuite.match(/^\s{2}it\(/gm) ?? []).length;
-    expect(naive, "the naive counter no longer undercounts, so this guard is stale").toBe(65);
-    // Seven of the engine's tests are generated, one per filed line id.
-    expect(72 - naive).toBe(7);
+    expect(naive, "the naive counter no longer undercounts, so this guard is stale").toBe(70);
+    // Seven of the engine's tests are generated, one per filed line id. The
+    // real count is RE-MEASURED here rather than written as 72 or 77, because a
+    // literal on this line has to be edited every time a test is added and is
+    // therefore the thing most likely to go stale. The gap is the invariant.
+    const real = countTestsOf("wa-quarterly.test.ts");
+    expect(real - naive).toBe(7);
   });
 
   it("the mutation count the report states is the count the script defines", () => {

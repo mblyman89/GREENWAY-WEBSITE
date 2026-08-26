@@ -327,6 +327,23 @@ export type WaQuarterReturn = {
   readonly quarter: QuarterRef;
   /** The single wage figure every ESD line is a percentage of. */
   readonly grossWagesCents: number;
+  /**
+   * ESD taxable wages: gross, less the part of each person's year-to-date pay
+   * above the annual wage base.
+   *
+   * EXPOSED IN books-64 BECAUSE THE 5208A WORKSHEET NEEDS IT AND THE
+   * ALTERNATIVE WAS TO COMPUTE IT TWICE. It was already being computed inside
+   * `buildWaQuarter` (it is what the UI and EAF lines are charged on) but only
+   * reached the outside world embedded in a `shownAs` sentence. The worksheet
+   * needs it as a NUMBER, to show line 16 and to derive line 14 (excess wages)
+   * by subtraction from gross.
+   *
+   * Returning it here rather than re-summing `esdTaxableWagesCents` in the
+   * worksheet is standing rule 25: one computation, one place. Two independent
+   * sums of the same quantity is how the taxable figure on the screen comes to
+   * differ from the taxable figure the tax was charged on.
+   */
+  readonly subjectsEsdTaxableCents: number;
   /** The hour count the L&I premium is charged on, and which the 5208B must also show. */
   readonly totalHours: number;
   readonly headcount: number;
@@ -746,6 +763,7 @@ export function buildWaQuarter(req: WaQuarterRequest): WaQuarterResult {
     value: {
       quarter: req.quarter,
       grossWagesCents,
+      subjectsEsdTaxableCents: esdTaxableCents,
       totalHours,
       headcount: subjects.length,
       lines,

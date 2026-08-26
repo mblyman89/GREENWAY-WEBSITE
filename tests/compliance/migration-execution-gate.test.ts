@@ -402,7 +402,52 @@ describe("the migration list is ordered the way the database will see it", () =>
     // post-state of the failure path - zero guard triggers after a refused
     // install. That is standing rule 105, and rule 39a's point that a pre-state
     // is evidence, extended to the path you hope never runs.
-    expect(listed[listed.length - 1]).toMatch(/^0206_/);
+    // ─── IT FIRED A TENTH TIME, ON 0207 (books-64) ────────────────────────
+    //
+    // 0207_employee_esd_upload_fields.sql adds the three columns an ESD upload
+    // needs and this database could not state: date_of_birth, wa_cares_exempt
+    // and soc_code. It exists because the store was written first and its
+    // column list was then CHECKED against the migrations rather than assumed:
+    // `grep -rln` over supabase/migrations for all three names returned nothing.
+    //
+    // WHY IT HAD TO BE EXECUTED AND NOT MERELY READ: 0207 carries a CHECK with
+    // a regular expression, and PostgreSQL's `~` is POSIX, not JavaScript. `~`
+    // is UNANCHORED by default, so a pattern missing its ^ and $ would MATCH
+    // the first six digits of a seven-digit string and accept it - sending ESD
+    // a truncated occupation code that looks plausible. That is unreadable from
+    // the page; it is only knowable by running it.
+    //
+    // 0207 WAS EXECUTED by scripts/payroll/verify-esd-upload-fields.sh against
+    // a real PostgreSQL 15 cluster: 21 checks, 0 failures, ALL CHECKS PASSED.
+    //   - THE PRE-STATE IS THE GAP (rule 39d). Before 0207 the store's own
+    //     nine-column select fails with 42703, naming date_of_birth.
+    //   - AFTER 0207 that select succeeds - and the script reads the column list
+    //     OUT OF EMPLOYEE_COLUMNS in esd-upload-store.ts rather than restating
+    //     it, so the migration and the store cannot drift apart silently.
+    //   - THE ANCHORS HOLD: '4120310' is REFUSED. This is the check the
+    //     unanchored-regex mistake fails, and the reason the script exists.
+    //     '41-2031' (as printed on Greenway's filed 5208B) and bare '412031'
+    //     are both accepted, so the refusals discriminate (rule 55).
+    //   - BLANK HAS EXACTLY ONE REPRESENTATION: NULL is accepted and '' is
+    //     refused, so `(e.soc_code ?? "").trim()` in the store cannot be
+    //     reading two different spellings of "no SOC code".
+    //   - date_of_birth accepts NULL, which is what lets buildEsdUpload refuse
+    //     BY NAME instead of inventing a birth date WA Cares eligibility turns
+    //     on; and it refuses '13/45/1999' because it is a real date type.
+    //   - wa_cares_exempt reads back FALSE on a row that never mentions it and
+    //     REFUSES an explicit NULL, so "unknown" cannot masquerade as "no".
+    //   - IDEMPOTENT over three applications: 3 columns, and exactly ONE CHECK.
+    //
+    // The script found a bug in ITSELF before it found anything about 0207: the
+    // first draft built its labels by interpolating the value into a second
+    // quoted string, nesting apostrophes, and eight inserts died of syntax
+    // errors. Six of those were in the REFUSE set, where a syntax error is a
+    // non-zero exit status and would have been banked as "the CHECK refused it"
+    // by a laxer assertion. It reported FAIL instead, because the refuse branch
+    // requires the words "violates check constraint" and classifies "syntax
+    // error" as a harness bug - standing rule 48: a check that cannot classify
+    // must FAIL, not skip, and not accept the right answer for the wrong reason.
+    expect(listed[listed.length - 1]).toMatch(/^0207_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

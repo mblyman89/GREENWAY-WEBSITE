@@ -254,3 +254,151 @@ survives, five entity boxes present, nothing else appears) exactly as the 941's
 does; a test asserts both adapters route through the one shared builder; and a
 third test discovers from the generated box map that every entity box has a
 rectangle on the 940's paper, page 2 included.
+
+---
+
+## D-10 — Q1 2026 UI and EAF cannot both be reproduced by one rounding rule
+
+**Found:** books-64, by computing the two ESD taxes from Michael's own filed Q1
+2026 figures and comparing with what ESD actually charged.
+
+**Severity: one cent, and DELIBERATELY UNRESOLVED.**
+
+Filed Q1 2026: gross $61,531.21 (the eleven wage-detail rows sum to exactly
+that), UI $227.66, EAF $18.46, charges this quarter $246.12.
+
+```
+UI  0.37% of 6153121c = 22766.5477c   statutory half-up -> 22767   ESD CHARGED 22766
+EAF 0.03% of 6153121c =  1845.9363c   statutory half-up ->  1846   ESD CHARGED  1846
+```
+
+EAF requires the round UP. UI requires the round DOWN. **No single rounding rule
+reproduces both**, and rounding per employee before summing reproduces neither
+(22767 / 1844). One reading does fit the total to the cent: `0.40% of 6153121c =
+24612.484c -> 24612`, i.e. ESD may compute the combined 0.40% once and round at
+the end, then apportion. Q2 2026 is consistent with either reading — both give
+$275.70 — so the evidence available cannot decide it.
+
+**Why it is not fixed.** Picking the rounding that reproduces Q1 would be
+inventing a rule the legislature did not write (standing rule 62d). RCW
+50.24.010 and RCW 50.24.014(2)(b) each command rounding for their own section,
+which is what the engine implements, and that is a defensible reading of the
+statute rather than a bug. ESD bills from its own computation and mails a
+monthly billing statement, so the practical exposure is that Michael's screen
+may read one cent above ESD's invoice.
+
+**What the system does instead.** The 5208A worksheet's total line says so in
+plain English and tells him to pay what ESD bills. Recording the discrepancy is
+worth more than resolving it wrongly: if a third quarter ever discriminates
+between the two readings, the evidence is here to settle it.
+
+---
+
+## D-11 — `buildPaidLeaveCsv` existed for eight slices with no caller
+
+**Found:** books-64. `grep -rn "buildPaidLeaveCsv" src/` outside its own module
+returned nothing.
+
+**Severity: the feature did not exist.** 511 lines of correct, spec-quoted,
+gate-covered CSV writer that no screen could reach — while Michael's instruction
+for this very slice was *"we will need an export .csv for esd and pfml/ wa
+cares."* This is D-08's class repeating: a pure core, tested and right, wired to
+nothing. Standing rule 125(d): a run needs a way in that is not a URL.
+
+**Fixed in books-64.** `src/lib/payroll/esd-upload-store.ts` joins the database
+quarter to both writers, and
+`src/app/admin/books/wa-quarterly/esd-upload/route.ts` serves each as a
+download with `Content-Disposition: attachment` and `Cache-Control: no-store`.
+Building the store is what exposed D-12 below.
+
+---
+
+## D-12 — the ESD upload store selected three columns that did not exist
+
+**Found:** books-64, immediately after writing the store, by checking its column
+list against the migrations instead of assuming:
+
+```
+$ grep -rln "date_of_birth\|wa_cares_exempt\|soc_code" supabase/migrations/
+(no output)
+```
+
+**Severity: the download would have failed in his hands, at a deadline.**
+`esd-upload-store.ts` selected nine employee columns; three had never been
+created. `esd-paid-leave-csv-core.ts` had *recorded* the gap in books-56 — "this
+file CANNOT be produced from what the engine holds today" — and the note was
+right, which is the only reason the fix was a short job rather than an
+excavation.
+
+**Fixed:** migration `0207_employee_esd_upload_fields.sql`, executed against a
+real PostgreSQL 15 by `scripts/payroll/verify-esd-upload-fields.sh`: 21 checks,
+0 failures. `date_of_birth` is nullable (so the upload refuses by name rather
+than inventing a date WA Cares eligibility turns on), `wa_cares_exempt` is
+`not null default false` (absent and "no" are the same claim), and `soc_code` is
+nullable with a CHECK — because ESD says the column "can be only 6 digits or
+blank", so blank is a documented value rather than a gap.
+
+**The gate that mattered was the regex.** PostgreSQL's `~` is POSIX and
+unanchored; a pattern missing `^`/`$` would match the first six digits of a
+seven-digit code and accept it, sending ESD a plausible-looking truncated
+occupation code. `'4120310'` is now an executed refusal, not a reasoned one.
+
+---
+
+## D-13 — the slice plan put the ESD total on line 24; the filed return says 19
+
+**Found:** books-64, while writing the 5208A worksheet, by opening
+`1ST QUARTER FORM 5208A - SAGE.pdf` and
+`example_form_5208_with_real_qtr_2_data.pdf` and reading the captions instead of
+trusting the plan's own table.
+
+**Severity: it would have printed a figure that asserted something false.** The
+filed 5208A numbers its money lines:
+
+```
+19) TOTAL TAX DUE          Add lines #17 and #18
+20) LATE PAYMENT PENALTY
+21) INTEREST
+22) LATE-REPORT PENALTY
+23) PRIOR BALANCE TO ADD (or credits to subtract)
+24) AMOUNT DUE             Add lines #19, #20, #21, #22, and #23
+```
+
+The engine computes UI + EAF, which is **line 19**. It computes no penalties, no
+interest and no prior balance, so it cannot compute line 24. Putting its total
+there would have asserted that Greenway owes nothing in penalties — a statement
+only ESD's monthly billing statement can make.
+
+**Fixed** before any of it reached a screen. `FILED_2026_LINE_NUMBERS` now
+carries `totalTaxDue: "19"` and `amountDue: "24"`, the worksheet fills 19 and
+explains why it leaves 24 empty, and a self-test asserts line 24 is **absent** —
+the assertion that would have failed under the plan's original reading.
+
+---
+
+## D-14 — his Sage record copy shows a UI rate and wage base that ESD did not use
+
+**Found:** books-64, comparing the two documents for the same quarter.
+
+**Severity: unresolved, and it is about HIS books rather than our code.** For
+Q1 2026 the two records disagree:
+
+| | Sage record copy (5208A) | EAMS confirmation (what ESD charged) |
+| --- | --- | --- |
+| UI rate | 0.0064 (0.64%) | 0.37% |
+| Taxable wage base printed | $72,800 | $78,200 |
+| UI tax | $393.80 | **$227.66** |
+| Total | $412.26 | **$246.12** |
+
+ESD's own confirmation is authoritative and the money actually moved on
+$246.12, which is the figure this system reproduces. But Michael's Sage
+installation computed the quarter at a rate 73% too high against a stale wage
+base, and its "Record Copy" is the document that would be handed to a CPA or an
+auditor. The Q2 example carries the corrected $78,200 base but still prints
+0.0064.
+
+**Not fixed here because it is not ours to fix**, and guessing which record is
+right would be exactly the wrong move — but it is recorded because a $166.14
+discrepancy per quarter in his own books is worth his knowing about, and because
+it is independent confirmation that this system's rate registry (0.37% / 0.03%,
+$78,200) matches what ESD actually billed.

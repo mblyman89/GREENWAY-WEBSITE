@@ -38,6 +38,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  NOT_A_FILING_COPY,
+  assertFiledNumberingIsNotThe2011Numbering,
+  build5208aWorksheet,
+} from "@/lib/payroll/esd-5208-worksheet-core";
+import {
   ALL_WA_QUARTER_REFUSAL_CODES,
   buildWaQuarter,
   exactMilliPct,
@@ -878,5 +883,96 @@ describe("wa-quarterly: the mentor covers the engine", () => {
     });
     expect(text.length).toBeGreaterThan(200);
     expect(text).toContain("3,558");
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * books-64 - THE 5208A WORKSHEET, AND THE LINE NUMBER THAT WAS WRONG
+ * ---------------------------------------------------------------------------
+ *
+ * These tests exist because of defect D-13. The slice plan recorded the ESD
+ * total as line 24. Reading Michael's actual filed returns with
+ * `pdftotext -layout` said otherwise:
+ *
+ *   19) TOTAL TAX DUE   Add lines #17 and #18
+ *   24) AMOUNT DUE      Add lines #19, #20, #21, #22, and #23
+ *
+ * Lines 20 through 23 are penalty, interest and prior balance. The engine
+ * computes none of them, so a figure at line 24 would assert Greenway owes no
+ * penalty - a claim we cannot support. The gate below therefore asserts line 24
+ * is ABSENT, which is rule 87: absence asserted AS absence.
+ *
+ * These tests reuse `builtFiledQuarter()` rather than building a second
+ * fixture. A worksheet test with its own invented quarter can agree with a
+ * broken worksheet; one driven by the numbers ESD actually billed cannot.
+ */
+describe("esd-5208-worksheet: keyed to the FILED line numbers, not the 2011 artwork", () => {
+  it("puts every amount on the line number the filed return prints", () => {
+    const ws = build5208aWorksheet(builtFiledQuarter());
+    const byLine = new Map(ws.lines.map((l) => [l.lineNumber, l]));
+
+    // Existence FIRST (rule 66d): asserting a line's amount when the line is
+    // missing reads as a null-vs-undefined puzzle rather than as a bug.
+    for (const n of ["13", "14", "16", "17", "18", "19"]) {
+      expect(byLine.has(n), `filed line ${n} is missing from the worksheet`).toBe(true);
+    }
+
+    // The three wage lines must satisfy the form's own subtraction.
+    const gross = byLine.get("13")!.amountCents;
+    const excess = byLine.get("14")!.amountCents;
+    const taxable = byLine.get("16")!.amountCents;
+    expect(gross - excess).toBe(taxable);
+
+    // And the tax lines must total to line 19 exactly, each already rounded.
+    expect(byLine.get("17")!.amountCents + byLine.get("18")!.amountCents).toBe(
+      byLine.get("19")!.amountCents,
+    );
+    expect(byLine.get("19")!.isTotal).toBe(true);
+  });
+
+  it("reproduces the amounts Employment Security actually billed", () => {
+    const ws = build5208aWorksheet(builtFiledQuarter());
+    const byLine = new Map(ws.lines.map((l) => [l.lineNumber, l]));
+    /*
+     * The oracle's ids are "esd-ui" and "esd-eaf", NOT the quarter-prefixed
+     * names the first draft of this test guessed at. `filedCents` throws on an
+     * unknown id rather than returning undefined, which is the only reason the
+     * guess failed loudly instead of comparing undefined to undefined and
+     * passing. That throw is worth more than the test it guards.
+     *
+     * Worth knowing what these figures are: the filed UI tax is $255.02, being
+     * 0.37% of the quarter's wages. Greenway's Sage record copy computes
+     * $441.11 from a stale 0.64% rate (defect D-14). The worksheet must agree
+     * with what Employment Security BILLED, not with what the bookkeeping
+     * software printed.
+     */
+    expect(byLine.get("17")!.amountCents).toBe(filedCents("esd-ui"));
+    expect(byLine.get("18")!.amountCents).toBe(filedCents("esd-eaf"));
+    expect(byLine.get("19")!.amountCents).toBe(filedCents("esd-total"));
+  });
+
+  it("leaves line 24 blank, because penalty and interest are not computed", () => {
+    const ws = build5208aWorksheet(builtFiledQuarter());
+    const lineNumbers = ws.lines.map((l) => l.lineNumber);
+    expect(lineNumbers).not.toContain("24");
+    // Guard the guard: if the worksheet ever stopped emitting lines at all,
+    // the assertion above would pass vacuously.
+    expect(lineNumbers.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("refuses to be confused with the obsolete 2011 numbering", () => {
+    // The 2011 blank form numbers these same six lines 12/13/14/15/16/17.
+    expect(() => assertFiledNumberingIsNotThe2011Numbering()).not.toThrow();
+    const ws = build5208aWorksheet(builtFiledQuarter());
+    const byLine = new Map(ws.lines.map((l) => [l.lineNumber, l.caption]));
+    // Line 12 on the FILED form is the 12th-day headcount, not gross wages.
+    // If gross wages ever appears at 12, we are back on the 2011 artwork.
+    expect(byLine.get("12")).toBeUndefined();
+  });
+
+  it("carries the not-a-filing-copy notice in the DATA, not the renderer", () => {
+    const ws = build5208aWorksheet(builtFiledQuarter());
+    expect(ws.notAFilingCopyNotice).toBe(NOT_A_FILING_COPY);
+    expect(ws.notAFilingCopyNotice).toContain("incorrectly formatted reports");
   });
 });

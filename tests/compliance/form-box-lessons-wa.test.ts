@@ -19,6 +19,7 @@ import { describe, it, expect } from "vitest";
 import {
   GREENWAY_LNI_RISK_CLASS,
   RCW_50A_10_030_PATH,
+  RCW_50_12_070_PATH,
   RCW_50_24_010_PATH,
   RCW_51_16_140_PATH,
   WAC_192_310_010_PATH,
@@ -44,6 +45,17 @@ const corpora = new Map<string, string>([
    * for holding the text of anything we quote.
    */
   [WAC_192_310_010_PATH, readFileSync(WAC_192_310_010_PATH, "utf8")],
+  /*
+   * Added in books-64 for the 12th-day headcount lesson.
+   *
+   * This map is the reason the gate has teeth: a lesson that quotes a file NOT
+   * listed here fails on "no mirrored corpus" rather than passing unchecked.
+   * That is how the first draft of the headcount lesson was caught, and it is
+   * why the path is imported from the lessons module rather than retyped -
+   * a retyped path could drift from the one the lesson actually cites, and the
+   * gate would then verify a file nobody quotes.
+   */
+  [RCW_50_12_070_PATH, readFileSync(RCW_50_12_070_PATH, "utf8")],
 ]);
 
 describe("every RCW quote is really in the statute", () => {

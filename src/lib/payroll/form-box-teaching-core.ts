@@ -1334,6 +1334,50 @@ export const ESD_5208A_TEACHING: readonly TeachingBox[] = [
       "statutory accounts, 0.02% under RCW 50.24.014(1)(a) and 0.01% under (1)(b).",
   },
   {
+    /*
+     * ═══ NOT AN ENGINE LINE, AND THAT IS THE POINT (books-64) ═══
+     *
+     * The 5208A prints THREE wage lines and the engine emits none of them: it
+     * emits the two taxes and their total. Gross (13), excess (14) and taxable
+     * (16) are wage figures the form derives, and line 14 is the one that bites
+     * — it is cumulative across the YEAR, not the quarter.
+     *
+     * A box with no engine line is legitimate here for the same reason the
+     * whole 5208B is: `assertSpecimenMatchesTheEngine` walks the ENGINE's lines
+     * and requires each to be taught, not the reverse. A form may teach more
+     * than it computes. What it may not do is compute something it cannot
+     * explain.
+     */
+    box: "esd-excess-wages",
+    caption: "Excess wages",
+    whoseSource: wa("not_money"),
+    howItGetsFilled:
+      "The part of each person's pay this quarter that sits ABOVE the annual taxable wage " +
+      "base, counting from 1 January. Derived on the worksheet by subtracting taxable wages " +
+      "from gross wages, so it can never disagree with the figure the tax is charged on.",
+  },
+  {
+    /*
+     * ALSO NOT AN ENGINE LINE, AND DELIBERATELY SO.
+     *
+     * Line 12 asks for a headcount on the payroll period containing the 12th
+     * day of each of the three months. The engine does not compute it, and this
+     * system does not claim to: it is a fact about who was ON THE PAYROLL on
+     * three specific dates, which is not the same question as who was paid
+     * during the quarter. Teaching it without computing it is the honest
+     * position — Michael's filed Q1 shows 10 / 11 / 9 against 11 employees paid
+     * in the quarter, which is precisely why the two cannot be conflated.
+     */
+    box: "esd-headcount-12th",
+    caption: "Number of employees who were paid wages during the payroll period that includes the 12th day of the month",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "Three separate counts, one per month of the quarter, of people on the payroll for the " +
+      "pay period containing the 12th. NOT computed by this system: it is a fact about three " +
+      "specific dates rather than about the quarter's wages, and it is not the same number as " +
+      "the count of people paid during the quarter.",
+  },
+  {
     // MISSING FROM THE FIRST DRAFT. The bottom line of the form - the figure
     // Michael actually pays - had no teaching entry at all, which was found by
     // printing the engine's real lines rather than by re-reading this file.

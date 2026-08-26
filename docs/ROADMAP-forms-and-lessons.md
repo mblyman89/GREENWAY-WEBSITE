@@ -147,19 +147,46 @@ books-55 figure is kept in the right-hand columns rather than overwritten,
 because the movement is the interesting part and a table that only ever shows
 today's number cannot be audited against the slice that produced it:
 
-| lesson set | lessons | ties | was (books-56) | was (books-55) |
-| --- | --- | --- | --- | --- |
-| `form-box-lessons-941.ts` | 24 | 25 | 20 / 19 | 20 / 19 |
-| `form-box-lessons-940.ts` | 20 | 20 | 20 / 20 | 20 / 20 |
-| `form-box-lessons-wa.ts` | 14 | 11 | 14 / 11 | 8 / 4 |
-| `form-box-lessons-w2.ts` | 26 | 20 | 26 / 20 | 20 / 13 |
-| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 | 31 / 34 |
-| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 | 4 / 6 |
-| **total** | **119** | **116** | **115 / 110** | **103 / 96** |
+| lesson set | lessons | ties | was (books-60) | was (books-56) | was (books-55) |
+| --- | --- | --- | --- | --- | --- |
+| `form-box-lessons-941.ts` | 24 | 25 | 24 / 25 | 20 / 19 | 20 / 19 |
+| `form-box-lessons-940.ts` | 20 | 20 | 20 / 20 | 20 / 20 | 20 / 20 |
+| `form-box-lessons-wa.ts` | 16 | 13 | 14 / 11 | 14 / 11 | 8 / 4 |
+| `form-box-lessons-w2.ts` | 26 | 20 | 26 / 20 | 26 / 20 | 20 / 13 |
+| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 | 31 / 34 | 31 / 34 |
+| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 | 4 / 6 | 4 / 6 |
+| **total** | **121** | **118** | **119 / 116** | **115 / 110** | **103 / 96** |
 
-Every one of the 116 resolves to a box that exists. The W-3 is the first set
-with more ties than lessons, which is what a transmittal should look like: most
-of its boxes have to agree with something on another form.
+Every one of the 118 resolves to a box that exists — `assertEveryTieResolves`
+walks them and names any that does not. The W-3 is the first set with more ties
+than lessons, which is what a transmittal should look like: most of its boxes
+have to agree with something on another form.
+
+### What moved in books-64: the two boxes that bite on the 5208A
+
+Michael's instruction for this slice was to work the Washington forms "learning
+lessons on boxes that bite". The ESD return has exactly two that bite, and both
+were already carrying a specimen box with no lesson behind it:
+
+- **Line 14, excess wages.** The only figure on the return that counts from
+  1 January rather than from the start of the quarter. It bites because the
+  annual wage base is per PERSON per YEAR, so a company whose quarterly wages
+  exceed the base can still correctly report zero excess — which is exactly
+  Greenway's Q1 and Q2 2026 position.
+- **Line 12, the 12th-day headcount.** Three separate counts of who was on the
+  payroll in the pay period containing the 12th of each month. It bites because
+  the obvious shortcut — the number of rows on the wage detail — is wrong.
+  Greenway's own filed Q1 proves it: eleven people were paid, and the three
+  counts filed were 10, 11 and 9.
+
+Neither is an engine line, and that is the point. `assertSpecimenMatchesTheEngine`
+walks the ENGINE's lines and requires each to be taught, not the reverse, so a
+form may teach more than it computes. The headcount in particular is NOT
+computed by this system and the worksheet says so on its face: it is a fact about
+three dates, not about the quarter's wages, and inventing it would be guessing.
+
+The WA row therefore moves 14 → 16 lessons and 11 → 13 ties. Every other row is
+unchanged, which is the check that this slice touched only what it claimed to.
 
 ### What moved in books-60, and the four boxes deliberately left untaught
 

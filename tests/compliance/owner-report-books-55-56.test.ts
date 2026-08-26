@@ -109,11 +109,36 @@ describe("books-55/56 owner report: the figures are the engine's, not the prose'
     expect(FLAT).toMatch(/thirty-one boxes/i);
   });
 
-  it("states the Washington lesson count the engine actually produces", () => {
-    // The report's claim is a TRANSITION: "eight to fourteen". The destination
-    // is what the code can prove, so the destination is what is pinned.
-    expect(WA_QUARTERLY_LESSONS.length, "a WA lesson was deleted").toBe(14);
+  /**
+   * THE REPORT'S CLAIM IS HISTORICAL AND STAYS HISTORICAL.
+   *
+   * The report's claim is a TRANSITION: "eight to fourteen". That was true when
+   * it was written, and books-64 then took the WA set to sixteen by teaching the
+   * two boxes that bite on the 5208A - line 14 (excess wages) and line 12 (the
+   * 12th-day headcount).
+   *
+   * The tempting fix is to edit the 14 here to a 16. That would be wrong twice
+   * over: it would make this gate assert something the REPORT does not say, and
+   * it would leave Michael holding a PDF whose sentence no longer matches the
+   * repository with nothing to tell him which one moved.
+   *
+   * So this pins three separate things, in the same shape books-58 uses for the
+   * 941 row:
+   *
+   *   1. The report's own sentence must still be there, unedited.
+   *   2. Today's count is asserted EXACTLY, so a deletion still fails.
+   *   3. Today's count may never fall below the fourteen he was promised.
+   *
+   * A single equality would have satisfied 2 alone, and the count is the least
+   * interesting of the three.
+   */
+  it("keeps the books-56 transition on the record and states today's count", () => {
     expect(FLAT).toMatch(/eight to fourteen/i);
+    expect(WA_QUARTERLY_LESSONS.length, "a WA lesson was deleted").toBe(16);
+    expect(
+      WA_QUARTERLY_LESSONS.length,
+      "the WA set has shrunk below the fourteen lessons the books-56 report promised Michael",
+    ).toBeGreaterThanOrEqual(14);
   });
 
   /**

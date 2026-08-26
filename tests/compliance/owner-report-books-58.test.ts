@@ -92,7 +92,13 @@ describe("books-58 owner report: the coverage table matches the engine", () => {
     // opens the page.
     { formId: "form_941", total: 27, taught: 24, untaught: 3 },
     { formId: "form_940", total: 30, taught: 20, untaught: 10 },
-    { formId: "esd_5208a", total: 3, taught: 3, untaught: 0 },
+    // books-64 moved this row 3 -> 5, and BOTH new boxes arrived already
+    // taught, so `untaught` stays 0. The two are line 14 (excess wages) and
+    // line 12 (the 12th-day headcount) -- the two boxes on the unemployment
+    // return that bite, neither of which the engine computes. Same treatment as
+    // the 941 row above: today's engine output is what is pinned, because that
+    // is what Michael sees when he opens the page.
+    { formId: "esd_5208a", total: 5, taught: 5, untaught: 0 },
     { formId: "esd_5208b", total: 4, taught: 4, untaught: 0 },
     { formId: "pfml_wa_cares", total: 3, taught: 3, untaught: 0 },
     { formId: "lni_quarterly", total: 4, taught: 4, untaught: 0 },

@@ -256,7 +256,21 @@ describe("every figure in the report is re-derived, not remembered", () => {
           "amount: 1a, 1b, 2, 4a-4e and 15b-15e. The books-53 letter said 18 and 18 was true " +
           "when it was written.",
       },
-      { formId: "esd_5208a", claimed: 3, engineNow: 3, note: null },
+      {
+        formId: "esd_5208a",
+        claimed: 3,
+        engineNow: 5,
+        note:
+          "books-64 added the two boxes that bite on the unemployment return: line 14 (excess " +
+          "wages) and line 12 (the number of employees paid in the payroll period containing " +
+          "the 12th day of each month). 3 was true when the books-53 letter was written \u2014 the " +
+          "form taught exactly the three boxes the ENGINE emits, being the UI tax, the EAF tax " +
+          "and their total. The two added here emit no amount and are deliberately not " +
+          "computed: excess wages is derived on the worksheet by subtraction, and the headcount " +
+          "is a fact about three specific dates that this system does not hold. They are taught " +
+          "because they are the two boxes on this return Michael can get wrong without any " +
+          "arithmetic disagreeing with him.",
+      },
       { formId: "esd_5208b", claimed: 4, engineNow: 4, note: null },
       { formId: "pfml_wa_cares", claimed: 3, engineNow: 3, note: null },
       { formId: "lni_quarterly", claimed: 4, engineNow: 4, note: null },
