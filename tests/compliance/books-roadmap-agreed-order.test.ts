@@ -1008,7 +1008,14 @@ describe("books-46: the roadmap's slice A claims are re-derived, not trusted", (
      * where it is not - so raising this number does not weaken anything. It
      * only records that a human looked at the new rows.
      */
-    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(11);
+    /*
+     * 11 -> 12 in books-61: the roadmap now names `form-facsimile-core.test.ts`
+     * (18), the gate for rendering the actual printed forms. It went red the
+     * moment that row was documented, which is the whole point of pinning the
+     * count of counts - a new claim in the document cannot start life
+     * unverified. The loop below checks the figure itself.
+     */
+    expect(rows.length, "the roadmap prints no test counts at all — regex drift?").toBe(12);
 
     for (const [, fileName, printedRaw] of rows) {
       const rel = join("tests", "compliance", fileName);

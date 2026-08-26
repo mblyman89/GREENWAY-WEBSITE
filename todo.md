@@ -2964,3 +2964,155 @@ building the matcher twice.
        (c) State WHY the number moved, in the same place. "Four of the seven were
            taught and three were deliberately left" is the useful sentence; "13"
            on its own teaches nothing.
+
+120. **A PICTURE PROVES POSITION. IT DOES NOT PROVE ATTRIBUTION (books-61).**
+     The W-2 box map was verified by rendering all 94 IRS rectangles tinted over
+     the real artwork and looking at it. It looked perfect. It was wrong three
+     times over, because every rect was tinted SOMETHING and the eye reads that
+     as "all accounted for":
+       - `Boxes?([0-9]+)_ReadOrder` matches "Boxe" plus an optional "s", so it
+         matched NONE of `Box1_ReadOrder`..`Box19_ReadOrder`. Boxes 10, 12, 17
+         and 19 fell through to a positional fallback and box 17's STATE INCOME
+         TAX was attributed to box 16's STATE WAGES.
+       - "nearest label above, anywhere to the left" gave box 11's rect to box
+         `e`, so box 11 vanished from the map entirely -- a whole line missing
+         from a tax form, invisible in the overlay because box e was tinted.
+     All three were found in one minute by dumping `box -> rect x,y` as TEXT and
+     reading it against the printed labels.
+       (a) A visual check answers "is this rectangle in the right place". Only a
+           numeric dump answers "does this rectangle belong to this box".
+       (b) When a fallback exists, assert how many items took the AUTHORITATIVE
+           path. A silent fallback that handles 100% of cases is a fallback that
+           replaced the real rule.
+       (c) Regexes over machine-generated field names get their own test with a
+           real name from the real file. `Boxes?` vs `Box(?:es)?` is one
+           character and four wrong tax boxes.
+
+121. **THE AGENCY STATES ITS OWN TYPOGRAPHY. TAKE IT (books-61).**
+     Every IRS `/Widget` carries `/Q` (alignment) and often `/MaxLen`, inherited
+     down `/Parent` exactly as `/FT` is. I first inferred "which rectangle holds
+     the cents" from a WIDTH THRESHOLD (`w <= 28pt`). It agreed with the 941 by
+     luck. The property itself is in the file: on 941 page 1 exactly 22 fields
+     carry `/MaxLen 3` and every one is a cents box.
+       (a) The proxy also travelled badly, which is how proxies fail. On the W-2
+           `/MaxLen 3` appears four times and NONE are cents -- they are the 14b
+           Treasury Tipped Occupation Code boxes. A width rule would have split
+           an occupation code into dollars and cents.
+       (b) "Money is right-aligned" is true on the 941 (44 fields at `/Q 2`) and
+           FALSE on the W-2, whose money boxes include centred and left-aligned
+           ones. Do not generalise one form's layout into a law.
+       (c) Rule 23 restated for documents: take the property, not the correlate.
+
+122. **THE SCREEN FORMATTER IS NOT THE PAPER FORMATTER (books-61).**
+     `formatBoxValue` renders `$68,923.45`, which is right in a sentence on a
+     teaching page. Greenway's own filed returns print `68923 45` on the 941 and
+     `11029.32` on the W-2 -- no currency symbol, no thousands separators.
+       (a) Reusing the screen formatter would have put `$68,923` in a 64.8pt box
+           that either overflows the rule or clips, and a clipped money figure on
+           a return is a wrong money figure.
+       (b) Derive the paper figure from the INTEGER CENTS, never by parsing the
+           formatted string back apart. Parsing a formatted number is how a
+           locale that groups digits differently silently changes a tax figure.
+       (c) Splitting dollars from cents is conditional on the FORM having a cents
+           rectangle. Assuming it always does dropped the cents from every W-2
+           box -- understating each by up to 99c on the copy an employee files.
+       (d) `blankOnPurpose` must be honoured on paper BEFORE the money branch,
+           exactly as `notComputedYet` is. `0.00` in W-2 box 17 is a claim that
+           Washington withheld zero state income tax -- a statement about a tax
+           that does not exist. His filed W-2 leaves it blank; so do we.
+
+123. **ASK THE PAGE HOW MANY FORMS ARE ON IT (books-61).**
+     A sheet of tax stock is not necessarily one form. The IRS W-2 Copy B page
+     is TWO forms, and I had rendered it three times without noticing, because
+     every screenshot I took was cropped to the top one.
+       (a) Partition the geometry NUMERICALLY before deciding what a page is:
+           do the rectangles split into N groups that are exact translations of
+           each other by `height / N`? On w2-copyb the answer is 2 groups of 47
+           at a pitch of exactly 396.0pt, with zero unmatched rectangles. On both
+           941 pages the answer is 1. The question is cheap and it is asked of
+           every page, not of the one I happened to doubt.
+       (b) Corroborate with the agency's own names. The IRS calls the two bands
+           `CopyB_Top` and `CopyB_Bottom`. Two independent sources agreeing is
+           the standard; a measurement alone is a coincidence waiting to happen.
+       (c) Measure the SEAM from printed text, never assume the midpoint. The top
+           form's last line ends at yMax 382.43 and the bottom form's first line
+           begins at yMin 433.17, so 396.0 sits in 50.7pt of blank paper and
+           cannot clip a caption.
+       (d) This is rule 120 again in a new costume. A picture proves position, it
+           does not prove attribution -- AND IT DOES NOT PROVE COVERAGE. Crop a
+           screenshot and you have decided in advance what you are willing to
+           see. Look at the whole artifact at least once.
+
+124. **NEVER FILL A REPEATED FORM WITH A REPEAT OF THE SAME DATA (books-61).**
+     Two copies on one sheet is a distribution convenience, not a duplication
+     instruction. Michael's own Sage-produced W-2 puts TWO DIFFERENT EMPLOYEES
+     on one page -- TERI BECKER on the top form, STEPHEN BENOIT on the bottom.
+       (a) So the second form gets the second subject, from the same list the
+           rest of the screen already uses.
+       (b) If there is no second subject, the second form stays BLANK. Blank IRS
+           stock is what a real sheet looks like at the end of an odd-numbered
+           run, and it is honest. Duplicating the first employee onto it would be
+           a plausible-looking invention -- the exact failure mode rule 122(d)
+           and the `MONEY_SLOT_IS_LAST` note already exist to prevent.
+
+125. **A FORM IS NOT A DELIVERABLE UNTIL IT PRODUCES THE RUN (books-61).**
+     Michael: "we have many employees so that means many w-2s. We have multiple
+     quarters, so that means needing forms that can produce those quarters...
+     It's meant to be a part of the process for bookkeeping and taxes, not just
+     informative." One specimen sheet for a ten-employee payroll is a demo.
+       (a) Paginate exactly as the paper paginates, and MEASURE the pitch per
+           copy rather than per form. His own filing proves the count belongs to
+           the COPY: Copy B is 2-up (5 sheets x 2 = 10 employees) and Copy D is
+           4-up (3 sheets x 4 = 12 slots for the same 10 people). Same W-2.
+       (b) Order the run the way his own filing orders it, and verify the rule
+           against the alternatives instead of adopting the first one that looks
+           right. Sage prints surname-then-first-name: `sorted(pairs) == pairs`
+           is True for (last, first) and False for first name alone. Greenway
+           has two employees called Michael, so the tie-break is load-bearing.
+       (c) Fill top-then-bottom and leave the tail of the last sheet BLANK -
+           which is what his Copy D does with its two spare slots.
+       (d) A run needs three ways in, because a CPA asks all three questions:
+           the whole run in paper order, one named person directly, and one
+           period. A route that only answers "sheet 4" answers none of them.
+
+126. **EVERY RECTANGLE ON A FILED FORM IS FILLED OR REASONED. NEVER MERELY
+     ABSENT (books-61).** A facsimile fails silently and beautifully: a W-2
+     with an empty box b reads as a blank form, not a broken one. MEASURED, not
+     imagined - a live W-2 was emitting only its 8 money boxes (no SSN, no EIN,
+     no employer, no employee name) while the teaching specimen emitted all 26,
+     which is exactly why nobody noticed: only the specimen was screenshotted.
+     The 941 was worse - 18 of page 1's 70 rects and 32 of page 2's 35 unplaced,
+     including the EIN. A 941 with no EIN is not a return, it is a page of
+     arithmetic the IRS cannot match to anybody.
+       (a) The derivation script EXITS rather than emitting a rect that is
+           neither bound to a box nor listed with a written reason. Two states,
+           never three; the third state IS the bug.
+       (b) The reason is keyed by RECT NAME, the same way on every form. Writing
+           this gate immediately found the 941 answering per-rect and the W-2
+           only per-label - same question, one form silent.
+       (c) A reason must be a sentence, not a shrug. Pinned at >30 chars.
+       (d) Ask the question of EVERY form, not the one that failed. The 941's
+           defect was found only because the W-2's prompted the question.
+           Rule 23, applied to rendering.
+
+127. **GEOMETRY IS MEASURED FROM THE AGENCY'S FILE, NEVER ESTIMATED (books-61).**
+     Positions on a document that gets FILED cannot come from a guess that
+     looks right.
+       (a) Read /Rect, /FT, /Q, /MaxLen and /Ff out of the AcroForm. Convert
+           once (PDF's origin is bottom-left, CSS's is top-left) and state the
+           conversion where it happens.
+       (b) /Ff bit 25 is COMB: divide the box into /MaxLen equal cells, one
+           character each. It is why his filed 941 prints "4 6 - 4 2 1 7 0 1 6".
+           A comb field with no /MaxLen has no cell count - REFUSE it, do not
+           choose one.
+       (c) A first comb implementation derived cell width from a FONT METRIC
+           GUESS (h * 0.52). It rendered correctly and was DELETED, because a
+           guess that currently looks right is how a figure drifts off the line
+           on a filed return. Divide the agency's rectangle by the agency's own
+           cell count: arithmetic, not estimation.
+       (d) Mirror the source PDF with its sha256. If the agency reissues the
+           form the hash moves, and the change becomes a deliberate act in a
+           commit rather than a silent shift in where numbers print.
+       (e) A gate that fires on LINE-WRAPPING is testing the formatter, not the
+           promise. Normalise whitespace and ask the question the reader
+           experiences. Reflowing working code to please a regex is backwards.

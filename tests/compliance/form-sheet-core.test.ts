@@ -518,7 +518,22 @@ describe("form-sheet-core: every sheet route keeps the same promises", () => {
         // A reader who cannot tell a blank specimen from his own computed
         // return is one step from typing invented figures into a government
         // portal.
-        expect(sheetPage).toMatch(/not computed yet/);
+        //
+        // ═══ WHITESPACE-NORMALISED IN books-61, AND WHY ═══
+        //
+        // This read the raw file, so the phrase had to survive on ONE SOURCE
+        // LINE. It went red in books-61 when the 941 route's prose was
+        // re-wrapped by an unrelated edit - the sentence "every figure reads
+        // 'not computed yet'" was still there, still rendered, and still true,
+        // but now split across two lines by the formatter.
+        //
+        // A gate that fires on line-wrapping is a gate that trains people to
+        // reflow their code to please it, which is exactly backwards. JSX text
+        // collapses whitespace when rendered, so the test now asks the question
+        // the READER experiences rather than the question the file happens to
+        // be formatted as.
+        const rendered = sheetPage.replace(/\s+/g, " ");
+        expect(rendered).toMatch(/not computed yet/);
       });
 
       it("is reachable: the parent screen carries a door to it", () => {

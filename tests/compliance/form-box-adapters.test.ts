@@ -325,7 +325,24 @@ describe("every line the engines actually emit is classified", () => {
     expect(ret.lines.length).toBeGreaterThan(5);
     // If any line were unclassified the adapter throws, naming it.
     expect(() => form941Boxes(ret)).not.toThrow();
-    expect(form941Boxes(ret).length).toBe(ret.lines.length);
+
+    /*
+     * ═══ WAS `=== ret.lines.length`, CHANGED IN books-61 ═══
+     *
+     * The adapter now also emits the ENTITY area - the EIN, legal name, trade
+     * name, address and city/state/ZIP that sit above line 1. Before this the
+     * 941 rendered with none of them, on either page, which is not a return.
+     *
+     * The count is not simply bumped to 5 + lines. Asserting the RELATIONSHIP
+     * keeps the check meaningful: every engine line must still survive, the
+     * five entity boxes must be present, and nothing else may appear.
+     */
+    const boxes = form941Boxes(ret);
+    const ids = boxes.map((b) => b.box);
+    const entity = ["ein", "name", "tradeName", "address", "cityStateZip"];
+    for (const e of entity) expect(ids, `941 lost entity box ${e}`).toContain(e);
+    for (const l of ret.lines) expect(ids, `941 lost line ${l.line}`).toContain(l.line);
+    expect(boxes.length).toBe(ret.lines.length + entity.length);
   });
 
   it("Form 940: classifies every line the engine produces", () => {
@@ -339,7 +356,20 @@ describe("every line the engines actually emit is classified", () => {
     const form = w2Form();
     expect(form.boxes.length).toBeGreaterThan(5);
     expect(() => w2Boxes(form)).not.toThrow();
-    expect(w2Boxes(form).length).toBe(form.boxes.length);
+
+    /*
+     * Same change as the 941, same reason: `w2Boxes` now also emits the seven
+     * identity boxes (a-f and 15). A live W-2 previously produced only the
+     * eight money boxes the engine computes - no SSN, no EIN, no employer, no
+     * employee name - while the teaching specimen produced all 26, which is
+     * why nobody noticed. The relationship is asserted, not a bare total.
+     */
+    const boxes = w2Boxes(form);
+    const ids = boxes.map((b) => b.box);
+    const identity = ["a", "b", "c", "d", "e", "f", "15"];
+    for (const i of identity) expect(ids, `W-2 lost identity box ${i}`).toContain(i);
+    for (const b of form.boxes) expect(ids, `W-2 lost box ${b.box}`).toContain(b.box);
+    expect(boxes.length).toBe(form.boxes.length + identity.length);
   });
 
   it("Washington: every line of every WA form survives translation", () => {

@@ -165,7 +165,21 @@ describe("the report's completeness claim is true", () => {
         `941 line ${label} is on the form but nobody has recorded whose money it is.`,
       ).toBe(true);
     }
-    expect(Object.keys(FORM_941_WHOSE).length).toBe(27);
+    /*
+     * 27 -> 32 in books-61, DELIBERATELY.
+     *
+     * The five added are not lines: they are `ein`, `name`, `tradeName`,
+     * `address` and `cityStateZip` - the entity area at the top of page 1. They
+     * were added because the 941 was rendering with no EIN and no business name
+     * on either page (18 of page 1's 70 rectangles and 32 of page 2's 35 were
+     * going unplaced), and a return the IRS cannot match to a taxpayer is not a
+     * return.
+     *
+     * They are classified `not_money`, which is the honest answer: an address
+     * is nobody's money. The pin moves rather than being relaxed, so the next
+     * unexplained change still fails here.
+     */
+    expect(Object.keys(FORM_941_WHOSE).length).toBe(32);
   });
 });
 

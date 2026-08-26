@@ -1,0 +1,125 @@
+SOURCE ARTIFACTS - IRS BLANK FORMS 941 AND W-2, AS PUBLISHED
+Used as the ARTWORK and the FIELD GEOMETRY for the on-screen facsimiles
+
+Mirrored in books-61 because the product now renders the agency's own page and
+positions every value using the agency's own rectangles. Standing rule 115: a
+claim about where a box sits on a tax form must rest on a document in the
+repository, not on a measurement quoted in a conversation.
+
+────────────────────────────────────────────────────────────────────────────
+THE FILES
+────────────────────────────────────────────────────────────────────────────
+
+  public/forms/irs/f941.pdf
+    Form 941, Employer's QUARTERLY Federal Tax Return
+    841,648 bytes, 3 pages, 611.976 x 791.968 pts (letter)
+    sha256 38a3d8cf7a455101d52543c8c48e66202bc25c189ead878627e35c797c88e2ad
+    Retrieved from https://www.irs.gov/pub/irs-pdf/f941.pdf
+
+  public/forms/irs/fw2.pdf
+    Form W-2, Wage and Tax Statement
+    2,150,352 bytes, 11 pages, 612 x 792 pts (letter)
+    sha256 61eca7c81f16d3965819fe1f31be4fe68c1b2887a81f51172f1d2ed2b2b9f087
+    Retrieved from https://www.irs.gov/pub/irs-pdf/fw2.pdf
+
+The sha256 of each is recorded so that a future regeneration can prove it used
+the SAME artwork. If the IRS reissues either form the hash changes, the derived
+geometry changes with it, and the change is then a deliberate act in a commit
+that says so - rather than a silent shift in where figures print on a document
+that gets filed.
+
+────────────────────────────────────────────────────────────────────────────
+COPYRIGHT
+────────────────────────────────────────────────────────────────────────────
+
+17 U.S.C. Sec. 105: "Copyright protection under this title is not available for
+any work of the United States Government." These are works prepared by officers
+of the Internal Revenue Service in the course of their official duties. They are
+published by the IRS for the express purpose of being printed and filed by
+taxpayers, which is precisely the use here.
+
+Michael's position, in his own words: "we are not a filing service, i agree, but
+being able to see and print and export a form doesnt mean we are a filing
+service." Displaying, printing and exporting a blank federal form filled with
+one's own data is the ordinary intended use of the document.
+
+────────────────────────────────────────────────────────────────────────────
+WHAT WAS DERIVED FROM THEM, AND HOW
+────────────────────────────────────────────────────────────────────────────
+
+Nothing about the layout is typed by hand. Two scripts read the PDFs:
+
+  scripts/derive-form-geometry.py
+    Reads the AcroForm dictionary with pypdf and records, for every /Widget
+    annotation on the pages we render: its /Rect, its field /FT, its /Q
+    alignment (0 left, 1 centre, 2 right), its /MaxLen and its /Ff flags.
+    Emits src/lib/payroll/form-geometry.generated.json.
+
+    Two conversions are performed and are worth stating because both are easy
+    to get silently wrong:
+
+      - PDF's origin is the BOTTOM-left of the page; CSS's is the TOP-left.
+        So y_css = pageHeight - y1.
+
+      - /Ff bit 25 (1 << 24) is the COMB flag. A comb field is divided into
+        /MaxLen equal cells, one character per cell. It is why Michael's own
+        filed 941 prints his EIN as "4 6 - 4 2 1 7 0 1 6". A field flagged comb
+        with NO /MaxLen has no cell count, and the script refuses it rather
+        than choosing one.
+
+    The page artwork itself is converted with `pdftocairo -svg` into
+    public/forms/art/, so the lines, captions and shading a reader sees are the
+    agency's own vector drawing rather than a redrawing of it.
+
+  scripts/derive-form-box-map.py
+    Binds each rectangle to the box our engines model, by reading the PRINTED
+    text near it with `pdftotext -bbox-layout` - the line numbers in the left
+    margin, and, in the entity area, the captions themselves. Emits
+    src/lib/payroll/form-box-map.generated.json.
+
+    Every rectangle must end up either BOUND to a box or listed as
+    deliberately blank WITH A WRITTEN REASON. There is no third state. A
+    rectangle that is merely absent from both lists is what an unfilled EIN box
+    looked like, and the script exits rather than emitting one.
+
+────────────────────────────────────────────────────────────────────────────
+MEASURED FACTS THAT THE CODE NOW DEPENDS ON
+────────────────────────────────────────────────────────────────────────────
+
+  f941.pdf page 1  -> 70 field rectangles, 4 of them comb
+  f941.pdf page 2  -> 35 field rectangles, 2 of them comb
+  f941.pdf page 3  -> Form 941-V, the payment voucher. DELIBERATELY NOT
+                      RENDERED: it is a separate form used only when paying by
+                      cheque, and Greenway pays by EFTPS. Rendering a payment
+                      voucher nobody should use would invite somebody to use it.
+
+  fw2.pdf page 4   -> Copy B, 94 field rectangles, 0 comb.
+                      TWO forms are printed on the one sheet, at a measured
+                      vertical pitch of 396.0pt (exactly half of 792). Getting
+                      this wrong prints one employee's wages on another
+                      employee's copy, which is a disclosure incident and not a
+                      layout bug.
+
+────────────────────────────────────────────────────────────────────────────
+CORROBORATED AGAINST A RETURN THE IRS ACCEPTED
+────────────────────────────────────────────────────────────────────────────
+
+Standing rule 115: a filed return outranks my reasoning. Greenway's own
+2ND_QTR_FORM_941.pdf was read with `pdftotext -layout` and shows:
+
+  EIN         4 6 - 4 2 1 7 0 1 6     (one digit per comb cell)
+  Name        LYMAN'S MARIJUANA        (the name the EIN was issued to)
+  Trade name  GREENWAY MARIJUANA       (a SEPARATE box - see below)
+  Address     4851 GEIGER RD SE
+              PORT ORCHARD WA 98366
+  Signature   MICHAEL LYMAN / OWNER
+
+  Line 16's monthly grid: BLANK on the filed return.
+  The entire paid-preparer block: BLANK on the filed return.
+
+The legal-name / trade-name distinction is load-bearing rather than cosmetic.
+The IRS matches a return to an account on the EIN plus the NAME CONTROL - the
+first four characters of the name the EIN was issued to. Greenway trades as
+GREENWAY MARIJUANA but the EIN belongs to LYMAN'S MARIJUANA, so printing the
+trading name in the name box is a mismatch, and a mismatched return does not
+post to the right account.

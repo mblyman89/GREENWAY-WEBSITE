@@ -1,0 +1,760 @@
+{
+ "941-p1": {
+  "copies": [
+   {
+    "1": [
+     "topmostSubform[0].Page1[0].f1_12[0]"
+    ],
+    "10": [
+     "topmostSubform[0].Page1[0].f1_45[0]",
+     "topmostSubform[0].Page1[0].f1_46[0]"
+    ],
+    "11": [
+     "topmostSubform[0].Page1[0].f1_47[0]",
+     "topmostSubform[0].Page1[0].f1_48[0]"
+    ],
+    "12": [
+     "topmostSubform[0].Page1[0].f1_49[0]",
+     "topmostSubform[0].Page1[0].f1_50[0]"
+    ],
+    "13": [
+     "topmostSubform[0].Page1[0].f1_51[0]",
+     "topmostSubform[0].Page1[0].f1_52[0]"
+    ],
+    "14": [
+     "topmostSubform[0].Page1[0].f1_53[0]",
+     "topmostSubform[0].Page1[0].f1_54[0]"
+    ],
+    "15a": [
+     "topmostSubform[0].Page1[0].f1_55[0]",
+     "topmostSubform[0].Page1[0].f1_56[0]"
+    ],
+    "15b": [
+     "topmostSubform[0].Page1[0].c1_4[0]",
+     "topmostSubform[0].Page1[0].c1_4[1]"
+    ],
+    "15c": [
+     "topmostSubform[0].Page1[0].RoutingNo[0].f1_57[0]"
+    ],
+    "15d": [
+     "topmostSubform[0].Page1[0].c1_5[0]",
+     "topmostSubform[0].Page1[0].c1_5[1]"
+    ],
+    "15e": [
+     "topmostSubform[0].Page1[0].AccountNo[0].f1_58[0]"
+    ],
+    "2": [
+     "topmostSubform[0].Page1[0].f1_13[0]",
+     "topmostSubform[0].Page1[0].f1_14[0]"
+    ],
+    "3": [
+     "topmostSubform[0].Page1[0].f1_15[0]",
+     "topmostSubform[0].Page1[0].f1_16[0]"
+    ],
+    "4": [
+     "topmostSubform[0].Page1[0].c1_3[0]"
+    ],
+    "5a": [
+     "topmostSubform[0].Page1[0].f1_17[0]",
+     "topmostSubform[0].Page1[0].f1_18[0]",
+     "topmostSubform[0].Page1[0].f1_19[0]",
+     "topmostSubform[0].Page1[0].f1_20[0]"
+    ],
+    "5b": [
+     "topmostSubform[0].Page1[0].f1_21[0]",
+     "topmostSubform[0].Page1[0].f1_22[0]",
+     "topmostSubform[0].Page1[0].f1_23[0]",
+     "topmostSubform[0].Page1[0].f1_24[0]"
+    ],
+    "5c": [
+     "topmostSubform[0].Page1[0].f1_25[0]",
+     "topmostSubform[0].Page1[0].f1_26[0]",
+     "topmostSubform[0].Page1[0].f1_27[0]",
+     "topmostSubform[0].Page1[0].f1_28[0]"
+    ],
+    "5d": [
+     "topmostSubform[0].Page1[0].f1_29[0]",
+     "topmostSubform[0].Page1[0].f1_30[0]",
+     "topmostSubform[0].Page1[0].f1_31[0]",
+     "topmostSubform[0].Page1[0].f1_32[0]"
+    ],
+    "5e": [
+     "topmostSubform[0].Page1[0].f1_33[0]",
+     "topmostSubform[0].Page1[0].f1_34[0]"
+    ],
+    "5f": [
+     "topmostSubform[0].Page1[0].f1_35[0]",
+     "topmostSubform[0].Page1[0].f1_36[0]"
+    ],
+    "6": [
+     "topmostSubform[0].Page1[0].f1_37[0]",
+     "topmostSubform[0].Page1[0].f1_38[0]"
+    ],
+    "7": [
+     "topmostSubform[0].Page1[0].f1_39[0]",
+     "topmostSubform[0].Page1[0].f1_40[0]"
+    ],
+    "8": [
+     "topmostSubform[0].Page1[0].f1_41[0]",
+     "topmostSubform[0].Page1[0].f1_42[0]"
+    ],
+    "9": [
+     "topmostSubform[0].Page1[0].f1_43[0]",
+     "topmostSubform[0].Page1[0].f1_44[0]"
+    ],
+    "address": [
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_5[0]"
+    ],
+    "cityStateZip": [
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_6[0]",
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_7[0]",
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_8[0]"
+    ],
+    "ein": [
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_1[0]",
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_2[0]"
+    ],
+    "name": [
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_3[0]"
+    ],
+    "tradeName": [
+     "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_4[0]"
+    ]
+   }
+  ],
+  "copyPitchPt": 791.968,
+  "labels": [
+   "1",
+   "10",
+   "11",
+   "12",
+   "13",
+   "14",
+   "15a",
+   "15c",
+   "15e",
+   "2",
+   "3",
+   "4",
+   "5a",
+   "5b",
+   "5c",
+   "5d",
+   "5e",
+   "5f",
+   "6",
+   "7",
+   "8",
+   "9"
+  ],
+  "midline": [
+   "15b",
+   "15d"
+  ],
+  "placed": {
+   "1": [
+    "topmostSubform[0].Page1[0].f1_12[0]"
+   ],
+   "10": [
+    "topmostSubform[0].Page1[0].f1_45[0]",
+    "topmostSubform[0].Page1[0].f1_46[0]"
+   ],
+   "11": [
+    "topmostSubform[0].Page1[0].f1_47[0]",
+    "topmostSubform[0].Page1[0].f1_48[0]"
+   ],
+   "12": [
+    "topmostSubform[0].Page1[0].f1_49[0]",
+    "topmostSubform[0].Page1[0].f1_50[0]"
+   ],
+   "13": [
+    "topmostSubform[0].Page1[0].f1_51[0]",
+    "topmostSubform[0].Page1[0].f1_52[0]"
+   ],
+   "14": [
+    "topmostSubform[0].Page1[0].f1_53[0]",
+    "topmostSubform[0].Page1[0].f1_54[0]"
+   ],
+   "15a": [
+    "topmostSubform[0].Page1[0].f1_55[0]",
+    "topmostSubform[0].Page1[0].f1_56[0]"
+   ],
+   "15b": [
+    "topmostSubform[0].Page1[0].c1_4[0]",
+    "topmostSubform[0].Page1[0].c1_4[1]"
+   ],
+   "15c": [
+    "topmostSubform[0].Page1[0].RoutingNo[0].f1_57[0]"
+   ],
+   "15d": [
+    "topmostSubform[0].Page1[0].c1_5[0]",
+    "topmostSubform[0].Page1[0].c1_5[1]"
+   ],
+   "15e": [
+    "topmostSubform[0].Page1[0].AccountNo[0].f1_58[0]"
+   ],
+   "2": [
+    "topmostSubform[0].Page1[0].f1_13[0]",
+    "topmostSubform[0].Page1[0].f1_14[0]"
+   ],
+   "3": [
+    "topmostSubform[0].Page1[0].f1_15[0]",
+    "topmostSubform[0].Page1[0].f1_16[0]"
+   ],
+   "4": [
+    "topmostSubform[0].Page1[0].c1_3[0]"
+   ],
+   "5a": [
+    "topmostSubform[0].Page1[0].f1_17[0]",
+    "topmostSubform[0].Page1[0].f1_18[0]",
+    "topmostSubform[0].Page1[0].f1_19[0]",
+    "topmostSubform[0].Page1[0].f1_20[0]"
+   ],
+   "5b": [
+    "topmostSubform[0].Page1[0].f1_21[0]",
+    "topmostSubform[0].Page1[0].f1_22[0]",
+    "topmostSubform[0].Page1[0].f1_23[0]",
+    "topmostSubform[0].Page1[0].f1_24[0]"
+   ],
+   "5c": [
+    "topmostSubform[0].Page1[0].f1_25[0]",
+    "topmostSubform[0].Page1[0].f1_26[0]",
+    "topmostSubform[0].Page1[0].f1_27[0]",
+    "topmostSubform[0].Page1[0].f1_28[0]"
+   ],
+   "5d": [
+    "topmostSubform[0].Page1[0].f1_29[0]",
+    "topmostSubform[0].Page1[0].f1_30[0]",
+    "topmostSubform[0].Page1[0].f1_31[0]",
+    "topmostSubform[0].Page1[0].f1_32[0]"
+   ],
+   "5e": [
+    "topmostSubform[0].Page1[0].f1_33[0]",
+    "topmostSubform[0].Page1[0].f1_34[0]"
+   ],
+   "5f": [
+    "topmostSubform[0].Page1[0].f1_35[0]",
+    "topmostSubform[0].Page1[0].f1_36[0]"
+   ],
+   "6": [
+    "topmostSubform[0].Page1[0].f1_37[0]",
+    "topmostSubform[0].Page1[0].f1_38[0]"
+   ],
+   "7": [
+    "topmostSubform[0].Page1[0].f1_39[0]",
+    "topmostSubform[0].Page1[0].f1_40[0]"
+   ],
+   "8": [
+    "topmostSubform[0].Page1[0].f1_41[0]",
+    "topmostSubform[0].Page1[0].f1_42[0]"
+   ],
+   "9": [
+    "topmostSubform[0].Page1[0].f1_43[0]",
+    "topmostSubform[0].Page1[0].f1_44[0]"
+   ],
+   "address": [
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_5[0]"
+   ],
+   "cityStateZip": [
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_6[0]",
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_7[0]",
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_8[0]"
+   ],
+   "ein": [
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_1[0]",
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_2[0]"
+   ],
+   "name": [
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_3[0]"
+   ],
+   "tradeName": [
+    "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_4[0]"
+   ]
+  },
+  "unclaimed": [
+   "topmostSubform[0].Page1[0].Header[0].AggregateReturn[0].c1_2[0]",
+   "topmostSubform[0].Page1[0].Header[0].AggregateReturn[0].c1_2[1]",
+   "topmostSubform[0].Page1[0].Header[0].AggregateReturn[0].c1_2[2]",
+   "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_10[0]",
+   "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_11[0]",
+   "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_9[0]",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[0]",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[1]",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[2]",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[3]"
+  ],
+  "unclaimedReasons": {
+   "topmostSubform[0].Page1[0].Header[0].AggregateReturn[0].c1_2[0]": "Section 3504 Agent. Greenway files its own return for its own employees, so no aggregate-filer type applies. Never ticked by software in any case.",
+   "topmostSubform[0].Page1[0].Header[0].AggregateReturn[0].c1_2[1]": "Certified Professional Employer Organization. Does not apply to Greenway.",
+   "topmostSubform[0].Page1[0].Header[0].AggregateReturn[0].c1_2[2]": "Other Third Party. Does not apply to Greenway.",
+   "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_10[0]": "Foreign province/county. Blank for the reason given on the foreign country box.",
+   "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_11[0]": "Foreign postal code. Blank for the reason given on the foreign country box.",
+   "topmostSubform[0].Page1[0].Header[0].EntityArea[0].f1_9[0]": "Foreign country name. Blank on a correct return for a Washington business, and the company profile holds no foreign address to print.",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[0]": "Quarter 1 tick box. Not ticked: a tick on a return is a declaration, and this page draws the return rather than making declarations on it.",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[1]": "Quarter 2 tick box. Not ticked, for the reason given on the quarter 1 box.",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[2]": "Quarter 3 tick box. Not ticked, for the reason given on the quarter 1 box.",
+   "topmostSubform[0].Page1[0].Header[0].ReportForQuarter[0].c1_1[3]": "Quarter 4 tick box. Not ticked, for the reason given on the quarter 1 box."
+  }
+ },
+ "941-p2": {
+  "copies": [
+   {
+    "16": [
+     "topmostSubform[0].Page2[0].c2_1[0]"
+    ],
+    "17": [
+     "topmostSubform[0].Page2[0].c2_2[0]"
+    ],
+    "18": [
+     "topmostSubform[0].Page2[0].c2_3[0]"
+    ],
+    "ein": [
+     "topmostSubform[0].Page2[0].EIN_Number[0].f1_1[0]",
+     "topmostSubform[0].Page2[0].EIN_Number[0].f1_2[0]"
+    ],
+    "name": [
+     "topmostSubform[0].Page2[0].Name_ReadOrder[0].f1_3[0]"
+    ]
+   }
+  ],
+  "copyPitchPt": 791.968,
+  "labels": [
+   "16",
+   "17",
+   "18"
+  ],
+  "midline": [],
+  "placed": {
+   "16": [
+    "topmostSubform[0].Page2[0].c2_1[0]"
+   ],
+   "17": [
+    "topmostSubform[0].Page2[0].c2_2[0]"
+   ],
+   "18": [
+    "topmostSubform[0].Page2[0].c2_3[0]"
+   ],
+   "ein": [
+    "topmostSubform[0].Page2[0].EIN_Number[0].f1_1[0]",
+    "topmostSubform[0].Page2[0].EIN_Number[0].f1_2[0]"
+   ],
+   "name": [
+    "topmostSubform[0].Page2[0].Name_ReadOrder[0].f1_3[0]"
+   ]
+  },
+  "unclaimed": [
+   "topmostSubform[0].Page2[0].c2_1[1]",
+   "topmostSubform[0].Page2[0].c2_1[2]",
+   "topmostSubform[0].Page2[0].c2_4[0]",
+   "topmostSubform[0].Page2[0].c2_4[1]",
+   "topmostSubform[0].Page2[0].c2_5[0]",
+   "topmostSubform[0].Page2[0].f2_10[0]",
+   "topmostSubform[0].Page2[0].f2_11[0]",
+   "topmostSubform[0].Page2[0].f2_12[0]",
+   "topmostSubform[0].Page2[0].f2_13[0]",
+   "topmostSubform[0].Page2[0].f2_14[0]",
+   "topmostSubform[0].Page2[0].f2_15[0]",
+   "topmostSubform[0].Page2[0].f2_16[0]",
+   "topmostSubform[0].Page2[0].f2_17[0]",
+   "topmostSubform[0].Page2[0].f2_18[0]",
+   "topmostSubform[0].Page2[0].f2_19[0]",
+   "topmostSubform[0].Page2[0].f2_1[0]",
+   "topmostSubform[0].Page2[0].f2_20[0]",
+   "topmostSubform[0].Page2[0].f2_21[0]",
+   "topmostSubform[0].Page2[0].f2_22[0]",
+   "topmostSubform[0].Page2[0].f2_23[0]",
+   "topmostSubform[0].Page2[0].f2_24[0]",
+   "topmostSubform[0].Page2[0].f2_2[0]",
+   "topmostSubform[0].Page2[0].f2_3[0]",
+   "topmostSubform[0].Page2[0].f2_4[0]",
+   "topmostSubform[0].Page2[0].f2_5[0]",
+   "topmostSubform[0].Page2[0].f2_6[0]",
+   "topmostSubform[0].Page2[0].f2_7[0]",
+   "topmostSubform[0].Page2[0].f2_8[0]",
+   "topmostSubform[0].Page2[0].f2_9[0]"
+  ],
+  "unclaimedReasons": {
+   "topmostSubform[0].Page2[0].c2_1[1]": "Line 16 'monthly schedule depositor' tick. The profile records a deposit schedule, but ticking it here would also assert the monthly liability grid below it, which we do not compute.",
+   "topmostSubform[0].Page2[0].c2_1[2]": "Line 16 'semiweekly schedule depositor' tick. Not ticked, for the reason given on the monthly tick.",
+   "topmostSubform[0].Page2[0].c2_4[0]": "Third-party designee 'Yes' tick. His decision, not a computation.",
+   "topmostSubform[0].Page2[0].c2_4[1]": "Third-party designee 'No' tick. His decision, not a computation.",
+   "topmostSubform[0].Page2[0].c2_5[0]": "Paid preparer 'check if self-employed'. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_10[0]": "Line 18 third-party designee name. Whether to let somebody else discuss the return with the IRS is his decision, not a computation.",
+   "topmostSubform[0].Page2[0].f2_11[0]": "Third-party designee phone number. See the designee name box.",
+   "topmostSubform[0].Page2[0].f2_12[0]": "Third-party designee five-digit PIN. A credential, chosen by him; software that invented one would be creating an IRS authentication factor.",
+   "topmostSubform[0].Page2[0].f2_13[0]": "Print your name here. Part 5 is signed under penalties of perjury. The company profile holds signer_name, and this deliberately does not print it: pre-filling a name under a perjury declaration is the worst possible place to be helpful.",
+   "topmostSubform[0].Page2[0].f2_14[0]": "Print your title here. Left blank for the reason given on the name box.",
+   "topmostSubform[0].Page2[0].f2_15[0]": "Best daytime phone. Part of the signature block, left to be completed by hand with the rest of it.",
+   "topmostSubform[0].Page2[0].f2_16[0]": "Paid preparer's name. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_17[0]": "Paid preparer's PTIN. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_18[0]": "Paid preparer's firm name. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_19[0]": "Paid preparer's EIN. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_1[0]": "Line 16 month 1 tax liability, dollars. The engine computes a QUARTERLY return and carries no monthly breakdown, and a monthly liability cannot be derived from a quarterly total. Three invented figures that happened to add up to line 12 would be a fabricated deposit history on a signed return.",
+   "topmostSubform[0].Page2[0].f2_20[0]": "Paid preparer's address. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_21[0]": "Paid preparer's phone. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_22[0]": "Paid preparer's city. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_23[0]": "Paid preparer's state. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_24[0]": "Paid preparer's ZIP code. Greenway uses no paid preparer.",
+   "topmostSubform[0].Page2[0].f2_2[0]": "Line 16 month 1 tax liability, cents. See the month 1 dollars box.",
+   "topmostSubform[0].Page2[0].f2_3[0]": "Line 16 month 2 tax liability, dollars. See the month 1 dollars box.",
+   "topmostSubform[0].Page2[0].f2_4[0]": "Line 16 month 2 tax liability, cents. See the month 1 dollars box.",
+   "topmostSubform[0].Page2[0].f2_5[0]": "Line 16 month 3 tax liability, dollars. See the month 1 dollars box.",
+   "topmostSubform[0].Page2[0].f2_6[0]": "Line 16 month 3 tax liability, cents. See the month 1 dollars box.",
+   "topmostSubform[0].Page2[0].f2_7[0]": "Line 16 total liability for the quarter, dollars. This one IS known - the paper says it must equal line 12 - but it is the total of three figures above that we are refusing to invent, and printing a total under three blank rows would look like the rows had been missed rather than declined.",
+   "topmostSubform[0].Page2[0].f2_8[0]": "Line 16 total liability for the quarter, cents. See the total dollars box.",
+   "topmostSubform[0].Page2[0].f2_9[0]": "Line 17 final date wages were paid. Only entered when the business has closed, which is a fact about the business that no payroll figure implies."
+  }
+ },
+ "w2-copyb": {
+  "copies": [
+   {
+    "1": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box1_ReadOrder[0].f2_09[0]"
+    ],
+    "10": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box10_ReadOrder[0].f2_18[0]"
+    ],
+    "11": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_19[0]"
+    ],
+    "12": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_20[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_21[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_22[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_23[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_24[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_25[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_26[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_27[0]"
+    ],
+    "13": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Retirement_ReadOrder[0].c2_3[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Statutory_ReadOrder[0].c2_2[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].c2_4[0]"
+    ],
+    "14": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_28[0]"
+    ],
+    "15": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].Box15_ReadOrder[0].f2_31[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].f2_32[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].f2_33[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].f2_34[0]"
+    ],
+    "16": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box16_ReadOrder[0].f2_35[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box16_ReadOrder[0].f2_36[0]"
+    ],
+    "17": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box17_ReadOrder[0].f2_37[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box17_ReadOrder[0].f2_38[0]"
+    ],
+    "18": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box18_ReadOrder[0].f2_39[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box18_ReadOrder[0].f2_40[0]"
+    ],
+    "19": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box19_ReadOrder[0].f2_41[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Box19_ReadOrder[0].f2_42[0]"
+    ],
+    "2": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_10[0]"
+    ],
+    "20": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].f2_43[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].f2_44[0]"
+    ],
+    "3": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box3_ReadOrder[0].f2_11[0]"
+    ],
+    "4": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_12[0]"
+    ],
+    "5": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box5_ReadOrder[0].f2_13[0]"
+    ],
+    "6": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_14[0]"
+    ],
+    "7": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box7_ReadOrder[0].f2_15[0]"
+    ],
+    "8": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_16[0]"
+    ],
+    "9": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_17[0]"
+    ],
+    "a": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].BoxA_ReadOrder[0].f2_01[0]"
+    ],
+    "b": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_02[0]"
+    ],
+    "c": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_03[0]"
+    ],
+    "d": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_04[0]"
+    ],
+    "e": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].FirstName_ReadOrder[0].f2_05[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].LastName_ReadOrder[0].f2_06[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_07[0]"
+    ],
+    "f": [
+     "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_08[0]"
+    ]
+   },
+   {
+    "1": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box1_ReadOrder[0].f2_53[0]"
+    ],
+    "10": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box10_ReadOrder[0].f2_62[0]"
+    ],
+    "11": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_63[0]"
+    ],
+    "12": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_64[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_65[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_66[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_67[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_68[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_69[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_70[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box12_ReadOrder[0].f2_71[0]"
+    ],
+    "13": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Retirement_ReadOrder[0].c2_7[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Statutory_ReadOrder[0].c2_6[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].c2_8[0]"
+    ],
+    "14": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_72[0]"
+    ],
+    "15": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Boxes15_ReadOrder[0].Box15_ReadOrder[0].f2_75[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Boxes15_ReadOrder[0].f2_76[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Boxes15_ReadOrder[0].f2_77[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Boxes15_ReadOrder[0].f2_78[0]"
+    ],
+    "16": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box16_ReadOrder[0].f2_79[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box16_ReadOrder[0].f2_80[0]"
+    ],
+    "17": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box17_ReadOrder[0].f2_81[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box17_ReadOrder[0].f2_82[0]"
+    ],
+    "18": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box18_ReadOrder[0].f2_83[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box18_ReadOrder[0].f2_84[0]"
+    ],
+    "19": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box19_ReadOrder[0].f2_85[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Box19_ReadOrder[0].f2_86[0]"
+    ],
+    "2": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_54[0]"
+    ],
+    "20": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].f2_87[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].f2_88[0]"
+    ],
+    "3": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box3_ReadOrder[0].f2_55[0]"
+    ],
+    "4": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_56[0]"
+    ],
+    "5": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box5_ReadOrder[0].f2_57[0]"
+    ],
+    "6": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_58[0]"
+    ],
+    "7": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].Box7_ReadOrder[0].f2_59[0]"
+    ],
+    "8": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_60[0]"
+    ],
+    "9": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_61[0]"
+    ],
+    "a": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].BoxA_ReadOrder[0].f2_45[0]"
+    ],
+    "b": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].f2_46[0]"
+    ],
+    "c": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].f2_47[0]"
+    ],
+    "d": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].f2_48[0]"
+    ],
+    "e": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].FirstName_ReadOrder[0].f2_49[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].LastName_ReadOrder[0].f2_50[0]",
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].f2_51[0]"
+    ],
+    "f": [
+     "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Left[0].f2_52[0]"
+    ]
+   }
+  ],
+  "copyPitchPt": 396.0,
+  "labels": [
+   "1",
+   "10",
+   "11",
+   "12a",
+   "12b",
+   "12c",
+   "12d",
+   "13",
+   "14a",
+   "14b",
+   "15",
+   "16",
+   "18",
+   "2",
+   "20",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "a",
+   "b",
+   "c",
+   "d",
+   "e",
+   "f"
+  ],
+  "midline": [],
+  "notModelled": {
+   "12a": "The four box-12 slots are one box to us; their rects are claimed by name.",
+   "12b": "The four box-12 slots are one box to us; their rects are claimed by name.",
+   "12c": "The four box-12 slots are one box to us; their rects are claimed by name.",
+   "12d": "The four box-12 slots are one box to us; their rects are claimed by name.",
+   "14b": "2026 splits box 14 into 14a Other and 14b Treasury Tipped Occupation Code(s). The engine models 14a only. Greenway has no tipped occupations, so 14b is blank on a correct filing either way."
+  },
+  "placed": {
+   "1": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box1_ReadOrder[0].f2_09[0]"
+   ],
+   "10": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box10_ReadOrder[0].f2_18[0]"
+   ],
+   "11": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_19[0]"
+   ],
+   "12": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_20[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_21[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_22[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_23[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_24[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_25[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_26[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box12_ReadOrder[0].f2_27[0]"
+   ],
+   "13": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Retirement_ReadOrder[0].c2_3[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Statutory_ReadOrder[0].c2_2[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].c2_4[0]"
+   ],
+   "14": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_28[0]"
+   ],
+   "15": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].Box15_ReadOrder[0].f2_31[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].f2_32[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].f2_33[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Boxes15_ReadOrder[0].f2_34[0]"
+   ],
+   "16": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box16_ReadOrder[0].f2_35[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box16_ReadOrder[0].f2_36[0]"
+   ],
+   "17": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box17_ReadOrder[0].f2_37[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box17_ReadOrder[0].f2_38[0]"
+   ],
+   "18": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box18_ReadOrder[0].f2_39[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box18_ReadOrder[0].f2_40[0]"
+   ],
+   "19": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box19_ReadOrder[0].f2_41[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Box19_ReadOrder[0].f2_42[0]"
+   ],
+   "2": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_10[0]"
+   ],
+   "20": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].f2_43[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].f2_44[0]"
+   ],
+   "3": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box3_ReadOrder[0].f2_11[0]"
+   ],
+   "4": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_12[0]"
+   ],
+   "5": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box5_ReadOrder[0].f2_13[0]"
+   ],
+   "6": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_14[0]"
+   ],
+   "7": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].Box7_ReadOrder[0].f2_15[0]"
+   ],
+   "8": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_16[0]"
+   ],
+   "9": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_17[0]"
+   ],
+   "a": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].BoxA_ReadOrder[0].f2_01[0]"
+   ],
+   "b": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_02[0]"
+   ],
+   "c": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_03[0]"
+   ],
+   "d": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_04[0]"
+   ],
+   "e": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].FirstName_ReadOrder[0].f2_05[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].LastName_ReadOrder[0].f2_06[0]",
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_07[0]"
+   ],
+   "f": [
+    "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Left[0].f2_08[0]"
+   ]
+  },
+  "unclaimed": [
+   "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_73[0]",
+   "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_74[0]",
+   "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_29[0]",
+   "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_30[0]"
+  ],
+  "unclaimedReasons": {
+   "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_73[0]": "2026 splits box 14 into 14a Other and 14b Treasury Tipped Occupation Code(s). The engine models 14a only. Greenway has no tipped occupations, so 14b is blank on a correct filing either way.",
+   "topmostSubform[0].CopyB[0].CopyB_Bottom[0].Col_Right[0].f2_74[0]": "No printed label sits above this rect within the measured band, so nothing on the paper says what it is for. Left blank and recorded rather than guessed from position alone.",
+   "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_29[0]": "2026 splits box 14 into 14a Other and 14b Treasury Tipped Occupation Code(s). The engine models 14a only. Greenway has no tipped occupations, so 14b is blank on a correct filing either way.",
+   "topmostSubform[0].CopyB[0].CopyB_Top[0].Col_Right[0].f2_30[0]": "No printed label sits above this rect within the measured band, so nothing on the paper says what it is for. Left blank and recorded rather than guessed from position alone."
+  }
+ }
+}

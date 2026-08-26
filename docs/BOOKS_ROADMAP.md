@@ -877,6 +877,7 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (85) |
 | The 941 as one big sheet **(books-60)** | `form-941/sheet/page.tsx`, one link added to `form-941/page.tsx` | `form-sheet-core.test.ts` (85), `owner-report-books-60.test.ts` (25) |
 | The filed 940 as an authority **(books-60)** | `docs/authorities/federal/filed-form-940-2025-greenway.txt`, `scripts/mirror-filed-940.py` | `filed-940-threshold.test.ts` (10) |
+| The actual printed form **(books-61)** | `form-facsimile-core.ts`, `FormFacsimile.tsx`, `FormPrintBar.tsx`, `scripts/derive-form-geometry.py`, `scripts/derive-form-box-map.py` | `form-facsimile-core.test.ts` (18) |
 
 **books-58 grew the screen row above by 29 lines, and that is the ENTIRE change
 to that file.** Michael asked for "one large page with nothing on it but form",
@@ -952,6 +953,60 @@ marker is therefore proved on the 941 (7 untaught: 5e, 6, 7, 10, 12, 13, 14) and
 the 940 (10), and the W-2's zero is pinned so adding an untaught box there is a
 deliberate decision. **17 untaught boxes across two federal forms** is the real
 remaining teaching backlog.
+
+### books-61: the form as it would look if you were holding it
+
+Michael, after seeing books-60: *"When I had asked for the physical form to be
+displayed on the page by itself, I meant literally. I am hoping that for all the
+various forms, I can see the form as it would look if I were holding it in my
+hand."* And: *"I want what the cpa needs... It's meant to be a part of the
+process for bookkeeping and taxes, not just informative."*
+
+books-58 and books-60 rendered a styled LIST of boxes. This slice renders the
+ACTUAL ARTWORK. Every rectangle is measured out of the agency's own PDF with
+`pypdf` — `/Rect`, `/FT`, `/Q`, `/MaxLen`, `/Ff` — and the artwork itself is the
+IRS's page converted to SVG. Nothing about the layout is hand-typed, so nothing
+about it can drift from the paper.
+
+Three findings, all measured rather than reasoned:
+
+- **Comb fields.** `/Ff` bit 25 divides a box into `/MaxLen` equal cells, one
+  character per cell. It is why Michael's filed 941 prints his EIN as
+  `4 6 - 4 2 1 7 0 1 6`. Six comb fields exist across the 941's two pages and
+  none on the W-2. A first implementation derived the cell width from a FONT
+  METRIC GUESS and was deleted in favour of dividing the agency's own rectangle
+  by its own stated cell count — arithmetic, not estimation.
+- **The identity defect, found twice.** A live W-2 was emitting only the eight
+  money boxes the engine computes: no SSN, no EIN, no employer, no employee
+  name. The teaching specimen emitted all 26, which is exactly why nobody
+  noticed — only the specimen was ever screenshotted. Asking the same question
+  of the 941 found the same defect, worse: 18 of page 1's 70 rectangles and 32
+  of page 2's 35 were going unplaced, including the EIN, the legal name, the
+  trade name and page 2's entire repeated header. **A 941 with no EIN on it is
+  not a return; it is a page of arithmetic the IRS cannot match to anybody.**
+  Rule 23 — fix the class, not the instance.
+- **Legal name and trade name are different boxes and must stay different.**
+  Greenway's EIN was issued to `LYMAN'S MARIJUANA`; it trades as
+  `GREENWAY MARIJUANA`. The IRS matches a return on the EIN plus the name
+  control — the first four characters of the name the EIN was issued to — so
+  putting the trading name in the name box is a mismatch, and a mismatched
+  return does not post.
+
+The governing gate is **rule 123**: every rectangle on the page must be either
+filled or recorded as deliberately blank WITH A WRITTEN REASON. There is no
+third state, because the third state is what an unfilled EIN box looked like.
+Writing that gate immediately caught an asymmetry — the 941 recorded reasons per
+rectangle while the W-2 recorded them per printed label, so the same question
+asked of two forms got an answer from one and silence from the other.
+
+**What is deliberately NOT filled, and why it is listed rather than hidden:**
+the quarter ticks and the aggregate-filer type (a choice only Michael can make);
+the signature block (pre-filling under a perjury declaration is refused even
+though the profile carries `signer_name` and `signer_title`); the paid-preparer
+block; and **the whole of line 16, the monthly deposit liability** — because
+`Form941Return` carries no monthly breakdown at all. That last one is a 941
+ENGINE gap rather than a rendering gap, and it is written into the owner report
+rather than quietly patched.
 
 **books-55 added the W-3 teaching layer, and the screen row above grew by 37
 lines because of it.** Section 5 of that page already rendered the W-3 as a

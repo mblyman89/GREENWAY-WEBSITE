@@ -461,3 +461,86 @@ h1, h2, h3, h4, h5, h6 {
   .md\:gw-hours-desktop-xl     { font-size: 1.26rem; }
   .md\:gw-hours-desktop-xxl    { font-size: 1.5rem; }
 }
+
+/* ---------------------------------------------------------------------------
+ * PRINTING A TAX FORM AT ACTUAL SIZE (books-61)
+ *
+ * Michael: "i want to be able to export the form to be added to my digital
+ * records. sage allows me to do this and it is something we will do too. we are
+ * not a filing service, i agree, but being able to see and print and export a
+ * form doesnt mean we are a filing service."
+ *
+ * ═══ WHY THIS IS A NAMED PAGE AND NOT AN EDIT TO THE @page ABOVE ═══
+ *
+ * There is already an `@page { margin: 8mm }` in this file, and it is there for
+ * a reason: the order pick-ticket and the receipt printing want a margin,
+ * because a thermal printer with a zero margin clips its own output.
+ *
+ * A tax form wants the exact opposite. The IRS's artwork ALREADY CONTAINS the
+ * form's own margins - measured: `pdfinfo` reports every page of f941.pdf as
+ * 611.976 x 791.968pt and Copy B of fw2.pdf as 612 x 792pt, i.e. Letter, with
+ * the printable content inset by the agency. Add 8mm on top of that and the
+ * sheet is scaled down to fit, so nothing on the paper is where the form says it
+ * is any more.
+ *
+ * So this is `@page facsimile`, applied only to the element that holds the
+ * artwork. The receipt path keeps its 8mm and this path gets none, and neither
+ * has to know about the other.
+ *
+ * ═══ WHY `width: 8.5in` AND NOT `width: 100%` ═══
+ *
+ * Because "100%" on paper means "100% of whatever the browser decided the
+ * printable area was", which depends on the driver, the paper size and the
+ * margin box. 8.5in is a physical measurement of a physical sheet, and CSS
+ * inches are absolute in print. Combined with the aspect-ratio the component
+ * takes from the PDF's own page box, the sheet lands at exactly the size the
+ * agency drew it - which is what makes a printout usable as a form rather than
+ * as a picture of one.
+ * ------------------------------------------------------------------------- */
+@page facsimile {
+  size: letter portrait;
+  margin: 0;
+}
+
+@media print {
+  .facsimile-sheet-wrap {
+    page: facsimile;
+    /* One form per sheet of paper. Two half-sheets straddling a page break is
+       not a document anyone can file. */
+    break-after: page;
+    break-inside: avoid;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* The last sheet must not push a blank page out of the printer. */
+  .facsimile-sheet-wrap:last-of-type {
+    break-after: auto;
+  }
+
+  /* The paper itself: actual size, no shadow, no rounding, top-left of the
+     sheet. `section` is the component's own wrapper, which carries screen
+     padding and a max-width that must both go away on paper. */
+  .facsimile-sheet-wrap > section {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  [data-testid="facsimile-sheet"] {
+    width: 8.5in !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    /* The artwork is the IRS's, in colour where the IRS used colour. Without
+       this, some drivers drop the form's rules and shading and the boxes
+       disappear. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* A figure printed on a tax form is INK, not themed text. The admin theme's
+     light-on-dark palette would put pale blue numbers on white paper. */
+  [data-testid="facsimile-value"] {
+    color: #000 !important;
+  }
+}

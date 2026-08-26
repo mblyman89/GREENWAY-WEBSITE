@@ -321,6 +321,52 @@ export const FORM_941_WHOSE: Readonly<Record<string, WhoseRow>> = {
     why:
       "A tickbox stating that the employer hires only seasonally. It reports no money at all.",
   },
+
+  /*
+   * ═══ THE ENTITY AREA - THE PART OF THE RETURN THAT SAYS WHO IS FILING ═══
+   *
+   * These five boxes have no line number, which is exactly why they were
+   * missing. The margin scan that builds the box map reads the number printed
+   * in the left margin; the EIN, the name, the trade name and the address are
+   * labelled with WORDS, so they matched nothing and were silently dropped.
+   * Measured: 18 of page 1's 70 rectangles and 32 of page 2's 35 were going
+   * unplaced, among them every box that identifies the taxpayer.
+   *
+   * A 941 with no EIN on it is not a return. It is a page of arithmetic the IRS
+   * cannot match to anybody.
+   *
+   * All five are `not_money`, and the reason is the same in each case: they
+   * hold text - a name, an address, a number that identifies somebody - rather
+   * than an amount. Nobody owes anything because of them. That is the same
+   * classification the W-2's identity boxes carry, for the same reason.
+   */
+  ein: {
+    whose: "not_money",
+    why:
+      "The number the IRS files this return under. It identifies Greenway; it is not an amount " +
+      "and nobody owes anything because of it.",
+  },
+  name: {
+    whose: "not_money",
+    why:
+      "The legal name of the business as the IRS holds it - LYMAN'S MARIJUANA, not the name over " +
+      "the door. Text, not an amount.",
+  },
+  tradeName: {
+    whose: "not_money",
+    why:
+      "The name the business trades under - GREENWAY MARIJUANA. The IRS asks for it separately " +
+      "from the legal name, and captions the box beside it 'Name (not your trade name)'. Text, " +
+      "not an amount.",
+  },
+  address: {
+    whose: "not_money",
+    why: "Where the business is. Text, not an amount.",
+  },
+  cityStateZip: {
+    whose: "not_money",
+    why: "The rest of the address - city, state and ZIP. Text, not an amount.",
+  },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1030,8 +1076,77 @@ function whoseFor(
  * knows what it means, but a generic renderer given that box would print
  * "$0.06" for six employees. Moving it is the whole reason `measure` exists.
  */
+/**
+ * The 941's entity area, as boxes.
+ *
+ * ═══ CAPTIONS QUOTED FROM THE PAPER, NOT PARAPHRASED ═══
+ *
+ * Each caption is what `pdftotext -layout` reads off page 1 of the official
+ * f941.pdf, character for character. "Name (not your trade name)" in particular
+ * is kept in full: the parenthesis is the IRS distinguishing two boxes that
+ * Greenway fills with two different values - LYMAN'S MARIJUANA and GREENWAY
+ * MARIJUANA - and shortening it to "Name" would erase the distinction on the
+ * one screen meant to teach it.
+ *
+ * The box ids are the same ones the derivation script binds to the agency's
+ * rectangles, so a mismatch here shows up as a box that fails to place rather
+ * than as a box that places somewhere wrong.
+ */
+const NINE41_ENTITY_BOXES: readonly { readonly box: string; readonly caption: string }[] = [
+  { box: "ein", caption: "Employer identification number (EIN)" },
+  { box: "name", caption: "Name (not your trade name)" },
+  { box: "tradeName", caption: "Trade name (if any)" },
+  { box: "address", caption: "Address - number, street, and suite or room number" },
+  { box: "cityStateZip", caption: "City, state, and ZIP code" },
+];
+
+const NINE41_ENTITY_NOT_A_FIGURE =
+  "This box holds text rather than a figure - a name, an address, or the number the IRS files " +
+  "this return under. It is filled from the company profile, not computed from payroll, so it " +
+  "is never a zero.";
+
 export function form941Boxes(ret: Form941Return): readonly FormBox[] {
-  return ret.lines.map((l: Form941Line): FormBox => {
+  /*
+   * ═══ THE DEFECT THESE FIVE BOXES EXIST TO FIX ═══
+   *
+   * Before this, `form941Boxes` returned only the numbered lines, because those
+   * are what the engine computes. The result was a 941 that printed its wages,
+   * its FICA and its total tax with NO EIN, NO business name, NO trade name and
+   * NO address - on either page. Measured: 18 of page 1's 70 rectangles and 32
+   * of page 2's 35 were going unplaced.
+   *
+   * It looked fine. A form with empty name boxes reads as a blank form rather
+   * than a broken one, which is the whole trap.
+   *
+   * Found by asking the same question of the 941 that had just been asked of
+   * the W-2, rather than by re-checking the W-2 fix. Rule 23: fix the class.
+   */
+  const entity: readonly FormBox[] = NINE41_ENTITY_BOXES.map(({ box, caption }): FormBox => {
+    const row = whoseFor(FORM_941_WHOSE, "Form 941", box);
+    return {
+      formId: FORM_ID_941,
+      box,
+      caption,
+      // "count" with a null quantity, exactly as the W-2's identity boxes are
+      // modelled. `BoxMeasure` has no "text" member, and adding one would touch
+      // every form in the system - a larger change than this slice should make.
+      // It is recorded as an open question in the owner report rather than done
+      // quietly.
+      measure: "count",
+      amountCents: 0,
+      quantity: null,
+      whose: row.whose,
+      derivation: `${NINE41_ENTITY_NOT_A_FIGURE} — ${row.why}`,
+      blankOnPurpose: null,
+      emphasise: false,
+      // Flagged not-computed so `paperText` refuses to print a figure for it.
+      // The actual text arrives separately, via `nine41IdentityText`, because a
+      // FormBox cannot carry a name.
+      notComputedYet: NINE41_ENTITY_NOT_A_FIGURE,
+    };
+  });
+
+  const lines = ret.lines.map((l: Form941Line): FormBox => {
     const row = whoseFor(FORM_941_WHOSE, "Form 941", l.line);
     return {
       formId: FORM_ID_941,
@@ -1057,6 +1172,20 @@ export function form941Boxes(ret: Form941Return): readonly FormBox[] {
       notComputedYet: null,
     };
   });
+
+  /*
+   * Entity first, because that is the order the paper prints it: the EIN, the
+   * name, the trade name and the address occupy the whole top third of page 1,
+   * above line 1. The facsimile positions every box from the IRS's own
+   * rectangles, so this order does not move anything on the printed page - but
+   * it does set the LIST order and the tab order, and somebody reading down a
+   * 941 should meet WHOSE return it is before they meet its arithmetic.
+   *
+   * Page 2 repeats the name and EIN in its own header. Those are the same two
+   * boxes, placed twice by the geometry, not two more entries here: a box is a
+   * fact about the return, and the return has exactly one EIN.
+   */
+  return [...entity, ...lines];
 }
 
 /**
@@ -1109,8 +1238,75 @@ export function form940Boxes(ret: Form940Return): readonly FormBox[] {
  * there, and hard-coding the box as always-blank would hide it. The condition
  * is on the value, not on the state.
  */
+/**
+ * The W-2 boxes that are NOT money, in the order the paper prints them.
+ *
+ * ═══ THE DEFECT THIS FIXES ═══
+ *
+ * `w2Boxes` maps over `W2Form.boxes`, and the W-2 engine computes MONEY. So a
+ * real, live W-2 rendered on the actual IRS artwork produced eight boxes -
+ * 1, 2, 3, 4, 5, 6, 16, 17 - and nothing else. No Social Security number, no
+ * EIN, no employer, no employee name, no box 15. The teaching specimen produced
+ * all 26, which is exactly why nobody noticed: the specimen looked complete and
+ * the real thing did not, and only the specimen was ever screenshotted.
+ *
+ * A wage summary printed on IRS artwork is not a W-2. It cannot be handed to an
+ * employee and it cannot go in a file, which is the job Michael named for it.
+ *
+ * ═══ WHY THEY CARRY NO VALUE HERE ═══
+ *
+ * Because a `FormBox` cannot hold one - `measure` is "money" | "hours" | "count".
+ * These boxes exist so the form has something to CLICK and something to teach;
+ * the strings that print in them travel separately, via `w2IdentityText`, from
+ * facts the engine and the company profile already state.
+ *
+ * So `notComputedYet` is set with the honest reason, exactly as the teaching
+ * specimen does it. The alternative - `amountCents: 0` - would print `0.00`
+ * where the employee's name goes.
+ *
+ * The captions are the FORM'S OWN WORDS, read off Michael's filed 2025 employer
+ * copies with `pdftotext -layout` and kept identical to FORM_W2_TEACHING so the
+ * two surfaces cannot drift apart.
+ */
+const W2_IDENTITY_BOXES: readonly { readonly box: string; readonly caption: string }[] = [
+  { box: "a", caption: "Employee's SSN" },
+  { box: "b", caption: "Employer identification number" },
+  { box: "c", caption: "Employer's name, address, and ZIP code" },
+  { box: "d", caption: "Control number" },
+  { box: "e", caption: "Employee's first name and initial, Last name, Suff." },
+  { box: "f", caption: "Employee's address and ZIP code" },
+  { box: "15", caption: "State / Employer's state ID number" },
+];
+
+const W2_IDENTITY_NOT_A_FIGURE =
+  "This box holds text rather than a figure - a name, a number that identifies " +
+  "somebody, or an address. It is filled from the employee record and the company " +
+  "profile, not computed from payroll, so it is never a zero.";
+
 export function w2Boxes(form: W2Form): readonly FormBox[] {
-  return form.boxes.map((b: W2Box): FormBox => {
+  const identity: readonly FormBox[] = W2_IDENTITY_BOXES.map(({ box, caption }): FormBox => {
+    const row = whoseFor(FORM_W2_WHOSE, "Form W-2", box);
+    return {
+      formId: FORM_ID_W2,
+      box,
+      caption,
+      // "count" with a null quantity, matching how the teaching specimen models
+      // exactly these boxes. The measure vocabulary has no "text" member, and
+      // adding one would touch every form in the system; that is a larger change
+      // than this slice should make, and it is recorded as an open question in
+      // the owner report rather than done quietly.
+      measure: "count",
+      amountCents: 0,
+      quantity: null,
+      whose: row.whose,
+      derivation: `${W2_IDENTITY_NOT_A_FIGURE} — ${row.why}`,
+      blankOnPurpose: null,
+      emphasise: false,
+      notComputedYet: W2_IDENTITY_NOT_A_FIGURE,
+    };
+  });
+
+  const money = form.boxes.map((b: W2Box): FormBox => {
     const row = whoseFor(FORM_W2_WHOSE, "Form W-2", b.box);
     const isWaStateBox = (b.box === "16" || b.box === "17") && b.amountCents === 0;
     return {
@@ -1133,6 +1329,16 @@ export function w2Boxes(form: W2Form): readonly FormBox[] {
       notComputedYet: null,
     };
   });
+
+  /*
+   * Identity first, because that is the order the paper prints them: boxes a
+   * through f sit ABOVE box 1 on the form, and box 15 sits below box 14. The
+   * facsimile positions everything from the IRS's own rectangles so order does
+   * not affect the paper - but it does affect the LIST view and the tab order,
+   * and a reader tabbing through a W-2 should meet the employee's name before
+   * their wages, exactly as their eye would.
+   */
+  return [...identity, ...money];
 }
 
 /**
@@ -1508,6 +1714,14 @@ const FORM_941_EXPECTED_WHOSE: Readonly<Record<string, WhoseMoney>> = {
   "16": "not_money", // Deposit schedule and tax liability selection
   "17": "not_money", // Tickbox: business has closed / stopped paying wages
   "18": "not_money", // Tickbox: seasonal employer
+  // ── The entity area: who is filing. No line number, which is why these were
+  // missing from the form entirely until they were measured for. Text rather
+  // than money in every case, so nobody owes anything because of them.
+  ein: "not_money", // Employer identification number
+  name: "not_money", // Name (not your trade name)
+  tradeName: "not_money", // Trade name (if any)
+  address: "not_money", // Address - number and street
+  cityStateZip: "not_money", // City, state, ZIP code
 };
 
 /**
@@ -1553,9 +1767,18 @@ export function assertEvery941LineOwnershipIsPinned(): void {
   const expectedIds = Object.keys(FORM_941_EXPECTED_WHOSE);
   const actualIds = Object.keys(FORM_941_WHOSE);
 
+  /*
+   * 27 numbered lines + the 5 entity boxes that identify the filer.
+   *
+   * The count went from 27 to 32 in books-61, deliberately and with reasons, on
+   * the day it was measured that the 941 was rendering with no EIN and no
+   * business name on it - 18 unplaced rectangles on page 1 and 32 on page 2.
+   * The entity area has no line numbers, so the margin scan that finds "line
+   * 5a" could never find it, and nothing was counting the difference.
+   */
   assert(
-    expectedIds.length === 27,
-    `The pinned Form 941 ownership table should describe 27 lines but describes ` +
+    expectedIds.length === 32,
+    `The pinned Form 941 ownership table should describe 32 boxes but describes ` +
       `${expectedIds.length}. If the form gained or lost a line, update the table ` +
       "deliberately rather than changing this count to match.",
   );

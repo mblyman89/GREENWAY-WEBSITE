@@ -360,6 +360,45 @@ export type W2Form = {
   readonly taxYear: number;
   readonly employeeId: string;
   readonly employeeName: string;
+  /**
+   * The surname on its own, for putting a run of W-2s in paper order.
+   *
+   * ═══ WHY THIS IS CARRIED AND NOT RECOVERED FROM `employeeName` ═══
+   *
+   * Because recovering it is guesswork, and the engine already knows the answer.
+   * `employeeName` is assembled here from `firstNameAndInitial`, `lastName` and
+   * `suffix`, so taking the last word back off it is inferring a fact that was
+   * thrown away one line above.
+   *
+   * The inference is also wrong for real names. "ANN MARIE DE LA CRUZ" sorts
+   * under D - the surname is "DE LA CRUZ" - and a last-word rule files her under
+   * C, in the wrong sheet of the run. Suffixes break it a second way: "JOHN
+   * SMITH JR" would file under J. Both were measured, not imagined; the
+   * last-word rule was written first and produced exactly those two answers.
+   *
+   * Standing rule 121: take the property, not the correlate. Greenway's own
+   * filing sorts by surname (verified against sorting by first name, which does
+   * not reproduce it), so the surname is what gets carried.
+   */
+  readonly employeeLastName: string;
+  /**
+   * The first name and middle initial, exactly as box e wants them.
+   *
+   * ═══ CARRIED FOR THE SAME REASON AS `employeeLastName` ═══
+   *
+   * Box e of the W-2 is three separate rectangles - first name and initial, last
+   * name, suffix - because the SSA parses them separately. Printing the joined
+   * `employeeName` across them would put the whole name in the first rectangle.
+   *
+   * And recovering the first name by stripping the surname off the end of
+   * `employeeName` is the rule-121 mistake in mirror image: it fails on
+   * "ANN MARIE DE LA CRUZ" and on anyone whose surname appears twice. The engine
+   * assembles the display name FROM this field, so it is kept rather than
+   * reconstructed.
+   */
+  readonly employeeFirstNameAndInitial: string;
+  /** Box e's third rectangle. Usually absent, and absent prints blank. */
+  readonly employeeSuffix: string | null;
   /** Never the full number. */
   readonly ssnMasked: string;
   readonly isVoid: boolean;
@@ -378,6 +417,21 @@ export type W2Form = {
   readonly statutoryEmployee: boolean;
   readonly thirdPartySickPay: boolean;
   readonly stateCode: string;
+  /**
+   * Box 15's second half: the state's own number for this employer.
+   *
+   * ═══ WHY THIS IS CARRIED WHEN IT WAS PREVIOUSLY DISCARDED ═══
+   *
+   * `W2Request.state` has always supplied it and `buildW2` always threw it away,
+   * because the box model could only carry MONEY and box 15 holds two strings.
+   * The result was measured rather than assumed: rendering a real W-2 produced a
+   * form with 60000.00 in box 1 and box 15 completely empty.
+   *
+   * Null is a legitimate answer - a business that has no state account number
+   * has nothing to print there - and null prints BLANK rather than a placeholder,
+   * for the same reason box 17 does.
+   */
+  readonly employerStateIdNumber: string | null;
   /**
    * TRAP 1 MADE VISIBLE.
    *
@@ -735,6 +789,10 @@ export function buildW2(req: W2Request): W2Result {
     employeeName: [emp.firstNameAndInitial, emp.lastName, emp.suffix ?? ""]
       .filter((s) => s.trim() !== "")
       .join(" "),
+    // Carried, not re-derived. See the note on `employeeLastName`.
+    employeeLastName: emp.lastName.trim(),
+    employeeFirstNameAndInitial: emp.firstNameAndInitial.trim(),
+    employeeSuffix: emp.suffix === null ? null : emp.suffix.trim() || null,
     ssnMasked: maskSsnForW2(emp.ssn),
     isVoid: emp.isVoid,
     boxes,
@@ -745,6 +803,7 @@ export function buildW2(req: W2Request): W2Result {
     statutoryEmployee: emp.statutoryEmployee,
     thirdPartySickPay: emp.thirdPartySickPay,
     stateCode: state.stateCode,
+    employerStateIdNumber: state.employerStateIdNumber,
     box1MinusBox3Cents: box1MinusBox3,
     box1ExceedsFicaExplanation: explanation,
   };
