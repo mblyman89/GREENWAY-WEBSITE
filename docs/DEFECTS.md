@@ -465,6 +465,108 @@ it is not discovered later as a surprise.
 
 ---
 
+## D-19 — the blank form said 0 employees and 10 employees at the same time
+
+**Found:** books-67, by the rule 130c visual check — after the empty-quarter
+feature had passed 11,658 tests, `tsc`, the pure self-tests, the verbatim
+verifier and eslint. It is the second consecutive slice where the single
+mandated screenshot found something no gate was looking for.
+
+**Severity: the form contradicted itself on two figures ESD reconciles against
+each other.** The first render of the no-payroll confirmation showed
+`TOTAL EMPLOYEES 0` and, two lines beneath it, `JANUARY 10  FEBRUARY 11
+MARCH 9`. On a document formatted to look like a filed return, that is not a
+cosmetic blemish — those two regions are exactly what an agency cross-checks,
+and a report that disagrees with itself invites the notice it is meant to avoid.
+
+**The mechanism, and why it is the same shape as D-15.** `monthlyHeadcount`
+arrives as its own input, passed independently of `ret`. When `ret` became
+nullable this slice, every figure DERIVED from `ret` correctly became an em
+dash — but the monthly counts were never derived from `ret` at all, so they went
+on faithfully echoing whatever the caller handed them. Both halves were
+individually correct: the totals honestly described an empty wage table, and the
+monthly row honestly echoed its input. **The defect lived in the space between
+two correct things**, which is precisely where D-15 lived, and where the
+expensive ones live.
+
+**Why no gate saw it.** Every existing assertion checked one region of the page
+against its own inputs. Not one compared two regions against each other. The
+`.render` harness likewise asserted that no charge printed `$0.00` — which was
+true, and irrelevant, because the contradiction was in a section the assertion
+never visited.
+
+**Fixed at the source of truth, not at the display.** `buildEamsConfirmation`
+now takes `ret === null ? null : input.monthlyHeadcount[i]`, so an absent quarter
+reports no headcount whatever the caller passes. Fixing it in the page instead
+would have left the next caller free to reintroduce it.
+
+**The gate:** "D-19: the monthly counts cannot contradict the employee total". It
+is deliberately fed a NON-EMPTY `monthlyHeadcount` alongside a null return — the
+exact combination that produced the contradiction — rather than the nulls the
+page happens to pass today, because a gate that only exercises today's caller
+proves nothing about tomorrow's. Mutation-proven: reverting the fix fails with
+`JANUARY reported "10" employees on a quarter whose employee total is 0`.
+
+---
+
+## D-20 — the two download links vanished on an empty quarter, so he hovered the disabled button
+
+**Found:** books-67, reported by Michael, and it is the SECOND occurrence of a
+defect class this repository had already found and fixed once.
+
+**What he saw, verbatim:** *"I think I see the export button for esd and pfml,
+the button is not very clear it is the button to use to export the files for esd
+and pfml/ wa cares, it has a circle with a slash in it when I hover over that
+box."*
+
+**What was actually happening.** The card holding both download links was wrapped
+in `{result.ok ? ( ... ) : null}`. With no payroll in the quarter,
+`validateWaQuarterRequest` raises `NO_SUBJECTS`, `result.ok` is false, and **both
+links were removed from the page entirely.** The only button-shaped object left
+was *"Taking these figures to the State"* — which is deliberately inert (its own
+comment calls it "the button that does not file") and deliberately carries
+`cursor-not-allowed`. That is the circle with a slash. **He hovered the one
+control on the screen designed to look forbidden, because the two that are not
+were not rendered at all.**
+
+His two reports in that message were therefore one defect seen from two angles:
+the confirmation page refusing to draw, and the downloads apparently disabled,
+are both `result.ok` hiding a surface that should never hide.
+
+**The class, and the precedent that should have prevented it.**
+`form-sheet-core.test.ts` has recorded the finding since books-49, in as many
+words: *"hiding a teaching surface behind `result.ok` made it invisible for a
+year."* The `sheet` route learned that lesson and falls back to a blank specimen.
+books-66 shipped the confirmation route and the upload card without it. Same
+class, new surface, two years apart — which is exactly the situation standing
+rule 23 exists for.
+
+**Fixed in the class.** The download card now renders ALWAYS. On an empty quarter
+it keeps both links and adds a panel explaining that a download would return a
+list of what is missing rather than an empty file — because an empty wage file
+uploaded to EAMS is an affirmative report that nobody was paid. The links became
+real buttons with a `download` attribute and each now states its purpose in a
+sentence (*"This is the file you upload to EAMS"*), which is what he asked for.
+
+**The gate:** "books-67: an empty quarter draws the form, and the downloads never
+hide", in `form-sheet-core.test.ts` alongside the books-49 gate it generalises.
+It walks back from each download link to the nearest enclosing `<Card>` and fails
+if the preceding conditional is the figures gate. Mutation-proven: re-wrapping
+the card fails with *"the download card is wrapped in `result.ok` again — on an
+empty quarter both links vanish and the only button left on the page is the
+disabled one."*
+
+**The separate judgement this forced, and it is the interesting part.** An empty
+quarter must draw the form; a BROKEN quarter must not. `NO_SUBJECTS` means "there
+is nothing here", which is a fact about the quarter and safe to render blank.
+Every other refusal — negative wages, fractional hours, a missing rate — means
+"something here is wrong and I will not guess", and rendering those as a blank
+form would hide a real fault behind a page that merely looks empty. So the
+confirmation route branches on the refusal CODE, not on `result.ok`, and only
+`NO_SUBJECTS` alone earns the blank form.
+
+---
+
 ## D-11 — `buildPaidLeaveCsv` existed for eight slices with no caller
 
 **Found:** books-64. `grep -rn "buildPaidLeaveCsv" src/` outside its own module

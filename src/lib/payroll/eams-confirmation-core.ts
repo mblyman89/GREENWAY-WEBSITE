@@ -155,6 +155,16 @@ export type EamsConfirmationView = {
    * field a reader learns to stop seeing.
    */
   readonly notFiledNotice: string;
+  /**
+   * Why every figure on this form is an em dash, or null when there are figures.
+   *
+   * A blank form with no explanation is the defect Michael reported in a
+   * different costume: the old behaviour told him "1 problem" and drew nothing,
+   * and drawing a page of dashes without saying why would be no better. This
+   * sentence is the difference between a form that is empty and a form that is
+   * broken, and the reader cannot be expected to tell those apart unaided.
+   */
+  readonly emptyReason: string | null;
 };
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -350,7 +360,36 @@ export function rateNote(prefix: string, milliPct: number | null): string | null
 
 export type BuildConfirmationInput = {
   readonly quarter: QuarterRef;
-  readonly ret: WaQuarterReturn;
+  /**
+   * The quarter's figures, or NULL when the engine honestly has none yet.
+   *
+   * ═══ WHY NULL IS ACCEPTED HERE (books-67) ═══
+   *
+   * Michael, on finding the page refusing: *"the esd form page says it refuses
+   * to draw the form because there is 1 problem, no payroll yet. I just want to
+   * make sure this is correct behavior, or if I should still be able to see the
+   * form without payroll data in it? Ideally I'd like to see the form like all
+   * the others, even with no payroll data to fill it with."*
+   *
+   * He is right, and the repository already agreed with him before he asked.
+   * `form-sheet-core.test.ts` records the books-49 finding in as many words:
+   * "hiding a teaching surface behind `result.ok` made it invisible for a year."
+   * The `sheet` route learned that lesson and falls back to a blank specimen;
+   * this route shipped in books-66 without it, so the same defect class
+   * recurred on a new surface. Standing rule 23: fix the class.
+   *
+   * NULL IS NOT ZERO, AND THAT DISTINCTION IS THE WHOLE DESIGN. An empty
+   * quarter must not print `$0.00` in the tax boxes, because a zero on a
+   * Washington return is an assertion that nothing was owed. Every figure
+   * derived from `ret` therefore becomes an em dash when `ret` is null, using
+   * the same `moneyOrDash` the filled path already uses for a missing line.
+   *
+   * ONE BUILDER, NOT TWO. The alternative — a separate `buildEmptyConfirmation`
+   * — would be a second layout free to drift from the first, so the blank form
+   * Michael studies would slowly stop resembling the filled form he files.
+   * Rule 25: extend, never duplicate.
+   */
+  readonly ret: WaQuarterReturn | null;
   readonly profile: ConfirmationProfile;
   /** UI rate in milli-percent, already resolved for this quarter. */
   readonly uiRateMilliPct: number | null;
@@ -391,13 +430,20 @@ export const NOT_FILED_NOTICE =
 export function buildEamsConfirmation(input: BuildConfirmationInput): EamsConfirmationView {
   const { quarter, ret, profile } = input;
 
-  const grossCents = ret.grossWagesCents;
-  const taxableCents = ret.subjectsEsdTaxableCents;
-  const excessCents = deriveExcessWagesCents(grossCents, taxableCents);
+  /*
+   * Every figure below is `number | null`, and null means "the books have not
+   * produced this yet" — never zero. `moneyOrDash` turns null into an em dash,
+   * so a blank form is visibly blank rather than quietly claiming that no wages
+   * were paid and no tax was owed.
+   */
+  const grossCents = ret === null ? null : ret.grossWagesCents;
+  const taxableCents = ret === null ? null : ret.subjectsEsdTaxableCents;
+  const excessCents =
+    ret === null ? null : deriveExcessWagesCents(ret.grossWagesCents, ret.subjectsEsdTaxableCents);
 
-  const uiCents = lineCents(ret, "esd-ui");
-  const eafCents = lineCents(ret, "esd-eaf");
-  const totalCents = lineCents(ret, "esd-total");
+  const uiCents = ret === null ? null : lineCents(ret, "esd-ui");
+  const eafCents = ret === null ? null : lineCents(ret, "esd-eaf");
+  const totalCents = ret === null ? null : lineCents(ret, "esd-total");
 
   /*
    * The charges column, in EAMS's own order and wording.
@@ -409,16 +455,16 @@ export function buildEamsConfirmation(input: BuildConfirmationInput): EamsConfir
    * because it is never filed. The note says so.
    */
   const charges: readonly ChargeRow[] = [
-    { label: "Gross wages", amount: confirmationMoney(grossCents), note: null, emphasis: false },
+    { label: "Gross wages", amount: moneyOrDash(grossCents), note: null, emphasis: false },
     {
       label: "Excess wages",
-      amount: confirmationMoney(excessCents),
+      amount: moneyOrDash(excessCents),
       note: "As calculated from your books, not by ESD",
       emphasis: false,
     },
     {
       label: "Total taxable wages",
-      amount: confirmationMoney(taxableCents),
+      amount: moneyOrDash(taxableCents),
       note:
         input.wageBaseCents === null
           ? "Based on excess wages calculation"
@@ -445,7 +491,12 @@ export function buildEamsConfirmation(input: BuildConfirmationInput): EamsConfir
     },
     {
       label: "Late report penalty",
-      amount: confirmationMoney(0),
+      /*
+       * Hard zero when there ARE figures (the real page always prints this line,
+       * and a preview is never late). An em dash when there are none, because on
+       * a blank form a lone $0.00 among em dashes reads as a computed result.
+       */
+      amount: ret === null ? "\u2014" : confirmationMoney(0),
       note: "A preview is never late. EAMS will show any real penalty when you file.",
       emphasis: false,
     },
@@ -457,7 +508,7 @@ export function buildEamsConfirmation(input: BuildConfirmationInput): EamsConfir
     },
   ];
 
-  const wageRows: readonly ConfirmationWageRow[] = ret.wageDetail.map(
+  const wageRows: readonly ConfirmationWageRow[] = (ret === null ? [] : ret.wageDetail).map(
     (row: WageDetailRow, i: number) => {
       /*
        * EAMS prints last and first name in separate columns. The engine carries
@@ -516,7 +567,26 @@ export function buildEamsConfirmation(input: BuildConfirmationInput): EamsConfir
   void spanMonths;
 
   const monthlyCounts = allMonths.map((month, i) => {
-    const c = input.monthlyHeadcount[i];
+    /*
+     * ═══ D-19, FOUND BY THE books-67 VISUAL CHECK ═══
+     *
+     * `monthlyHeadcount` arrives as its own input, independent of `ret`. When
+     * `ret` is null the wage table is empty and "Total employees" reads 0 — but
+     * the monthly counts kept rendering whatever they were handed, so the first
+     * screenshot of an empty quarter showed TOTAL EMPLOYEES 0 directly above
+     * JANUARY 10, FEBRUARY 11, MARCH 9.
+     *
+     * A form that contradicts itself is worse than one that admits it does not
+     * know, and this one contradicted itself on the two figures ESD cross-checks
+     * against each other. Both halves were individually correct — the totals
+     * honestly reported an empty table, the monthly counts honestly echoed their
+     * input — and the defect lived in the space between them, which is where the
+     * expensive ones live (D-15, same shape).
+     *
+     * With no quarter to count, there is no headcount to report, whatever the
+     * caller passed.
+     */
+    const c = ret === null ? null : input.monthlyHeadcount[i];
     return {
       month,
       /*
@@ -536,10 +606,27 @@ export function buildEamsConfirmation(input: BuildConfirmationInput): EamsConfir
     preparer,
     charges,
     wageRows,
-    totalEmployees: ret.headcount,
-    totalHours: ret.totalHours,
-    totalWages: confirmationMoney(grossCents),
+    totalEmployees: ret === null ? 0 : ret.headcount,
+    totalHours: ret === null ? 0 : ret.totalHours,
+    /*
+     * `totalEmployees` and `totalHours` are counts of rows actually present, so
+     * 0 is the honest answer for an empty table — there genuinely are no rows.
+     * `totalWages` is MONEY and gets a dash, because "$0.00 of wages" is a claim
+     * about the quarter while "no rows" is a statement about the table.
+     */
+    totalWages: moneyOrDash(grossCents),
     monthlyCounts,
+    emptyReason:
+      ret === null
+        ? "This form is blank because no pay run has reached this quarter yet — not " +
+          "because anything is wrong. It is the real layout, with every box in the place " +
+          "ESD prints it, so you can see what will be reported before there is anything " +
+          "to report. Every amount shows a dash rather than $0.00 on purpose: a zero on " +
+          "an unemployment report is a statement that no wages were paid, and that is a " +
+          "claim this page will not make on your behalf. Run payroll for the quarter and " +
+          "the same boxes fill in. If nobody is paid all quarter, that is still a return " +
+          "— file it marked 'no payroll'."
+        : null,
     notFiledNotice: NOT_FILED_NOTICE.replace("$Q", String(quarter.quarter)).replace(
       "$Y",
       String(quarter.year),

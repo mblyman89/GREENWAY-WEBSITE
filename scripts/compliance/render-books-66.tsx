@@ -284,4 +284,49 @@ writeFileSync(
   ),
 );
 
-console.log("rendered 2 pages into .render/ (all filed-figure assertions passed)");
+/* ── 3. THE EMPTY QUARTER (books-67) ────────────────────────────────────────
+ *
+ * The state Michael actually hit and reported: *"the esd form page says it
+ * refuses to draw the form because there is 1 problem, no payroll yet ...
+ * Ideally I'd like to see the form like all the others, even with no payroll
+ * data to fill it with."*
+ *
+ * This is the page that used to be a refusal notice. Two questions can only be
+ * answered by looking at it: does the blank form still teach where everything
+ * goes, and is it unmistakably blank rather than unmistakably zero. A test can
+ * assert the strings; only a photograph shows whether a reader would be misled.
+ */
+const emptyView = buildEamsConfirmation({ ...INPUT, ret: null });
+
+/*
+ * Pre-render assertion, same discipline as the filed-figure `must()` above: do
+ * not emit an image that could be mistaken for a return reporting no wages.
+ */
+for (const row of emptyView.charges) {
+  if (row.amount === "$0.00") {
+    throw new Error(
+      `render-books-67: charge "${row.label}" printed $0.00 on an EMPTY quarter. ` +
+        `A zero on an unemployment report asserts that no wages were paid. ` +
+        `Refusing to produce a screenshot of that.`,
+    );
+  }
+}
+if (emptyView.emptyReason === null) {
+  throw new Error(
+    "render-books-67: the empty quarter produced no explanation, so the page " +
+      "would show a wall of dashes with no reason. Refusing to shoot it.",
+  );
+}
+
+writeFileSync(
+  join(OUT, "52-eams-confirmation-empty-quarter.html"),
+  page(
+    "EAMS confirmation facsimile - a quarter with no payroll yet",
+    `<p class="harness-label">No pay run in this quarter &mdash; the form still draws, every amount is an em dash, and the blue panel says why</p>` +
+      renderToStaticMarkup(
+        <EamsConfirmationSheet view={emptyView} lessons={WA_QUARTERLY_LESSONS} />,
+      ),
+  ),
+);
+
+console.log("rendered 3 pages into .render/ (all filed-figure and empty-quarter assertions passed)");

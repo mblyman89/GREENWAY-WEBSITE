@@ -1199,6 +1199,71 @@ quarter costs a command instead of a re-derivation.
 He should not spend time on it \u2014 he preferred the EAMS confirmation layout, and
 that is what was built.
 
+### books-67: the button that looked forbidden, and the form that would not draw
+
+Michael reported two things and they turned out to be one defect seen twice.
+
+*"I think I see the export button for esd and pfml, the button is not very clear
+it is the button to use to export the files ... it has a circle with a slash in
+it when I hover over that box."* And: *"the esd form page says it refuses to draw
+the form because there is 1 problem, no payroll yet ... Ideally I'd like to see
+the form like all the others, even with no payroll data to fill it with."*
+
+**The measurement came before the fix.** A throwaway probe built an empty Q3 2026
+and printed what the engine actually says: exactly one refusal, `NO_SUBJECTS`,
+"This quarter has nobody on it at all" — matching his "1 problem" precisely. That
+mattered, because fixing the wrong refusal would have left his screen unchanged
+while looking, from here, exactly like success. (The probe's first run threw: it
+guessed the PFML fields were flat on the request when they are nested under
+`pfml`. Read the type, corrected, re-ran — rule 1, on my own scratch code.)
+
+**The two reports share one cause: `{result.ok ? ... : null}`.** With no payroll,
+`result.ok` is false, and the card holding BOTH download links was removed from
+the page entirely. The only button-shaped object left was *"Taking these figures
+to the State"* — deliberately inert, deliberately `cursor-not-allowed`. **He
+hovered the one control designed to look forbidden because the two that are not
+were not on the screen.** The confirmation route refused for the same reason.
+
+**This is the second occurrence of a class this repo already fixed.**
+`form-sheet-core.test.ts` has said so since books-49: *"hiding a teaching surface
+behind `result.ok` made it invisible for a year."* The `sheet` route learned it;
+books-66 shipped two new surfaces without it. Rule 23 — so the fix is a gate that
+walks back from each download link to its enclosing card and fails if the
+preceding conditional is the figures gate, sitting beside the books-49 gate it
+generalises. Mutation-proven in both directions.
+
+**An empty quarter draws the form; a broken one still refuses.** That distinction
+is the whole design. `NO_SUBJECTS` is a fact about the quarter and safe to render
+blank. Every other refusal — negative wages, fractional hours, a missing rate —
+means something is wrong, and drawing those as a blank form would hide a real
+fault behind a page that merely looks empty. The route branches on the refusal
+CODE, never on `result.ok`.
+
+**Null, never zero.** `buildEamsConfirmation` now accepts `ret: null` and every
+derived figure becomes an em dash, because `$0.00` on an unemployment report is
+an affirmative claim that no wages were paid. One builder, not two — a separate
+`buildEmptyConfirmation` would be a second layout free to drift, so the blank
+form he studies would slowly stop resembling the filled form he files (rule 25).
+Counts are treated differently from money on purpose: "0 rows" is a true
+statement about a table, "$0.00" is a claim about a quarter.
+
+**And the screenshot found what 11,658 tests could not — D-19.** The first render
+of the blank form showed `TOTAL EMPLOYEES 0` above `JANUARY 10  FEBRUARY 11
+MARCH 9`. `monthlyHeadcount` is passed independently of `ret`, so it went on
+echoing its input while everything derived from `ret` correctly dashed. Both
+halves were individually correct and the contradiction lived between them —
+the same shape as D-15, on the two figures ESD reconciles against each other.
+Fixed at the source, gated with a deliberately non-empty headcount rather than
+the nulls today's caller passes, and mutation-proven.
+
+**Also answered, without building anything (rule 132):** the ATM model. His four
+uploaded reports were measured rather than assumed — $526,620.00 of transaction
+settlements against $16,272.50 of surcharge over 1 May–23 Aug 2026, and the
+Timberland account showing 230 `DLY SETTLE MVNT` credits against 66
+`TRANSFER FROM X6228 TO X6048`. That confirms his description: the surcharge is
+the ATM company's revenue, not Greenway's, and it arrives separated in the data.
+What he still owes is named in the owner report; the wiring is the next slice.
+
 ### books-62: Schedule B, and three defects a green test suite could not see
 
 Michael: *"I am a schedule b filer, so we don't need to compute the monthly

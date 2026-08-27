@@ -154,7 +154,32 @@ export default async function EamsConfirmationPage({
     );
   }
 
-  if (!loaded.result.ok) {
+  /*
+   * ═══ AN EMPTY QUARTER IS NOT A REFUSAL (books-67) ═══
+   *
+   * Michael: *"the esd form page says it refuses to draw the form because there
+   * is 1 problem, no payroll yet ... Ideally I'd like to see the form like all
+   * the others, even with no payroll data to fill it with."*
+   *
+   * He is right, and books-49 already established it as repo law for the W-2
+   * sheet: hiding a teaching surface behind `result.ok` made it invisible for a
+   * year. books-66 shipped this route without that lesson, so the class
+   * recurred here. Rule 23 — fix the class, not the instance.
+   *
+   * The distinction that keeps this honest: `NO_SUBJECTS` is the engine saying
+   * "there is nothing here", which is a fact about the quarter. Every OTHER
+   * refusal is the engine saying "something here is wrong and I will not guess",
+   * which is a fault. Drawing a blank form for the first is helpful; drawing one
+   * for the second would hide a negative-wage row or a fractional-hours row
+   * behind a page that looks merely empty. So they are separated by CODE, and a
+   * quarter carrying any other refusal still refuses.
+   */
+  const onlyRefusalIsEmptiness =
+    !loaded.result.ok &&
+    loaded.result.refusals.length === 1 &&
+    loaded.result.refusals[0]!.code === "NO_SUBJECTS";
+
+  if (!loaded.result.ok && !onlyRefusalIsEmptiness) {
     return (
       <main className="min-h-screen bg-[var(--admin-bg)] text-white/85">
         {header}
@@ -175,7 +200,13 @@ export default async function EamsConfirmationPage({
     );
   }
 
-  const ret = loaded.result.value;
+  /*
+   * Null, never a zeroed stand-in. `buildEamsConfirmation` turns null into em
+   * dashes throughout; handing it a fabricated empty return would print $0.00
+   * in the tax boxes, which on an unemployment report asserts that no wages
+   * were paid.
+   */
+  const ret = loaded.result.ok ? loaded.result.value : null;
 
   /*
    * SSNs and SOC codes, read through the store that already owns the ESD column
@@ -185,7 +216,7 @@ export default async function EamsConfirmationPage({
    * eleven honest "not on file" cells.
    */
   const factsResult = await loadConfirmationEmployeeFacts(
-    ret.wageDetail.map((r) => r.subjectId),
+    ret === null ? [] : ret.wageDetail.map((r) => r.subjectId),
   );
   const facts = factsResult.ok
     ? factsResult.facts

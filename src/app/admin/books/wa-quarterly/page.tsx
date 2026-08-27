@@ -572,46 +572,86 @@ export default async function WaQuarterlyPage({
            must not. A gate exists purely to prove they can never converge. Two
            separate buttons, each naming its portal, is the whole defence
            against uploading one to the other's screen. ------------------- */}
-      {result.ok ? (
-        <Card>
-          <CardHeader
-            title="Upload files"
-            subtitle="Two different eight-column files for two different portals. They are not interchangeable."
-          />
-          <div className="space-y-3">
-            <div className="rounded-[var(--admin-radius-sm)] border border-white/12 bg-white/[0.03] p-4">
-              <a
-                className="text-sm font-semibold text-[var(--admin-gold)] underline"
-                href={`/admin/books/wa-quarterly/esd-upload?kind=eams_unemployment&year=${quarter.year}&quarter=${quarter.quarter}`}
-              >
-                Download the EAMS wage file (unemployment)
-              </a>
-              <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-                For the Employer Account Management System, where the 5208A and 5208B are filed.
-                This file carries full Social Security numbers, so it is served with caching
-                switched off and should be deleted from your downloads folder once uploaded.
-              </p>
-            </div>
-            <div className="rounded-[var(--admin-radius-sm)] border border-white/12 bg-white/[0.03] p-4">
-              <a
-                className="text-sm font-semibold text-[var(--admin-gold)] underline"
-                href={`/admin/books/wa-quarterly/esd-upload?kind=paid_leave_wa_cares&year=${quarter.year}&quarter=${quarter.quarter}`}
-              >
-                Download the Paid Leave &amp; WA Cares file
-              </a>
-              <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-                For the Paid Leave portal, which takes Paid Family &amp; Medical Leave and WA Cares
-                in one file. Different column order from the EAMS file, and it requires the header
-                row that the EAMS file must not have.
-              </p>
-            </div>
+      {/* ── DOWNLOADS: ALWAYS RENDERED, NEVER HIDDEN (books-67) ─────────────
+           Michael: "I think I see the export button for esd and pfml, the
+           button is not very clear it is the button to use to export the files
+           ... it has a circle with a slash in it when I hover over that box.
+           Are you able to make it more obvious and have text that tells me this
+           is where you download the report."
+
+           Two defects, and they are the same defect. This card used to be
+           wrapped in `result.ok`, so on an empty quarter BOTH download links
+           vanished entirely. The only button-shaped thing left on the page was
+           "Taking these figures to the State", which is deliberately inert and
+           deliberately carries `cursor-not-allowed` — the circle-with-a-slash
+           he described. He hovered the one control designed to look forbidden
+           because the two that are not were not on the screen at all.
+
+           So the fix is not merely cosmetic. The card now renders ALWAYS: the
+           links stay reachable, and when a quarter has no figures they say so
+           in place rather than disappearing. A control that vanishes teaches
+           the reader it never existed; a control that explains itself teaches
+           them what it is for. ------------------------------------------- */}
+      <Card>
+        <CardHeader
+          title="Download the files you upload to the State"
+          subtitle="Two different eight-column files for two different portals. They are not interchangeable."
+        />
+        <div className="space-y-3">
+          <div className="rounded-[var(--admin-radius-sm)] border border-white/12 bg-white/[0.03] p-4">
+            <a
+              className="inline-flex items-center gap-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm font-semibold text-[var(--admin-gold)] hover:bg-[var(--admin-gold)]/20"
+              href={`/admin/books/wa-quarterly/esd-upload?kind=eams_unemployment&year=${quarter.year}&quarter=${quarter.quarter}`}
+              download
+            >
+              <span aria-hidden="true">&darr;</span>
+              Download the EAMS wage file (unemployment)
+            </a>
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+              <strong className="text-[var(--admin-text)]">
+                This is the file you upload to EAMS.
+              </strong>{" "}
+              Click it and a .csv downloads to your computer; then sign in to the Employer Account
+              Management System, where the 5208A and 5208B are filed, and upload the file there.
+              It carries full Social Security numbers, so it is served with caching switched off
+              and should be deleted from your downloads folder once uploaded.
+            </p>
+          </div>
+          <div className="rounded-[var(--admin-radius-sm)] border border-white/12 bg-white/[0.03] p-4">
+            <a
+              className="inline-flex items-center gap-2 rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm font-semibold text-[var(--admin-gold)] hover:bg-[var(--admin-gold)]/20"
+              href={`/admin/books/wa-quarterly/esd-upload?kind=paid_leave_wa_cares&year=${quarter.year}&quarter=${quarter.quarter}`}
+              download
+            >
+              <span aria-hidden="true">&darr;</span>
+              Download the Paid Leave &amp; WA Cares file
+            </a>
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+              <strong className="text-[var(--admin-text)]">
+                This is the file you upload to the Paid Leave portal.
+              </strong>{" "}
+              That portal takes Paid Family &amp; Medical Leave and WA Cares together in one file.
+              Different column order from the EAMS file, and it requires the header row that the
+              EAMS file must not have &mdash; so they can never be swapped.
+            </p>
+          </div>
+          {result.ok ? (
             <p className="text-xs text-[var(--admin-text-muted)]">
               If either file cannot be built, the download does not produce a partial file. It
               returns a page listing what is missing, by name.
             </p>
-          </div>
-        </Card>
-      ) : null}
+          ) : (
+            <p className="rounded-[var(--admin-radius-sm)] border border-sky-400/30 bg-sky-400/10 p-3 text-xs text-sky-100">
+              <strong>These two links are the downloads</strong>, and they stay here whether or not
+              this quarter has figures yet. Right now there is no payroll in{" "}
+              {waQuarterLabel(quarter)}, so a download would return a page telling you what is
+              missing rather than an empty file &mdash; an empty wage file uploaded to EAMS reports
+              that nobody was paid. Once payroll runs for this quarter, these produce the real
+              files.
+            </p>
+          )}
+        </div>
+      </Card>
 
       {/* ── TAKE ME TO SCHOOL (books-47 slice D) ───────────────────────────
           Michael's slice-D correction, verbatim: "the majority of the forms I

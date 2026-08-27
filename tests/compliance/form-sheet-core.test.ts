@@ -722,3 +722,90 @@ describe("books-60/65: the 941 sheet, built from the module the page imports", (
     expect(own.untaughtBoxes).toEqual(pooled.untaughtBoxes);
   });
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * books-67 — THE CLASS GATE: NO FORM SURFACE MAY VANISH ON AN EMPTY QUARTER
+ *
+ * This defect has now occurred TWICE, on two different routes, two years apart:
+ *
+ *   books-49  the W-2 teaching surface was hidden behind `result.ok` and was
+ *             invisible for a year before anyone noticed.
+ *   books-67  the EAMS confirmation route, shipped in books-66, refused to draw
+ *             anything at all when a quarter had no payroll — and the same
+ *             `result.ok` wrapper hid BOTH upload download links on the
+ *             Washington screen, which is how Michael came to hover the one
+ *             button on the page that is deliberately disabled.
+ *
+ * Standing rule 23 says fix the class. The instance fixes are in those slices;
+ * this is the gate that makes a third occurrence fail out loud.
+ *
+ * WHAT THIS DOES NOT ASSERT, deliberately. It does not forbid `result.ok` — the
+ * flag is legitimate and load-bearing for figures. It asserts the two specific
+ * things whose absence caused real harm: that a route which can draw a blank
+ * form actually distinguishes an empty quarter from a fault, and that the
+ * download links are not conditional on figures existing.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-67: an empty quarter draws the form, and the downloads never hide", () => {
+  const CONFIRMATION = join(ROOT, "src/app/admin/books/wa-quarterly/confirmation/page.tsx");
+  const WA_SCREEN = join(ROOT, "src/app/admin/books/wa-quarterly/page.tsx");
+
+  it("the confirmation route separates an EMPTY quarter from a REFUSAL", () => {
+    // Assert existence before absence (rule 66c) — a deleted file must not pass.
+    expect(existsSync(CONFIRMATION)).toBe(true);
+    const src = readFileSync(CONFIRMATION, "utf8");
+
+    /*
+     * NO_SUBJECTS is "there is nothing here" — a fact about the quarter, safe to
+     * draw blank. Every other refusal is "something here is wrong and I will not
+     * guess", which must still refuse, or a negative-wage row would hide behind
+     * a page that merely looks empty.
+     */
+    expect(src).toMatch(/NO_SUBJECTS/);
+    expect(src).toMatch(/onlyRefusalIsEmptiness/);
+
+    // The two states that MUST still refuse are still refusing.
+    expect(src).toMatch(/ratesMissing|resolved\.ok/);
+    expect(src).toMatch(/loaded\.ok/);
+
+    // And the builder is handed null rather than a fabricated zeroed return.
+    expect(src).toMatch(/loaded\.result\.ok \? loaded\.result\.value : null/);
+  });
+
+  it("the Washington screen's download links are NOT behind `result.ok`", () => {
+    expect(existsSync(WA_SCREEN)).toBe(true);
+    const src = readFileSync(WA_SCREEN, "utf8");
+
+    const eamsAt = src.indexOf("Download the EAMS wage file");
+    const pfmlAt = src.indexOf("Download the Paid Leave");
+    expect(eamsAt, "the EAMS download link must exist").toBeGreaterThan(-1);
+    expect(pfmlAt, "the Paid Leave download link must exist").toBeGreaterThan(-1);
+
+    /*
+     * The heart of it. Walk back from each link to the nearest enclosing
+     * conditional and require that it is not the figures gate. `result.ok ? (`
+     * immediately before a Card is exactly the shape that hid these for a slice.
+     */
+    const cardOpensAt = src.lastIndexOf("<Card>", eamsAt);
+    expect(cardOpensAt).toBeGreaterThan(-1);
+    const preamble = src.slice(Math.max(0, cardOpensAt - 400), cardOpensAt);
+    expect(
+      /\{result\.ok \? \(\s*$/.test(preamble),
+      "the download card is wrapped in `result.ok` again — on an empty quarter " +
+        "both links vanish and the only button left on the page is the disabled one",
+    ).toBe(false);
+  });
+
+  it("the download links say plainly that they are the download", () => {
+    /*
+     * Michael's words: "the button is not very clear it is the button to use to
+     * export the files ... have text that tells me this is where you download
+     * the report." A link he cannot identify is a link that does not work.
+     */
+    const src = readFileSync(WA_SCREEN, "utf8");
+    expect(src).toMatch(/This is the file you upload to EAMS/);
+    expect(src).toMatch(/This is the file you upload to the Paid Leave portal/);
+    // Real download affordance, not bare underlined text.
+    expect(src).toMatch(/download\s*$/m);
+  });
+});

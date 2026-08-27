@@ -378,3 +378,112 @@ describe("EAMS confirmation preview — every clickable charge really teaches", 
     }
   });
 });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * books-67 — AN EMPTY QUARTER DRAWS THE FORM, IT DOES NOT REFUSE
+ *
+ * Michael: "the esd form page says it refuses to draw the form because there is
+ * 1 problem, no payroll yet ... Ideally I'd like to see the form like all the
+ * others, even with no payroll data to fill it with."
+ *
+ * The danger in granting that request is printing $0.00 where the books simply
+ * have no answer. A zero on an unemployment report is a claim that no wages
+ * were paid; an em dash is the absence of a claim. These gates hold that line.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+describe("EAMS confirmation preview — a quarter with no payroll still draws", () => {
+  const empty = buildEamsConfirmation({ ...BASE_INPUT, ret: null });
+
+  it("builds a view instead of throwing", () => {
+    // Assert existence before absence (rule 66c).
+    expect(empty).toBeDefined();
+    expect(empty.charges.length).toBeGreaterThan(0);
+    expect(empty.identity.length).toBeGreaterThan(0);
+  });
+
+  it("shows an em dash for EVERY money figure, and never a zero", () => {
+    /*
+     * The whole point of the slice. If any of these ever reads "$0.00" the page
+     * is asserting, on a document formatted to look filed, that Greenway paid
+     * wages of nothing and owes tax of nothing.
+     */
+    for (const row of empty.charges) {
+      expect(row.amount, `charge "${row.label}" must not print a zero`).not.toBe("$0.00");
+      expect(row.amount, `charge "${row.label}" must be an em dash`).toBe("\u2014");
+    }
+    expect(empty.totalWages).toBe("\u2014");
+  });
+
+  it("keeps the full layout so the blank form matches the filled one", () => {
+    /*
+     * Michael asked to see the form "like all the others". A blank form that
+     * dropped half its rows would not teach him where anything goes, which is
+     * the only reason to show it at all. Same labels, same order, same count.
+     */
+    const filled = buildEamsConfirmation(BASE_INPUT);
+    expect(empty.charges.map((c) => c.label)).toEqual(filled.charges.map((c) => c.label));
+    expect(empty.identity.map((p) => p.label)).toEqual(filled.identity.map((p) => p.label));
+    expect(empty.preparer.map((p) => p.label)).toEqual(filled.preparer.map((p) => p.label));
+    expect(empty.monthlyCounts.length).toBe(filled.monthlyCounts.length);
+  });
+
+  it("explains WHY it is blank, and only when it is blank", () => {
+    expect(empty.emptyReason).not.toBeNull();
+    expect(empty.emptyReason ?? "").toContain("no pay run");
+    // It must tell him the empty state is normal, not a fault.
+    expect(empty.emptyReason ?? "").toMatch(/on purpose|not because anything is wrong/i);
+    // And it must not appear on a quarter that HAS figures.
+    expect(buildEamsConfirmation(BASE_INPUT).emptyReason).toBeNull();
+  });
+
+  it("has no employee rows, and reports that as a count rather than a dash", () => {
+    /*
+     * Counts and money are treated differently ON PURPOSE. "No rows in the
+     * table" is a fact about the table and 0 states it correctly. "$0.00 of
+     * wages" is a claim about the quarter, so money gets a dash instead.
+     */
+    expect(empty.wageRows).toEqual([]);
+    expect(empty.totalEmployees).toBe(0);
+    expect(empty.totalHours).toBe(0);
+  });
+
+  it("D-19: the monthly counts cannot contradict the employee total", () => {
+    /*
+     * ═══ FOUND BY LOOKING, NOT BY TESTING ═══
+     *
+     * The first screenshot of the empty form showed "TOTAL EMPLOYEES 0" and,
+     * two lines below it, "JANUARY 10  FEBRUARY 11  MARCH 9". Both halves were
+     * behaving correctly in isolation: the totals described an empty wage table,
+     * and the monthly counts faithfully echoed the `monthlyHeadcount` input,
+     * which is passed independently of `ret`.
+     *
+     * ESD cross-checks those two figures against each other, so a form that
+     * disagrees with itself there is a form that invites a notice. Every one of
+     * the 11,658 tests passing at that moment was blind to it, because no test
+     * compared the two regions of the page.
+     *
+     * This gate is deliberately fed a NON-EMPTY headcount alongside a null
+     * return — the exact combination that produced the contradiction — rather
+     * than the nulls the page happens to pass today. A gate that only exercises
+     * today's caller proves nothing about tomorrow's.
+     */
+    const contradictory = buildEamsConfirmation({
+      ...BASE_INPUT,
+      ret: null,
+      monthlyHeadcount: [10, 11, 9],
+    });
+    expect(contradictory.totalEmployees).toBe(0);
+    for (const m of contradictory.monthlyCounts) {
+      expect(
+        m.count,
+        `${m.month} reported "${m.count}" employees on a quarter whose employee total is 0`,
+      ).toBe("\u2014");
+    }
+  });
+
+  it("still says it is not a filing", () => {
+    // The blank form is the one most likely to be printed and shown to someone.
+    expect(empty.notFiledNotice.length).toBeGreaterThan(40);
+    expect(empty.notFiledNotice).toMatch(/not a filing/i);
+  });
+});

@@ -91,6 +91,22 @@ export function EamsConfirmationSheet({
         <p className="mt-2">{view.notFiledNotice}</p>
       </div>
 
+      {/* ── WHY THE FORM IS BLANK (books-67) ────────────────────────────────
+          Rendered ONLY when every figure is a dash. Michael asked to see the
+          form "even with no payroll data to fill it with", and a page of
+          dashes with no explanation would trade one confusing screen for
+          another: he would not know whether the form was empty or broken.
+          Blue, not red — an empty quarter is a normal state, and colouring it
+          like a fault would teach him to fear a page that is working. */}
+      {view.emptyReason !== null ? (
+        <div className="mt-3 rounded-md border border-sky-400/40 bg-sky-400/10 p-4 text-xs leading-relaxed text-sky-100">
+          <div className="font-semibold uppercase tracking-wide">
+            No payroll in this quarter yet — the form below is blank on purpose
+          </div>
+          <p className="mt-2">{view.emptyReason}</p>
+        </div>
+      ) : null}
+
       {/* ── THE SHEET ITSELF ────────────────────────────────────────────── */}
       <div className="mt-4 rounded-md border border-white/15 bg-white p-6 text-[#1a1a1a] print:border-0 print:p-0">
         {/* Masthead, as EAMS prints it */}
