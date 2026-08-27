@@ -253,6 +253,37 @@ describe("form-scope-core: one selector, proved across every form page", () => {
    * and journal screens - which have their own filters and their own vocabulary
    * - out of a gate written about FORMS.
    */
+  /*
+   * ═══ FORMS THAT HAVE NO REPORTING PERIOD (books-68) ═══
+   *
+   * Every form above answers "what did Greenway owe for THIS quarter / THIS
+   * year". The scope bar is how a reader moves between periods, and a form
+   * page without one is a page whose period is decided by code the reader
+   * cannot see. That is the defect this block exists to prevent.
+   *
+   * The DSHS 18-463 is not that kind of form, and forcing it to be one would
+   * make it WRONG rather than merely odd:
+   *
+   *   - Its trigger is an EVENT, not a period. RCW 26.23.040(1) requires a
+   *     report "within twenty days of the date of hire". There is no quarter to
+   *     select and no annual version of this return.
+   *   - A quarter grain would actively hide the thing the page is for. Somebody
+   *     hired on 28 September is due on 18 October. Viewing "Q3" would show the
+   *     hire and not the deadline; viewing "Q4" would show neither. The one
+   *     reader question this page must answer — "who am I late for RIGHT NOW" —
+   *     is unanswerable in quarters.
+   *   - It reads `searchParams` for exactly one thing, `empty=1`, which is
+   *     Michael's "I should be able to see the form empty". That is a choice of
+   *     SPECIMEN, not a choice of period, so it is not the shared reader's
+   *     vocabulary.
+   *
+   * Its window is a lookback in DAYS, stated on the page as ours rather than
+   * the state's (rule 62d). The two assertions below keep this exemption
+   * honest: the page must really contain no period parsing, and must really
+   * say what window it is showing.
+   */
+  const NO_REPORTING_PERIOD: readonly string[] = ["/new-hire-report"];
+
   const formPages: string[] = [];
   const walk = (dir: string, rel: string): void => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -263,12 +294,57 @@ describe("form-scope-core: one selector, proved across every form page", () => {
         const isForm =
           /form-box-lessons-|FormFacsimile|FormBoxExplorer/.test(src) &&
           /searchParams/.test(src);
-        if (isForm) formPages.push(`${rel}/${e.name}`);
+        if (isForm && !NO_REPORTING_PERIOD.includes(`${rel}/${e.name}`)) {
+          formPages.push(`${rel}/${e.name}`);
+        }
       }
       walk(join(dir, e.name), `${rel}/${e.name}`);
     }
   };
   walk(BOOKS, "");
+
+  /*
+   * An exemption nobody checks is a hole. These run against the exempt pages
+   * themselves, so the allowance costs something to keep.
+   */
+  describe("the period-less forms really are period-less", () => {
+    for (const rel of NO_REPORTING_PERIOD) {
+      const page = join(BOOKS, rel, "page.tsx");
+
+      it(`${rel} exists, so the exemption is not stale`, () => {
+        // Rule 40: an allowance for a page that was deleted is dead weight that
+        // hides the next real one.
+        expect(existsSync(page), `${rel} is exempt from the scope gate but does not exist`).toBe(
+          true,
+        );
+      });
+
+      it(`${rel} keeps no private copy of the period rules`, () => {
+        // The exemption is from the SELECTOR, not from the ban on re-deriving
+        // periods in a corner. If this page ever starts computing a quarter, it
+        // must do it through the shared reader like everything else.
+        const code = readFileSync(page, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/(^|[^:])\/\/.*$/gm, "$1");
+        expect(code, "a private copy of the closed-year rule").not.toMatch(
+          /getUTCFullYear\(\)\s*-\s*1/,
+        );
+        expect(code, "a private copy of the closed-quarter rule").not.toMatch(
+          /Math\.floor\([^)]*getUTCMonth\(\)\s*\/\s*3\)/,
+        );
+      });
+
+      it(`${rel} tells the reader which window it is showing`, () => {
+        // The reason a scope bar is required elsewhere is that an unstated
+        // period is an invisible decision. This page owes the same debt in
+        // words, since it does not pay it with a selector.
+        const src = readFileSync(page, "utf8");
+        expect(src, `${rel} shows a window it never names`).toMatch(
+          /NEW_HIRE_LOOKBACK_DAYS/,
+        );
+      });
+    }
+  });
 
   it("finds the form pages, so nothing below can pass over an empty list", () => {
     // Rule 39/66d: a glob that silently matches nothing passes forever.

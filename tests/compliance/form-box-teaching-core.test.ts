@@ -54,6 +54,7 @@ import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
 import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
+import { NEW_HIRE_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-new-hire";
 import { FORM_941_CONFIRMATION_LESSONS } from "@/lib/payroll/form-941-confirmation-lessons";
 import {
   SCHEDULE_B_LESSONS,
@@ -219,6 +220,11 @@ describe("every cross-reference between forms goes somewhere real", () => {
     { name: "form-box-lessons-w2.ts", lessons: FORM_W2_BOX_LESSONS, kind: "printed-form" },
     { name: "form-box-lessons-w3.ts", lessons: FORM_W3_BOX_LESSONS, kind: "printed-form" },
     { name: "form-box-lessons-wa.ts", lessons: WA_QUARTERLY_LESSONS, kind: "printed-form" },
+    /*
+     * books-68. DSHS 18-463, the Washington new-hire report. PRINTED paper —
+     * Michael mails it — so it takes no screen-only exemption.
+     */
+    { name: "form-box-lessons-new-hire.ts", lessons: NEW_HIRE_BOX_LESSONS, kind: "printed-form" },
     {
       name: "form-941-confirmation-lessons.ts",
       lessons: FORM_941_CONFIRMATION_LESSONS,
@@ -640,8 +646,16 @@ describe("every form Michael can open has a tab", () => {
    * This assertion FAILED when the W-3 was registered, which is the pin working
    * as designed — a roster change must be stated, not absorbed. Rule 89.
    */
-  it("covers all eight forms, including the 5208B that has no boxes", () => {
+  /*
+   * UPDATED DELIBERATELY IN books-68, from eight forms to nine.
+   *
+   * `dshs_18_463` is the addition — the Washington new-hire report. Same
+   * discipline as the books-55 note above: this assertion FAILED when the form
+   * was registered, and the failure is the pin working. Rule 89.
+   */
+  it("covers all nine forms, including the 5208B that has no boxes", () => {
     expect(Object.keys(TEACHING_FORMS).sort()).toEqual([
+      "dshs_18_463",
       "esd_5208a",
       "esd_5208b",
       "form_940",

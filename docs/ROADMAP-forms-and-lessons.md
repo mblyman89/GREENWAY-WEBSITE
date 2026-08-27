@@ -155,9 +155,17 @@ today's number cannot be audited against the slice that produced it:
 | `form-box-lessons-w2.ts` | 26 | 20 | 26 / 20 | 26 / 20 | 26 / 20 | 20 / 13 |
 | `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 | 31 / 34 | 31 / 34 | 31 / 34 |
 | `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 | 4 / 6 | 4 / 6 | 4 / 6 |
-| **total** | **144** | **168** | **121 / 118** | **119 / 116** | **115 / 110** | **103 / 96** |
+| `form-box-lessons-new-hire.ts` | 12 | 5 | — | — | — | — |
+| **total** | **156** | **173** | **121 / 118** | **119 / 116** | **115 / 110** | **103 / 96** |
 
-Every one of the 168 resolves to a box that exists — `assertEveryTieResolves`
+books-68 added the last row. The DSHS 18-463 new-hire report is a 12-box form
+and every box earned a lesson, so lessons and boxes match exactly — the only set
+in the table where they do. Its five ties are low on purpose: a new-hire report
+is the FIRST paper a worker generates, so it has almost nothing upstream to
+point at. It points forward (to the W-4 and the 941 that will carry this person
+for the rest of the year) rather than backward.
+
+Every one of the 173 resolves to a box that exists — `assertEveryTieResolves`
 walks them and names any that does not. The W-3 is the first set with more ties
 than lessons, which is what a transmittal should look like: most of its boxes
 have to agree with something on another form.

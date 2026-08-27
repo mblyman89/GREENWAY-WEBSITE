@@ -1544,6 +1544,75 @@ boundary rather than swept in.
 
 ---
 
+### books-68: the new hire report, and the form whose every box printed zero
+
+*"I want to create the new hire form and add it to the w-4 payroll setup page in
+the same way the other forms are displayed. I want a button in the setup employee
+page at the top right corner that shows me the form filled out and downloadable
+for me to send to the state ... I should be able to see the form empty. And if
+it's not too much work, learning lessons for each box would be amazing!"*
+
+**The statute chose the placement, not preference.** RCW 26.23.040(2): *"Employers
+shall report to the extent practicable by W-4 form, or, at the option of the
+employer, an equivalent form."* Washington names the W-4 as the reporting vehicle
+for new hires, so putting the door on the W-4 payroll setup screen is where the
+law already puts it. Michael's instinct and the RCW agree.
+
+**Why it is a `FormSheet` and not a filled PDF.** `pdfinfo` on the DSHS file
+reports `Form: none` — there is no AcroForm, no named fields, nothing to fill
+programmatically. Rule 127 forbids placing boxes by eye on a scanned page, so this
+took the road books-65 built for the ESD 5208A: the real layout reproduced as a
+sheet, every box where DSHS prints it. Twelve boxes, all taught, each lesson
+citing RCW 26.23.040.
+
+**Three states, one branch point.** Empty draws a blank specimen; broken still
+refuses by name; complete draws the report. That is books-67's law applied at
+birth rather than retrofitted — `onlyRefusalIsEmptiness()` is the single place the
+question is asked. A missing address or SSN names the employee and the field and
+draws nothing, because a form with a hole in it is a failure to report at
+**$25 per employee per month** under RCW 26.23.040(5).
+
+**Twenty days, and day twenty is not late.** `newHireDeadline` is hire + 20, with
+the boundary pinned in both directions: day 20 passes, day 21 is overdue. Overdue
+hires colour on the page. Pagination is four employees per sheet, tail left short
+(rule 125(c)) — never padded to look full.
+
+**The SSN prints unmasked, because the statute requires it** — and still routes
+through the `employee_ssn_reveals` audit table, one row per employee written
+*before* the numbers are returned. If the log fails, the reveal fails: `ssn` is
+set to null and the core refuses by name. A statutory requirement to disclose is
+not a licence to disclose unaudited.
+
+**Migration 0208** adds `home_street / home_city / home_state / home_zip`,
+nullable and deliberately **not** defaulted to `'WA'` — a defaulted state is a
+guess wearing the costume of data, on a form where a wrong address is a
+misreport. The legal name comes from `w2_last_name` / `w2_first_name_and_initial`
+(migration 0203), not from `full_name`, whose own column comment warns it "may be
+a nickname". I had guessed `first_name`/`last_name` existed; measuring the schema
+corrected it (rule 1).
+
+**The route is exempt from two gates, and both exemptions are argued, not
+asserted.** It has no reporting period, because a new hire report is event-driven
+— a quarterly grain would hide an overdue hire across a boundary. And it is
+owner-only without a menu entry, so it is listed in the nav gate's `known` set
+with its statutory rationale, since an unreachable page is a decision nobody made.
+
+**D-21: the screenshot was the only gate that fired.** With all 11,695 tests
+green, the filled form rendered a literal `0` in **all twelve boxes** — employer
+name `0`, SSN `0`, date of hire `0`. Every test asserted on the view object, which
+was correct; the defect lived in the last step between a correct view and the
+rendered page. The first fix removed the zeroes and printed "not computed yet"
+across a fully populated report instead — a second falsehood, caught by a second
+screenshot. Shipped fix: an additive optional `text` field on `FormBox`, read
+through `boxText()`, checked after `notComputedYet` and before the numeric
+branches, with `assertBoxTextIsHonest` called from `sheetGroups()` so every sheet
+in the system passes the same door. Full record in `docs/DEFECTS.md`.
+
+**This is the third slice in a row where a visual check found what the suite could
+not** (D-19, D-20, D-21). Rule 130c is earning its place.
+
+---
+
 ## Also outstanding (not in the mandated chain)
 
 - **R1 — the security finding.** Twenty RLS policies use `for all using

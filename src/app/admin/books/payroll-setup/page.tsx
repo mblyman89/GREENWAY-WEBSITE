@@ -148,11 +148,51 @@ export default async function PayrollSetupPage({
     <div className="space-y-8 pb-16">
       {/* ---------------------------------------------------------------- */}
       <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold text-[var(--admin-text)]">
-            Set up payroll from W-4 data
-          </h1>
-          <Badge tone="gold">Owner only</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold text-[var(--admin-text)]">
+              Set up payroll from W-4 data
+            </h1>
+            <Badge tone="gold">Owner only</Badge>
+          </div>
+
+          {/*
+           * ═══ THE NEW-HIRE REPORT BUTTON (books-68) ═══
+           *
+           * Michael: "I want a button in the setup employee page at the top
+           * right corner that shows me the form filled out and downloadable for
+           * me to send to the state."
+           *
+           * Top right of the header, which is the top right of the page's
+           * content column. `justify-between` on the row above puts it there
+           * without absolute positioning, so it drops below the title on a
+           * narrow screen instead of covering it.
+           *
+           * WHY THIS PAGE, beyond the fact that he asked. RCW 26.23.040(2):
+           * "Employers shall report to the extent practicable by W-4 form, or,
+           * at the option of the employer, an equivalent form." The statute
+           * names the W-4 as the primary new-hire reporting vehicle, so the
+           * new-hire report genuinely belongs on the W-4 screen. His instinct
+           * matched the law.
+           *
+           * TWO links, not one, because "show me the form empty" is a different
+           * request from "show me what I owe" and a single button cannot mean
+           * both. The second is small and quiet: it is the teaching path.
+           */}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Link
+              href="/admin/books/new-hire-report"
+              className="rounded-md border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 px-3 py-2 text-sm font-semibold text-[var(--admin-gold)] transition hover:bg-[var(--admin-gold)]/20"
+            >
+              New hire report &rarr;
+            </Link>
+            <Link
+              href="/admin/books/new-hire-report?empty=1"
+              className="text-[11px] text-[var(--admin-text-faint)] underline hover:text-[var(--admin-text)]"
+            >
+              or see the blank form
+            </Link>
+          </div>
         </div>
         <p className="max-w-3xl text-sm leading-relaxed text-[var(--admin-text-faint)]">
           A W-4 is the employee&apos;s instruction sheet for one tax and one tax only: federal

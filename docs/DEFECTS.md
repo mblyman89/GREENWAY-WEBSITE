@@ -791,3 +791,81 @@ the two-problem condition, asserts existence before absence (rule 66c), checks
 the pairing, and separately asserts that index 0 WOULD have been wrong — because
 a test that only checks the right answer still passes against the broken code on
 a one-problem step. Mutation-proven: re-introducing the index-0 read fails it.
+
+## D-21 — every box on the new hire form printed "0", and the first fix printed "not computed yet" instead
+
+**Found:** books-68, by looking at a screenshot, with **all 11,695 tests green**.
+Not reported by Michael — he never saw it, because it was caught before the slice
+shipped. That is the only reason it is a defect record rather than an apology.
+
+**What the screenshot showed.** The filled DSHS 18-463 rendered a literal `0` in
+all twelve boxes. The employer's legal name: `0`. The employee's last name: `0`.
+The social security number: `0`. The date of hire: `0`. A form that, printed and
+mailed, would have told Washington that Greenway hired a person named zero.
+
+**The cause.** `BoxMeasure` is `"money" | "hours" | "count"`. There is no text
+member. `formatBoxValue` therefore sent every one of these boxes down the count
+branch, which returns `(box.quantity ?? 0).toLocaleString()`, and `quantity` is
+null on all twelve — because **nothing on the 18-463 is a figure.** It is two
+names, an address, an SSN and two dates. The type system was asked to represent a
+form made entirely of words using a vocabulary that only knows amounts, and it
+answered with the default.
+
+**Why the suite did not catch it, which is the part worth keeping.** Thirty-three
+tests covered this form and every one of them passed. They asserted on the *view
+object* — that the SSN was grouped `534-29-8006`, that the deadline was hire + 20,
+that the pagination broke 4 + 1 — and the view object was **correct in every
+respect.** The defect lived entirely in the last step, between a correct view and
+the rendered page. This is precisely the D-19 class (assertions about the data
+while the page says something else) and it is why standing rule 130c requires one
+visual check per surface. **The screenshot is not a courtesy to Michael. It is a
+gate, and on this slice it was the only gate that fired.**
+
+**The first fix, and why it was also false.** The codebase already had a road for
+non-numeric boxes: `employerEntityBoxes` carries the 941's EIN, legal name and
+address flagged `notComputedYet`, which `formatBoxValue` checks first, ahead of
+every numeric branch. Following it (rule 25: extend, never duplicate) removed all
+twelve zeroes, and the suite went green a second time. The next screenshot showed
+the real problem: **a fully populated report reading "not computed yet" in all
+twelve boxes.** Trading a false zero for a false "unknown" is not a fix. Those 941
+boxes are headers repeated from a company profile; these twelve *are* the return.
+
+**Fixed in the class.** One additive, optional `text?: string | null` field on
+`FormBox`, read only through `boxText()`, which treats absent, null and
+whitespace-only identically as "no words here". `formatBoxValue` consults it
+**second** — after `notComputedYet`, so an unknown figure still refuses to print,
+and before the numeric branches, so a person's name is never formatted as
+`quantity ?? 0`. `boxIsEmpty` returns false for a box carrying text, so a box
+holding an employee's name is not greyed out as `correctlyBlank`.
+
+Widening `BoxMeasure` to a fourth member was the alternative and was rejected on
+budget: it is a union that `form-box-adapters`, `form-box-teaching-core`,
+`wa-quarterly-mentor-gates`, `form-941-schedule-b-boxes` and `form-box-ui-core`
+must each then handle exhaustively — every form in the system, for one form's
+benefit. Michael: *"We need to find a fair balance between having perfect code
+verse acceptable code within budget."* The field was made optional rather than
+required for the same reason: required, the type checker enumerated ~30
+construction sites, and every one would have been edited to write `text: null` —
+churn across nine files of tax-form code to restate a default, which is how a real
+edit hides among a hundred mechanical ones.
+
+**The honesty gate.** `assertBoxTextIsHonest` throws if a box is `measure:
+"money"` and also carries text, or carries text while flagged not-computed. A box
+is an amount or a sentence, never both: words where a dollar figure belongs is how
+a wrong number reaches a return. It is called from `sheetGroups()`, so **every
+sheet in the system passes through that one door** (rule 23), not just this form.
+
+**The gates:** two, in `tests/compliance/new-hire-report.test.ts`, one per half of
+the defect. *"never reaches the numeric branch, because no box on this form is a
+figure"* asserts the **class** rather than twelve strings — a box escapes the
+count branch only via `notComputedYet` or `text`, so a thirteenth box added later
+with neither fails immediately. *"prints the real value in the box, and greys only
+what is genuinely unknown"* pins the rendered strings through the real formatter
+and uses MIDDLE NAME as its control: the one box that must read "not computed yet"
+while the eleven beside it read as data.
+
+Mutation-proven, both halves. Reverting `text` to null reproduces the original
+failure verbatim — *"expected '0' to contain 'LYMAN\'S MARIJUANA L.L.C.'"* — and
+re-flagging a populated box `notComputedYet` fails with *"expected 'not computed
+yet' to be '46-4217016'"*. The green suite that missed this defect twice now
+fails against both versions of it.

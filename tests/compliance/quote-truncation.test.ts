@@ -68,6 +68,7 @@ import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { FORM_941_LESSONS, FORM_941_SOURCE_PATH } from "@/lib/payroll/form-box-lessons-941";
 import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
+import { NEW_HIRE_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-new-hire";
 import { FORM_941_CONFIRMATION_LESSONS } from "@/lib/payroll/form-941-confirmation-lessons";
 import type { BoxLesson } from "@/lib/payroll/form-box-core";
 /*
@@ -108,6 +109,7 @@ const SETS: readonly (readonly [string, readonly BoxLesson[]])[] = [
   ["form-box-lessons-941.ts", FORM_941_LESSONS],
   ["form-box-lessons-940.ts", FORM_940_LESSONS],
   ["form-box-lessons-wa.ts", WA_QUARTERLY_LESSONS],
+  ["form-box-lessons-new-hire.ts", NEW_HIRE_BOX_LESSONS],
   ["form-941-confirmation-lessons.ts", FORM_941_CONFIRMATION_LESSONS],
 ];
 
@@ -228,7 +230,8 @@ describe("no quotation is cut off mid-sentence", () => {
       SETS.length,
       "a lesson set was added or removed without updating this gate, so quotations in it are " +
         "not being checked for truncation at all",
-    ).toBe(6);
+      // books-68: 6 -> 7 with form-box-lessons-new-hire.ts. Stated, not absorbed.
+    ).toBe(7);
     for (const [name, set] of SETS) {
       expect(set.length, `${name} is empty, so checking it proves nothing`).toBeGreaterThan(0);
     }

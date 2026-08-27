@@ -48,6 +48,7 @@ import { join } from "node:path";
 import { FORM_941_LESSONS } from "@/lib/payroll/form-box-lessons-941";
 import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
+import { NEW_HIRE_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-new-hire";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
 import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { FORM_941_CONFIRMATION_LESSONS } from "@/lib/payroll/form-941-confirmation-lessons";
@@ -70,6 +71,7 @@ const LESSON_SETS: readonly (readonly [string, readonly BoxLesson[]])[] = [
   ["form-box-lessons-941.ts", FORM_941_LESSONS],
   ["form-box-lessons-940.ts", FORM_940_LESSONS],
   ["form-box-lessons-wa.ts", WA_QUARTERLY_LESSONS],
+  ["form-box-lessons-new-hire.ts", NEW_HIRE_BOX_LESSONS],
   ["form-box-lessons-w2.ts", FORM_W2_BOX_LESSONS],
   ["form-box-lessons-w3.ts", FORM_W3_BOX_LESSONS],
   ["form-941-confirmation-lessons.ts", FORM_941_CONFIRMATION_LESSONS],

@@ -328,6 +328,22 @@ describe("books-49 owner report: the figures were re-derived, not remembered", (
        * accidental pass against `undefined` — the gate worked.
        */
       form_w3: 31,
+      /*
+       * Added in books-68, on the same instruction the failure message gives:
+       * "Add it to this baseline with the count it shipped at."
+       *
+       * It ships at 12 — every box printed on the DSHS 18-463 (Rev. 04/2023),
+       * two employer boxes and ten employee boxes, with a lesson behind each.
+       * The books-49 report predates the form entirely, so 12 is a new floor
+       * rather than a promise being restated.
+       *
+       * Worth noting WHY 12 and not more: the paper repeats the same ten
+       * employee boxes four times down the page, and the count here is of
+       * DISTINCT taught boxes. Counting the repeats would inflate this floor to
+       * 42 and would then demand forty-two lessons, thirty of which would be
+       * duplicates of each other.
+       */
+      dshs_18_463: 12,
     };
     for (const { formId, count } of PER_FORM) {
       const promised = baseline[formId];

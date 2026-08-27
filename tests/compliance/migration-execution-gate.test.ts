@@ -447,7 +447,29 @@ describe("the migration list is ordered the way the database will see it", () =>
     // requires the words "violates check constraint" and classifies "syntax
     // error" as a harness bug - standing rule 48: a check that cannot classify
     // must FAIL, not skip, and not accept the right answer for the wrong reason.
-    expect(listed[listed.length - 1]).toMatch(/^0207_/);
+    // ─── IT FIRED AN ELEVENTH TIME, ON 0208 (books-68) ──────────────────────
+    //
+    // 0208_employee_home_address.sql adds home_street, home_city, home_state
+    // and home_zip. It exists for the same reason 0207 did, and was found the
+    // same way: the DSHS 18-463 new-hire report prints an employee's address,
+    // RCW 26.23.040(3)(a) requires "The employee's name, address, social
+    // security number, and date of birth", and a grep of every migration for
+    // address|street|city|zip|postal returned hits only on vendors, billing,
+    // shipping and locations. `public.employees` had no address column at all,
+    // so the report could not have been produced complete. Checked, not assumed.
+    //
+    // Nullable with no defaults, following 0207 exactly, so that "not captured"
+    // stays distinguishable from a value and the builder can refuse BY NAME
+    // rather than printing a blank line onto a legal report. Deliberately NOT
+    // defaulted to 'WA': an employee's home state is a fact about a person, not
+    // about the employer, and a default would state it on everyone's behalf.
+    //
+    // HONOURED THE SAME WAY AS 0198 AND 0199, re-verified before this line was
+    // touched: 208 files; `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so
+    // every name is still zero-padded to four digits; `ls [0-9]*.sql | sort -c`
+    // exits clean, so the on-disk order and the string sort still agree. Only
+    // then was 0207 changed to 0208.
+    expect(listed[listed.length - 1]).toMatch(/^0208_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

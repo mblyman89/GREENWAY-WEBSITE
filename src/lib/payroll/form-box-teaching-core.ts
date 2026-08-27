@@ -1645,6 +1645,110 @@ const ENTITY_TEACHING: readonly TeachingBox[] = ENTITY_BOX_CAPTIONS.map(
   }),
 );
 
+/**
+ * DSHS 18-463, the Washington new-hire report (books-68).
+ *
+ * Every box is `not_money` because this form carries no money at all — it is a
+ * CHILD SUPPORT identification form, which is also why it wants a date of birth
+ * and a home address. Captions are measured off page 1 of Michael's own copy
+ * with `pdftotext -bbox-layout`, not retyped from memory.
+ *
+ * `count` rather than `money` as the unit; `formatBoxValue` never prints a
+ * currency symbol beside a name or a ZIP code.
+ */
+const NEW_HIRE_TEACHING: readonly TeachingBox[] = [
+  {
+    box: "E1",
+    caption: "EMPLOYER NAME AND ADDRESS",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "Greenway's legal entity name and mailing address, taken from the company profile. The " +
+      "form prints the name and the address under one caption, which is why this is one box.",
+  },
+  {
+    box: "E2",
+    caption: "EMPLOYER FEDERAL ID NUMBER (FEIN)",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The nine-digit federal EIN from the company profile, hyphenated after the second digit " +
+      "when it prints. RCW 26.23.040(3)(b) names the federal number, not the state UBI.",
+  },
+  {
+    box: "LAST NAME",
+    caption: "EMPLOYEE LAST NAME",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The employee's legal surname exactly as the Social Security card shows it, so the state " +
+      "can match the report against the federal record.",
+  },
+  {
+    box: "FIRST NAME",
+    caption: "EMPLOYEE FIRST NAME",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled: "The legal given name from the Social Security card, never a nickname.",
+  },
+  {
+    box: "MIDDLE NAME",
+    caption: "EMPLOYEE MIDDLE NAME",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The middle name or initial if it is known. The only employee box on this form that " +
+      "RCW 26.23.040(3)(a) does not require, so its absence never blocks the report.",
+  },
+  {
+    box: "ADDRESS",
+    caption: "EMPLOYEE ADDRESS",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The employee's home street address, one line, from the employee record. Required by " +
+      "statute because the Division of Child Support may need to serve documents.",
+  },
+  {
+    box: "CITY",
+    caption: "EMPLOYEE CITY",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled: "The city of the home address, stored in its own column so it is never parsed out of a line.",
+  },
+  {
+    box: "STATE",
+    caption: "EMPLOYEE STATE",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The two-letter postal abbreviation for where the employee lives. Two characters because " +
+      "the printed box holds two.",
+  },
+  {
+    box: "ZIP CODE",
+    caption: "EMPLOYEE ZIP CODE",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled: "Five digits, or ZIP+4 with the hyphen when the employee's record carries it.",
+  },
+  {
+    box: "SOCIAL SECURITY NUMBER",
+    caption: "EMPLOYEE SOCIAL SECURITY NUMBER",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The employee's full nine-digit SSN, grouped 3-2-4. The one report in this system that " +
+      "prints the number unmasked, because a masked number cannot be matched by the registry.",
+  },
+  {
+    box: "BIRTH DATE",
+    caption: "EMPLOYEE BIRTH DATE",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The date of birth from the employee record, printed MM/DD/YYYY. Payroll never needs it; " +
+      "child support enforcement does, to tell two similar records apart.",
+  },
+  {
+    box: "DATE OF HIRE",
+    caption: "EMPLOYEE DATE OF HIRE",
+    whoseSource: wa("not_money", "count"),
+    howItGetsFilled:
+      "The first day the employee performed services for pay. The twenty-day reporting clock is " +
+      "measured from this date, which is what makes it the most consequential box on the form.",
+  },
+];
+
 export const TEACHING_FORMS: Readonly<Record<string, readonly TeachingBox[]>> = {
   form_941: [...ENTITY_TEACHING, ...FORM_941_TEACHING],
   form_940: [...ENTITY_TEACHING, ...FORM_940_TEACHING],
@@ -1663,6 +1767,10 @@ export const TEACHING_FORMS: Readonly<Record<string, readonly TeachingBox[]>> = 
   esd_5208b: ESD_5208B_TEACHING,
   pfml_wa_cares: PFML_WA_CARES_TEACHING,
   lni_quarterly: LNI_QUARTERLY_TEACHING,
+  // books-68. The DSHS new-hire report. Registered here rather than left out
+  // because it is PRINTED paper Michael mails, and the specimen gate treats an
+  // unregistered printed form as a lesson set teaching boxes that do not exist.
+  dshs_18_463: NEW_HIRE_TEACHING,
 };
 
 /**
@@ -2027,8 +2135,14 @@ export type LessonSetKind = "printed-form" | "screen-only";
  *
  * MEASURED at books-62: 940, 941, W-2, W-3, WA, 941-confirmation,
  * 941-schedule-B = 7.
+ *
+ * RAISED at books-68 to 8. The DSHS 18-463 new-hire report added an eighth set
+ * (`form-box-lessons-new-hire.ts`). Left at 7 the backstop stopped backstopping:
+ * a caller could have handed over seven of the eight sets, passed `7` as the
+ * expected count, and the floor would have shrugged. Rule 89 — a roster change
+ * is STATED, not absorbed.
  */
-export const MIN_LESSON_SETS = 7;
+export const MIN_LESSON_SETS = 8;
 
 /**
  * How many lesson sets may be exempt from the printed-specimen check.

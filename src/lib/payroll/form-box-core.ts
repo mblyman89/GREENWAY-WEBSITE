@@ -333,6 +333,57 @@ export type FormBox = {
    * red, and never silent.
    */
   readonly blankOnPurpose: string | null;
+  /**
+   * The box's contents WHEN THEY ARE WORDS RATHER THAN AN AMOUNT.
+   *
+   * ═══ WHY THIS EXISTS (books-68, defect D-21) ═══
+   *
+   * `BoxMeasure` is money | hours | count, and every one of those formats a
+   * NUMBER. That was sufficient while every rendered form was a tax return,
+   * where the identity fields (EIN, legal name, address) are printed by a
+   * separate facsimile layer and the boxes carry only figures.
+   *
+   * The DSHS 18-463 new-hire report broke that assumption completely: not one
+   * of its twelve boxes is an amount. They are names, a street address, a
+   * social security number and two dates. Modelled as `count` — the only
+   * non-money option — `formatBoxValue` printed `quantity ?? 0`, so the whole
+   * form rendered as twelve zeroes. Every test passed; the screenshot caught it.
+   *
+   * The first fix was to flag those boxes `notComputedYet`, following the
+   * pattern `employerEntityBoxes` uses for the 941's identity fields. That
+   * removed the false zeroes but replaced them with a different false
+   * statement: a fully populated report reading "not computed yet" in every
+   * box, when the values were sitting right there.
+   *
+   * ═══ WHY A FIELD AND NOT A FOURTH `BoxMeasure` ═══
+   *
+   * A `"text"` member would widen a union that 47 sites read, and would make
+   * every exhaustive check over it incomplete until each was revisited — a
+   * change to every form in the system for one form's benefit. Michael: "We
+   * need to find a fair balance between having perfect code verse acceptable
+   * code within budget."
+   *
+   * This field is ADDITIVE and defaults to null. `formatBoxValue` consults it
+   * only after `notComputedYet`, so:
+   *   - every existing box, which sets it null, behaves exactly as before;
+   *   - an unknown figure still refuses to print, which is the older and more
+   *     important guarantee;
+   *   - a text box prints its words instead of a fabricated zero.
+   *
+   * MUST BE NULL when `measure` is "money". A form box cannot be both an
+   * amount and a sentence, and letting it be would put a caption where a
+   * reader expects a dollar figure. `assertBoxTextIsHonest` enforces that.
+   *
+   * OPTIONAL, and deliberately so. Making it required would have been the
+   * stricter choice, and the type checker did enumerate all ~30 construction
+   * sites when it was — but every one of them would have been edited to write
+   * `text: null`, which is the meaning `undefined` already carries: this box is
+   * not textual. That is churn across nine files of tax-form code to restate a
+   * default, and it is exactly the kind of change that hides a real edit in a
+   * hundred mechanical ones. Absent and null are read identically by
+   * `boxText()`, which is the ONLY thing permitted to read this field.
+   */
+  readonly text?: string | null;
   /** True for boxes a reader must not skim (the ones other forms are compared against). */
   readonly emphasise: boolean;
   /**
@@ -375,6 +426,20 @@ export type FormBox = {
  * precisely the defect the `measure` field exists to prevent, and which would
  * otherwise reappear in every new screen.
  */
+/**
+ * The words in a text box, or null if this box is not a text box.
+ *
+ * The single reader of `FormBox.text`, so "absent" and "explicitly null" cannot
+ * be treated as different things by two callers who each guessed. An
+ * empty-or-whitespace string is also null: a box containing only spaces is not
+ * a box containing an answer.
+ */
+export function boxText(box: FormBox): string | null {
+  const t = box.text;
+  if (t === undefined || t === null) return null;
+  return t.trim() === "" ? null : t;
+}
+
 export function formatBoxValue(box: FormBox): string {
   /*
    * AN UNKNOWN FIGURE IS NEVER PRINTED AS A NUMBER (books-49).
@@ -386,6 +451,16 @@ export function formatBoxValue(box: FormBox): string {
    * not-computed box and checking the output contains no digits.
    */
   if (box.notComputedYet !== null) return "not computed yet";
+  /*
+   * WORDS, WHEN THE BOX HOLDS WORDS (books-68, D-21).
+   *
+   * Second, never first: an unknown figure must still refuse to print, and a
+   * box that is both unknown and textual is unknown. Before the numeric
+   * branches, because those would format `quantity ?? 0` as a literal zero for
+   * a box that holds a person's name.
+   */
+  const words = boxText(box);
+  if (words !== null) return words;
   if (box.measure === "hours") {
     const hundredths = box.quantity ?? 0;
     const hours = hundredths / 100;
@@ -426,8 +501,42 @@ export function boxIsEmpty(box: FormBox): boolean {
    * the one place that decides emptiness rather than at each caller.
    */
   if (box.notComputedYet !== null) return false;
+  /*
+   * A TEXT BOX IS EMPTY WHEN IT HAS NO WORDS, not when its quantity is zero
+   * (books-68). Without this, every populated text box would report itself
+   * empty — quantity is null on all of them — and `correctlyBlank` would grey
+   * out a box containing an employee's name.
+   */
+  if (boxText(box) !== null) return false;
   if (box.measure === "money") return box.amountCents === 0;
   return (box.quantity ?? 0) === 0;
+}
+
+/**
+ * A box may be an amount or a sentence, never both.
+ *
+ * Called by the box gate rather than at construction, so the failure names the
+ * offending box instead of throwing from inside a render. A money box carrying
+ * text would print words where a reader expects dollars — on a page whose whole
+ * purpose is being copied onto a government portal.
+ */
+export function assertBoxTextIsHonest(boxes: readonly FormBox[]): void {
+  for (const b of boxes) {
+    if (boxText(b) !== null && b.measure === "money") {
+      throw new Error(
+        `form-box-core: box ${b.formId}/${b.box} is measure "money" and also carries text ` +
+          `(${JSON.stringify(b.text)}). A box is an amount or a sentence, not both: printing ` +
+          `words where a dollar figure belongs is how a wrong number reaches a return.`,
+      );
+    }
+    if (boxText(b) !== null && b.notComputedYet !== null) {
+      throw new Error(
+        `form-box-core: box ${b.formId}/${b.box} carries text and is ALSO flagged not-computed. ` +
+          `Those are contradictory claims, and the reader would be shown "not computed yet" ` +
+          `while the value sat in the object.`,
+      );
+    }
+  }
 }
 
 /**

@@ -53,7 +53,7 @@
  * in, and the 941 would then be a port rather than a second caller.
  */
 import type { BoxLesson, FormBox } from "./form-box-core";
-import { formatBoxValue, lessonFor } from "./form-box-core";
+import { assertBoxTextIsHonest, formatBoxValue, lessonFor } from "./form-box-core";
 import type { RenderableBox } from "./form-box-ui-core";
 import { renderableBoxes } from "./form-box-ui-core";
 
@@ -275,6 +275,14 @@ export function sheetGroups(
         `page that does not correspond to any paper document.`,
     );
   }
+
+  /*
+   * books-68: a box may be an amount or a sentence, never both, and may not
+   * claim to be uncomputed while carrying words. Checked HERE, at the one door
+   * every sheet passes through, rather than at each form's builder — rule 23,
+   * fix the class.
+   */
+  assertBoxTextIsHonest(boxes);
 
   const rendered = renderableBoxes(boxes, lessons);
   const cells: readonly SheetCell[] = rendered.map((r) => ({

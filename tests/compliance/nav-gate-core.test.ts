@@ -361,6 +361,44 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * those.
        */
       "/admin/books/wa-quarterly/confirmation",
+
+      /*
+       * books-68: the DSHS 18-463 Washington New Hire Report. Exempt from the
+       * MENU on exactly the same grounds as the six routes above -- reached
+       * from a door in the header of /admin/books/payroll-setup, which IS in
+       * the menu. That door is not self-evident, so it is PINNED: the
+       * "the door onto the payroll setup screen" block in
+       * tests/compliance/new-hire-report.test.ts asserts the link exists, that
+       * it sits in the header's top-right row, and that the blank-form link is
+       * beside it. Without those, this exemption would be an excuse with
+       * nothing behind it and the page could become unreachable in a refactor
+       * while this list still swore it was fine.
+       *
+       * Michael, books-68: "I want to create the new hire form and add it to
+       * the w-4 payroll setup page in the same way the other forms are
+       * displayed. I want a button in the setup employee page at the top right
+       * corner that shows me the form filled out and downloadable for me to
+       * send to the state."
+       *
+       * WHY IT HANGS OFF THE W-4 SCREEN rather than earning its own menu row:
+       * RCW 26.23.040(2) -- "Employers shall report to the extent practicable
+       * by W-4 form, or, at the option of the employer, an equivalent form."
+       * The statute names the W-4 as the reporting vehicle, so this is not a
+       * separate errand, it is the back half of hiring somebody. A menu row
+       * would imply a task Michael goes looking for on its own; the twenty-day
+       * clock means it should meet him where he already is.
+       *
+       * It is NOT under a `sheet/` directory, and that is deliberate rather
+       * than an oversight. `<form>/sheet/page.tsx` is the second view of a form
+       * that already has a parent screen -- form-sheet-core.test.ts's
+       * discovery block asserts "has a parent screen to be a view OF". The new
+       * hire report has no parent screen and needs none: there is no tabbed
+       * "new hire" workspace it is an alternative rendering of. Creating an
+       * empty parent purely to satisfy the shape would be a page nobody asked
+       * for, so the route is flat and the promises that block enforces are
+       * asserted directly in new-hire-report.test.ts instead.
+       */
+      "/admin/books/new-hire-report",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

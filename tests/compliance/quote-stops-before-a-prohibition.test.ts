@@ -69,6 +69,7 @@ import { FORM_940_LESSONS } from "@/lib/payroll/form-box-lessons-940";
 import { FORM_W2_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w2";
 import { FORM_W3_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-w3";
 import { WA_QUARTERLY_LESSONS } from "@/lib/payroll/form-box-lessons-wa";
+import { NEW_HIRE_BOX_LESSONS } from "@/lib/payroll/form-box-lessons-new-hire";
 import { normalise } from "../../scripts/verify-verbatim-quotes";
 
 const LESSON_SETS: readonly (readonly [string, readonly BoxLesson[]])[] = [
@@ -77,6 +78,7 @@ const LESSON_SETS: readonly (readonly [string, readonly BoxLesson[]])[] = [
   ["w2", FORM_W2_BOX_LESSONS],
   ["w3", FORM_W3_BOX_LESSONS],
   ["wa", WA_QUARTERLY_LESSONS],
+  ["new-hire", NEW_HIRE_BOX_LESSONS],
 ];
 
 /**
