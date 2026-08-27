@@ -998,7 +998,12 @@ describe("evidence cannot be softened without a test failing", () => {
     // exactly, so a new row joining the backlog is a STATED change rather than
     // one absorbed silently (rule 89). 6 -> 7 when the Cultivera manifest import
     // row was added: it has a builder (buildBillJournal) and cannot be reached.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
+    // 7 -> 8 in books-72: cutover_inventory_load gained a builder
+    // (cutover-inventory-core.ts#buildCutoverInventoryPlan) while its reachable
+    // layer stayed MISSING, because writing a builder does not wire a path.
+    // THIS TEST FAILING IS THE SYSTEM WORKING — it is how a new unreachable
+    // builder announces itself instead of quietly joining the backlog.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(8);
 
     for (const r of drivers) {
       expect(
@@ -1020,7 +1025,7 @@ describe("evidence cannot be softened without a test failing", () => {
     const fullPaths = new Set(
       [
         ...evidence.matchAll(
-          /\b((?:src|scripts|supabase)\/[A-Za-z0-9_\-./]+\.(?:tsx|ts|sql))/g,
+          /\b((?:src|scripts|supabase|tests|docs)\/[A-Za-z0-9_\-./]+\.(?:tsx|ts|sql))/g,
         ),
       ].map((m) => m[1]),
     );
@@ -1031,15 +1036,24 @@ describe("evidence cannot be softened without a test failing", () => {
 
     // Pass 2: bare basenames must resolve to at least one real file. This is
     // the wider net - the census names far more files by basename than by path.
-    const tracked = walk("src").concat(walk("scripts"), walk("supabase"));
+    const tracked = walk("src").concat(walk("scripts"), walk("supabase"), walk("tests"));
     const sqlFiles = readdirSync(join(REPO, "supabase", "migrations"));
     const known = new Set<string>([
       ...tracked.map((f) => f.slice(f.lastIndexOf("/") + 1)),
       ...sqlFiles,
     ]);
 
+    // The character class must allow INTERIOR DOTS. Without them a real
+    // filename like `cutover-inventory-core.test.ts` was truncated to a phantom
+    // `test.ts`, and this test failed citing a file that was never written — a
+    // false accusation rather than a real finding. books-72 found this the hard
+    // way when the census first cited a `.test.ts` file.
     const basenames = new Set(
-      [...evidence.matchAll(/\b([A-Za-z0-9_-]+\.(?:tsx|ts|sql))\b/g)].map((m) => m[1]),
+      [
+        ...evidence.matchAll(
+          /\b([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:tsx|ts|sql))\b/g,
+        ),
+      ].map((m) => m[1]),
     );
     expect(basenames.size, "no basenames found - the extractor is broken").toBeGreaterThan(15);
     for (const b of basenames) {

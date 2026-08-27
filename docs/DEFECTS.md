@@ -1933,3 +1933,93 @@ second owner decision.
 **Census rows:** `cost_of_goods_sold.cutover_inventory_load`,
 `cost_of_goods_sold.cultivera_manifest_import`.
 
+## D-51 -- the cut-over inventory builder exists, and two of its guards were decoration until a mutation campaign said so
+
+**Slice:** books-72. **Status:** builder BUILT and double-gated; nothing calls it
+yet, deliberately.
+
+`src/lib/accounting/cutover-inventory-core.ts` now converts a counted lot list
+into the cut-over opening-balance entry: per-category `200xx` debits and ONE
+`40400` Opening Balance Equity credit. It is a pure leaf -- zero imports, no I/O
+-- so it can be reasoned about and tested in isolation.
+
+**Why the credit is equity and not accounts payable.** The shelf counted on
+2026-10-31 was bought and paid for months earlier, under Cultivera, with money
+that left the bank before this platform existed. Booking the load as a purchase
+would credit `30000` Accounts Payable and assert that Michael owes his vendors
+the entire value of his inventory. His liabilities would be overstated by
+$176,824.62-ish, his equity understated by the same, **and the trial balance
+would still balance.** Every report would render. Michael closed the last input
+question himself: *"The cost from Cultivera is the invoice cost. There isn't any
+other cost associated with inventory purchases unfortunately... All that matters
+is the cost from the spreadsheet is the all inclusive cost for that product."*
+So nothing is added to the invoice cost, and employee hours capitalised to COGS
+were explicitly excluded from this slice by the owner.
+
+**THE FINDING WORTH RECORDING.** A 30-mutant campaign against the module left
+**two survivors**: deleting the builder's internal balance assertion, and
+deleting its control-account loop, changed **no test result at all**. Both were
+correct code. Both were also unreachable through the builder's input surface --
+no category slot resolves to `20000`, and the balancing credit is derived from
+the same sum that builds the debits. Under rule 43 that made them decoration, not
+protection. Fixed by extracting both into an exported
+`findCutoverLineSetDefect(lines)` that a test can hand hostile lines directly.
+The builder still calls it on every run, so protection is unchanged; the
+difference is that it is now proven rather than asserted. Re-tested: 4 further
+mutants aimed at the extracted guard, all 4 dead. **Final: 34 mutants, 34 dead,
+0 survivors.**
+
+**A process failure in the same campaign, recorded because the result was nearly
+believed.** The first run reported a clean 26/26 sweep. It was worthless. A
+blocking command reported a timeout without killing the python process; a second
+copy was then started, and the two raced on the same module and the same backup
+file. The second process captured an ALREADY-MUTATED file as its baseline and
+"restored" that at the end, leaving two mutants (broken zero-padding, so `20100`
+rendered as `2100`; and a balance check hard-coded to `return true`) baked into
+the module AND into the backup. Two other mutants silently failed to apply and
+were never tested, yet the run still printed a clean sweep. Detected only because
+`grep padStart` returned nothing. Repaired, then verified BY BEHAVIOUR
+(`infused-blunt -> 20100`, and a tampered plan reporting unbalanced) rather than
+by string match. The campaign was rewritten with a lockfile, pattern
+pre-validation that refuses if any pattern does not match exactly once, a
+baseline-must-be-green check, and sha256-verified restoration.
+
+**Measured, not assumed:** the live `CATEGORY_MAP` in `src/lib/pos/transform.ts`
+has **53 source keys but only 12 distinct target slugs**, so it can currently
+reach only 12 of the 21 inventory accounts. The nine it cannot reach are
+`accessories`, `blunt`, `infused-blunt`, `infused-preroll-pack`, `merch`,
+`paraphernalia`, `preroll-pack`, `rso`, `tincture`. This is not a defect in the
+builder, which files all 21 correctly; it is the D-50 routing question still
+awaiting Michael's decision. Pinned in a test at the exact measured counts so
+that when the map gains finer slugs the count changes and the test FAILS, forcing
+the change to be acknowledged rather than absorbed (rule 89).
+
+**Design decisions, each with a reason:**
+- Keys on `Id`, never `Barcode`. books-71 measured 41 barcodes spanning multiple
+  rows, 6 at genuinely different costs; a barcode-keyed loader would collapse
+  real cost layers and lose value.
+- An unresolved category is **dropped and named, not quarantined to `20890`**. A
+  mid-year vendor bill can be parked and cleaned up later; the cut-over is the
+  foundation every later number is measured from, so it asks rather than parks.
+- A negative or zero cost is dropped and named, never netted against a good lot
+  and never silently zeroed. The table refuses a zero line outright
+  (`check (amount_cents <> 0)`).
+- Range checks use `Number.isSafeInteger`, not `Number.isInteger`.
+  `Number.isInteger(1e300)` is `true`, and past `MAX_SAFE_INTEGER` money stops
+  being exact. Both the per-lot extension and the running total are checked, so
+  an unholdable value is named where it enters instead of resurfacing as an
+  unexplained imbalance.
+- No rounding exists anywhere in the module. Cost is integer cents, quantity is
+  whole units, so the extension is exact. Fractional quantities are refused
+  rather than rounded, because how to round half a gummy is an accounting
+  decision and rule 1 forbids inventing one. D-10 stays open and uninvented.
+
+**Reachability is deliberately still MISSING.** `grep -rn
+'buildCutoverInventoryPlan' src/` finds only the definition. No migration, no UI,
+no server action, no posting call. The census row records `exists: PARTIAL` and
+`reachable: MISSING`; writing a builder does not make a path reachable, and
+recording otherwise would be the exact overstatement the census exists to
+prevent.
+
+**Census rows:** `cost_of_goods_sold.cutover_inventory_load`.
+

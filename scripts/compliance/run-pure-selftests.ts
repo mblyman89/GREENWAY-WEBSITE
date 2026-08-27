@@ -146,6 +146,7 @@ import { __runOwnerGateCoreTests } from "../../src/lib/auth/owner-gate-core";
 import { __runGlRefusalCoreTests } from "../../src/lib/accounting/gl-refusal-core";
 import { __runJournalAdvisorCoreTests } from "../../src/lib/accounting/journal-advisor-core";
 import { __runCutoverCoreTests } from "../../src/lib/accounting/cutover-core";
+import { __runCutoverInventoryCoreTests } from "../../src/lib/accounting/cutover-inventory-core";
 // Slice books-03: the vendor bill / accounts-payable brain. Decides what
 // §280E lets Greenway keep (inventory → COGS) versus what it disallows, with
 // verbatim authority behind every call.
@@ -810,6 +811,10 @@ async function main() {
   console.log("journal-advisor-core self-tests: all passed");
   __runCutoverCoreTests();
   console.log("cutover-core self-tests: all passed");
+  // books-72. The cut-over INVENTORY builder, kept separate from cutover-core
+  // because that module owns the dates and this one owns the money on the shelf.
+  __runCutoverInventoryCoreTests();
+  console.log("cutover-inventory-core self-tests: all passed");
   __runVendorBillCoreTests();
   __runPayrollCogsCoreTests();
   __runBankMatchCoreTests();

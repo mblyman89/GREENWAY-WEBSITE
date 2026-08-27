@@ -291,28 +291,42 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     sourceKind: "opening_balance",
     entityCode: "greenway",
     accountCodes: ["20000", "20010", "20890", "40400"],
-    builder: null,
+    builder: "src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan",
     poster: null,
     layers: {
       exists: {
-        status: "MISSING",
+        status: "PARTIAL",
         evidence:
-          "grep -rn 'sourceKind: \"opening_balance\"' src/ -> 0 hits. No module " +
-          "converts a counted lot list into an opening inventory journal. " +
-          "inventoryAccountForCategory (vendor-bill-core.ts:966) maps a category " +
-          "slug to its 200xx account and is self-tested, so the ACCOUNT side is " +
-          "solved; the entry that uses it for a cut-over load is not written. " +
-          "books-71 recon also measured the CATEGORY side as solved: transform.ts " +
-          "CATEGORY_MAP covers 52 of 52 Cultivera categories in the real export, " +
-          "routing 100.00% of value and $0.00 to 20890 quarantine.",
+          "books-72 WROTE THE BUILDER: cutover-inventory-core.ts, a pure leaf " +
+          "with zero imports. buildCutoverInventoryPlan() turns a counted lot " +
+          "list into a balanced opening-balance line set \u2014 per-category 200xx " +
+          "debits and ONE 40400 credit \u2014 and returns a refusal rather than a " +
+          "half-usable result. Gated twice: __runCutoverInventoryCoreTests() in " +
+          "run-pure-selftests.ts, plus 45 vitest assertions in " +
+          "tests/compliance/cutover-inventory-core.test.ts that check parity " +
+          "against coa-core.INVENTORY_CATEGORIES, vendor-bill-core.CATEGORY_SLOTS " +
+          "and the real 0173 seed text. PARTIAL, not COMPLETE, because the " +
+          "builder is only the ENTRY: no migration, no UI, no server action and " +
+          "no posting call exist, so nothing can present its output to " +
+          "gl_opening_balances yet. inventoryAccountForCategory " +
+          "(vendor-bill-core.ts:966) already solved the ACCOUNT side; books-71 " +
+          "measured the CATEGORY side solved too (transform.ts CATEGORY_MAP " +
+          "covers 52 of 52 Cultivera categories, 100.00% of value, $0.00 to " +
+          "20890 quarantine).",
       },
       reachable: {
         status: "MISSING",
         evidence:
-          "src/app/admin/books/conversion/page.tsx is 361 lines and deliberately " +
-          "read-only: grep for 'rpc(' in it -> 0 hits, and its own header says " +
-          "'Nothing here posts anything.' No src/ file inserts into " +
-          "gl_opening_balances; ledger-store.ts:458 only SELECTs from it.",
+          "STILL MISSING ON PURPOSE after books-72. The builder exists but " +
+          "NOTHING CALLS IT: grep -rn 'buildCutoverInventoryPlan' src/ finds " +
+          "only its own definition, and the only other references are the test " +
+          "and the self-test runner. src/app/admin/books/conversion/page.tsx is " +
+          "361 lines and deliberately read-only: grep for 'rpc(' in it -> 0 " +
+          "hits, and its own header says 'Nothing here posts anything.' No src/ " +
+          "file inserts into gl_opening_balances; ledger-store.ts:458 only " +
+          "SELECTs from it. Writing a builder does not make a path reachable, " +
+          "and recording otherwise would be the exact overstatement this census " +
+          "was built to prevent.",
       },
       correct: {
         status: "UNKNOWN",
@@ -327,11 +341,17 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "scripts/recon/cultivera-measure.py): INVENTORIES.xlsx carries a usable " +
           "non-zero Cost on 3,917 of 3,917 rows, zero blanks, zero zeros, zero " +
           "negatives, extending to $176,824.62 and cross-verified by parsing the " +
-          "raw sheet XML. So per-unit cost EXISTS. What is still unmeasurable from " +
-          "code is (a) the 2026-10-31 count itself, which has not happened, and " +
-          "(b) whether Cultivera's Cost is landed or invoice cost, which changes " +
-          "COGS under 280E. Rule 1: the census will not invent the largest asset " +
-          "figure on the balance sheet.",
+          "raw sheet XML. So per-unit cost EXISTS. THE LANDED-VS-INVOICE " +
+          "QUESTION IS NOW CLOSED by the owner directly: 'The cost from Cultivera " +
+          "is the invoice cost. There isn't any other cost associated with " +
+          "inventory purchases unfortunately... All that matters is the cost from " +
+          "the spreadsheet is the all inclusive cost for that product.' So the " +
+          "builder adds nothing to it. ONE unknown remains and it is not a code " +
+          "question: the 2026-10-31 physical count has not happened, so the " +
+          "actual quantities do not exist yet. Rule 1: the census will not invent " +
+          "the largest asset figure on the balance sheet. (Employee hours " +
+          "capitalised into COGS were explicitly excluded from this slice by the " +
+          "owner and are NOT modelled.)",
       },
       accepted: {
         status: "PARTIAL",

@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 33 money events that should reach the books. 31 cannot reach them at all. 24 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 33 money events that should reach the books. 31 cannot reach them at all. 23 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 33 |
 | Proven on all six layers | 2 |
 | Cannot reach the books at all | 31 |
-| Have nothing that even builds the entry | 24 |
+| Have nothing that even builds the entry | 23 |
 | Layers that could not be measured | 5 |
 
 ## The six layers
@@ -43,7 +43,7 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 23 of 33 |
+| `exists` | 22 of 33 |
 | `reachable` | 31 of 33 |
 | `correct` | 18 of 33 |
 | `accepted` | 29 of 33 |
@@ -132,7 +132,7 @@ A customer returns product, or a sale is voided after tender.
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `cogs_on_sale` | NO | NO | NO | NO | NO | n/a | D-33 |
-| `cutover_inventory_load` | NO | NO | ? | part | NO | n/a | D-48 |
+| `cutover_inventory_load` | part | NO | ? | part | NO | n/a | D-48 |
 | `cultivera_manifest_import` | part | NO | part | NO | part | NO | D-49 |
 | `inventory_receipt` | yes | NO | yes | NO | part | NO | D-34 |
 | `inventory_audit_adjustment` | yes | yes | yes | yes | yes | n/a | -- |
@@ -160,12 +160,12 @@ Product leaves the shelf, so its cost has to move from asset to expense.
 THE CUT-OVER. Inventory is counted on 2026-10-31 after close and loaded into this platform on 2026-11-01 before open, carrying its value from Cultivera. This is the single largest asset number the books will ever receive, and it arrives once.
 
 - Accounts: `20000`, `20010`, `20890`, `40400`
-- Builds the entry: **nothing**
+- Builds the entry: `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - Posts the entry: **nothing**
 
-- **exists: MISSING** -- grep -rn 'sourceKind: "opening_balance"' src/ -> 0 hits. No module converts a counted lot list into an opening inventory journal. inventoryAccountForCategory (vendor-bill-core.ts:966) maps a category slug to its 200xx account and is self-tested, so the ACCOUNT side is solved; the entry that uses it for a cut-over load is not written. books-71 recon also measured the CATEGORY side as solved: transform.ts CATEGORY_MAP covers 52 of 52 Cultivera categories in the real export, routing 100.00% of value and $0.00 to 20890 quarantine.
-- **reachable: MISSING** -- src/app/admin/books/conversion/page.tsx is 361 lines and deliberately read-only: grep for 'rpc(' in it -> 0 hits, and its own header says 'Nothing here posts anything.' No src/ file inserts into gl_opening_balances; ledger-store.ts:458 only SELECTs from it.
-- **correct: UNKNOWN** -- The account side is determined: 0173 seeds 21 per-category inventory accounts under control account 20000, and gl_guard_inventory_manual (0173:316) REFUSES any source_kind='manual' line touching a 2xxxx asset, so this load must be source_kind 'opening_balance', 'inventory' or 'purchase' by database law, never a typed journal. _Michael's Cultivera export has now been MEASURED (books-71 recon, scripts/recon/cultivera-measure.py): INVENTORIES.xlsx carries a usable non-zero Cost on 3,917 of 3,917 rows, zero blanks, zero zeros, zero negatives, extending to $176,824.62 and cross-verified by parsing the raw sheet XML. So per-unit cost EXISTS. What is still unmeasurable from code is (a) the 2026-10-31 count itself, which has not happened, and (b) whether Cultivera's Cost is landed or invoice cost, which changes COGS under 280E. Rule 1: the census will not invent the largest asset figure on the balance sheet._
+- **exists: PARTIAL** -- books-72 WROTE THE BUILDER: cutover-inventory-core.ts, a pure leaf with zero imports. buildCutoverInventoryPlan() turns a counted lot list into a balanced opening-balance line set — per-category 200xx debits and ONE 40400 credit — and returns a refusal rather than a half-usable result. Gated twice: __runCutoverInventoryCoreTests() in run-pure-selftests.ts, plus 45 vitest assertions in tests/compliance/cutover-inventory-core.test.ts that check parity against coa-core.INVENTORY_CATEGORIES, vendor-bill-core.CATEGORY_SLOTS and the real 0173 seed text. PARTIAL, not COMPLETE, because the builder is only the ENTRY: no migration, no UI, no server action and no posting call exist, so nothing can present its output to gl_opening_balances yet. inventoryAccountForCategory (vendor-bill-core.ts:966) already solved the ACCOUNT side; books-71 measured the CATEGORY side solved too (transform.ts CATEGORY_MAP covers 52 of 52 Cultivera categories, 100.00% of value, $0.00 to 20890 quarantine).
+- **reachable: MISSING** -- STILL MISSING ON PURPOSE after books-72. The builder exists but NOTHING CALLS IT: grep -rn 'buildCutoverInventoryPlan' src/ finds only its own definition, and the only other references are the test and the self-test runner. src/app/admin/books/conversion/page.tsx is 361 lines and deliberately read-only: grep for 'rpc(' in it -> 0 hits, and its own header says 'Nothing here posts anything.' No src/ file inserts into gl_opening_balances; ledger-store.ts:458 only SELECTs from it. Writing a builder does not make a path reachable, and recording otherwise would be the exact overstatement this census was built to prevent.
+- **correct: UNKNOWN** -- The account side is determined: 0173 seeds 21 per-category inventory accounts under control account 20000, and gl_guard_inventory_manual (0173:316) REFUSES any source_kind='manual' line touching a 2xxxx asset, so this load must be source_kind 'opening_balance', 'inventory' or 'purchase' by database law, never a typed journal. _Michael's Cultivera export has now been MEASURED (books-71 recon, scripts/recon/cultivera-measure.py): INVENTORIES.xlsx carries a usable non-zero Cost on 3,917 of 3,917 rows, zero blanks, zero zeros, zero negatives, extending to $176,824.62 and cross-verified by parsing the raw sheet XML. So per-unit cost EXISTS. THE LANDED-VS-INVOICE QUESTION IS NOW CLOSED by the owner directly: 'The cost from Cultivera is the invoice cost. There isn't any other cost associated with inventory purchases unfortunately... All that matters is the cost from the spreadsheet is the all inclusive cost for that product.' So the builder adds nothing to it. ONE unknown remains and it is not a code question: the 2026-10-31 physical count has not happened, so the actual quantities do not exist yet. Rule 1: the census will not invent the largest asset figure on the balance sheet. (Employee hours capitalised into COGS were explicitly excluded from this slice by the owner and are NOT modelled.)_
 - **accepted: PARTIAL** -- Migration 0186 already moves the opening-balance date to 2026-10-31, matching Michael's stated cut-over, and records that the old hard-coded 2025-12-31 would have stamped it TEN MONTHS EARLY while balancing. 0176:76 lists 'inventory_count' as a valid evidence_kind, so the worksheet is designed to accept exactly this row. Nothing has presented one.
 - **idempotent: MISSING** -- Loading the cut-over count twice would double the largest asset on the balance sheet. gl_ob_guard_frozen (0176:162) freezes rows once blessed, which protects the WORKSHEET, but no ref convention protects the load itself because no load path exists.
 - **married: NOT_APPLICABLE** -- No bank row corresponds to a cut-over count. _This product was already bought and paid for under Cultivera and Sage. Its cash left the bank before this platform existed, so there is no second arrival to reconcile against._
@@ -684,7 +684,6 @@ all, so the work is to write it, then wire it.
 - `revenue_and_tax_collected.discount_and_comp` (D-31)
 - `revenue_and_tax_collected.refund_or_return` (D-31)
 - `cost_of_goods_sold.cogs_on_sale` (D-33)
-- `cost_of_goods_sold.cutover_inventory_load` (D-48)
 - `cost_of_goods_sold.freight_in` (D-34)
 - `vendor_cycle.purchase_order_commitment` (D-35)
 - `vendor_cycle.vendor_paid_by_ach` (D-36)
@@ -709,6 +708,7 @@ all, so the work is to write it, then wire it.
 The cheapest real progress available. The accounting logic is written and tested; only
 the path from the screen to the ledger is absent.
 
+- `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `vendor_cycle.vendor_bill_recorded` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
