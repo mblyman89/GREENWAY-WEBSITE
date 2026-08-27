@@ -887,12 +887,26 @@ function Shell({
             closed for the 940. A gate in form-scope-core.test.ts asserts every
             sheet link on every form page is built this way.
           */}
-          <Link
-            href={scopeHref("/admin/books/wa-quarterly/sheet", scope)}
-            className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
-          >
-            View just the forms &rarr;
-          </Link>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Link
+              href={scopeHref("/admin/books/wa-quarterly/sheet", scope)}
+              className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+            >
+              View just the forms &rarr;
+            </Link>
+            {/*
+              books-66. Michael: "I would not be opposed to the form looking
+              like the one given after efiling ... thats what I am used to
+              seeing." Same `scopeHref` rule as its neighbour, for the same
+              reason, and covered by the same gate.
+            */}
+            <Link
+              href={scopeHref("/admin/books/wa-quarterly/confirmation", scope)}
+              className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+            >
+              View as the EAMS confirmation &rarr;
+            </Link>
+          </div>
         </div>
         <p className="mt-1 max-w-3xl text-sm text-[var(--admin-text-muted)]">
           Four forms, three submissions, two agencies. This screen reads the pay runs whose pay

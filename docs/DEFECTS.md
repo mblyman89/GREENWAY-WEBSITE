@@ -364,6 +364,105 @@ small differences, and small differences are how the large ones announce
 themselves. That is the reason to close it, and also the reason not to close it
 by guessing.
 
+### books-66 UPDATE — half of it is now settled BY AUTHORITY, and the half that is not has narrowed to one sentence
+
+Michael uploaded three official ESD documents this slice: the **Employer Tax
+Handbook** (April 2026), the **EAMS bulk filing specifications** (2021), and the
+**ICESA bulk filing specifications** (rev. December 2023). All three were mined
+against this entry specifically. The result splits D-10 cleanly in two.
+
+**The STRUCTURE half is SETTLED, and it kills reading B for good.** The ICESA
+specification names the fields in ESD's own words, and the words are arithmetic:
+
+- *"UI Taxes Due (taxable wages multiplied by the UI tax rate)"*
+- *"EAF Assessment Amount ... (total taxable wages x EAF rate)"*
+- *"Total Taxable Wages for this Employer (total gross wages – total excess wages)"*
+- *"EAF Tax rate ... 0.02% = 0002 / 0.03% = 0003"*
+
+That is two separate fields, each carrying its own rate, each multiplied
+separately. The original entry's proposed reading B — that ESD computes a
+combined 0.40% once and apportions it afterwards — is not merely unsupported now,
+it is contradicted by the document that defines the file ESD ingests. There is no
+combined rate anywhere in the specification, and EAF is enumerated as a rate of
+its own in basis points. **Per-fund computation is the published behaviour.** The
+engine already does exactly this, so nothing changed in code; what changed is that
+it is now backed by a citation instead of by a reading of the statute.
+
+**The ROUNDING half is still open, and it is now the ONLY thing open.** None of
+the three documents states whether the rate is applied to taxable wages including
+cents or to whole dollars with the cents dropped. This was not assumed — it was
+searched. An exhaustive grep across all three extracted texts for cents, rounding,
+truncation and EAF arithmetic returns **zero hits** on the question. The handbook
+rounds HOURS (*"round up to the next whole number"*) and the EAMS spec formats
+MONEY for transmission (*"decimal is assumed two places from right"*), but neither
+says a word about rounding the computed TAX.
+
+**A probe was written and then deliberately not acted on.** `probe-d10-icesa.py`
+tested all four candidate readings against Michael's four filed figures. Exactly
+one survives: drop the wage cents, then apply each fund's rate separately, round
+half up. That is the same pattern books-65 found, now with reading B independently
+eliminated by authority rather than by arithmetic. **It is still not implemented.**
+One surviving reading over four data points is a stronger pattern than before and
+is still a pattern, and rule 62d does not permit a filed tax figure to be computed
+from a pattern no matter how well it fits. The probe was kept in the repository on
+purpose — it is the cheapest way to re-run the question the day a fifth quarter
+arrives, and deleting it would mean re-deriving it from this paragraph.
+
+**What Michael needs to get is unchanged and has shortened by one item.** Item 4
+of the list above (the 2026 rate notice) is the only remaining paper candidate the
+handbook did not cover; items 1–3 still stand, and item 1 — the monthly billing
+statement — is still the cheapest. The question to ask has not moved: *does EAMS
+apply the rate to taxable wages including cents, or to whole dollars?* Everything
+else about D-10 now has a citation.
+
+---
+
+## D-17 — the confirmation sheet prints one name column, not first and last
+
+**Found:** books-66, at the moment of writing the wage-detail table, and recorded
+rather than fixed.
+
+**Severity: cosmetic, deliberate, and safer than the alternative.** The filed EAMS
+confirmation prints employee names in two columns, first and last. The facsimile
+prints the whole `displayName` in one. The reason is that splitting a name on
+whitespace is a guess about the person, and the guesses fail in exactly the cases
+that matter to someone reading their own name on a tax document: "Van Dyke", "De
+La Cruz", "St. John", any two-word surname, any hyphenated pair entered without a
+hyphen. A wrong split on a document that is meant to look filed is worse than an
+honest single column, because a single column reads as a layout choice and a wrong
+split reads as a records error.
+
+**What would close it.** Separate `first_name` / `last_name` columns on the
+employee record, which the upload path will need anyway — the ICESA layout has
+fixed-width positions for each. When those columns exist the table takes them
+directly and this entry closes with no guessing involved. Until then, one column.
+
+---
+
+## D-18 — monthly employment counts render as em dashes because the engine does not compute them
+
+**Found:** books-66, while laying out the confirmation sheet against Michael's
+filed copy.
+
+**Severity: a visible gap on a document that otherwise reproduces exactly.** The
+real EAMS confirmation carries three monthly employment counts — the number of
+covered employees on the 12th of each month in the quarter. The engine has never
+been asked for that figure, so the facsimile renders `[null, null, null]`, which
+the sheet prints as three em dashes.
+
+**Why em dashes and not zeros.** Zero is an answer. A dash is the absence of one.
+Printing `0` in those three boxes would state, on a document formatted to look
+filed, that Michael employed nobody in January, February and March 2026 — which is
+false, and which he would have no way to distinguish from a genuine zero. This
+follows the same rule the money boxes follow throughout the system (D-07): a box
+with nothing in it must not look like a box with zero in it.
+
+**What would close it.** A headcount-on-the-12th query over the payroll records,
+which is a real piece of engine work rather than a display fix, because it needs a
+definition of "covered" that matches ESD's and a decision about employees who start
+or end mid-month. Scoped out of books-66 deliberately (rule 132) and named here so
+it is not discovered later as a surprise.
+
 ---
 
 ## D-11 — `buildPaidLeaveCsv` existed for eight slices with no caller

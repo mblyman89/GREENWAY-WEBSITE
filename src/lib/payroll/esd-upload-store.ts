@@ -490,3 +490,87 @@ export async function buildEsdUpload(
     omitted: built.omitted,
   };
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+ * §6  THE CONFIRMATION SHEET'S READER   (books-66)
+ * ═════════════════════════════════════════════════════════════════════════
+ *
+ * Michael, books-66:
+ *
+ *   "I would not be opposed to the form looking like the one given after
+ *    efiling ... that would actually be better in my opinion as thats what I am
+ *    used to seeing."
+ *
+ * The EAMS confirmation prints a masked SSN and a SOC code beside each person.
+ * Both already live on the `employees` row this module reads, so this function
+ * reuses `EMPLOYEE_COLUMNS` and the same admin client rather than opening a
+ * second query with its own column list. Standing rule 25: one place that knows
+ * which columns an ESD surface needs.
+ *
+ * WHY IT RETURNS RAW SSNs AND THE CALLER MASKS
+ * The masking lives in `eams-confirmation-core.maskSsn`, which is pure and
+ * gate-tested. Masking here instead would put the rule in a database module
+ * where no test can reach it without a database, and would leave the pure core
+ * trusting a string it cannot verify. The route that calls this is owner-gated
+ * (`requireBooksAccess`), identically to the download route above.
+ *
+ * WHY IT DOES NOT REFUSE ON MISSING DATA
+ * `buildEsdUpload` refuses loudly when an SSN or SOC code is absent, and it is
+ * right to: an incomplete FILE is a penalty. But this is a PREVIEW whose whole
+ * purpose is to show Michael what is and is not ready. A preview that refuses
+ * to draw because one person lacks a SOC code hides the nine who are fine and
+ * tells him less than a page with one red "missing" on it. So absences come
+ * back as empty strings and the sheet renders them in red.
+ */
+export type ConfirmationEmployeeFacts = {
+  readonly ssnBySubject: Readonly<Record<string, string>>;
+  readonly socCodeBySubject: Readonly<Record<string, string>>;
+};
+
+export type ConfirmationFactsResult =
+  | { readonly ok: true; readonly facts: ConfirmationEmployeeFacts }
+  | { readonly ok: false; readonly message: string };
+
+export async function loadConfirmationEmployeeFacts(
+  employeeIds: readonly string[],
+): Promise<ConfirmationFactsResult> {
+  if (!isSupabaseServiceConfigured) {
+    return {
+      ok: false,
+      message:
+        "The database connection is not configured, so the confirmation preview cannot " +
+        "read employee records. Nothing was changed.",
+    };
+  }
+  /*
+   * An empty id list short-circuits. `.in("id", [])` is valid PostgREST and
+   * returns nothing, so this is an optimisation rather than a correctness fix —
+   * but it also keeps an empty quarter from looking like a read failure in the
+   * logs, which is the kind of false alarm that trains people to ignore logs.
+   */
+  if (employeeIds.length === 0) {
+    return { ok: true, facts: { ssnBySubject: {}, socCodeBySubject: {} } };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("employees")
+    .select(EMPLOYEE_COLUMNS)
+    .in("id", [...employeeIds]);
+
+  if (error) {
+    return {
+      ok: false,
+      message:
+        `Could not read the employee records for the confirmation preview: ${error.message}.`,
+    };
+  }
+
+  const ssnBySubject: Record<string, string> = {};
+  const socCodeBySubject: Record<string, string> = {};
+  for (const row of (data ?? []) as EmployeeRow[]) {
+    ssnBySubject[row.id] = (row.ssn_full ?? "").trim();
+    socCodeBySubject[row.id] = (row.soc_code ?? "").trim();
+  }
+  return { ok: true, facts: { ssnBySubject, socCodeBySubject } };
+}

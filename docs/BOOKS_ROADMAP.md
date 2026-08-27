@@ -1109,6 +1109,96 @@ risks that actually matter — coverage may never fall below the 72 promised in 
 books-41 report, and the counter must still see the loop-generated tests a naive
 regex cannot. Verified both ways: deleting a describe block still fails the gate.
 
+### books-66: the ESD confirmation rebuilt as paper, and the half of D-10 that authority closed
+
+Michael's ask was specific: *"I am just trying to mimic sage \u2014 is there a way for
+you to take the form 5208 I gave you \u2026 and somehow use it like form 940 and 941?
+its only for visualization only."* Then he improved on it himself: *"I would not
+be opposed to the form looking like the one given after efiling \u2026
+1st_quarter_form_5208a.pdf. that would actually be better in my opinion as thats
+what I am used to seeing."* That second version is what was built, and it is the
+easier of the two to build honestly.
+
+**Why this facsimile is possible where books-65's was not, which is the whole
+argument of the slice.** books-65 refused to paint the 5208A and gave two measured
+reasons: `pypdf` reports `/Fields: []` on both ESD PDFs, so the agency states no
+coordinates, and the published blank is the **2011 draft** numbering its wage
+lines against a $37,300 base while his filed returns use $78,200. Neither
+objection touches the EAMS confirmation. That document is **a printed web page** \u2014
+Michael's own copy carries the browser print header and the `portal.esd.wa.gov`
+footer \u2014 so rebuilding it is a flow layout in HTML, not an attempt to guess where
+a box sits on someone else's artwork. Nothing is placed at coordinates, so rule
+62d is never engaged. The refusal and the build are the same policy applied to two
+different documents.
+
+**It reproduces his filed Q1 2026 to the cent, and the test suite is anchored to
+that fact rather than to invented figures**: gross $61,531.21, excess $0.00,
+taxable $61,531.21, UI $227.66, EAF $18.46, charges $246.12, eleven employees,
+3,027 hours, all SOC `41-2031`. The render harness asserts every one of those
+before it will emit an image, so a screenshot of a wrong document cannot be
+produced.
+
+**Three things it deliberately does NOT do, each visible on screen rather than
+hidden.** It carries no confirmation code and no submitted-on date \u2014 absent by
+design, with no such fields on the view type at all, because a facsimile that
+displays a receipt number is a forgery rather than a preview; the page says
+`CONFIRMATION CODE: none \u2014 not filed` in as many words, under an amber *PREVIEW,
+NOT A RECEIPT* banner. Names print in one column, not two (**D-17**), because
+splitting on whitespace guesses wrong on exactly the names that matter \u2014 "Van
+Dyke", "De La Cruz". And the three monthly employment counts print as em dashes
+(**D-18**), because the engine has never been asked for headcount-on-the-12th and
+printing `0` would assert on filed-looking paper that Michael employed nobody in
+January.
+
+**Hours ASSERT rather than round, and the reason is the interesting part.** The
+ceiling is applied once, in `eamsHours()`, on the path to the uploaded file. If a
+fractional value ever reaches the confirmation sheet, `confirmationHours` throws
+instead of tidying it, because rounding in the second place would make the
+displayed figure and the uploaded figure agree while concealing which of the two
+was wrong. A gate mutates the throw into a silent `Math.round` and fails.
+
+**The mutation campaign found a real defect in my own gate, and it is the lesson
+of the slice.** Flipping `deriveExcessWagesCents(gross, taxable)` to compute
+`taxable - gross` \u2014 a sign inversion on a filed tax figure \u2014 left all 24 tests
+GREEN. Michael's Q1 is degenerate: gross equals taxable, so excess is zero in
+either direction. The handbook itself says excess wages *"are most often paid
+during Q3 or Q4"*, which means the error would have shipped and first appeared as
+a large negative number on a Q3 document formatted to look filed. **A suite
+anchored entirely to real data is anchored to that data's blind spots too.** Fixed
+by adding gates built on the handbook's own worked example (Q3: $18,000 gross,
+$12,000 taxable, $6,000 excess) plus a negative-formatting check; re-applying the
+mutation now fails, and it was re-applied to prove it.
+
+**Both of Michael's questions were answered by measurement, not opinion.**
+
+- *Are the three documents sufficient?* **Yes, and one rule they confirm was
+  already implemented.** The handbook's *"round up to the next whole number \u2026 if
+  an employee worked 9.75 hours, you should report 10 hours"* is the **second and
+  third** independent statement of a rule `Math.ceil` has been enforcing in
+  `eamsHours` and its Paid Leave twin for several slices. Nothing to change; a
+  citation gained.
+- *Are the exports ready to upload?* **Yes, and they already were.** `esd-upload/route.ts`
+  and both download links on the Washington screen have been live since books-56/64.
+  He can file with them today.
+
+**D-10 split in two, and one half is now closed by authority** \u2014 see `docs/DEFECTS.md`.
+The ICESA specification names ESD's own fields as *"UI Taxes Due (taxable wages
+multiplied by the UI tax rate)"* and *"EAF Assessment Amount \u2026 (total taxable
+wages x EAF rate)"*, with EAF enumerated as its own basis-point rate. That is
+per-fund arithmetic in the agency's own words, and it **refutes by authority** the
+combined-0.40% reading the original D-10 entry proposed. The engine already
+computed it this way. What remains unsettled is only the rounding question \u2014
+whether the rate meets taxable wages with or without cents \u2014 and an exhaustive
+grep across all three documents returns **zero hits** on it. A probe narrowed four
+candidate readings to exactly one that fits all four filed figures, and it is
+**still not implemented**, because one surviving pattern over four data points is
+not a published rule (rule 62d). The probe was kept on purpose, so the fifth
+quarter costs a command instead of a re-derivation.
+
+**Not needed:** Michael offered to re-export the Sage 5208A without its watermark.
+He should not spend time on it \u2014 he preferred the EAMS confirmation layout, and
+that is what was built.
+
 ### books-62: Schedule B, and three defects a green test suite could not see
 
 Michael: *"I am a schedule b filer, so we don't need to compute the monthly

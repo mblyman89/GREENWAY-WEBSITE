@@ -333,6 +333,34 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * today's 13/14/16 and $78,200. The page says so on its face.
        */
       "/admin/books/wa-quarterly/sheet",
+      /*
+       * books-66: the 5208A drawn as the EAMS confirmation page. Exempt from the
+       * MENU on the same grounds as its four predecessors -- reached from the
+       * "View as the EAMS confirmation" door in the header of
+       * /admin/books/wa-quarterly, which IS in the menu.
+       *
+       * Michael, books-66: "I would not be opposed to the form looking like the
+       * one given after efiling, the example you have in the workspace folder,
+       * 1st_quarter_form_5208a.pdf. that would actually be better in my opinion
+       * as thats what I am used to seeing."
+       *
+       * It sits BESIDE wa-quarterly/sheet rather than replacing it because the
+       * two answer different questions. `sheet` is a box list, which is what a
+       * reader wants when asking "what belongs on line 16". This is a facsimile
+       * of the receipt ESD hands back, which is what a reader wants when asking
+       * "does this match what I filed last quarter".
+       *
+       * And note what makes this one POSSIBLE where books-65 refused to draw the
+       * 5208A itself: the confirmation is not scanned agency artwork with
+       * unknown rectangles, it is a web page ESD renders and the browser prints
+       * -- the file Michael supplied still carries the browser's own print
+       * header and the portal.esd.wa.gov footer. Rebuilding a flow layout in
+       * HTML guesses at no coordinates, so rule 62d is not engaged. The page
+       * states on its face that it is a preview and carries neither the
+       * confirmation code nor the submitted-on date, because only ESD can issue
+       * those.
+       */
+      "/admin/books/wa-quarterly/confirmation",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());
