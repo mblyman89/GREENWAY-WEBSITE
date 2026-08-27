@@ -957,3 +957,125 @@ quoted back.
 *"we need bullet proof logic in place before we touch the books."* Every figure
 these readers return is about to become a journal line. A zero posts perfectly
 cleanly.
+
+---
+
+## D-23 — the owner distribution that would have erased itself
+
+**Found:** books-69 step 2, while checking the first draft of
+`atm-sweep-core.ts` against migrations 0172 / 0173 / 0175 / 0178 before writing
+any test for it.
+
+**Where:** `src/lib/atm/atm-sweep-core.ts`, the 6228 → 3557 branch, in the draft
+version of the file only. It never reached a commit, which is the reason it is
+recorded here rather than in a git log: a defect that was designed and then
+caught still says something about how the design went wrong.
+
+**What it did.** The draft treated *every* transfer out of the ATM account as an
+intercompany pair, including the one to Michael's personal checking. For that
+row it proposed:
+
+    ON THE ATM BOOKS        debit  41000    distribution
+                            credit 10300    cash out
+    ON THE PERSONAL BOOKS   debit  10200    cash in
+                            credit 41000    distribution
+
+Both halves balance. Both post. Both are wrong, in two independent ways, and the
+second is the expensive one.
+
+**Wrong direction.** `41000 Shareholder Distributions` is seeded in 0173 as
+`equity` with `is_contra = true`, so `gl_upsert_account` derives its
+`normal_balance` as **debit**. `gl_trial_balance` in 0175 computes `is_abnormal`
+as `normal_balance = 'debit' and sum(amount_cents) < 0`. The credit leg would
+therefore have sat permanently on the abnormal-balance report — the same report
+that exists to catch negative ATM cash, which is on Michael's permanent failure
+corpus.
+
+**Wrong economics, which is worse.** `41000` has `allowed_entity_codes = null`,
+meaning it is shared by all four entities. A `+X` debit on the ATM books and a
+`−X` credit on the personal books therefore **sum to zero across the group**.
+The consolidated equity statement would have reported that no distributions were
+taken. Michael's S-corporation stock basis and the §1368(b)/(c) analysis are
+computed *from* distributions; a distribution that nets itself out understates
+basis consumption and hides the point at which further draws become capital gain.
+Migration 0175's own header warns about exactly this shape of error — "a
+balanced, fictional report".
+
+**The fix.** A distribution is not a transfer between two businesses. It is money
+leaving the business; where it lands afterwards is not a claim on any entity. So
+it is now a **single** entry on the ATM books (debit `41000`, credit `10300`) with
+`entityB: null` and `linesB: []`. `36000` was considered and rejected: an
+undocumented owner "loan" is routinely re-characterised as a distribution on
+examination, and having called it a loan first is worse than having called it a
+distribution. The judgment is stated in the proposal's own `assumptionNote`,
+including how to overrule it.
+
+**The gates:** `atm-sweep-core.test.ts` §3, five tests. The load-bearing ones are
+*"is ONE entry, not an intercompany pair — the defect this replaced"* and
+*"DEBITS 41000, because it is contra-equity and therefore debit-normal"*. Both
+were mutation-proven: forcing the personal branch down the intercompany path
+fails 8 tests, and flipping the sign on the `41000` leg fails 4.
+
+**Why nothing would have caught it.** The pair balances, both entities exist,
+`41000` permits both of them, and `gl_submit_intercompany_pair` would have
+accepted it without complaint. The error is invisible at every level except the
+consolidated equity statement, which is the one report nobody looks at until the
+K-1s are being prepared. It was found by reading the account's seed definition
+instead of assuming what a distributions account does.
+
+---
+
+## D-24 — a reference the database would have rejected, and a duplicate it would have swallowed
+
+**Found:** books-69 step 2, same review pass as D-23. Also pre-commit.
+
+**Where:** `src/lib/atm/atm-sweep-core.ts`, draft version.
+
+Two defects with one cause: the draft invented its own identifier scheme without
+measuring the column it had to fit or the uniqueness rule it had to survive.
+
+**(a) The ref was a string; the column is a uuid.** The draft produced
+`ref: "atm-sweep:2026-08-21:6048:1142750"`. `gl_journals.intercompany_ref` is
+declared `uuid` in migration 0172 and `gl_submit_intercompany_pair` takes
+`p_ref uuid`. Postgres would have rejected the very first sweep Michael tried to
+post. **No pure unit test could have caught this**, because nothing in a pure
+test ever meets the column's type — the suite would have been green right up to
+the moment a human pressed the button. The fix is a deterministic RFC 4122
+version-5 uuid over a frozen namespace; deterministic because a random
+`randomUUID()` would mint a new ref on every re-import and yesterday's two halves
+would stop pointing at each other. The four real statement keys were computed
+independently in Python's `uuid.uuid5` and those measured values are what the
+tests assert (rule: measure, never assert from memory).
+
+**(b) Two transfers on one day would have collided.** `gl_submit_journal` keys
+idempotency on `entity:source_kind:source_ref`, and when that key already exists
+with the same line fingerprint it returns `GL_DUPLICATE_IGNORED` and writes
+nothing — correctly; that is what idempotency is for. The draft's source ref was
+date + destination, so **two sweeps on one date would have merged into one and
+the second one's money would have silently disappeared** behind a cheerful
+"already recorded".
+
+This is not hypothetical. Walking the population (rule 43) found **2026-05-26
+carries two sweeps**, $3,522.50 and $20,610.00. Adding the amount to the key
+saves that particular pair but not the general case: two transfers of the same
+amount to the same account on the same day are ordinary. So `SweepFacts` now
+carries a **required** `occurrence` — the 1-based position among identical rows —
+and it is required rather than defaulted to 1 precisely because a default would
+make the dangerous case look exactly like the safe case at every call site.
+`withOccurrences()` assigns them, and the store sorts oldest-first before
+numbering, because Plaid returns newest-first and numbering a same-day pair
+backwards would keep the refs stable while swapping which bank row each one
+describes.
+
+**The gates:** §5 and §6 of `atm-sweep-core.test.ts`. *"is a syntactically valid
+version-5 uuid"* (mutation-proven: removing the version nibble yields
+`...-af60-...`, which is not a v5 uuid and which Postgres would reject),
+*"matches the uuid measured independently in Python"* (killed by sha256-for-sha1
+and by omitting the namespace), and *"distinguishes two IDENTICAL transfers on
+one day"* — the most important test in the file, which asserts the two
+`buildIdempotencyKey` outputs differ rather than merely that the refs do.
+
+**The class, not the instance (rule 23).** Both halves of this defect come from
+the same habit: designing an identifier from what reads nicely instead of from
+the constraint it must satisfy. The constraint was written down in two
+migrations the whole time.

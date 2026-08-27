@@ -97,15 +97,26 @@ This closes the books-69 blocker. Confirmed against the data:
 - **x6228 — ATM account** (Timberland). Every row of the Funds Movement report
   carries `Acct # = ******6228`. Both money legs land here.
 - **x6048 — cannabis checking.** Appears only as the destination of
-  `TRANSFER FROM X6228 TO X6048` (67 occurrences, all Debits to 6228).
-- **x3557 — personal checking.** Does **not** appear anywhere in the four CSVs.
+  `TRANSFER FROM X6228 TO X6048` (**66** occurrences, all Debits to 6228,
+  totalling **$526,937.58**).
+- **x3557 — personal checking.** **CORRECTED IN STEP 2 — this recon was wrong.**
+  It said x3557 does not appear anywhere in the four CSVs. It does:
+  `TRANSFER FROM X6228 TO X3557`, once, on **2026-07-03**, for **$5,242.50**,
+  a Debit. There were 67 `TRANSFER` rows in total and this recon counted all 67
+  as sweeps to x6048; 66 were, and the sixty-seventh went to Michael's personal
+  checking. Treating it as a sweep would have overstated what the store owes the
+  ATM business by $5,242.50 and hidden an owner distribution that belongs on the
+  equity statement. Stated rather than quietly amended, per standing rule 89.
 
-**The Timberland vocabulary is only five phrases** (301 rows, 5.1.26–8.23.26):
+**The Timberland vocabulary is SIX phrases**, not five (301 rows, 5.1.26–8.23.26).
+This recon said five; the sixth is the transfer to personal checking, corrected
+below:
 
 | n | Description | Dr/Cr | What it is |
 |---|---|---|---|
 | 229 | `DLY SETTLE MVNT - HG26499 CCD` | Credit | The ATM company funding the account |
-| 67 | `TRANSFER FROM X6228 TO X6048` | Debit | **The cash sweep** to the cannabis account |
+| 66 | `TRANSFER FROM X6228 TO X6048` | Debit | **The cash sweep** to the cannabis account ($526,937.58) |
+| 1 | `TRANSFER FROM X6228 TO X3557` | Debit | **An owner distribution** to personal checking, 2026-07-03, $5,242.50 |
 | 3 | `ACCOUNT ANALYSIS CHARGE` | Debit | Bank fee |
 | 1 | `EFTRANSACT PAYMENT ALLIANCE PPD` | Debit | Processor debit |
 | 1 | `DLY SETTLE MVNT - HG26499 CCD` | **Debit** | A settlement that went the *other* way |
@@ -237,6 +248,14 @@ Stated so Michael can overrule it before money is spent.
 2. **The sweep as an intercompany pair.** `TRANSFER FROM X6228 TO X6048` is
    `10300` down in `atm`, cash up in `greenway`, with `36000` carrying both sides
    so it nets to zero on consolidation. `submitIntercompanyPair` already does this.
+   **BUILT IN STEP 2, with three corrections to this plan.** (a) The transfer to
+   x3557 is NOT an intercompany pair — it is a single-entity owner distribution
+   against `41000`; a matching credit on the personal books would have netted the
+   distribution to zero across the group and understated Michael's §1368 basis.
+   (b) `intercompany_ref` is a `uuid` column, so the reference is a deterministic
+   v5 uuid, not the readable string this plan implied. (c) 2026-05-26 carries TWO
+   sweeps, so the source ref must include an occurrence number or the ledger's
+   own idempotency check would swallow the second one as a duplicate.
 3. **Take Funds Movement as primary**, Daily Settlement as corroboration, and
    surface every date where they disagree instead of preferring one silently.
 4. **The classification rules** for the five Timberland patterns, extended by the

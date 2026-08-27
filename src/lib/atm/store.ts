@@ -27,6 +27,13 @@ import {
   buildAtmSettlementProposals,
   type AtmPostingProposal,
 } from "@/lib/atm/atm-posting-core";
+import {
+  buildSweepProposals,
+  parseTransferDescription,
+  withOccurrences,
+  type SweepFacts,
+  type SweepProposal,
+} from "@/lib/atm/atm-sweep-core";
 
 export type AtmConnectionStatus = "unconfigured" | "ok" | "error";
 
@@ -1053,4 +1060,80 @@ export async function listAtmSettlementProposals(
       terminalTransactionCents: s.terminalTransactionCents,
     })),
   );
+}
+
+// ---------------------------------------------------------------------------
+// books-69 step 2 — the cash sweep, as a proposed pair of entries.
+//
+// The sweep is the one movement in this whole subsystem that touches two sets
+// of books at once, and until now it touched neither. The recon found 67
+// `TRANSFER FROM X6228 ...` rows on the Timberland statement totalling
+// $532,180.08, and not one of them had ever produced a journal entry on either
+// side.
+//
+// As in step 1, every judgment lives in the pure core (`atm-sweep-core`) and
+// this function only reads rows. The one thing it must do that the core cannot
+// is decide which transactions to hand over, and it does that by the SAME rule
+// the reconciliation path uses: accounts tagged role="atm".
+// ---------------------------------------------------------------------------
+
+/**
+ * Every transfer OUT of the ATM bank account, as an entry proposed for review.
+ *
+ * Nothing is written and nothing is posted. `intercompany` is not an
+ * autopostable source kind — `posting-core` gives the reason, that money moving
+ * between Michael's own books "is the most drift-prone entry there is" — so
+ * every proposal comes back `postable: false`.
+ *
+ * TWO THINGS WORTH KNOWING ABOUT THE PLAID SIGN CONVENTION. A Plaid amount is
+ * POSITIVE for money leaving the account (this is Plaid's own convention, and
+ * `toBankDeposits` in `atm-reconcile-core` relies on the same thing in the
+ * opposite direction — it keeps only negatives). A sweep is money leaving, so
+ * only positive rows can be sweeps, and the magnitude handed to the core is
+ * always positive with the direction carried separately in `creditOrDebit`.
+ * Rows that are money IN are still passed through, deliberately: the core
+ * refuses them with an explanation rather than silently dropping them, because
+ * a transfer arriving in the ATM account is the reverse of a sweep and Michael
+ * should be told it happened, not have it hidden.
+ *
+ * Transfers this module does not recognise are RETURNED, not filtered. From
+ * November 1 vendors are paid out of 6228 and from January 1 payroll is too;
+ * those will appear here as transfers to destinations the core has never seen,
+ * and surfacing them for classification is the entire point.
+ */
+export async function listAtmSweepProposals(
+  limit = 400,
+): Promise<readonly SweepProposal[]> {
+  if (!isSupabaseServiceConfigured) return [];
+
+  const accounts = await listPlaidAccounts();
+  const atmAccounts = accounts.filter((a) => a.role === "atm" && a.active);
+
+  const rows: Omit<SweepFacts, "occurrence">[] = [];
+  for (const acct of atmAccounts) {
+    const txns = await listPlaidTransactions(acct.accountId, limit);
+    for (const t of txns) {
+      const description = t.name ?? t.merchantName ?? "";
+      // Not a transfer at all (a settlement, a bank charge) — the core would
+      // filter it anyway, but there is no reason to carry it this far.
+      if (parseTransferDescription(description) === null) continue;
+      rows.push({
+        processedDate: t.date,
+        description,
+        // Magnitude only. Direction is stated in the next field, in the bank's
+        // own vocabulary, so the core never has to infer it from a sign.
+        amountCents: Math.abs(t.amountCents),
+        creditOrDebit: t.amountCents >= 0 ? "Debit" : "Credit",
+      });
+    }
+  }
+
+  // Oldest first, so that when two identical transfers land on one day the
+  // occurrence numbers follow the order the money actually moved. Plaid returns
+  // newest first, and numbering a same-day pair backwards would swap which
+  // entry is #1 between imports — the refs would be stable but would point at
+  // each other's rows.
+  rows.sort((a, b) => (a.processedDate < b.processedDate ? -1 : a.processedDate > b.processedDate ? 1 : 0));
+
+  return buildSweepProposals(withOccurrences(rows));
 }

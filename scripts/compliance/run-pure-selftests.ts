@@ -416,6 +416,7 @@ import { __runAtmCoreTests } from "../../src/lib/atm/atm-core";
 import { __runAtmUiCoreTests } from "../../src/lib/atm/atm-ui-core";
 import { __runAtmReconcileCoreTests } from "../../src/lib/atm/atm-reconcile-core";
 import { __runAtmPostingCoreTests } from "../../src/lib/atm/atm-posting-core";
+import { __runAtmSweepCoreTests } from "../../src/lib/atm/atm-sweep-core";
 import { __runPayrollReconcileCoreTests } from "../../src/lib/payroll/payroll-reconcile-core";
 import { __runPayrollUiCoreTests } from "../../src/lib/payroll/payroll-ui-core";
 import { __runVendorReconcileCoreTests } from "../../src/lib/payments/vendor-reconcile-core";
@@ -720,6 +721,7 @@ async function main() {
   __runAtmUiCoreTests();
   __runAtmReconcileCoreTests();
   __runAtmPostingCoreTests();
+  __runAtmSweepCoreTests();
   __runAtmSyncCoreTests();
   __runPaiEndpointsTests();
   __runAtmReportDiagnosticsTests();

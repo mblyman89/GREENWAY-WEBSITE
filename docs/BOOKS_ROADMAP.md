@@ -1898,3 +1898,91 @@ qualified business income, or it is an omission. The way to distinguish them is
 documentary - a deliberate position generally leaves a supporting statement on the
 return - not doctrinal argument. **Needed: the complete 2024 Form 1040 with all
 statements.** Do not resolve this from either direction without it.
+
+---
+
+### books-69: the ATM had never touched the general ledger
+
+*"I will gather the reports now while you begin on the first slice. I agree with
+everything you are proposing, in the order you recommended."* — and, before any
+of it: *"Please fix the housekeeping item first, I agree 100%, we need bullet
+proof logic in place before we touch the books."*
+
+**The recon's finding, in one line.** Fourteen modules, five test files, three
+migrations, a portal scraper, a reconciliation engine — and `grep -rn "51000" src`
+returned nothing at all. The ATM subsystem *looked* wired to the ledger and had
+never written a single journal entry. Account `51000 ATM Surcharge Income` existed
+in the chart of accounts and in no line of application code. Neither did the cash
+sweep, which had moved **$532,180.08** across two entities in under four months
+without either set of books recording it.
+
+**Step 0 — the housekeeping, and D-22.** Michael asked for bulletproof reads
+before touching the books, and the ask paid for itself immediately. Typing the
+three ATM row reads (recon said four cast sites; there were **five** — rule 89)
+exposed `Number(r.cash_load_cents ?? 0)` on a `bigint NOT NULL` column. `Number("")`
+is `0`, and `atm-ui-core.ts` accepted the invented zero as a real reading of "no
+cash loaded", understating vault cash. Every row type is now paired with a
+`Record<keyof Row, true>` column map that the `select` string is generated from,
+so select/row drift is a compile error **in both directions**. Four mutations
+proven; the one that matters is that `r.surchage_cents` used to compile cleanly
+and return `null`.
+
+**Step 1 — the surcharge reaches 51000.** Pure core, no I/O: debit `10300`,
+credit `51000`, entity `atm`. The 280E separation is enforced by asserting
+`entityCode === "atm"` with the tax consequence in the failure message, because
+CHAMP (128 T.C. 173) is the reason the ATM operation is a separate trade or
+business at all. Nothing auto-posts: `atm` is not in `AUTOPOSTABLE_SOURCE_KINDS`,
+and the gate asserts that against `posting-core` itself rather than restating the
+rule locally. **A mutant escaped here and is worth remembering:** deleting
+`.trim().toUpperCase()` from `atmSettlementSourceRef` left all 27 tests green,
+because the test that seemed to cover it went through a caller that upper-cased
+the terminal itself. A normalisation asserted only through its caller is not
+asserted at all.
+
+**Step 2 — the sweep, and three corrections to my own plan.** The sweep is the
+one movement here that touches two sets of books at once, so it is proposed as a
+pair: on the ATM books debit `36000` / credit `10300`, on the store's books debit
+`10200` / credit `36000`, the two `36000` legs equal and opposite so consolidation
+nets to zero — the standing close check that account's own seed comment describes.
+
+Walking the population (rule 43) corrected the recon twice, and both are stated
+rather than quietly amended (rule 89). There are **66** sweeps to x6048
+($526,937.58), not 67; the sixty-seventh `TRANSFER` row went to **x3557 on
+2026-07-03 for $5,242.50** — Michael's personal checking, which the recon had
+said "does not appear anywhere in the four CSVs." One row in sixty-seven, and it
+is the one with a different meaning.
+
+That row produced **D-23**, the most expensive near-miss in the slice. Booked as
+an intercompany pair it balances, posts, and erases itself: `41000` is not
+entity-scoped, so a debit on the ATM books and a credit on the personal books
+**sum to zero across the group** and the consolidated equity statement would
+report that no distributions were taken — understating the basis consumption that
+§1368 turns on. It is now a single entry on the ATM books, and `36000` was
+considered and rejected because an undocumented owner "loan" is re-characterised
+as a distribution anyway and calling it a loan first is worse.
+
+**D-24** is two defects with one cause: designing an identifier from what reads
+nicely instead of from the constraint it must satisfy. `intercompany_ref` is a
+`uuid` column, so the draft's readable string ref would have been rejected by
+Postgres the first time Michael pressed the button — and **no pure test could
+have caught it**, because nothing pure meets the column's type. And the ledger
+keys idempotency on `entity:source_kind:source_ref`, returning
+`GL_DUPLICATE_IGNORED` on a repeat, so a date-plus-destination ref would have
+merged the **two real sweeps on 2026-05-26** and silently dropped $3,522.50.
+`occurrence` is therefore required, never defaulted: a default would make the
+dangerous case look exactly like the safe case at every call site.
+
+**Classification is by destination, which is what buys the flexibility Michael
+asked for.** *"Even after the start of the new year though, I don't know exactly
+how the cash flow will work, so we will need a system that allows flexibility."*
+Vendors move to the ATM account on **November 1** and payroll on **January 1**.
+Those payments will arrive as debits out of 6228 to destinations this code has
+never seen, and they surface as `unrecognised` with a reason instead of being
+absorbed into the nearest familiar bucket. A transfer arriving *into* the account
+is refused too, by name, rather than posted backwards.
+
+**Nothing in this slice posts anything.** Every proposal carries
+`postable: false` and quotes `NEVER_AUTOPOST_REASONS.intercompany` verbatim — *"it
+is only about 24 entries a year — automation would save minutes and risk the
+balance sheet."* The words on Michael's screen and the rule in the ledger are
+asserted equal, so they cannot drift.
