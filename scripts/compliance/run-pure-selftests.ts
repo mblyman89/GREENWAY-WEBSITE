@@ -419,6 +419,7 @@ import { __runAtmPostingCoreTests } from "../../src/lib/atm/atm-posting-core";
 import { __runAtmSweepCoreTests } from "../../src/lib/atm/atm-sweep-core";
 import { __runAtmCorroborateCoreTests } from "../../src/lib/atm/atm-corroborate-core";
 import { __runAtmClassificationCoreTests } from "../../src/lib/atm/atm-classification-core";
+import { __runLedgerCensusCoreTests } from "../../src/lib/accounting/ledger-census-core";
 import { __runPayrollReconcileCoreTests } from "../../src/lib/payroll/payroll-reconcile-core";
 import { __runPayrollUiCoreTests } from "../../src/lib/payroll/payroll-ui-core";
 import { __runVendorReconcileCoreTests } from "../../src/lib/payments/vendor-reconcile-core";
@@ -726,6 +727,7 @@ async function main() {
   __runAtmSweepCoreTests();
   __runAtmCorroborateCoreTests();
   __runAtmClassificationCoreTests();
+  __runLedgerCensusCoreTests();
   __runAtmSyncCoreTests();
   __runPaiEndpointsTests();
   __runAtmReportDiagnosticsTests();

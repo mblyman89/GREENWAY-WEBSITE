@@ -1338,3 +1338,415 @@ day after"*, and *"treats effectiveTo as INCLUSIVE"*. Mutants 1, 2 and 3 (a
 dateless lookup, a fallback to the nearest rule, an exclusive end date) are each
 killed by three of them. There is no gate on the SQL side, and that absence is
 the open half of this record.
+
+---
+
+## D-31 - Not one retail sale has ever reached the general ledger
+
+**Found:** books-70, by walking the ledger's own `source_kind` vocabulary and
+asking which values any code path can actually produce.
+
+**What broke:** `pos_sale` has zero producers. 97 files live under `src/lib/pos`
+and `src/app/api/pos`; none of them calls `submitJournal`. Sales, discounts
+(50900) and refunds (50910) are all absent from the books. The accounts were
+seeded in 0173 and have never been touched.
+
+**How it hid:** the POS works. Orders are taken, tenders are recorded, the
+`orders` table fills up. Nothing in the application is broken, and nothing
+reports an error, because posting to the ledger was never wired rather than
+wired wrongly. A missing feature has no failure mode to notice.
+
+**Gate:** `tests/compliance/ledger-census.test.ts` asserts that nothing under
+`src/lib/pos` reaches a ledger door, and separately that no module anywhere
+emits `sourceKind: "pos_sale"`. Both tests FAIL the moment sales are wired,
+which forces the census row to be updated in the same commit.
+
+---
+
+## D-32 - Excise and retail sales tax cannot be told apart from stored data
+
+**Found:** books-70, while checking whether the trust liabilities 32000 and
+32100 could be posted from what the database already holds.
+
+**What broke:** two things, and the second is the harder one. First, `excise`
+has zero producers, so the 37% cannabis excise is never accrued. Second, prices
+are TAX-INCLUSIVE (`CANNABIS_EXCISE_TAX_BPS = 3700`, back-out divisor 1.463,
+RCW 69.50.535) and the `orders` table from migration 0007 stores only
+`subtotal_minor_units`, `estimated_tax_minor_units` and `total_minor_units`.
+There is no excise column. A single blended "estimated tax" figure cannot be
+split into 32000 and 32100 after the fact.
+
+**How it hid:** the total the customer pays is correct, which is the only figure
+anybody looks at on a receipt. The split only matters when the money has to be
+handed to two different agencies, and that step is the one nobody has reached
+yet.
+
+**Gate:** the census test asserts `estimated_tax_minor_units` exists in 0007 and
+that the word "excise" does not, so the day a column is added the test fails and
+the finding is revisited deliberately. Also asserted: nothing emits
+`sourceKind: "excise"`.
+
+**Note on scope:** 32000 is TRUST money, collected on the state's behalf. Booking
+it as revenue overstates income and understates a liability the state can audit.
+
+---
+
+## D-33 - Cost of goods sold is never booked, which is the 280E deduction
+
+**Found:** books-70.
+
+**What broke:** `cogs-position-core.ts` computes costing and has ZERO importers.
+Nothing moves cost from inventory (20000) to COGS (60000) when product sells.
+`coa-core` already mirrors every 20xxx inventory account to a 60xxx COGS account
+per category, so the destination exists; nothing selects it.
+
+**How it hid:** inventory quantities are tracked correctly by the inventory
+system, so the shelves and the counts agree. The financial consequence lives in
+a ledger nobody was reading yet.
+
+**Why this is the most expensive record in the register:** under IRC 280E a
+cannabis retailer may deduct essentially nothing except cost of goods sold. An
+unbooked COGS is tax paid on gross receipts instead of gross profit.
+
+**Gate:** census test asserts `cogs-position-core` has no importer, and the
+census row for `cost_of_goods_sold.cogs_on_sale` carries the consequence in
+writing so it cannot be reprioritised by accident.
+
+---
+
+## D-34 - The vendor bill builder is finished, correct, and unreachable
+
+**Found:** books-70, function-level reachability sweep.
+
+**What broke:** `vendor-bill-core.ts` builds a complete, balanced bill journal
+with 280E cost classes, and `billSourceRef` builds a genuinely good idempotency
+key (`manifest:<n>` when the bill came from an accepted manifest, else
+`bill:<vendor>:<invoice>`). Migration 0187 supplies the posting door
+`gl_post_vendor_bill` and an auditor `gl_audit_vendor_bill_wiring`. NOTHING
+calls any of it: `src/app/admin/books/bills/` has no `actions.ts`, and no
+`supabase.rpc()` names the door. Inventory receipts and freight-in (60800) are
+therefore never booked either.
+
+**How it hid:** this is the archetype the census was built to catch. The module
+has thorough self-tests and they all pass. Purity is the absence of the wiring in
+question, so a pure test can never see that nothing calls it. Reviewed on its
+own, the file looks complete - because it is.
+
+**Gate:** the census test asserts `src/app/admin/books/bills/actions.ts` does not
+exist and that `gl_post_vendor_bill` has no `.rpc()` caller, plus a positive
+control listing the three doors that ARE called. Wiring the bill screen breaks
+the test.
+
+---
+
+## D-35 - Nothing connects an approved purchase order to the receipt that should post
+
+**Found:** books-70, while answering Michael's question "I want to make sure that
+purchase orders are properly booked."
+
+**What broke:** the honest answer is that a plain PO should NOT hit the ledger -
+an unfulfilled purchase order is a commitment, not a transaction, and booking it
+would overstate both assets and payables. The real gap is that none of the 12
+`po-*` modules under `src/lib/purchasing` connects an approved PO to the receipt
+event that IS supposed to post, and `20800 Inventory - In Transit` (which would
+carry goods that have shipped but not arrived) is unused.
+
+**How it hid:** it presents as a question with an intuitive wrong answer. "Are
+POs booked?" invites wiring a journal that should not exist. Recording the
+correct treatment as a `NOT_APPLICABLE` verdict with a stated reason means the
+next person to ask does not have to re-derive it, and cannot "fix" it by
+mistake.
+
+**Gate:** the census row `vendor_cycle.purchase_order_commitment` carries
+`correct: NOT_APPLICABLE` with the reason, and a test asserts that verdict and
+its reason text. The validator refuses `NOT_APPLICABLE` without a reason, so the
+justification cannot be dropped.
+
+---
+
+## D-36 - A vendor ACH payment would be booked twice, and the books would balance
+
+**Found:** books-70, tracing the workflow Michael described.
+
+**What broke:** the full ACH stack exists - `nacha-core`, `vendor-ach-core`,
+`payee-banking-store`, `invoice-po-match-core`, `vendor-payables-store` - with
+zero ledger references. Separately, `payments/vendor-reconcile-core.ts`
+(`reconcileVendorPayments`, with a real tolerance model) ALREADY matches system
+payments to bank withdrawals. It returns matches and posts nothing.
+
+**How it hid:** this is the failure mode that survives an audit. The same dollar
+arrives twice - once from the system that spent it, once from the Plaid feed that
+saw it leave - and each arrival is individually correct. Book both and the
+expense doubles while the trial balance still balances and the bank still
+reconciles. There is no imbalance for a control to detect.
+
+**Gate:** the census test asserts both reconcilers exist, that neither contains
+`submitJournal(`, and that the census records their marriage layer as PARTIAL
+rather than MISSING - so a future wiring slice connects the existing matcher
+instead of rebuilding it.
+
+---
+
+## D-37 - The bank feed cannot post, and the rules table that would classify it is inert
+
+**Found:** books-70.
+
+**What broke:** 16 files under `src/lib/plaid` and none reaches a ledger door.
+Migration 0189 supplies an entire SQL-side reconciliation suite -
+`gl_post_bank_match`, `gl_unmatch_bank_row`, `gl_bank_reconcile`,
+`gl_sign_off_bank_reconciliation` - with no `.rpc()` caller. The
+`gl_account_rules` table that would map a description to an account is empty and
+no code reads or writes it (see D-30).
+
+**How it hid:** the Plaid integration visibly works - transactions arrive and are
+displayed. Display and posting are different problems, and only one of them was
+solved.
+
+**Why this is nonetheless the SAFEST thing to wire first:** a bank-fed expense
+has no in-system counterpart, so nothing can duplicate it. Its marriage layer is
+`NOT_APPLICABLE` for a real reason rather than an unfinished one, which is
+exactly what makes it the right starting point.
+
+**Gate:** census test asserts nothing under `src/lib/plaid` reaches a door and
+that `gl_post_bank_match` has no caller.
+
+---
+
+## D-38 - The payroll journal is built, proven, and called only by a development script
+
+**Found:** books-70. This record is the reason the census measures reachability
+at FUNCTION level rather than MODULE level.
+
+**What broke:** `payroll-cogs-core.ts#buildPayrollJournal` builds a complete
+payroll journal including the 61000 allocable-inventory-labour split that 280E
+turns into real money. Migration 0188 supplies `gl_post_payroll_run` and
+`gl_payroll_allocation_guard`. `grep -rn buildPayrollJournal` returns matches
+ONLY inside `payroll-cogs-core.ts` itself, all in its own self-tests. The single
+external caller anywhere is `scripts/compliance/e2e-payroll-journal.ts`, whose
+header says "Not part of the app. Development verification only." Net pay,
+withheld tax remittance (31100), employer tax (31200) and garnishments (31300)
+are all unbooked.
+
+**How it hid - and how it nearly hid from the census itself:** the FIRST DRAFT of
+`ledger-census-core.ts` scored reachability by counting module importers.
+`payroll-cogs-core` has six of them, so the first draft scored payroll WIRED.
+Those six importers take types, labour-role codes and teaching content - not the
+journal builder. A census that measured modules would have shipped a green
+verdict on the largest unwired subsystem in the platform.
+
+**Gate:** two of them. `validateCensusRow` now REFUSES any row claiming
+`reachable = PRESENT` without naming a `file#symbol` poster, so the contradiction
+cannot be expressed. And the census test asserts that no file in `src/` outside
+`payroll-cogs-core.ts` mentions `buildPayrollJournal` at all.
+
+---
+
+## D-39 - Cash movements from till to vault to bank are not booked
+
+**Found:** books-70.
+
+**What broke:** 7 files under `src/lib/registers` with zero ledger reach.
+`10400 Undeposited Funds` and `10900 Cash - Clearing / In Transit` were seeded
+for exactly this purpose and are unused, as is `50920 Cash Over / (Short)`.
+Neither deposits nor till discrepancies are recorded.
+
+**How it hid:** register close-out works as an operational process, so staff
+count and reconcile and the drawer balances. The accounting consequence lives
+elsewhere.
+
+**Why it matters more here than in most businesses:** in a cash-heavy regulated
+industry the till-to-bank trail is the first thing an examiner asks for, and
+over/short is the earliest signal of both honest error and theft.
+
+**Gate:** census test asserts nothing under `src/lib/registers` reaches a ledger
+door.
+
+---
+
+## D-40 - The ATM classifier decides correctly and posts nothing
+
+**Found:** books-70, immediately after books-69 shipped the classifier.
+
+**What broke:** books-69 built `atm/atm-classification-core.ts` - effective-dated,
+5 rules, 80 tests, 18/18 mutants killed - and wired it to
+`store.ts#listAtmClassificationProposals`. That function returns PROPOSALS for
+human review, by design. No journal is built from an accepted proposal. Vault
+loads (10300 against 10100) and surcharge income (51000) are unbooked.
+
+**How it hid:** it is not hiding; it is the deliberate end of the previous slice.
+It is recorded because "reviewed and proposed" is one step short of "booked", and
+without a register entry the distinction erodes into an assumption that the ATM
+is done.
+
+**Note:** `ledger-core.ts:770` uses code `70100` named "ATM Fee Income" inside a
+self-test FIXTURE. The seeded account is `51000 ATM Surcharge Income`. The
+fixture is not a production mapping and must not be copied when this is wired.
+
+**Gate:** the census row records the classifier's `correct` layer as PARTIAL with
+the reason that classification is proven while the journal is not built, and the
+validator forbids a PARTIAL verdict from carrying softening prose.
+
+---
+
+## D-41 - Intercompany transfers have a working paired door and no caller
+
+**Found:** books-70.
+
+**What broke:** `posting-service.ts#submitIntercompanyPair` exists and
+`gl_submit_intercompany_pair` is one of only three ledger write doors any code
+actually invokes - but the only `.rpc()` call sits inside the service itself, and
+`grep -rn submitIntercompanyPair src/app` returns zero callers. `36000 Due To /
+From Related Entity` is unused.
+
+**How it hid:** the door is genuinely complete and atomic, so any review of it
+passes. Nothing about the module reveals that no screen reaches it.
+
+**OPEN QUESTION FOR MICHAEL, and the census refuses to guess it:** the vendor
+payment made out of account 6228 is either an intercompany balance (36000) or a
+capital contribution (41100). That is a decision about intent, not a measurable
+fact, and it changes Michael's basis. The census records this as `correct:
+UNKNOWN` with the reason stated, per standing rule 1.
+
+**Gate:** the validator refuses `UNKNOWN` without a reason, so the open question
+cannot decay into a silent assumption.
+
+---
+
+## D-42 - The B&O tax accrual is correct to the millionth and has no caller
+
+**Found:** books-70.
+
+**What broke:** `bo-tax-core.ts` exports `boAccrualEntry` and `boPaymentEntry`,
+holding rates in MILLIONTHS specifically to avoid the rounding drift a percentage
+would introduce (.00471 retailing for Greenway, .015 service for the ATM entity).
+`grep -rn 'boAccrualEntry|boPaymentEntry' src/` returns ZERO callers. 75040 B&O
+Tax Expense and 32200 B&O Tax Payable are unused.
+
+**How it hid:** same shape as D-34 and D-38 - a finished, well-tested pure module
+with no wire. B&O is owed on gross receipts whether or not there is profit, so
+the liability accrues in reality regardless of whether the books record it.
+
+**Gate:** census test asserts no file in `src/` outside `bo-tax-core.ts` mentions
+either export.
+
+---
+
+## D-43 - Fixed assets and depreciation are ready in the database and unwired - and my first finding about them was WRONG
+
+**Found:** books-70. Recorded with the error included, because the error is the
+more useful half.
+
+**What I first concluded, and stated to Michael:** that the chart of accounts was
+complete and only wires were missing. Then, that the entire fixed-asset block
+(21000-21900) was ABSENT from the chart, making capitalisation impossible.
+
+**Both were wrong, and the second was wrong in the more dangerous direction.** I
+extracted the chart of accounts from `0173_chart_of_accounts.sql` alone - 183
+accounts - and 21000-21900 are not in it. They are seeded by
+`0178_fixed_assets.sql` via `gl_upsert_account`, with `0189` adding one more:
+193 accounts in total. 0178 also installs `gl_guard_no_land_depreciation` and
+`gl_check_accumulated_depreciation`. The chart, the guards and the MACRS maths in
+`fixed-assets-core.ts` all agree with each other.
+
+**The actual defect:** `fixed-assets-core.ts` has no importer - five files
+mention it, every mention being a comment or
+`period-close-mentor-gates.ts` reading it as TEXT - and nothing emits
+`sourceKind: "depreciation"`. So no asset has ever been capitalised or
+depreciated, but the blocker is a missing wire, not a missing chart.
+
+**How the WRONG finding hid:** it was measured, evidenced, reproducible and
+confidently reported. A single-source measurement produces exactly the same kind
+of confidence as a complete one. The chart is the sum of every migration that
+ever touched it; reading one file answered a narrower question than the one I
+asked.
+
+**Gate:** the census test now scrapes account codes from EVERY migration and
+handles both seeding shapes (`VALUES` tuples and `gl_upsert_account(...)`). One
+test asserts 21000-21900 ARE present; another asserts the all-migrations total
+exceeds the 0173-only total and that `21900` is absent from 0173 specifically -
+so the shortcut that produced the wrong answer can never silently return.
+
+---
+
+## D-44 - Loan principal and interest are not split, and neither is booked
+
+**Found:** books-70.
+
+**What broke:** `sourceKind: "loan"` has zero producers. `34000 Notes & Loans
+Payable` and `85010 Interest Expense` are seeded and unused.
+`plaid/liabilities-core.ts` reads liability data and posts nothing.
+
+**How it hid:** a loan payment leaves the bank as a SINGLE debit. It looks like
+one expense, and booked as one it is wrong in two directions at once - the
+liability is never reduced and the deduction is overstated.
+
+**Gate:** census test asserts nothing emits `sourceKind: "loan"`.
+
+---
+
+## D-45 - Crypto activity is not booked (recorded so it is not mistaken for an oversight)
+
+**Found:** books-70.
+
+**What broke:** 35 files under `src/lib/crypto`; `sourceKind: "crypto"` has zero
+producers. `80030 Realized` and `80040 Unrealized Investment Gain/(Loss)` are
+unused. An on-chain transaction hash would be a perfect natural idempotency key
+and is not used as one.
+
+**Why it is recorded despite being lowest priority:** it belongs to the personal
+entity and affects the 1040 rather than the business return. Left unrecorded, its
+absence from a wiring plan looks like an omission; recorded, it is a decision.
+
+**Gate:** the census row exists with a stated consequence, and its marriage layer
+is `UNKNOWN` with the reason that it depends on which exchange accounts Michael
+has linked - which is not measurable from the source tree.
+
+---
+
+## D-46 - There is no period close and no way to reverse a posted entry
+
+**Found:** books-70.
+
+**What broke:** `period-close-core.ts` has no functional importer and nothing
+emits `sourceKind: "close"` or `sourceKind: "reversal"`. `gl_reverse_journal`
+exists in 0172 with no `.rpc()` caller. `40300 Retained Earnings` and `40400
+Opening Balance Equity` are unused.
+
+**How it hid:** neither matters until posting starts. Both matter immediately
+afterwards. Without a close, a prior period can silently change after the CPA has
+filed from it - which is the difference between books and a spreadsheet. Without
+a reversal path, the first mistake can only be corrected by hand-keying the
+opposite entry with no link between the two.
+
+**The idempotency trap in the reversal case:** reversing twice re-creates the
+error it was cancelling, and the books still balance afterwards. Like D-36, there
+is no imbalance for a control to catch.
+
+**Gate:** census test asserts nothing emits either source kind.
+
+---
+
+## D-47 - Opening balances have a staging table, a validator, and no path into the ledger
+
+**Found:** books-70.
+
+**What broke:** `0176_opening_balances.sql` supplies a staging table plus
+`gl_ob_validate_row`, `gl_bless_opening_balances` and
+`gl_close_opening_balance_equity`. `gl_opening_balance_summary` IS called from the
+app, so the staging side is reachable READ-ONLY. The two functions that would
+turn staged balances into journals have no `.rpc()` caller, and nothing emits
+`sourceKind: "opening_balance"`.
+
+**How it hid:** the read path works, so the screen shows data and looks
+functional. Reading staged balances and posting them are different operations.
+
+**Why it gates everything else:** every other row in the census assumes a
+starting point. Until opening balances are loaded, even perfectly wired activity
+produces a balance sheet that starts from zero.
+
+**BLOCKED ON MICHAEL, not on code:** the opening figures come from the Sage
+COA-tagged spreadsheets, which he has not yet produced. Standing rule 1 - the
+census will not invent them. Recorded as `correct: UNKNOWN` with that reason.
+
+**Gate:** the validator refuses `UNKNOWN` without a reason; the census test
+asserts nothing emits `sourceKind: "opening_balance"`.

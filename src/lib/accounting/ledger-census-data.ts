@@ -1,0 +1,1424 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE LEDGER REACHABILITY CENSUS — THE POPULATION
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Michael, verbatim, books-70:
+ *
+ *   "I agree completely that the next slice should be the census build and map
+ *    so nothing ever drifts while we wire everything up. I don't want to fold
+ *    extra work into this slice. Just build the census and then get back to me
+ *    with the first wiring slice."
+ *
+ *   "We need to systematically and methodically go through each function, every
+ *    aspect of the system that generates a book entry to make sure it is
+ *    producing a book entry and that it is correct and accurate."
+ *
+ * ── WHAT THIS FILE IS ─────────────────────────────────────────────────────
+ *
+ * The machinery lives in `ledger-census-core.ts`. This file is the DATA: one
+ * row per economic event that should leave a mark in the books, each carrying a
+ * MEASURED verdict on six layers, the command that produced the verdict, and
+ * the defect id for every gap.
+ *
+ * It is code rather than a spreadsheet for exactly the reason Michael gave —
+ * "so nothing ever drifts". A spreadsheet records what was true the day it was
+ * typed. This file is validated on construction, asserted against the real
+ * chart of accounts, and re-checked by `tests/compliance/ledger-census.test.ts`
+ * against the real source tree on every run. When somebody wires an event up,
+ * the census fails until the row is updated to say so.
+ *
+ * ── THE EVIDENCE DISCIPLINE ───────────────────────────────────────────────
+ *
+ * Every `evidence` string is the actual command or `file#symbol` that produced
+ * the verdict, measured on 2026-08-27 against commit 5a163817. No status here
+ * was remembered, inferred, or carried over from a previous session's notes.
+ * Standing rule 1: never guess.
+ *
+ * Where a verdict could not be measured, the status is UNKNOWN and it says why.
+ * Standing rule 48: a check that cannot classify must fail, never skip. An
+ * UNKNOWN that is honest is worth more than a PRESENT that is optimistic.
+ *
+ * ── WHY `married` IS MOSTLY NOT_APPLICABLE ────────────────────────────────
+ *
+ * The marriage layer only applies where the SAME dollar arrives twice: once
+ * from the system that spent it, once from the Plaid bank feed that saw it
+ * leave. A POS sale has no second arrival, so its marriage layer is
+ * NOT_APPLICABLE with a stated reason — not PRESENT. Recording a layer as
+ * satisfied when it never applied is how a controls matrix flatters itself.
+ *
+ * ── WHAT THIS FILE DELIBERATELY DOES NOT DO ───────────────────────────────
+ *
+ * It does not wire anything, post anything, or change any schema. Michael's
+ * scope fence for books-70 was explicit: "I don't want to fold extra work into
+ * this slice." A census that quietly started fixing things would be unable to
+ * tell him what was broken before it started.
+ */
+
+import { LedgerCensus, type CensusRow } from "./ledger-census-core";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE ROWS
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
+  /* ── FAMILY 1: REVENUE AND THE TAX YOU COLLECT FOR SOMEBODY ELSE ─────── */
+
+  {
+    key: "revenue_and_tax_collected.retail_sale",
+    family: "revenue_and_tax_collected",
+    event:
+      "A customer buys product at the counter and pays. The price on the shelf " +
+      "already includes both taxes.",
+    sourceKind: "pos_sale",
+    entityCode: "greenway",
+    accountCodes: ["10110", "50000", "32000", "32100"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'sourceKind: \"pos_sale\"' src/ -> 0 hits. No module builds a " +
+          "sale journal.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "97 files under src/lib/pos/ and src/app/api/pos/; grep for submitJournal " +
+          "across all of them -> 0 hits.",
+      },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "Nothing to evaluate. Prices are tax-inclusive (CANNABIS_EXCISE_TAX_BPS " +
+          "= 3700, back-out divisor 1.463, RCW 69.50.535) so the entry must EXTRACT " +
+          "excise before it can be correct.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "pos_sale is in AUTOPOSTABLE_SOURCE_KINDS (posting-core.ts:112) so the " +
+          "door would accept it, but nothing has ever presented one.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence: "No sourceRef convention exists for a sale; nothing to key on.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "Cash and card settlement are separate events, censused below.",
+        reason:
+          "The sale itself has no second arrival. The DEPOSIT of its proceeds does, " +
+          "and that is a different row.",
+      },
+    },
+    defectId: "D-31",
+    consequence:
+      "This is the single largest number in the business and the books currently " +
+      "contain none of it. Revenue, excise trust liability and sales tax trust " +
+      "liability are all absent.",
+  },
+
+  {
+    key: "revenue_and_tax_collected.excise_liability_split",
+    family: "revenue_and_tax_collected",
+    event:
+      "The 37% cannabis excise inside a tax-inclusive price is separated from the " +
+      "retail sales tax, because they are owed to different places.",
+    sourceKind: "excise",
+    entityCode: "greenway",
+    accountCodes: ["32000", "32100"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence: "grep -rn 'sourceKind: \"excise\"' src/ -> 0 hits.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence: "No caller anywhere; excise has zero producers.",
+      },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "Blocked upstream: the `orders` table (migration 0007) has no excise " +
+          "column. It carries estimated_tax_minor_units, subtotal_minor_units and " +
+          "total_minor_units only, so 32000 and 32100 cannot be told apart from " +
+          "stored data.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence: "excise is autopostable per posting-core.ts:114; never presented.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence: "No sourceRef convention defined.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "An accrual of tax collected is not a bank movement.",
+        reason:
+          "The excise PAYMENT to DOR is a bank movement and is censused separately.",
+      },
+    },
+    defectId: "D-32",
+    consequence:
+      "32000 is TRUST money — collected on the state's behalf, never Michael's. " +
+      "Booking it as revenue overstates income and understates a liability the " +
+      "state can audit.",
+  },
+
+  {
+    key: "revenue_and_tax_collected.discount_and_comp",
+    family: "revenue_and_tax_collected",
+    event: "A discount, loyalty redemption or comped item reduces what is collected.",
+    sourceKind: "pos_sale",
+    entityCode: "greenway",
+    accountCodes: ["50900", "50000"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No pos_sale builder exists at all." },
+      reachable: { status: "MISSING", evidence: "Same as retail_sale: 0 hits." },
+      correct: {
+        status: "MISSING",
+        evidence: "Account 50900 Discounts & Comps is seeded (0173) and unused.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No sourceRef convention." },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "A discount never moves cash.",
+        reason: "There is no bank line for money that was never collected.",
+      },
+    },
+    defectId: "D-31",
+    consequence:
+      "Without this, gross revenue and net revenue are the same number, which " +
+      "hides margin erosion and misstates the excise base.",
+  },
+
+  {
+    key: "revenue_and_tax_collected.refund_or_return",
+    family: "revenue_and_tax_collected",
+    event: "A customer returns product, or a sale is voided after tender.",
+    sourceKind: "pos_sale",
+    entityCode: "greenway",
+    accountCodes: ["50910", "10110", "32000", "32100"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No pos_sale builder." },
+      reachable: { status: "MISSING", evidence: "0 submitJournal hits under src/lib/pos/." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "A refund must also reverse the two trust liabilities, not just revenue. " +
+          "50910 Returns & Refunds is seeded and unused.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: {
+        status: "MISSING",
+        evidence:
+          "Highest-risk idempotency case in the family: a retried refund that " +
+          "double-posts hands money back twice in the books.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "Cash refunds leave the till, not the bank.",
+        reason: "Card refunds appear in the settlement row, which is censused there.",
+      },
+    },
+    defectId: "D-31",
+    consequence:
+      "Refunds reduce the excise Michael owes. Not booking them means overpaying " +
+      "trust tax, and there is no record to claim it back with.",
+  },
+
+  /* ── FAMILY 2: INVENTORY AND COST OF GOODS SOLD ──────────────────────── */
+
+  {
+    key: "cost_of_goods_sold.cogs_on_sale",
+    family: "cost_of_goods_sold",
+    event: "Product leaves the shelf, so its cost has to move from asset to expense.",
+    sourceKind: "inventory",
+    entityCode: "greenway",
+    accountCodes: ["60000", "20000"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'cogs-position-core' src/ -> 0 importers. The costing module " +
+          "exists but no journal builder consumes it.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence: "No COGS-on-sale path reaches submitJournal.",
+      },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "coa-core mirrors 20xxx inventory to 60xxx COGS per category, so the " +
+          "account pairs exist; nothing selects them at sale time.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No sourceRef convention." },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "COGS is an internal reclass.",
+        reason: "No cash moves, so no bank line can duplicate it.",
+      },
+    },
+    defectId: "D-33",
+    consequence:
+      "Under IRC 280E, COGS is the ONLY deduction a cannabis retailer gets. An " +
+      "unbooked COGS is tax paid on gross receipts instead of gross profit — the " +
+      "most expensive single gap in this census.",
+  },
+
+  {
+    key: "cost_of_goods_sold.inventory_receipt",
+    family: "cost_of_goods_sold",
+    event: "A vendor delivery is received and the product goes on the shelf.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["20000", "30000"],
+    builder: "src/lib/accounting/vendor-bill-core.ts#buildBillJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "vendor-bill-core.ts exports a journal builder with account mappings " +
+          "and 280E cost classes.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "src/app/admin/books/bills/ has no actions.ts; gl_post_vendor_bill is " +
+          "referenced nowhere outside its own migration.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Builder balances in its own self-tests, and every account it targets " +
+          "(including capitalisation codes 21500/21600/21700) is seeded: 0173 " +
+          "for the operating chart, 0178 for the fixed-asset block.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "Migration 0187 supplies the door gl_post_vendor_bill and the checker " +
+          "gl_audit_vendor_bill_wiring. No supabase.rpc() call names either.",
+      },
+      idempotent: {
+        status: "PARTIAL",
+        evidence:
+          "vendor-bill-core.ts#billSourceRef builds a real key: `manifest:<n>` when " +
+          "the bill came from an accepted manifest, else `bill:<vendor>:<invoice>`. " +
+          "The key exists and is sound; no app path ever calls it.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "Receiving goods creates a payable; paying it later is the bank event. " +
+          "No link exists between the two.",
+      },
+    },
+    defectId: "D-34",
+    consequence:
+      "Inventory purchases are the input to COGS. If receipts are not booked, the " +
+      "20000 control account stays at zero and no COGS figure can be trusted.",
+  },
+
+  {
+    key: "cost_of_goods_sold.inventory_audit_adjustment",
+    family: "cost_of_goods_sold",
+    event: "A physical count finds more or less product than the system expected.",
+    sourceKind: "inventory",
+    entityCode: "greenway",
+    accountCodes: ["20000", "20810", "60810"],
+    builder: "src/lib/inventory/inventory-audit-store.ts#postAuditSession",
+    poster: "src/lib/inventory/inventory-audit-store.ts#postAuditSession",
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "inventory-audit-store.ts:458 calls submitJournal with sourceKind " +
+          "'inventory'.",
+      },
+      reachable: {
+        status: "PRESENT",
+        evidence:
+          "One of only two live ledger writers in the whole platform, reached from " +
+          "the inventory audit screen.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "audit-posting-accounts.ts derives account codes from INVENTORY_CATEGORIES " +
+          "rather than a literal map, and a structural test enforces that.",
+      },
+      accepted: {
+        status: "PRESENT",
+        evidence:
+          "Posts through submitJournal, which is the door migration 0174 governs.",
+      },
+      idempotent: {
+        status: "PRESENT",
+        evidence: "sourceRef is `audit:${sessionId}`, unique per session.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "A count adjustment moves no money.",
+        reason: "Nothing in the bank feed can correspond to a shrink write-off.",
+      },
+    },
+    defectId: null,
+    consequence:
+      "This is the one path that already works end to end. It is the template the " +
+      "wiring slices should copy.",
+  },
+
+  {
+    key: "cost_of_goods_sold.freight_in",
+    family: "cost_of_goods_sold",
+    event: "An inbound delivery charge that belongs in the cost of the product.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["60800", "30000"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No builder targets 60800." },
+      reachable: { status: "MISSING", evidence: "No purchase path posts." },
+      correct: {
+        status: "MISSING",
+        evidence: "60800 Freight-In is seeded (0173) and never referenced in src/.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No sourceRef convention." },
+      married: {
+        status: "MISSING",
+        evidence: "Freight is usually paid by ACH and would arrive twice.",
+      },
+    },
+    defectId: "D-34",
+    consequence:
+      "Freight-in is 280E-deductible as part of inventory cost. Booked as an " +
+      "operating expense instead, it becomes non-deductible and raises tax owed.",
+  },
+
+  /* ── FAMILY 3: BUYING FROM VENDORS AND PAYING THEM ───────────────────── */
+
+  {
+    key: "vendor_cycle.purchase_order_commitment",
+    family: "vendor_cycle",
+    event: "A purchase order is approved and sent to a vendor.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["20800", "30000"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "12 po-* modules under src/lib/purchasing/; grep for submitJournal or " +
+          "gl_post across all of them -> 0 hits.",
+      },
+      reachable: { status: "MISSING", evidence: "Zero ledger references in purchasing/." },
+      correct: {
+        status: "NOT_APPLICABLE",
+        evidence: "GAAP: an unfulfilled PO is a commitment, not a transaction.",
+        reason:
+          "A plain PO should NOT hit the ledger. Michael asked whether POs are " +
+          "'properly booked' — the correct answer is that the RECEIPT is booked, " +
+          "not the order. This row exists so that answer is recorded rather than " +
+          "rediscovered.",
+      },
+      accepted: {
+        status: "NOT_APPLICABLE",
+        evidence: "Nothing should be presented.",
+        reason: "No entry is due at commitment.",
+      },
+      idempotent: {
+        status: "NOT_APPLICABLE",
+        evidence: "No entry, no ref.",
+        reason: "No entry is due at commitment.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "No money has moved.",
+        reason: "No entry is due at commitment.",
+      },
+    },
+    defectId: "D-35",
+    consequence:
+      "The gap is not the missing entry — it is that nothing connects an approved " +
+      "PO to the receipt that SHOULD post. In-transit inventory (20800) is the " +
+      "account that would carry it if goods ship before they arrive.",
+  },
+
+  {
+    key: "vendor_cycle.vendor_bill_recorded",
+    family: "vendor_cycle",
+    event: "An invoice arrives from a vendor and becomes a payable.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["30000", "20000"],
+    builder: "src/lib/accounting/vendor-bill-core.ts#buildBillJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence: "vendor-bill-core.ts builds a full bill journal with cost classes.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "No actions.ts under src/app/admin/books/bills/. The SQL door " +
+          "gl_post_vendor_bill has no caller outside its migration.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Balanced in self-tests; every account it names is seeded across 0173 " +
+          "and 0178.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "gl_post_vendor_bill exists (0187); no supabase.rpc() call names it.",
+      },
+      idempotent: {
+        status: "PARTIAL",
+        evidence:
+          "billSourceRef prefers the manifest number as the strongest external key " +
+          "and falls back to vendor+invoice. Sound, and never invoked.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "The bill and its later ACH payment are two events; nothing links them.",
+      },
+    },
+    defectId: "D-34",
+    consequence:
+      "Without payables, the balance sheet shows no money owed and cash-basis and " +
+      "accrual-basis results diverge silently.",
+  },
+
+  {
+    key: "vendor_cycle.vendor_paid_by_ach",
+    family: "vendor_cycle",
+    event:
+      "Greenway pays a vendor by ACH through the system, and days later the bank " +
+      "debit shows up in Plaid.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["30000", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "nacha-core, vendor-ach-core, payee-banking-store and vendor-payables-store " +
+          "exist; grep for submitJournal across them -> 0 hits.",
+      },
+      reachable: { status: "MISSING", evidence: "Zero ledger references in the ACH stack." },
+      correct: {
+        status: "MISSING",
+        evidence: "No entry is built, so correctness cannot be measured.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No sourceRef convention for an ACH batch." },
+      married: {
+        status: "PARTIAL",
+        evidence:
+          "src/lib/payments/vendor-reconcile-core.ts#reconcileVendorPayments already " +
+          "matches system payments to bank withdrawals with a tolerance. It returns " +
+          "matches and posts nothing.",
+      },
+      // NOTE: `married: PARTIAL` with `reachable: MISSING` is deliberate and
+      // permitted. The matching LOGIC genuinely exists and is tested; what is
+      // missing is the posting. Recording this as MISSING would erase real work
+      // and would send a future wiring slice off to rebuild it.
+    },
+    defectId: "D-36",
+    consequence:
+      "This is the exact double-booking risk Michael described. Both the system " +
+      "payment and the Plaid debit are individually correct, so booking both " +
+      "balances the books and doubles the expense.",
+  },
+
+  {
+    key: "vendor_cycle.operating_expense_from_bank",
+    family: "vendor_cycle",
+    event:
+      "A card or bank charge appears in the Plaid feed with no corresponding event " +
+      "inside the system.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["76040", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "16 files under src/lib/plaid/; grep for submitJournal -> 0 hits. " +
+          "Migration 0189_bank_matching.sql supplies gl_post_bank_match, " +
+          "gl_unmatch_bank_row, gl_bank_reconcile and " +
+          "gl_sign_off_bank_reconciliation: a complete SQL-side reconciliation " +
+          "suite with no supabase.rpc() caller.",
+      },
+      reachable: { status: "MISSING", evidence: "No Plaid path reaches the ledger." },
+      correct: {
+        status: "PARTIAL",
+        evidence:
+          "gl_account_rules exists to map a description to an account, but it is " +
+          "empty and no code reads or writes it (D-30).",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence: "bank is autopostable per posting-core.ts:116; never presented.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence:
+          "The natural ref is the Plaid transaction id, which is stable — but no " +
+          "code uses it as a sourceRef.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "The bank feed IS the only source for this event.",
+        reason:
+          "There is no in-system counterpart to marry, which is what makes this " +
+          "family safe to auto-post and the right place to start wiring.",
+      },
+    },
+    defectId: "D-37",
+    consequence:
+      "These are the expenses Michael's CPA needs categorised for the return. It " +
+      "is also the lowest-risk wiring target, because nothing else can duplicate it.",
+  },
+
+  /* ── FAMILY 4: PAYROLL ───────────────────────────────────────────────── */
+
+  {
+    key: "payroll_cycle.payroll_run_accrued",
+    family: "payroll_cycle",
+    event:
+      "A payroll run is calculated: gross wages, employee withholding, employer " +
+      "taxes, and the split between shop labour and inventory-handling labour.",
+    sourceKind: "payroll",
+    entityCode: "greenway",
+    accountCodes: ["71010", "61000", "31000", "31100", "31200"],
+    builder: "src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "payroll-cogs-core.ts#buildPayrollJournal builds a complete payroll " +
+          "journal including the 61000 allocable-labour split.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'buildPayrollJournal' -> matches ONLY inside payroll-cogs-core.ts " +
+          "itself (its own self-tests). The single external caller is " +
+          "scripts/compliance/e2e-payroll-journal.ts, whose own header says " +
+          "'Not part of the app. Development verification only.'",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Balanced and 280E-classed in its own self-tests, which are registered " +
+          "in run-pure-selftests.ts.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "Migration 0188_payroll_to_gl.sql supplies gl_post_payroll_run and the " +
+          "guard gl_payroll_allocation_guard. The only mention in src/ is a comment " +
+          "in books/payroll/page.tsx; no supabase.rpc() call names it.",
+      },
+      idempotent: {
+        status: "UNKNOWN",
+        evidence: "No app path generates a ref for a payroll run.",
+        reason:
+          "The builder is pure and takes no ref. Whether two clicks of a future " +
+          "Post Payroll button would double-post is a property of the button.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "src/lib/payroll/payroll-reconcile-core.ts#reconcilePayroll matches runs " +
+          "to bank withdrawals and posts nothing.",
+      },
+    },
+    defectId: "D-38",
+    consequence:
+      "Wages are the largest expense after product. The 61000 split is also a 280E " +
+      "matter: labour that handles inventory is deductible through COGS, and labour " +
+      "that sells is not. The logic to do this correctly already exists and is " +
+      "unreachable, which is the most frustrating finding in the census.",
+  },
+
+  {
+    key: "payroll_cycle.net_pay_disbursed",
+    family: "payroll_cycle",
+    event:
+      "Net pay leaves the operating account by ACH, then the debit appears in the " +
+      "Plaid feed.",
+    sourceKind: "payroll",
+    entityCode: "greenway",
+    accountCodes: ["31000", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence: "No builder clears 31000 Accrued Payroll against cash.",
+      },
+      reachable: { status: "MISSING", evidence: "No payroll path reaches the ledger." },
+      correct: { status: "MISSING", evidence: "Nothing to evaluate." },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention for an ACH batch." },
+      married: {
+        status: "PARTIAL",
+        evidence:
+          "payroll-reconcile-core.ts (P6b) matches the run to the withdrawal with a " +
+          "tolerance. Match logic present, posting absent.",
+      },
+    },
+    defectId: "D-38",
+    consequence:
+      "Exactly the workflow Michael described: 'tracked through the system, paid " +
+      "via ACH through the system, then the expense will show up in the system via " +
+      "Plaid.' Booking both arrivals would double payroll expense.",
+  },
+
+  {
+    key: "payroll_cycle.payroll_tax_remitted",
+    family: "payroll_cycle",
+    event:
+      "Withheld and employer payroll taxes are paid to the IRS, ESD and L&I.",
+    sourceKind: "payroll",
+    entityCode: "greenway",
+    accountCodes: ["31100", "31200", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence: "No builder clears 31100 or 31200 against cash.",
+      },
+      reachable: { status: "MISSING", evidence: "No remittance path posts." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "The 941/940/5208A calculators exist and are proven, but they compute " +
+          "form figures rather than journal entries.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: {
+        status: "MISSING",
+        evidence: "The remittance also arrives as a Plaid debit; nothing links them.",
+      },
+    },
+    defectId: "D-38",
+    consequence:
+      "Withheld tax is trust money. If the liability is never relieved, 31100 grows " +
+      "forever and the balance sheet shows tax owed that was in fact paid.",
+  },
+
+  {
+    key: "payroll_cycle.garnishment_remitted",
+    family: "payroll_cycle",
+    event: "A child-support or garnishment withholding is forwarded to the agency.",
+    sourceKind: "payroll",
+    entityCode: "greenway",
+    accountCodes: ["31300", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No builder targets 31300." },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "src/app/admin/books/garnishments/actions.ts exists but contains no " +
+          "ledger call.",
+      },
+      correct: {
+        status: "MISSING",
+        evidence: "31300 is seeded (0173) and never referenced in src/.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: { status: "MISSING", evidence: "Arrives again as a bank debit." },
+    },
+    defectId: "D-38",
+    consequence:
+      "Garnishments carry legal exposure separate from tax. A missing remittance " +
+      "record is the hardest kind of gap to defend to a court.",
+  },
+
+  /* ── FAMILY 5: CASH, BANKS AND THE ATM ───────────────────────────────── */
+
+  {
+    key: "cash_and_banking.cash_deposit_to_bank",
+    family: "cash_and_banking",
+    event: "Till cash is counted, moved to the vault, and deposited at the bank.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["10200", "10400", "10100"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No builder moves cash between 101xx and 10200." },
+      reachable: {
+        status: "MISSING",
+        evidence: "7 files under src/lib/registers/; 0 submitJournal hits.",
+      },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "10400 Undeposited Funds and 10900 Cash Clearing are seeded precisely for " +
+          "this and are unused.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: {
+        status: "MISSING",
+        evidence:
+          "The deposit appears in Plaid as a credit; the count exists in the " +
+          "register system. Nothing links them.",
+      },
+    },
+    defectId: "D-39",
+    consequence:
+      "In a cash business this is the reconciliation regulators look at first. " +
+      "Without it there is no audit trail from till to bank.",
+  },
+
+  {
+    key: "cash_and_banking.till_over_short",
+    family: "cash_and_banking",
+    event: "A till count does not match what the system says it should be.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["50920", "10110"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No builder targets 50920." },
+      reachable: { status: "MISSING", evidence: "0 ledger hits under src/lib/registers/." },
+      correct: {
+        status: "MISSING",
+        evidence: "50920 Cash Over / (Short) is seeded and never referenced in src/.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "A shortage never reaches a bank.",
+        reason: "There is no second arrival for money that went missing.",
+      },
+    },
+    defectId: "D-39",
+    consequence:
+      "Over/short is the earliest signal of both honest error and theft. " +
+      "Unbooked, the difference silently distorts revenue instead.",
+  },
+
+  {
+    key: "cash_and_banking.atm_vault_load",
+    family: "cash_and_banking",
+    event: "Cash is loaded into the ATM from the vault account.",
+    sourceKind: "atm",
+    entityCode: "atm",
+    accountCodes: ["10300", "10100"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "books-69 built src/lib/atm/atm-classification-core.ts, which CLASSIFIES " +
+          "debits. It does not build journals.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "store.ts#listAtmClassificationProposals returns proposals for review and " +
+          "posts nothing, by design.",
+      },
+      correct: {
+        status: "PARTIAL",
+        evidence:
+          "The classifier is effective-dated, proven by 80 tests, and 18/18 mutants " +
+          "were killed. Classification is proven; the journal is not built.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "10300 is a control account; migration 0172 REFUSES a 'manual' journal " +
+          "touching it, so this must post as sourceKind 'atm'.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence: "The Plaid transaction id is available but unused as a ref.",
+      },
+      married: {
+        status: "PARTIAL",
+        evidence:
+          "The classifier reads the Plaid feed directly, so there is one arrival " +
+          "rather than two. Vault-load pairing across two accounts is not modelled.",
+      },
+    },
+    defectId: "D-40",
+    consequence:
+      "The ATM is a separate entity with its own tax position. Michael's own " +
+      "$5,242.50 personal transfer is the case that proves classification matters: " +
+      "misclassified, it becomes a deduction that is not real.",
+  },
+
+  {
+    key: "cash_and_banking.atm_surcharge_income",
+    family: "cash_and_banking",
+    event: "A customer pays the ATM fee, which is income to the ATM entity.",
+    sourceKind: "atm",
+    entityCode: "atm",
+    accountCodes: ["51000", "10300"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No builder targets 51000." },
+      reachable: { status: "MISSING", evidence: "No ATM path posts." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "51000 ATM Surcharge Income is seeded. Note ledger-core.ts:770 uses code " +
+          "70100 named 'ATM Fee Income' in a self-test fixture, which is NOT the " +
+          "seeded account — a fixture, not a production mapping.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: {
+        status: "MISSING",
+        evidence: "Surcharge settlement arrives in the bank feed; nothing links it.",
+      },
+    },
+    defectId: "D-40",
+    consequence:
+      "This is real taxable income in a non-cannabis entity, so it is NOT subject " +
+      "to 280E and is the ATM entity's B&O base at the .015 service rate.",
+  },
+
+  {
+    key: "cash_and_banking.intercompany_transfer",
+    family: "cash_and_banking",
+    event:
+      "Money moves between Michael's entities — for example the vendor payment made " +
+      "out of account 6228.",
+    sourceKind: "intercompany",
+    entityCode: "greenway",
+    accountCodes: ["36000", "10200"],
+    builder: "src/lib/accounting/posting-service.ts#submitIntercompanyPair",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "submitIntercompanyPair exists and gl_submit_intercompany_pair exists in SQL.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence: "grep -rn 'submitIntercompanyPair' src/app -> 0 callers.",
+      },
+      correct: {
+        status: "UNKNOWN",
+        evidence:
+          "36000 Due To / From Related Entity is seeded and the paired door enforces " +
+          "both sides.",
+        reason:
+          "Whether the 6228 vendor payment is intercompany (36000) or a capital " +
+          "contribution (41100) is Michael's decision, not a measurable fact. It " +
+          "changes his basis, so the census refuses to guess.",
+      },
+      accepted: { status: "MISSING", evidence: "No app path presents a pair." },
+      idempotent: {
+        status: "UNKNOWN",
+        evidence: "The paired door is designed to be atomic.",
+        reason: "Never exercised from the app, so the ref behaviour is unobserved.",
+      },
+      married: {
+        status: "MISSING",
+        evidence: "Both sides appear in two Plaid feeds; nothing links them.",
+      },
+    },
+    defectId: "D-41",
+    consequence:
+      "Intercompany errors move taxable income between entities with different " +
+      "rates and different 280E exposure. This is also the one row that needs a " +
+      "decision from Michael before it can be wired.",
+  },
+
+  /* ── FAMILY 6: PERIOD-END, TAX ACCRUALS, ASSETS AND EVERYTHING ELSE ──── */
+
+  {
+    key: "periodic_and_other.manual_journal",
+    family: "periodic_and_other",
+    event: "Michael or the bookkeeper types a journal entry by hand.",
+    sourceKind: "manual",
+    entityCode: "greenway",
+    accountCodes: ["10200", "76040"],
+    builder: "src/lib/accounting/journal-entry-service.ts#submitManualJournal",
+    poster: "src/app/admin/books/journal/actions.ts#submitJournalAction",
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence: "journal-entry-service.ts#submitManualJournal builds and submits.",
+      },
+      reachable: {
+        status: "PRESENT",
+        evidence:
+          "src/app/admin/books/journal/actions.ts:68 calls it from the journal screen.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Runs the advisor (evaluateJournalDraft) and refuses on ADV_BLOCKED before " +
+          "submitting.",
+      },
+      accepted: {
+        status: "PRESENT",
+        evidence:
+          "Posts through submitJournal with autoPost false, so a human posts it.",
+      },
+      idempotent: {
+        status: "NOT_APPLICABLE",
+        evidence:
+          "sourceRef is null; migration 0174 section 1 explicitly allows this for " +
+          "'manual'.",
+        reason:
+          "A hand-keyed entry has no external event to key on. Two identical entries " +
+          "may be two genuine entries, so the ledger must not silently merge them.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "A manual entry has no system-side counterpart.",
+        reason: "Nothing automatic produced it, so nothing can duplicate it.",
+      },
+    },
+    defectId: null,
+    consequence:
+      "The second of two working paths, and the safety valve: anything not yet " +
+      "wired can be entered by hand without corrupting the ledger.",
+  },
+
+  {
+    key: "periodic_and_other.bo_tax_accrual",
+    family: "periodic_and_other",
+    event:
+      "Washington B&O tax is accrued on the period's gross receipts — .00471 " +
+      "retailing for Greenway, .015 for the ATM service entity.",
+    sourceKind: "accrual",
+    entityCode: "greenway",
+    accountCodes: ["75040", "32200"],
+    builder: "src/lib/accounting/bo-tax-core.ts#boAccrualEntry",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence: "bo-tax-core.ts exports boAccrualEntry and boPaymentEntry.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence: "grep -rn 'boAccrualEntry\\|boPaymentEntry' src/ -> 0 callers.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Rates are held in MILLIONTHS to avoid the rounding drift a percentage " +
+          "would introduce; proven in its own self-tests.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "'accrual' is deliberately NOT in AUTOPOSTABLE_SOURCE_KINDS, so this must " +
+          "always be drafted for review. Never presented.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence:
+          "The natural ref is the tax period, which would make a re-run safe. No " +
+          "code sets it.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "An accrual moves no money.",
+        reason: "The PAYMENT is the bank event, and boPaymentEntry is its builder.",
+      },
+    },
+    defectId: "D-42",
+    consequence:
+      "B&O is owed on gross receipts whether or not there is profit. The " +
+      "calculation is already correct and simply unreachable — a cheap win.",
+  },
+
+  {
+    key: "periodic_and_other.excise_tax_remitted",
+    family: "periodic_and_other",
+    event: "The 37% excise held in trust is paid to the LCB.",
+    sourceKind: "excise",
+    entityCode: "greenway",
+    accountCodes: ["32000", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "No builder clears 32000 against cash." },
+      reachable: { status: "MISSING", evidence: "No excise path posts." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "12300 Excise Tax Receivable / Overpayment is seeded for the case where " +
+          "more was remitted than collected, and is unused.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: { status: "MISSING", evidence: "The remittance appears in Plaid too." },
+    },
+    defectId: "D-32",
+    consequence:
+      "If the liability is never relieved, 32000 grows without limit and the books " +
+      "show trust tax outstanding that was in fact paid.",
+  },
+
+  {
+    key: "periodic_and_other.fixed_asset_acquired",
+    family: "periodic_and_other",
+    event: "Equipment, a vehicle or a leasehold improvement is bought and capitalised.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["21600", "30000", "10200"],
+    builder: "src/lib/accounting/fixed-assets-core.ts#accountCodeForClass",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PARTIAL",
+        evidence:
+          "fixed-assets-core.ts maps asset classes to codes 21000-21900 and computes " +
+          "MACRS schedules. It resolves the ACCOUNT for an asset class; no function " +
+          "in it assembles a journal.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence: "grep -rn 'fixed-assets-core' src/ -> 0 importers.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "MEASURED: all ten target accounts 21000-21900 ARE seeded, by migration " +
+          "0178_fixed_assets.sql via gl_upsert_account. 0178 also installs " +
+          "gl_guard_no_land_depreciation and gl_check_accumulated_depreciation, so " +
+          "the codes and the guards agree with the module.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "The accounts exist, so a line naming 21600 would not be refused. No app " +
+          "path has ever presented one.",
+      },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: {
+        status: "MISSING",
+        evidence: "Asset purchases are paid by ACH or card and arrive again in Plaid.",
+      },
+    },
+    defectId: "D-43",
+    consequence:
+      "Capitalising an asset instead of expensing it is a GAAP requirement and, " +
+      "under 280E, usually the difference between a cost that is eventually " +
+      "recovered and one that is lost. The chart and the MACRS maths are both " +
+      "ready; only the wire is missing.",
+  },
+
+  {
+    key: "periodic_and_other.depreciation_booked",
+    family: "periodic_and_other",
+    event: "Monthly or annual depreciation is recorded against the asset.",
+    sourceKind: "depreciation",
+    entityCode: "greenway",
+    accountCodes: ["78010", "21900"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'sourceKind: \"depreciation\"' src/ -> 0 hits. fixed-assets-core " +
+          "computes MACRS schedules but no function assembles a journal from them.",
+      },
+      reachable: { status: "MISSING", evidence: "0 importers of fixed-assets-core." },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Both sides exist: 78010 Depreciation Expense (0173) and 21900 Accumulated " +
+          "Depreciation (0178). 0178 also installs gl_guard_no_land_depreciation, so " +
+          "the database itself refuses to depreciate land.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "'depreciation' is never autopostable: posting-core.ts:128 states " +
+          "'Depreciation is a schedule and a judgment, not an observed event.'",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence: "Period-keyed ref would make re-runs safe; no code sets one.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "Depreciation moves no money.",
+        reason: "There is no bank line for a non-cash allocation.",
+      },
+    },
+    defectId: "D-43",
+    consequence:
+      "The accounts, the guards and the MACRS schedule maths are all in place. What " +
+      "is missing is the monthly entry that uses them, so no asset has ever been " +
+      "depreciated in the books.",
+  },
+
+  {
+    key: "periodic_and_other.loan_activity",
+    family: "periodic_and_other",
+    event: "A loan is drawn or repaid, splitting principal from interest.",
+    sourceKind: "loan",
+    entityCode: "greenway",
+    accountCodes: ["34000", "85010", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: { status: "MISSING", evidence: "grep -rn 'sourceKind: \"loan\"' src/ -> 0 hits." },
+      reachable: { status: "MISSING", evidence: "No loan path posts." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "34000 Notes & Loans Payable and 85010 Interest Expense are both seeded " +
+          "and unused. src/lib/plaid/liabilities-core.ts reads liability data and " +
+          "posts nothing.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      married: {
+        status: "MISSING",
+        evidence: "Loan payments arrive in Plaid as a single debit covering both parts.",
+      },
+    },
+    defectId: "D-44",
+    consequence:
+      "Only the interest portion is deductible, and under 280E even that depends on " +
+      "the entity. Booking the whole payment to either account misstates both the " +
+      "liability and the deduction.",
+  },
+
+  {
+    key: "periodic_and_other.crypto_activity",
+    family: "periodic_and_other",
+    event: "A crypto position changes value or is disposed of.",
+    sourceKind: "crypto",
+    entityCode: "personal",
+    accountCodes: ["80030", "80040"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "35 files under src/lib/crypto/; grep -rn 'sourceKind: \"crypto\"' -> 0 hits.",
+      },
+      reachable: { status: "MISSING", evidence: "No crypto path reaches the ledger." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "80030 Realized and 80040 Unrealized Investment Gain/(Loss) are seeded " +
+          "and unused.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: {
+        status: "MISSING",
+        evidence: "An on-chain transaction hash is a perfect natural ref and is unused.",
+      },
+      married: {
+        status: "UNKNOWN",
+        evidence: "Whether fiat on/off-ramps appear in a connected Plaid account.",
+        reason:
+          "Depends on which exchange accounts Michael has linked. Not measurable " +
+          "from the source tree.",
+      },
+    },
+    defectId: "D-45",
+    consequence:
+      "Personal-entity activity that affects the 1040 rather than the business " +
+      "return. Lowest priority of anything in this census, and recorded so it is " +
+      "not mistaken for an oversight.",
+  },
+
+  {
+    key: "periodic_and_other.period_close",
+    family: "periodic_and_other",
+    event: "A month or year is closed and locked so figures can no longer move.",
+    sourceKind: "close",
+    entityCode: "greenway",
+    accountCodes: ["40300", "40400"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'period-close-core' src/ -> 0 importers; " +
+          "grep -rn 'sourceKind: \"close\"' -> 0 hits.",
+      },
+      reachable: { status: "MISSING", evidence: "period-close-core has no importers." },
+      correct: {
+        status: "MISSING",
+        evidence: "40300 Retained Earnings and 40400 Opening Balance Equity are unused.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: {
+        status: "MISSING",
+        evidence: "Closing the same period twice must be a no-op; untested.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "A close moves no money.",
+        reason: "It is a reclass within equity.",
+      },
+    },
+    defectId: "D-46",
+    consequence:
+      "Without a close, a prior period can silently change after the CPA has filed " +
+      "from it. That is the difference between books and a spreadsheet.",
+  },
+
+  {
+    key: "periodic_and_other.reversal",
+    family: "periodic_and_other",
+    event: "A posted entry is found to be wrong and must be reversed, not deleted.",
+    sourceKind: "reversal",
+    entityCode: "greenway",
+    accountCodes: ["10200", "76040"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence: "grep -rn 'sourceKind: \"reversal\"' src/ -> 0 hits.",
+      },
+      reachable: { status: "MISSING", evidence: "No reversal path exists in the app." },
+      correct: {
+        status: "MISSING",
+        evidence:
+          "A reversal must mirror the original exactly with opposite signs and " +
+          "preserve the original's cost class.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: {
+        status: "MISSING",
+        evidence:
+          "Highest-consequence idempotency case in the census: reversing twice " +
+          "re-creates the error it was cancelling, and the books still balance.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "A reversal is an internal correction.",
+        reason: "No bank line corresponds to a correction of a prior entry.",
+      },
+    },
+    defectId: "D-46",
+    consequence:
+      "Once real posting begins, the first mistake will need reversing. There is " +
+      "currently no way to correct a posted entry except by hand-keying the " +
+      "opposite, with no link between the two.",
+  },
+
+  {
+    key: "periodic_and_other.opening_balance",
+    family: "periodic_and_other",
+    event: "Historical balances are loaded when the books are first stood up.",
+    sourceKind: "opening_balance",
+    entityCode: "greenway",
+    accountCodes: ["40400", "10200"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "PARTIAL",
+        evidence:
+          "Migration 0176_opening_balances.sql supplies a staging table with " +
+          "gl_ob_validate_row, gl_bless_opening_balances and " +
+          "gl_close_opening_balance_equity. gl_opening_balance_summary IS called " +
+          "from the app, so the staging side is reachable read-only; " +
+          "grep -rn 'sourceKind: \"opening_balance\"' -> 0 hits.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "gl_bless_opening_balances and gl_close_opening_balance_equity have no " +
+          "supabase.rpc() caller, so nothing turns staged balances into journals.",
+      },
+      correct: {
+        status: "UNKNOWN",
+        evidence: "40400 Opening Balance Equity is seeded for exactly this purpose.",
+        reason:
+          "Michael has not yet supplied the Sage COA-tagged spreadsheets, so the " +
+          "opening figures themselves are not yet known. Standing rule 1: the census " +
+          "will not invent them.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: {
+        status: "MISSING",
+        evidence: "Loading opening balances twice would double the balance sheet.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "Opening balances predate the bank feed.",
+        reason: "There is no Plaid history for a balance carried in from Sage.",
+      },
+    },
+    defectId: "D-47",
+    consequence:
+      "Everything else in the census assumes a starting point. Until opening " +
+      "balances are loaded, even perfectly wired activity produces a balance sheet " +
+      "that starts from zero.",
+  },
+] as const;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * CONSTRUCTION
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Build the validated census.
+ *
+ * The chart of accounts is a PARAMETER rather than an import, so the test can
+ * pass the codes it scraped out of migration 0173 itself. That is the point:
+ * the census is checked against the chart the database actually has, not
+ * against a second copy of the chart kept in TypeScript that could drift from
+ * it. If an account is removed from the migration, this throws.
+ */
+export function buildLedgerCensus(knownAccountCodes: readonly string[]): LedgerCensus {
+  return LedgerCensus.create(LEDGER_CENSUS_ROWS, knownAccountCodes);
+}

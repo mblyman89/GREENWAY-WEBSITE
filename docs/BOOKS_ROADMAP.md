@@ -2074,3 +2074,100 @@ dates with `Date.parse`, which **rolls over** rather than rejecting, so
 `2026-02-30` passed as valid and became March 2nd. Those dates are a medical
 recognition card's effective and expiry dates, which RCW 69.51A.230(4)(a) makes
 legally operative, and they feed the check for whether a patient is a minor.
+
+---
+
+### books-70: the census, before any wiring
+
+*"I agree completely that the next slice should be the census build and map so
+nothing ever drifts while we wire everything up. I don't want to fold extra work
+into this slice. Just build the census and then get back to me with the first
+wiring slice."* And the scope, in Michael's own words: *"We need to
+systematically and methodically go through each function, every aspect of the
+system that generates a book entry to make sure it is producing a book entry and
+that it is correct and accurate."*
+
+**Nothing was wired in this slice, deliberately.** No new posting path, no
+migration, no schema change. The product is a measurement and the gates that stop
+it rotting. Wiring before measuring is how a system ends up with fourteen modules
+that look connected and post nothing, which is exactly what books-69 found in the
+ATM subsystem.
+
+**The finding, in one line.** Thirty-one money events were catalogued. **Two** are
+proven to reach the general ledger end to end. **Twenty-nine cannot reach it at
+all.** Twenty-three have nothing that even builds the journal entry, so wiring
+alone will not fix them. Only three SQL doors are ever actually called from the
+application (`gl_submit_journal`, `gl_submit_intercompany_pair`,
+`gl_approve_journal`) out of **66 `gl_*` functions, 15 of them writers** — the
+rest are complete, guarded, tested SQL with no caller in `src/`.
+
+**Six layers, because a thing can break in six places between a click and correct
+books.** `exists` (is the entry built anywhere), `reachable` (can a real action
+get to it), `correct` (balanced, right accounts, right 280E class), `accepted`
+(does Postgres take it), `idempotent` (does twice leave the books unchanged),
+`married` (is the bank feed matched to it rather than booking the same dollar
+twice). Each fails separately, so each is measured separately. The `reachable`
+layer is the one nothing pure can ever see, because purity is the absence of the
+wiring in question — and it is the layer where 29 of 31 rows fail.
+
+**Every cell cites what was checked.** A verdict with no evidence is refused by
+the validator, and `UNKNOWN` and `NOT_APPLICABLE` must both say why. `UNKNOWN` is
+used four times and it means *this was not measurable*, not *this is probably
+fine*; a census that guesses in the reassuring direction is worse than none. The
+most important refusal in the core rejects `reachable = PRESENT` on a row with no
+poster, which is the precise error an earlier module-level reading of the payroll
+subsystem made: the builder is finished, tested, and correct, and its only
+external caller is a development script whose own header says *"Not part of the
+app. Development verification only."*
+
+**I got two things wrong and the tests now hold both corrections.** I reported to
+Michael that the chart of accounts was complete and only the wires were missing,
+having extracted the chart from `0173_chart_of_accounts.sql` alone — 183 accounts
+— and concluded the whole fixed-asset block `21000`–`21900` was absent. It is
+not: `0178_fixed_assets.sql` seeds it through `gl_upsert_account`, and with
+`0189` the real total is **193 accounts across three migrations**. D-43 records
+the error itself rather than quietly stating the corrected fact. Separately, a
+substring grep told me `fixed-assets-core` and `period-close-core` had importers;
+all five hits were comments or a mentor-gate reading the file as *text*. Both
+checks are now shaped like what they claim to measure — the chart is scraped from
+every migration in both seeding forms, and the import check matches an actual
+`import` statement — because the substring grep was wrong *in the direction that
+would have quietly marked the census wired*.
+
+**120 tests, and 16 mutants, 16 killed.** Four of those mutants had to be
+repaired before they could be scored, and each repair was a real defect in the
+gates. Two survived: one softened a row's evidence string from a measured
+`grep -rn ... -> 0 hits` into "wired up in a previous slice" while leaving the
+status at `MISSING`, and every test stayed green — a census whose evidence can rot
+will be argued with later and cannot defend itself. One made `fullyProven()`
+count `UNKNOWN` as proof, which makes the report look *better* than the
+repository, the single most dangerous direction for this file to drift; the test
+meant to catch it was vacuous, because measurement showed **zero** rows have
+`UNKNOWN` as their only unproven layer, so a hand-built fixture was needed. The
+other two reported "no tests" rather than a named failure, the same
+collection-time `const` in a describe body that bit books-69, and "no tests" is
+indistinguishable from a surviving mutant.
+
+**A first attempt at one gate was arbitrary and was thrown away.** Requiring
+every gap verdict to exceed forty characters failed on 74 of 186 evidence
+strings, all legitimately short: on the `accepted` and `idempotent` layers of a
+row that cannot post at all there is genuinely nothing to measure, and
+manufacturing a measurement there would be guessing. It was replaced by a
+structural gate scoped to the six rows that drive the backlog — a builder exists,
+nothing reaches it — whose evidence must cite something a reader can go check: a
+file, a `gl_` door, or a grep that was really run.
+
+**`docs/LEDGER_REACHABILITY_CENSUS.md` is generated, not written**, and a test
+asserts the copy on disk reproduces every count, every verdict and every piece of
+evidence. A hand-maintained map drifts within a slice or two, and a map that
+disagrees with the territory is worse than no map, because it gets trusted. The
+staleness gate was itself verified by making the document stale and confirming a
+named test fails.
+
+**Seventeen defects recorded, D-31 through D-47**, contiguous and gated as such.
+Among them: no retail sale reaches the ledger at all, and the `orders` table has
+no excise column, so excise and sales tax cannot yet be told apart; COGS is never
+booked, which is the one deduction Sec. 280E actually allows; a vendor ACH
+double-book that *balances*, which is what makes it dangerous; and the opening
+balances, which stay blocked on Michael's Sage spreadsheets rather than being
+invented.
