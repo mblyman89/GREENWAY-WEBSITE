@@ -60,6 +60,7 @@ import { __runFormBoxTeachingCoreTests } from "../../src/lib/payroll/form-box-te
 import { __runFormScopeCoreTests } from "../../src/lib/payroll/form-scope-core";
 import { __runEsdEamsCsvTests } from "../../src/lib/payroll/esd-eams-csv-core";
 import { __runExpenseClassificationCoreTests } from "../../src/lib/accounting/expense-classification-core";
+import { __runRelatedPartyLoanCoreTests } from "../../src/lib/accounting/related-party-loan-core";
 import { __runEsd5208WorksheetTests } from "../../src/lib/payroll/esd-5208-worksheet-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
@@ -878,6 +879,9 @@ async function main() {
 
   __runExpenseClassificationCoreTests();
   console.log("expense-classification-core self-tests: all passed");
+
+  __runRelatedPartyLoanCoreTests();
+  console.log("related-party-loan-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

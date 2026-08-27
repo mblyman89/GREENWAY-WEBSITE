@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 34 money events that should reach the books. 32 cannot reach them at all. 23 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 34 money events that should reach the books. 32 cannot reach them at all. 22 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 34 |
 | Proven on all six layers | 2 |
 | Cannot reach the books at all | 32 |
-| Have nothing that even builds the entry | 23 |
+| Have nothing that even builds the entry | 22 |
 | Layers that could not be measured | 6 |
 
 ## The six layers
@@ -43,9 +43,9 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 22 of 34 |
+| `exists` | 21 of 34 |
 | `reachable` | 32 of 34 |
-| `correct` | 18 of 34 |
+| `correct` | 17 of 34 |
 | `accepted` | 30 of 34 |
 | `idempotent` | 25 of 34 |
 | `married` | 13 of 34 |
@@ -420,7 +420,7 @@ A child-support or garnishment withholding is forwarded to the agency.
 | `till_over_short` | NO | NO | NO | NO | NO | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
 | `atm_surcharge_income` | NO | NO | NO | NO | NO | NO | D-40 |
-| `intercompany_transfer` | yes | NO | ? | NO | ? | NO | D-41 |
+| `intercompany_transfer` | yes | NO | part | NO | ? | NO | D-41 |
 
 ### `cash_and_banking.cash_deposit_to_bank`
 
@@ -500,7 +500,7 @@ Money moves between Michael's entities — for example the vendor payment made o
 
 - **exists: PRESENT** -- submitIntercompanyPair exists and gl_submit_intercompany_pair exists in SQL.
 - **reachable: MISSING** -- grep -rn 'submitIntercompanyPair' src/app -> 0 callers.
-- **correct: UNKNOWN** -- 36000 Due To / From Related Entity is seeded and the paired door enforces both sides. _Whether the 6228 vendor payment is intercompany (36000) or a capital contribution (41100) is Michael's decision, not a measurable fact. It changes his basis, so the census refuses to guess. books-73: Michael asked for a recommendation and D-41 now carries one -- 36000, because it is the reversible default, because his Sage books already invoice rent between the entities, and because 288 Sage accounts contain no due-to/due-from while 121 rows ($61,109.02) already pay LYMAN expenses from GREENWAY cash. Still UNKNOWN: a recommendation on the record is not a decision. It closes when Michael confirms whether the money is expected to be repaid. books-74 adds the half the recommendation was missing: Michael disclosed that the entities 'exist solely to mitigate 280E', so 36000 is now also a MEASURING INSTRUMENT. A due-from that cycles evidences two businesses; one that only ratchets evidences a single unified enterprise under Alternative Health Care Advocates, 151 T.C. No. 13 (2018), and is the first exhibit against him. So: book to 36000 AND settle it. If it cannot be settled, the answer was 41100 all along. See D-55 and docs/ENTITY-STRUCTURE-AND-280E.md._
+- **correct: PARTIAL** -- 36000 Due To / From Related Entity is seeded and the paired door enforces both sides. books-76 CLOSES the question this row was waiting on. It asked whether the money is expected to be repaid, and Michael answered: 'I want to classify the cash in the atm as a loan.' So the account is decided -- 36000, not 41100 -- and the target is no longer UNKNOWN. It is PARTIAL rather than PRESENT because deciding the label is not the same as earning it: 26 C.F.R. 1.482-2(a)(1)(ii)(B) says the regime 'does not apply to so much of an alleged indebtedness which is not in fact a bona fide indebtedness, even if the stated rate of interest thereon would be within the safe haven rates', and names the two substitutes as a contribution to capital or a distribution -- exactly the 41100/41000 pair this row was choosing between. related-party-loan-core.ts#assessBonaFide sorts the facts and returns UNDETERMINED on Michael's stated terms, because two facts (is the balance tracked, was demand ever made) have never been put to him. Two facts DO favour him and were measured, not assumed: cash goes back, and the balance cycles both ways, which is the books-74 measuring-instrument test passing. Michael also offered to write a contract; CONTRACT_REQUIREMENTS states what it must contain, and the highest-value item is stating the rate as a FORMULA (the applicable Federal short-term rate) so it stays inside the 100-130% safe haven automatically. See D-59, D-60, D-55 and docs/ENTITY-STRUCTURE-AND-280E.md.
 - **accepted: MISSING** -- No app path presents a pair.
 - **idempotent: UNKNOWN** -- The paired door is designed to be atomic. _Never exercised from the app, so the ref behaviour is unobserved._
 - **married: MISSING** -- Both sides appear in two Plaid feeds; nothing links them.
@@ -516,7 +516,7 @@ Money moves between Michael's entities — for example the vendor payment made o
 | `excise_tax_remitted` | NO | NO | NO | NO | NO | NO | D-32 |
 | `fixed_asset_acquired` | part | NO | yes | NO | NO | NO | D-43 |
 | `depreciation_booked` | NO | NO | yes | NO | NO | n/a | D-43 |
-| `loan_activity` | NO | NO | NO | NO | NO | NO | D-44 |
+| `loan_activity` | part | NO | part | NO | NO | NO | D-44 |
 | `crypto_activity` | NO | NO | NO | NO | NO | ? | D-45 |
 | `period_close` | NO | NO | NO | NO | NO | n/a | D-46 |
 | `reversal` | NO | NO | NO | NO | NO | n/a | D-46 |
@@ -611,18 +611,18 @@ Monthly or annual depreciation is recorded against the asset.
 
 A loan is drawn or repaid, splitting principal from interest.
 
-- Accounts: `34000`, `85010`, `10200`
-- Builds the entry: **nothing**
+- Accounts: `34000`, `36000`, `85010`, `10200`
+- Builds the entry: `src/lib/accounting/related-party-loan-core.ts#loanControlAccountFor`
 - Posts the entry: **nothing**
 
-- **exists: MISSING** -- grep -rn 'sourceKind: "loan"' src/ -> 0 hits.
-- **reachable: MISSING** -- No loan path posts.
-- **correct: MISSING** -- 34000 Notes & Loans Payable and 85010 Interest Expense are both seeded and unused. src/lib/plaid/liabilities-core.ts reads liability data and posts nothing.
+- **exists: PARTIAL** -- grep -rn 'sourceKind: "loan"' src/ -> still 0 hits, so no loan POSTS. books-76 adds the half that had to come first: loanControlAccountFor decides WHICH control account holds a related-party balance, and imputedInterestRequirement decides what interest the law requires. A poster that did not know the answer to either would have been guessing at both.
+- **reachable: MISSING** -- grep -rn 'loanControlAccountFor' src/app -> 0 callers. grep -rn 'sourceKind: "loan"' src/ -> 1 hit, and it is this census row describing itself, not a poster.
+- **correct: PARTIAL** -- 34000, 36000 and 85010 are all seeded. src/lib/plaid/liabilities-core.ts reads liability data and posts nothing. books-76 settles the routing on measured grounds: 34000's chart comment in migration 0173 is 'CONTROL, driven by the loan subledger and its amortization schedule', and Michael's ATM loan has no term, hence no schedule, hence no subledger to drive it -- so it routes to 36000 and 34000 is reserved for loans that have both a maturity date and a repayment schedule. The interest leg is why this is PARTIAL and not PRESENT: D-59 measured that loan-core.ts returns ZERO schedule rows and ZERO interest for a zero-term loan, and FEDERAL_SHORT_TERM_RATES is empty on purpose, so 85010 cannot yet be given a number. imputedInterestRequirement refuses with a named code instead of inventing one.
 - **accepted: MISSING** -- Never presented.
 - **idempotent: MISSING** -- No ref convention.
 - **married: MISSING** -- Loan payments arrive in Plaid as a single debit covering both parts.
 
-**If this stays broken:** Only the interest portion is deductible, and under 280E even that depends on the entity. Booking the whole payment to either account misstates both the liability and the deduction.
+**If this stays broken:** Only the interest portion is deductible, and under 280E even that depends on the entity. Booking the whole payment to either account misstates both the liability and the deduction. For a RELATED-PARTY loan the exposure is worse and runs the other way: 26 C.F.R. 1.482-2(a)(2)(iii)(B)(2) imputes interest at 100% of the AFR even when none is charged, so interest income appears in the ATM entity (taxable, B&O at the .015000 service rate) while the matching expense lands in Greenway where 280E disallows it. The imputation is not a wash. See D-59 and D-60.
 
 ### `periodic_and_other.crypto_activity`
 
@@ -715,7 +715,6 @@ all, so the work is to write it, then wire it.
 - `cash_and_banking.atm_surcharge_income` (D-40)
 - `periodic_and_other.excise_tax_remitted` (D-32)
 - `periodic_and_other.depreciation_booked` (D-43)
-- `periodic_and_other.loan_activity` (D-44)
 - `periodic_and_other.crypto_activity` (D-45)
 - `periodic_and_other.period_close` (D-46)
 - `periodic_and_other.reversal` (D-46)
@@ -735,6 +734,7 @@ the path from the screen to the ledger is absent.
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
 - `periodic_and_other.fixed_asset_acquired` (D-43) -- `src/lib/accounting/fixed-assets-core.ts#accountCodeForClass`
+- `periodic_and_other.loan_activity` (D-44) -- `src/lib/accounting/related-party-loan-core.ts#loanControlAccountFor`
 
 ## What is deliberately not posted
 

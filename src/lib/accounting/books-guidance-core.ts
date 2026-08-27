@@ -69,6 +69,7 @@ import { BASIS_AAA_AUTHORITIES_NEW } from "./basis-aaa-authorities";
 import { COGS_POSITION_AUTHORITIES_NEW } from "./cogs-position-authorities";
 import { INTEREST_AUTHORITIES_NEW } from "./interest-authorities";
 import { SHAREHOLDER_ROSTER_AUTHORITIES } from "./shareholder-roster-authorities";
+import { RELATED_PARTY_LOAN_AUTHORITIES } from "./related-party-loan-authorities";
 // books-25. The HIRING PAPERWORK authorities: Form I-9 (8 CFR §274a.2), the
 // W-4 withholding certificate regulation (26 CFR §31.3402(f)(2)-1), and
 // Washington's twenty-day new-hire report (RCW 26.23.040). Imported HERE, in
@@ -753,6 +754,14 @@ export const ALL_SOURCE_REGISTRIES = [
   "basis-aaa",
   "cogs-position",
   "interest",
+  // books-76. The related-party loan slice. Its own tag rather than folded
+  // into "interest" because those authorities answer "what does the IRS
+  // charge ME when I am late", which is §6621 penalty arithmetic. These
+  // answer a different question entirely: whether a transfer between two
+  // entities the same man owns is a LOAN at all, and what rate the
+  // government substitutes when he charges none. Same word, opposite
+  // direction, and merging them would put §1.482-2 on the penalty screen.
+  "related-party-loan",
   "payroll-onboarding",
   "reporting",
   "internal-control",
@@ -1220,6 +1229,16 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     // being wrong. The mentor cites the EXISTING ids.
     ...SHAREHOLDER_ROSTER_AUTHORITIES.map((a) => ({
       tag: "shareholder-roster" as const,
+      authority: a,
+    })),
+    // books-76. §1.482-2(a), which nothing in this repository had ever cited.
+    // Registered the moment Michael decided the ATM cash is a loan, because
+    // that decision is what makes the regulation apply. Note what is NOT
+    // re-declared here: §280E and Alternative Health Care Advocates already
+    // have records under other tags, and the loan module cites those existing
+    // ids rather than making second copies that can drift.
+    ...RELATED_PARTY_LOAN_AUTHORITIES.map((a) => ({
+      tag: "related-party-loan" as const,
       authority: a,
     })),
     // books-25. WHAT A NEW HIRE MUST FILL OUT, WHEN, AND WHAT HAPPENS WHEN

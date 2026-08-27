@@ -1241,28 +1241,30 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
         evidence: "grep -rn 'submitIntercompanyPair' src/app -> 0 callers.",
       },
       correct: {
-        status: "UNKNOWN",
+        status: "PARTIAL",
         evidence:
-          "36000 Due To / From Related Entity is seeded and the paired door enforces " +
-          "both sides.",
-        reason:
-          "Whether the 6228 vendor payment is intercompany (36000) or a capital " +
-          "contribution (41100) is Michael's decision, not a measurable fact. It " +
-          "changes his basis, so the census refuses to guess. books-73: Michael " +
-          "asked for a recommendation and D-41 now carries one -- 36000, because " +
-          "it is the reversible default, because his Sage books already invoice " +
-          "rent between the entities, and because 288 Sage accounts contain no " +
-          "due-to/due-from while 121 rows ($61,109.02) already pay LYMAN expenses " +
-          "from GREENWAY cash. Still UNKNOWN: a recommendation on the record is " +
-          "not a decision. It closes when Michael confirms whether the money is " +
-          "expected to be repaid. books-74 adds the half the recommendation was " +
-          "missing: Michael disclosed that the entities 'exist solely to mitigate " +
-          "280E', so 36000 is now also a MEASURING INSTRUMENT. A due-from that " +
-          "cycles evidences two businesses; one that only ratchets evidences a " +
-          "single unified enterprise under Alternative Health Care Advocates, 151 " +
-          "T.C. No. 13 (2018), and is the first exhibit against him. So: book to " +
-          "36000 AND settle it. If it cannot be settled, the answer was 41100 all " +
-          "along. See D-55 and docs/ENTITY-STRUCTURE-AND-280E.md.",
+          "36000 Due To / From Related Entity is seeded and the paired door " +
+          "enforces both sides. books-76 CLOSES the question this row was waiting " +
+          "on. It asked whether the money is expected to be repaid, and Michael " +
+          "answered: 'I want to classify the cash in the atm as a loan.' So the " +
+          "account is decided -- 36000, not 41100 -- and the target is no longer " +
+          "UNKNOWN. It is PARTIAL rather than PRESENT because deciding the label " +
+          "is not the same as earning it: 26 C.F.R. 1.482-2(a)(1)(ii)(B) says the " +
+          "regime 'does not apply to so much of an alleged indebtedness which is " +
+          "not in fact a bona fide indebtedness, even if the stated rate of " +
+          "interest thereon would be within the safe haven rates', and names the " +
+          "two substitutes as a contribution to capital or a distribution -- " +
+          "exactly the 41100/41000 pair this row was choosing between. " +
+          "related-party-loan-core.ts#assessBonaFide sorts the facts and returns " +
+          "UNDETERMINED on Michael's stated terms, because two facts (is the " +
+          "balance tracked, was demand ever made) have never been put to him. " +
+          "Two facts DO favour him and were measured, not assumed: cash goes back, " +
+          "and the balance cycles both ways, which is the books-74 measuring-" +
+          "instrument test passing. Michael also offered to write a contract; " +
+          "CONTRACT_REQUIREMENTS states what it must contain, and the " +
+          "highest-value item is stating the rate as a FORMULA (the applicable " +
+          "Federal short-term rate) so it stays inside the 100-130% safe haven " +
+          "automatically. See D-59, D-60, D-55 and docs/ENTITY-STRUCTURE-AND-280E.md.",
       },
       accepted: { status: "MISSING", evidence: "No app path presents a pair." },
       idempotent: {
@@ -1515,18 +1517,43 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     event: "A loan is drawn or repaid, splitting principal from interest.",
     sourceKind: "loan",
     entityCode: "greenway",
-    accountCodes: ["34000", "85010", "10200"],
-    builder: null,
+    accountCodes: ["34000", "36000", "85010", "10200"],
+    builder:
+      "src/lib/accounting/related-party-loan-core.ts#loanControlAccountFor",
     poster: null,
     layers: {
-      exists: { status: "MISSING", evidence: "grep -rn 'sourceKind: \"loan\"' src/ -> 0 hits." },
-      reachable: { status: "MISSING", evidence: "No loan path posts." },
-      correct: {
+      exists: {
+        status: "PARTIAL",
+        evidence:
+          "grep -rn 'sourceKind: \"loan\"' src/ -> still 0 hits, so no loan POSTS. " +
+          "books-76 adds the half that had to come first: loanControlAccountFor " +
+          "decides WHICH control account holds a related-party balance, and " +
+          "imputedInterestRequirement decides what interest the law requires. " +
+          "A poster that did not know the answer to either would have been " +
+          "guessing at both.",
+      },
+      reachable: {
         status: "MISSING",
         evidence:
-          "34000 Notes & Loans Payable and 85010 Interest Expense are both seeded " +
-          "and unused. src/lib/plaid/liabilities-core.ts reads liability data and " +
-          "posts nothing.",
+          "grep -rn 'loanControlAccountFor' src/app -> 0 callers. " +
+          "grep -rn 'sourceKind: \"loan\"' src/ -> 1 hit, and it is this census " +
+          "row describing itself, not a poster.",
+      },
+      correct: {
+        status: "PARTIAL",
+        evidence:
+          "34000, 36000 and 85010 are all seeded. src/lib/plaid/liabilities-core.ts " +
+          "reads liability data and posts nothing. books-76 settles the routing on " +
+          "measured grounds: 34000's chart comment in migration 0173 is 'CONTROL, " +
+          "driven by the loan subledger and its amortization schedule', and " +
+          "Michael's ATM loan has no term, hence no schedule, hence no subledger " +
+          "to drive it -- so it routes to 36000 and 34000 is reserved for loans " +
+          "that have both a maturity date and a repayment schedule. The interest " +
+          "leg is why this is PARTIAL and not PRESENT: D-59 measured that " +
+          "loan-core.ts returns ZERO schedule rows and ZERO interest for a " +
+          "zero-term loan, and FEDERAL_SHORT_TERM_RATES is empty on purpose, so " +
+          "85010 cannot yet be given a number. imputedInterestRequirement refuses " +
+          "with a named code instead of inventing one.",
       },
       accepted: { status: "MISSING", evidence: "Never presented." },
       idempotent: { status: "MISSING", evidence: "No ref convention." },
@@ -1539,7 +1566,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     consequence:
       "Only the interest portion is deductible, and under 280E even that depends on " +
       "the entity. Booking the whole payment to either account misstates both the " +
-      "liability and the deduction.",
+      "liability and the deduction. For a RELATED-PARTY loan the exposure is worse " +
+      "and runs the other way: 26 C.F.R. 1.482-2(a)(2)(iii)(B)(2) imputes interest " +
+      "at 100% of the AFR even when none is charged, so interest income appears in " +
+      "the ATM entity (taxable, B&O at the .015000 service rate) while the matching " +
+      "expense lands in Greenway where 280E disallows it. The imputation is not a " +
+      "wash. See D-59 and D-60.",
   },
 
   {

@@ -1047,9 +1047,18 @@ describe("evidence cannot be softened without a test failing", () => {
     // builder (expense-classification-core.ts#classifyExpense) while its
     // reachable layer stayed MISSING, because nothing in src/app calls it and
     // nothing reads or writes gl_account_rules from TypeScript yet.
+    // 9 -> 10 in books-76: loan_activity gained a builder
+    // (related-party-loan-core.ts#loanControlAccountFor) while its reachable
+    // layer stayed MISSING. Deliberate. Michael decided the ATM cash is a loan,
+    // which settles WHICH account holds it (36000, because 34000 needs an
+    // amortization schedule his no-term loan cannot have) and WHAT interest the
+    // law imputes. It does not wire a poster, and it should not: D-59 measured
+    // that the shipped loan engine returns an empty schedule for a zero-term
+    // loan, and FEDERAL_SHORT_TERM_RATES is empty on purpose, so a poster today
+    // would have to invent both the schedule and the rate.
     // THIS TEST FAILING IS THE SYSTEM WORKING — it is how a new unreachable
     // builder announces itself instead of quietly joining the backlog.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(9);
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(10);
 
     for (const r of drivers) {
       expect(
