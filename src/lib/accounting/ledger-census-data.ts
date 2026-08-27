@@ -713,6 +713,102 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
   },
 
   {
+    key: "vendor_cycle.expense_classified_to_account_and_entity",
+    family: "vendor_cycle",
+    event:
+      "A card swipe or bank debit at a named vendor has to become a specific " +
+      "account, on a specific entity's books, with a specific tax character.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["70010", "70020", "70030", "70040", "71010", "76010"],
+    builder:
+      "src/lib/accounting/expense-classification-core.ts#classifyExpense",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "expense-classification-core.ts exports classifyExpense and the " +
+          "parameterized classifyIn; 50 tests in " +
+          "tests/compliance/expense-classification-core.test.ts plus a registered " +
+          "self-test in scripts/compliance/run-pure-selftests.ts.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'classifyExpense' src/app -> 0 callers. Nothing reads or " +
+          "writes gl_account_rules from TypeScript either, so the seeded rules " +
+          "are not yet the rules the system uses. books-75 built the classifier " +
+          "only; wiring is a later slice.",
+      },
+      correct: {
+        status: "PARTIAL",
+        evidence:
+          "MEASURED from Michael's five Sage exports (550 rows, $368,276.34; 60 " +
+          "distinct vendors). PARTIAL is itself the measurement: 54 of 60 vendors " +
+          "map to exactly one G/L account and are seeded; the other 6 hit two or " +
+          "three accounts in his own history (LIQUOR & CANNABIS BOARD, MICHAEL " +
+          "LYMAN, OFFICE DEPOT, SECRETARY OF THE STATE, STAPLES, VENTURE LIFE AND " +
+          "HEALTH) and are REFUSED as MERCHANT_AMBIGUOUS, so the classifier " +
+          "cannot finish 6/60 of vendors alone. Any vendor outside the seeded 54 " +
+          "returns MERCHANT_UNKNOWN: there is no fallback account, because a " +
+          "silent 76010 would be indistinguishable from a correct answer in every " +
+          "report (rule 48). Entity assignment is read from Michael's own account " +
+          "suffixes -- 81001/81002/81003-LYMAN utilities, maintenance and property " +
+          "tax, 121 rows / $61,109.02 -- not from judgement. Chart facts are " +
+          "drift-tested against migration 0173; the reseller COGS bar is " +
+          "mutation-verified across all 14 barred accounts (6/6 mutants caught, " +
+          "D-58).",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "The classifier returns a decision; no door accepts it. gl_account_rules " +
+          "exists in migration 0173 with gl_guard_rule_target(), and has zero " +
+          "TypeScript readers or writers.",
+      },
+      idempotent: {
+        status: "UNKNOWN",
+        evidence:
+          "The module is pure and deterministic -- no clock, no randomness, no " +
+          "I/O, all asserted by test; normalizeMerchant is idempotent and " +
+          "first-match-wins is pinned, so the same vendor text always yields the " +
+          "same account, entity, cost class and provenance across repeated runs.",
+        reason:
+          "Deterministic is NOT the same as idempotent, and recording it as " +
+          "PRESENT here would conflate them. Idempotence is a property of " +
+          "POSTING -- classify the same bank line twice and the ledger still shows " +
+          "one entry -- and this module never posts, so the property is untested " +
+          "rather than satisfied. It resolves when a caller carries the decision " +
+          "through a door with a source_ref; the ref will have to come from the " +
+          "bank transaction id, because merchant text repeats every month.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence:
+          "classifyExpense takes merchant text and returns a decision; it never " +
+          "sees a bank feed and has no second arrival to reconcile against.",
+        reason:
+          "Classification decides how ONE arrival is characterised. The same " +
+          "dollar arriving twice -- once from the system that spent it, once from " +
+          "the Plaid debit that saw it leave -- is the payment event's problem, " +
+          "and it is already tracked on vendor_cycle.vendor_paid_by_ach. Marking " +
+          "this layer PRESENT here would double-count a control that lives " +
+          "elsewhere.",
+      },
+    },
+    defectId: "D-56",
+    consequence:
+      "This is the row that decides which entity's books a cost lands on and " +
+      "whether it is COGS or 280E-disallowed -- the two facts that set Michael's " +
+      "taxable income. A wrong cogs_direct on store rent or wages is the line an " +
+      "auditor pulls first: Reg. 1.471-3(b) allows a reseller only invoice price " +
+      "plus the cost of acquiring possession, and 263A(a)(2) bars capitalising " +
+      "anything 280E disallows. The classifier refuses that combination outright " +
+      "rather than letting it balance.",
+  },
+
+  {
     key: "vendor_cycle.vendor_paid_by_ach",
     family: "vendor_cycle",
     event:

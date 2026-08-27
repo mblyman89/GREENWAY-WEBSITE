@@ -13,15 +13,15 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 33 money events that should reach the books. 31 cannot reach them at all. 23 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 34 money events that should reach the books. 32 cannot reach them at all. 23 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
-| Money events catalogued | 33 |
+| Money events catalogued | 34 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 31 |
+| Cannot reach the books at all | 32 |
 | Have nothing that even builds the entry | 23 |
-| Layers that could not be measured | 5 |
+| Layers that could not be measured | 6 |
 
 ## The six layers
 
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 22 of 33 |
-| `reachable` | 31 of 33 |
-| `correct` | 18 of 33 |
-| `accepted` | 29 of 33 |
-| `idempotent` | 25 of 33 |
-| `married` | 13 of 33 |
+| `exists` | 22 of 34 |
+| `reachable` | 32 of 34 |
+| `correct` | 18 of 34 |
+| `accepted` | 30 of 34 |
+| `idempotent` | 25 of 34 |
+| `married` | 13 of 34 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -246,6 +246,7 @@ An inbound delivery charge that belongs in the cost of the product.
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `purchase_order_commitment` | NO | NO | n/a | n/a | n/a | n/a | D-35 |
 | `vendor_bill_recorded` | yes | NO | yes | NO | part | NO | D-34 |
+| `expense_classified_to_account_and_entity` | yes | NO | part | NO | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
 | `operating_expense_from_bank` | NO | NO | part | NO | NO | n/a | D-37 |
 
@@ -282,6 +283,23 @@ An invoice arrives from a vendor and becomes a payable.
 - **married: MISSING** -- The bill and its later ACH payment are two events; nothing links them.
 
 **If this stays broken:** Without payables, the balance sheet shows no money owed and cash-basis and accrual-basis results diverge silently.
+
+### `vendor_cycle.expense_classified_to_account_and_entity`
+
+A card swipe or bank debit at a named vendor has to become a specific account, on a specific entity's books, with a specific tax character.
+
+- Accounts: `70010`, `70020`, `70030`, `70040`, `71010`, `76010`
+- Builds the entry: `src/lib/accounting/expense-classification-core.ts#classifyExpense`
+- Posts the entry: **nothing**
+
+- **exists: PRESENT** -- expense-classification-core.ts exports classifyExpense and the parameterized classifyIn; 50 tests in tests/compliance/expense-classification-core.test.ts plus a registered self-test in scripts/compliance/run-pure-selftests.ts.
+- **reachable: MISSING** -- grep -rn 'classifyExpense' src/app -> 0 callers. Nothing reads or writes gl_account_rules from TypeScript either, so the seeded rules are not yet the rules the system uses. books-75 built the classifier only; wiring is a later slice.
+- **correct: PARTIAL** -- MEASURED from Michael's five Sage exports (550 rows, $368,276.34; 60 distinct vendors). PARTIAL is itself the measurement: 54 of 60 vendors map to exactly one G/L account and are seeded; the other 6 hit two or three accounts in his own history (LIQUOR & CANNABIS BOARD, MICHAEL LYMAN, OFFICE DEPOT, SECRETARY OF THE STATE, STAPLES, VENTURE LIFE AND HEALTH) and are REFUSED as MERCHANT_AMBIGUOUS, so the classifier cannot finish 6/60 of vendors alone. Any vendor outside the seeded 54 returns MERCHANT_UNKNOWN: there is no fallback account, because a silent 76010 would be indistinguishable from a correct answer in every report (rule 48). Entity assignment is read from Michael's own account suffixes -- 81001/81002/81003-LYMAN utilities, maintenance and property tax, 121 rows / $61,109.02 -- not from judgement. Chart facts are drift-tested against migration 0173; the reseller COGS bar is mutation-verified across all 14 barred accounts (6/6 mutants caught, D-58).
+- **accepted: MISSING** -- The classifier returns a decision; no door accepts it. gl_account_rules exists in migration 0173 with gl_guard_rule_target(), and has zero TypeScript readers or writers.
+- **idempotent: UNKNOWN** -- The module is pure and deterministic -- no clock, no randomness, no I/O, all asserted by test; normalizeMerchant is idempotent and first-match-wins is pinned, so the same vendor text always yields the same account, entity, cost class and provenance across repeated runs. _Deterministic is NOT the same as idempotent, and recording it as PRESENT here would conflate them. Idempotence is a property of POSTING -- classify the same bank line twice and the ledger still shows one entry -- and this module never posts, so the property is untested rather than satisfied. It resolves when a caller carries the decision through a door with a source_ref; the ref will have to come from the bank transaction id, because merchant text repeats every month._
+- **married: NOT_APPLICABLE** -- classifyExpense takes merchant text and returns a decision; it never sees a bank feed and has no second arrival to reconcile against. _Classification decides how ONE arrival is characterised. The same dollar arriving twice -- once from the system that spent it, once from the Plaid debit that saw it leave -- is the payment event's problem, and it is already tracked on vendor_cycle.vendor_paid_by_ach. Marking this layer PRESENT here would double-count a control that lives elsewhere._
+
+**If this stays broken:** This is the row that decides which entity's books a cost lands on and whether it is COGS or 280E-disallowed -- the two facts that set Michael's taxable income. A wrong cogs_direct on store rent or wages is the line an auditor pulls first: Reg. 1.471-3(b) allows a reseller only invoice price plus the cost of acquiring possession, and 263A(a)(2) bars capitalising anything 280E disallows. The classifier refuses that combination outright rather than letting it balance.
 
 ### `vendor_cycle.vendor_paid_by_ach`
 
@@ -712,6 +730,7 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `vendor_cycle.vendor_bill_recorded` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
+- `vendor_cycle.expense_classified_to_account_and_entity` (D-56) -- `src/lib/accounting/expense-classification-core.ts#classifyExpense`
 - `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
@@ -733,6 +752,7 @@ mistake later.
 - `vendor_cycle.purchase_order_commitment` / `accepted`: No entry is due at commitment.
 - `vendor_cycle.purchase_order_commitment` / `idempotent`: No entry is due at commitment.
 - `vendor_cycle.purchase_order_commitment` / `married`: No entry is due at commitment.
+- `vendor_cycle.expense_classified_to_account_and_entity` / `married`: Classification decides how ONE arrival is characterised. The same dollar arriving twice -- once from the system that spent it, once from the Plaid debit that saw it leave -- is the payment event's problem, and it is already tracked on vendor_cycle.vendor_paid_by_ach. Marking this layer PRESENT here would double-count a control that lives elsewhere.
 - `vendor_cycle.operating_expense_from_bank` / `married`: There is no in-system counterpart to marry, which is what makes this family safe to auto-post and the right place to start wiring.
 - `cash_and_banking.till_over_short` / `married`: There is no second arrival for money that went missing.
 - `periodic_and_other.manual_journal` / `idempotent`: A hand-keyed entry has no external event to key on. Two identical entries may be two genuine entries, so the ledger must not silently merge them.

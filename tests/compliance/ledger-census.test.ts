@@ -574,14 +574,56 @@ describe("every defect the census cites is recorded, and vice versa", () => {
     expect([...census().defectIds()].sort()).toEqual(citedIds);
   });
 
-  it("cites a contiguous block starting at D-31", () => {
+  it("cites only recorded defects, starting at D-31", () => {
+    // WHY THIS NO LONGER DEMANDS CONTIGUITY (changed in books-75).
+    //
+    // This test used to assert the cited ids formed an unbroken run from D-31.
+    // That held for as long as every defect above D-30 happened to be a census
+    // row, and it stopped being true the moment defects were recorded that are
+    // NOT census rows: D-51 (the cut-over builder), D-52 (the ledger category
+    // map), D-55 (the entity structure researched against the case law) and
+    // D-58 (two unreachable refusal codes) are all real findings about code or
+    // about Michael's structure, and none of them describes an economic event
+    // that should leave a mark in the books. Requiring contiguity would have
+    // forced either a fake census row for each, or renumbering DEFECTS.md,
+    // which is append-only.
+    //
+    // The protection contiguity was really providing -- catching a row that
+    // cites a defect id nobody wrote, usually a transposition like D-45 for
+    // D-54 -- is already provided directly and per-id by the generated
+    // "has an entry in DEFECTS.md" tests above. This assertion keeps the part
+    // that still means something: the census starts at D-31, and it never cites
+    // a number beyond what has actually been recorded.
     const nums = census()
       .defectIds()
       .map((d) => Number(d.slice(2)))
       .sort((a, b) => a - b);
     expect(nums[0]).toBe(31);
-    for (let i = 1; i < nums.length; i++) {
-      expect(nums[i], "defect ids must not skip").toBe(nums[i - 1] + 1);
+
+    const recorded = (defectsMd.match(/^##+\s*D-(\d+)/gm) ?? []).map((h) =>
+      Number(h.replace(/^##+\s*D-/, "")),
+    );
+    expect(recorded.length, "DEFECTS.md must parse").toBeGreaterThan(30);
+    const maxRecorded = Math.max(...recorded);
+    for (const n of nums) {
+      expect(n, "census cites a defect number beyond the last recorded one").toBeLessThanOrEqual(
+        maxRecorded,
+      );
+    }
+  });
+
+  it("no cited defect id is a gap in DEFECTS.md", () => {
+    // The transposition guard, stated positively. D-53 and D-54 are known to be
+    // absent -- the numbering jumped from D-52 to D-55 during books-74 -- so a
+    // row citing either one would be a typo, not a record. This proves the
+    // census does not cite a number that was never written.
+    const recorded = new Set(
+      (defectsMd.match(/^##+\s*D-(\d+)/gm) ?? []).map((h) =>
+        Number(h.replace(/^##+\s*D-/, "")),
+      ),
+    );
+    for (const id of citedIds) {
+      expect(recorded.has(Number(id.slice(2))), `${id} is cited but never written`).toBe(true);
     }
   });
 });
@@ -1001,9 +1043,13 @@ describe("evidence cannot be softened without a test failing", () => {
     // 7 -> 8 in books-72: cutover_inventory_load gained a builder
     // (cutover-inventory-core.ts#buildCutoverInventoryPlan) while its reachable
     // layer stayed MISSING, because writing a builder does not wire a path.
+    // 8 -> 9 in books-75: expense_classified_to_account_and_entity gained a
+    // builder (expense-classification-core.ts#classifyExpense) while its
+    // reachable layer stayed MISSING, because nothing in src/app calls it and
+    // nothing reads or writes gl_account_rules from TypeScript yet.
     // THIS TEST FAILING IS THE SYSTEM WORKING — it is how a new unreachable
     // builder announces itself instead of quietly joining the backlog.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(8);
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(9);
 
     for (const r of drivers) {
       expect(

@@ -59,6 +59,7 @@ import { __runFormBoxTeachingCoreTests } from "../../src/lib/payroll/form-box-te
 // books-63: the one period/employee reader every form page and tab now uses.
 import { __runFormScopeCoreTests } from "../../src/lib/payroll/form-scope-core";
 import { __runEsdEamsCsvTests } from "../../src/lib/payroll/esd-eams-csv-core";
+import { __runExpenseClassificationCoreTests } from "../../src/lib/accounting/expense-classification-core";
 import { __runEsd5208WorksheetTests } from "../../src/lib/payroll/esd-5208-worksheet-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
@@ -874,6 +875,9 @@ async function main() {
 
   __runEsd5208WorksheetTests();
   console.log("esd-5208-worksheet-core self-tests: all passed");
+
+  __runExpenseClassificationCoreTests();
+  console.log("expense-classification-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
