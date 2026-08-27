@@ -23,6 +23,10 @@ import { optionalBigint, requiredBigint } from "@/lib/supabase/pg-bigint";
 import { encryptSecret, decryptSecret, maskAccountTail } from "@/lib/security/at-rest-crypto";
 import { listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
 import { toBankDeposits, type BankDeposit, type ReconcileSettlement } from "@/lib/atm/atm-reconcile-core";
+import {
+  buildAtmSettlementProposals,
+  type AtmPostingProposal,
+} from "@/lib/atm/atm-posting-core";
 
 export type AtmConnectionStatus = "unconfigured" | "ok" | "error";
 
@@ -1008,4 +1012,45 @@ export async function getAtmReconcileInputs(
     hasAtmAccount: atmAccounts.length > 0,
     atmAccountNames,
   };
+}
+
+// ---------------------------------------------------------------------------
+// books-69 step 1 — the settled days, as proposed journal entries.
+//
+// This is the connective tissue between the ATM subsystem and the general
+// ledger, and until books-69 it did not exist: the recon proved the ATM had
+// never written a journal entry, and that account 51000 was referenced by zero
+// lines of application code.
+//
+// The accounting judgment lives entirely in `atm-posting-core`, which is pure
+// and therefore testable. This function does the one thing that core cannot: it
+// reads the rows. It deliberately performs NO arithmetic and makes NO
+// classification decision of its own, so there is no logic here that a unit
+// test is unable to reach - which is precisely the shape that let D-22 hide.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every settled day in the store, as an entry proposed for Michael's review.
+ *
+ * Nothing is written and nothing is posted. `atm` is not an autopostable source
+ * kind - `posting-core` says so, with the reason "ATM cash movements are
+ * reconciled against a physical count, by a person" - so each proposal comes
+ * back carrying `postable: false` and an explanation.
+ *
+ * Days that cannot be turned into an entry are RETURNED, not filtered out. The
+ * day with a missing figure is the one Michael most needs to see; dropping it
+ * here would make the screen quietly shorter and the problem invisible.
+ */
+export async function listAtmSettlementProposals(
+  limit = 400,
+): Promise<readonly AtmPostingProposal[]> {
+  const settlements = await listAtmSettlements(limit);
+  return buildAtmSettlementProposals(
+    settlements.map((s) => ({
+      settlementDate: s.settlementDate,
+      terminalId: s.terminalId,
+      surchargeCents: s.surchargeCents,
+      terminalTransactionCents: s.terminalTransactionCents,
+    })),
+  );
 }
