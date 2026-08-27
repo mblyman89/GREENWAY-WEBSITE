@@ -13,15 +13,15 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 31 money events that should reach the books. 29 cannot reach them at all. 23 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 4 carry a layer this census could not measure, and say so.
+> 33 money events that should reach the books. 31 cannot reach them at all. 24 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
-| Money events catalogued | 31 |
+| Money events catalogued | 33 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 29 |
-| Have nothing that even builds the entry | 23 |
-| Layers that could not be measured | 4 |
+| Cannot reach the books at all | 31 |
+| Have nothing that even builds the entry | 24 |
+| Layers that could not be measured | 5 |
 
 ## The six layers
 
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 22 of 31 |
-| `reachable` | 29 of 31 |
-| `correct` | 18 of 31 |
-| `accepted` | 28 of 31 |
-| `idempotent` | 24 of 31 |
-| `married` | 12 of 31 |
+| `exists` | 23 of 33 |
+| `reachable` | 31 of 33 |
+| `correct` | 18 of 33 |
+| `accepted` | 29 of 33 |
+| `idempotent` | 25 of 33 |
+| `married` | 13 of 33 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -132,6 +132,8 @@ A customer returns product, or a sale is voided after tender.
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `cogs_on_sale` | NO | NO | NO | NO | NO | n/a | D-33 |
+| `cutover_inventory_load` | NO | NO | ? | part | NO | n/a | D-48 |
+| `cultivera_manifest_import` | part | NO | part | NO | part | NO | D-49 |
 | `inventory_receipt` | yes | NO | yes | NO | part | NO | D-34 |
 | `inventory_audit_adjustment` | yes | yes | yes | yes | yes | n/a | -- |
 | `freight_in` | NO | NO | NO | NO | NO | NO | D-34 |
@@ -152,6 +154,40 @@ Product leaves the shelf, so its cost has to move from asset to expense.
 - **married: NOT_APPLICABLE** -- COGS is an internal reclass. _No cash moves, so no bank line can duplicate it._
 
 **If this stays broken:** Under IRC 280E, COGS is the ONLY deduction a cannabis retailer gets. An unbooked COGS is tax paid on gross receipts instead of gross profit — the most expensive single gap in this census.
+
+### `cost_of_goods_sold.cutover_inventory_load`
+
+THE CUT-OVER. Inventory is counted on 2026-10-31 after close and loaded into this platform on 2026-11-01 before open, carrying its value from Cultivera. This is the single largest asset number the books will ever receive, and it arrives once.
+
+- Accounts: `20000`, `20010`, `20890`, `40400`
+- Builds the entry: **nothing**
+- Posts the entry: **nothing**
+
+- **exists: MISSING** -- grep -rn 'sourceKind: "opening_balance"' src/ -> 0 hits. No module converts a counted lot list into an opening inventory journal. inventoryAccountForCategory (vendor-bill-core.ts:966) maps a category slug to its 200xx account and is self-tested, so the ACCOUNT side is solved; the entry that uses it for a cut-over load is not written.
+- **reachable: MISSING** -- src/app/admin/books/conversion/page.tsx is 361 lines and deliberately read-only: grep for 'rpc(' in it -> 0 hits, and its own header says 'Nothing here posts anything.' No src/ file inserts into gl_opening_balances; ledger-store.ts:458 only SELECTs from it.
+- **correct: UNKNOWN** -- The account side is determined: 0173 seeds 21 per-category inventory accounts under control account 20000, and gl_guard_inventory_manual (0173:316) REFUSES any source_kind='manual' line touching a 2xxxx asset, so this load must be source_kind 'opening_balance', 'inventory' or 'purchase' by database law, never a typed journal. _Whether the counted VALUE is right cannot be measured from code. It depends on the 2026-10-31 count and on Cultivera's per-unit costs, which Michael has not yet supplied. Rule 1: the census will not invent the largest asset figure on the balance sheet._
+- **accepted: PARTIAL** -- Migration 0186 already moves the opening-balance date to 2026-10-31, matching Michael's stated cut-over, and records that the old hard-coded 2025-12-31 would have stamped it TEN MONTHS EARLY while balancing. 0176:76 lists 'inventory_count' as a valid evidence_kind, so the worksheet is designed to accept exactly this row. Nothing has presented one.
+- **idempotent: MISSING** -- Loading the cut-over count twice would double the largest asset on the balance sheet. gl_ob_guard_frozen (0176:162) freezes rows once blessed, which protects the WORKSHEET, but no ref convention protects the load itself because no load path exists.
+- **married: NOT_APPLICABLE** -- No bank row corresponds to a cut-over count. _This product was already bought and paid for under Cultivera and Sage. Its cash left the bank before this platform existed, so there is no second arrival to reconcile against._
+
+**If this stays broken:** This is the number every subsequent COGS figure is measured from. Book it as a PURCHASE and the books invent an accounts-payable balance to vendors who were already paid, overstating liabilities and understating equity by the entire value of the shelf. Book it at the wrong value and every 280E cost-of-goods deduction for the life of the business inherits the error, and the balance sheet balances either way.
+
+### `cost_of_goods_sold.cultivera_manifest_import`
+
+AFTER cut-over: a Cultivera / WCIA transfer data link (or a batch of hundreds) is imported, staging a manifest whose lots later go on the shelf.
+
+- Accounts: `20000`, `20890`, `30000`
+- Builds the entry: `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
+- Posts the entry: **nothing**
+
+- **exists: PARTIAL** -- The import parses cost: intake-parser.ts:375-380 computes unit_cost_minor_units as round(linePrice / qty * 100), and 0023/0028 store it on inventory_lots. But ccrs-manifest-csv-core.ts:495 hard-codes 'unit_cost_minor_units: null' for the CCRS CSV shape, because a CCRS transfer file carries no price. So cost survives the URL/PDF path and is absent on the CSV path.
+- **reachable: MISSING** -- grep -n 'submitJournal|gl_' on src/app/admin/inventory/intake/actions.ts (821 lines, 21 exported actions incl. importManifestAction and finalizeManifestAction) -> 0 posting calls. BatchTransferImport.tsx states 'DRAFTS-ONLY'. Product reaches the shelf; value reaches nothing.
+- **correct: PARTIAL** -- buildBillJournal resolves cannabis lines to the CATEGORY subaccount via inventoryAccountForCategory and falls back to 20890 quarantine on an unknown category rather than guessing (vendor-bill-core.ts:1140-1146). That is the right shape. Untested against a manifest, because no manifest has ever been handed to it.
+- **accepted: MISSING** -- 'purchase' is a permitted source_kind in the 0172:277 CHECK and gl_guard_inventory_manual explicitly names it as a legitimate way for inventory to move. Never presented.
+- **idempotent: PARTIAL** -- billSourceRef yields 'manifest:<n>', which is the correct key for a manifest-derived entry. The import itself de-duplicates URLs client-side and reports 'already imported', so the STAGING side is idempotent; the posting side has never run.
+- **married: MISSING** -- The vendor is paid later by ACH and that payment arrives again through Plaid; 0067_vendor_manifest_payments.sql computes the owed total as SUM(received_qty * unit_cost_minor_units) but nothing books either side.
+
+**If this stays broken:** Every post-cut-over delivery puts sellable product on the shelf with no corresponding asset or liability in the books. Inventory on hand grows, the ledger does not, and the gap is invisible because both systems are internally consistent. On the CCRS CSV path the cost is NULL, so even once wired that path would post a zero-value receipt unless it refuses instead.
 
 ### `cost_of_goods_sold.inventory_receipt`
 
@@ -648,6 +684,7 @@ all, so the work is to write it, then wire it.
 - `revenue_and_tax_collected.discount_and_comp` (D-31)
 - `revenue_and_tax_collected.refund_or_return` (D-31)
 - `cost_of_goods_sold.cogs_on_sale` (D-33)
+- `cost_of_goods_sold.cutover_inventory_load` (D-48)
 - `cost_of_goods_sold.freight_in` (D-34)
 - `vendor_cycle.purchase_order_commitment` (D-35)
 - `vendor_cycle.vendor_paid_by_ach` (D-36)
@@ -672,6 +709,7 @@ all, so the work is to write it, then wire it.
 The cheapest real progress available. The accounting logic is written and tested; only
 the path from the screen to the ledger is absent.
 
+- `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `vendor_cycle.vendor_bill_recorded` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`
@@ -689,6 +727,7 @@ mistake later.
 - `revenue_and_tax_collected.discount_and_comp` / `married`: There is no bank line for money that was never collected.
 - `revenue_and_tax_collected.refund_or_return` / `married`: Card refunds appear in the settlement row, which is censused there.
 - `cost_of_goods_sold.cogs_on_sale` / `married`: No cash moves, so no bank line can duplicate it.
+- `cost_of_goods_sold.cutover_inventory_load` / `married`: This product was already bought and paid for under Cultivera and Sage. Its cash left the bank before this platform existed, so there is no second arrival to reconcile against.
 - `cost_of_goods_sold.inventory_audit_adjustment` / `married`: Nothing in the bank feed can correspond to a shrink write-off.
 - `vendor_cycle.purchase_order_commitment` / `correct`: A plain PO should NOT hit the ledger. Michael asked whether POs are 'properly booked' — the correct answer is that the RECEIPT is booked, not the order. This row exists so that answer is recorded rather than rediscovered.
 - `vendor_cycle.purchase_order_commitment` / `accepted`: No entry is due at commitment.

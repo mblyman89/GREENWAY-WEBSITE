@@ -281,6 +281,157 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
   },
 
   {
+    key: "cost_of_goods_sold.cutover_inventory_load",
+    family: "cost_of_goods_sold",
+    event:
+      "THE CUT-OVER. Inventory is counted on 2026-10-31 after close and loaded " +
+      "into this platform on 2026-11-01 before open, carrying its value from " +
+      "Cultivera. This is the single largest asset number the books will ever " +
+      "receive, and it arrives once.",
+    sourceKind: "opening_balance",
+    entityCode: "greenway",
+    accountCodes: ["20000", "20010", "20890", "40400"],
+    builder: null,
+    poster: null,
+    layers: {
+      exists: {
+        status: "MISSING",
+        evidence:
+          "grep -rn 'sourceKind: \"opening_balance\"' src/ -> 0 hits. No module " +
+          "converts a counted lot list into an opening inventory journal. " +
+          "inventoryAccountForCategory (vendor-bill-core.ts:966) maps a category " +
+          "slug to its 200xx account and is self-tested, so the ACCOUNT side is " +
+          "solved; the entry that uses it for a cut-over load is not written.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "src/app/admin/books/conversion/page.tsx is 361 lines and deliberately " +
+          "read-only: grep for 'rpc(' in it -> 0 hits, and its own header says " +
+          "'Nothing here posts anything.' No src/ file inserts into " +
+          "gl_opening_balances; ledger-store.ts:458 only SELECTs from it.",
+      },
+      correct: {
+        status: "UNKNOWN",
+        evidence:
+          "The account side is determined: 0173 seeds 21 per-category inventory " +
+          "accounts under control account 20000, and gl_guard_inventory_manual " +
+          "(0173:316) REFUSES any source_kind='manual' line touching a 2xxxx asset, " +
+          "so this load must be source_kind 'opening_balance', 'inventory' or " +
+          "'purchase' by database law, never a typed journal.",
+        reason:
+          "Whether the counted VALUE is right cannot be measured from code. It " +
+          "depends on the 2026-10-31 count and on Cultivera's per-unit costs, " +
+          "which Michael has not yet supplied. Rule 1: the census will not invent " +
+          "the largest asset figure on the balance sheet.",
+      },
+      accepted: {
+        status: "PARTIAL",
+        evidence:
+          "Migration 0186 already moves the opening-balance date to 2026-10-31, " +
+          "matching Michael's stated cut-over, and records that the old hard-coded " +
+          "2025-12-31 would have stamped it TEN MONTHS EARLY while balancing. " +
+          "0176:76 lists 'inventory_count' as a valid evidence_kind, so the " +
+          "worksheet is designed to accept exactly this row. Nothing has presented " +
+          "one.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence:
+          "Loading the cut-over count twice would double the largest asset on the " +
+          "balance sheet. gl_ob_guard_frozen (0176:162) freezes rows once blessed, " +
+          "which protects the WORKSHEET, but no ref convention protects the load " +
+          "itself because no load path exists.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "No bank row corresponds to a cut-over count.",
+        reason:
+          "This product was already bought and paid for under Cultivera and Sage. " +
+          "Its cash left the bank before this platform existed, so there is no " +
+          "second arrival to reconcile against.",
+      },
+    },
+    defectId: "D-48",
+    consequence:
+      "This is the number every subsequent COGS figure is measured from. Book it " +
+      "as a PURCHASE and the books invent an accounts-payable balance to vendors " +
+      "who were already paid, overstating liabilities and understating equity by " +
+      "the entire value of the shelf. Book it at the wrong value and every 280E " +
+      "cost-of-goods deduction for the life of the business inherits the error, " +
+      "and the balance sheet balances either way.",
+  },
+  {
+    key: "cost_of_goods_sold.cultivera_manifest_import",
+    family: "cost_of_goods_sold",
+    event:
+      "AFTER cut-over: a Cultivera / WCIA transfer data link (or a batch of " +
+      "hundreds) is imported, staging a manifest whose lots later go on the shelf.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["20000", "20890", "30000"],
+    builder: "src/lib/accounting/vendor-bill-core.ts#buildBillJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PARTIAL",
+        evidence:
+          "The import parses cost: intake-parser.ts:375-380 computes " +
+          "unit_cost_minor_units as round(linePrice / qty * 100), and 0023/0028 " +
+          "store it on inventory_lots. But ccrs-manifest-csv-core.ts:495 " +
+          "hard-codes 'unit_cost_minor_units: null' for the CCRS CSV shape, " +
+          "because a CCRS transfer file carries no price. So cost survives the " +
+          "URL/PDF path and is absent on the CSV path.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "grep -n 'submitJournal|gl_' on src/app/admin/inventory/intake/actions.ts " +
+          "(821 lines, 21 exported actions incl. importManifestAction and " +
+          "finalizeManifestAction) -> 0 posting calls. BatchTransferImport.tsx " +
+          "states 'DRAFTS-ONLY'. Product reaches the shelf; value reaches nothing.",
+      },
+      correct: {
+        status: "PARTIAL",
+        evidence:
+          "buildBillJournal resolves cannabis lines to the CATEGORY subaccount via " +
+          "inventoryAccountForCategory and falls back to 20890 quarantine on an " +
+          "unknown category rather than guessing (vendor-bill-core.ts:1140-1146). " +
+          "That is the right shape. Untested against a manifest, because no " +
+          "manifest has ever been handed to it.",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "'purchase' is a permitted source_kind in the 0172:277 CHECK and " +
+          "gl_guard_inventory_manual explicitly names it as a legitimate way for " +
+          "inventory to move. Never presented.",
+      },
+      idempotent: {
+        status: "PARTIAL",
+        evidence:
+          "billSourceRef yields 'manifest:<n>', which is the correct key for a " +
+          "manifest-derived entry. The import itself de-duplicates URLs " +
+          "client-side and reports 'already imported', so the STAGING side is " +
+          "idempotent; the posting side has never run.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "The vendor is paid later by ACH and that payment arrives again through " +
+          "Plaid; 0067_vendor_manifest_payments.sql computes the owed total as " +
+          "SUM(received_qty * unit_cost_minor_units) but nothing books either side.",
+      },
+    },
+    defectId: "D-49",
+    consequence:
+      "Every post-cut-over delivery puts sellable product on the shelf with no " +
+      "corresponding asset or liability in the books. Inventory on hand grows, " +
+      "the ledger does not, and the gap is invisible because both systems are " +
+      "internally consistent. On the CCRS CSV path the cost is NULL, so even once " +
+      "wired that path would post a zero-value receipt unless it refuses instead.",
+  },
+  {
     key: "cost_of_goods_sold.inventory_receipt",
     family: "cost_of_goods_sold",
     event: "A vendor delivery is received and the product goes on the shelf.",

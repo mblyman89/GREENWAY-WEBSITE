@@ -988,14 +988,17 @@ describe("evidence cannot be softened without a test failing", () => {
     // next: a builder already exists, but nothing reaches it. For those, the
     // reachable evidence must point at something a reader can go check - a
     // file, a SQL door, or a grep that was really run.
-    const ARTIFACT = /[A-Za-z0-9_-]+\.(?:ts|tsx|sql)|\bgl_[a-z0-9_]+|\bgrep\b/;
+    const ARTIFACT = /[A-Za-z0-9_-]+\.(?:tsx|ts|sql)|\bgl_[a-z0-9_]+|\bgrep\b/;
 
     const drivers = census()
       .all()
       .filter((r) => r.builder !== null && r.layers.reachable.status === "MISSING");
 
-    // Guard against this test passing on an empty set.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(6);
+    // Guard against this test passing on an empty set. The count is asserted
+    // exactly, so a new row joining the backlog is a STATED change rather than
+    // one absorbed silently (rule 89). 6 -> 7 when the Cultivera manifest import
+    // row was added: it has a builder (buildBillJournal) and cannot be reached.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
 
     for (const r of drivers) {
       expect(
@@ -1017,7 +1020,7 @@ describe("evidence cannot be softened without a test failing", () => {
     const fullPaths = new Set(
       [
         ...evidence.matchAll(
-          /\b((?:src|scripts|supabase)\/[A-Za-z0-9_\-./]+\.(?:ts|tsx|sql))/g,
+          /\b((?:src|scripts|supabase)\/[A-Za-z0-9_\-./]+\.(?:tsx|ts|sql))/g,
         ),
       ].map((m) => m[1]),
     );
@@ -1036,7 +1039,7 @@ describe("evidence cannot be softened without a test failing", () => {
     ]);
 
     const basenames = new Set(
-      [...evidence.matchAll(/\b([A-Za-z0-9_-]+\.(?:ts|tsx|sql))\b/g)].map((m) => m[1]),
+      [...evidence.matchAll(/\b([A-Za-z0-9_-]+\.(?:tsx|ts|sql))\b/g)].map((m) => m[1]),
     );
     expect(basenames.size, "no basenames found - the extractor is broken").toBeGreaterThan(15);
     for (const b of basenames) {
@@ -1206,5 +1209,101 @@ describe("the readable census map is present and current", () => {
     const gen = "scripts/compliance/build-census-doc.ts";
     expect(exists(gen)).toBe(true);
     expect(read(gen)).toContain("--check");
+  });
+});
+
+/* ═══════════════════ 9. THE CUT-OVER CLASSIFICATION ═══════════════════ */
+
+/**
+ * Michael, on the November 2026 cut-over: "When I go to transfer my inventory
+ * from Cultivera to our system, how will the system add that inventory to the
+ * books? I want to make sure it is accounted for properly."
+ *
+ * This section exists because a mutation run proved the census had no answer it
+ * could defend. Changing the cut-over row's source kind from `opening_balance`
+ * to `purchase` left all 123 tests green.
+ *
+ * That is not a cosmetic drift. The Oct 31 count is product that was already
+ * bought and paid for under Cultivera and Sage -- its cash left the bank before
+ * this platform existed. Booking it as a purchase credits 30000 Accounts
+ * Payable and invents a liability to vendors who have already been paid,
+ * overstating liabilities and understating equity by the entire value of the
+ * shelf. The trial balance balances either way, which is what makes it the most
+ * dangerous single misclassification available at cut-over.
+ */
+describe("the cut-over inventory load is classified as equity, never as a purchase", () => {
+
+  it("carries source kind opening_balance, because the product is already paid for", () => {
+    const row = census().byKey("cost_of_goods_sold.cutover_inventory_load");
+    expect(row, "the cut-over row must exist").toBeDefined();
+    expect(
+      row!.sourceKind,
+      "a cut-over load booked as a purchase invents an accounts-payable balance " +
+        "to vendors who were already paid under Cultivera and Sage",
+    ).toBe("opening_balance");
+  });
+
+  it("credits Opening Balance Equity and never Accounts Payable", () => {
+    const row = census().byKey("cost_of_goods_sold.cutover_inventory_load")!;
+    expect(row.accountCodes, "40400 Opening Balance Equity is the credit side").toContain("40400");
+    expect(
+      row.accountCodes,
+      "30000 Accounts Payable must not appear: nothing is owed for this product",
+    ).not.toContain("30000");
+  });
+
+  it("debits inventory through a per-category account, not the control account alone", () => {
+    // 0173 marks 20000 a control account. Posting only to it makes the ledger
+    // and the subledger disagree with no way to tell which is right.
+    const row = census().byKey("cost_of_goods_sold.cutover_inventory_load")!;
+    const perCategory = row.accountCodes.filter((c) => /^20[0-9]{3}$/.test(c) && c !== "20000");
+    expect(perCategory.length, "at least one per-category inventory account").toBeGreaterThan(0);
+  });
+
+  it("the ongoing manifest import IS a purchase, which is the opposite case", () => {
+    // The distinction is the point: post-cut-over deliveries genuinely do create
+    // a payable. If both rows carried the same source kind, one of them would be
+    // wrong, so they are asserted against each other.
+    const cutover = census().byKey("cost_of_goods_sold.cutover_inventory_load")!;
+    const ongoing = census().byKey("cost_of_goods_sold.cultivera_manifest_import")!;
+    expect(ongoing.sourceKind).toBe("purchase");
+    expect(ongoing.accountCodes).toContain("30000");
+    expect(
+      ongoing.sourceKind === cutover.sourceKind,
+      "the cut-over load and an ordinary delivery cannot be the same kind of event",
+    ).toBe(false);
+  });
+
+  it("the database really does forbid moving inventory by a typed journal", () => {
+    // Re-derived from the migration, not restated from the row. This guard is
+    // what makes the classification enforceable rather than merely intended.
+    const sql = read("supabase/migrations/0173_chart_of_accounts.sql");
+    expect(sql).toContain("gl_guard_inventory_manual");
+    expect(sql).toContain("GL_INVENTORY_MANUAL");
+    // The guard names the source kinds by which inventory may legitimately move.
+    expect(sql).toContain("source_kind inventory/purchase/pos_sale/opening_balance");
+  });
+
+  it("opening_balance is a source kind Postgres actually accepts", () => {
+    const sql = read("supabase/migrations/0172_gl_foundation.sql");
+    expect(sql).toContain("'opening_balance'");
+    const row = census().byKey("cost_of_goods_sold.cutover_inventory_load")!;
+    expect(SOURCE_KINDS).toContain(row.sourceKind);
+  });
+
+  it("the cut-over date was already corrected to 2026-10-31, and stays corrected", () => {
+    // 0186 exists because the hard-coded 2025-12-31 would have stamped the
+    // cut-over ten months early while balancing. If that ever regresses, the
+    // opening balance sheet silently moves.
+    const sql = read("supabase/migrations/0186_cutover_config.sql");
+    expect(sql).toContain("2026-11-01");
+    expect(sql).toContain("2026-10-31");
+  });
+
+  it("inventory_count is an accepted evidence kind for the worksheet", () => {
+    // The census claims the worksheet was designed to accept this row. Proven
+    // from the migration rather than asserted.
+    const sql = read("supabase/migrations/0176_opening_balances.sql");
+    expect(sql).toContain("'inventory_count'");
   });
 });

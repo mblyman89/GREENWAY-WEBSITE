@@ -2171,3 +2171,73 @@ booked, which is the one deduction Sec. 280E actually allows; a vendor ACH
 double-book that *balances*, which is what makes it dangerous; and the opening
 balances, which stay blocked on Michael's Sage spreadsheets rather than being
 invented.
+
+
+#### books-70 follow-up: the Cultivera cut-over, added to the census
+
+*"One more thing to check and add to the census is the Cultivera menu import.
+When I go to transfer my inventory from Cultivera to our system, how will the
+system add that inventory to the books? I want to make sure it is accounted for
+properly. The conversion process is going to be a serious struggle for me and
+wrapping my head around how to do it logically is really stressing me out."*
+
+And the plan: *"I plan on auditing the inventory October 31st, after we close.
+Then upload the inventory November 1st before we open."*
+
+**Two rows added, D-48 and D-49, and they are different events** — which is the
+entire finding. The **cut-over load** is product already bought and paid for
+under Cultivera and Sage: its cash left the bank before this platform existed, so
+it is an **equity** event (debit the per-category inventory accounts, credit
+`40400` Opening Balance Equity, `source_kind='opening_balance'`,
+`evidence_kind='inventory_count'`). An **ongoing delivery** after cut-over is a
+**purchase** and genuinely does create a payable. Booking the first like the
+second credits `30000 Accounts Payable` and invents a liability to vendors who
+have already been paid — overstating liabilities and understating equity by the
+entire value of the shelf, **and it balances**.
+
+**More was already right than expected.** Migration `0186_cutover_config.sql`
+had already moved the opening-balance date to **2026-10-31**, exactly the day
+Michael named, and its header records that the previously hard-coded `2025-12-31`
+would have *"stamped the cut-over TEN MONTHS EARLY"* while balancing. `0173`
+seeds 21 per-category inventory accounts and installs
+`gl_guard_inventory_manual`, which **refuses** any `manual` journal line touching
+a `2xxxx` asset — so the database already forbids the wrong way to do this.
+`inventoryAccountForCategory` maps category to account and is self-tested,
+including the zero-padding trap. `0176:76` already lists `inventory_count` as a
+valid evidence kind. Cost survives the Cultivera parse
+(`intake-parser.ts:375-380`).
+
+**What is missing is the path, and one silent hole.** No `src/` file inserts into
+`gl_opening_balances`; the conversion screen is 361 lines with **zero** `rpc(`
+calls, deliberately and correctly so. `intake/actions.ts` has 821 lines and 21
+server actions and **zero** posting calls. And `ccrs-manifest-csv-core.ts:495`
+hard-codes `unit_cost_minor_units: null`, because a CCRS transfer file carries no
+price — so once posting is wired, that path would book a **zero-value receipt**
+unless it refuses. It must refuse, on `0192`'s own established principle: *"an
+unknown value is never quietly turned into a zero."*
+
+**The most consequential mutant of the whole slice survived at first.** Changing
+the cut-over row's source kind from `opening_balance` to `purchase` left all 123
+tests green. The census had no gate for the single most dangerous
+misclassification available at cut-over — the one Michael had just asked to be
+protected from. Section 9 now asserts the economic classification, asserts the two
+rows against **each other** so they cannot converge, and re-derives the constraint
+from the migrations rather than restating the row. **19 mutants, 19 killed.**
+
+**A gate I wrote last session had a real bug, found by these rows.** Three
+regexes used `\.(?:ts|tsx|sql)`. Alternation is first-match-wins, so `page.tsx`
+matched the `ts` branch and yielded the non-existent path `page.ts` — and the
+gate then correctly reported its own truncated string missing. It went unnoticed
+because no evidence string had cited a `.tsx` path until now. Fixed by ordering
+the alternation longest-first. The gate caught its own defect, which is what a
+gate is for.
+
+**Answering the question directly: do we convert at upload?** No — at
+**finalize**, not at import. A staged manifest is a draft that can be rejected,
+partially accepted, or blocked by the WAC 314-55-096 sample cap, and
+`finalizeManifestAction` already computes `activated` / `rejected` / `blocked`.
+Posting at import books product that never reached the shelf. That is D-35's
+lesson one step earlier: the commitment is not the transaction. The **cut-over**
+load is the exception and runs once, through the opening-balance worksheet, not
+through the import path at all.
+

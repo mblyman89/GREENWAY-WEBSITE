@@ -1750,3 +1750,120 @@ census will not invent them. Recorded as `correct: UNKNOWN` with that reason.
 
 **Gate:** the validator refuses `UNKNOWN` without a reason; the census test
 asserts nothing emits `sourceKind: "opening_balance"`.
+
+---
+
+## D-48 - The cut-over inventory load has no path into the books, and it is the largest number the ledger will ever receive
+
+**Found:** books-70 follow-up recon, in answer to Michael's own question: *"When I
+go to transfer my inventory from Cultivera to our system, how will the system add
+that inventory to the books? I want to make sure it is accounted for properly."*
+
+**Severity:** BLOCKING for the 2026-11-01 cut-over.
+
+**The plan, in Michael's words:** *"I plan on auditing the inventory October 31st,
+after we close. Then upload the inventory November 1st before we open."*
+
+**What is already right, and it is more than expected.**
+
+- Migration `0186_cutover_config.sql` **already moved the opening-balance date to
+  2026-10-31**, which is exactly the day Michael named. Its own header records
+  that the previously hard-coded `2025-12-31` would have *"stamped the cut-over
+  TEN MONTHS EARLY. Nothing would have errored. The journal would have balanced."*
+- `0173_chart_of_accounts.sql` seeds **21 per-category inventory accounts**
+  (`20010` Flower through `20220` Merch) under control account `20000`, plus
+  `20890` as a visible quarantine.
+- `inventoryAccountForCategory` (`vendor-bill-core.ts:966`) maps a category slug
+  to its account and is self-tested, including the zero-padding trap
+  (`infused-blunt` -> `20100`, not `2100`) and returning `null` on an unknown
+  category rather than guessing.
+- `gl_guard_inventory_manual` (`0173:316`) **refuses** any `source_kind='manual'`
+  journal line touching a `2xxxx` asset account. Its message is explicit:
+  inventory moves only with goods. So the database already forbids the wrong way
+  to do this.
+- `0176_opening_balances.sql:76` lists **`inventory_count`** among the valid
+  `evidence_kind` values. The worksheet was designed to accept exactly this row.
+
+**What is missing.** The path. Measured:
+
+- `grep -rn 'sourceKind: "opening_balance"' src/` -> **0 hits**.
+- No file in `src/` inserts into `gl_opening_balances`. `ledger-store.ts:458`
+  only `SELECT`s from it.
+- `src/app/admin/books/conversion/page.tsx` is 361 lines and contains **zero**
+  `rpc(` calls. This is deliberate and correct - its header states *"Nothing here
+  posts anything... a screen that could bypass it would be the single most
+  dangerous button in the application, because a wrong opening balance can never
+  be found again."*
+- `gl_bless_opening_balances` and `gl_close_opening_balance_equity` have no
+  caller (already recorded as D-47).
+
+**THE CLASSIFICATION QUESTION, and it is the whole defect.** The cut-over load is
+**not a purchase**. That product was bought and paid for under Cultivera and Sage;
+its cash left the bank before this platform existed. Booking it through the
+receipt path would credit `30000 Accounts Payable` and invent a liability to
+vendors who have already been paid - overstating liabilities and understating
+equity by the entire value of the shelf. The correct shape is a debit to the
+per-category inventory accounts against **`40400` Opening Balance Equity**, with
+`source_kind='opening_balance'` and `evidence_kind='inventory_count'` citing the
+2026-10-31 count.
+
+**Why it is dangerous rather than merely missing.** Every COGS figure for the life
+of the business is measured from this number, and under Sec. 280E cost of goods is
+the only deduction available. A wrong opening inventory value propagates into
+every 280E computation forever, and the balance sheet balances either way.
+
+**Blocked on:** the 2026-10-31 count and Cultivera's per-unit costs. **Not
+invented** (rule 1). The census records `correct: UNKNOWN` with that reason
+attached.
+
+**Census row:** `cost_of_goods_sold.cutover_inventory_load`.
+
+---
+
+## D-49 - Cultivera manifest imports put product on the shelf and value nowhere, and the CCRS CSV path carries no cost at all
+
+**Found:** books-70 follow-up recon.
+
+**Severity:** BLOCKING for accurate books from 2026-11-01 onward.
+
+This is the *ongoing* sibling of D-48: after cut-over, every new delivery arrives
+as a Cultivera / WCIA transfer data link.
+
+**Cost DOES survive the import, on one path.** `intake-parser.ts:375-380` computes
+`unit_cost_minor_units = round((linePrice / qty) * 100)` and migrations `0023` /
+`0028` persist it on `inventory_lots`. `0067_vendor_manifest_payments.sql` already
+computes what is owed as `SUM(received_qty * unit_cost_minor_units)`. This is a
+genuinely good position to be in.
+
+**But `ccrs-manifest-csv-core.ts:495` hard-codes `unit_cost_minor_units: null`,**
+because a CCRS transfer file carries no price. So cost is present on the
+URL/PDF path and **absent** on the CSV path. Once posting is wired, that path
+would book a **zero-value receipt** unless it refuses instead. It must refuse:
+`0192`'s own comment on the audit path already establishes the principle -
+*"NULL here means 'not valued'... an unknown value is never quietly turned into a
+zero."*
+
+**Nothing posts.** Measured on `src/app/admin/inventory/intake/actions.ts` (821
+lines, 21 exported server actions including `importManifestAction`,
+`importManifestBatchAction` and `finalizeManifestAction`): **0** `submitJournal`
+or `gl_` posting calls. `BatchTransferImport.tsx` states its own scope as
+*"DRAFTS-ONLY."* Product reaches the shelf; value reaches nothing.
+
+**What is already right.** `buildBillJournal` resolves cannabis lines to the
+category subaccount and falls back to `20890` quarantine on an unknown category
+rather than guessing (`vendor-bill-core.ts:1140-1146`), and applies the entity
+correction so only `greenway` carries `nondeductible_280e`. `billSourceRef`
+already yields `manifest:<n>`, the right idempotency key. The import
+de-duplicates URLs and reports "already imported", so the staging side is
+idempotent.
+
+**The open design question for the wiring slice:** does the entry post at
+**import** (manifest staged) or at **finalize** (lots activated)? Recommendation,
+with reasoning: **finalize**, because a staged manifest is a draft that may be
+rejected, partially accepted, or blocked by the WAC 314-55-096 sample cap, and
+`finalizeManifestAction` already computes `activated` / `rejected` / `blocked`
+counts. Posting at import would book product that never came on the shelf. This
+is D-35's lesson applied one step earlier: the commitment is not the transaction.
+
+**Census row:** `cost_of_goods_sold.cultivera_manifest_import`.
+
