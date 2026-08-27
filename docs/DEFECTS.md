@@ -2261,3 +2261,208 @@ rather than assume.
 
 **Census rows:** `intercompany.transfer_pair`.
 
+---
+
+## D-55 - The entity structure was designed for a tax result and never tested against the case that governs it
+
+**Found:** books-74, and found because Michael volunteered the one fact that
+makes it findable. Verbatim:
+
+> "They exist solely to mitigate 280E, otherwise all three businesses would be
+> under the cannabis business."
+
+**Why this is a defect record and not just research.** Every prior slice treated
+the four entities in `gl_entities` as a given -- a settled dimension to post
+against. They are not settled. They are a *tax position*, and until books-74
+nobody had checked that position against the authority that decides it. A
+structure nobody has tested is the same class of problem as a refusal code
+nobody can reach (rule 43): it looks like protection and may be decoration.
+
+**What the law actually says.** `Alternative Health Care Advocates v.
+Commissioner`, 151 T.C. No. 13 (2018) held that a commonly-owned S corporation
+which performed a dispensary's daily operations was *itself* "trafficking in
+controlled substances" under Sec. 280E, though it never held title to any
+marijuana:
+
+> "the only difference between what Alternative did and what Wellness did (since
+> Alternative acted only through Wellness) is that Alternative had title to the
+> marijuana and Wellness did not. Wellness employees were directly involved in
+> the provision of medical marijuana ... We do not read the term 'trafficking' to
+> require Wellness to have had title to the marijuana its employees were
+> purchasing and selling."
+
+And on the double tax that resulted:
+
+> "These tax consequences are a direct result of the organizational structure
+> petitioners employed, and petitioners have identified no legal basis for
+> remedy."
+
+The structure produced a result WORSE than no structure: income to the service
+entity, deductions disallowed at both, flow-through income to the shareholders
+with nothing to offset it. `Loughman v. Commissioner`, T.C. Memo 2018-85, is the
+same trap in miniature.
+
+**The hinge, measured from the opinion's own text rather than assumed.** The
+holding turns on the fact that *Wellness employees bought and sold the
+marijuana*; that "was Wellness' primary business." Two findings follow:
+
+- **A management/staffing/payroll entity for the store is the losing pattern.**
+  Title is irrelevant. Do not build one.
+- **Wellness was the tenant: the opinion lists rent among the expenses Wellness
+  PAID.** No lessor was before the court, so the case decides nothing about a
+  commonly-owned landlord. It is authority against a management company, not
+  against Michael's landholding entity. Stated as a limit, not as a blessing --
+  no case found holds a cannabis landlord is trafficking, and none holds it is
+  safe either.
+
+**Why Michael's sentence is the exposure.** Whether entities are one trade or
+business or several is factual, and separate entities still collapse into one
+where they form a "unified business enterprise" with a single profit motive
+(`Alternative Health Care`, 151 T.C. at 239) or "share a close and inseparable
+organizational and economic relationship" (`Olive v. Commissioner`, 139 T.C. 19,
+41 (2012), aff'd 792 F.3d 1146 (9th Cir. 2015)). One express factor is "the
+business purpose which is (or might be) served by carrying on the various
+undertakings separately or together." **A tax purpose is not a business purpose.**
+`CHAMP`, 128 T.C. 173 (2007) won on separate people, separate space, separate
+records -- 7 employees on marijuana against 18 on caregiving. `Olive`,
+`Canna Care` and `Patients Mutual` lost on shared staff, shared fees, and a
+percentage nobody could compute.
+
+**How it stayed hidden.** The structure is real and correctly modeled: migration
+0172 seeds four entities with tax forms and NAICS codes, and `coa-core.ts`
+already encodes that only `greenway` is exposed to 280E. Correct modeling of a
+structure is not validation of the structure. The schema can only record the
+position; it cannot check whether the position survives audit. Nothing in the
+census asks "is this dimension defensible," so nothing failed.
+
+**Measured evidence already in his books that argues the wrong way.** From
+`scripts/recon/sage-suffix-check.py` over the real chart (288 accounts) and 550
+expense rows ($368,276.34):
+
+- **121 rows, $61,109.02** of LYMAN-suffixed expenses paid out of GREENWAY cash
+  (`81002-LYMAN` MAINENANCE $40,206.79; `81001-LYMAN` UTILITIES $10,743.08;
+  `81003-LYMAN` PROPERTY TAX $10,159.15). Commingled cash is the strongest
+  available evidence of a single unified enterprise.
+- Rent IS booked both ways (`70000-GRNWY` expense against `52000-LYMAN` income),
+  which is the right instinct and should be kept -- but the rate has no
+  documented market basis on file, and Sec. 482 plus Reg. 1.6662-6(d)(2) both
+  want that basis to exist BEFORE the return is filed.
+
+**Washington cuts the other way, and that is load-bearing.** WAC 314-55-035(4)(a)
+excludes from "true party of interest" a person "receiving payment for rent on a
+fixed basis under a lease or rental agreement," then adds that where there IS
+common ownership between licensee and property owner, "the board may investigate
+all funds associated with the landlord," and may also investigate "where a rental
+payment has been waived or deferred." So Michael's landlord arrangement is
+expressly contemplated and permitted -- conditioned on a written lease, a fixed
+basis, and rent actually paid. Meanwhile (4)(f) would TOLERATE a staffing company
+that federal tax law punishes. Both regimes must be satisfied; the safe
+intersection is no staffing entity, and a documented fixed lease that is never
+waived.
+
+**Consequence for D-41, recorded honestly rather than left standing.** The
+books-73 recommendation (`36000` intercompany, not `41100` capital contribution)
+STANDS and is strengthened -- but it gains a second half. An intercompany balance
+is only meaningful if the entities are genuinely separate, and the `36000` balance
+is therefore a measuring instrument as well as an account: a due-from that cycles
+looks like two businesses; a due-from that only ratchets upward looks like one
+wallet with two labels, and is the first exhibit in a unified-enterprise
+argument. So: book it to `36000`, **and settle it.** If it cannot be settled
+because the receiving entity has no cash of its own, that is the finding, and the
+answer was `41100` or a distribution all along. The question put to Michael in
+books-73 is unchanged but now matters more, because its answer is also the answer
+to whether the entities are separate.
+
+**Gate.** No code gate is possible here and claiming one would be decoration: this
+is a question of fact about conduct, not a computable property. What IS gated is
+the consequence -- the census row for `intercompany.transfer_pair` stays
+`correct: UNKNOWN`, `submitIntercompanyPair` still has no caller, and the
+forthcoming expense classifier (D-56) must REFUSE rather than guess an entity or
+a cost class. The research itself is recorded in
+`docs/ENTITY-STRUCTURE-AND-280E.md` so it is cited by number hereafter and not
+retold (rule 131).
+
+**Not done, deliberately.** No restructuring is recommended and none should be
+undertaken on my say-so: I am not Michael's attorney, and under WAC
+314-55-035(5)(b) and WAC 314-55-120 an ownership change requires LCB approval
+before it happens. The structural questions go to cannabis-experienced tax
+counsel with this document attached.
+
+**Census rows:** `intercompany.transfer_pair` (unchanged, still UNKNOWN).
+
+---
+
+## D-56 - Nothing turns a real transaction into (account, entity, cost class)
+
+**Found:** books-74, while choosing the next slice. This is the measured gap, and
+it is recorded before any code is written so the slice can be judged against it.
+
+**What is missing.** Four things exist and one does not:
+
+- The **entity dimension exists and is right.** `gl_entities` (0172) seeds exactly
+  `greenway` / `atm` / `landholding` / `personal` with tax form and NAICS each.
+- The **280E classification exists in the schema.**
+  `gl_accounts.default_cost_class` and `gl_account_rules.cost_class` both carry
+  `cogs_direct | cogs_allocable | nondeductible_280e | separate_business |
+  personal | none`; `coa-core.ts#defaultCostClass` encodes that only `greenway`
+  is 280E-exposed.
+- The **costing engine exists**: `cogs-position-core.ts`, 1,260 lines,
+  `determineTaxpayerRole` / `validateCogsInput` / `computeForm1125A` /
+  `comparePositions` / `adviseOnMethodChange`. **Zero importers** (census already
+  records this).
+- The **raw material exists and is measured**: 550 rows, $368,276.34, five real
+  exports, 18 G/L accounts, paid from `10005-GRNWY` (349 rows) and `37009-GRNWY`
+  (201 rows), with "G/L accounts used but NOT in the chart: 0".
+- **The classifier in the middle does not exist.** `gl_account_rules` has a unique
+  index and a control-account guard trigger and **no TypeScript reads or writes
+  it**; `atm-classification-core.ts` documents it in comments and deliberately
+  does not use it.
+
+**How it hid.** Each individual piece is present and demonstrably good, so every
+inspection of any one piece passes. The gap is between the pieces. This is the
+same shape as D-37 (the bank feed displays but cannot post) and D-38 (the payroll
+journal builds but nothing calls it): display and posting are different problems,
+and a chain is measured at its missing link, not at its strongest one.
+
+**Why it is the right next slice.** It is the single surface blocking D-30, D-37
+and D-47 simultaneously; it can be proved against Michael's real measured rows
+rather than fixtures; it posts nothing, so it cannot corrupt anything (the same
+safety property that made the bank feed the safest thing to wire first); and it
+is where the Sec. 280E conclusions in `docs/ENTITY-STRUCTURE-AND-280E.md` become
+mechanical instead of advisory. It is also the expense side, not the inventory
+cut-over, which Michael has deferred ("we are not ready to migrate inventory over
+yet").
+
+**What the slice must do, and the two rules that shape it.**
+
+1. Normalize merchant text the way `match_value` requires (upper-cased,
+   punctuation stripped) so "Office Depot", "OFFICE DEPOT #1234" and
+   "office  depot" are ONE rule.
+2. Match on the ladder the schema already defines (`merchant_exact` before
+   `merchant_contains`), lowest `priority` wins, **with first-key determinism
+   pinned by test** -- the exact weakness that produced survivor M15b in the
+   books-73 campaign.
+3. Assign the ENTITY. Kitsap County Treasury property tax on Geiger Rd is the
+   landlord's cost whichever card paid it. This is where separateness stops being
+   advice (D-55) and becomes code.
+4. Assign the COST CLASS conservatively by law: for `greenway`, a reseller's
+   operating expense is `nondeductible_280e`, and the module must **REFUSE to put
+   store labor, rent or security into `cogs_direct`** -- Reg. 1.471-3(b) does not
+   allow it and `Richmond Patients Group`, T.C. Memo 2020-52, closed the
+   trimming-and-packaging route. A wrong `cogs_direct` is the row that loses an
+   audit; a refusal is worth more than a guess.
+5. Refuse with reachable codes (rule 48: a check that cannot classify must fail,
+   never skip). Any code the shipped rule set cannot reach gets a parameterized
+   door -- `classifyIn(rules, line)` -- so tests can reach it, exactly as
+   `resolveLedgerCategoryIn` does for D-52. Rule 43: an unreachable refusal code
+   is decoration.
+
+**Gate (to be built with the slice).** Pure-leaf self-test plus a second
+independent test file; the census row must move from absent to
+`exists: YES / reachable: NO` and say so honestly until a caller exists.
+
+**Explicitly out of scope.** It will not post, will not write
+`gl_account_rules`, and will not touch the `41000` WITHDRAWALS question
+($141,904.95 across 87 rows) -- that needs the CPA and the K-1 work that is
+deliberately on the back burner.
+

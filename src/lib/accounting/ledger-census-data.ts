@@ -1159,7 +1159,14 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "due-to/due-from while 121 rows ($61,109.02) already pay LYMAN expenses " +
           "from GREENWAY cash. Still UNKNOWN: a recommendation on the record is " +
           "not a decision. It closes when Michael confirms whether the money is " +
-          "expected to be repaid.",
+          "expected to be repaid. books-74 adds the half the recommendation was " +
+          "missing: Michael disclosed that the entities 'exist solely to mitigate " +
+          "280E', so 36000 is now also a MEASURING INSTRUMENT. A due-from that " +
+          "cycles evidences two businesses; one that only ratchets evidences a " +
+          "single unified enterprise under Alternative Health Care Advocates, 151 " +
+          "T.C. No. 13 (2018), and is the first exhibit against him. So: book to " +
+          "36000 AND settle it. If it cannot be settled, the answer was 41100 all " +
+          "along. See D-55 and docs/ENTITY-STRUCTURE-AND-280E.md.",
       },
       accepted: { status: "MISSING", evidence: "No app path presents a pair." },
       idempotent: {
