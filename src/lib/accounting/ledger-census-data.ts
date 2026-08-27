@@ -301,7 +301,10 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "converts a counted lot list into an opening inventory journal. " +
           "inventoryAccountForCategory (vendor-bill-core.ts:966) maps a category " +
           "slug to its 200xx account and is self-tested, so the ACCOUNT side is " +
-          "solved; the entry that uses it for a cut-over load is not written.",
+          "solved; the entry that uses it for a cut-over load is not written. " +
+          "books-71 recon also measured the CATEGORY side as solved: transform.ts " +
+          "CATEGORY_MAP covers 52 of 52 Cultivera categories in the real export, " +
+          "routing 100.00% of value and $0.00 to 20890 quarantine.",
       },
       reachable: {
         status: "MISSING",
@@ -320,10 +323,15 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "so this load must be source_kind 'opening_balance', 'inventory' or " +
           "'purchase' by database law, never a typed journal.",
         reason:
-          "Whether the counted VALUE is right cannot be measured from code. It " +
-          "depends on the 2026-10-31 count and on Cultivera's per-unit costs, " +
-          "which Michael has not yet supplied. Rule 1: the census will not invent " +
-          "the largest asset figure on the balance sheet.",
+          "Michael's Cultivera export has now been MEASURED (books-71 recon, " +
+          "scripts/recon/cultivera-measure.py): INVENTORIES.xlsx carries a usable " +
+          "non-zero Cost on 3,917 of 3,917 rows, zero blanks, zero zeros, zero " +
+          "negatives, extending to $176,824.62 and cross-verified by parsing the " +
+          "raw sheet XML. So per-unit cost EXISTS. What is still unmeasurable from " +
+          "code is (a) the 2026-10-31 count itself, which has not happened, and " +
+          "(b) whether Cultivera's Cost is landed or invoice cost, which changes " +
+          "COGS under 280E. Rule 1: the census will not invent the largest asset " +
+          "figure on the balance sheet.",
       },
       accepted: {
         status: "PARTIAL",
@@ -381,7 +389,11 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "store it on inventory_lots. But ccrs-manifest-csv-core.ts:495 " +
           "hard-codes 'unit_cost_minor_units: null' for the CCRS CSV shape, " +
           "because a CCRS transfer file carries no price. So cost survives the " +
-          "URL/PDF path and is absent on the CSV path.",
+          "URL/PDF path and is absent on the CSV path. books-71 recon adds a " +
+          "second measured source of this hole: PRODUCTS.xlsx, the Cultivera " +
+          "catalog export, has Vendor Price BLANK on 3,311 of 3,311 rows, so the " +
+          "catalog side carries no cost either. Cost can only come from the " +
+          "INVENTORIES export or from purchase history.",
       },
       reachable: {
         status: "MISSING",

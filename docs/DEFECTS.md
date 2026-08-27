@@ -1867,3 +1867,69 @@ is D-35's lesson applied one step earlier: the commitment is not the transaction
 
 **Census row:** `cost_of_goods_sold.cultivera_manifest_import`.
 
+## D-50 - The ledger inherits the website menu's category groupings, and four of them ignore a more specific account that already exists
+
+**Found by:** books-71 recon, measuring Michael's real Cultivera exports
+(`INVENTORIES.xlsx`, 3,917 rows; `PRODUCTS.xlsx`, 3,311 rows) against the code.
+
+**Status:** OPEN, awaiting an owner decision. Not a code fault.
+
+**The good news first, because it reverses an earlier fear.** The census recorded
+the cut-over's category side as unsolved. It is solved. `src/lib/pos/transform.ts`
+already contains `CATEGORY_MAP`, a hand-built Cultivera-category to
+Greenway-slug map with 53 entries. Measured against the real export by
+`scripts/recon/cultivera-existing-map.py` (which parses the map out of the
+TypeScript source rather than retyping it, so the measurement cannot drift from
+the code):
+
+- Cultivera categories present in the file: **52**
+- covered by the existing map: **52**
+- not covered: **0**
+- shelf value routed to a real category account: **$176,824.62 = 100.00%**
+- shelf value routed to `20890` quarantine: **$0.00 = 0.00%**
+- map entries pointing at a slug with no inventory account: **0**
+
+My own first pass, applying only the naive slug rule the posting code uses
+(lowercase, spaces to hyphens), concluded that 43 of 52 categories would fail and
+**51.31% of shelf value would land in quarantine.** That conclusion was wrong. It
+measured a rule, not the system. Recorded here because the wrong number is the
+instructive part: a plausible-looking measurement of the wrong artifact produced a
+false alarm, and only reading the actual mapper corrected it.
+
+**The defect.** `CATEGORY_MAP` was written for the **storefront menu**, where
+grouping blunts with prerolls is good merchandising. The **ledger** has dedicated
+accounts the menu map does not use. Four entries route to a less specific account
+than the chart provides:
+
+| Cultivera Category | map sends to | dedicated account that exists | rows | value |
+|---|---|---|---|---|
+| `RSO` | `20140` Concentrate | **`20150` RSO** | 47 | $2,680.69 |
+| `Tincture` | `20170` Edible (Liquid) | **`20180` Tincture** | 32 | $2,484.78 |
+| `Infused Blunt` | `20080` Infused Preroll | **`20100` Infused Blunt** | 44 | $951.78 |
+| `Blunt` | `20050` Preroll | **`20070` Blunt** | 24 | $782.82 |
+
+Combined value affected: **$6,900.07** of $176,824.62 (3.90%).
+
+Neither choice is an error. Sharing the menu map keeps one list to maintain and
+guarantees the menu and the books agree. A ledger-specific override uses the chart
+as designed and yields finer margin reporting. **This is an accounting judgement
+and it belongs to Michael.** Rule 1: not decided here.
+
+**Whatever is decided, one rule must hold: `Category` must win over
+`InventoryType`.** `Infused Pre-roll` carries `InventoryType = Concentrate for
+Inhalation` on 532 of its 617 rows. An infused pre-roll is not a concentrate.
+Keying on `InventoryType` would post **$19,547.49** to `20140` instead of `20080`
+and every report would still balance. `Usable Marijuana` is similarly unusable as
+a key: the file carries Flower (749), Pre-roll (626), Infused Pre-roll (85), Blunt
+(24) and stray `Panda Candies` (1), `Roll On` (1), `Hash` (1) under it.
+
+**Also measured, and consequential for the loader:** `Barcode` is NOT unique - 41
+barcodes appear on more than one row (35 groups at identical cost, 6 groups at
+**different** costs, all with differing `Received date`). `Id` IS unique (3,917
+distinct, 0 duplicates). A loader keyed on barcode would collapse 41 real cost
+lots. Whether the 6 differing-cost groups keep both layers or are averaged is a
+second owner decision.
+
+**Census rows:** `cost_of_goods_sold.cutover_inventory_load`,
+`cost_of_goods_sold.cultivera_manifest_import`.
+
