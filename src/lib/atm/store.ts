@@ -19,7 +19,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { optionalBigint } from "@/lib/supabase/pg-bigint";
+import { optionalBigint, requiredBigint } from "@/lib/supabase/pg-bigint";
 import { encryptSecret, decryptSecret, maskAccountTail } from "@/lib/security/at-rest-crypto";
 import { listPlaidAccounts, listPlaidTransactions } from "@/lib/plaid/store";
 import { toBankDeposits, type BankDeposit, type ReconcileSettlement } from "@/lib/atm/atm-reconcile-core";
@@ -303,6 +303,138 @@ export async function clearAtmCredentials(): Promise<{ ok: true } | { ok: false;
 // they return empty arrays so the tabs render an honest empty state.
 // ---------------------------------------------------------------------------
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE DATABASE ROW SHAPES, AND WHY THEY ARRIVE THE WAY THEY DO
+ *
+ * Every read below used to say `data as Array<Record<string, unknown>>`. That
+ * cast does not establish a shape, it ASSERTS one, and an assertion is not a
+ * check: it tells the compiler to stop asking. The consequence was recorded in
+ * this file's own `numOrNull` docstring before it was fixed - "no column in
+ * this file has ever been type-checked at all" - and it was true. Five sites
+ * carried it. (The books-69 recon counted four; it missed the one inside
+ * `getLatestAtmTerminalStatus`. The number is stated here rather than quietly
+ * corrected, per standing rule 89.)
+ *
+ * WHY THE `number | string` UNIONS ARE NOT SLOPPINESS. PostgREST serialises a
+ * Postgres `bigint` as a JSON STRING and an `integer` as a JSON NUMBER, because
+ * 64 bits do not fit in JavaScript's 53 bits of exact integer. So the union is
+ * not "we are unsure what this is" - it is the wire format, written down. The
+ * migration is the source of truth for which is which, and each field below is
+ * annotated with the declared Postgres type it was MEASURED from:
+ *
+ *   0156_atm_pai_foundation.sql   atm_settlements, atm_cash_loads
+ *   0183_atm_terminal_status.sql  atm_terminal_status
+ *
+ * `bigint` columns are typed `number | string` and must go through
+ * `pg-bigint`. `integer` columns are typed `number | string` too, because a
+ * view or a computed column can still hand back text, and `pg-bigint` refuses
+ * that safely rather than coercing it.
+ *
+ * NULLABILITY IS COPIED FROM THE MIGRATION, NOT CHOSEN. A column the schema
+ * declares `not null` is typed without `| null` here, which is what makes
+ * `requiredBigint` the correct reader for it and `optionalBigint` the wrong
+ * one. That distinction is load-bearing: see D-22 on `cash_load_cents`.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * A row of `public.atm_settlements` as PostgREST returns it (migration 0156).
+ * Every measurement column is nullable in the schema; null means PAI did not
+ * report the figure, and never zero.
+ */
+type AtmSettlementDbRow = {
+  readonly id: string; // uuid  not null
+  readonly settlement_date: string; // date  not null
+  readonly terminal_id: string; // text  not null
+  readonly total_trx: number | string | null; // integer
+  readonly withdrawal_trx: number | string | null; // integer
+  readonly surcharged_wd_trx: number | string | null; // integer
+  readonly terminal_transaction_cents: number | string | null; // bigint
+  readonly surcharge_cents: number | string | null; // bigint
+  readonly settlement_total_cents: number | string | null; // bigint
+};
+
+/**
+ * The `select` list, DERIVED from the row type rather than written beside it.
+ *
+ * A hand-written select string and a hand-written row type are two lists that
+ * must agree, and nothing was making them. Ask for a column and forget it in
+ * the type and it is invisible; name it in the type and forget it in the select
+ * and PostgREST simply omits it, so the field reads `undefined` at runtime
+ * while the compiler believes it is a string. `Record<keyof T, true>` closes
+ * both directions at once: a missing key fails to satisfy the Record, and an
+ * extra key is not in `keyof T`. The select string is then generated from the
+ * same object, so drift is a compile error instead of an empty column.
+ */
+const SETTLEMENT_COL_MAP = {
+  id: true,
+  settlement_date: true,
+  terminal_id: true,
+  total_trx: true,
+  withdrawal_trx: true,
+  surcharged_wd_trx: true,
+  terminal_transaction_cents: true,
+  surcharge_cents: true,
+  settlement_total_cents: true,
+} as const satisfies Record<keyof AtmSettlementDbRow, true>;
+
+/** Join a checked column map into a PostgREST `select` list. */
+function colsOf(map: Record<string, true>): string {
+  return Object.keys(map).join(",");
+}
+
+/**
+ * THE ONE PLACE THE UNTYPED WIRE BECOMES A TYPED ROW.
+ *
+ * The admin client is created by `createSupabaseAdminClient()` with no
+ * generated `Database` generic, so supabase-js cannot know what
+ * `.from("atm_settlements")` contains. Its declared return in that situation is
+ * a union that includes `GenericStringError` - literally `{ error: true } &
+ * String` - and that is not a pessimistic guess by the library, it is the
+ * honest type of "I have no schema, this might be an error payload".
+ *
+ * The old `as Array<Record<string, unknown>>` cast compiled precisely BECAUSE
+ * it was so loose that it overlapped that error sentinel. Narrowing to a real
+ * row shape made TypeScript object, which is the type system doing its job:
+ * asked to convert an error object into a settlement, it correctly refused.
+ *
+ * So the conversion is routed through `unknown` deliberately, and it is done
+ * ONCE, here, instead of at four call sites. What this function does and does
+ * not buy is worth stating plainly rather than leaving to be assumed:
+ *
+ *   IT DOES catch the error sentinel at runtime. `{ error: true }` is a real
+ *   thing PostgREST can hand back, the declared type says so, and turning it
+ *   into a row would produce an "ATM settlement" whose every column is
+ *   undefined. That is refused here with a message naming the table.
+ *
+ *   IT DOES NOT verify each column's type. Proving `surcharge_cents` really is
+ *   a bigint string would mean a validator per table, and the money columns
+ *   already get exactly that from `pg-bigint` one layer down, which is where a
+ *   bad figure actually needs to be stopped.
+ *
+ *   WHAT PROTECTS THE NON-MONEY COLUMNS is not this function but the
+ *   `Record<keyof Row, true>` column maps above. The old code wrote
+ *   `String(r.settlement_date ?? "")` because a column missing from the select
+ *   list arrives as `undefined`, and that defensive `?? ""` then turned the
+ *   omission into an empty date. The maps make that omission a COMPILE error,
+ *   so the defensive coalesce is no longer papering over a real hazard and the
+ *   field can simply be read.
+ */
+function rowsOf<T>(data: unknown, table: string): readonly T[] {
+  if (!Array.isArray(data)) return [];
+  for (const row of data) {
+    if (row === null || typeof row !== "object" || (row as { error?: unknown }).error === true) {
+      throw new Error(
+        `A read of ${table} returned something that is not a row. PostgREST can answer a ` +
+          `select with an error payload instead of data, and the declared type of this query ` +
+          `includes exactly that case. Reading it as a row would produce a record whose every ` +
+          `column is undefined - a settlement with no date and no amount, which downstream code ` +
+          `would treat as real. Nothing was assumed and no row was invented; the read stopped here.`,
+      );
+    }
+  }
+  return data as readonly T[];
+}
+
 export type AtmSettlementRow = {
   id: string;
   settlementDate: string; // ISO yyyy-mm-dd
@@ -315,8 +447,7 @@ export type AtmSettlementRow = {
   settlementTotalCents: number | null;
 };
 
-const SETTLEMENT_COLS =
-  "id,settlement_date,terminal_id,total_trx,withdrawal_trx,surcharged_wd_trx,terminal_transaction_cents,surcharge_cents,settlement_total_cents";
+const SETTLEMENT_COLS = colsOf(SETTLEMENT_COL_MAP);
 
 /** List settlements, newest settlement_date first. Empty when DB unconfigured. */
 export async function listAtmSettlements(limit = 400): Promise<AtmSettlementRow[]> {
@@ -329,10 +460,10 @@ export async function listAtmSettlements(limit = 400): Promise<AtmSettlementRow[
       .order("settlement_date", { ascending: false })
       .limit(limit);
     if (error || !data) return [];
-    return (data as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id),
-      settlementDate: String(r.settlement_date ?? ""),
-      terminalId: String(r.terminal_id ?? ""),
+    return rowsOf<AtmSettlementDbRow>(data, "atm_settlements").map((r) => ({
+      id: r.id,
+      settlementDate: r.settlement_date,
+      terminalId: r.terminal_id,
       totalTrx: numOrNull(r.total_trx, "atm_settlements", "total_trx"),
       withdrawalTrx: numOrNull(r.withdrawal_trx, "atm_settlements", "withdrawal_trx"),
       surchargedWdTrx: numOrNull(r.surcharged_wd_trx, "atm_settlements", "surcharged_wd_trx"),
@@ -345,6 +476,34 @@ export async function listAtmSettlements(limit = 400): Promise<AtmSettlementRow[
   }
 }
 
+/**
+ * A row of `public.atm_cash_loads` as PostgREST returns it (migration 0156).
+ *
+ * `cash_load_cents` is declared `bigint NOT NULL`, and it is typed here without
+ * `| null` for that reason. That is the whole of D-22: see the reader below.
+ */
+type AtmCashLoadDbRow = {
+  readonly id: string; // uuid    not null
+  readonly terminal_id: string; // text    not null
+  readonly loaded_at: string | null; // timestamptz
+  readonly load_date: string | null; // date
+  readonly cash_load_cents: number | string; // bigint  NOT NULL
+  readonly balance_after_cents: number | string | null; // bigint
+  readonly source: string; // text    not null, check in ('pai','manual')
+  readonly raw: Record<string, unknown> | null; // jsonb   not null default '{}'
+};
+
+const CASH_LOAD_COL_MAP = {
+  id: true,
+  terminal_id: true,
+  loaded_at: true,
+  load_date: true,
+  cash_load_cents: true,
+  balance_after_cents: true,
+  source: true,
+  raw: true,
+} as const satisfies Record<keyof AtmCashLoadDbRow, true>;
+
 export type AtmCashLoadRow = {
   id: string;
   terminalId: string;
@@ -355,8 +514,7 @@ export type AtmCashLoadRow = {
   source: "pai" | "manual";
 };
 
-const CASH_LOAD_COLS =
-  "id,terminal_id,loaded_at,load_date,cash_load_cents,balance_after_cents,source,raw";
+const CASH_LOAD_COLS = colsOf(CASH_LOAD_COL_MAP);
 
 /** List cash loads, newest loaded_at first. Empty when DB unconfigured. */
 export async function listAtmCashLoads(limit = 400): Promise<AtmCashLoadRow[]> {
@@ -369,21 +527,37 @@ export async function listAtmCashLoads(limit = 400): Promise<AtmCashLoadRow[]> {
       .order("loaded_at", { ascending: false, nullsFirst: false })
       .limit(limit);
     if (error || !data) return [];
-    return (data as Array<Record<string, unknown>>).map((r) => {
-      const raw = (r.raw ?? {}) as Record<string, unknown>;
+    return rowsOf<AtmCashLoadDbRow>(data, "atm_cash_loads").map((r) => {
+      const raw = r.raw ?? {};
       // Prefer the verbatim report "Trx Time" captured in raw; fall back to loaded_at.
       const rawTrxTime =
         typeof raw["Trx Time"] === "string"
-          ? (raw["Trx Time"] as string)
+          ? raw["Trx Time"]
           : typeof raw.loaded_at_raw === "string"
-            ? (raw.loaded_at_raw as string)
+            ? raw.loaded_at_raw
             : null;
       return {
-        id: String(r.id),
-        terminalId: String(r.terminal_id ?? ""),
-        loadedAtRaw: rawTrxTime ?? (r.loaded_at ? String(r.loaded_at) : null),
-        loadDate: r.load_date ? String(r.load_date) : null,
-        cashLoadCents: Number(r.cash_load_cents ?? 0),
+        id: r.id,
+        terminalId: r.terminal_id,
+        loadedAtRaw: rawTrxTime ?? r.loaded_at,
+        loadDate: r.load_date,
+        // D-22. This line used to read `Number(r.cash_load_cents ?? 0)`, and
+        // that is the exact defect `pg-bigint.ts` was written to end - it even
+        // names this file in its header as one of the callers still doing it.
+        // The column is `bigint NOT NULL`, so PostgREST sends it as a STRING,
+        // and `Number("")` is 0, not NaN. An unreadable or blank cash load
+        // therefore became a confident "no cash was loaded", which is the most
+        // dangerous possible wrong answer here because it is entirely
+        // plausible - an ATM that was not filled that day looks identical. It
+        // then flowed into `atm-ui-core.ts` `totalLoaded`, understating cash
+        // put into the machine. `?? 0` also silently covered for a column the
+        // schema says cannot be null, hiding a broken row instead of reporting
+        // it. `requiredBigint` refuses all of it and says which column failed.
+        cashLoadCents: requiredBigint(r.cash_load_cents, {
+          table: "atm_cash_loads",
+          column: "cash_load_cents",
+          context: `cash load ${r.id}`,
+        }),
         balanceAfterCents: numOrNull(r.balance_after_cents, "atm_cash_loads", "balance_after_cents"),
         source: r.source === "manual" ? "manual" : "pai",
       };
@@ -455,35 +629,35 @@ export async function insertManualCashLoad(
  * balance keeps its null, while an unreadable balance now says so instead of
  * quietly resembling one.
  *
- * IT STILL TAKES `unknown`, AND THAT IS A FINDING, NOT A PREFERENCE. Narrowing
- * the parameter to `number | string | null` was tried first and the compiler
- * refused it in eleven places, which is how the real problem surfaced: every
- * caller reads rows cast `as Array<Record<string, unknown>>`, so no column in
- * this file has ever been type-checked at all. The cast asserts the shape
- * instead of establishing it, and a cast protects nothing. Removing those casts
- * means giving three `atm_*` row types real shapes, which is a change to the
- * ATM ingestion path and does not belong in a commit about W-2s; it is recorded
- * on the roadmap instead.
+ * IT USED TO TAKE `unknown`, AND THAT WAS A FINDING, NOT A PREFERENCE. The
+ * previous note here read: "Narrowing the parameter to `number | string | null`
+ * was tried first and the compiler refused it in eleven places, which is how
+ * the real problem surfaced: every caller reads rows cast
+ * `as Array<Record<string, unknown>>`, so no column in this file has ever been
+ * type-checked at all." It then deferred the fix to the roadmap, because giving
+ * the `atm_*` rows real shapes did not belong in a commit about W-2s.
  *
- * So `unknown` stays, and this function REFUSES what it cannot recognise rather
- * than coercing it. That is the part that matters: `Number([])` is 0 and
- * `Number(true)` is 1, so the old body would have turned an object, an empty
- * array or a boolean into a plausible ATM balance. Now anything that is not a
- * number, a numeric string, or absent stops here and says which column it came
- * from.
+ * books-69 is that commit. The rows above now have declared shapes measured
+ * from migrations 0156 and 0183, so the parameter is narrowed and the eleven
+ * call sites type-check against the columns they actually name. The runtime
+ * guard for "this is not a number or a string" is GONE ON PURPOSE, because it
+ * is now unreachable: the only way to reach this function is through a typed
+ * row field, and every one of those fields is declared `number | string | null`
+ * after being read off the migration. A runtime check for a case the type
+ * system has excluded is not extra safety, it is an untestable branch that
+ * would fail standing rule 39 - an assertion nothing can make fire proves
+ * nothing.
+ *
+ * What remains is the part that always mattered, and it now lives entirely in
+ * `pg-bigint`: a blank is not a zero, hex and exponent notation are refused
+ * rather than coerced, and anything outside JavaScript's exact integer range
+ * stops here instead of arriving silently wrong.
  */
-function numOrNull(v: unknown, table: string, column: string): number | null {
-  if (v === null || v === undefined) return null;
-  if (typeof v !== "number" && typeof v !== "string") {
-    throw new Error(
-      `${table}.${column} arrived as a ${
-        Array.isArray(v) ? "array" : typeof v
-      }, which is not something a numeric column can return. Nothing was assumed: an array, ` +
-        `an object or a boolean all convert to a plausible-looking number in JavaScript ` +
-        `(Number([]) is 0, Number(true) is 1), so this reading stopped instead of inventing an ` +
-        `ATM balance out of the wrong type.`,
-    );
-  }
+function numOrNull(
+  v: number | string | null | undefined,
+  table: string,
+  column: string,
+): number | null {
   return optionalBigint(v, { table, column, context: `an ${table} row` });
 }
 
@@ -623,14 +797,53 @@ export type AtmTerminalStatusRecord = {
   balanceCents: number | null;
 };
 
-const TERMINAL_STATUS_COLS =
-  "id,terminal_id,captured_at,status,location,group_name,days_until_cash_out,trxs_since_settlement,last_trx_raw,last_wd_trx_raw,last_rev_trx_raw,balance_prev_eod_cents,balance_cents";
+/**
+ * A row of `public.atm_terminal_status` as PostgREST returns it (0183).
+ *
+ * The migration is explicit that "every measurement column is NULLABLE on
+ * purpose: PAI omits columns depending on how the report is configured, and
+ * NULL means 'not reported' -- never zero." The nullability below is copied
+ * from it rather than decided here.
+ */
+type AtmTerminalStatusDbRow = {
+  readonly id: string; // uuid        not null
+  readonly terminal_id: string; // text        not null
+  readonly captured_at: string; // timestamptz not null
+  readonly status: string | null; // text
+  readonly location: string | null; // text
+  readonly group_name: string | null; // text
+  readonly days_until_cash_out: number | string | null; // integer
+  readonly trxs_since_settlement: number | string | null; // integer
+  readonly last_trx_raw: string | null; // text
+  readonly last_wd_trx_raw: string | null; // text
+  readonly last_rev_trx_raw: string | null; // text
+  readonly balance_prev_eod_cents: number | string | null; // bigint
+  readonly balance_cents: number | string | null; // bigint
+};
 
-function mapTerminalStatusRecord(r: Record<string, unknown>): AtmTerminalStatusRecord {
+const TERMINAL_STATUS_COL_MAP = {
+  id: true,
+  terminal_id: true,
+  captured_at: true,
+  status: true,
+  location: true,
+  group_name: true,
+  days_until_cash_out: true,
+  trxs_since_settlement: true,
+  last_trx_raw: true,
+  last_wd_trx_raw: true,
+  last_rev_trx_raw: true,
+  balance_prev_eod_cents: true,
+  balance_cents: true,
+} as const satisfies Record<keyof AtmTerminalStatusDbRow, true>;
+
+const TERMINAL_STATUS_COLS = colsOf(TERMINAL_STATUS_COL_MAP);
+
+function mapTerminalStatusRecord(r: AtmTerminalStatusDbRow): AtmTerminalStatusRecord {
   return {
-    id: String(r.id),
-    terminalId: String(r.terminal_id ?? "").trim(),
-    capturedAt: String(r.captured_at ?? ""),
+    id: r.id,
+    terminalId: r.terminal_id.trim(),
+    capturedAt: r.captured_at,
     status: textOrNullDb(r.status),
     location: textOrNullDb(r.location),
     groupName: textOrNullDb(r.group_name),
@@ -671,7 +884,9 @@ export async function getLatestAtmTerminalStatus(
     if (want !== "") q = q.eq("terminal_id", want);
     const { data, error } = await q;
     if (error || !data || data.length === 0) return null;
-    return mapTerminalStatusRecord(data[0] as Record<string, unknown>);
+    const [first] = rowsOf<AtmTerminalStatusDbRow>(data, "atm_terminal_status");
+    if (!first) return null;
+    return mapTerminalStatusRecord(first);
   } catch {
     return null;
   }
@@ -688,7 +903,7 @@ export async function listAtmTerminalStatus(limit = 200): Promise<AtmTerminalSta
       .order("captured_at", { ascending: false })
       .limit(limit);
     if (error || !data) return [];
-    return (data as Array<Record<string, unknown>>).map(mapTerminalStatusRecord);
+    return rowsOf<AtmTerminalStatusDbRow>(data, "atm_terminal_status").map(mapTerminalStatusRecord);
   } catch {
     return [];
   }

@@ -869,3 +869,91 @@ failure verbatim — *"expected '0' to contain 'LYMAN\'S MARIJUANA L.L.C.'"* —
 re-flagging a populated box `notComputedYet` fails with *"expected 'not computed
 yet' to be '46-4217016'"*. The green suite that missed this defect twice now
 fails against both versions of it.
+
+---
+
+## D-22 — an unreadable ATM cash load counted as a real reading of "no cash loaded"
+
+**Where:** `src/lib/atm/store.ts`, `listAtmCashLoads()`.
+
+**The line, as it shipped:**
+
+```ts
+cashLoadCents: Number(r.cash_load_cents ?? 0),
+```
+
+**Why it is wrong.** `atm_cash_loads.cash_load_cents` is declared `bigint NOT
+NULL` in migration `0156_atm_pai_foundation.sql`. PostgREST serialises a
+`bigint` as a JSON **string**, because 64 bits do not fit in JavaScript's 53
+bits of exact integer. So the value arriving here is text, and `Number("")` is
+`0`, not `NaN`. A blank, whitespace, or otherwise unreadable column therefore
+became a confident `0` — and zero is the most dangerous possible wrong answer
+for this particular column, because it is entirely plausible: an ATM that simply
+was not filled that day looks exactly the same.
+
+It did not stop at the read. `atm-ui-core.ts` `buildCashLoadsView` accumulates
+with `if (Number.isFinite(r.cashLoadCents)) totalLoaded += ...`, and
+`Number.isFinite(0)` is `true`, so the invented zero was **added to the total as
+a genuine reading** rather than skipped as missing. Vault cash put into the
+machine was understated, silently, with no null, no NaN and no throw anywhere.
+
+The `?? 0` is a second, separate fault stacked on the first. The schema says the
+column cannot be null, so a null there means the row is not the shape the schema
+promises — something wrote it outside the normal path. The coalesce converted
+that evidence of a broken row into a plausible figure.
+
+**How it survived.** `src/lib/atm/store.ts` was already listed as a caller in
+`tests/compliance/pg-bigint.test.ts` §7, and it passed every check there: it
+imported the shared reader, and it carried neither of the two banned idioms.
+Both of those assertions ask *"does this file still contain the old line"*,
+which is a check for one spelling of the mistake rather than for the mistake.
+Importing the fixed reader and then failing to use it on one column out of
+twelve defeats both. That is standing rule 50 — dead code wearing a green check
+— and the file wearing it was on the list of files the check existed to protect.
+
+**Why the casts hid it.** Every read in the file said `data as
+Array<Record<string, unknown>>`. A cast does not establish a shape, it asserts
+one, so `r.cash_load_cents` was typed `unknown` and *any* handling of it
+compiled. The file's own `numOrNull` docstring had already recorded the
+consequence — *"no column in this file has ever been type-checked at all"* — and
+deferred the repair to the roadmap. This is that repair.
+
+**Fixed.** Three DB row types (`AtmSettlementDbRow`, `AtmCashLoadDbRow`,
+`AtmTerminalStatusDbRow`) measured field by field from migrations `0156` and
+`0183`, with nullability copied from the schema rather than chosen — which is
+what makes `requiredBigint` demonstrably the correct reader for this column and
+`optionalBigint` the wrong one. Five cast sites removed (the books-69 recon
+counted four; it missed the one in `getLatestAtmTerminalStatus`, and the number
+is corrected out loud per rule 89). `numOrNull` narrowed from `unknown` to
+`number | string | null | undefined`, which is the payoff the old docstring
+predicted, and its now-unreachable runtime type guard deleted rather than left
+as a branch no test could ever fire (rule 39).
+
+Each row type is paired with a `Record<keyof Row, true>` column map that the
+`select` string is generated from, so the two lists cannot drift: a column
+missing from the map is a compile error, and a column that is not in the row
+type is a compile error. This matters more than it looks, because a column
+omitted from a `select` arrives as `undefined` at runtime while the compiler
+believes it is a string — the failure the old defensive `String(r.x ?? "")`
+calls were quietly absorbing.
+
+**The gates:** two, in `pg-bigint.test.ts` §7. *"none of them converts a row
+value with a raw `Number()`"* asks the opposite question from the two gates that
+missed this — not "is the old line still here" but "is there any raw `Number()`
+left on a row value anywhere in the six stores". *"that D-22 gate would have
+caught the real defect"* feeds the removed line back to the regex, so a gate
+that matches nothing cannot quietly become a decoration (rule 39).
+
+Mutation-proven, four ways. Dropping a column from a map, misspelling a column
+in a map, and misspelling a column at a read site are each now compile errors
+naming the column (the third — `r.surchage_cents` — compiled cleanly under the
+old cast and returned `null`, which is precisely the recon's warning that *"a
+mistyped column reads as empty, becomes a zero in a journal line, and a zero
+posts perfectly cleanly without complaining"*). Restoring the original
+`Number(r.cash_load_cents ?? 0)` fails the new gate with the defective line
+quoted back.
+
+**Why it was worth fixing before wiring the ATM to the ledger.** Michael:
+*"we need bullet proof logic in place before we touch the books."* Every figure
+these readers return is about to become a journal line. A zero posts perfectly
+cleanly.

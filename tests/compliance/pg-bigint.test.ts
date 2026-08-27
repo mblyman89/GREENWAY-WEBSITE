@@ -387,6 +387,60 @@ describe("§7 every store that reads a bigint uses the shared reader", () => {
     }
   });
 
+  /**
+   * D-22. The two assertions above look thorough and were not, and the proof is
+   * that `src/lib/atm/store.ts` was already on the CALLERS list - it imported
+   * the shared reader, it did not carry either banned idiom, it passed both
+   * gates - and it still read `Number(r.cash_load_cents ?? 0)` on a column the
+   * migration declares `bigint NOT NULL`.
+   *
+   * Both existing checks ask "does this file still contain the OLD line". That
+   * is a check for one spelling of the mistake, not for the mistake. Importing
+   * the fixed reader and then not using it on one column out of twelve defeats
+   * it completely, which is standing rule 50 wearing the green check it warns
+   * about.
+   *
+   * So this asks the opposite question: is there any RAW `Number(...)` left on
+   * a value that came off a database row. `?? 0` is the specific poison, since
+   * `Number("")` is 0 and `Number(null ?? 0)` is 0, so a blank or absent money
+   * column becomes a confident zero - and zero cash loaded looks exactly like
+   * an ATM that simply was not filled that day.
+   */
+  it("none of them converts a row value with a raw Number() (D-22)", () => {
+    // `r` / `row` / `data` are the row-variable names used across the six
+    // stores; measured from the files, not assumed.
+    const rawNumberOnARow = /\bNumber\s*\(\s*(?:r|row|rec|data)\b[^)]*\)/;
+    for (const rel of CALLERS) {
+      const code = codeOf(rel);
+      const hit = rawNumberOnARow.exec(code);
+      expect(
+        hit?.[0] ?? null,
+        `${rel} converts a database row value with a bare Number(). That is D-22: ` +
+          `Number("") is 0, so a blank bigint column becomes a plausible-looking zero ` +
+          `instead of an error. Use requiredBigint/optionalBigint from pg-bigint.`,
+      ).toBeNull();
+    }
+  });
+
+  /**
+   * The gate above is a regex, and a regex that matches nothing passes forever
+   * (rule 39). This proves it can still fire by handing it the exact line that
+   * was removed from `atm/store.ts`, so the protection cannot rot into a
+   * decoration the day someone rewrites it slightly.
+   */
+  it("that D-22 gate would have caught the real defect", () => {
+    const rawNumberOnARow = /\bNumber\s*\(\s*(?:r|row|rec|data)\b[^)]*\)/;
+    const theDefectAsItShipped = "        cashLoadCents: Number(r.cash_load_cents ?? 0),";
+    expect(
+      rawNumberOnARow.test(theDefectAsItShipped),
+      "the D-22 gate no longer matches the line it was written to catch",
+    ).toBe(true);
+    // And it must not fire on the honest replacement, or it is unusable.
+    expect(rawNumberOnARow.test("cashLoadCents: requiredBigint(r.cash_load_cents, src),")).toBe(
+      false,
+    );
+  });
+
   it("the comment-stripper actually strips (rule 39 self-check)", () => {
     // Without this, a bug in `codeOf` returning "" would make the entire
     // section above pass vacuously - which is the precise failure mode these
