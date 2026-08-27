@@ -48,7 +48,15 @@ function summaryRow(over: Partial<SettlementRow>): SettlementRow {
     surchargedWdTrx: 8,
     terminalTransactionCents: null,
     surchargeCents: 2400,
-    settlementTotalCents: 90000,
+    // MEASURED, not assumed: in Michael's 2026-05-01..2026-08-23 exports the
+    // Daily Settlement "Settlement" column equals the Funds Movement
+    // "Transaction" leg on 112 of 115 days, and equals transaction + surcharge
+    // on ZERO days. The three exceptions are the known correction days. This
+    // fixture previously said 90000 against a Funds Movement leg of 87600 -
+    // i.e. 87600 + 2400, the transaction-plus-surcharge reading the real report
+    // never once shows. That made every settlement fixture a day on which the
+    // two reports silently disagreed by $24.00.
+    settlementTotalCents: 87600,
     raw: {},
     ...over,
   };
@@ -62,6 +70,8 @@ function fmRow(over: Partial<FundsMovementRow>): FundsMovementRow {
     surchargeCents: 2400,
     accountTail: "1234",
     legCount: 2,
+    transactionLegCount: 1,
+    surchargeLegCount: 1,
     ...over,
   };
 }
@@ -149,11 +159,21 @@ describe("planSettlementUpserts (Simple Summary ⊕ FundsMovement merge)", () =>
     expect(u.total_trx).toBe(10);
     expect(u.withdrawal_trx).toBe(9);
     expect(u.surcharged_wd_trx).toBe(8);
-    expect(u.settlement_total_cents).toBe(90000);
+    expect(u.settlement_total_cents).toBe(87600);
     // terminal_transaction_cents ONLY from FundsMovement
     expect(u.terminal_transaction_cents).toBe(87600);
     // deposit-truth surcharge wins
     expect(u.surcharge_cents).toBe(2400);
+  });
+  it("reports agreement when the two sources match, rather than a silent $24.00 gap", () => {
+    // The Daily Settlement "Settlement" column is the dispensed cash, NOT
+    // dispensed plus surcharge - measured on 112 of 115 real days, and on none
+    // of them does it include the surcharge. A fixture that added the surcharge
+    // in made every ingest look like a disagreement.
+    const plan = planSettlementUpserts([summaryRow({})], [fmRow({})]);
+    expect(plan.corroboration).toHaveLength(1);
+    expect(plan.corroboration[0].agreement).toBe("agreed");
+    expect(plan.corroboration[0].transactionDiffCents).toBe(0);
   });
   it("FundsMovement surcharge overwrites the Simple Summary fallback", () => {
     const plan = planSettlementUpserts(

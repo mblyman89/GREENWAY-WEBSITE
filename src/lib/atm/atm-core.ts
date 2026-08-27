@@ -408,6 +408,32 @@ export type FundsMovementRow = {
   surchargeCents: number | null; // summed "Surcharge" legs
   accountTail: string | null; // masked bank account (e.g. "******6228") if present
   legCount: number; // how many source rows folded into this group
+  /**
+   * How many source rows folded into EACH leg, kept separately from `legCount`.
+   *
+   * WHY THE PER-LEG COUNTS EXIST (books-69 step 3)
+   * ---------------------------------------------
+   * A settlement day normally contributes exactly two rows: one Transaction and
+   * one Surcharge. When Payment Alliance corrects a day it does not restate the
+   * original row - it appends a second row for the affected leg. Michael's real
+   * export contains four such rows in one 115-day window:
+   *
+   *   2026-06-27  Transaction  $3,060.00  and  -$100.00
+   *   2026-07-02  Transaction  $4,980.00  and  +$100.00
+   *   2026-07-02  Surcharge      $157.50  and    +$5.00
+   *   2026-07-09  Transaction  $2,500.00  and  +$100.00
+   *
+   * `legCount` alone cannot say WHICH leg was corrected: 2026-06-27 and
+   * 2026-07-09 both fold to legCount 3, and on both of them it is the
+   * transaction leg that carries the extra row. Without the split, a day whose
+   * surcharge disagreed with the summary report for an entirely unrelated reason
+   * would be waved through as "explained by a correction" purely because some
+   * OTHER leg happened to have two rows. That is the kind of false all-clear the
+   * corroboration in atm-corroborate-core.ts exists to prevent, so the counts
+   * are recorded per leg at the only place that can still see the source rows.
+   */
+  transactionLegCount: number;
+  surchargeLegCount: number;
 };
 
 /** Classify a "Settlement Type" cell into a known leg, or null if unrecognized. */
@@ -451,6 +477,8 @@ export function mapFundsMovementCsv(csv: string): MapResult<FundsMovementRow> {
     surchargeCents: number | null;
     accountTail: string | null;
     legCount: number;
+    transactionLegCount: number;
+    surchargeLegCount: number;
     order: number;
   };
   const groups = new Map<string, Group>();
@@ -494,12 +522,22 @@ export function mapFundsMovementCsv(csv: string): MapResult<FundsMovementRow> {
         surchargeCents: null,
         accountTail: iAcct >= 0 ? (cells[iAcct] ?? "").trim() || null : null,
         legCount: 0,
+        transactionLegCount: 0,
+        surchargeLegCount: 0,
         order: seq,
       };
       groups.set(key, g);
     }
-    if (leg === "transaction") g.txnCents = (g.txnCents ?? 0) + amountCents;
-    else g.surchargeCents = (g.surchargeCents ?? 0) + amountCents;
+    // Negative amounts are ADDED, never dropped and never made absolute. The
+    // -$100.00 row on 2026-06-27 is a genuine reversal: dropping it would
+    // overstate that day by $100 and absolutising it would overstate by $200.
+    if (leg === "transaction") {
+      g.txnCents = (g.txnCents ?? 0) + amountCents;
+      g.transactionLegCount += 1;
+    } else {
+      g.surchargeCents = (g.surchargeCents ?? 0) + amountCents;
+      g.surchargeLegCount += 1;
+    }
     g.legCount += 1;
   }
 
@@ -516,9 +554,37 @@ export function mapFundsMovementCsv(csv: string): MapResult<FundsMovementRow> {
       surchargeCents: g.surchargeCents,
       accountTail: g.accountTail,
       legCount: g.legCount,
+      transactionLegCount: g.transactionLegCount,
+      surchargeLegCount: g.surchargeLegCount,
     });
   }
   return { rows, problems };
+}
+
+/**
+ * Format integer CENTS as US dollars for a sentence: `$1,234.56`.
+ *
+ * Negatives render with a real minus sign (`−$100.00`), not `$-100.00`.
+ *
+ * WHY THIS IS SHARED RATHER THAN COPIED (books-69 step 3)
+ * ------------------------------------------------------
+ * Three separate one-line `money()` closures had grown inside src/lib/atm -
+ * in atm-posting-core, atm-sweep-core and atm-corroborate-core - and they did
+ * not agree. Two of them interpolated the sign straight from `toLocaleString`,
+ * so a negative amount printed as `$-100.00`. That was harmless only for as
+ * long as no negative could reach them, and books-69 ended that: the Funds
+ * Movement report demonstrably carries reversal rows (-$100.00 on 2026-06-27),
+ * and a surcharge total that nets negative is now reachable. One formatter,
+ * defined at the base of the folder every ATM module already imports, is the
+ * fix for the class rather than for the three instances.
+ */
+export function formatMoneyCents(cents: number): string {
+  const abs = Math.abs(cents);
+  const dollars = (abs / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${cents < 0 ? "\u2212" : ""}$${dollars}`;
 }
 
 /** Parse an integer count cell ("1,234" → 1234); null on blank/garbage. */
@@ -723,6 +789,55 @@ export function __runAtmCoreTests(): void {
   // Missing required column → single header-level problem.
   const fmBad = mapFundsMovementCsv("Market Partner,Amount\r\nx,$1.00\r\n");
   expect("funds: missing cols → problem", fmBad.rows.length === 0 && fmBad.problems.length === 1);
+
+  // --- per-leg counts: WHICH leg the correction landed on (books-69 step 3) ---
+  // These are Michael's REAL rows, copied from
+  // "Funds Movement By Account By Day 5.1.26-8.23.26.csv".
+  const fmHdr =
+    '"Market Partner Code","Market Partner","Acct #","Group","Location",' +
+    '"Settlement Date","Terminal","Settlement Type","Amount"\r\n';
+  const fmLegs = mapFundsMovementCsv(
+    fmHdr +
+      // 2026-06-27: the transaction leg was corrected, the surcharge was not.
+      '"02-110K804","American ATM Network","******6228","","CASCADE","6/27/26","HG26499","Transaction","$3,060.00"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","6/27/26","HG26499","Surcharge","$107.50"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","6/27/26","HG26499","Transaction","-$100.00"\r\n' +
+      // 2026-07-02: BOTH legs were corrected.
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Transaction","$4,980.00"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Surcharge","$157.50"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Transaction","$100.00"\r\n' +
+      '"02-110K804","American ATM Network","******6228","","CASCADE","7/2/26","HG26499","Surcharge","$5.00"\r\n',
+  );
+  const jun27 = fmLegs.rows.find((r) => r.settlementDate === "2026-06-27");
+  const jul2 = fmLegs.rows.find((r) => r.settlementDate === "2026-07-02");
+  expect(
+    "funds: -$100 REDUCES the day (2026-06-27 → $2,960.00)",
+    jun27?.terminalTransactionCents === 296000,
+  );
+  expect(
+    "funds: 2026-06-27 correction is on the TRANSACTION leg only",
+    jun27?.transactionLegCount === 2 && jun27?.surchargeLegCount === 1,
+  );
+  expect(
+    "funds: 2026-07-02 corrections land on BOTH legs",
+    jul2?.transactionLegCount === 2 && jul2?.surchargeLegCount === 2,
+  );
+  expect(
+    "funds: 2026-07-02 legs sum with their corrections ($5,080.00 / $162.50)",
+    jul2?.terminalTransactionCents === 508000 && jul2?.surchargeCents === 16250,
+  );
+  expect(
+    "funds: per-leg counts add up to legCount",
+    jun27 !== undefined &&
+      jun27.transactionLegCount + jun27.surchargeLegCount === jun27.legCount,
+  );
+
+  // --- formatMoneyCents (one formatter, and it survives a negative) ---
+  expect("money: 0 → $0.00", formatMoneyCents(0) === "$0.00");
+  expect("money: thousands separated", formatMoneyCents(526620_00) === "$526,620.00");
+  expect("money: cents kept", formatMoneyCents(16250) === "$162.50");
+  // The bug this replaces: `$${(-10000/100).toLocaleString(...)}` → "$-100.00".
+  expect("money: negative uses a real minus, not $-", formatMoneyCents(-10000) === "\u2212$100.00");
 
   // --- bankPostingWindow (business-day math, weekend rollover) ---
   // 2026-08-05 is a Wednesday. +1 bday = Thu 08-06, +3 bday = Mon 08-10.

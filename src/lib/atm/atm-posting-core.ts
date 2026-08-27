@@ -99,6 +99,7 @@ import {
   type EntityCode,
   type SourceKind,
 } from "@/lib/accounting/posting-core";
+import { formatMoneyCents } from "@/lib/atm/atm-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * THE ACCOUNTS, NAMED ONCE
@@ -438,8 +439,7 @@ export function summariseProposals(proposals: readonly AtmPostingProposal[]): {
     }
   }
   const total = proposals.length;
-  const money = (cents: number) =>
-    `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = formatMoneyCents;
   const sentence =
     total === 0
       ? "No settled days were found, so there is nothing to post."

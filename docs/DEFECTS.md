@@ -1079,3 +1079,153 @@ one day"* — the most important test in the file, which asserts the two
 the same habit: designing an identifier from what reads nicely instead of from
 the constraint it must satisfy. The constraint was written down in two
 migrations the whole time.
+
+## D-25 — the disagreement the ingest resolved correctly and never mentioned
+
+**Found:** books-69 step 3, by reading `atm-sync-core.planSettlementUpserts`
+before writing a new comparison module.
+
+Payment Alliance publishes the same ATM period twice. The Funds Movement report
+carries one row per settlement leg; the Daily Settlement Report carries one row
+per day. Michael's 2026-05-01..2026-08-23 exports do not agree:
+
+|                  | Surcharge  | Transaction |
+| ---------------- | ---------- | ----------- |
+| Funds Movement   | 16,272.50  | 526,620.00  |
+| Daily Settlement | 16,267.50  | 526,520.00  |
+
+The whole difference is four rows on three days. Funds Movement appends a
+correction row rather than restating the original, so 2026-06-27 carries
+`$3,060.00` **and** `-$100.00`, 2026-07-02 carries `$4,980.00` and `+$100.00`
+plus `$157.50` and `+$5.00`, and 2026-07-09 carries `$2,500.00` and `+$100.00`.
+The Daily Settlement Report shows only the first row of each pair. It is
+structurally blind to corrections.
+
+**The defect was not the disagreement. It was that a choice was already being
+made about it, silently.** `planSettlementUpserts` wrote the Daily Settlement
+surcharge and then overwrote it from Funds Movement, commented *"deposit truth
+wins"*. That preference is **correct** — Funds Movement is the only one of the
+two reports that can ever say a correction happened, and books built on the
+summary report would be permanently $100 wrong on three days with nothing to
+ever reveal it. But on Michael's real data the overwrite quietly discarded a
+$5.00 surcharge difference and a $100.00 dispensed difference, and wrote nothing
+down to say a decision had been reached. If the next export disagrees for a
+different reason — a dropped day, a duplicated batch, a terminal swap, a genuine
+processor error — it would be discarded just as quietly, and the system would
+look like it was handling corrections while it was actually absorbing an unknown.
+
+**The fix keeps the conclusion and records the reasoning.** `SettlementPlan` now
+carries a `corroboration` array built from the same rows the merge consumed, so
+the record cannot drift from the decision. `IngestSummary.corroborationAttention`
+carries only the days where nothing in the data explains the difference, and
+`ingestResultMessage` names those days in the sentence Michael reads. On the
+measured 115 days that list is **empty**: 112 days agree exactly, 3 differ
+because of a correction, 0 are unexplained.
+
+**A five-state vocabulary, because "different" is not one thing.** `agreed`,
+`adjusted` (differs, and the differing leg carries a correction row),
+`unexplained` (differs, and nothing accounts for it), `primary_only`,
+`secondary_only`. Only `unexplained` and `secondary_only` ask for attention —
+listing explained corrections would bury the real questions, which is the same
+mistake that once produced a false six-figure shortage in the reconciliation
+engine.
+
+**The gates:** `tests/compliance/atm-corroborate-core.test.ts`, 34 tests, and
+§8 covers this defect directly: *"still prefers the Funds Movement surcharge,
+which was always the right call"* alongside *"but now records that the two
+reports disagreed on that day"*. Mutation-proven: returning
+`corroboration: []` from the plan kills three tests; making
+`agreementNeedsAttention` return `a !== "agreed"` kills five.
+
+## D-26 — the correction on one leg that would have excused the other
+
+**Found:** books-69 step 3, while deciding what evidence separates an explained
+difference from an unexplained one.
+
+The signature of a correction is that Funds Movement carries more than one row
+for a settlement figure. `mapFundsMovementCsv` already recorded `legCount` — the
+number of source rows folded into the day — so the obvious test was
+`legCount > 2`.
+
+That test is wrong, and Michael's own data is the counterexample. **2026-06-27
+folds to `legCount` 3: two Transaction rows and one Surcharge row.** The
+correction is unambiguously on the transaction leg. But `legCount` cannot say
+which leg it landed on, so a day whose *surcharge* disagreed with the summary
+report for a completely unrelated reason would be waved through as "explained by
+a correction" purely because some *other* leg happened to carry two rows. A
+false all-clear, produced by evidence about the wrong number.
+
+**The fix is per-leg counts recorded at the only place that can still see the
+source rows.** `FundsMovementRow` now carries `transactionLegCount` and
+`surchargeLegCount` beside the existing `legCount`, assigned in the same loop
+that sums the cents. `compareReports` then checks the signature **on the leg
+that actually differs**. Walking the whole population confirmed the shapes are
+112 days of `1/1`, two days of `2/1`, and one day of `2/2` — which accounts for
+exactly the four known adjustment rows and nothing else.
+
+`tsc --noEmit` caught the two places that construct a `FundsMovementRow`
+literal, which is the reason the typecheck gate runs separately from vitest:
+vitest transpiles without type-checking and both sites would have compiled
+silently into fixtures missing the new fields.
+
+**The gates:** *"does not let a corrected transaction leg vouch for an
+unexplained surcharge difference"* and its mirror for the surcharge leg. Both
+fire when the check is reverted to `pp.legCount > 2`. In `atm-core.ts`,
+*"funds: 2026-06-27 correction is on the TRANSACTION leg only"* fires when the
+two counters are conflated.
+
+## D-27 — three money formatters, one of which would print `$-100.00`
+
+**Found:** books-69 step 3, by grepping `src/lib/atm` for `toLocaleString`
+before adding a fourth formatter.
+
+`atm-posting-core.ts` and `atm-sweep-core.ts` each defined a local one-line
+`money()` closure of the shape
+`` `$${(cents / 100).toLocaleString(...)}` ``. Interpolating the sign from
+`toLocaleString` puts the minus **inside** the string, after the dollar sign, so
+a negative amount renders as `$-100.00`.
+
+That was harmless only for as long as no negative could reach either function,
+and books-69 ended that: the Funds Movement report demonstrably carries reversal
+rows, so a period whose surcharge nets negative is now reachable in ordinary
+data. Writing a third copy — this time with the sign handled correctly — would
+have left the codebase with three formatters that disagree about the most
+error-prone case, which is a worse outcome than the original duplication.
+
+**The fix is one exported `formatMoneyCents` in `atm-core.ts`**, the module every
+ATM file already imports, with the sign taken from the number and rendered as a
+real minus (`−$100.00`). Both closures now delegate to it (rule 23: fix the
+class, not the instance).
+
+**The gate:** *"money: negative uses a real minus, not $-"* in
+`__runAtmCoreTests`, plus *"renders a negative total with a real minus rather
+than $-"* in the vitest suite, which asserts both that `−$100.00` is present and
+that `$-100.00` is absent. Restoring the old one-liner kills it.
+
+## D-28 — the test fixture that made every ingest a disagreement
+
+**Found:** books-69 step 3, by a pre-existing test failing after the
+corroboration was wired in — `Imported 1 settlement day.` gained a sentence
+about a day that did not match.
+
+The failure was correct and the fixture was wrong. `atm-sync-core.test.ts` built
+a Daily Settlement row with `settlementTotalCents: 90000` against a Funds
+Movement transaction leg of `87600`, and `87600 + 2400` is exactly `90000` —
+the fixture had been written on the assumption that the report's "Settlement"
+column means dispensed cash **plus** surcharge.
+
+Rather than assume either reading, the relationship was measured across the real
+export: the Daily Settlement `Settlement` column equals the Funds Movement
+`Transaction` leg on **112 of 115 days** and equals transaction + surcharge on
+**zero** days. The three exceptions are the known correction days. The fixture
+described a settlement shape the real report never produces, and it made every
+settlement fixture into a day on which the two sources silently disagreed by
+$24.00.
+
+The fixture now says `87600`, with the measurement recorded beside it, and a new
+assertion pins the meaning: *"reports agreement when the two sources match,
+rather than a silent $24.00 gap"*. Restoring `90000` kills three tests.
+
+**The lesson (rule 1).** The old fixture passed for as long as nothing compared
+the two columns. A wrong number is invisible until something finally reads it,
+and the thing that finally read it was a feature built to catch exactly this.

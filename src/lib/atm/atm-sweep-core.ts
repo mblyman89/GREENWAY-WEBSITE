@@ -158,6 +158,7 @@
 import { createHash } from "node:crypto";
 
 import { type EntityCode } from "@/lib/accounting/posting-core";
+import { formatMoneyCents } from "@/lib/atm/atm-core";
 
 /* ═════════════════════════════════════════════════════════════════════════════
  * THE ACCOUNTS AND THE BANK ACCOUNT NUMBERS
@@ -641,8 +642,7 @@ export function summariseSweeps(proposals: readonly SweepProposal[]): {
       intercompanyCents += cents;
     }
   }
-  const money = (c: number) =>
-    `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = formatMoneyCents;
   const parts: string[] = [];
   if (intercompany > 0) {
     parts.push(

@@ -20,6 +20,7 @@
 
 import type { CashLoadRow, SettlementRow, FundsMovementRow } from "./atm-core";
 import { parseUsDate } from "./atm-core";
+import { compareReports, daysNeedingAttention, type DayComparison } from "./atm-corroborate-core";
 
 // ---------------------------------------------------------------------------
 // Cash loads → atm_cash_loads upsert plan
@@ -200,6 +201,20 @@ export type SettlementUpsert = {
 export type SettlementPlan = {
   upserts: SettlementUpsert[];
   skipped: Array<{ reason: string; sample: string }>;
+  /**
+   * Every day on which the two reports disagreed, and why (books-69 step 3).
+   *
+   * The merge below prefers the Funds Movement surcharge over the Daily
+   * Settlement one whenever both are present. That preference is correct and it
+   * used to be INVISIBLE: on Michael's real 115-day export it quietly discarded
+   * a $5.00 surcharge difference and a $100.00 dispensed difference, with
+   * nothing written down to say a choice had been made.
+   *
+   * The choice is unchanged. What changed is that it is now recorded. An empty
+   * array means the two reports agreed everywhere, which is itself worth being
+   * able to state.
+   */
+  corroboration: readonly DayComparison[];
 };
 
 function keyOf(date: string, terminal: string): string {
@@ -217,6 +232,12 @@ function keyOf(date: string, terminal: string): string {
  *     fall back to Simple Summary "Surch" when FundsMovement has none.
  *   • counts + settlement_total_cents → from Simple Summary only.
  *   • anything absent stays null.
+ *
+ * The surcharge precedence above is a CHOICE BETWEEN TWO DISAGREEING SOURCES,
+ * and it is made on real disagreements: on Michael's 2026-05-01..2026-08-23
+ * export the two reports differ on three days. The choice is kept, and the
+ * disagreement is now recorded in `plan.corroboration` rather than discarded.
+ * See atm-corroborate-core.ts for why Funds Movement is the right primary.
  */
 export function planSettlementUpserts(
   simpleSummary: SettlementRow[],
@@ -292,7 +313,11 @@ export function planSettlementUpserts(
   }
 
   const upserts = order.map((k) => map.get(k)!);
-  return { upserts, skipped };
+  // Compare the two sources over the UNION of their days, before returning.
+  // This is deliberately computed from the SAME rows the merge above consumed,
+  // so the record of the disagreement cannot drift from the decision made about
+  // it.
+  return { upserts, skipped, corroboration: compareReports(fundsMovement, simpleSummary) };
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +330,16 @@ export type IngestSummary = {
   problems: string[];
   /** True when at least one report produced at least one row. */
   didSomething: boolean;
+  /**
+   * Days where the two reports disagreed and NOTHING in the data explains it
+   * (books-69 step 3). A day whose difference carries a correction row is not
+   * listed here - that one is explained, and burying it among the real
+   * questions would make the list too noisy to read.
+   *
+   * On Michael's measured 115-day export this is empty: all three
+   * disagreements are explained corrections.
+   */
+  corroborationAttention: readonly DayComparison[];
 };
 
 export function summarizeIngest(args: {
@@ -323,6 +358,9 @@ export function summarizeIngest(args: {
     settlementsUpserted,
     problems,
     didSomething: cashLoadsUpserted > 0 || settlementsUpserted > 0,
+    corroborationAttention: daysNeedingAttention(
+      args.settlementPlan?.corroboration ?? [],
+    ),
   };
 }
 
@@ -341,7 +379,18 @@ export function ingestResultMessage(sum: IngestSummary): string {
     parts.push(`${sum.cashLoadsUpserted} cash load${sum.cashLoadsUpserted === 1 ? "" : "s"}`);
   }
   const tail = sum.problems.length > 0 ? ` (${sum.problems.length} row(s) skipped)` : "";
-  return `Imported ${parts.join(" and ")}${tail}.`;
+  // A day the two reports disagree on for no established reason belongs in the
+  // sentence Michael reads, not only in a field a page has to remember to
+  // render. An explained correction is excluded upstream, so anything reaching
+  // here is a genuine question.
+  const n = sum.corroborationAttention.length;
+  const corr =
+    n === 0
+      ? ""
+      : ` ${n} ${n === 1 ? "day does" : "days do"} not match between the two Payment Alliance ` +
+        `reports, and nothing in the files explains why: ` +
+        `${sum.corroborationAttention.map((c) => c.settlementDate).join(", ")}.`;
+  return `Imported ${parts.join(" and ")}${tail}.${corr}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -462,6 +511,10 @@ export function __runAtmSyncCoreTests(): void {
       surchargeCents: 16250, // deposit truth (differs from SS fallback → must win)
       accountTail: "******6228",
       legCount: 4,
+      // 2026-07-02 is the real day where BOTH legs were corrected: Transaction
+      // $4,980.00 + $100.00 and Surcharge $157.50 + $5.00.
+      transactionLegCount: 2,
+      surchargeLegCount: 2,
     },
   ];
   const sPlan = planSettlementUpserts(ssRows, fmRows);
@@ -499,6 +552,71 @@ export function __runAtmSyncCoreTests(): void {
   const empty = summarizeIngest({});
   expect("summary: empty → didSomething false", empty.didSomething === false);
   expect("summary: empty message honest", ingestResultMessage(empty).toLowerCase().includes("no rows"));
+
+  // corroboration: the surcharge overwrite above is RECORDED, not silent ------
+  // ssRows says the surcharge was $240.00 and fmRows says $162.50. The merge
+  // prefers $162.50 and always has. What must not happen again is that choice
+  // leaving no trace.
+  expect("corroboration: the disagreeing day is recorded", sPlan.corroboration.length === 1);
+  expect(
+    "corroboration: it is not reported as agreement",
+    sPlan.corroboration[0].agreement !== "agreed",
+  );
+  expect(
+    "corroboration: both figures are kept, so the discarded one is still readable",
+    sPlan.corroboration[0].primarySurchargeCents === 16250 &&
+      sPlan.corroboration[0].secondarySurchargeCents === 24000,
+  );
+  expect(
+    "corroboration: the figure the books use is the primary",
+    sPlan.corroboration[0].authoritativeSurchargeCents === 16250,
+  );
+  // Both legs of this fixture carry two source rows, so the difference is
+  // explained and must NOT be raised as a question.
+  expect("corroboration: an explained day needs no attention", sum.corroborationAttention.length === 0);
+  expect(
+    "corroboration: and the message stays quiet about it",
+    !ingestResultMessage(sum).includes("nothing in the files explains why"),
+  );
+
+  // A difference with NO correction row behind it must reach the message.
+  const sUnex = planSettlementUpserts(
+    [
+      {
+        terminalId: "HG26499",
+        settlementDate: "2026-07-03",
+        totalTrx: 10,
+        withdrawalTrx: 10,
+        surchargedWdTrx: 10,
+        terminalTransactionCents: null,
+        surchargeCents: 5000,
+        settlementTotalCents: 100000,
+        raw: {},
+      },
+    ],
+    [
+      {
+        terminalId: "HG26499",
+        settlementDate: "2026-07-03",
+        terminalTransactionCents: 105000,
+        surchargeCents: 5000,
+        accountTail: "******6228",
+        legCount: 2,
+        transactionLegCount: 1,
+        surchargeLegCount: 1,
+      },
+    ],
+  );
+  const unexSum = summarizeIngest({ settlementPlan: sUnex });
+  expect(
+    "corroboration: an unexplained difference is raised",
+    unexSum.corroborationAttention.length === 1,
+  );
+  expect(
+    "corroboration: and it names the day in the message Michael reads",
+    ingestResultMessage(unexSum).includes("2026-07-03") &&
+      ingestResultMessage(unexSum).includes("nothing in the files explains why"),
+  );
 
   if (failures > 0) throw new Error(`atm-sync-core self-tests: ${failures} failure(s)`);
   console.log("atm-sync-core: all self-tests passed");
