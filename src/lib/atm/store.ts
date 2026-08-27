@@ -34,6 +34,11 @@ import {
   type SweepFacts,
   type SweepProposal,
 } from "@/lib/atm/atm-sweep-core";
+import {
+  classifyAtmDebits,
+  type ClassificationFacts,
+  type ClassificationProposal,
+} from "@/lib/atm/atm-classification-core";
 
 export type AtmConnectionStatus = "unconfigured" | "ok" | "error";
 
@@ -1136,4 +1141,71 @@ export async function listAtmSweepProposals(
   rows.sort((a, b) => (a.processedDate < b.processedDate ? -1 : a.processedDate > b.processedDate ? 1 : 0));
 
   return buildSweepProposals(withOccurrences(rows));
+}
+
+// ---------------------------------------------------------------------------
+// books-69 step 4 — what a debit out of the ATM account MEANS, on its own date.
+//
+// Steps 1 and 2 gave the settlements and the transfers a home. This closes the
+// account: of the 72 debits out of 6228 in the statement Michael provided, 67
+// are transfers the sweep path owns, and the other five had no home at all.
+// Four of them are real costs — three Timberland account-analysis charges and
+// one Payment Alliance debit, $25.23 together — and until now every one of them
+// was refused as "not a transfer" and left permanently unclassified. In the one
+// entity whose expenses actually reduce tax.
+//
+// As in steps 1 to 3, every judgement lives in the pure core
+// (`atm-classification-core`) and this function only reads rows. It hands over
+// EVERY debit, including the transfers, because the core's answer for a
+// transfer ("another path already records this") is information the screen
+// needs — it is what stops a $5,242.50 personal transfer from appearing on a
+// "needs your attention" list it does not belong on.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every debit out of the ATM bank account, classified by the rule that was in
+ * force on the transaction's own date.
+ *
+ * Nothing is written and nothing is posted. `atm` is not an autopostable source
+ * kind, so every proposal comes back `postable: false`.
+ *
+ * ONLY DEBITS. A Plaid amount is POSITIVE for money leaving the account, which
+ * is the same convention `listAtmSweepProposals` relies on immediately above.
+ * Credits are money ARRIVING, which is settlement income handled by the
+ * settlement path, so they are not offered to the classifier as costs. The core
+ * refuses a credit with an explanation if one reaches it anyway, which is why
+ * the direction is passed in the bank's own vocabulary rather than inferred
+ * from a sign inside the core.
+ */
+export async function listAtmClassificationProposals(
+  limit = 400,
+): Promise<readonly ClassificationProposal[]> {
+  if (!isSupabaseServiceConfigured) return [];
+
+  const accounts = await listPlaidAccounts();
+  const atmAccounts = accounts.filter((a) => a.role === "atm" && a.active);
+
+  const rows: ClassificationFacts[] = [];
+  for (const acct of atmAccounts) {
+    const txns = await listPlaidTransactions(acct.accountId, limit);
+    for (const t of txns) {
+      // Money arriving is not a cost. Filtered here rather than in the core so
+      // the screen is not padded with 229 settlement credits, each refused.
+      if (t.amountCents <= 0) continue;
+      rows.push({
+        processedDate: t.date,
+        description: t.name ?? t.merchantName ?? "",
+        amountCents: Math.abs(t.amountCents),
+        creditOrDebit: "Debit",
+      });
+    }
+  }
+
+  // Oldest first, so the screen reads in the order the money actually moved.
+  // Plaid returns newest first.
+  rows.sort((a, b) =>
+    a.processedDate < b.processedDate ? -1 : a.processedDate > b.processedDate ? 1 : 0,
+  );
+
+  return classifyAtmDebits(rows);
 }

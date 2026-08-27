@@ -1986,3 +1986,91 @@ is refused too, by name, rather than posted backwards.
 is only about 24 entries a year — automation would save minutes and risk the
 balance sheet."* The words on Michael's screen and the rule in the ledger are
 asserted equal, so they cannot drift.
+
+**Step 3 — the two ATM reports disagree, and the ingest was choosing silently.**
+Michael's export carries the same money twice: a Funds Movement report leg by
+leg, and a Daily Settlement report day by day. The ingest read one of them and
+never asked whether the other agreed. Which one it should read was not a
+preference to be picked; it was measured. Across the real export the Daily
+Settlement `Settlement` column equals the Funds Movement `Transaction` leg on
+**112 of 115 days** and equals transaction-plus-surcharge on **zero** days, so
+Funds Movement is primary and Daily Settlement is the cross-check. Where they
+disagree the disagreement is now shown with both figures and the difference,
+instead of one number quietly winning. **D-25** through **D-28** came out of it,
+including **D-27** — three separate money formatters, one of which rendered a
+negative as `$-100.00` because the sign came from `toLocaleString` and landed
+inside the string. Harmless only while no negative could reach it, and books-69
+ended that: the report demonstrably carries reversal rows. One
+`formatMoneyCents` now, with a real minus.
+
+**Step 4 — what a debit out of the ATM account MEANS, on its own date.** Steps 1
+and 2 gave the settlements and the transfers a home. This closes the account. Of
+the **72 debits out of 6228**, 67 are transfers the sweep path owns and five had
+no home at all — four of them real costs (three Timberland account-analysis
+charges and one Payment Alliance debit, **$25.23** together) that every previous
+version refused as "not a transfer" and left permanently unclassified, in the one
+entity whose expenses actually reduce tax.
+
+**The fifth row is the one to remember.** A `DLY SETTLE MVNT` arriving as a
+**Debit** for $100.00 on 2026-06-29 looks exactly like a bank charge, and booking
+it as one would have been defensible-sounding and wrong. Traced into the Funds
+Movement report instead of guessed: settlement day 2026-06-27 carries
+`Transaction $3,060.00`, `Surcharge $107.50` and `Transaction −$100.00`, and all
+three land in the bank on Monday the 29th with the rest of the weekend batch. It
+is a card-network reversal that step 1's posting path **already** accounts for,
+because `mapFundsMovementCsv` adds negative legs (D-26). Booking it again would
+have double-counted it. It now has its own treatment, `already_accounted`, whose
+whole purpose is to say "another path records this" rather than to invent a
+second record of it.
+
+**The rules are effective-dated, which is the promise the recon made** — *"A
+transaction gets classified by the rule that was in force on its own date, never
+by today's rules. If your CPA re-runs last March in two years' time, he gets last
+March's answer."* `ClassificationRegistry` mirrors `PayrollRateRegistry`
+deliberately (construction validates, overlaps are hard errors, and there is no
+`current()` or `latest()` or default at all, so no caller can accidentally ask
+"what is the rule now?" about a transaction that happened in May) with **one
+documented divergence**: a gap is REPORTED, not refused. Michael genuinely has no
+vendor-payment rule before November 1st, so wiring gap-detection into `create()`
+would make the correct table the one that cannot be built.
+
+**D-30 is why that layer exists at all.** `public.gl_account_rules` already
+existed — migration 0173, well built, with its own guard trigger — and it has no
+effective dating, and its unique index on
+`(match_kind, match_value, coalesce(entity_id, ...))` makes adding any
+physically impossible: one row per matcher, so November's rule can only
+**overwrite** October's. That is exactly the dateless-rule failure the recon
+promised would not happen. Step 4 therefore put a dated layer in FRONT of that
+table and wrote nothing to it; the migration that reshapes the index is recorded
+as open and has to land before November 1st.
+
+**Michael's two dates are notices, not rules.** Vendors move on November 1st and
+payroll on January 1st, but *which account* a vendor payment out of 6228 debits
+is a decision he has not made yet — `36000` intercompany or a capital
+contribution — and the difference matters to his basis. So those dates exist in
+the code as `RuleNotice`, a type with no account and no treatment, which the
+compiler therefore cannot post. A November vendor payment gets refused with the
+notice attached for context, naming the decision still needed. Nothing invents
+the rule on his behalf.
+
+**Nothing posts.** `atm` is not in `AUTOPOSTABLE_SOURCE_KINDS`, every proposal is
+`postable: false`, and the source kind is asserted **not** to be `manual` —
+because migration 0172's guard (6) rejects a `manual` journal touching a control
+account, and `10300` is one, so a `manual` source kind would have failed in
+Postgres and passed every pure test ever written. **18 mutants, 18 killed**, each
+by an assertion named for the risk. Two of them were repaired first rather than
+scored: one survived because it inserted a duplicate object key that TypeScript
+resolves in the original's favour, and one killed the whole file at collection
+time instead of naming a risk, because the fixture it broke was a `const` in the
+describe body. A mutation campaign is only evidence if the mutants themselves are
+audited.
+
+**D-29 was found on the way and is the reason to prefer executing code over
+reading it.** Looking for an existing ISO-date validator to reuse turned up nine,
+and a grep flagged two as broken; both were false positives, correct by different
+means. A throwaway script that actually ran all nine against thirteen cases found
+the real defect somewhere I had not suspected: `medical-intake-core` validated
+dates with `Date.parse`, which **rolls over** rather than rejecting, so
+`2026-02-30` passed as valid and became March 2nd. Those dates are a medical
+recognition card's effective and expiry dates, which RCW 69.51A.230(4)(a) makes
+legally operative, and they feed the check for whether a patient is a minor.

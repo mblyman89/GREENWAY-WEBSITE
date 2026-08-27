@@ -1229,3 +1229,112 @@ rather than a silent $24.00 gap"*. Restoring `90000` kills three tests.
 **The lesson (rule 1).** The old fixture passed for as long as nothing compared
 the two columns. A wrong number is invisible until something finally reads it,
 and the thing that finally read it was a feature built to catch exactly this.
+
+## D-29 — the date validator that accepted February 30th, on a medical card
+
+**Found:** books-69 step 4, while looking for an existing ISO-date validator to
+reuse rather than writing a tenth one (rule 25).
+
+`medical-intake-core.ts` validated a date as:
+
+```ts
+ISO_DATE.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`))
+```
+
+The regex proves the SHAPE and `Date.parse` was trusted to prove the date is
+real. It does not. `Date.parse` **rolls over** rather than rejecting, so
+`2026-02-30` silently becomes March 2nd, `2025-02-29` becomes March 1st, and
+`2026-04-31` becomes May 1st. All three passed as valid dates.
+
+**Why it matters here and not somewhere harmless.** The function guards a
+recognition card's `effectiveOn`, `expiresOn` and `authorizationIssuedOn`.
+RCW 69.51A.230(4)(a) makes those dates legally operative — they are what decides
+whether a card is valid at the moment of a sale. The same value feeds `ageOn`,
+which decides whether a patient is a minor and therefore whether a designated
+provider is required. A card typed as expiring `2027-02-30` would have been
+accepted and then silently treated as expiring on March 2nd: a card honoured for
+two days after it expired, with nothing anywhere saying so.
+
+**How it hid:** nobody types February 30th on purpose. The defect needed a
+typo, an OCR slip or a bad import to surface, and when it did surface the result
+was not an error but a plausible neighbouring date. Every test in the suite used
+real dates, so every test passed.
+
+**The fix** is a `Date.UTC` round-trip — build the date from its parts, then
+check the constructed date reports back the same year, month and day. Kept
+dependency-free rather than importing a shared helper, because the module header
+promises "PURE: no imports" and breaking that promise to fix a date bug would
+have been a worse trade.
+
+**The gate:** seven named assertions in `__runMedicalIntakeTests`, one per
+rolling-over case (`2026-02-30`, `2025-02-29`, `2026-04-31`, `2026-13-01`,
+`2026-00-10`, `2026-01-32`) plus one confirming `2024-02-29` is still ACCEPTED,
+because a leap day is a real date and over-correcting would reject a valid card.
+
+**The lesson (rule 1, and the reason this was found at all).** The first pass at
+this audit was a grep across nine implementations, and it produced two FALSE
+POSITIVES — `posting-core` and `cutover-core` both looked wrong and are correct
+by different means (`toISOString().slice(0, 10) === s`, and an explicit
+`daysInMonth` table). Reading code told me the wrong answer twice. A throwaway
+script that EXECUTED all nine against thirteen cases found the one real defect
+in a module I had not suspected.
+
+## D-30 — the classification-rule table whose unique index forbids effective dating
+
+**Found:** books-69 step 4, by grepping for the existing rules table before
+building one (rule 25) after the recon had promised Michael dated rules.
+
+`public.gl_account_rules` already exists, in migration 0173. It carries
+`match_kind`, `match_value`, `account_id`, `entity_id`, `cost_class`,
+`priority`, `source`, and a `gl_guard_rule_target()` trigger that refuses
+control-account targets. It is a well-built table. It has **no effective
+dating**, and this index makes adding any physically impossible:
+
+```sql
+create unique index gl_account_rules_unique_idx
+  on public.gl_account_rules (
+    match_kind, match_value,
+    coalesce(entity_id, '00000000-0000-0000-0000-000000000000'::uuid));
+```
+
+One row per (kind, value, entity). Michael's own plan is the counter-example:
+
+> "My plan is to switch to paying vendors from the atm account starting on
+> November 1st. I will begin paying employees via the atm account on
+> January 1st."
+
+Two rules for the same matcher on different dates. Under that index the November
+rule can only **overwrite** the October rule, and the October history is gone —
+which is precisely the dateless-rule failure the books-69 recon told Michael
+would not happen:
+
+> "A transaction gets classified by the rule that was in force on its own date,
+> never by today's rules. If your CPA re-runs last March in two years' time, he
+> gets last March's answer."
+
+**How it hides:** nothing is wrong today, because there is only one rule per
+matcher today. The defect activates on November 1st, and its symptom is not an
+error — it is last October's transactions quietly re-classifying themselves
+under November's rule the next time anybody re-runs the period. A restated prior
+period that nobody asked for.
+
+**What step 4 did instead of a schema change.** A dated layer in FRONT of the
+existing table (`atm-classification-core.ts`), which writes nothing to it. The
+five ATM rules carry `effectiveFrom`/`effectiveTo` and are matched on the
+transaction's own date, so the promise holds for the ATM account now. The table
+itself is untouched, so no migration was rushed.
+
+**OPEN.** The migration that adds `effective_from`/`effective_to` and reshapes
+that unique index into a dated pair is NOT written. It has to come before the
+general ledger's own rules are used for anything dated — realistically before
+November 1st, since that is the date Michael named. Recorded here rather than
+attempted, because a unique-index change on a live table is its own slice with
+its own backfill.
+
+**The gate:** `atm-classification-core.test.ts` asserts the dated behaviour the
+schema cannot yet express — *"still gives October's answer for an October row
+after November's rule exists"*, *"switches on the boundary day itself, not the
+day after"*, and *"treats effectiveTo as INCLUSIVE"*. Mutants 1, 2 and 3 (a
+dateless lookup, a fallback to the nearest rule, an exclusive end date) are each
+killed by three of them. There is no gate on the SQL side, and that absence is
+the open half of this record.

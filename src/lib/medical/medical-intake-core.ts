@@ -22,8 +22,47 @@
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * True only for a REAL calendar date in `yyyy-mm-dd`.
+ *
+ * books-69 D-29. The previous implementation was
+ * `ISO_DATE.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`))`, and it
+ * accepted `2026-02-30`, `2025-02-29` and `2026-04-31` as valid, because
+ * `Date.parse` does not reject an out-of-range day — it silently ROLLS OVER
+ * into the following month and returns a perfectly good timestamp. The regex
+ * checks the shape and `Date.parse` was trusted to check the calendar, and it
+ * does not.
+ *
+ * That mattered here more than it looks. This predicate guards the recognition
+ * card's `effectiveOn` / `expiresOn` / `authorizationIssuedOn`, and RCW
+ * 69.51A.230(4)(a) makes those dates legally operative — a card is valid one
+ * year from authorization for an adult and six months for a minor. A typed
+ * `2026-02-30` passed validation, then `addMonthsClamped` and `ageOn` parsed it
+ * with `parseInt`, so the stored expiry was computed from a day that does not
+ * exist. Worse for a minor: an impossible birthdate passed straight through
+ * `ageOn`, and age is what decides whether a designated provider is required at
+ * all.
+ *
+ * The round-trip through `Date.UTC` is what catches it: build the date from the
+ * parts, then check the parts came back unchanged. A rollover changes them.
+ * Leap years are handled by construction rather than by a rule — 2024-02-29
+ * round-trips and 2025-02-29 does not.
+ *
+ * Deliberately still dependency-free. `payroll-rate-registry-core` has an
+ * identical, correct implementation, but this module's header promises "PURE:
+ * no imports" and eleven pure modules in this repository make the same promise.
+ * Importing across a domain boundary to save nine lines would trade a real
+ * architectural guarantee for a cosmetic one. D-29 records that the class of
+ * defect is wider than this instance.
+ */
 export function isIsoDate(s: string | null | undefined): s is string {
-  return typeof s === "string" && ISO_DATE.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
+  if (typeof s !== "string" || !ISO_DATE.test(s)) return false;
+  const y = Number(s.slice(0, 4));
+  const m = Number(s.slice(5, 7));
+  const d = Number(s.slice(8, 10));
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
 /**
@@ -189,6 +228,18 @@ export function __runMedicalIntakeTests(): { passed: number; failed: number } {
       console.error(`medical-intake-core self-test FAILED: ${label}`);
     }
   };
+
+  // isIsoDate — books-69 D-29. Every one of these three returned TRUE before
+  // the fix, because Date.parse rolls an out-of-range day into the next month
+  // instead of rejecting it. Named individually rather than as one assertion,
+  // so a partial regression cannot hide behind a passing test (rule 129).
+  ok(!isIsoDate("2026-02-30"), "D-29: February 30th is not a date");
+  ok(!isIsoDate("2025-02-29"), "D-29: 2025 is not a leap year");
+  ok(!isIsoDate("2026-04-31"), "D-29: April has thirty days");
+  ok(isIsoDate("2024-02-29"), "D-29: a real leap day is still accepted");
+  ok(isIsoDate("2026-12-31"), "D-29: an ordinary date is still accepted");
+  ok(!isIsoDate("2026-13-01"), "D-29: there is no thirteenth month");
+  ok(!isIsoDate("2026-7-12"), "D-29: an unpadded month is rejected");
 
   // addMonthsClamped
   ok(addMonthsClamped("2026-07-12", 12) === "2027-07-12", "+12 months plain");
