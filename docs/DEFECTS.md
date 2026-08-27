@@ -2023,3 +2023,241 @@ prevent.
 
 **Census rows:** `cost_of_goods_sold.cutover_inventory_load`.
 
+---
+
+## D-50 UPDATE -- DECIDED by Michael: the ledger gets its own map
+
+**Decided:** books-73. Michael, verbatim:
+
+> "the ledger should use its own accounts and not the website map."
+
+That closes the open question D-50 recorded. The ledger no longer inherits
+`src/lib/pos/transform.ts#CATEGORY_MAP`; it has its own map in
+`src/lib/accounting/ledger-category-map-core.ts`, and the four measured
+divergences are applied:
+
+| Cultivera Category | website menu map | LEDGER account | rows | value |
+|---|---|---|---|---|
+| `RSO` | `20140` Concentrate | **`20150` RSO** | 47 | $2,680.69 |
+| `Tincture` | `20170` Edible (Liquid) | **`20180` Tincture** | 32 | $2,484.78 |
+| `Infused Blunt` | `20080` Infused Preroll | **`20100` Infused Blunt** | 44 | $951.78 |
+| `Blunt` | `20050` Preroll | **`20070` Blunt** | 24 | $782.82 |
+
+Total re-routed: **$6,900.07** of $176,824.62 (3.90%), 147 rows.
+
+**The second question, also decided.** On the 41 non-unique barcodes -- 35 groups
+at identical cost and 6 groups at DIFFERENT costs -- Michael said:
+
+> "keep both layers."
+
+So the loader keys on `Id` (3,917 distinct, 0 duplicates), never on `Barcode`,
+and the 6 differing-cost groups keep both cost layers rather than being averaged
+into one. `cutover-inventory-core.ts` already keys on `Id`, so his answer
+confirms the built behaviour rather than changing it. No averaging code exists,
+and D-51's builder has no rounding at all, which is what makes "keep both
+layers" free rather than a change.
+
+**The third item is a deferral, not a decision.** On wiring the upload/review/post
+path for the cut-over count, Michael said:
+
+> "we are not ready to migrate inventory over yet."
+
+So the census row `cost_of_goods_sold.cutover_inventory_load` KEEPS
+`reachable: MISSING`. That is now a deliberate deferral with a quote behind it,
+not an unmeasured gap. It must not be marked reachable until he asks for it.
+
+---
+
+## D-52 -- the ledger's own category map, and the two guards its own map cannot reach
+
+**Built:** books-73, on Michael's decision above.
+
+**What exists:** `src/lib/accounting/ledger-category-map-core.ts`, a pure leaf
+with ZERO imports, no I/O, no clock, no randomness, and -- proved by a
+source-level test -- no `Math.round`, `Math.floor`, `toFixed` or `parseFloat`
+anywhere. It maps Cultivera `Category` to a house slug and a 5-digit block-2
+inventory account.
+
+**The counts are stated, not rounded off.** The measured export
+`INVENTORIES.xlsx` (3,917 rows) contains **52** distinct `Category` values. The
+map holds **53** keys. The extra key is `Trim`, which carries **zero rows** in
+this export but is a real chart category (`20040`) that the website map also
+carries. It is mapped in advance so that the first trim Michael receives posts
+instead of refusing. Rather than let 52 and 53 sit next to each other looking
+like an error, the module exports `MEASURED_CATEGORY_COUNT = 52` and
+`UNSTOCKED_MAPPED_CATEGORIES = ["Trim"]`, and the self-test asserts
+`keys === measured + unstocked`. A mutant that falsified either constant died.
+
+**Five chart categories are deliberately absent as map targets** --
+`preroll-pack`, `infused-preroll-pack`, `accessories`, `paraphernalia`, `merch`.
+No Cultivera category in the measured export belongs to any of them. A test
+asserts they are NOT map values, because routing something to them without
+evidence is exactly the invention rule 1 forbids; it also asserts their accounts
+still exist, so a future category can be mapped when there is a real row to map.
+
+**There is no fallback account, and a test enforces that.** The website map has
+one by design -- an unmapped category still has to appear on a menu. The ledger
+must not, because a fallback in the books silently misstates an account balance.
+`CATEGORY_UNKNOWN` names the offending category string in the refusal message. A
+mutant that replaced the refusal with a silent route to `20140` died, and so did
+one that stripped the category name out of the message.
+
+**"Category wins over InventoryType" is now executable rather than commented.**
+D-50 measured the trap: `Infused Pre-roll` carries
+`InventoryType = Concentrate for Inhalation` on 532 of its 617 rows, and routing
+by `InventoryType` would post **$19,547.49** to `20140` instead of `20080` --
+and every report would still balance. That is why it needs a refusal and not a
+warning. `resolveLedgerLotCategory` accepts `inventoryType` as a parameter and
+never reads it as a key; supplying it alone yields
+`INVENTORY_TYPE_IS_NOT_A_KEY` with both account numbers and both row counts in
+the message, because Michael is a visual learner and the number he needs to see
+is the one the shortcut would have hit. Three mutants attacked this rule -- make
+`InventoryType` a fallback key, let it override a good `Category`, strip the
+account numbers from the message -- and all three died.
+
+**How the divergence is kept honest.** The test parses `CATEGORY_MAP` out of
+`src/lib/pos/transform.ts` SOURCE rather than retyping it, then asserts the set
+of actual divergences equals `LEDGER_ONLY_OVERRIDES` **exactly -- no more, no
+fewer**. It also asserts the ledger map covers every key the website map covers,
+so the books can never be blinder than the menu. Either map can now be edited
+and the test will name the drift.
+
+**The failure this record exists for.** The first mutation campaign scored **34
+mutants, 30 dead, 4 survivors.** Two survivors -- `CATEGORY_AMBIGUOUS` (two keys
+case-folding onto disagreeing slugs) and `SLUG_HAS_NO_ACCOUNT` (a category
+pointing at a slug with no account) -- survived because **the shipped map cannot
+reach either guard.** The shipped map has no case-folding collision and no
+dangling slug, so no input on earth could make those branches fire. Correct code,
+genuinely valuable for the map's future, and under standing rule 43 -- "A REFUSAL
+CODE THAT NO CODE PATH EMITS IS NOT PROTECTION, IT IS DECORATION" -- not yet
+protection.
+
+The fix is the same one D-51 used: the resolver was parameterised on the map it
+reads. `resolveLedgerCategoryIn(map, category)` holds the real logic and is
+exported so tests can hand it hostile maps (`{RSO:"rso", rso:"concentrate"}` for
+the ambiguity guard, `{Ghost:"not-a-real-slug"}` for the dangling-slug guard);
+`resolveLedgerCategory(category)` is a one-line wrapper passing the shipped map.
+The code that runs in production is the identical function, and a test asserts
+both entry points agree on every one of the 53 keys plus four junk inputs.
+
+The other two survivors were **weak tests of mine, not decoration**: one let
+`InventoryType` override a good `Category` while my assertion only checked the
+account code, and one stripped the teaching numbers out of a refusal message
+nothing asserted on. Fixed by comparing the FULL result object against the
+Category-only result for all 53 categories under 4 misleading `InventoryType`
+values, and by pinning `532`, `617`, `20140`, `20080` in the message.
+
+Re-aiming added 5 mutants. **Final: 39 mutants, 39 dead, 0 survivors**, file
+byte-identical to the original at exit (sha256 verified).
+
+**Two more survivors appeared after the refactor and were also real gaps.** One
+picked `hits[hits.length - 1]` instead of `hits[0]` on an agreeing case-fold --
+harmless to the account, but `matchedKey` is evidence that gets printed, so it
+must be deterministic and it must be the first declared key. One made the
+wrapper inject an extra key into the map it passes, which no test noticed
+because nothing asserted that the public door resolves EXACTLY the declared 53
+and nothing else. Both now have named assertions.
+
+**Process note.** The campaign script `scripts/recon/lcm-mutate.py` carries the
+five rails the D-51 corruption incident earned: exclusive lockfile, pattern
+pre-validation requiring every pattern to match exactly once against the pristine
+original before anything is written, baseline-must-be-green, sha256-verified
+restore after every single mutant, and a final hash check. **Rail 2 earned its
+keep immediately** -- after the resolver was parameterised, three mutants (M17,
+M22, M25) no longer matched anything, and the run REFUSED to start rather than
+print a clean sweep over three untested mutants. That is precisely the silent
+"NOT APPLIED" that made campaign #1's result garbage.
+
+**Census rows:** `cost_of_goods_sold.cutover_inventory_load` (builder side).
+
+---
+
+## D-41 UPDATE -- the professional opinion Michael asked for
+
+**Asked:** books-73. Michael, verbatim:
+
+> "for question 4, i am not sure, please tell me your professional opinion and
+> recommendation."
+
+The question: when Michael pays a vendor out of account **6228** (the ATM
+account) for something that is not an ATM expense, is that an **intercompany
+balance (`36000` Due To / From Related Entity)** or a **capital contribution
+(`41100` Shareholder Contributions)**?
+
+This is a question about intent, so it cannot be measured outright. But the
+CONSEQUENCES can be, and Michael's existing Sage books already answer most of
+it. Measured by `scripts/recon/sage-suffix-check.py` over his real chart (288
+accounts) and 550 expense rows totalling $368,276.34:
+
+- **Sage has NO due-to/due-from account. In 288 accounts, there is not one.**
+  There is no `36000` equivalent under any suffix.
+- **121 expense rows, $61,109.02, are LYMAN-suffixed expenses paid out of
+  GREENWAY cash** -- `81002-LYMAN` MAINENANCE $40,206.79 (56 rows),
+  `81001-LYMAN` UTILITIES $10,743.08 (61 rows), `81003-LYMAN` PROPERTY TAX
+  $10,159.15 (4 rows). Cross-entity payment is not a hypothetical; it is 22% of
+  the expense dollars already.
+- **Sage DOES book rent both ways:** `70000-GRNWY` RENT (expense) and
+  `52000-LYMAN` RENT (income). So the landholding entity is already treated as a
+  real counterparty with real revenue, not as a pocket.
+- **Owner money is currently classified as EQUITY, and it closes:**
+  `41000-GRNWY` WITHDRAWALS - LYMAN, type **"Equity-gets closed"**, carrying
+  **$141,904.95 across 87 rows** -- the single largest G/L account in the
+  exports. Plus `41001`/`41002` for Mullan and Becker, and `40001`/`40002`/`40003`
+  RETAINED EARNINGS per member, type "Equity-doesn't close".
+
+**My recommendation: `36000` intercompany, NOT `41100` capital contribution.**
+Four reasons, in the order I weight them.
+
+**1. It is reversible; a capital contribution is not.** An intercompany balance
+is a receivable/payable that gets settled or written off later, and either way
+the treatment is visible and fixable. A capital contribution permanently
+increases Michael's basis in the paying entity and permanently increases the
+receiving entity's equity. If we guess "contribution" and it was really a loan,
+unwinding it means amending returns. If we guess "intercompany" and it was
+really a contribution, we reclassify one balance at year end with the CPA. **The
+asymmetry of the mistake decides the default.** Rule 1 says never guess; when a
+default is unavoidable, take the one that is cheapest to correct.
+
+**2. His own books already treat the entities as counterparties.** Rent flows
+Greenway to Lyman as expense and income. Entities that invoice each other have
+intercompany balances. Recording the same relationship as equity in one place
+and as revenue in another would make the two treatments disagree.
+
+**3. `41100` means something specific and this probably is not it.** A capital
+contribution is money the owner puts IN to fund the business. The 6228 payments
+are the ATM entity's cash paying someone ELSE's bill. Nothing was contributed to
+the ATM entity; the ATM entity paid out on another entity's behalf. That is the
+textbook definition of a due-from.
+
+**4. It is the only treatment that keeps the four entities auditable
+separately.** Michael's end game needs each entity to stand on its own -- an
+LCB-regulated retailer must. `36000` on both sides preserves that: each entity's
+P&L carries its own expenses and each balance sheet carries what it owes the
+others. Routing it through equity erases the trail.
+
+**Three things this recommendation does NOT do, so it cannot be mistaken for
+more than it is.**
+
+- **It does not post anything.** `submitIntercompanyPair` still has zero callers.
+  This is a recommendation about which account a future rule should name, not a
+  wiring change.
+- **It does not decide the `41000` WITHDRAWALS question.** That $141,904.95 is a
+  separate and larger issue: distributions from an S-corp to its members have
+  their own basis and reasonable-compensation consequences, and it needs the CPA
+  and the K-1 work that is on the back burner. I am not folding it into this.
+- **It does not cover the $61,109.02 of LYMAN expenses paid from Greenway cash.**
+  Those are the SAME pattern as the 6228 question and the same logic points the
+  same way, but they are historical Sage rows, and restating history is Michael's
+  and his CPA's call, not mine.
+
+**What I need from Michael to close D-41 rather than merely advise on it:** one
+sentence confirming that money one entity spends on another's behalf is expected
+to be **repaid or settled** (then `36000` is correct and I will build the rule),
+or that it is **not expected to be repaid** (then it is `41100` or a
+distribution, and the rule differs). Until he answers, the census row stays
+`correct: UNKNOWN` with this recommendation attached as the reason -- an opinion
+on the record is not the same as a decision, and the code will keep refusing
+rather than assume.
+
+**Census rows:** `intercompany.transfer_pair`.
+

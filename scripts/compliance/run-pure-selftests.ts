@@ -147,6 +147,7 @@ import { __runGlRefusalCoreTests } from "../../src/lib/accounting/gl-refusal-cor
 import { __runJournalAdvisorCoreTests } from "../../src/lib/accounting/journal-advisor-core";
 import { __runCutoverCoreTests } from "../../src/lib/accounting/cutover-core";
 import { __runCutoverInventoryCoreTests } from "../../src/lib/accounting/cutover-inventory-core";
+import { __runLedgerCategoryMapCoreTests } from "../../src/lib/accounting/ledger-category-map-core";
 // Slice books-03: the vendor bill / accounts-payable brain. Decides what
 // §280E lets Greenway keep (inventory → COGS) versus what it disallows, with
 // verbatim authority behind every call.
@@ -815,6 +816,10 @@ async function main() {
   // because that module owns the dates and this one owns the money on the shelf.
   __runCutoverInventoryCoreTests();
   console.log("cutover-inventory-core self-tests: all passed");
+  // books-73. The LEDGER's own category map. Michael, verbatim: "the ledger
+  // should use its own accounts and not the website map."
+  __runLedgerCategoryMapCoreTests();
+  console.log("ledger-category-map-core self-tests: all passed");
   __runVendorBillCoreTests();
   __runPayrollCogsCoreTests();
   __runBankMatchCoreTests();

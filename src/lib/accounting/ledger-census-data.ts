@@ -312,7 +312,15 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "(vendor-bill-core.ts:966) already solved the ACCOUNT side; books-71 " +
           "measured the CATEGORY side solved too (transform.ts CATEGORY_MAP " +
           "covers 52 of 52 Cultivera categories, 100.00% of value, $0.00 to " +
-          "20890 quarantine).",
+          "20890 quarantine). books-73 THEN GAVE THE LEDGER ITS OWN MAP on " +
+          "Michael's decision: 'the ledger should use its own accounts and not " +
+          "the website map.' ledger-category-map-core.ts is a second pure leaf " +
+          "(zero imports) mapping 53 Cultivera categories to 16 block-2 " +
+          "accounts, with the four D-50 overrides applied (RSO 20150, Tincture " +
+          "20180, Infused Blunt 20100, Blunt 20070 = $6,900.07 re-routed), NO " +
+          "fallback account, and CATEGORY_UNKNOWN naming anything it has not " +
+          "seen. Gated twice (self-tests + 42 vitest assertions) and hardened " +
+          "by 39 mutants, 39 dead, 0 survivors.",
       },
       reachable: {
         status: "MISSING",
@@ -326,7 +334,10 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "file inserts into gl_opening_balances; ledger-store.ts:458 only " +
           "SELECTs from it. Writing a builder does not make a path reachable, " +
           "and recording otherwise would be the exact overstatement this census " +
-          "was built to prevent.",
+          "was built to prevent. books-73: this is now a DELIBERATE DEFERRAL " +
+          "with an owner quote behind it, not an unmeasured gap. Michael: 'we " +
+          "are not ready to migrate inventory over yet.' It must not be marked " +
+          "reachable until he asks for the wiring.",
       },
       correct: {
         status: "UNKNOWN",
@@ -351,7 +362,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "actual quantities do not exist yet. Rule 1: the census will not invent " +
           "the largest asset figure on the balance sheet. (Employee hours " +
           "capitalised into COGS were explicitly excluded from this slice by the " +
-          "owner and are NOT modelled.)",
+          "owner and are NOT modelled.) books-73 CLOSED THE BARCODE QUESTION: " +
+          "41 barcodes repeat, 6 groups at DIFFERENT costs, and Michael said " +
+          "'keep both layers.' So the builder keys on Id (3,917 distinct, 0 " +
+          "duplicates), never Barcode, and no cost is averaged. It already " +
+          "behaved this way, so the answer confirms the build rather than " +
+          "changing it.",
       },
       accepted: {
         status: "PARTIAL",
@@ -1136,7 +1152,14 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
         reason:
           "Whether the 6228 vendor payment is intercompany (36000) or a capital " +
           "contribution (41100) is Michael's decision, not a measurable fact. It " +
-          "changes his basis, so the census refuses to guess.",
+          "changes his basis, so the census refuses to guess. books-73: Michael " +
+          "asked for a recommendation and D-41 now carries one -- 36000, because " +
+          "it is the reversible default, because his Sage books already invoice " +
+          "rent between the entities, and because 288 Sage accounts contain no " +
+          "due-to/due-from while 121 rows ($61,109.02) already pay LYMAN expenses " +
+          "from GREENWAY cash. Still UNKNOWN: a recommendation on the record is " +
+          "not a decision. It closes when Michael confirms whether the money is " +
+          "expected to be repaid.",
       },
       accepted: { status: "MISSING", evidence: "No app path presents a pair." },
       idempotent: {
