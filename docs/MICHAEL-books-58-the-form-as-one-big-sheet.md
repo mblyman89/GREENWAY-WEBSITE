@@ -97,6 +97,16 @@ So the current figures are **Form 941: 27 boxes, 24 taught, 3 not taught (12, 13
 
 The 940's ten are unchanged so far, but four of those ten I can already tell you do not apply to you, and I know it from your own filed return rather than from an opinion. Your 2025 Form 940 shows total payments of $332,975.44 on line 3, exempt and excess payments of $262,975.44 on line 6, and taxable FUTA wages of $70,000.00 on line 7 — which comes to $420.00 of FUTA tax for the year. Boxes 16a through 16d are the quarterly deposit-schedule boxes, and they only start to matter once the liability crosses $500. At $420 you are under it, so those four boxes are not yours to learn. If your payroll grows enough to push that figure over $500 the answer changes, which is exactly why I am giving you the number and not just the conclusion.
 
+### Updated again in books-65 — the to-do list is now empty
+
+Same rule as above: nothing in this letter has been rewritten, because a report that edits itself is a report you cannot check. Here is what changed.
+
+You looked at the forms and told me the boxes without lessons "look like there is a red squiggly line in it," and you pointed at Schedule B, where every single box opens with an explanation, and said that was the level you wanted. So I stopped treating the untaught boxes as a judgement call. I measured all 23 that were left across the 941 and the 940, and for each one I asked whether the IRS had actually written anything about it. All 23 did. Not one of them was a box that "doesn't need a lesson" — they were boxes nobody had written yet. So I wrote them, and the standing to-do total is now **0 boxes, not 13.**
+
+That includes 12, 13 and 14, which I told you above I was skipping on purpose. I was applying your "only if it will really truly benefit me" instruction, and on those three I got the balance wrong; you have since been clear that you want the thoroughness. It also includes 16a through 16d. Those four still do not apply to you and I have not pretended otherwise — every one of them now opens by saying that Part 5 is only used when line 12 is over $500, that your 2025 line 12 was $420.00, and that all four are therefore left blank rather than zeroed, before it explains what the box would mean if your payroll ever crossed that line. A test in the repository now fails if any of those four ever stops saying so.
+
+One more number moved, and it is the important one. The 941 went from 27 boxes to 32, and the 940 from 30 to 35. The five new boxes on each are your EIN, business name, trade name, address and city/state/ZIP. They were missing from the specimen entirely, which is the reason your company information was not appearing on the forms even though you had entered it correctly and had green checks against all of it. That was a real defect, not a display quirk, and it is fixed.
+
 ---
 
 ## A pre-existing gate caught me building a room with no door

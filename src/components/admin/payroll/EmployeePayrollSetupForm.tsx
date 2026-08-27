@@ -96,6 +96,10 @@ import { formatCentsPlain } from "@/lib/payroll/payroll-withholding-core";
 import { findGuidanceAuthority } from "@/lib/accounting/books-guidance-core";
 import { GREENWAY_RATES } from "@/lib/payroll/payroll-rates-2026";
 import { revealSsnAction, saveSetupAction } from "@/app/admin/books/payroll-setup/actions";
+// books-65. Both spellings of the work code, so the screen can show exactly
+// what will be stored and exactly what will be uploaded, rather than
+// promising one and doing the other.
+import { eamsSocCode, socCodeCanonical } from "@/lib/payroll/esd-eams-csv-core";
 
 // ---------------------------------------------------------------------------
 // Form state. Every money field is held as the STRING the user typed.
@@ -136,6 +140,8 @@ type FormState = {
   payAnnualSalary: string;
   payFrequency: PayFrequency;
   payLaborRoleCode: string;
+  /** The ESD work code (SOC). Text, like every other field here. books-65. */
+  socCode: string;
   payCogsSplitPercent: string;
   payHireYmd: string;
   payMinimumWage: string;
@@ -214,6 +220,7 @@ export function EmployeePayrollSetupForm({
   employeeId,
   employeeName,
   maskedSsnOnFile,
+  socCodeOnFile,
   defaultFormYear,
   todayYmd,
 }: {
@@ -221,6 +228,15 @@ export function EmployeePayrollSetupForm({
   employeeName: string;
   /** What is already on file, already masked. The full number never ships here. */
   maskedSsnOnFile: string | null;
+  /**
+   * The ESD work code already stored for this person, or "" when there is none.
+   *
+   * Unlike the SSN this one arrives in full, because it is not a secret - it
+   * says what job somebody does, which is printed on the quarterly wage report
+   * the state publishes statistics from. It seeds the input so that re-saving
+   * an employee does not silently drop a code that was set last quarter.
+   */
+  socCodeOnFile: string;
   defaultFormYear: number;
   todayYmd: string;
 }) {
@@ -258,6 +274,12 @@ export function EmployeePayrollSetupForm({
       // his current system, silently mis-annualizing every calculation.
       payFrequency: "biweekly",
       payLaborRoleCode: "",
+      // NOT pre-filled with 41-2031. Michael told us that is the code HIS
+      // employees use, which is a fact about his roster, not a default for
+      // every person this screen will ever open. A code that arrived by
+      // default states what someone does for a living without anyone saying
+      // so, and it would be indistinguishable from one that was checked.
+      socCode: socCodeOnFile,
       payCogsSplitPercent: "0",
       payHireYmd: "",
       // DELIBERATELY BLANK. There is no minimum-wage figure anywhere in this
@@ -342,6 +364,7 @@ export function EmployeePayrollSetupForm({
       },
       pay,
       newHireReportedYmd: ymdOrNull(form.newHireReportedYmd),
+      socCode: form.socCode,
     };
   }, [form]);
 
@@ -358,14 +381,25 @@ export function EmployeePayrollSetupForm({
     return s;
   }, [view]);
 
-  /** The engine's own sentence about this field, if it has one. */
+  /**
+   * The engine's own sentence ABOUT THIS FIELD, if it has one.
+   *
+   * Looked up by field name. This used to return `row.problems[0]` - the first
+   * complaint on the step, whichever field it happened to belong to - which was
+   * correct only for as long as every step raised at most one problem. books-65
+   * gave `labor_role` a second one and the ESD work code box began displaying
+   * the labor role's message. Logged as D-16; the visual check found it.
+   *
+   * Every matching sentence is joined rather than only the first, because two
+   * things being wrong with one box is not a reason to hide one of them.
+   */
   function problemFor(path: string): string | undefined {
     if (!highlighted.has(path)) return undefined;
-    for (const row of view.rows) {
-      if (row.highlightFields.includes(path) && row.problems.length > 0) {
-        return row.problems[0];
-      }
-    }
+    const mine = view.rows
+      .flatMap((row) => row.fieldProblems)
+      .filter((p) => p.field === path)
+      .map((p) => p.message);
+    if (mine.length > 0) return mine.join(" ");
     // Named but with no sentence attached. Say something true rather than
     // nothing - a highlighted field with no explanation is the Sage experience.
     return "This still needs an answer before payroll can run.";
@@ -1045,6 +1079,53 @@ export function EmployeePayrollSetupForm({
                 value={form.payCogsSplitPercent}
                 onChange={(e) => set("payCogsSplitPercent", e.target.value)}
               />
+            </Field>
+          </div>
+
+          {/*
+            books-65. Michael: "for esd, they require a work code for each
+            employee, so i will need a way to enter that code in."
+
+            It sits with the labor role because it answers the same question -
+            what does this person do - for a different reader. The labor role
+            answers it for §280E; this answers it for Washington. The box is
+            NOT marked required, and that is deliberate: RCW 50.12.070 accepts
+            the code OR a job title, so a blank is a lawful filing and the
+            checklist raises it as a warning rather than stopping the payroll.
+          */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field
+              label="ESD work code (SOC)"
+              error={problemFor("socCode")}
+              help="Six digits, hyphen optional. Washington wants this on every line of the quarterly wage report. Greenway's filed 5208B uses 41-2031, Retail Salespersons."
+            >
+              <Input
+                value={form.socCode}
+                placeholder="41-2031"
+                onChange={(e) => set("socCode", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-[var(--admin-muted)]">
+                {form.socCode.trim() === "" ? (
+                  <>
+                    Leaving this blank is allowed &mdash; the law takes a code{" "}
+                    <em>or</em> a job title &mdash; but then somebody types the title
+                    into EAMS by hand every quarter.
+                  </>
+                ) : socCodeCanonical(form.socCode) === "" ? (
+                  <>
+                    That is not six digits, so it will not be saved as it stands.
+                    Blank is a lawful option; a code that is nearly right is not.
+                  </>
+                ) : (
+                  <>
+                    Stored as{" "}
+                    <strong>{socCodeCanonical(form.socCode)}</strong>, and written to
+                    the EAMS wage file as{" "}
+                    <strong>{eamsSocCode(form.socCode)}</strong> &mdash; the uploader
+                    wants the digits without the hyphen.
+                  </>
+                )}
+              </p>
             </Field>
           </div>
 

@@ -190,41 +190,95 @@ describe("form-sheet-core: every real form builds a sheet", () => {
   }
 });
 
-describe("form-sheet-core: the 'not taught yet' marker is reachable", () => {
+describe("form-sheet-core: the 'not taught yet' marker, after books-65", () => {
   /*
-   * The whole point of this block. Michael approved marking untaught boxes, and
-   * the form he asked for first cannot produce one. These assertions prove the
-   * state exists in the real product, so the marker is not decoration.
+   * ---------------------------------------------------------------------
+   * THIS BLOCK WAS INVERTED IN books-65, AND HERE IS WHY  (rules 23, 40, 50)
+   * ---------------------------------------------------------------------
+   * It used to read "the 941 really does have untaught boxes today" and pin
+   * that list to ["12","13","14"]. That was the right gate for books-58
+   * through books-64, when the marker was reachable in the shipped product and
+   * the risk worth guarding was the set changing without anybody saying why.
+   *
+   * Michael then looked at the forms and said:
+   *
+   *   "the boxes that dont have lessons, the boxes look like there is a red
+   *    squiggly line in it, but id rather they just open a box that says in
+   *    plain english what it is and why it doesn't need a lesson"
+   *
+   *   "on the 941 schedule b, every single box opens with an explanation.
+   *    this is the level of thoroughness i want."
+   *
+   * Before writing anything, the 23 marked boxes were measured and each was
+   * asked whether real authority existed for it. It did, 23 for 23, located by
+   * line number in the mirrored IRS corpora. So not one of them was a box that
+   * "doesn't need a lesson" - they were boxes nobody had written yet. Writing
+   * them removes the marker's CAUSE rather than dressing up its symptom, which
+   * is what Michael actually asked for.
+   *
+   * That makes the old assertions unsatisfiable. The previous author left an
+   * instruction for this moment - "this test should move to whichever form
+   * still has an untaught box -- not be deleted" - but there is no such form
+   * left. So the block is inverted rather than moved or deleted:
+   *
+   *   1. the product now has ZERO untaught boxes, and that is PINNED, so a new
+   *      box added without a lesson fails here instead of shipping a squiggle;
+   *   2. the marker is still proved REACHABLE - through the real pipeline, on
+   *      real product boxes, with the lesson set withheld - so rule 40 is
+   *      satisfied and `affordanceOf`'s untaught branch is not dead code.
+   *
+   * Point 2 matters because point 1 alone would let somebody delete the
+   * untaught branch entirely and stay green.
    */
-  it("the 941 really does have untaught boxes today", () => {
-    const cov = sheetCoverage(sheetGroups(teachingBoxes("form_941"), ALL_LESSONS));
-    expect(cov.untaught).toBeGreaterThan(0);
-    /*
-     * books-60 moved this list from seven to three. Lines 5e, 6, 7 and 10 were
-     * taught; 12, 13 and 14 were left alone on purpose, because for Greenway
-     * line 12 is a subtraction of zero, line 13 is a transcription of the EFTPS
-     * record and line 14 is arithmetic on the two -- Michael asked for a lesson
-     * "only ... if it will really truly benefit me".
-     *
-     * The list stays PINNED rather than loosened to `.length > 0`, because the
-     * useful failure is not "some box is untaught" but "the set changed and
-     * nobody said why".
-     */
-    expect(cov.untaughtBoxes).toEqual(["12", "13", "14"]);
-  });
 
-  it("the 940 really does have untaught boxes today", () => {
-    const cov = sheetCoverage(sheetGroups(teachingBoxes("form_940"), ALL_LESSONS));
-    expect(cov.untaught).toBeGreaterThan(0);
-  });
-
-  it("at least one box in the product is untaught, or the marker is dead code", () => {
+  it("no form in the product has an untaught box any more", () => {
     const untaught = ALL_TAUGHT_FORM_IDS.flatMap((f) =>
       sheetCoverage(sheetGroups(teachingBoxes(f), ALL_LESSONS)).untaughtBoxes.map(
         (b) => `${f}:${b}`,
       ),
     );
-    expect(untaught.length).toBeGreaterThan(0);
+    // Listed in the message, not just counted, so the failure names the box.
+    expect(
+      untaught,
+      "a box is rendering with the 'not taught yet' marker. books-65 closed " +
+        "every one of them at Michael's request; if a new box arrived, it needs " +
+        "a lesson backed by real authority, not a re-opened exception here.",
+    ).toEqual([]);
+  });
+
+  it("the 941 and the 940 specifically are fully taught", () => {
+    // Named separately from the sweep above because these two are the forms
+    // books-65 was about, and a helpful refactor of ALL_TAUGHT_FORM_IDS could
+    // drop them from the sweep without anybody noticing.
+    for (const formId of ["form_941", "form_940"]) {
+      const cov = sheetCoverage(sheetGroups(teachingBoxes(formId), ALL_LESSONS));
+      expect(cov.untaughtBoxes, `${formId} has untaught boxes again`).toEqual([]);
+      expect(cov.teachable, `${formId} teaches nothing at all`).toBeGreaterThan(0);
+      expect(cov.teachable + cov.unusedAndUntaught).toBe(cov.total);
+    }
+  });
+
+  it("the untaught marker is still REACHABLE, on real boxes, with no lesson set", () => {
+    /*
+     * Rule 40. Full coverage must not be allowed to turn the untaught branch
+     * into dead code that no test can distinguish from a deletion.
+     *
+     * These are the REAL 941 boxes going through the REAL sheetGroups. The only
+     * thing withheld is the lessons, which is exactly the state the product is
+     * in the moment somebody adds a box and forgets to teach it.
+     */
+    const groups = sheetGroups(teachingBoxes("form_941"), []);
+    const cells = groups.flatMap((g) => g.cells);
+    expect(cells.length).toBeGreaterThan(0);
+    for (const c of cells) {
+      expect(c.affordance, `box ${c.box.box} with no lesson was not marked untaught`).toBe(
+        "untaught",
+      );
+      expect(c.lesson).toBeUndefined();
+    }
+    const cov = sheetCoverage(groups);
+    expect(cov.teachable).toBe(0);
+    expect(cov.untaught + cov.unusedAndUntaught).toBe(cov.total);
   });
 
   it("at least one box in the product is teachable, or the click target is dead code", () => {
@@ -237,15 +291,22 @@ describe("form-sheet-core: the 'not taught yet' marker is reachable", () => {
   });
 
   it("every affordance in the vocabulary is produced by a real form", () => {
+    /*
+     * books-65: "teachable" now comes from the product as shipped, and
+     * "untaught" from the same real boxes with the lesson set withheld. Both
+     * halves walk ALL_TAUGHT_FORM_IDS rather than naming forms, per rule 43,
+     * so a ninth form is covered without anybody remembering to add it.
+     */
     const produced = new Set(
-      ALL_TAUGHT_FORM_IDS.flatMap((f) =>
-        sheetGroups(teachingBoxes(f), ALL_LESSONS)
+      ALL_TAUGHT_FORM_IDS.flatMap((f) => [
+        ...sheetGroups(teachingBoxes(f), ALL_LESSONS)
           .flatMap((g) => g.cells)
           .map((c) => c.affordance),
-      ),
+        ...sheetGroups(teachingBoxes(f), [])
+          .flatMap((g) => g.cells)
+          .map((c) => c.affordance),
+      ]),
     );
-    // Rule 43: walked, not hand-listed. A state nobody can reach is a state
-    // nobody has tested, and it must be deleted or made reachable.
     for (const a of ALL_BOX_AFFORDANCES) {
       expect(produced.has(a), `affordance "${a}" is unreachable across every real form`).toBe(
         true,
@@ -462,8 +523,53 @@ describe("form-sheet-core: every sheet route keeps the same promises", () => {
 
   for (const form of sheetForms) {
     describe(form, () => {
-      const sheetPage = readFileSync(join(BOOKS, form, "sheet", "page.tsx"), "utf8");
+      const sheetPageOnly = readFileSync(join(BOOKS, form, "sheet", "page.tsx"), "utf8");
       const parentPath = join(BOOKS, form, "page.tsx");
+
+      /*
+       * ═══ THE PAGE PLUS THE COMPONENTS IT COMPOSES (books-65) ═══
+       *
+       * These assertions grep source text, and until books-65 they grepped ONE
+       * file. That was sound while every sheet route wrote its own banners
+       * inline, and it broke the moment one did the thing this codebase asks
+       * for everywhere else: extract the markup into a component so a render
+       * harness and the page can share it (rule 25, rule 130c).
+       *
+       * The WA sheet moved its header into `WaSheetHeader`. Every promise below
+       * was still kept — the words are on the reader's screen — but the gate
+       * went red, because the sentence had moved one file away. A gate that
+       * fires on refactoring trains people to inline their markup to please it,
+       * which is exactly backwards, and it is the same failure this file's own
+       * comment above records about line-wrapping.
+       *
+       * So the corpus is now the page AND the local components it imports. Not
+       * the whole tree: only `@/components/...` specifiers this file actually
+       * names, resolved once. That keeps the check honest — a promise has to be
+       * kept in code this route really renders — while letting the route be
+       * built out of parts.
+       */
+      const localComponentSources: string[] = Array.from(
+        sheetPageOnly.matchAll(/from "@\/(components\/[^"]+)"/g),
+      )
+        .map((m) => join(ROOT, "src", `${m[1]}.tsx`))
+        .filter((p) => existsSync(p))
+        .map((p) => readFileSync(p, "utf8"));
+
+      /*
+       * Rule 66d: prove the resolver found something before relying on it.
+       * A regex that silently matched nothing would make every assertion below
+       * fall back to the single-file behaviour without saying so.
+       */
+      it("resolves the components this route composes", () => {
+        expect(
+          localComponentSources.length,
+          `${form}/sheet/page.tsx imports no local component this gate could resolve. Every ` +
+            `sheet route renders through at least FormSheet or FormFacsimile, so zero means ` +
+            `the import pattern stopped matching and the checks below silently narrowed.`,
+        ).toBeGreaterThanOrEqual(1);
+      });
+
+      const sheetPage = [sheetPageOnly, ...localComponentSources].join("\n");
 
       it("has a parent screen to be a view OF", () => {
         // A sheet with no parent is not an alternative view of anything, and
@@ -565,20 +671,29 @@ describe("form-sheet-core: every sheet route keeps the same promises", () => {
 });
 
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * THE "NOT TAUGHT YET" MARKER IS FINALLY REACHABLE
- * ═══════════════════════════════════════════════════════════════════════════
+ * ============================================================================
+ * A SHEET RENDERS BOTH AFFORDANCES  (books-60, rewritten in books-65)
+ * ============================================================================
+ * books-58 shipped the untaught marker and admitted in the owner report that
+ * it could not be proved on the only form that had a sheet, because the W-2
+ * has zero untaught boxes. books-60 closed that on the 941, which then had
+ * seven.
  *
- * books-58 shipped the marker and said so honestly in the owner report: it
- * could not be proved on the only form with a sheet, because the W-2 has zero
- * untaught boxes. Rule 40 -- an unreachable guard is an untested guard.
+ * books-65 closed the 941 too - all 23 remaining untaught boxes across the 941
+ * and the 940 were written, because Michael asked that every box open with an
+ * explanation the way Schedule B already does. So the old form of this block,
+ * which required the 941 to still have an untaught box, can no longer pass.
  *
- * The 941's sheet closes that. This asserts the closure rather than assuming it,
- * because "the 941 has untaught boxes" is a fact about today's lesson set and
- * will stop being true the day somebody teaches lines 12, 13 and 14.
+ * What survives, and is worth keeping separate from the sweep above, is the
+ * lesson SET this block uses. Everything above pools every lesson in the
+ * product into ALL_LESSONS and leans on lessonFor matching formId as well as
+ * box. Here the 941's sheet is built from FORM_941_LESSONS alone - the exact
+ * import the real page makes. That distinguishes "the 941 is covered" from
+ * "the 941 is covered by lessons that happen to live in some other form's
+ * module", which the pooled version cannot tell apart.
  */
-describe("books-60: a sheet now renders BOTH affordances", () => {
-  it("the 941 sheet has taught boxes and untaught boxes on the same screen", () => {
+describe("books-60/65: the 941 sheet, built from the module the page imports", () => {
+  it("teaches every box on the 941 using only the 941's own lesson module", () => {
     const groups = sheetGroups(teachingBoxes("form_941"), FORM_941_LESSONS);
     const cells = groups.flatMap((g) => g.cells);
     const teachable = cells.filter((c) => c.affordance === "teachable");
@@ -586,19 +701,24 @@ describe("books-60: a sheet now renders BOTH affordances", () => {
 
     expect(teachable.length).toBeGreaterThan(0);
     expect(
-      untaught.length,
-      "no untaught box on the 941 sheet, so the 'not taught yet' marker is unreachable " +
-        "again. If lines 12, 13 and 14 were taught deliberately, this test should move to " +
-        "whichever form still has an untaught box -- not be deleted.",
-    ).toBeGreaterThan(0);
+      untaught.map((c) => c.box.box),
+      "a 941 box is untaught when the sheet is built from FORM_941_LESSONS alone. " +
+        "If it is taught in the pooled ALL_LESSONS run above but not here, its lesson " +
+        "was written into the wrong module and the real page will not show it.",
+    ).toEqual([]);
 
-    // And the two sets must be disjoint and exhaustive: every cell is one or
-    // the other. A third state would render as neither and be invisible.
+    // The two sets are disjoint and exhaustive: every cell is one or the
+    // other. A third state would render as neither and be invisible.
     expect(teachable.length + untaught.length).toBe(cells.length);
   });
 
-  it("the untaught boxes on the 941 are the three left untaught on purpose", () => {
-    const cov = sheetCoverage(sheetGroups(teachingBoxes("form_941"), FORM_941_LESSONS));
-    expect(cov.untaughtBoxes).toEqual(["12", "13", "14"]);
+  it("agrees with the pooled run, proving no lesson is filed under the wrong form", () => {
+    // Same sheet, two lesson sets. If these ever disagree, a 941 lesson is
+    // carrying the wrong formId, or another form's module is answering for it.
+    const own = sheetCoverage(sheetGroups(teachingBoxes("form_941"), FORM_941_LESSONS));
+    const pooled = sheetCoverage(sheetGroups(teachingBoxes("form_941"), ALL_LESSONS));
+    expect(own.total).toBe(pooled.total);
+    expect(own.teachable).toBe(pooled.teachable);
+    expect(own.untaughtBoxes).toEqual(pooled.untaughtBoxes);
   });
 });

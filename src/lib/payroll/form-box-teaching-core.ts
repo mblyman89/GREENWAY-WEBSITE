@@ -79,8 +79,19 @@ import {
   FORM_W2_WHOSE,
   FORM_W3_WHOSE,
   FORM_ID_W3,
+  ENTITY_BOX_CAPTIONS,
   type WhoseRow,
 } from "@/lib/payroll/form-box-adapters";
+/*
+ * The REAL identity builders the sheet pages call, imported so D-15's gate can
+ * ask them what they emit rather than being told. Safe in this direction:
+ * form-facsimile-core imports nothing from this module, so there is no cycle.
+ */
+import {
+  nine41IdentityText,
+  nine40IdentityText,
+  w3IdentityText,
+} from "@/lib/payroll/form-facsimile-core";
 // Imported so the drift gate can compare this file's claims against a return
 // the engine actually built, rather than against this file's own opinions.
 import {
@@ -1549,9 +1560,94 @@ export const LNI_QUARTERLY_TEACHING: readonly TeachingBox[] = [
  * Every form that can be taught with no data, keyed by the SAME formId the
  * lessons use. Held as data (rule 43) so adding a form is one row.
  */
+/**
+ * How each entity box gets filled, in English, with no numbers substituted.
+ *
+ * Written per box rather than shared, because "it comes from the company
+ * profile" is true of all five and therefore teaches nothing. What Michael
+ * needs from each is the trap particular to it: which name goes in which box,
+ * why the EIN has no hyphen on the paper, and that the address is where the
+ * IRS will post a notice.
+ */
+const ENTITY_HOW_IT_GETS_FILLED: Readonly<Record<string, string>> = {
+  ein:
+    "Copied from Company Information. The IRS matches this return to your account on the EIN " +
+    "and the name together, so a return missing either cannot post. On the paper it prints as " +
+    "two digits, then seven, in separate squares — the hyphen is part of the printed form, not " +
+    "something you type, and typing it would push the last digit off the end of the box.",
+  name:
+    "Copied from Company Information. This is the LEGAL name the EIN was issued to — for " +
+    "Greenway that is LYMAN'S MARIJUANA L.L.C., not the name over the door. The IRS builds a " +
+    "'name control' from the first four characters and checks it against the EIN, so putting " +
+    "the trading name here is one of the most common reasons a return fails to post.",
+  tradeName:
+    "Copied from Company Information. GREENWAY MARIJUANA — the name customers know. The IRS " +
+    "gives it a box of its own precisely so it does not end up in the legal-name box, and " +
+    "captions that one 'Name (not your trade name)' to say so.",
+  address:
+    "Copied from Company Information. The street address of the business. This is where the " +
+    "IRS posts a notice about this return, so an out-of-date address here is how a letter " +
+    "with a deadline on it goes unanswered.",
+  cityStateZip:
+    "Copied from Company Information. City, state and ZIP, filled into three separate " +
+    "rectangles in that order. They are kept apart rather than run together so that a missing " +
+    "city cannot slide the ZIP into the state box.",
+};
+
+/**
+ * The employer's entity area, as TEACHING boxes.
+ *
+ * ═══ D-15: THE DEFECT THIS CLOSES, MEASURED ═══
+ *
+ * Michael, books-65: "i input all my company info into the company info page
+ * and have green checks for all of them. but when i view the forms, they do not
+ * populate with my company data in them."
+ *
+ * He was right, and the cause was not the company profile. The sheet pages read
+ * it correctly, and `nine41IdentityText` turns it into exactly five entries -
+ * `ein`, `name`, `tradeName`, `address`, `cityStateZip`. The facsimile then
+ * places that text by looking each entry up BY BOX ID: `identity[r.box.box]`.
+ * So a value only reaches the paper if a box with that id is in the box list.
+ *
+ * `form941Boxes` and `form940Boxes` add those five (books-61, books-63). But
+ * those adapters only run when a return has been BUILT. With no 2026 payroll
+ * yet, every form page falls back to `teachingBoxes`, and the specimen had no
+ * entity boxes at all. Measured, before the fix:
+ *
+ *     form_941: 27 boxes | entity MISSING=[ein,name,tradeName,address,cityStateZip]
+ *     form_940: 30 boxes | entity MISSING=[ein,name,tradeName,address,cityStateZip]
+ *     JOIN RESULT in specimen mode: 0 of 5 identity values find a box.
+ *
+ * So the EIN was read from the database, formatted, split for the comb, handed
+ * to the component - and dropped on the floor, silently, because nothing was
+ * listening for it. A form whose name boxes are blank reads as a form nobody
+ * has started rather than as a form that is broken, which is why this survived
+ * three slices of people looking straight at it.
+ *
+ * WHY THE CAPTIONS ARE NOT RETYPED HERE. They are the same five captions the
+ * adapters print, and a second copy would eventually disagree with the first.
+ * `ENTITY_BOX_CAPTIONS` is imported from form-box-adapters.ts, which is already
+ * a dependency of this module (it supplies every FORM_*_WHOSE table), so this
+ * adds no cycle.
+ *
+ * WHY `FED_941` ON A 940 ROW. Because the entity facts are not per-form facts.
+ * Greenway has one EIN, one legal name, one trade name and one address, and the
+ * IRS reconciles a year's 940 against the four 941s filed under that same EIN.
+ * The adapters made the same choice for the same reason - `employerEntityBoxes`
+ * calls `whoseFor(FORM_941_WHOSE, ...)` whichever form it is building.
+ */
+const ENTITY_TEACHING: readonly TeachingBox[] = ENTITY_BOX_CAPTIONS.map(
+  ({ box, caption }): TeachingBox => ({
+    box,
+    caption,
+    whoseSource: FED_941,
+    howItGetsFilled: ENTITY_HOW_IT_GETS_FILLED[box],
+  }),
+);
+
 export const TEACHING_FORMS: Readonly<Record<string, readonly TeachingBox[]>> = {
-  form_941: FORM_941_TEACHING,
-  form_940: FORM_940_TEACHING,
+  form_941: [...ENTITY_TEACHING, ...FORM_941_TEACHING],
+  form_940: [...ENTITY_TEACHING, ...FORM_940_TEACHING],
   form_w2: FORM_W2_TEACHING,
   // The transmittal. Registered in books-55. Before that, `form_w3` was already
   // named in ALL_TAUGHT_FORM_IDS and already had a working title, but asking it
@@ -2180,6 +2276,85 @@ export function assertNoSpecimenClaimsAFigure(): void {
   }
 }
 
+/**
+ * D-15's gate: every identity value a page computes must have a box to land in.
+ *
+ * WHAT IT ACTUALLY MEASURES, and why it is not a restatement of the fix.
+ *
+ * It does not read a list of box ids and compare it with the same list written
+ * twice. It CALLS the real identity builders with a filled-in employer, takes
+ * the keys they genuinely emit, and asserts each one is a box in the specimen
+ * the form would render with no payroll on file. That is the exact join the
+ * facsimile performs at `identity[r.box.box]`, so the gate fails in precisely
+ * the circumstance the owner reported and in no other (rule 39: a gate must not
+ * measure its own opinion).
+ *
+ * The employer passed in is fully populated ON PURPOSE. `nine41IdentityText`
+ * omits an absent field, so an empty employer emits zero keys and the loop
+ * below would pass by having nothing to check - a gate that cannot fail. Every
+ * field is present so every key is emitted.
+ */
+export function assertEveryIdentityValueHasABox(): void {
+  const employer = {
+    ein: "464217016",
+    legalName: "LYMAN'S MARIJUANA L.L.C.",
+    street: "4851 GEIGER RD SE",
+    city: "PORT ORCHARD",
+    state: "WA",
+    zip: "98366",
+  };
+
+  /*
+   * Each row is a REAL page: the form id it renders with no data, and the
+   * identity builder that page calls. Both halves are taken from the page's own
+   * source, so a new form cannot be added to one without the other.
+   */
+  const pages: readonly {
+    readonly formId: string;
+    readonly keys: readonly string[];
+    readonly label: string;
+  }[] = [
+    {
+      formId: "form_941",
+      keys: Object.keys(nine41IdentityText(employer, "GREENWAY MARIJUANA")),
+      label: "Form 941",
+    },
+    {
+      formId: "form_940",
+      keys: Object.keys(nine40IdentityText(employer, "GREENWAY MARIJUANA")),
+      label: "Form 940",
+    },
+    { formId: "form_w3", keys: Object.keys(w3IdentityText(employer)), label: "Form W-3" },
+  ];
+
+  for (const page of pages) {
+    // Rule 66d / 87: prove the builder produced something before proving each
+    // one lands. An identity builder that silently returned {} would otherwise
+    // satisfy every assertion below by vacuity.
+    assert(
+      page.keys.length >= 3,
+      `${page.label}: its identity builder emitted only ${page.keys.length} values, so the ` +
+        `check below has almost nothing to verify. Expected the entity area to produce at ` +
+        `least the number, the name and the address.`,
+    );
+
+    const specimen = new Set(teachingBoxes(page.formId).map((b) => b.box));
+    for (const key of page.keys) {
+      assert(
+        specimen.has(key),
+        `D-15 has come back on ${page.label}. Its page reads the company profile and builds an ` +
+          `identity value for "${key}", but the teaching specimen for "${page.formId}" has no ` +
+          `box with that id - and the facsimile places identity text by looking it up on the ` +
+          `box id. So that value is computed, formatted, handed to the component and then ` +
+          `dropped, and the form prints with an empty box that looks merely unstarted. This is ` +
+          `the exact bug Michael reported in books-65: "i input all my company info into the ` +
+          `company info page and have green checks for all of them. but when i view the forms, ` +
+          `they do not populate with my company data in them."`,
+      );
+    }
+  }
+}
+
 /** Captions must be the form's words, and every box must explain itself. */
 export function assertEverySpecimenBoxTeaches(): void {
   for (const [formId, spec] of Object.entries(TEACHING_FORMS)) {
@@ -2378,4 +2553,5 @@ export function __runFormBoxTeachingCoreTests(): void {
   assertSpecimenMatchesTheEngine();
   assertEveryWaFormIsTeachable();
   assertEveryFederalBoxIsClassified();
+  assertEveryIdentityValueHasABox();
 }

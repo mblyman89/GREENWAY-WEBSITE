@@ -1017,6 +1017,268 @@ export const I940_WORKSHEET_EXAMPLE_FACTS: GuidanceAuthority = {
   source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
 };
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * §4c  THE FIFTEEN BOXES THAT STILL HAD NO WORDS  (books-65)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * books-54 closed twelve lines and this file's own comment above says so. It
+ * did not close all of them, and the marker on the screen is what proved it:
+ * Michael, inspecting the rendered forms, wrote "the boxes that dont have
+ * lessons, the boxes look like there is a red squiggly line in it, but id
+ * rather they just open a box that says in plain english what it is and why it
+ * doesn't need a lesson."
+ *
+ * Measured rather than guessed. `scripts/tmp-gap.ts` joined the teaching
+ * specimen against every lesson module in the repository and printed:
+ *
+ *     form_940: 35 boxes | 15 UNTAUGHT ->
+ *       [ein, name, tradeName, address, cityStateZip,
+ *        4, 6, 11, 13, 14, 15a, 16a, 16b, 16c, 16d]
+ *
+ * Then the second question, the one that decides whether a lesson is even
+ * permitted: is there authority for each, or would some be explained on my own
+ * say-so (standing rule 62d)? Every one of the fifteen has instruction text in
+ * the mirrored corpus. So none of them was a box that "doesn't need a lesson";
+ * all fifteen were boxes nobody had written. Michael's fallback panel is
+ * unnecessary, which is the best answer his question could have had.
+ *
+ * Lines 4 and 14 already had authorities here, and lines 4a-4e are covered
+ * above. The eight records below close the rest. Every quote was extracted
+ * mechanically from the corpus by a throwaway slicing script rather than
+ * retyped, so a failure of the verbatim gate means the corpus changed, not
+ * that somebody's fingers slipped.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * THE TOP OF THE FORM. The IRS's own worked example here is, by coincidence,
+ * exactly Greenway's situation: a legal name that nobody says out loud and a
+ * trading name that everybody does. The last sentence is the rule people break
+ * - a trade name identical to the legal name is left BLANK, not repeated.
+ */
+export const I940_ENTITY_TOP_OF_FORM: GuidanceAuthority = {
+  id: "i940-entity-top-of-form",
+  kind: "irs_guidance",
+  cite:
+    "IRS Instructions for Form 940 (2025), Employer Identification Number (EIN), Name, Trade Name, and Address",
+  quote:
+    "Enter your EIN, name, and address in the spaces provided. You must enter your name and EIN " +
+    "here and on page 2. Enter the business (legal) name that you used when you applied for your " +
+    "EIN on Form SS-4. For example, if you're a sole proprietor, enter \u201CRonald Smith\u201D on the Name " +
+    "line and \u201CRon's Cycles\u201D on the Trade Name line. Leave the Trade Name line blank if it is the " +
+    "same as your Name.",
+  soWhat:
+    "Two names, and the form decides which goes where: the one on the SS-4 goes on Name, the one " +
+    "on the door goes on Trade Name, and if they are the same the second line stays empty. " +
+    "Greenway is the two-name case - LYMAN'S MARIJUANA L.L.C. and GREENWAY MARIJUANA - so both " +
+    "lines print.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * THE EIN, AND WHY IT IS A PENALTY RATHER THAN A TYPO. Worth quoting on the
+ * 940 as well as the 941 even though the wording is close: this is the return
+ * that ties to the state's records, and Michael runs four entities.
+ */
+export const I940_EIN_MUST_MATCH_EXACTLY: GuidanceAuthority = {
+  id: "i940-ein-must-match-exactly",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), Employer identification number (EIN)",
+  quote:
+    "Always be sure the EIN on the form you file exactly matches the EIN that the IRS assigned to " +
+    "your business. Don't use a social security number (SSN) or an individual taxpayer " +
+    "identification number (ITIN) on forms that ask for an EIN. Filing a Form 940 with an " +
+    "incorrect EIN or using the EIN of another's business may result in penalties and delays in " +
+    "processing your return.",
+  soWhat:
+    "\u201CExactly\u201D, and the penalty is for the identifier rather than for the tax. With four entities " +
+    "on one desk, borrowing the wrong EIN is a realistic mistake with a real cost, which is why " +
+    "this product stores it once per entity and prints it rather than asking anyone to type it.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * THE PREPARER SENTENCE. Michael prepares his own returns today; his CPA
+ * touches them too. This is the sentence that says the name must survive the
+ * handover unchanged.
+ */
+export const I940_PREPARER_MUST_USE_EXACT_NAME: GuidanceAuthority = {
+  id: "i940-preparer-must-use-exact-name",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), Enter Your Business Information at the Top of the Form",
+  quote:
+    "If you pay a tax preparer to fill out Form 940, make sure the preparer shows your business " +
+    "name exactly as it appeared when you applied for your EIN.",
+  soWhat:
+    "A name retyped by somebody else is a name that can drift. The instruction puts the duty on " +
+    "the business owner rather than on the preparer, which is why the stored profile - not the " +
+    "preparer's memory - is the source this product prints from.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 6. Two lines added, and the reason it exists as its own line rather
+ * than being folded into line 7 is that it is the total the IRS wants to see
+ * SUBTRACTED - exempt payments plus over-the-ceiling payments, the whole of
+ * what is not taxable.
+ */
+export const I940_LINE_6_SUBTOTAL: GuidanceAuthority = {
+  id: "i940-line-6-subtotal",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), 6. Subtotal",
+  quote:
+    "To figure your subtotal, add the amounts on lines 4 and 5 and enter the result on line 6.",
+  soWhat:
+    "Line 4 is money that was never FUTA wages at all; line 5 is money that was, but sat above " +
+    "the $7,000 ceiling. Line 6 is the two together, and line 7 takes it away from line 3. The " +
+    "split matters because the two halves fail in different ways.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 11. The line that is blank for Greenway, and the year it stops being
+ * blank is a year Washington borrowed from the federal unemployment fund and
+ * did not repay. Not an employer's doing, and not optional.
+ */
+export const I940_LINE_11_CREDIT_REDUCTION_AMOUNT: GuidanceAuthority = {
+  id: "i940-line-11-credit-reduction-amount",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), 11. If Credit Reduction Applies...",
+  quote:
+    "If you paid FUTA taxable wages that were also subject to state unemployment taxes in any " +
+    "states that are subject to credit reduction, enter the total amount from Schedule A (Form " +
+    "940) on Form 940, line 11. However, if you entered an amount on line 9 because all the FUTA " +
+    "taxable wages you paid were excluded from state unemployment tax, skip line 11 and go to " +
+    "line 12.",
+  soWhat:
+    "The figure is not computed on this form - it comes off Schedule A, which is a separate page " +
+    "listing the affected states. Washington is not one today. If it ever is, this line stops " +
+    "being blank and Schedule A must be attached, so the emptiness of the box is a fact with an " +
+    "expiry date rather than a permanent truth.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 13. The only line on Form 940 that records money leaving the bank.
+ * Everything above it is liability; this is cash, and it comes from outside
+ * the form.
+ */
+export const I940_LINE_13_DEPOSITED: GuidanceAuthority = {
+  id: "i940-line-13-deposited",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), 13. FUTA Tax Deposited for the Year",
+  quote:
+    "Enter the amount of FUTA tax that you deposited for the year, including any overpayment that " +
+    "you applied from a prior year.",
+  soWhat:
+    "Deposits made, plus credit carried in from last year. Nothing on the form can compute it, " +
+    "which is exactly why it is capable of contradicting the form - and a line that cannot " +
+    "contradict the computation above it would be worthless as a check.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 15a. The mirror image of line 14, and the instruction that matters is
+ * the one shared with the 941: never both.
+ */
+export const I940_LINE_15A_OVERPAYMENT: GuidanceAuthority = {
+  id: "i940-line-15a-overpayment",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), 15a. Overpayment",
+  quote:
+    // books-65, SECOND CORRECTION. The first draft ran the quote on past the
+    // full stop to pick up the arithmetic diagram the IRS prints beneath it:
+    // "line 13 \u2013 line 12 line 15a". The quote-truncation gate rejected it,
+    // correctly. Those three lines are a BOX DIAGRAM, not the tail of the
+    // sentence, so a quote that swallows them ends on the bare fragment
+    // "line 15a" and reads as though the authority were cut off mid-thought.
+    //
+    // The sentence the authority actually states is complete on its own and is
+    // the whole rule, so the quote now stops at its full stop. The subtraction
+    // it describes is explained in `soWhat` in our own words, which is where
+    // our paraphrase belongs.
+    "If line 13 is more than line 12, enter the difference on\nline 15a.",
+  soWhat:
+    "One subtraction, in the opposite direction from line 14. A return cannot be both short and " +
+    "over, so a figure here means line 14 is blank, and a figure on both is a return that " +
+    "contradicts itself on its face.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * PART 5 DOES NOT APPLY TO GREENWAY, AND THE FORM SAYS SO ITSELF.
+ *
+ * books-65. `filed-940-threshold.test.ts` refused the first draft of the
+ * 16a-16d lessons and it was RIGHT to: Michael's filed 2025 return shows line
+ * 12 of $420.00, and Part 5's own heading says to fill it out "Only if Line 12
+ * Is More Than $500". A lesson that explains how to apportion his FUTA across
+ * four quarters, without ever mentioning that he leaves all four blank, teaches
+ * him a box he does not file.
+ *
+ * He asked for those boxes to open anyway - "you can write me a genuine, non
+ * verbatim plain english explanation for the boxes that are trivial or the
+ * boxes that dont apply to me" - so the lessons stay. This authority is what
+ * makes them honest: every one of the four now leads with the threshold and the
+ * instruction to leave Part 5 blank, in the IRS's own words, before explaining
+ * what the box would mean if his payroll ever crossed $500.
+ */
+export const I940_PART5_ONLY_IF_OVER_500: GuidanceAuthority = {
+  id: "i940-part-5-only-if-over-500",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), Part 5: Report Your FUTA Tax Liability by Quarter Only if Line 12 Is More Than $500",
+  quote:
+    "Fill out Part 5 only if line 12 is more than $500. If line 12 is\n$500 or less, leave Part 5 blank and go to Part 6.",
+  soWhat:
+    "This is the gate on all four boxes. Greenway's 2025 line 12 was 420.00, which is under the " +
+    "threshold, so Part 5 was correctly left entirely blank - not zeroed, blank. The boxes are " +
+    "still worth understanding, because the day the payroll grows past 500.00 they switch on " +
+    "with no warning from the form itself.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 16a-16d. The quarterly liability breakdown, and the single most
+ * misunderstood instruction on the form: "Don't enter the amount you
+ * deposited." These four boxes are a LIABILITY diary, exactly like Schedule B
+ * is for the 941, and confusing them with the deposits is what makes line 17
+ * fail to equal line 12.
+ */
+export const I940_LINE_16_QUARTERLY_LIABILITY: GuidanceAuthority = {
+  id: "i940-line-16-quarterly-liability",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), 16. Report the Amount of Your FUTA Tax Liability for Each Quarter",
+  quote:
+    // En dash again (see line 15a above): the corpus prints "16a\u201316d".
+    "Enter the amount of your FUTA tax liability for each quarter on lines 16a\u201316d. Don't enter " +
+    "the amount you deposited. If you had no liability for a quarter, leave the line blank.",
+  soWhat:
+    "Liability, not deposits, and a blank rather than a zero when there was none. The four boxes " +
+    "must add to line 17, which must equal line 12 - so entering deposits here breaks an " +
+    "arithmetic check the IRS runs on every return.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
+/**
+ * LINE 16d IS COMPUTED DIFFERENTLY FROM THE OTHER THREE, and almost nobody
+ * knows it. The fourth quarter is a RESIDUAL, so any rounding drift in the
+ * first three quarters lands there by design rather than by accident.
+ */
+export const I940_LINE_16D_IS_A_RESIDUAL: GuidanceAuthority = {
+  id: "i940-line-16d-is-a-residual",
+  kind: "irs_guidance",
+  cite: "IRS Instructions for Form 940 (2025), 16d. 4th quarter (October 1 to December 31)",
+  quote:
+    "To figure your FUTA tax liability for the fourth quarter, complete Form 940 through line 12. " +
+    "Then, copy the amount from line 12 onto line 17. Lastly, subtract the sum of lines 16a " +
+    "through 16c from line 17 and enter the result on line 16d.",
+  soWhat:
+    "The fourth quarter is not computed from fourth-quarter wages. It is whatever is left of the " +
+    "year's tax after the first three quarters are taken off, which is what guarantees the four " +
+    "boxes sum exactly to line 12. A 16d that looks slightly odd against Q4 payroll is usually " +
+    "correct for this reason.",
+  source: "https://www.irs.gov/pub/irs-pdf/i940.pdf",
+};
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * §6  THE SET
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -1057,6 +1319,17 @@ export const FORM_940_OWN_AUTHORITIES: readonly GuidanceAuthority[] = [
   I940_LINE_15C_ROUTING_NUMBER,
   I940_LINE_15D_ACCOUNT_TYPE,
   I940_LINE_15E_ACCOUNT_NUMBER,
+  // books-65 - the fifteen boxes that still carried the untaught marker.
+  I940_ENTITY_TOP_OF_FORM,
+  I940_EIN_MUST_MATCH_EXACTLY,
+  I940_PREPARER_MUST_USE_EXACT_NAME,
+  I940_LINE_6_SUBTOTAL,
+  I940_LINE_11_CREDIT_REDUCTION_AMOUNT,
+  I940_LINE_13_DEPOSITED,
+  I940_LINE_15A_OVERPAYMENT,
+  I940_LINE_16_QUARTERLY_LIABILITY,
+  I940_LINE_16D_IS_A_RESIDUAL,
+  I940_PART5_ONLY_IF_OVER_500,
 ];
 
 /**

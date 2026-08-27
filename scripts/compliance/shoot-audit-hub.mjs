@@ -9,13 +9,40 @@
  * it is fine.
  */
 import { chromium } from "playwright";
-import { readdirSync } from "node:fs";
+import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const DIR = join(process.cwd(), ".render");
 const files = readdirSync(DIR).filter((f) => f.endsWith(".html")).sort();
 
-const browser = await chromium.launch();
+/*
+ * books-65: the pinned playwright package asks for a Chromium build number that
+ * is not the one this sandbox has on disk, and `npx playwright install` is a
+ * ~170MB download onto a volume that is 87% full. So: if the build playwright
+ * wants is missing, USE THE ONE THAT IS THERE rather than failing.
+ *
+ * This is a fallback, not a default. When the expected build exists it is used
+ * untouched, so nothing about how this script behaves on a normal machine
+ * changes. And it is loud either way - a screenshot taken by a browser other
+ * than the one the harness thinks it is using is exactly the kind of quiet
+ * substitution that makes a photograph untrustworthy.
+ */
+function resolveExecutable() {
+  const wanted = chromium.executablePath();
+  if (existsSync(wanted)) return undefined; // let playwright do its normal thing
+  const root = wanted.split("/chromium-")[0];
+  if (!existsSync(root)) throw new Error(`no playwright browser cache at ${root}`);
+  const alt = readdirSync(root)
+    .filter((d) => d.startsWith("chromium-"))
+    .map((d) => join(root, d, "chrome-linux64", "chrome"))
+    .find((p) => existsSync(p));
+  if (!alt) throw new Error(`playwright wants ${wanted}, and no other chromium build is present`);
+  console.warn(`playwright wants ${wanted} (absent) -- falling back to ${alt}`);
+  return alt;
+}
+
+const executablePath = resolveExecutable();
+const browser = await chromium.launch(executablePath ? { executablePath } : {});
 const page = await browser.newPage({
   viewport: { width: 1280, height: 1000 },
   deviceScaleFactor: 1,

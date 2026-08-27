@@ -590,6 +590,42 @@ export const WA_QUARTER_CHECKS: readonly WaQuarterCheck[] = [
       "learning it on that day is entirely avoidable.",
     authorityIds: ["wac-192-310-010-termination", "wac-296-17-31023-no-payroll"],
   },
+  {
+    /*
+     * books-65. Added because Michael asked for the field and, having built it,
+     * the obligation belongs on the list he actually works through before
+     * filing - not only on the employee screen where it is set. The wage detail
+     * is where a missing code shows up, and by then the quarter is over.
+     *
+     * Placed LAST by order rather than next to "hours-complete" because it is
+     * checked against the finished wage detail. The numbering below is 9; the
+     * earlier eight are untouched, so nothing a reader has learned moves.
+     */
+    key: "work-code-on-every-line",
+    order: 9,
+    title: "Every person on the wage detail has a work code, or a job title ready",
+    doThis:
+      "Open the payroll setup screen and confirm each employee shows an ESD work code. " +
+      "Greenway's people are 41-2031, Retail Salespersons, which is what the filed 5208B " +
+      "shows. Anyone left blank needs a job title typed into EAMS by hand at filing time, so " +
+      "decide which it is now rather than at the deadline.",
+    doneWhen:
+      "The work-code column on the payroll setup roster has no dashes in it - or you have " +
+      "written down the job title for each person who has none.",
+    ifSkipped:
+      "The statute takes the classification OR a job title, so a blank column is not itself a " +
+      "violation and nothing will bounce for being empty. What bounces is a code that is " +
+      "nearly right: EAMS rejects the WHOLE wage file over one malformed value, not the single " +
+      "row, so ten good employees fail to upload because of one typo. The other cost is " +
+      "quieter - somebody re-types ten job titles into EAMS every quarter forever, and the " +
+      "quarter they mistype one is the quarter the state's occupational statistics say " +
+      "Greenway employs something it does not.",
+    authorityIds: [
+      "rcw-50-12-070-occupational-classification",
+      "wac-192-310-010-soc-six-digits",
+      "wac-192-310-010-wage-detail",
+    ],
+  },
 ] as const;
 
 export function waChecksInOrder(): readonly WaQuarterCheck[] {

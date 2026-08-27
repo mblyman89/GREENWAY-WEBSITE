@@ -255,8 +255,18 @@ describe("the SSN never travels where it is not needed", () => {
       CODE.indexOf("export async function listEmployeeSetup"),
       CODE.indexOf("export type RevealResult"),
     );
-    expect(listFn).toContain('select("id, full_name, ssn_last_four")');
+    /*
+     * books-65 widened this select by one column (soc_code, the ESD work code).
+     * The assertion is therefore written as "names these columns and NOT the
+     * full SSN" rather than as an exact string, because pinning the exact
+     * string made a lawful addition look like a regression while doing nothing
+     * extra to protect the number - which is what this test is actually for.
+     */
+    expect(listFn).toContain("id, full_name, ssn_last_four");
+    expect(listFn).toContain("soc_code");
     expect(listFn).not.toContain('select("*")');
+    // THE POINT OF THE TEST: whatever else the roster selects, never this.
+    expect(listFn).not.toContain("ssn_full");
   });
 
   it("the roster row type carries only the last four", () => {
@@ -265,6 +275,7 @@ describe("the SSN never travels where it is not needed", () => {
       STORE.indexOf("export type EmployeeSetupRow") + 600,
     );
     expect(rowType).toContain("ssnLastFour");
+    expect(rowType).toContain("socCode"); // books-65
     expect(rowType).not.toMatch(/ssnFull|ssn_full/);
   });
 

@@ -147,20 +147,44 @@ books-55 figure is kept in the right-hand columns rather than overwritten,
 because the movement is the interesting part and a table that only ever shows
 today's number cannot be audited against the slice that produced it:
 
-| lesson set | lessons | ties | was (books-60) | was (books-56) | was (books-55) |
-| --- | --- | --- | --- | --- | --- |
-| `form-box-lessons-941.ts` | 24 | 25 | 24 / 25 | 20 / 19 | 20 / 19 |
-| `form-box-lessons-940.ts` | 20 | 20 | 20 / 20 | 20 / 20 | 20 / 20 |
-| `form-box-lessons-wa.ts` | 16 | 13 | 14 / 11 | 14 / 11 | 8 / 4 |
-| `form-box-lessons-w2.ts` | 26 | 20 | 26 / 20 | 26 / 20 | 20 / 13 |
-| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 | 31 / 34 | 31 / 34 |
-| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 | 4 / 6 | 4 / 6 |
-| **total** | **121** | **118** | **119 / 116** | **115 / 110** | **103 / 96** |
+| lesson set | lessons | ties | was (books-64) | was (books-60) | was (books-56) | was (books-55) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `form-box-lessons-941.ts` | 32 | 40 | 24 / 25 | 24 / 25 | 20 / 19 | 20 / 19 |
+| `form-box-lessons-940.ts` | 35 | 55 | 20 / 20 | 20 / 20 | 20 / 20 | 20 / 20 |
+| `form-box-lessons-wa.ts` | 16 | 13 | 16 / 13 | 14 / 11 | 14 / 11 | 8 / 4 |
+| `form-box-lessons-w2.ts` | 26 | 20 | 26 / 20 | 26 / 20 | 26 / 20 | 20 / 13 |
+| `form-box-lessons-w3.ts` | 31 | 34 | 31 / 34 | 31 / 34 | 31 / 34 | 31 / 34 |
+| `form-941-confirmation-lessons.ts` | 4 | 6 | 4 / 6 | 4 / 6 | 4 / 6 | 4 / 6 |
+| **total** | **144** | **168** | **121 / 118** | **119 / 116** | **115 / 110** | **103 / 96** |
 
-Every one of the 118 resolves to a box that exists — `assertEveryTieResolves`
+Every one of the 168 resolves to a box that exists — `assertEveryTieResolves`
 walks them and names any that does not. The W-3 is the first set with more ties
 than lessons, which is what a transmittal should look like: most of its boxes
 have to agree with something on another form.
+
+### What moved in books-65: the last untaught box, and the missing entity area
+
+Two things moved the 941 and 940 rows, and they are worth separating.
+
+The first is teaching. Michael said the boxes without lessons "look like there
+is a red squiggly line in it," pointed at Schedule B where every box opens with
+an explanation, and asked for that standard everywhere. Rather than build the
+fallback panel he described, the 23 remaining untaught boxes were measured and
+each was checked for real authority. All 23 had it, so none of them was a box
+that did not need a lesson — they were boxes nobody had written. Writing them
+removes the marker's cause instead of dressing up its symptom, and the standing
+untaught total across every form is now **0**.
+
+The second is D-15, and it is a defect rather than an improvement. Michael
+reported that his company information never reached the forms despite being
+stored correctly with green checks against every field. The cause was that the
+teaching specimen emitted no entity boxes at all, so all five of his identity
+values — EIN, legal name, trade name, address, city/state/ZIP — had nowhere to
+land. The 941 went 27 → 32 boxes and the 940 30 → 35 when they were added, and
+`assertEveryIdentityValueHasABox` now fails if any of the five loses its home
+again. Both forms were measured against Michael's own filed returns with
+`pdftotext` before anything was added, because the question was whether the
+paper prints those fields, not whether we thought it should.
 
 ### What moved in books-64: the two boxes that bite on the 5208A
 

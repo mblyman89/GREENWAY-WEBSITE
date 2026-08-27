@@ -90,8 +90,16 @@ describe("books-58 owner report: the coverage table matches the engine", () => {
     // correction beneath it, which the tests below pin. What is asserted here
     // is TODAY'S engine output, because that is what the reader will see if he
     // opens the page.
-    { formId: "form_941", total: 27, taught: 24, untaught: 3 },
-    { formId: "form_940", total: 30, taught: 20, untaught: 10 },
+    // books-65 moved BOTH of these rows again, and by more than a lesson count.
+    // The totals rose 27 -> 32 and 30 -> 35 because the five identity boxes
+    // (EIN, name, trade name, address, city/state/ZIP) were finally emitted
+    // onto each specimen. That is D-15: the reason Michael's company details
+    // were not appearing on the forms was that the boxes to put them in did not
+    // exist. The untaught counts fell to zero because all 23 remaining boxes
+    // were taught at his request. As above, the historical table in the letter
+    // is NOT edited - today's engine output is what is pinned here.
+    { formId: "form_941", total: 32, taught: 32, untaught: 0 },
+    { formId: "form_940", total: 35, taught: 35, untaught: 0 },
     // books-64 moved this row 3 -> 5, and BOTH new boxes arrived already
     // taught, so `untaught` stays 0. The two are line 14 (excess wages) and
     // line 12 (the 12th-day headcount) -- the two boxes on the unemployment
@@ -138,21 +146,41 @@ describe("books-58 owner report: the coverage table matches the engine", () => {
     expect(md).toMatch(/\*\*17 boxes across two federal forms\.\*\*/);
   });
 
-  it("carries a books-60 correction whose number is the engine's real total", () => {
-    const total = ALL_TAUGHT_FORM_IDS.reduce((n, f) => n + coverageOf(f).untaught, 0);
-    expect(total).toBe(13);
-    // The correction must state the new total in words he will read, not just
-    // exist as a heading. A heading with no figure under it corrects nothing.
+  it("carries the whole correction chain, 17 then 13 then 0", () => {
+    /*
+     * THREE FIGURES, ALL THREE ON THE RECORD.
+     *
+     * books-58 said 17 and was right. books-60 taught four and said 13, and was
+     * right. books-65 taught the rest and says 0. Each correction is dated and
+     * sits beneath the one before it, so Michael can read the letter top to
+     * bottom and watch the number move rather than being handed a figure with
+     * no history and no way to tell whether it was ever different.
+     *
+     * The engine's real total is asserted against the LAST link in the chain.
+     */
     expect(md).toMatch(/Updated in books-60/);
     expect(md).toMatch(/\*\*13 boxes, not 17\.\*\*/);
+    expect(md).toMatch(/Updated again in books-65/);
+    expect(md).toMatch(/\*\*0 boxes, not 13\.\*\*/);
+
+    const total = ALL_TAUGHT_FORM_IDS.reduce((n, f) => n + coverageOf(f).untaught, 0);
+    expect(total).toBe(0);
   });
 
-  it("the 941's named untaught boxes are exactly what both tables claim", () => {
+  it("the 941's historical box lists survive, and none of them is untaught now", () => {
     // The historical list of seven must survive verbatim...
     expect(md).toMatch(/5e, 6, 7, 10, 12, 13, 14/);
-    // ...and the three that are still untaught must be the real three, named.
-    expect(coverageOf("form_941").untaughtBoxes).toEqual(["12", "13", "14"]);
+    // ...as must books-60's list of three...
     expect(md).toMatch(/3 not taught \(12, 13, 14\)/);
+    // ...and every one of the seven must now actually be taught, which is the
+    // claim books-65's correction makes further down the same letter.
+    for (const box of ["5e", "6", "7", "10", "12", "13", "14"]) {
+      expect(
+        FORM_941_LESSONS.some((l) => l.box === box),
+        `941 box ${box} appears in the letter's untaught list and is STILL untaught`,
+      ).toBe(true);
+    }
+    expect(coverageOf("form_941").untaughtBoxes).toEqual([]);
   });
 
   /**
@@ -163,9 +191,38 @@ describe("books-58 owner report: the coverage table matches the engine", () => {
    * to tell a deliberate omission from a forgotten one, or the three boxes get
    * "fixed" by someone adding the exact lessons he asked not to have.
    */
-  it("states in the report WHY 12, 13 and 14 were deliberately not taught", () => {
+  it("keeps the books-60 reasoning on the record AND the books-65 reversal", () => {
+    /*
+     * books-60 explained why 12, 13 and 14 were skipped: line 12 is a
+     * subtraction of zero, line 13 is copied off the EFTPS record, line 14 is
+     * arithmetic on the two. That reasoning stays in the letter, because a
+     * later reader has to be able to tell a deliberate omission from a
+     * forgotten one.
+     *
+     * books-65 reversed the decision on Michael's instruction, so the letter
+     * must ALSO say that plainly. A superseded reason left standing with no
+     * note is indistinguishable from a reason that still holds.
+     */
     expect(md).toMatch(/subtraction of zero/);
     expect(md).toMatch(/EFTPS/);
+    expect(md).toMatch(/red squiggly/);
+    expect(md).toMatch(/I got the balance wrong/);
+  });
+
+  it("says the four Part 5 boxes still do not apply, even though they are taught", () => {
+    // The risk in teaching a box that does not apply is that the reader
+    // concludes it does. The letter has to keep saying $500 and $420.
+    expect(md).toMatch(/\$500/);
+    expect(md).toMatch(/\$420\.00/);
+    expect(md).toMatch(/left blank rather than zeroed/);
+  });
+
+  it("tells him the identity boxes are why his company info was missing", () => {
+    // D-15 in his own words: "i input all my company info into the company info
+    // page and have green checks for all of them. but when i view the forms,
+    // they do not populate with my company data in them."
+    expect(md).toMatch(/27 boxes to 32/);
+    expect(md).toMatch(/green checks/);
   });
 
   it("the report's claim that the W-2 has zero untaught boxes is true", () => {

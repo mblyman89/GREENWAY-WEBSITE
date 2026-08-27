@@ -148,6 +148,38 @@ export const PAYROLL_ONBOARDING_LESSONS: readonly MentorLesson[] = [
     authorityIds: [],
   },
   {
+    fn: "socCodeProblems",
+    plainEnglish:
+      "Judges the ESD work code - the six-digit Standard Occupational Classification that " +
+      "Washington wants beside every name on the quarterly wage report. A blank raises a " +
+      "warning, a malformed code blocks the save, and a good one passes silently.",
+    whyItExists:
+      "Michael asked for it in one line: \"for esd, they require a work code for each employee, " +
+      "so i will need a way to enter that code in. the code my employees use is, 41-2031.\" He " +
+      "is right that the state requires it. The reason blank only WARNS is that RCW " +
+      "50.12.070(2)(a)(i) asks for the classification OR a job title, and ESD's own wage-file " +
+      "spec says the column can be six digits or blank - so an empty box is a lawful filing " +
+      "in which the title gets typed into EAMS instead.",
+    theTrap:
+      "Treating the two failure modes as one thing. A blank is a filing choice; a malformed " +
+      "code is a typo that makes EAMS reject the ENTIRE wage file rather than the one row, so " +
+      "nine correct employees fail to upload because of the tenth. That is why the malformed " +
+      "case blocks here, next to the person's name, instead of surfacing three months later " +
+      "as an error that names a filename. The second trap is subtler: this function checks the " +
+      "SHAPE of the code and nothing else. BLS publishes roughly 870 detailed codes and this " +
+      "system holds no copy of that list, so a well-formed code for the wrong occupation " +
+      "passes cleanly. It proves the code could be real, never that it is right.",
+    whatIWouldDo:
+      "Set 41-2031 on everyone who sells, because that is what the filed 5208B already says, " +
+      "and leave it blank rather than guessing for anyone whose job genuinely differs - a " +
+      "guessed code is a statement to the state about what a named person does for a living. " +
+      "Look the real one up on the BLS SOC list when there is a minute, and fix it then.",
+    authorityIds: [
+      "rcw-50-12-070-occupational-classification",
+      "wac-192-310-010-soc-six-digits",
+    ],
+  },
+  {
     fn: "isPossibleSsn",
     plainEnglish:
       "A yes/no wrapper on the impossibility checks, for when you only need the verdict.",

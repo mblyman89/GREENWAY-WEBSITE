@@ -1606,4 +1606,615 @@ export const FORM_941_LESSONS: readonly BoxLesson[] = [
     ],
   },
 
+  /* ═══════════════════════════════════════════════════════════════════════
+   * books-65 — THE LINES THAT WERE NEVER WRITTEN
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Michael, on inspecting the forms: "the boxes that dont have lessons, the
+   * boxes look like there is a red squiggly line in it, but id rather they
+   * just open a box that says in plain english what it is and why it doesn't
+   * need a lesson." And: "on the 941 schedule b, every single box opens with
+   * an explanation. this is the level of thoroughness i want."
+   *
+   * He asked for a fallback panel. He does not need one. Every box that was
+   * carrying the amber marker turned out to have real instruction text sitting
+   * in the mirrored corpus already — none of them was a box that "doesn't need
+   * a lesson", every one was a box nobody had written yet. So the marker is
+   * removed by removing its cause.
+   *
+   * Lines 12, 13 and 14 are not minor. They are the three lines an IRS notice
+   * is actually about: what you owed, what you paid, and the gap. Leaving them
+   * unexplained while lines 1 through 10 were fully taught meant the form got
+   * quieter exactly where it got expensive.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  {
+    formId: "form_941",
+    box: "12",
+    headline: "What the quarter actually costs \u2014 and the figure Schedule B must equal",
+    plainEnglish:
+      "The bottom line of the top half of the form. Line 10 was everything owed after the small " +
+      "rounding adjustments; line 11 is a research credit Greenway does not claim; so line 12 is " +
+      "the quarter's real federal employment tax bill. It is what you owe. It is NOT what you " +
+      "have paid \u2014 that is line 13, one row down, and the whole point of the form is the " +
+      "comparison between them. This figure can never be negative; if the arithmetic above it " +
+      "produces a negative number, something above it is wrong.",
+    whereItComesFrom:
+      "Line 10 minus line 11. Line 10 is the withheld income tax plus both halves of Social " +
+      "Security and Medicare plus the fractions-of-cents adjustment; line 11 is zero for " +
+      "Greenway, because the qualified small business research credit requires a Form 8974 and a " +
+      "qualifying research activity, and a cannabis retailer has neither. So in practice line 12 " +
+      "equals line 10 exactly.",
+    howToReadIt:
+      "Two things at once. First, it is the number that decides how Greenway must PAY: under " +
+      "$2,500 for this quarter and the last, and the tax may simply go with the return; at " +
+      "$2,500 or more it must be deposited on schedule, and paying it with the return instead is " +
+      "penalised. Second, it is the reconciliation target \u2014 the IRS requires it to equal the " +
+      "\u201CTotal liability for the quarter\u201D on Schedule B, to the cent. Greenway files Schedule B, " +
+      "so this box is checked against another document every single quarter.",
+    commonMistake:
+      "Reading it as the amount to write a cheque for. It is the amount OWED for the quarter, and " +
+      "most of it has usually been deposited already, payday by payday. Sending it again is a " +
+      "double payment that takes months to unwind. The amount to pay is line 14, and on a " +
+      "correctly deposited quarter line 14 is zero.",
+    whatToDo:
+      "Read this box beside the quarter total on Schedule B and confirm they are identical. If " +
+      "they differ by even a cent, fix the difference before filing \u2014 an internally inconsistent " +
+      "return invites a notice about the whole quarter rather than about one day.",
+    examples: [
+      {
+        title: "Why line 12 equals line 10 on every Greenway return",
+        steps: [
+          "Line 10 (total taxes after adjustments): 24,300.02.",
+          "Line 11 (qualified small business payroll tax credit): blank \u2014 Greenway claims no research credit and files no Form 8974.",
+          "24,300.02 \u2212 0.00 = 24,300.02.",
+          "That figure must also appear as the quarter total on Schedule B.",
+        ],
+        answer: "24,300.02",
+        moral:
+          "Line 11 exists on the form for companies that are not Greenway. Its emptiness is the " +
+          "correct entry, not a gap.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 12",
+        quote:
+          "Subtract line 11 from line 10 and enter the result on\nline 12. The amount entered on line 12 can\u2019t be less than\nzero.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "One subtraction, and a floor of zero. A negative result is not an overpayment to be " +
+          "shown here \u2014 it means a line above is wrong.",
+      },
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 12, deposit rules",
+        quote:
+          "The amount\nshown on line 12 must equal the \u201CTotal liability for quarter\u201D\nshown on line 16 or the \u201CTotal liability for the quarter\u201D\nshown on Schedule B (Form 941). For more information,\nsee the line 16 instructions, later.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "This is the identity the IRS checks mechanically. Greenway files Schedule B, so this " +
+          "box is compared against that schedule's quarter total on every return.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "10",
+        why: "Line 12 is line 10 less the research credit, and Greenway's research credit is always zero \u2014 so these two boxes should show the same figure.",
+      },
+      {
+        formId: "form_941",
+        box: "13",
+        why: "Line 12 is what is owed; line 13 is what was paid. The form exists to put them next to each other.",
+      },
+      {
+        // books-65: the form id is "form_941_sb", not "form_941_schedule_b".
+        // The first draft of this tie invented the longer spelling, and
+        // assertEveryTieResolves caught it: a tie into a form id that does not
+        // exist sends Michael to a screen that cannot load. Verified against
+        // FORM_ID_941_SB in form-941-schedule-b-boxes.ts, and "quarterTotal" is
+        // a real box in the generated Schedule B specimen.
+        formId: "form_941_sb",
+        box: "quarterTotal",
+        why: "The IRS requires these two to be equal to the cent. A difference is what a notice is written about.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "13",
+    headline: "What was already sent to the IRS during the quarter",
+    plainEnglish:
+      "The total of the deposits Greenway actually made during the quarter, plus any overpayment " +
+      "carried forward from a prior quarter. Everything above this line is a LIABILITY \u2014 what " +
+      "the wages caused Greenway to owe. This line is the only one on the form that records " +
+      "money leaving the bank. It is the answer to \u201Cwhat have we already paid?\u201D",
+    whereItComesFrom:
+      "The federal tax deposits recorded in the books for the quarter, matched to what actually " +
+      "cleared the bank via EFTPS. It is a cash figure and not a computed one: nothing on the " +
+      "top half of the form can produce it, which is precisely why it can disagree with the top " +
+      "half and why the form asks for it separately.",
+    howToReadIt:
+      "Read it against line 12 and nothing else. Equal means the quarter was deposited correctly. " +
+      "Smaller than line 12 means Greenway is short, and the shortfall matters more than its size " +
+      "suggests \u2014 the money above it includes tax WITHHELD FROM EMPLOYEES, which the IRS treats " +
+      "as trust-fund money and can assess personally against the responsible individual. Larger " +
+      "than line 12 is only a cash-flow annoyance and produces an overpayment on line 15a.",
+    commonMistake:
+      "Entering the liability instead of the deposits, so the two lines agree by construction. " +
+      "That defeats the entire purpose of the bottom half of the form: line 13 exists to be an " +
+      "INDEPENDENT figure, taken from the bank, that can contradict the computation above it. A " +
+      "line 13 copied from line 12 will never catch the missed deposit it was designed to catch.",
+    whatToDo:
+      "Pull the quarter's EFTPS payment history and add it up from the payment records, not from " +
+      "this return. Then compare it to line 12. If the two differ, identify whether it was a " +
+      "missed deposit, a deposit posted to the wrong quarter, or an error in the wages above \u2014 " +
+      "the three look identical here and have completely different remedies.",
+    examples: [
+      {
+        title: "A deposit that landed in the wrong quarter",
+        steps: [
+          "Line 12 for Q2: 24,300.02.",
+          "EFTPS history for April, May and June totals 21,800.02.",
+          "Line 13 is therefore 21,800.02 and line 14 shows a 2,500.00 balance due.",
+          "The missing 2,500.00 turns out to have been deposited on 2 July and applied to Q3.",
+          "Q2 is genuinely short and Q3 will show an overpayment \u2014 two errors, not one.",
+        ],
+        answer: "21,800.02",
+        moral:
+          "A deposit made is not a deposit made in the right period. The date the IRS applied it " +
+          "is what this line is counting.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 13",
+        quote:
+          "Enter your deposits for this quarter, including any\noverpayment from a prior quarter that you applied to this\nreturn.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "Deposits made, plus credit carried in. Not the liability, and not what the return " +
+          "computes \u2014 this figure comes from outside the form.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "12",
+        why: "Line 13 is only meaningful next to line 12. Equal is a clean quarter; short is a balance due; over is an overpayment.",
+      },
+      {
+        formId: "form_941",
+        box: "14",
+        why: "When line 13 falls short of line 12, the difference lands on line 14 as the amount to pay.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "14",
+    headline: "The amount still to pay \u2014 which on a correctly deposited quarter is empty",
+    plainEnglish:
+      "The gap, when line 12 (owed) is bigger than line 13 (paid). It is the only box on Form 941 " +
+      "that asks Greenway to send money WITH the return. On a quarter where every deposit was " +
+      "made on time this box is blank, and blank is the goal. Line 14 and line 15a are mutually " +
+      "exclusive: one is a shortfall, the other an overpayment, and no return can have both.",
+    whereItComesFrom:
+      "Line 12 minus line 13, when that difference is positive. Nothing is looked up for this " +
+      "box \u2014 it is pure subtraction of the two lines above it, which is why an error anywhere " +
+      "on the form surfaces here rather than being absorbed.",
+    howToReadIt:
+      "A figure here on a $2,500-or-more quarter is a warning, not a bill. If Greenway was " +
+      "required to deposit and instead pays with the return, the IRS may penalise the deposit " +
+      "even though the tax was ultimately paid \u2014 the offence is the missed deposit, not the " +
+      "unpaid tax. So the question a figure here raises is never \u201Chow do I pay this?\u201D but " +
+      "\u201Cwhich deposit did we miss, and when?\u201D",
+    commonMistake:
+      "Two, and they compound. First, entering a figure on both line 14 and line 15a \u2014 the " +
+      "instructions forbid it outright, because a return cannot be both short and over. Second, " +
+      "paying a balance due by cheque while also being required to deposit, which fixes the " +
+      "cash and leaves the penalty in place.",
+    whatToDo:
+      "If this box is not blank, find the deposit that is missing before you pay anything. Then " +
+      "pay by EFT rather than by cheque, and check whether the quarter also needs a corrected " +
+      "Schedule B \u2014 a missed deposit does not change the liability schedule, but a mis-recorded " +
+      "payday does.",
+    examples: [
+      {
+        title: "Under a dollar",
+        steps: [
+          "Line 12: 24,300.02. Line 13: 24,299.50.",
+          "The difference is 0.52, which goes on line 14.",
+          "The instructions say you don\u2019t have to pay if line 14 is under $1.",
+          "So nothing is remitted \u2014 but the 52 cents is still worth explaining, because it is " +
+            "usually a rounding difference between the engine and a deposit made by hand.",
+        ],
+        answer: "0.52",
+        moral:
+          "A tiny balance due is not a payment problem. It is a signal that two systems rounded " +
+          "differently, and it is cheaper to find out which than to ignore it four times a year.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), line 14",
+        quote:
+          "If line 12 is more than line 13, enter the difference on\nline 14. Otherwise, see the instructions for line 15a, later.\nNever make an entry on both lines 14 and 15a.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "\u201CNever\u201D is the IRS\u2019s own word. One box or the other, never both \u2014 a return with " +
+          "figures in both is self-contradicting on its face.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "12",
+        why: "The larger of the two figures this box subtracts. If line 12 is wrong, so is the balance due.",
+      },
+      {
+        formId: "form_941",
+        box: "13",
+        why: "The deposits. A balance due almost always means a deposit is missing rather than that the tax was computed wrongly.",
+      },
+    ],
+  },
+
+  /* ─────────────────────────────────────────────────────────────────────
+   * THE FIVE IDENTIFIER BOXES
+   *
+   * These are the boxes D-15 was hiding. Until books-65 the teaching
+   * specimen had no box carrying the ids `ein`, `name`, `tradeName`,
+   * `address` or `cityStateZip`, so Michael's company profile \u2014 correctly
+   * stored, green ticks and all \u2014 had nowhere to print. Adding the boxes
+   * fixed the printing; these lessons make them teach.
+   *
+   * Michael on this exact request: "it would be nice to have the ein and top
+   * section have clickables. dont waste too much time, these boxes are
+   * already self explanatory, but i really like thoroughness."
+   *
+   * They are self-explanatory as DATA ENTRY and they are not self-explanatory
+   * as RISK. An EIN that does not match IRS records is a penalty; a legal name
+   * that does not match the SS-4 delays processing; a trade name filled in
+   * when it duplicates the legal name is contrary to the instructions. Those
+   * are the parts worth reading, so those are the parts these lessons lead
+   * with.
+   * ───────────────────────────────────────────────────────────────────── */
+
+  {
+    formId: "form_941",
+    box: "ein",
+    headline: "The nine digits every filing is filed under \u2014 46-4217016",
+    plainEnglish:
+      "Greenway's Employer Identification Number, the federal account number for the business. " +
+      "Every 941, every 940, every W-2 and W-3 is filed under it, and the IRS matches those " +
+      "documents to each other by this number and nothing else. It appears twice on Form 941 " +
+      "\u2014 the top of page 1 and the top of page 2 \u2014 and both must be filled in.",
+    whereItComesFrom:
+      "The company profile in Accounting \u2192 Company Info, stored once and printed on every form " +
+      "that asks for it. It is never typed onto a form here. That is deliberate: a number that " +
+      "is entered once and reused cannot be right on the 941 and wrong on the W-3, which is " +
+      "exactly the failure the IRS instructions warn about.",
+    howToReadIt:
+      "Read it as the join key of the entire federal filing year. If the EIN on the 941s does not " +
+      "match the EIN on the W-3, the year-end reconciliation the IRS runs has nothing to " +
+      "reconcile against and the mismatch surfaces months later as a letter. Check it once a " +
+      "year against an actual IRS notice, not against memory.",
+    commonMistake:
+      "Using a social security number, an ITIN, or a prior owner's EIN. Each is a penalty rather " +
+      "than a typo, and an electronically filed return with an invalid EIN is rejected outright " +
+      "rather than corrected.",
+    whatToDo:
+      "Compare the printed number against the EIN confirmation letter or a recent IRS notice, and " +
+      "correct it in Company Info if it differs. Never correct it on the form.",
+    examples: [
+      {
+        title: "Greenway's own",
+        steps: [
+          "The company profile holds 464217016 as nine digits with no punctuation.",
+          "The form prints it in the IRS's own two-then-seven layout: 46 \u2013 4217016.",
+          "The same nine digits print on page 2, on Form 940, and on the W-3.",
+        ],
+        answer: "46-4217016",
+        moral:
+          "One stored value, many forms. The hyphen is presentation; the digits are the account.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), Employer identification number (EIN)",
+        quote:
+          "Always be sure the EIN on the form you file exactly\nmatches the EIN the IRS assigned to your business. Don\u2019t\nuse your SSN or ITIN on forms that ask for an EIN.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "\u201CExactly\u201D is the operative word. Close is a rejected return, not an approximate one.",
+      },
+      {
+        cite: "IRS Instructions for Form 941 (2026), Employer identification number (EIN)",
+        quote:
+          "Filing a\nForm 941 with an incorrect EIN or using another\nbusiness\u2019s EIN may result in penalties and delays in\nprocessing your return.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "This is why the number lives in one place in this product. Four entities means four " +
+          "EINs, and the chance of borrowing the wrong one is real.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "ein",
+        why: "The same nine digits. The annual FUTA return and the four quarterly returns are matched to each other by this number.",
+      },
+      {
+        formId: "form_w3",
+        box: "e",
+        why: "The W-3 carries the same EIN, and the IRS reconciles the four 941s against the W-3 using it. A mismatch means the reconciliation fails.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "name",
+    headline: "The legal name \u2014 the one on the SS-4, not the one on the sign",
+    plainEnglish:
+      "The business's legal name as it was given to the IRS when the EIN was applied for. For " +
+      "Greenway that is LYMAN'S MARIJUANA L.L.C., which is not what the shop is called and not " +
+      "what customers know. The IRS instructions are explicit that this line takes the name used " +
+      "on the EIN application, and the trading name goes on the line below.",
+    whereItComesFrom:
+      "The legal name field of the company profile. It prints identically on page 1 and page 2 of " +
+      "the 941, on Form 940 and on the W-3, because they all ask the same question.",
+    howToReadIt:
+      "Read it as a matching exercise, not a description. The only question that matters is " +
+      "whether these characters are the ones in the IRS's file. A missing apostrophe or an " +
+      "expanded \u201CL.L.C.\u201D is enough to make an automated match fail, and a failed match delays " +
+      "processing rather than announcing itself.",
+    commonMistake:
+      "Entering the trading name because it is the name everyone uses. The two lines exist " +
+      "precisely so the business can be identified by its legal name and recognised by its " +
+      "trading name, and swapping them is the single most common identifier error on the form.",
+    whatToDo:
+      "Check the printed name character for character against the EIN confirmation letter. If it " +
+      "differs, correct Company Info \u2014 and if the legal name has genuinely changed, write to the " +
+      "IRS office where the returns are filed, because a name change is not something a form can " +
+      "communicate on its own.",
+    examples: [
+      {
+        title: "Which name goes where",
+        steps: [
+          "Legal name on the SS-4: LYMAN'S MARIJUANA L.L.C.",
+          "Trading name on the door: GREENWAY MARIJUANA.",
+          "Line \u201CName (not your trade name)\u201D takes LYMAN'S MARIJUANA L.L.C.",
+          "Line \u201CTrade name (if any)\u201D takes GREENWAY MARIJUANA.",
+        ],
+        answer: "LYMAN'S MARIJUANA L.L.C.",
+        moral:
+          "The form's own caption \u2014 \u201Cnot your trade name\u201D \u2014 is there because this is the line " +
+          "people get wrong.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), How Should You Complete Form 941?",
+        quote:
+          "Type or print your EIN, name, and address in the spaces\nprovided. Also enter your name and EIN on the top of\npage 2. Don\u2019t use your social security number (SSN) or\nindividual taxpayer identification number (ITIN). Generally,\nenter the business (legal) name you used when you\napplied for your EIN. For example, if you\u2019re a sole\nproprietor, enter \u201CHaleigh Smith\u201D on the \u201CName\u201D line and\n\u201CHaleigh\u2019s Cycles\u201D on the \u201CTrade name\u201D line. Leave the\n\u201CTrade name\u201D line blank if it is the same as your \u201CName.\u201D",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "The IRS's own worked example is exactly Greenway's situation: legal entity on one line, " +
+          "shop name on the next.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "tradeName",
+        why: "The two are a pair, and the instructions define each by reference to the other.",
+      },
+      {
+        formId: "form_w3",
+        box: "f",
+        why: "The W-3 carries the employer's name for the same year. The IRS matches them, so they must be the same characters.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "tradeName",
+    headline: "The name on the door \u2014 and the rule about leaving it blank",
+    plainEnglish:
+      "The name Greenway actually trades under: GREENWAY MARIJUANA. It is here so the IRS can " +
+      "recognise the business a human would recognise, while still filing it under its legal " +
+      "name. The instructions add a rule that surprises people \u2014 if the trade name is the same " +
+      "as the legal name, this line is left BLANK rather than repeated.",
+    whereItComesFrom:
+      "The trade name field of the company profile. Greenway's differs from its legal name, so " +
+      "the line is printed rather than left empty.",
+    howToReadIt:
+      "Read it as the recognisable half of a two-part identifier. It carries no tax consequence " +
+      "on its own, but it is the line that lets a person at the IRS, or Michael's CPA, see at a " +
+      "glance which of the four entities this return belongs to \u2014 which matters a great deal " +
+      "when four sets of forms are on the same desk.",
+    commonMistake:
+      "Repeating the legal name here when there is no separate trading name. The instructions say " +
+      "to leave it blank, and a duplicated name is the kind of small inconsistency that makes " +
+      "automated matching harder for no benefit.",
+    whatToDo:
+      "Confirm the printed trade name matches the name registered with the State \u2014 for Greenway, " +
+      "the trade name on the UBI record. If the business ever trades under a single name, clear " +
+      "the trade name field in Company Info rather than duplicating the legal one.",
+    examples: [
+      {
+        title: "When the line stays empty",
+        steps: [
+          "A company whose legal name and trading name are both \u201CAcme Holdings LLC\u201D.",
+          "The instructions: leave the Trade name line blank if it is the same as your Name.",
+          "So the line prints nothing at all \u2014 and blank is the correct entry, not an omission.",
+          "Greenway is the opposite case: two genuinely different names, so both lines print.",
+        ],
+        answer: "GREENWAY MARIJUANA",
+        moral:
+          "An empty box on a tax form is sometimes the right answer. This is one of the few " +
+          "places the instructions say so outright.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), How Should You Complete Form 941?",
+        quote:
+          "Leave the\n\u201CTrade name\u201D line blank if it is the same as your \u201CName.\u201D",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "A rule with a definite answer, which is why this box is worth a lesson even though it " +
+          "looks trivial. Blank is an instruction, not an oversight.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "name",
+        why: "Defined against each other: the trade name is blank precisely when it would repeat the legal name.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "address",
+    headline: "Where the IRS writes to \u2014 and why a form cannot change it",
+    plainEnglish:
+      "The street address of the business: 4851 GEIGER RD SE. Every notice, every letter and " +
+      "every refund the IRS sends about federal employment tax goes to the address it has on " +
+      "file. Printing an address here does NOT update that file \u2014 that is the part worth " +
+      "knowing, and it is the reason this box has a lesson at all.",
+    whereItComesFrom:
+      "The address fields of the company profile, printed on every form that asks. Nothing about " +
+      "this box is computed.",
+    howToReadIt:
+      "Read it as a delivery instruction with a delay built in. An IRS notice that goes to a stale " +
+      "address is still legally delivered, and the response clock still runs. The consequence of " +
+      "a wrong address on this line is therefore not a filing error \u2014 it is missing a letter " +
+      "whose deadline has already started.",
+    commonMistake:
+      "Assuming that changing the address on the return changes it at the IRS. It does not. The " +
+      "IRS requires Form 8822-B for an address change, and it must be mailed separately \u2014 the " +
+      "instructions say explicitly not to send it with the 941.",
+    whatToDo:
+      "If Greenway ever moves, file Form 8822-B separately as well as updating Company Info. Do " +
+      "not rely on the next return to carry the message.",
+    examples: [
+      {
+        title: "Moving premises",
+        steps: [
+          "The business relocates in March and Company Info is updated the same week.",
+          "The Q1 941 prints the new address, so the return looks correct.",
+          "The IRS still holds the old address, because a return does not change an address of record.",
+          "A notice about Q4 of the prior year goes to the old premises, and the 30-day clock runs.",
+          "Form 8822-B, mailed on its own, is what would have prevented it.",
+        ],
+        answer: "Form 8822-B",
+        moral:
+          "The form reports the address. It does not register it. Those are two different acts " +
+          "and only one of them happens automatically.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), If you change your business name, business address, or responsible party",
+        quote:
+          "Complete and mail Form 8822-B to notify the IRS of a\nbusiness address or responsible party change. Don\u2019t mail\nForm 8822-B with your Form 941.",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "Two separate mailings. Enclosing the 8822-B with the return is the natural thing to do " +
+          "and the instructions specifically forbid it.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "cityStateZip",
+        why: "The other half of the same address. They are separate boxes on the paper and one fact in the books.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_941",
+    box: "cityStateZip",
+    headline: "City, state and ZIP \u2014 the half of the address that routes the mail",
+    plainEnglish:
+      "The second line of Greenway's address: PORT ORCHARD, WA 98366. The form splits the address " +
+      "across two boxes because the IRS reads them as separate fields, not because they are " +
+      "separate facts. The state matters beyond the postal service: WA is what makes Greenway " +
+      "subject to Washington unemployment insurance, which is what the FUTA credit on Form 940 " +
+      "depends on.",
+    whereItComesFrom:
+      "The city, state and postal code fields of the company profile, joined for printing. One " +
+      "stored fact, one printed line.",
+    howToReadIt:
+      "Read the state code as more than an address. It is the state whose unemployment fund " +
+      "Greenway pays into, and therefore the state that determines whether the 5.4% FUTA credit " +
+      "is available and whether a credit reduction applies. An address in the wrong state would " +
+      "be a filing inconsistency across two different agencies, not just bad post.",
+    commonMistake:
+      "A ZIP+4 typed into a field expecting five digits, or a state spelled out rather than " +
+      "abbreviated. Neither invalidates the return, but both make the automated address match " +
+      "fail, and a failed match is how a business ends up on a stale address without knowing it.",
+    whatToDo:
+      "Check the state code reads WA and the ZIP matches the ESD and Department of Revenue " +
+      "records. Those three agencies should hold one address between them, not three.",
+    examples: [
+      {
+        title: "Why the state code is a tax fact",
+        steps: [
+          "The address line says PORT ORCHARD, WA 98366.",
+          "WA means Greenway pays Washington state unemployment tax to ESD.",
+          "Paying state unemployment on time is what earns the 5.4% credit on Form 940.",
+          "That credit is the difference between 6.0% and 0.6% FUTA \u2014 a ten-fold difference in " +
+            "the annual federal unemployment bill.",
+        ],
+        answer: "WA",
+        moral:
+          "Two characters in the address box decide the size of an entire federal tax. That is " +
+          "why it is worth reading rather than skipping.",
+      },
+    ],
+    quotes: [
+      {
+        cite: "IRS Instructions for Form 941 (2026), How Should You Complete Form 941?",
+        quote:
+          "Type or print your EIN, name, and address in the spaces\nprovided. Also enter your name and EIN on the top of\npage 2. Don\u2019t use your social security number (SSN) or\nindividual taxpayer identification number (ITIN).",
+        sourcePath: FORM_941_SOURCE_PATH,
+        sourceUrl: FORM_941_SOURCE_URL,
+        soWhat:
+          "\u201CIn the spaces provided\u201D \u2014 the split across two boxes is the IRS's layout, and each " +
+          "box is read as its own field.",
+      },
+    ],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "address",
+        why: "The first half of the same address. Both are printed from the same stored profile.",
+      },
+      {
+        formId: "form_940",
+        box: "cityStateZip",
+        why: "The state on this line is the state Form 940 line 1a names as Greenway's unemployment state. They must agree.",
+      },
+    ],
+  },
+
 ];

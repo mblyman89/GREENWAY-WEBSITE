@@ -122,6 +122,7 @@ import { FormScopeBar } from "@/components/admin/books/FormScopeBar";
 import {
   mostRecentlyClosedQuarter,
   readScope,
+  scopeHref,
   scopeQuarters,
   scopeYears,
   type FormScope,
@@ -860,9 +861,39 @@ function Shell({
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--admin-text)]">
-          Washington quarterly returns &mdash; {waQuarterLabel(quarter)}
-        </h1>
+        {/*
+          ═══ THE DOOR TO THE FORMS (books-65) ═══
+
+          Michael: "i can not figure out how to open and view the state forms.
+          did they get wired in correctly?" They were not. The 941, 940 and W-2
+          each had a `sheet` route and a link to it from their tabbed screen;
+          the Washington screen had neither, so there was no state form to open.
+
+          Placed in the Shell rather than in one branch of the page body ON
+          PURPOSE. `WaQuarterlyPage` returns early through Shell in three
+          separate failure paths — rates unresolved, quarter unreadable, and the
+          empty quarter — and a link written into the body would vanish in
+          exactly the situations where a reader is most likely to go looking for
+          the form to see what it should say.
+        */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold text-[var(--admin-text)]">
+            Washington quarterly returns &mdash; {waQuarterLabel(quarter)}
+          </h1>
+          {/*
+            `scopeHref`, not a hand-built query string. A hardcoded `?year=`
+            sends a reader who is looking at Q1 2026 to the paper for whatever
+            the code happened to name — which is the exact class of bug books-63
+            closed for the 940. A gate in form-scope-core.test.ts asserts every
+            sheet link on every form page is built this way.
+          */}
+          <Link
+            href={scopeHref("/admin/books/wa-quarterly/sheet", scope)}
+            className="shrink-0 rounded-md border border-white/15 px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)]/60 hover:text-[var(--admin-text)]"
+          >
+            View just the forms &rarr;
+          </Link>
+        </div>
         <p className="mt-1 max-w-3xl text-sm text-[var(--admin-text-muted)]">
           Four forms, three submissions, two agencies. This screen reads the pay runs whose pay
           date falls inside the quarter, adds them up, and shows every box with the arithmetic and

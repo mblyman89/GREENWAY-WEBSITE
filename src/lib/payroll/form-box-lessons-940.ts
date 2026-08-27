@@ -94,6 +94,23 @@ import {
   I940_LINE_8_BEFORE_ADJUSTMENTS,
   I940_LINE_9_ALL_EXCLUDED,
   I940_ON_TIME_AND_LATE_DEFINED,
+  // books-65 - the authorities behind the fifteen boxes that still carried the
+  // untaught marker on Michael's screen.
+  I940_CREDIT_REDUCTION_STATE,
+  I940_DEPOSIT_THRESHOLD,
+  I940_EIN_MUST_MATCH_EXACTLY,
+  I940_ENTITY_TOP_OF_FORM,
+  I940_FOURTH_QUARTER,
+  I940_LINE_11_CREDIT_REDUCTION_AMOUNT,
+  I940_LINE_13_DEPOSITED,
+  I940_LINE_15A_OVERPAYMENT,
+  I940_LINE_16D_IS_A_RESIDUAL,
+  I940_LINE_16_QUARTERLY_LIABILITY,
+  I940_PART5_ONLY_IF_OVER_500,
+  I940_LINE_4_EXEMPT_MUST_BE_IN_LINE_3,
+  I940_LINE_6_SUBTOTAL,
+  I940_PREPARER_MUST_USE_EXACT_NAME,
+  I940_BALANCE_DUE_BANDS,
   I940_RATE_AND_CREDIT,
   I940_WHO_MUST_FILE,
 } from "./form-940-authorities";
@@ -1179,6 +1196,901 @@ export const FORM_940_LESSONS: readonly BoxLesson[] = [
         formId: "form_940",
         box: "12",
         why: "Line 17 must equal line 12 exactly. This is the form's own internal arithmetic check.",
+      },
+    ],
+  },
+  /* ═══════════════════════════════════════════════════════════════════════
+   * books-65 — THE FIFTEEN BOXES THAT STILL CARRIED THE MARKER
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Michael: "the boxes that dont have lessons, the boxes look like there is a
+   * red squiggly line in it, but id rather they just open a box that says in
+   * plain english what it is and why it doesn't need a lesson." And: "on the
+   * 941 schedule b, every single box opens with an explanation. this is the
+   * level of thoroughness i want."
+   *
+   * He asked for a second kind of panel. He does not need one: every box still
+   * marked untaught had real instruction text sitting in the mirrored corpus,
+   * so none of them was a box that needs no lesson — they were boxes nobody
+   * had written. The marker is removed by removing its cause.
+   *
+   * The five identifier boxes at the top of the page are here for a second
+   * reason as well. They are the boxes D-15 was hiding: until books-65 the
+   * teaching specimen had no box carrying the ids `ein`, `name`, `tradeName`,
+   * `address` or `cityStateZip`, so Michael's company profile — correctly
+   * stored, green ticks and all — had nowhere on the paper to print.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  {
+    formId: "form_940",
+    box: "ein",
+    headline: "The nine digits the whole federal year hangs on \u2014 46-4217016",
+    plainEnglish:
+      "Greenway's Employer Identification Number, the federal account number for the business. " +
+      "Form 940 asks for it at the top of page 1 and again at the top of page 2, and both must be " +
+      "filled in. It is the number the IRS uses to match this annual return against the four " +
+      "quarterly 941s and against the W-3, and it is the number ESD's records must agree with for " +
+      "the FUTA credit on line 9 through 11 to hold up.",
+    whereItComesFrom:
+      "The company profile in Accounting \u2192 Company Info. Stored once for the entity and printed " +
+      "on every form that asks. It is never typed onto a form here, deliberately: a number " +
+      "entered once cannot be right on the 940 and wrong on the W-3.",
+    howToReadIt:
+      "Read it as the join key. Michael runs four entities, which means four EINs, and the risk " +
+      "is not mistyping a digit \u2014 it is filing an entirely valid EIN that belongs to the wrong " +
+      "company. Check the printed number is the one whose payroll this return reports.",
+    commonMistake:
+      "Using an SSN, an ITIN, or another entity's EIN. Each is a penalty in its own right rather " +
+      "than an arithmetic error, and an electronically filed return with an invalid EIN is " +
+      "rejected outright.",
+    whatToDo:
+      "Compare the printed EIN against the IRS confirmation letter for THIS entity, not against " +
+      "memory. If it is wrong, correct Company Info; never correct it on the form.",
+    examples: [
+      {
+        title: "Four entities, four EINs",
+        steps: [
+          "Greenway's payroll runs under LYMAN'S MARIJUANA L.L.C., EIN 46-4217016.",
+          "The other three entities have their own EINs and their own filings.",
+          "This Form 940 reports Greenway's FUTA wages, so 46-4217016 is the only correct number here.",
+          "An EIN from a sibling entity would be a valid number attached to the wrong wages \u2014 the " +
+            "hardest kind of error to spot, because nothing about it looks malformed.",
+        ],
+        answer: "46-4217016",
+        moral:
+          "With more than one entity, the danger is not a typo. It is a perfectly good EIN in the " +
+          "wrong place.",
+      },
+    ],
+    quotes: [quoteOf(I940_EIN_MUST_MATCH_EXACTLY)],
+    tiesTo: [
+      {
+        formId: "form_941",
+        box: "ein",
+        why: "The same nine digits. The IRS matches this annual return to the four quarterly ones by this number.",
+      },
+      {
+        formId: "form_w3",
+        box: "e",
+        why: "The W-3 carries the same EIN for the same year, and the year-end reconciliation depends on them agreeing.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "name",
+    headline: "The legal name \u2014 the one on the SS-4, not the one on the sign",
+    plainEnglish:
+      "The business's legal name as given to the IRS on Form SS-4 when the EIN was applied for. " +
+      "For Greenway that is LYMAN'S MARIJUANA L.L.C. \u2014 not what the shop is called and not what " +
+      "customers know. The instructions are explicit: this line takes the name used on the EIN " +
+      "application, and the trading name goes on the line below it.",
+    whereItComesFrom:
+      "The legal name field of the company profile, printed identically on page 1 and page 2 of " +
+      "this return, on the 941s and on the W-3, because all of them ask the same question.",
+    howToReadIt:
+      "Read it as a matching exercise, not a description. The only question is whether these " +
+      "characters are the ones in the IRS's file. A missing apostrophe or an \u201CLLC\u201D written where " +
+      "the file says \u201CL.L.C.\u201D is enough to make an automated match fail, and a failed match " +
+      "delays processing without announcing itself.",
+    commonMistake:
+      "Entering the trading name because it is the name everyone uses. The two lines exist so the " +
+      "business can be IDENTIFIED by its legal name and RECOGNISED by its trading name, and " +
+      "swapping them is the most common identifier error on the form.",
+    whatToDo:
+      "Check the printed name character for character against the EIN confirmation letter. If the " +
+      "legal name has genuinely changed, write to the IRS office where the returns are filed \u2014 a " +
+      "return cannot communicate a name change on its own.",
+    examples: [
+      {
+        title: "Which name goes on which line",
+        steps: [
+          "Legal name on the SS-4: LYMAN'S MARIJUANA L.L.C.",
+          "Trading name on the door: GREENWAY MARIJUANA.",
+          "The Name line takes LYMAN'S MARIJUANA L.L.C.",
+          "The Trade Name line takes GREENWAY MARIJUANA.",
+          "The IRS's own example in the instructions is the identical shape: Ronald Smith on Name, " +
+            "Ron's Cycles on Trade Name.",
+        ],
+        answer: "LYMAN'S MARIJUANA L.L.C.",
+        moral:
+          "The IRS wrote a worked example for this because it is the line people get wrong.",
+      },
+    ],
+    quotes: [quoteOf(I940_ENTITY_TOP_OF_FORM), quoteOf(I940_PREPARER_MUST_USE_EXACT_NAME)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "tradeName",
+        why: "The two are defined against each other: the trade name is blank precisely when it would repeat the legal name.",
+      },
+      {
+        formId: "form_941",
+        box: "name",
+        why: "The same legal name appears on all four quarterly returns. A difference between them and this one is a mismatch the IRS can see.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "tradeName",
+    headline: "The name on the door \u2014 and the rule about leaving it blank",
+    plainEnglish:
+      "The name Greenway actually trades under: GREENWAY MARIJUANA. It is here so a person can " +
+      "recognise the business while the filing still happens under the legal name. The " +
+      "instructions add a rule that surprises people \u2014 if the trade name is the same as the legal " +
+      "name, this line is left BLANK rather than repeated.",
+    whereItComesFrom:
+      "The trade name field of the company profile. Greenway's differs from its legal name, so " +
+      "the line prints rather than staying empty.",
+    howToReadIt:
+      "It carries no tax consequence of its own. What it carries is recognition: with four " +
+      "entities' forms on one desk, the trade name is what tells a human at a glance which " +
+      "company a page belongs to. That is worth having right even though nothing computes from it.",
+    commonMistake:
+      "Repeating the legal name here when there is no separate trading name. The instructions say " +
+      "to leave it blank, and a duplicated name makes automated matching harder for no benefit.",
+    whatToDo:
+      "Confirm the printed trade name matches the name on the State's UBI record. If the business " +
+      "ever trades under a single name, clear the field in Company Info rather than duplicating " +
+      "the legal name.",
+    examples: [
+      {
+        title: "When the line correctly prints nothing",
+        steps: [
+          "A company whose legal and trading names are both \u201CAcme Holdings LLC\u201D.",
+          "The instruction: leave the Trade Name line blank if it is the same as your Name.",
+          "So the line prints nothing \u2014 and blank is the correct entry, not an omission.",
+          "Greenway is the opposite case: two genuinely different names, so both lines print.",
+        ],
+        answer: "GREENWAY MARIJUANA",
+        moral:
+          "An empty box on a tax form is sometimes the instruction rather than an oversight. This " +
+          "is one of the few places the IRS says so outright.",
+      },
+    ],
+    quotes: [quoteOf(I940_ENTITY_TOP_OF_FORM)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "name",
+        why: "The pair. Each is defined by reference to the other, and the blank rule only makes sense with both in view.",
+      },
+      {
+        formId: "form_941",
+        box: "tradeName",
+        why: "The same trade name prints on the quarterly returns. They should not disagree.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "address",
+    headline: "Where the IRS writes to \u2014 and why a return cannot change it",
+    plainEnglish:
+      "The street address of the business: 4851 GEIGER RD SE. Every notice and every refund the " +
+      "IRS sends about federal unemployment tax goes to the address it holds on file. Printing an " +
+      "address on this return does NOT update that file, and that is the part worth knowing.",
+    whereItComesFrom:
+      "The address fields of the company profile, printed on every form that asks. Nothing about " +
+      "this box is computed.",
+    howToReadIt:
+      "Read it as a delivery instruction with a deadline attached. An IRS notice sent to a stale " +
+      "address is still legally delivered and the response clock still runs. So a wrong address " +
+      "here is not a filing error \u2014 it is a letter you never see whose deadline has already " +
+      "started counting.",
+    commonMistake:
+      "Assuming the return updates the address of record. It does not. The IRS requires Form " +
+      "8822-B, filed separately, and Form 940 is annual \u2014 so a move in February would not even " +
+      "be reported on a return until the following January.",
+    whatToDo:
+      "If Greenway moves, file Form 8822-B on its own as well as updating Company Info. Do not " +
+      "wait for the next return to carry the message, and on an annual form that wait is a year.",
+    examples: [
+      {
+        title: "Why the annual form makes this worse",
+        steps: [
+          "The business relocates in February and Company Info is updated the same week.",
+          "The 941s for Q1 through Q4 print the new address as they are filed.",
+          "This Form 940 is not filed until January of the following year.",
+          "In the meantime the IRS still holds the old address, because no return changes an address of record.",
+          "Form 8822-B, mailed on its own, is what would have prevented it.",
+        ],
+        answer: "Form 8822-B",
+        moral:
+          "Reporting an address and registering one are two different acts, and only one of them " +
+          "happens by filing.",
+      },
+    ],
+    quotes: [quoteOf(I940_ENTITY_TOP_OF_FORM)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "cityStateZip",
+        why: "The other half of the same address. Two boxes on the paper, one fact in the books.",
+      },
+      {
+        formId: "form_941",
+        box: "address",
+        why: "The same address prints on the quarterly returns, and the 8822-B rule is identical there.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "cityStateZip",
+    headline: "City, state and ZIP \u2014 and the two letters that decide the whole tax",
+    plainEnglish:
+      "The second line of the address: PORT ORCHARD, WA 98366. On this form more than any other, " +
+      "the state code is a tax fact rather than a postal one. WA is what makes Greenway subject " +
+      "to Washington unemployment insurance, and paying that state tax on time is what earns the " +
+      "5.4% credit that turns a 6.0% federal tax into 0.6%.",
+    whereItComesFrom:
+      "The city, state and postal code fields of the company profile, joined for printing. One " +
+      "stored fact, one printed line.",
+    howToReadIt:
+      "Read the state code against line 1a. Line 1a asks which state's unemployment fund the wages " +
+      "were paid into, and this line says where the business is. For a single-state employer like " +
+      "Greenway they are the same two letters, and if they ever differ, one of them is wrong or " +
+      "the return needs Schedule A.",
+    commonMistake:
+      "A ZIP+4 in a five-digit field, or a state spelled out rather than abbreviated. Neither " +
+      "invalidates the return, but both make the automated address match fail \u2014 which is how a " +
+      "business ends up on a stale address without knowing it.",
+    whatToDo:
+      "Check the state code reads WA and that the ZIP matches what ESD and the Department of " +
+      "Revenue hold. Three agencies should share one address between them, not keep three.",
+    examples: [
+      {
+        title: "Two characters, ten times the tax",
+        steps: [
+          "The address line reads PORT ORCHARD, WA 98366.",
+          "WA means Greenway pays state unemployment tax to Washington ESD.",
+          "Paying that on time earns the maximum 5.4% credit on this form.",
+          "6.0% \u2212 5.4% = 0.6%. On $7,000 of wages per person that is $42 rather than $420.",
+        ],
+        answer: "0.6%",
+        moral:
+          "The state in the address box is the reason the FUTA credit exists. It is the least " +
+          "decorative address line on any federal form.",
+      },
+    ],
+    quotes: [quoteOf(I940_ENTITY_TOP_OF_FORM)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "1a",
+        why: "Line 1a names the state whose unemployment fund the wages went to. For a single-state employer it must be the state in this address.",
+      },
+      {
+        formId: "form_940",
+        box: "address",
+        why: "The first half of the same address, printed from the same stored profile.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "4",
+    headline: "Money that was never FUTA wages \u2014 and the trap in the last sentence",
+    plainEnglish:
+      "Payments that went to people but are not subject to federal unemployment tax at all: " +
+      "certain fringe benefits, group-term life insurance, employer retirement contributions, " +
+      "dependent care, and a handful of others. This line SUBTRACTS from line 3. The trap is that " +
+      "a payment only belongs here if it was already counted on line 3 \u2014 taking something out " +
+      "that was never put in understates the tax.",
+    whereItComesFrom:
+      "The payroll records, classified by what each payment IS rather than by what it is called. " +
+      "The engine reports zero for Greenway today because none of the exempt categories appears " +
+      "in the current pay runs \u2014 and zero here is a measured result, not an assumption.",
+    howToReadIt:
+      "Read it beside the tick boxes 4a through 4e. A figure on line 4 with no box ticked is " +
+      "incomplete on its face; a ticked box with no figure is the same error in reverse. And read " +
+      "it against Michael's own situation: the company-paid health premium for a 2%-or-more " +
+      "shareholder-employee IS wages on the 941 and IS reportable, so it is not automatically an " +
+      "exempt payment here \u2014 which is exactly why this line needs deciding rather than assuming.",
+    commonMistake:
+      "Reporting a payment as exempt that was never included on line 3 in the first place. Line 3 " +
+      "is ALL payments to all employees; line 4 removes the ones that are not FUTA wages. If a " +
+      "payment skipped line 3, subtracting it here removes money from the base twice.",
+    whatToDo:
+      "Before entering anything on line 4, confirm the same payment is inside line 3. If it is " +
+      "not, the error is on line 3 and fixing line 4 will hide it rather than solve it.",
+    examples: [
+      {
+        title: "The double subtraction",
+        steps: [
+          "A $2,000 employer retirement contribution is made during the year.",
+          "It was omitted from line 3, which should have shown ALL payments.",
+          "Entering $2,000 on line 4 removes it a second time.",
+          "Line 7 is therefore $2,000 too low and the FUTA tax is understated by $12 at 0.6%.",
+          "The dollar amount is small; the error is a base error and it repeats every year.",
+        ],
+        answer: "$2,000 too low",
+        moral:
+          "Line 4 only works if line 3 is complete. The instruction saying so is the most " +
+          "important sentence attached to this box.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_4_EXEMPT_MUST_BE_IN_LINE_3)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "3",
+        why: "A payment may only be exempted here if it was included there. That is the instruction, and it is the error this line invites.",
+      },
+      {
+        formId: "form_940",
+        box: "6",
+        why: "Line 4 is one of the two figures line 6 adds together.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "6",
+    headline: "Everything that is NOT taxable, in one figure",
+    plainEnglish:
+      "Line 4 plus line 5. Two quite different kinds of money added together: line 4 is payments " +
+      "that were never FUTA wages at all, and line 5 is payments that were, but sat above the " +
+      "$7,000-per-person ceiling. Line 6 is the whole of what comes off line 3 to leave the " +
+      "taxable base on line 7.",
+    whereItComesFrom:
+      "Added from lines 4 and 5. Nothing is computed independently for this box \u2014 deliberately, " +
+      "because a subtotal calculated on its own can disagree with the two lines above it, and a " +
+      "form that disagrees with itself is what a notice is written about.",
+    howToReadIt:
+      "Read the SPLIT, not the total. For Greenway line 6 is almost entirely line 5, because " +
+      "every employee paid more than $7,000 in the year contributes their excess to it. A line 6 " +
+      "that is mostly line 4 instead would mean large exempt payments, which for a cannabis " +
+      "retailer with no retirement plan and no cafeteria plan would be a surprise worth chasing.",
+    commonMistake:
+      "Treating line 6 as \u201Cwages we do not pay tax on\u201D and reconciling it against something. It " +
+      "is a mechanical subtotal of two unlike things, and it has no meaning outside the " +
+      "subtraction on line 7.",
+    whatToDo:
+      "Add lines 4 and 5 yourself once and confirm you get this figure. If you do not, one of the " +
+      "three lines is wrong and line 7 cannot be right.",
+    examples: [
+      {
+        title: "Greenway's shape",
+        steps: [
+          "Line 3 (all payments): 44,000.00 for Joan and 6,200.00 for Nicholas \u2014 50,200.00.",
+          "Line 4 (exempt payments): 0.00 \u2014 no fringe, pension, or dependent-care payments.",
+          "Line 5 (payments over $7,000 per person): Joan is 37,000.00 over; Nicholas is under the " +
+            "ceiling and contributes nothing. So 37,000.00.",
+          "Line 6 = 0.00 + 37,000.00 = 37,000.00.",
+          "Line 7 = 50,200.00 \u2212 37,000.00 = 13,200.00 of taxable FUTA wages.",
+        ],
+        answer: "37,000.00",
+        moral:
+          "For an employer with no exempt payments, line 6 is just the ceiling doing its work. The " +
+          "line exists to keep the two reasons separate.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_6_SUBTOTAL)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "4",
+        why: "One of the two figures added here.",
+      },
+      {
+        formId: "form_940",
+        box: "5",
+        why: "The other, and for Greenway almost all of it \u2014 the $7,000 ceiling rather than any exemption.",
+      },
+      {
+        formId: "form_940",
+        box: "7",
+        why: "Line 7 is line 3 less this figure. Line 6 exists only to be subtracted.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "11",
+    headline: "Blank today, and the year it is not blank is not Greenway's fault",
+    plainEnglish:
+      "An extra amount of federal unemployment tax owed by employers in a \u201Ccredit reduction\u201D " +
+      "state \u2014 a state that borrowed from the federal unemployment fund and has not repaid it. " +
+      "Washington is not one, so this line is blank. The figure, when it applies, is not computed " +
+      "on this form at all: it comes off Schedule A, a separate page listing the affected states.",
+    whereItComesFrom:
+      "Schedule A (Form 940), when one is required. The engine takes the credit reduction rate as " +
+      "an INPUT rather than assuming zero, because \u201Cnot this year\u201D is a fact with an expiry date " +
+      "and a hard-coded zero would silently understate the tax the year it changes.",
+    howToReadIt:
+      "Read the emptiness as current, not permanent. The U.S. Department of Labor publishes the " +
+      "list of credit reduction states each November, and Washington has been off it for years \u2014 " +
+      "but a recession that drains the state fund puts it back on, and the first sign would be " +
+      "this line needing a figure and a Schedule A being required.",
+    commonMistake:
+      "Two opposite ones. Filling it in because a state tax was paid late \u2014 that is line 10 and " +
+      "the worksheet, not this line. And leaving it blank in a year Washington IS on the list, " +
+      "which understates the tax and omits a required schedule.",
+    whatToDo:
+      "Check the DOL credit reduction list once a year, in November, before the return is prepared. " +
+      "If Washington appears, Schedule A must be completed and its total brought here.",
+    examples: [
+      {
+        title: "What it would cost if Washington were on the list",
+        steps: [
+          "Assume 13,200.00 of taxable FUTA wages, as in the line 6 example.",
+          "A credit reduction of 0.3% in the first year a state is on the list.",
+          "13,200.00 \u00D7 0.003 = 39.60, which would go on line 11.",
+          "Line 12 rises by the same 39.60, and Schedule A must be attached.",
+          "The rate steps up 0.3% for each additional year the state stays on the list.",
+        ],
+        answer: "39.60",
+        moral:
+          "Small the first year and compounding after it. Worth checking annually rather than " +
+          "assuming the blank is permanent.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_11_CREDIT_REDUCTION_AMOUNT), quoteOf(I940_CREDIT_REDUCTION_STATE)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "2",
+        why: "The tick box that says a credit reduction state is involved. A figure here with that box unticked is inconsistent.",
+      },
+      {
+        formId: "form_940",
+        box: "12",
+        why: "Line 11 is one of the four figures line 12 adds. Every adjustment on this form only ever increases the tax.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "13",
+    headline: "The only line on this form that records money leaving the bank",
+    plainEnglish:
+      "The total FUTA tax Greenway actually deposited during the year, plus any overpayment " +
+      "carried forward from the prior year. Everything above this line is a LIABILITY \u2014 what the " +
+      "wages caused Greenway to owe. This is cash, and it is the answer to \u201Cwhat have we already " +
+      "paid?\u201D",
+    whereItComesFrom:
+      "The federal tax deposits recorded in the books for the year, matched against what actually " +
+      "cleared the bank through EFTPS. It is a cash figure, not a computed one: nothing above it " +
+      "can produce it, which is precisely why it is capable of contradicting the form.",
+    howToReadIt:
+      "Read it against line 12 and nothing else. Equal means the year was deposited correctly. " +
+      "Short means a balance due on line 14; over means an overpayment on line 15a. Note that for " +
+      "an employer Greenway's size this line is often small or zero \u2014 FUTA only has to be " +
+      "deposited once the accumulated liability passes $500, and under that it can simply be paid " +
+      "with the return.",
+    commonMistake:
+      "Entering the liability instead of the deposits so the two lines agree by construction. That " +
+      "defeats the entire bottom half of the form: line 13 exists to be an INDEPENDENT figure " +
+      "taken from the bank, and one copied from line 12 will never catch the missed deposit it " +
+      "was designed to catch.",
+    whatToDo:
+      "Pull the year's EFTPS payment history and total it from the payment records rather than " +
+      "from this return. Then compare with line 12 and account for any difference before filing.",
+    examples: [
+      {
+        title: "Why zero can be the right answer",
+        steps: [
+          "Line 12 for the year: 79.20 of FUTA tax.",
+          "The deposit threshold is $500 of accumulated liability.",
+          "79.20 never reaches it, so no deposit was ever required.",
+          "Line 13 is therefore 0.00 and line 14 shows 79.20 to pay with the return.",
+          "That is the ordinary, correct pattern for a business this size \u2014 one payment a year.",
+        ],
+        answer: "0.00",
+        moral:
+          "An empty line 13 is not a missed deposit when no deposit was ever due. The $500 " +
+          "threshold is what tells the two apart.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_13_DEPOSITED), quoteOf(I940_DEPOSIT_THRESHOLD)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "12",
+        why: "Line 13 is only meaningful next to line 12. Equal is clean; short is a balance due; over is an overpayment.",
+      },
+      {
+        formId: "form_940",
+        box: "14",
+        why: "When line 13 falls short of line 12, the difference lands there as the amount to pay.",
+      },
+      {
+        formId: "form_940",
+        box: "15a",
+        why: "When line 13 exceeds line 12, the difference lands there instead. Never both.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "14",
+    headline: "The amount to pay \u2014 and three bands almost nobody knows",
+    plainEnglish:
+      "The gap, when line 12 (owed) exceeds line 13 (deposited). For a business Greenway's size " +
+      "this is normally where the whole year's FUTA tax is paid, because the tax rarely reaches " +
+      "the $500 deposit threshold. The instructions split it into three bands, and the bands " +
+      "change what you are allowed to do rather than just how much you owe.",
+    whereItComesFrom:
+      "Line 12 minus line 13, when the difference is positive. Pure subtraction \u2014 nothing is " +
+      "looked up, which is why an error anywhere on the form surfaces here rather than being " +
+      "absorbed.",
+    howToReadIt:
+      "Find which band the figure is in, because the band is the real information. Under $1 and " +
+      "the IRS says not to bother paying it. $500 or less and it may be paid however is " +
+      "convenient, including with the return. More than $500 and it should have been DEPOSITED " +
+      "during the year \u2014 paying it with the return instead can earn a penalty even though the IRS " +
+      "ends up with the same money on the same day.",
+    commonMistake:
+      "Paying a balance over $500 with the return and treating the matter as closed. The offence " +
+      "in that band is the missed deposit, not the unpaid tax, so the penalty survives the " +
+      "payment. The other mistake is entering a figure on both line 14 and line 15a, which is a " +
+      "return that contradicts itself.",
+    whatToDo:
+      "Check which band this figure falls in. If it is over $500, work out which quarter's " +
+      "deposit was missed \u2014 lines 16a to 16d will show you \u2014 before paying, because next year " +
+      "the same pattern will repeat unless the deposit schedule is fixed.",
+    examples: [
+      {
+        title: "The three bands on real figures",
+        steps: [
+          "79.20 owed, nothing deposited: $500 or less, so pay it with the return. Correct.",
+          "0.60 owed: under $1, so the instructions say you don't have to pay it at all.",
+          "640.00 owed with nothing deposited: over $500, so a deposit was required during the " +
+            "year and paying now may draw a penalty.",
+          "640.00 owed with 500.00 already deposited: the balance is 140.00, in the payable band.",
+        ],
+        answer: "three bands",
+        moral:
+          "The same dollar figure is fine or penalised depending on what happened earlier in the " +
+          "year. That is why the deposit history matters more than the balance.",
+      },
+    ],
+    quotes: [quoteOf(I940_BALANCE_DUE_BANDS)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "12",
+        why: "The larger of the two figures subtracted here. If line 12 is wrong the balance due is wrong.",
+      },
+      {
+        formId: "form_940",
+        box: "13",
+        why: "The deposits. A balance over $500 means a deposit was missed rather than that the tax was miscomputed.",
+      },
+      {
+        formId: "form_940",
+        box: "15a",
+        why: "The opposite case. A return can have one or the other, never both.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "15a",
+    headline: "Paid too much \u2014 the mirror image of line 14",
+    plainEnglish:
+      "The difference when line 13 (deposited) exceeds line 12 (owed). One subtraction in the " +
+      "opposite direction from line 14, and the two are mutually exclusive: a return cannot be " +
+      "both short and over. A figure here means line 14 is blank and vice versa.",
+    whereItComesFrom:
+      "Line 13 minus line 12. Nothing else feeds it.",
+    howToReadIt:
+      "A figure here is usually not good news even though it means money is coming back. FUTA is " +
+      "a small, predictable tax with a $500 deposit threshold, so a material overpayment normally " +
+      "means either a deposit was made against the wrong form or the wage base was over-reported " +
+      "during the year and corrected here. Both are worth understanding rather than banking.",
+    commonMistake:
+      "Ignoring it because the amount is small and the money will come back eventually. An " +
+      "overpayment that came from a deposit posted to the wrong tax type leaves a SHORTFALL " +
+      "somewhere else \u2014 typically on a 941 \u2014 and the two do not offset each other.",
+    whatToDo:
+      "Find out where the extra money came from before choosing between a refund and a carry " +
+      "forward on line 15b. If it came from a misposted deposit, fix the posting rather than " +
+      "accepting the refund.",
+    examples: [
+      {
+        title: "An overpayment that is really a shortfall",
+        steps: [
+          "A 600.00 deposit is made in July intended for Form 941.",
+          "It is coded to Form 940 by mistake.",
+          "Line 13 shows 600.00 against a line 12 of 79.20.",
+          "Line 15a therefore shows 520.80 as an overpayment.",
+          "The Q3 941 is short by the same 600.00, and that shortfall carries trust-fund exposure " +
+            "while this overpayment carries none.",
+        ],
+        answer: "520.80",
+        moral:
+          "An overpayment on one form and a shortfall on another are the same event seen twice. " +
+          "The one that matters is the shortfall.",
+      },
+    ],
+    quotes: [quoteOf(I940_LINE_15A_OVERPAYMENT)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "13",
+        why: "The deposits figure this line subtracts from.",
+      },
+      {
+        formId: "form_940",
+        box: "14",
+        why: "The opposite direction. One or the other, never both.",
+      },
+      {
+        formId: "form_940",
+        box: "15b",
+        why: "Having established an overpayment, line 15b is where you choose refund or carry forward.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "16a",
+    headline: "First quarter liability \u2014 blank for Greenway, and not what you deposited",
+    plainEnglish:
+      "Greenway does not fill this box in. Part 5 is only used when line 12 is more than $500, and the 2025 return came to 420.00, so all four quarter boxes were correctly left blank - blank, not zeroed. It is explained here because the threshold is not a permanent exemption: the first year the FUTA total crosses 500.00, these four boxes switch on and the form gives no warning that they did. " +
+      "The FUTA tax that the wages of January, February and March caused Greenway to owe. The " +
+      "single most misread instruction on the form is attached to this box and its three " +
+      "siblings: \u201CDon't enter the amount you deposited.\u201D These four boxes are a liability diary, " +
+      "the annual equivalent of what Schedule B does for the 941. If there was no liability for " +
+      "the quarter, the line is left blank rather than zeroed.",
+    whereItComesFrom:
+      "The taxable FUTA wages paid in Q1, at 0.6% after the state credit. Because the $7,000 " +
+      "per-person ceiling is reached early in the year, this is normally the LARGEST of the four " +
+      "quarters by a wide margin.",
+    howToReadIt:
+      "Expect it to be front-loaded and be suspicious if it is not. Every employee's first $7,000 " +
+      "is taxable, so for a stable workforce most of the year's FUTA is incurred in Q1 and the " +
+      "later quarters trail off toward nothing. A Q1 that is small and a Q3 that is large means " +
+      "new hires mid-year, which is worth knowing, or a base error, which is worth fixing.",
+    commonMistake:
+      "Entering the deposit made in April for the first quarter. The deposit is a payment and " +
+      "belongs on line 13; this box is what was INCURRED. Confusing them breaks the check that " +
+      "lines 16a through 16d sum to line 17, which must equal line 12.",
+    whatToDo:
+      "Confirm this figure came from Q1 WAGES and not from a Q1 or April payment, then check the " +
+      "four boxes add to line 17.",
+    examples: [
+      {
+        title: "Why Q1 carries most of the year",
+        steps: [
+          "Joan earns 44,000.00 across the year, paid evenly \u2014 about 11,000.00 a quarter.",
+          "Only her first 7,000.00 is FUTA taxable, and she passes it inside Q1.",
+          "So Joan's entire 42.00 of FUTA (7,000.00 \u00D7 0.006) is incurred in Q1.",
+          "Nicholas earns 6,200.00 across the year and never reaches the ceiling, so his liability " +
+            "spreads across all four quarters.",
+          "Line 16a is therefore large and 16b through 16d are small.",
+        ],
+        answer: "front-loaded",
+        moral:
+          "The shape of these four boxes is dictated by the ceiling, not by when the work happened.",
+      },
+    ],
+    quotes: [quoteOf(I940_PART5_ONLY_IF_OVER_500), quoteOf(I940_LINE_16_QUARTERLY_LIABILITY)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "16b",
+        why: "The next quarter. Read the four together \u2014 the pattern is the information, not any single figure.",
+      },
+      {
+        formId: "form_940",
+        box: "17",
+        why: "The four quarterly boxes must add to line 17, which must equal line 12. That is the form's own arithmetic check.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "16b",
+    headline: "Second quarter liability \u2014 blank for Greenway, where the ceiling starts to bite",
+    plainEnglish:
+      "Greenway does not fill this box in. Part 5 is only used when line 12 is more than $500, and the 2025 return came to 420.00, so all four quarter boxes were correctly left blank - blank, not zeroed. It is explained here because the threshold is not a permanent exemption: the first year the FUTA total crosses 500.00, these four boxes switch on and the form gives no warning that they did. " +
+      "The FUTA tax incurred on April, May and June wages. Liability, not deposits, and blank " +
+      "rather than zero if there was none. By the second quarter most established employees have " +
+      "already passed the $7,000 ceiling, so this figure is normally well below Q1.",
+    whereItComesFrom:
+      "Q2's taxable FUTA wages at 0.6% \u2014 which for a stable workforce means only the employees " +
+      "who had not yet reached $7,000 by the end of March, plus anyone hired during the quarter.",
+    howToReadIt:
+      "Read it as a hiring signal. A Q2 that is close to Q1 means substantial new hiring in the " +
+      "spring, because established staff have no taxable base left. A Q2 that is near zero means " +
+      "a stable roster, which is what Greenway's two-employee shape produces.",
+    commonMistake:
+      "Assuming the four quarters should be roughly equal because the payroll is roughly equal. " +
+      "FUTA liability is not proportional to wages \u2014 it is proportional to the part of each " +
+      "person's wages still under $7,000, which runs out.",
+    whatToDo:
+      "Compare this figure with Q1 and ask whether the difference is explained by the ceiling or " +
+      "by a hire. If neither explains it, the wage base is being recomputed somewhere it should " +
+      "not be.",
+    examples: [
+      {
+        title: "A spring hire showing up in Q2",
+        steps: [
+          "Q1 liability: 42.00, almost all of it Joan's ceiling being reached.",
+          "A new employee starts in May at 3,000.00 for the quarter.",
+          "Their whole 3,000.00 is under the ceiling, so all of it is taxable: 18.00 at 0.6%.",
+          "Line 16b therefore shows about 18.00 where it would otherwise have shown a few cents.",
+        ],
+        answer: "18.00",
+        moral:
+          "A jump in a later quarter is almost always a hire. These four boxes are the only place " +
+          "on the form where that is visible.",
+      },
+    ],
+    quotes: [quoteOf(I940_PART5_ONLY_IF_OVER_500), quoteOf(I940_LINE_16_QUARTERLY_LIABILITY)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "16a",
+        why: "The quarter before. The drop between them is the ceiling doing its work.",
+      },
+      {
+        formId: "form_940",
+        box: "17",
+        why: "One of the four figures that must add to line 17, and therefore to line 12.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "16c",
+    headline: "Third quarter liability \u2014 blank for Greenway, and usually the quietest box",
+    plainEnglish:
+      "Greenway does not fill this box in. Part 5 is only used when line 12 is more than $500, and the 2025 return came to 420.00, so all four quarter boxes were correctly left blank - blank, not zeroed. It is explained here because the threshold is not a permanent exemption: the first year the FUTA total crosses 500.00, these four boxes switch on and the form gives no warning that they did. " +
+      "The FUTA tax incurred on July, August and September wages. Liability, not deposits, and " +
+      "blank rather than zero if there was none. For a stable workforce this is frequently blank, " +
+      "because everyone still employed passed the $7,000 ceiling months ago.",
+    whereItComesFrom:
+      "Q3's taxable FUTA wages at 0.6%. In practice, only employees hired in or after July, and " +
+      "anyone whose year-to-date pay was still under $7,000 at the end of June.",
+    howToReadIt:
+      "A blank here is normal and correct, and the instruction says blank rather than a zero. A " +
+      "figure here means somebody's wage base was still open in the summer \u2014 a mid-year hire, a " +
+      "part-timer, or a seasonal worker. For Greenway, a Q3 figure with no summer hire would be " +
+      "worth investigating.",
+    commonMistake:
+      "Writing 0.00 instead of leaving it blank. The instructions are explicit about the blank, " +
+      "and while a zero is unlikely to cause a rejection, it makes an automated read of the form " +
+      "ambiguous about whether the question was answered or the liability was genuinely nil.",
+    whatToDo:
+      "If this box has a figure, identify which employee generated it. If it does not, confirm " +
+      "that everyone who worked in Q3 had already passed $7,000 \u2014 which is what makes the blank " +
+      "true rather than merely empty.",
+    examples: [
+      {
+        title: "The part-timer who keeps Q3 open",
+        steps: [
+          "Nicholas earns 6,200.00 across the whole year, paid evenly.",
+          "By the end of June he has earned about 3,100.00 \u2014 still under 7,000.00.",
+          "So his Q3 wages are entirely FUTA taxable.",
+          "About 1,550.00 \u00D7 0.006 = 9.30 goes on line 16c.",
+          "Joan contributes nothing, having passed the ceiling in Q1.",
+        ],
+        answer: "9.30",
+        moral:
+          "A low-paid employee is the reason a late quarter has any FUTA at all. The ceiling never " +
+          "closes for someone who never reaches it.",
+      },
+    ],
+    quotes: [quoteOf(I940_PART5_ONLY_IF_OVER_500), quoteOf(I940_LINE_16_QUARTERLY_LIABILITY)],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "16b",
+        why: "The quarter before. Read the four as a sequence.",
+      },
+      {
+        formId: "form_940",
+        box: "17",
+        why: "One of the four figures that must add to line 17, and therefore to line 12.",
+      },
+    ],
+  },
+
+  {
+    formId: "form_940",
+    box: "16d",
+    headline: "Fourth quarter \u2014 blank for Greenway, and computed differently from the other three",
+    plainEnglish:
+      "Greenway does not fill this box in. Part 5 is only used when line 12 is more than $500, and the 2025 return came to 420.00, so all four quarter boxes were correctly left blank - blank, not zeroed. It is explained here because the threshold is not a permanent exemption: the first year the FUTA total crosses 500.00, these four boxes switch on and the form gives no warning that they did. " +
+      "The FUTA tax incurred on October, November and December wages \u2014 except that the " +
+      "instructions do not have you compute it from those wages at all. Line 16d is a RESIDUAL: " +
+      "complete the form through line 12, copy line 12 to line 17, then subtract 16a plus 16b " +
+      "plus 16c from line 17. Whatever is left goes here. Almost nobody knows this, and it is why " +
+      "16d sometimes looks slightly odd against Q4 payroll.",
+    whereItComesFrom:
+      "Line 17 minus the sum of lines 16a, 16b and 16c. Not from Q4 wages directly. This is what " +
+      "GUARANTEES the four quarterly boxes add exactly to line 12 \u2014 any rounding drift across " +
+      "the first three quarters is absorbed here by construction rather than left to disagree.",
+    howToReadIt:
+      "Read it as the balancing figure it is. If 16d comes out negative, that is not a Q4 refund " +
+      "\u2014 it means the first three quarters have been overstated, and the error is above this box " +
+      "rather than in it. A negative residual is the single clearest signal on the form that a " +
+      "quarterly split is wrong.",
+    commonMistake:
+      "Computing 16d from fourth-quarter wages like the other three, then wondering why the four " +
+      "boxes do not add to line 12. They will not, because the residual method exists precisely " +
+      "to make them add. The other mistake is entering the February deposit here \u2014 these boxes " +
+      "are liability, and the instruction says so in as many words.",
+    whatToDo:
+      "Add 16a, 16b and 16c, subtract from line 17, and confirm the result is what this box shows. " +
+      "If the result is negative, stop and find the overstated quarter before filing.",
+    examples: [
+      {
+        title: "The residual absorbing rounding",
+        steps: [
+          "Line 12 for the year: 79.20. Copy it to line 17.",
+          "16a: 42.00. 16b: 18.00. 16c: 9.30. Those sum to 69.30.",
+          "79.20 \u2212 69.30 = 9.90, which goes on line 16d.",
+          "If Q4 wages had been computed directly they might have given 9.88 or 9.92 \u2014 and the " +
+            "four boxes would then miss line 12 by a cent or two.",
+          "The residual method makes the miss impossible.",
+        ],
+        answer: "9.90",
+        moral:
+          "The fourth quarter is where the form makes its own arithmetic come out even. That is a " +
+          "feature, and it is documented.",
+      },
+    ],
+    quotes: [
+      quoteOf(I940_PART5_ONLY_IF_OVER_500),
+      quoteOf(I940_LINE_16D_IS_A_RESIDUAL),
+      quoteOf(I940_LINE_16_QUARTERLY_LIABILITY),
+      quoteOf(I940_FOURTH_QUARTER),
+    ],
+    tiesTo: [
+      {
+        formId: "form_940",
+        box: "16a",
+        why: "One of the three figures subtracted from line 17 to produce this one.",
+      },
+      {
+        formId: "form_940",
+        box: "17",
+        why: "This box is defined as line 17 less the other three quarters, so line 17 must be right first.",
+      },
+      {
+        formId: "form_940",
+        box: "12",
+        why: "Line 17 is a copy of line 12, which makes this box ultimately a function of the year's total tax.",
       },
     ],
   },

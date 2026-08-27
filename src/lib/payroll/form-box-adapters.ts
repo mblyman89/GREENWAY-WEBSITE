@@ -531,6 +531,45 @@ export const FORM_940_WHOSE: Readonly<Record<string, WhoseRow>> = {
     whose: "employer_cost",
     why: "The four quarters added up, which must equal line 12 to the cent.",
   },
+  /*
+   * books-65: the five identity fields, matching FORM_941_WHOSE above.
+   *
+   * They were missing here for the same reason they were missing from the
+   * specimen - every slice built this form outward from what the ENGINE
+   * computes, and the engine computes money. That gap is D-15: Michael entered
+   * his company information, saw green checks against all of it, and none of it
+   * appeared on any form, because there were no boxes to put it in.
+   */
+  ein: {
+    whose: "not_money",
+    why:
+      "The number the IRS files this return under. It identifies Greenway; it is not an amount " +
+      "and nobody owes anything because of it.",
+  },
+  name: {
+    whose: "not_money",
+    why:
+      "The legal name of the business as the IRS holds it - LYMAN'S MARIJUANA, not the name over " +
+      "the door. Text, not an amount.",
+  },
+  tradeName: {
+    whose: "not_money",
+    why:
+      "The name the business trades under - GREENWAY MARIJUANA. The IRS asks for it separately " +
+      "from the legal name, and captions the box beside it 'Name (not your trade name)'. Text, " +
+      "not an amount.",
+  },
+  address: {
+    whose: "not_money",
+    why: "Where the business is. Text, not an amount.",
+  },
+  cityStateZip: {
+    whose: "not_money",
+    why:
+      "The rest of the address - city, state and ZIP. Text, not an amount, but on THIS form the " +
+      "state is the one identity field that changes the tax: WA is what makes line 3's wages " +
+      "eligible for the 5.4% state credit, and a credit-reduction state would not be.",
+  },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1092,7 +1131,20 @@ function whoseFor(
  * rectangles, so a mismatch here shows up as a box that fails to place rather
  * than as a box that places somewhere wrong.
  */
-const NINE41_ENTITY_BOXES: readonly { readonly box: string; readonly caption: string }[] = [
+/*
+ * EXPORTED as of books-65, and the export is the fix for D-15.
+ *
+ * The teaching specimen needs these same five box ids, because a company-profile
+ * value only reaches the paper if a box carrying its id is in the box list (see
+ * ENTITY_TEACHING in form-box-teaching-core.ts for the full measurement). It
+ * imports this constant rather than retyping the captions: two copies of a
+ * caption is two things to keep in step, and the one that drifts is always the
+ * copy nobody is looking at.
+ */
+export const ENTITY_BOX_CAPTIONS: readonly {
+  readonly box: string;
+  readonly caption: string;
+}[] = [
   { box: "ein", caption: "Employer identification number (EIN)" },
   { box: "name", caption: "Name (not your trade name)" },
   { box: "tradeName", caption: "Trade name (if any)" },
@@ -1142,7 +1194,7 @@ const NINE41_ENTITY_NOT_A_FIGURE =
  * later. One table, one answer, and `whose` is `not_money` on every row of it.
  */
 function employerEntityBoxes(formId: string, formLabel: string): readonly FormBox[] {
-  return NINE41_ENTITY_BOXES.map(({ box, caption }): FormBox => {
+  return ENTITY_BOX_CAPTIONS.map(({ box, caption }): FormBox => {
     const row = whoseFor(FORM_941_WHOSE, formLabel, box);
     return {
       formId,
@@ -1933,6 +1985,14 @@ const FORM_940_EXPECTED_WHOSE: Readonly<Record<string, WhoseMoney>> = {
   "16c": "employer_cost", // 3rd quarter FUTA liability
   "16d": "employer_cost", // 4th quarter FUTA liability
   "17": "employer_cost", // Total for the year -- must equal line 12
+  // -- The entity area: who is filing. No line number, which is why these were
+  // missing from the form entirely until they were measured for (D-15). Text
+  // rather than money in every case, so nobody owes anything because of them.
+  ein: "not_money", // Employer identification number
+  name: "not_money", // Name (not your trade name)
+  tradeName: "not_money", // Trade name (if any)
+  address: "not_money", // Address - number and street
+  cityStateZip: "not_money", // City, state, ZIP code
 };
 
 /**
@@ -1947,12 +2007,23 @@ export function assertEvery940LineOwnershipIsPinned(): void {
   const expectedIds = Object.keys(FORM_940_EXPECTED_WHOSE);
   const actualIds = Object.keys(FORM_940_WHOSE);
 
+  /*
+   * 30 -> 35 in books-65, DELIBERATELY, and for the same reason the 941 went
+   * 27 -> 32 in books-61: the entity area has no line numbers, so a margin scan
+   * looking for "line 5a" can never find it, and nothing was counting the
+   * difference. The result was a Form 940 rendering with no EIN and no business
+   * name on it while Michael's company page showed a green check against every
+   * one of those values. That is D-15.
+   *
+   * 30 numbered lines (1a through 17) + 5 identity fields.
+   */
   assert(
-    expectedIds.length === 30,
-    `The pinned Form 940 ownership table should describe 30 lines but describes ` +
+    expectedIds.length === 35,
+    `The pinned Form 940 ownership table should describe 35 lines but describes ` +
       `${expectedIds.length}. Form 940 has 30 numbered lines on the printed page ` +
-      "(1a through 17). If the form gained or lost a line, update the table " +
-      "deliberately rather than changing this count to match.",
+      "(1a through 17) plus the five identity fields in the entity area. If the " +
+      "form gained or lost a line, update the table deliberately rather than " +
+      "changing this count to match.",
   );
 
   for (const lineId of expectedIds) {

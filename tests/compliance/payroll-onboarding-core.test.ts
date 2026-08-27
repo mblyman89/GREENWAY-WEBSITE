@@ -154,6 +154,9 @@ function goodCandidate(over: Partial<OnboardingCandidate> = {}): OnboardingCandi
     i9: goodI9(),
     pay: goodPay(),
     newHireReportedYmd: HIRE,
+    // Greenway's real code, off his filed 5208B. A good fixture carries a good
+    // code so the happy path is genuinely clean rather than clean-with-a-warning.
+    socCode: "41-2031",
     ...over,
   };
 }

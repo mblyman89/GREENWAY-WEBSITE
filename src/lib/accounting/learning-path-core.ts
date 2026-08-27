@@ -328,6 +328,10 @@ export const CURRICULUM: readonly CurriculumUnit[] = [
       ["onboarding", "w4RequiredFieldPaths"],
       ["onboarding", "validatePay"],
       ["onboarding", "payRequiredFieldPaths"],
+      // books-65. Sits after validatePay because it answers the same question
+      // for a different reader: what does this person DO. validatePay decides
+      // the §280E treatment; this one decides what Washington is told.
+      ["onboarding", "socCodeProblems"],
       ["onboarding", "findOnboardingStep"],
       ["onboarding", "evaluateOnboarding"],
       ["onboarding", "buildChecklistView"],

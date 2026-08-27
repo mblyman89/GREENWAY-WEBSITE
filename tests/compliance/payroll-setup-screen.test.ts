@@ -125,6 +125,7 @@ const COMPLETE_CANDIDATE: OnboardingCandidate = {
   i9: COMPLETE_I9,
   pay: COMPLETE_PAY,
   newHireReportedYmd: HIRE,
+  socCode: "41-2031",
 };
 
 const FORM_PATH = path.join(
@@ -243,6 +244,7 @@ describe("2) a missing field is highlighted, and the highlight points somewhere 
         i9: null,
         pay: null,
         newHireReportedYmd: null,
+        socCode: "",
       },
       mustHighlight: "ssn",
       exactlyOne: false,

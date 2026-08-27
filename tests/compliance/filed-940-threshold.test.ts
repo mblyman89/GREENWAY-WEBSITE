@@ -114,11 +114,38 @@ describe("books-60: the $500 threshold is read off the form, not remembered", ()
   });
 });
 
-describe("books-60: boxes 16a-16d are untaught on purpose", () => {
+describe("books-65: boxes 16a-16d are TAUGHT, and every one says it is blank", () => {
+  /*
+   * --------------------------------------------------------------------
+   * THIS BLOCK WAS INVERTED, AND THE OLD VERSION EARNED ITS KEEP FIRST
+   * --------------------------------------------------------------------
+   * books-60 asserted the opposite: that none of these four boxes had a
+   * lesson, because the measurement above proves Greenway's line 12 was
+   * 420.00 and Part 5 is only filled out above $500. Teaching Michael how to
+   * apportion FUTA across four quarters he does not file would have been
+   * teaching him a box he never touches.
+   *
+   * books-65 wrote lessons for all four anyway, because he asked for exactly
+   * that:
+   *
+   *   "you can write me a genuine, non verbatim plain english explanation for
+   *    the boxes that are trivial or the boxes that dont apply to me"
+   *
+   * The old gate FIRED when that happened, and it was right to. The first
+   * draft of those four lessons explained the arithmetic beautifully and never
+   * once mentioned that Michael leaves all four blank - which is the single
+   * most important thing about them for him. The lessons were fixed, not the
+   * gate's opinion of them.
+   *
+   * So the assertion is inverted rather than deleted, and it now guards the
+   * thing that actually matters: a Part 5 lesson MAY exist, but it must state
+   * the threshold and it must cite the authority for it. A future lesson that
+   * quietly drops that sentence fails here.
+   */
   const coverage = sheetCoverage(sheetGroups(teachingBoxes("form_940"), FORM_940_LESSONS));
 
-  it("the four boxes exist on the specimen, so this is a real omission", () => {
-    // Rule 66d / rule 40: if the boxes were not on the form at all, the
+  it("the four boxes exist on the specimen, so this is a real check", () => {
+    // Rule 66d / rule 40: if the boxes were not on the form at all, every
     // assertion below would be vacuously true and prove nothing.
     for (const box of PART5_BOXES) {
       expect(
@@ -128,23 +155,50 @@ describe("books-60: boxes 16a-16d are untaught on purpose", () => {
     }
   });
 
-  it("none of the four has a lesson", () => {
+  it("all four now have a lesson, because Michael asked for the ones that do not apply", () => {
     for (const box of PART5_BOXES) {
-      const lesson = FORM_940_LESSONS.find((l) => l.box === box);
       expect(
-        lesson,
-        `Form 940 box ${box} now has a lesson ("${lesson?.headline ?? ""}"). That may be right, ` +
-          `but it contradicts a measurement: his filed 2025 return shows line 12 of $420.00 and ` +
-          `Part 5 says to report by quarter "only if line 12 is more than $500". If his payroll ` +
-          `has grown past that, update this test and say so. If it has not, the lesson teaches ` +
-          `him a box he does not file, which is what he asked us not to do.`,
-      ).toBeUndefined();
+        FORM_940_LESSONS.find((l) => l.box === box),
+        `Form 940 box ${box} lost its lesson, so it renders with the untaught marker again`,
+      ).toBeDefined();
     }
   });
 
-  it("all four are still reported as untaught by the coverage engine", () => {
+  it("every one of the four SAYS Greenway leaves it blank, and why", () => {
     for (const box of PART5_BOXES) {
-      expect(coverage.untaughtBoxes).toContain(box);
+      const lesson = FORM_940_LESSONS.find((l) => l.box === box)!;
+      const prose = [lesson.headline, lesson.plainEnglish].join(" ");
+      expect(
+        prose,
+        `Form 940 box ${box} explains the arithmetic without saying Greenway leaves it ` +
+          `blank. Line 12 was 420.00 and Part 5 starts above 500.00 - a lesson that omits ` +
+          `that teaches him a box he does not file.`,
+      ).toMatch(/blank/i);
+      expect(
+        prose,
+        `Form 940 box ${box} does not name the $500 threshold, so a reader cannot tell ` +
+          `WHEN the box would start applying to him.`,
+      ).toContain("500");
+    }
+  });
+
+  it("every one of the four cites the threshold authority, not just our prose", () => {
+    // Rule 24: our own sentence is not authority. The IRS's own Part 5 heading
+    // has to travel with the lesson, or the claim above is just our opinion.
+    for (const box of PART5_BOXES) {
+      const lesson = FORM_940_LESSONS.find((l) => l.box === box)!;
+      const cited = lesson.quotes.map((q) => q.quote).join("\n");
+      expect(
+        cited,
+        `Form 940 box ${box} claims the $500 threshold in our words but cites no authority ` +
+          `for it.`,
+      ).toContain("Fill out Part 5 only if line 12 is more than $500.");
+    }
+  });
+
+  it("the coverage engine reports none of the four as untaught any more", () => {
+    for (const box of PART5_BOXES) {
+      expect(coverage.untaughtBoxes).not.toContain(box);
     }
   });
 });

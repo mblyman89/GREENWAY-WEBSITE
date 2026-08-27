@@ -149,17 +149,17 @@ The probe: for each `*-mentor.ts`, list importers under `src/` excluding the
 module itself and its own `-gates` sibling. Rule 66d applies — existence is
 asserted before absence of importers is called "unreachable work".
 
-### C1. Six mentor modules that no screen renders — 83 lessons, 2,130 lines
+### C1. Six mentor modules that no screen renders — 84 lessons, 2,162 lines
 
 | Module | Lessons | Lines | Importers under `src/` |
 |--------|---------|-------|------------------------|
-| `payroll/payroll-onboarding-mentor.ts` | 33 | 746 | **0** |
+| `payroll/payroll-onboarding-mentor.ts` | 34 | 778 | **0** |
 | `accounting/tax-penalty-mentor.ts` | 20 | 540 | **0** |
 | `accounting/interest-mentor.ts` | 11 | 287 | **0** |
 | `accounting/period-close-mentor.ts` | 9 | 234 | **0** |
 | `accounting/s-corporation-year-mentor.ts` | 5 | 153 | **0** |
 | `reports/payroll-reconciliation-mentor.ts` | 5 | 170 | **0** |
-| **Total** | **83** | **2,130** | — |
+| **Total** | **84** | **2,162** | — |
 
 **WHY FOUR OF THESE LINE COUNTS FELL DURING SLICE C, AND THE TOTAL WITH THEM.**
 When this table was first written the total was **2,345**. Four of the six
@@ -185,10 +185,21 @@ ship untaught, so `interest-mentor.ts` went from 10 lessons to 11 and from 257
 lines to 287, and the totals above moved with it. The lesson was then placed in
 the curriculum next to the §6699 penalty it sizes, so nothing became reachable-
 in-principle-only: every one of the lessons in this table appears in a unit on
-`/admin/books/learn`, and the count is still **83** after placement as it was
+`/admin/books/learn`, and the count is still **84** after placement as it was
 before it. Thirty lines arriving with exactly one lesson is the pairing worth
 noticing — lines rising while the lesson count stayed flat would have meant
 thirty lines of something that is not teaching had entered a teaching module.
+
+**books-65 repeated the pattern a third time, 83 → 84.** Michael asked for the
+ESD work code (“they require a work code for each employee … the code my
+employees use is, 41-2031”). Deciding whether a code is acceptable is a new
+exported function, `socCodeProblems`, so rule 26 required a lesson and
+`payroll-onboarding-mentor.ts` went from 33 lessons to 34 and from 746 lines to
+778. It was placed in unit 3, hiring, beside `validatePay` — the two answer the
+same question, “what does this person do”, for two different readers: §280E and
+Washington. The placement was not optional politeness; the curriculum gate
+failed the build until it happened, naming `onboarding:socCodeProblems` as a
+lesson nothing teaches.
 
 Each is reachable from its own test file and from `owner-report-books-38`, which
 is precisely the shape rule 50 warns about: **dead code wearing a green check.**
@@ -876,7 +887,7 @@ those totals compared line by line against the four Form 941s he actually filed.
 | The W-3 taught box by box **(books-55)** | `form-box-lessons-w3.ts` | `form-box-lessons-w3.test.ts` (17) |
 | The form as one big sheet **(books-58)** | `form-sheet-core.ts`, `FormSheet.tsx`, `form-w2/sheet/page.tsx` | `form-sheet-core.test.ts` (85) |
 | The 941 as one big sheet **(books-60)** | `form-941/sheet/page.tsx`, one link added to `form-941/page.tsx` | `form-sheet-core.test.ts` (85), `owner-report-books-60.test.ts` (25) |
-| The filed 940 as an authority **(books-60)** | `docs/authorities/federal/filed-form-940-2025-greenway.txt`, `scripts/mirror-filed-940.py` | `filed-940-threshold.test.ts` (10) |
+| The filed 940 as an authority **(books-60)** | `docs/authorities/federal/filed-form-940-2025-greenway.txt`, `scripts/mirror-filed-940.py` | `filed-940-threshold.test.ts` (12) |
 | The actual printed form **(books-61)** | `form-facsimile-core.ts`, `FormFacsimile.tsx`, `FormPrintBar.tsx`, `scripts/derive-form-geometry.py`, `scripts/derive-form-box-map.py` | `form-facsimile-core.test.ts` (20) |
 
 **books-58 grew the screen row above by 29 lines, and that is the ENTIRE change
@@ -1014,6 +1025,89 @@ Two more were caught by the gates during the slice: my own new "Show everybody
 to see the W-3" link was hardcoded `?year=` - exactly the class of bug the slice
 exists to close - and `tsc` refused an `/s` regex flag that vitest had happily
 accepted, which is a green test that fails the build.
+
+### books-65: the work code, the data with nowhere to land, and the cent that was never a rounding tie
+
+Michael's order was explicit and was followed in it: finish the Washington forms,
+explain D-10 and what he must obtain, find out why company data never reached the
+forms, then state the plan for clickability thoroughness.
+
+**The clickability answer was to make the question disappear.** He asked for a
+fallback panel saying "what this box is and why it doesn't need a lesson". Before
+building it, the 23 untaught boxes were measured and each was checked for real
+authority on disk. All 23 had it — so not one of them was a box that did not need
+a lesson; they were boxes nobody had written. Writing them removes the marker's
+cause instead of dressing its symptom, and the standing untaught total across
+every form is now **0**. Asking the question before building the feature is what
+made the feature unnecessary.
+
+**Why the Washington sheet is not a facsimile, measured rather than asserted:**
+`pypdf` reports `/Fields: []` on both ESD PDFs — zero widget annotations between
+them, against 116 on the 941 — so there is no agency answer to where a figure
+belongs. And the published blank 5208A is the **2011 draft**, numbering the wage
+lines 12/13/14 against a $37,300 base where his filed returns number them 13/14/16
+against $78,200. The page says this out loud, so the absence reads as a decision.
+
+Three defects, in `docs/DEFECTS.md`:
+
+- **D-15**, the one he reported: his company information was stored correctly,
+  read correctly, and printed nowhere. Identity is joined onto the specimen by
+  `identity[box.box]`, and `teachingBoxes` emitted **no entity boxes at all** —
+  five values, zero homes, on every form. Nothing threw and nothing was null;
+  each half was correct in isolation and the defect lived in the space between
+  them. The 941 went 27 → 32 boxes and the 940 30 → 35, both measured against his
+  filed returns with `pdftotext` first. `assertEveryIdentityValueHasABox` now
+  fails if any of the five loses its home again.
+- **D-16**, and it is the lesson of the slice: after 11,616 green tests, a clean
+  type check, the self-tests, the verbatim verifier and the linter, the ONE
+  screenshot rule 130(c) requires showed the new ESD work-code box displaying
+  **the labor role's error message**. `problemFor(path)` returned
+  `row.problems[0]` — the first complaint on the STEP, whichever field owned it.
+  For eight slices `labor_role` raised exactly one problem, so index 0 was right
+  **by accident**; this slice gave it a second and the accident ended. Every gate
+  was blind because every gate was looking at a correct thing: right problem,
+  right field, faithful copy — only the JOIN was wrong, in a component function
+  no test called. `ChecklistRow` now carries `fieldProblems`, pairing each message
+  with its own field and severity. Mutation-proven.
+- **D-10 was re-measured and the previous entry was WRONG.** Answering his
+  question meant re-doing the arithmetic rather than re-reading the note. The
+  claim that "Q2 is consistent with either reading" is false: Q2 discriminates and
+  refutes the combined-0.40% reading the entry had proposed. Reading A fits Q2 and
+  misses Q1; reading B fits Q1 and misses Q2 — so the rounding rule was never the
+  variable, and that wrong question had been asked for two slices. One rule fits
+  all four figures across both quarters: **ESD drops the cents from taxable wages
+  before applying the rate.** At $61,531.21 the UI figure is 227.665477 and rounds
+  UP; drop the 21 cents of wages and it is 227.6647, which rounds DOWN to the
+  227.66 ESD charged. The 0.5477 was never a tie — it was wages already discarded.
+  **Deliberately not implemented** (rule 62d): a rule fitting four data points is
+  a pattern, not an authority, and no ESD publication stating it was found. Pinned
+  by a test that walks all three candidate readings against both quarters, so the
+  next reader inherits a measurement instead of a paragraph.
+
+**D-14 was closed by the owner**, not by the code: *"sage is wrong, i need to
+update the formula … we will build a compliance cron bot that will poll the
+agencies for tax updates and such. that way our books never lie to me."* The
+engine was already right; what changed is that it is no longer an open question.
+The cron bot is the correct generalisation — D-14 is not about one rate, it is
+about a rate going stale while nothing noticed for two quarters — and it is
+recorded as intent, **not built**.
+
+**On the SOC code, the system declined to invent an obligation.** Michael said ESD
+"require a work code for each employee". RCW 50.12.070(2)(a)(i) says the standard
+occupational classification **or job title**, and the EAMS spec says the column
+"can be only 6 digits or blank" — so blank WARNS and malformed BLOCKS, and
+`41-2031` is never auto-defaulted because that is a fact about his roster. Wiring
+the write also exposed a live bug: `4-12031` strips to six digits and passed
+validation, but the 0207 CHECK would have rejected it — screen says saved,
+database throws. `socCodeCanonical` re-seats the hyphen so the stored value
+satisfies the constraint by construction.
+
+**Two count-pins were widened rather than bumped** (rule 129d): an exact
+`toBe(77)` on the engine suite and a `toBe(70)` on the naive test counter both
+had to be hand-edited on every slice touching that file. They now assert the
+risks that actually matter — coverage may never fall below the 72 promised in the
+books-41 report, and the counter must still see the loop-generated tests a naive
+regex cannot. Verified both ways: deleting a describe block still fails the gate.
 
 ### books-62: Schedule B, and three defects a green test suite could not see
 

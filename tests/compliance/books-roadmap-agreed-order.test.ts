@@ -115,8 +115,12 @@ const UNREACHABLE_TEACHING = [
   {
     file: "src/lib/payroll/payroll-onboarding-mentor.ts",
     lessons: PAYROLL_ONBOARDING_LESSONS,
-    printedLessons: 33,
-    printedLines: 746,
+    // books-65: 33 -> 34 lessons, 746 -> 778 lines. The socCodeProblems lesson,
+    // added because the ESD work code needed an engine and no engine ships
+    // without one. These mirror the figures printed in docs/BOOKS_ROADMAP.md,
+    // which the assertions below re-derive from the module itself.
+    printedLessons: 34,
+    printedLines: 778,
     importsNodeFs: false,
   },
   {
@@ -351,7 +355,11 @@ describe("books-43: the slice-C recon figures are real", () => {
     // shipping formatSection6699MaximumUsd untaught. The figure is spelled out
     // here as well as derived above so that a lesson going MISSING can never be
     // absorbed silently by both sides of a comparison falling together.
-    expect(lessons).toBe(83);
+    //
+    // BOOKS-65: 83 -> 84, and it is the books-50 pattern exactly. The ESD work
+    // code needed an engine (socCodeProblems), rule 26 forbids shipping one
+    // untaught, so one lesson arrived with it.
+    expect(lessons).toBe(84);
 
     /*
      * BOOKS-44: 2,345 became 2,100 and the LESSON COUNT DID NOT MOVE.
@@ -368,8 +376,13 @@ describe("books-43: the slice-C recon figures are real", () => {
      * arrived is teaching. Lines rising while the lesson count stayed FLAT would
      * have meant thirty lines of something that is not a lesson had been added to
      * a teaching module - and that is the case this pair exists to catch.
+     *
+     * BOOKS-65: 2,130 BECAME 2,162, AND 83 BECAME 84. The same informative
+     * pairing a third time. Thirty-two lines arrived in the onboarding mentor
+     * and they carried exactly one lesson between them, so what arrived is
+     * teaching rather than machinery that slipped into a teaching module.
      */
-    expect(lines).toBe(2_130);
+    expect(lines).toBe(2_162);
 
     /*
      * ═══ books-46 — THIS PAIR OF ASSERTIONS WAS DECORATIVE, AND THE MUTATION

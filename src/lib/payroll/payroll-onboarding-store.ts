@@ -58,6 +58,8 @@ import type { W4Record, PayFrequency } from "@/lib/payroll/payroll-w4-core";
 // than re-typing the eight strings means a frequency added to the core is
 // understood by the read-back below without a second edit nobody remembers.
 import { ALL_PAY_FREQUENCIES } from "@/lib/payroll/payroll-w4-core";
+// books-65. The one place that decides how a work code is spelled on disk.
+import { socCodeCanonical } from "@/lib/payroll/esd-eams-csv-core";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -133,6 +135,13 @@ export type EmployeeSetupRow = {
   hasW4: boolean;
   hasI9: boolean;
   hasPay: boolean;
+  /**
+   * The ESD work code on file, or "" when there is none. books-65.
+   *
+   * Empty string rather than null so the roster and the form speak one
+   * vocabulary for absent; `OnboardingCandidate.socCode` is the same shape.
+   */
+  socCode: string;
 };
 
 /**
@@ -153,7 +162,7 @@ export async function listEmployeeSetup(): Promise<{
 
   const { data: emps, error } = await admin
     .from("employees")
-    .select("id, full_name, ssn_last_four")
+    .select("id, full_name, ssn_last_four, soc_code")
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -161,7 +170,13 @@ export async function listEmployeeSetup(): Promise<{
     return { rows: [], migrationApplied: false };
   }
 
-  const employees = (emps as { id: string; full_name: string; ssn_last_four: string | null }[]) ?? [];
+  const employees =
+    (emps as {
+      id: string;
+      full_name: string;
+      ssn_last_four: string | null;
+      soc_code: string | null;
+    }[]) ?? [];
   if (employees.length === 0) return { rows: [], migrationApplied: true };
 
   const ids = employees.map((e) => e.id);
@@ -181,6 +196,7 @@ export async function listEmployeeSetup(): Promise<{
       employeeId: e.id,
       fullName: e.full_name,
       ssnLastFour: e.ssn_last_four ?? null,
+      socCode: (e.soc_code ?? "").trim(),
       hasW4: w4Set.has(e.id),
       hasI9: i9Set.has(e.id),
       hasPay: paySet.has(e.id),
@@ -418,14 +434,37 @@ export async function saveEmployeePayrollSetup(input: {
   if (payInsert.error) return writeFailed(payInsert.error.message, evaluation);
   rowsWritten += (payInsert.data ?? []).length;
 
-  if (normalizedSsn) {
-    const ssnUpdate = await admin
+  /*
+   * The two columns that live on `employees` rather than on one of the three
+   * forms: the full SSN, and the ESD work code (books-65).
+   *
+   * ONE UPDATE, NOT TWO. An earlier shape did the SSN here and the SOC code in
+   * a second statement, and that is two chances to half-succeed - a saved code
+   * against an unsaved number, with `rowsWritten` counting both. Building the
+   * patch object first means the row is either updated or it is not.
+   *
+   * A field the caller did not supply is OMITTED from the patch rather than
+   * written as null. Sending null would erase a code that is already on file
+   * because this particular save happened not to mention it, which is how a
+   * quarterly wage report quietly loses a column between one save and the next.
+   */
+  const employeePatch: Record<string, string> = {};
+  if (normalizedSsn) employeePatch.ssn_full = normalizedSsn;
+
+  // Canonical spelling, chosen to satisfy the CHECK in migration 0207 by
+  // construction. `socCodeProblems` has already blocked anything malformed, so
+  // a non-empty candidate value canonicalises rather than vanishing.
+  const canonicalSoc = socCodeCanonical(input.candidate.socCode);
+  if (canonicalSoc !== "") employeePatch.soc_code = canonicalSoc;
+
+  if (Object.keys(employeePatch).length > 0) {
+    const employeeUpdate = await admin
       .from("employees")
-      .update({ ssn_full: normalizedSsn })
+      .update(employeePatch)
       .eq("id", employeeId)
       .select("id");
-    if (ssnUpdate.error) return writeFailed(ssnUpdate.error.message, evaluation);
-    rowsWritten += (ssnUpdate.data ?? []).length;
+    if (employeeUpdate.error) return writeFailed(employeeUpdate.error.message, evaluation);
+    rowsWritten += (employeeUpdate.data ?? []).length;
   }
 
   // (5) Standing rule 51: count the write. If the database accepted the

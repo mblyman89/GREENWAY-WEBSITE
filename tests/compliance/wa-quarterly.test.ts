@@ -275,6 +275,69 @@ describe("wa-quarterly: per-fund rounding is the difference between right and wr
     // read RCW 50.24.010 and RCW 50.24.014(2)(b) first.
   });
 
+  /*
+   * D-10, as re-measured in books-65.
+   *
+   * The risk without this: the register said Q2 "cannot decide" between two
+   * readings of ESD's arithmetic. It can, and it refutes both. Pinning the four
+   * filed figures against all three candidate rules means the next person to
+   * open D-10 inherits a measurement instead of a paragraph they must re-derive
+   * - which is exactly how the wrong claim survived two slices.
+   *
+   * Nothing here changes the engine. It records what the evidence says, and it
+   * fails if any of the filed figures or rates is ever edited.
+   */
+  it("D-10: neither rounding rule fits both quarters, but dropping the wage cents fits all four", () => {
+    const Q1_GROSS = 6_153_121;
+    const Q1_UI = 22_766;
+    const Q1_EAF = 1_846;
+
+    // Existence before absence (rule 66c): Q2's figures come from the oracle,
+    // so if the oracle is ever renamed this test fails loudly rather than
+    // comparing undefined with undefined.
+    const q2Ui = filedCents("esd-ui");
+    const q2Eaf = filedCents("esd-eaf");
+    expect(q2Ui).toBe(25_502);
+    expect(q2Eaf).toBe(2_068);
+
+    const perFund = (wages: number) => ({
+      ui: statutoryRoundCents(exactMilliPct(wages, 370)),
+      eaf: statutoryRoundCents(exactMilliPct(wages, 30)),
+    });
+
+    // READING A - round each fund on exact cents. This is what the engine does.
+    // It reproduces Q2 and MISSES Q1 by one cent on the UI line.
+    expect(perFund(Q2_2026_GROSS_WAGES_CENTS)).toEqual({ ui: q2Ui, eaf: q2Eaf });
+    expect(perFund(Q1_GROSS).eaf).toBe(Q1_EAF);
+    expect(perFund(Q1_GROSS).ui).toBe(Q1_UI + 1);
+
+    // READING B - the combined 0.40%, rounded once. D-10 originally offered
+    // this as the explanation because it fits Q1. It does NOT fit Q2, which is
+    // the correction books-65 made.
+    expect(statutoryRoundCents(exactMilliPct(Q1_GROSS, 400))).toBe(Q1_UI + Q1_EAF);
+    expect(statutoryRoundCents(exactMilliPct(Q2_2026_GROSS_WAGES_CENTS, 400))).not.toBe(
+      q2Ui + q2Eaf,
+    );
+
+    // READING C - drop the CENTS from taxable wages, then apply the rate per
+    // fund. The only rule that reproduces all four filed figures.
+    const wholeDollarsAsCents = (wages: number) => Math.floor(wages / 100) * 100;
+    const q1c = perFund(wholeDollarsAsCents(Q1_GROSS));
+    const q2c = perFund(wholeDollarsAsCents(Q2_2026_GROSS_WAGES_CENTS));
+    expect(q1c).toEqual({ ui: Q1_UI, eaf: Q1_EAF });
+    expect(q2c).toEqual({ ui: q2Ui, eaf: q2Eaf });
+
+    // AND IT IS DELIBERATELY NOT IMPLEMENTED. A rule that fits four numbers is
+    // a pattern, not an authority (standing rule 62d), and no ESD publication
+    // stating it has been found. The engine still computes on exact cents:
+    // this asserts that the deliberate difference is still exactly one cent on
+    // Q1 and zero on Q2, so if anybody ever "fixes" it quietly, this fails.
+    const engineQ1 = perFund(Q1_GROSS);
+    expect(engineQ1.ui + engineQ1.eaf - (Q1_UI + Q1_EAF)).toBe(1);
+    const engineQ2 = perFund(Q2_2026_GROSS_WAGES_CENTS);
+    expect(engineQ2.ui + engineQ2.eaf - (q2Ui + q2Eaf)).toBe(0);
+  });
+
   it("half a cent rounds UP, and below half rounds DOWN, as the statute words it", () => {
     expect(statutoryRoundCents(100.5)).toBe(101);
     expect(statutoryRoundCents(100.49)).toBe(100);

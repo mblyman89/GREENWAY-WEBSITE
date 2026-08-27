@@ -58,6 +58,10 @@ import { WA_QUARTERLY_LESSONS } from "../../src/lib/payroll/form-box-lessons-wa"
 import { FORM_941_LESSONS } from "../../src/lib/payroll/form-box-lessons-941";
 import { FORM_W2_BOX_LESSONS } from "../../src/lib/payroll/form-box-lessons-w2";
 import { FORM_941_CONFIRMATION_LESSONS } from "../../src/lib/payroll/form-941-confirmation-lessons";
+import {
+  FORM_ID_941_SB,
+  scheduleBTeachingBoxes,
+} from "../../src/lib/payroll/form-941-schedule-b-boxes";
 
 const ROOT = process.cwd();
 const REPORT_PATH = join(ROOT, "docs", "MICHAEL-books-54-the-940-is-finished.md");
@@ -102,7 +106,35 @@ const LABELS_ON_THE_PRINTED_940: readonly string[] = [
   "16c",
   "16d",
   "17",
+  /*
+   * books-65: the five identity fields, added for the same reason and by the
+   * same measurement as the 941's. Verified with
+   *   pdftotext -layout -f 1 -l 1 2025_FORM_940_-_SAGE.pdf
+   * on Michael's own filed return, which prints "Employer identification
+   * number (EIN) 4 6 4 2 1 7 0 1 6", "Name (not your trade name)",
+   * "Trade name (if any)" and "Address". They were absent from this list, not
+   * from the paper - which is D-15, the reason his company details never
+   * reached the forms.
+   */
+  "ein",
+  "name",
+  "tradeName",
+  "address",
+  "cityStateZip",
 ];
+
+/** The identity fields, so the letter's "30 numbered lines" stays checkable. */
+const IDENTITY_FIELDS_ON_THE_940: readonly string[] = [
+  "ein",
+  "name",
+  "tradeName",
+  "address",
+  "cityStateZip",
+];
+
+const NUMBERED_LINES_ON_THE_940 = LABELS_ON_THE_PRINTED_940.filter(
+  (l) => !IDENTITY_FIELDS_ON_THE_940.includes(l),
+);
 
 describe("the books-54 report exists and is the document it claims to be", () => {
   it("is a real file with substantial content", () => {
@@ -118,10 +150,23 @@ describe("the books-54 report exists and is the document it claims to be", () =>
 
 describe("every figure in the report is re-derived, not remembered", () => {
   it("agrees with the printed form on how many lines Form 940 has", () => {
-    expect(LABELS_ON_THE_PRINTED_940).toHaveLength(30);
-    expect(new Set(LABELS_ON_THE_PRINTED_940).size).toBe(30);
-    // The claim the whole report rests on.
-    expect(teachingBoxes("form_940").length).toBe(30);
+    /*
+     * books-65: 30 NUMBERED lines, plus five identity fields, is 35.
+     *
+     * The books-54 letter's "all 30" was about the numbered lines and is still
+     * exactly true of them, so it is asserted against the numbered subset. The
+     * letter is not edited.
+     */
+    expect(NUMBERED_LINES_ON_THE_940).toHaveLength(30);
+    expect(new Set(NUMBERED_LINES_ON_THE_940).size).toBe(30);
+    expect(LABELS_ON_THE_PRINTED_940).toHaveLength(35);
+    expect(new Set(LABELS_ON_THE_PRINTED_940).size).toBe(35);
+    // The claim the whole report rests on, plus what the engine emits today.
+    expect(teachingBoxes("form_940").length).toBe(35);
+    const emitted940 = teachingBoxes("form_940").map((b) => b.box);
+    for (const line of NUMBERED_LINES_ON_THE_940) {
+      expect(emitted940, `numbered line ${line} is no longer emitted`).toContain(line);
+    }
   });
 
   it("teaches every line on the printed form, and invents none", () => {
@@ -145,7 +190,19 @@ describe("every figure in the report is re-derived, not remembered", () => {
         `Form 940 line ${label} is on the paper but has no ownership classification`,
       ).toBe(true);
     }
-    expect(Object.keys(FORM_940_WHOSE)).toHaveLength(30);
+    /*
+     * books-65: 30 -> 35, the five identity fields, matching FORM_941_WHOSE
+     * which took the same step in books-61. The letter's "30" was about the
+     * numbered lines and those are still all classified; the assertion below
+     * proves the numbered subset is intact rather than merely counting to 35.
+     */
+    expect(Object.keys(FORM_940_WHOSE)).toHaveLength(35);
+    for (const line of NUMBERED_LINES_ON_THE_940) {
+      expect(
+        Object.prototype.hasOwnProperty.call(FORM_940_WHOSE, line),
+        `numbered line ${line} lost its ownership classification`,
+      ).toBe(true);
+    }
   });
 
   it("states the 940 line count the engine actually reports", () => {
@@ -160,14 +217,35 @@ describe("every figure in the report is re-derived, not remembered", () => {
     const claimed = /\| Full written lessons \| 8 \| \*\*(\d+)\*\* \|/.exec(REPORT);
     expect(claimed, "the report must state a lesson count in its table").not.toBeNull();
     expect(Number(claimed![1])).toBeLessThanOrEqual(lessons);
-    expect(lessons).toBe(20);
+    /*
+     * books-65: 20 -> 35. Fifteen lessons were written for the Form 940 boxes
+     * that still rendered with the untaught marker, at Michael's request that
+     * every box open with an explanation. The ratchet above is what lets this
+     * dated letter survive the improvement; this line records where it landed.
+     */
+    expect(lessons).toBe(35);
   });
 
   it("states an authority count the registry actually holds", () => {
     const claimed = /\| Word-for-word IRS quotes behind them \| 21 \| \*\*(\d+)\*\* \|/.exec(REPORT);
     expect(claimed, "the report must state an authority count").not.toBeNull();
     expect(Number(claimed![1])).toBeLessThanOrEqual(FORM_940_OWN_AUTHORITIES.length);
-    expect(FORM_940_OWN_AUTHORITIES.length).toBe(34);
+    /*
+     * books-65: 34 -> 43.
+     *
+     * The books-54 letter said 34 and the letter is not being edited - it was
+     * true when it was written and a dated report that changes retroactively is
+     * worthless. What changed is the registry, because books-65 wrote the nine
+     * authorities behind the fifteen Form 940 boxes that still carried the
+     * untaught marker on Michael's screen. The ratchet above already permits
+     * the letter's figure to be lower than today's; this line records today's.
+     *
+     * Then 43 -> 44, still within books-65: i940-part-5-only-if-over-500 was
+     * added after `filed-940-threshold.test.ts` rejected the first draft of the
+     * 16a-16d lessons for explaining the arithmetic without ever saying that
+     * Greenway leaves all four blank.
+     */
+    expect(FORM_940_OWN_AUTHORITIES.length).toBe(44);
   });
 
   /**
@@ -344,7 +422,12 @@ describe("the report's cross-form claims are true", () => {
    * renumbering.
    */
   it("was wrong that the W-2 was complete: it was missing six lettered boxes", () => {
-    expect(teachingBoxes("form_941").length).toBe(27);
+    /*
+     * books-65: 27 -> 32, the five identity fields again. The letter's sentence
+     * below still says 27 and is left alone; what is pinned here is today's
+     * engine, and that the 27 the letter named are all still emitted.
+     */
+    expect(teachingBoxes("form_941").length).toBe(32);
 
     // The sentence the report actually printed, still on the page.
     expect(REPORT).toContain("The 941 (27 lines) and W-2 (20 boxes) were already complete");
@@ -499,6 +582,29 @@ describe("the report's cross-form claims are true", () => {
    * whole repository rather than against a hand-picked list.
    */
   it("now really does resolve every cross-reference, across all five sets", () => {
+    /*
+     * books-65: this call gained its second argument.
+     *
+     * Schedule B's specimen is GENERATED - 93 day cells, four totals and three
+     * header boxes - rather than declared as a literal, so `assertEveryTieResolves`
+     * cannot see its boxes unless it is handed them. Until this slice no lesson
+     * outside Schedule B pointed into Schedule B, so the omission was invisible.
+     *
+     * 941 line 12 now ties to the Schedule B quarter total, because the IRS
+     * checks those two against each other to the cent and that is exactly the
+     * kind of cross-reference Michael wants surfaced. Without the map below,
+     * that legitimate tie reads as a tie into a form that does not exist.
+     *
+     * The quarter is arbitrary: the box IDS of a Schedule B do not vary by
+     * quarter, only the dates printed beside them do.
+     */
+    const generated: Readonly<Record<string, readonly string[]>> = {
+      [FORM_ID_941_SB]: scheduleBTeachingBoxes({ year: 2028, quarter: 1 }).map((b) => b.box),
+    };
+    // Rule 66d: prove the map is not empty, or passing it proves nothing.
+    expect(generated[FORM_ID_941_SB]!.length).toBeGreaterThan(90);
+    expect(generated[FORM_ID_941_SB]).toContain("quarterTotal");
+
     for (const set of [
       FORM_940_LESSONS,
       FORM_941_LESSONS,
@@ -506,7 +612,7 @@ describe("the report's cross-form claims are true", () => {
       WA_QUARTERLY_LESSONS,
       FORM_941_CONFIRMATION_LESSONS,
     ]) {
-      expect(() => assertEveryTieResolves(set)).not.toThrow();
+      expect(() => assertEveryTieResolves(set, generated)).not.toThrow();
     }
   });
 });

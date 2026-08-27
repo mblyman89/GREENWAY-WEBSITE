@@ -282,6 +282,38 @@ export function eamsSocCode(socCode: string): string {
   return socCode.replace(/-/g, "");
 }
 
+/**
+ * The SAME six digits, printed the way BLS prints them and the way Michael
+ * writes them: `41-2031`.  (books-65)
+ *
+ * WHY THIS EXISTS SEPARATELY FROM `eamsSocCode`, WHICH LOOKS LIKE ITS TWIN
+ *
+ * They serve opposite consumers and must not be merged. EAMS wants the bare
+ * digits with no punctuation; a person reading a screen, and the `soc_code`
+ * column's CHECK constraint in migration 0207, want the printed form. Storing
+ * whatever was typed satisfies neither reliably, and this is not hypothetical:
+ *
+ *   `4-12031` strips to `412031`, which is six digits, so `eamsSocCode` is
+ *   perfectly happy with it - and the database CHECK `^[0-9]{2}-?[0-9]{4}$`
+ *   REFUSES it, because the hyphen is in the wrong place.
+ *
+ * A value that passes the application check and fails the column check is the
+ * worst kind of bug: the screen says saved, the write throws, and the two
+ * disagree about a record that is now in neither state. So input is normalised
+ * to one canonical spelling on the way in, and that spelling is chosen to
+ * satisfy the constraint by construction rather than by luck.
+ *
+ * Returns "" for blank, which is a lawful value here - see the docblock above.
+ * Returns "" for anything that is not six digits, so a caller cannot smuggle a
+ * malformed code past the column check by routing it through this function;
+ * shape is validated BEFORE this point, by `socCodeProblems`.
+ */
+export function socCodeCanonical(socCode: string): string {
+  const digits = eamsSocCode(socCode).trim();
+  if (!/^\d{6}$/.test(digits)) return "";
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * §4  VALIDATION — REFUSALS, NEVER COERCIONS
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -580,6 +612,21 @@ export function __runEsdEamsCsvTests(): void {
   eq(eamsSocCode("41-2031"), "412031", "the SOC hyphen is a display convention");
   eq(eamsSocCode("412031"), "412031", "an unhyphenated code is unchanged");
   eq(eamsSocCode(""), "", "blank is expressly permitted");
+
+  /* books-65: the storage spelling, which is the EAMS spelling inverted. */
+  eq(socCodeCanonical("412031"), "41-2031", "bare digits gain the printed hyphen");
+  eq(socCodeCanonical("41-2031"), "41-2031", "an already-printed code is unchanged");
+  eq(socCodeCanonical("  41-2031  "), "41-2031", "surrounding whitespace is not part of a code");
+  eq(socCodeCanonical(""), "", "blank stays blank, because blank is lawful");
+  // THE CASE THAT MOTIVATED THE FUNCTION. Six digits after stripping, so
+  // `eamsSocCode` accepts it, but the hyphen sits where the column's CHECK
+  // constraint will not have it. Canonicalising re-seats the hyphen, and the
+  // value that reaches the database matches '^[0-9]{2}-?[0-9]{4}$'.
+  eq(eamsSocCode("4-12031"), "412031", "a misplaced hyphen still strips to six digits");
+  eq(socCodeCanonical("4-12031"), "41-2031", "and the hyphen is re-seated where 0207 wants it");
+  eq(socCodeCanonical("4120311"), "", "seven digits is not a code, and is not padded down");
+  eq(socCodeCanonical("41203"), "", "five digits is not a code, and is not padded up");
+  eq(socCodeCanonical("41-203X"), "", "a letter is not a digit");
 
   /* ---- a real file, from his own filed wage detail ---------------------- */
 

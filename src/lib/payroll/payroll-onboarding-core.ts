@@ -68,6 +68,17 @@ import {
   validateW4,
 } from "@/lib/payroll/payroll-w4-core";
 import { addBusinessDaysYmd } from "@/lib/staffing/employee-lifecycle-core";
+/*
+ * books-65. The SOC normaliser is IMPORTED, not reimplemented.
+ *
+ * `esd-eams-csv-core` already decides what a work code looks like, because it
+ * is the module that has to satisfy ESD's uploader. If this file carried its
+ * own regex, the screen could accept a code the wage file later rejects, and
+ * the disagreement would surface at the worst possible moment - during a
+ * quarterly upload, naming a file instead of a person. One definition, two
+ * callers (standing rule 25).
+ */
+import { eamsSocCode } from "@/lib/payroll/esd-eams-csv-core";
 
 // ===========================================================================
 // 1) MONEY AND HOURS INTEGRITY
@@ -958,6 +969,27 @@ export type OnboardingCandidate = {
   i9: I9Record | null;
   pay: PayRecord | null;
   newHireReportedYmd: string | null;
+  /**
+   * The ESD work code - a BLS Standard Occupational Classification code, six
+   * digits, optionally hyphenated (Michael's roster uses `41-2031`).
+   *
+   * OPTIONAL BY DESIGN, AND THE REASON IS STATUTORY, NOT LAZINESS.
+   *
+   * RCW 50.12.070(2)(a)(i) requires the report to set forth "the standard
+   * occupational classification OR JOB TITLE of each worker", and ESD's own
+   * wage-file spec says the code column "can be only 6 digits or blank". A
+   * blank code is therefore a lawful filing in which the job title was typed
+   * into EAMS instead. Blocking payroll over an empty box would be this system
+   * inventing an obligation the state did not impose - so an empty box WARNS.
+   *
+   * A code that is present and malformed is the opposite case and BLOCKS. It is
+   * not a filing choice, it is a typo; EAMS rejects the whole upload over it,
+   * and the error there names a file while the error here names a person.
+   *
+   * Empty string means "not supplied", matching `ssn`'s convention on this type
+   * rather than introducing a second way to spell absent.
+   */
+  socCode: string;
 };
 
 export type StepStatus = {
@@ -1146,6 +1178,14 @@ export function evaluateOnboarding(
     }
   }
 
+  // --- the ESD work code (SOC) -------------------------------------------
+  //
+  // Attributed to the `labor_role` step rather than a step of its own. That
+  // step already asks "what kind of work does this person do" for §280E, and
+  // this is the same question asked by Washington for a different reason. Two
+  // screens asking one question twice is how they start disagreeing.
+  for (const p of socCodeProblems(candidate.socCode)) problems.push(p);
+
   // --- new hire report ----------------------------------------------------
   if (candidate.pay?.hireYmd && !candidate.newHireReportedYmd) {
     problems.push({
@@ -1203,6 +1243,73 @@ export function evaluateOnboarding(
       : [],
     refusalCode: canSaveToPayroll ? null : refusalCodeFor(blockingProblems),
   };
+}
+
+/**
+ * THE WORK CODE, JUDGED.  (books-65)
+ *
+ * Michael: "for esd, they require a work code for each employee, so i will need
+ * a way to enter that code in. the code my employees use is, 41-2031."
+ *
+ * Two outcomes, and the asymmetry between them is the whole design:
+ *
+ *   BLANK      -> warn.  RCW 50.12.070(2)(a)(i) accepts "the standard
+ *                 occupational classification OR JOB TITLE", and ESD's file
+ *                 spec says the column "can be only 6 digits or blank". So an
+ *                 empty box is a lawful filing, and stopping payroll over it
+ *                 would be a rule this software made up.
+ *
+ *   MALFORMED  -> block. WAC 192-310-010(3)(b)(vii): the categories "are
+ *                 identified by a six-digit numerical code". Five digits is not
+ *                 a shorter code, it is a wrong one, and there is no honest way
+ *                 to guess the digit that is missing.
+ *
+ * Note what this function does NOT do: it does not check that the six digits
+ * name a real occupation. BLS publishes about 870 detailed codes and this
+ * system holds no copy of that list, so claiming to validate membership would
+ * be a check that passes by not looking. Shape is verified; existence is not
+ * claimed.
+ */
+export function socCodeProblems(socCode: string): FieldProblem[] {
+  const raw = socCode.trim();
+
+  if (raw === "") {
+    return [
+      {
+        step: "labor_role",
+        field: "socCode",
+        severity: "warn",
+        message:
+          "No ESD work code for this person. That is allowed - RCW 50.12.070 lets you report " +
+          "the occupational classification OR a job title, and ESD's wage file says the code " +
+          "column can be blank - but then somebody has to type a job title into EAMS by hand " +
+          "every quarter. Greenway's filed 5208B uses 41-2031, Retail Salespersons.",
+        authorityId: "rcw-50-12-070-occupational-classification",
+      },
+    ];
+  }
+
+  // The normaliser the EAMS writer itself uses, so the screen and the upload
+  // can never disagree about what counts as a code.
+  const digits = eamsSocCode(raw);
+  if (!/^\d{6}$/.test(digits)) {
+    return [
+      {
+        step: "labor_role",
+        field: "socCode",
+        severity: "block",
+        message:
+          `"${raw}" is not a work code. A Standard Occupational Classification code is exactly ` +
+          `six digits - 41-2031 or 412031, both fine, the hyphen is only how BLS prints it. ` +
+          `This one comes to ${digits.length} digit${digits.length === 1 ? "" : "s"}. Leaving it ` +
+          `blank is a lawful option; a code that is nearly right is not, and EAMS rejects the ` +
+          `whole quarterly upload over it rather than the one row.`,
+        authorityId: "wac-192-310-010-soc-six-digits",
+      },
+    ];
+  }
+
+  return [];
 }
 
 /**

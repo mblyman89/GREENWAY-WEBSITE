@@ -538,6 +538,89 @@ export const WAC_296_17_31023_NO_PAYROLL: GuidanceAuthority = {
   source: "https://app.leg.wa.gov/WAC/default.aspx?cite=296-17-31023",
 };
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * §4b  THE WORK CODE  (books-65)
+ *
+ * Michael: "for esd, they require a work code for each employee, so i will need
+ * a way to enter that code in. the code my employees use is, 41-2031."
+ *
+ * He is right that it is required, and the two texts below are why the field
+ * this slice adds BLOCKS on a malformed code but only WARNS on a blank one.
+ * Read them together: the statute demands the classification OR A JOB TITLE,
+ * and ESD's own file spec says the code column "can be only 6 digits or blank".
+ * A blank column is therefore a legitimate filing where the title was typed
+ * into EAMS instead, and refusing to run payroll over it would be this system
+ * inventing an obligation the state did not impose. A MALFORMED code is a
+ * different thing entirely: it is not a filing choice, it is a typo that EAMS
+ * will bounce, and it is worth catching next to the person's name rather than
+ * inside a rejected upload three months later.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * THE OBLIGATION ITSELF, INCLUDING THE ALTERNATIVE THAT MAKES BLANK LAWFUL.
+ *
+ * The final sentence about October 1, 2022 is kept rather than trimmed. It is
+ * the sentence that dates the obligation, and it is the reason older filings
+ * have an empty column: reporting the code was OPTIONAL until then. Cutting it
+ * would leave a reader unable to tell whether a 2021 filing with no codes was a
+ * defect or simply the law at the time.
+ */
+export const RCW_50_12_070_OCCUPATIONAL_CLASSIFICATION: GuidanceAuthority = {
+  id: "rcw-50-12-070-occupational-classification",
+  kind: "statute",
+  cite: "RCW 50.12.070(2)(a)(i)",
+  quote:
+    "Each employer shall register with the department and obtain an employment security account " +
+    "number. Each employer shall make periodic reports at such intervals as the commissioner may " +
+    "by regulation prescribe, setting forth the remuneration paid for employment to workers in " +
+    "its employ, the full names and social security numbers of all such workers, the standard " +
+    "occupational classification or job title of each worker, and the total hours worked by each " +
+    "worker and such other information as the commissioner may by regulation prescribe. Reporting " +
+    "the standard occupational classification or job title of each worker is optional for " +
+    "employers until October 1, 2022.",
+  soWhat:
+    "This is the sentence behind the work code Michael asked for, and the word that changes the " +
+    "design is OR. The state wants to know what each person does; it will take a six-digit code " +
+    "or a plain job title. That is why this system stores the code as a strongly-checked field " +
+    "but does not refuse to pay somebody who has not got one yet - the obligation can be " +
+    "discharged by typing a job title into EAMS. What it will not tolerate is a code that is " +
+    "nearly right, because a nearly-right code is not a lawful alternative, it is a typo, and " +
+    "the upload will reject the whole file over it. The last sentence dates the duty: before 1 " +
+    "October 2022 the column was optional, which is why old filings are empty and are not " +
+    "defective for being empty.",
+  source: "https://app.leg.wa.gov/RCW/default.aspx?cite=50.12.070",
+};
+
+/**
+ * WHAT A SOC CODE IS, AND WHY IT IS EXACTLY SIX DIGITS.
+ *
+ * Quoted because the six-digit shape is the entire content of the validator.
+ * Without this, "why six?" would be a number in a regex with nothing behind it,
+ * which is precisely the kind of unsourced constant standing rule 24 exists to
+ * stop. With it, the check in the UI and the CHECK constraint in migration 0207
+ * both point at the same published sentence.
+ */
+export const WAC_192_310_010_SOC_SIX_DIGITS: GuidanceAuthority = {
+  id: "wac-192-310-010-soc-six-digits",
+  kind: "regulation",
+  cite: "WAC 192-310-010(3)(b)(vii)",
+  quote:
+    "The United States Bureau of Labor Statistics Standard Occupational Classification system is " +
+    "used by federal agencies to classify workers into standard occupational categories for the " +
+    "purpose of collecting, calculating or disseminating data. These standard occupational " +
+    "categories are identified by a six-digit numerical code.",
+  soWhat:
+    "Six digits, and the hyphen Michael writes in 41-2031 is not one of them - it is how BLS " +
+    "prints a major group and a detailed occupation together, the same way a phone number gains " +
+    "dashes. So this system accepts the hyphenated form he reads off his own filed 5208B, and " +
+    "strips the hyphen on the way into the EAMS file, which wants the bare 412031. Anything that " +
+    "is not six digits after that is refused rather than padded or truncated, because the code " +
+    "is a claim about what a named person does for a living and there is no honest way to guess " +
+    "a missing digit. For the record, 41-2031 is Retail Salespersons.",
+  source: "https://app.leg.wa.gov/WAC/default.aspx?cite=192-310-010",
+};
+
+
 /* ══════════════════════════════════════════════════════════════════════════
  * §5  THE REGISTRY
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -548,6 +631,9 @@ export const WA_QUARTERLY_OWN_AUTHORITIES: readonly GuidanceAuthority[] = [
   WAC_192_310_010_WAGE_DETAIL,
   WAC_192_310_010_DUE_DATES,
   WAC_192_310_010_TERMINATION,
+  // books-65 - the work code Michael asked for.
+  RCW_50_12_070_OCCUPATIONAL_CLASSIFICATION,
+  WAC_192_310_010_SOC_SIX_DIGITS,
   RCW_50_24_010_NO_DEDUCTION,
   RCW_50_24_010_ROUNDING,
   RCW_50_24_014_EAF_ACCOUNT_A,

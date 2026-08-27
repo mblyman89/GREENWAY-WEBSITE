@@ -1,4 +1,4 @@
-# Learning the books — 83 lessons that were already written, and nobody could read
+# Learning the books — 84 lessons that were already written, and nobody could read
 
 **For Michael. Written at the end of books-44, slice C.**
 
@@ -59,20 +59,20 @@ material to do it had been sitting in the repository the whole time.
 
 ## What now exists
 
-A screen at **Accounting → Learning the Books**. Eight units, 83 lessons, in the
+A screen at **Accounting → Learning the Books**. Eight units, 84 lessons, in the
 order Greenway's year actually raises them.
 
 | # | Unit | Lessons | The question it answers |
 |---|------|---------|-------------------------|
 | 1 | How money is written down | 7 | Why does the system refuse numbers that look perfectly reasonable? |
 | 2 | How the agencies count days | 14 | Everyone says "the 20th" or "three business days". What do they actually mean? |
-| 3 | Hiring someone — the paperwork before the first cheque | 22 | Somebody starts on Monday. What has to be true before I can pay them? |
+| 3 | Hiring someone — the paperwork before the first cheque | 23 | Somebody starts on Monday. What has to be true before I can pay them? |
 | 4 | Running a payroll — every other Friday | 4 | How does a timesheet become the number on the cheque? |
 | 5 | Checking your own work — before anyone else does | 5 | How do I know the quarter is right before I file it? |
 | 6 | Closing the month — making a period stop moving | 8 | What does it actually mean to say a month is finished? |
 | 7 | The S-corporation year — where the shop's numbers become yours | 5 | Why does an S corporation need to know which year it started being one? |
 | 8 | When something is late — penalties and interest | 18 | It slipped. What does it cost, and what do I do now? |
-| | **Total** | **83** | |
+| | **Total** | **84** | |
 
 Every unit tells you **why it sits where it sits**. Unit 1 is first because
 every other unit's arithmetic depends on knowing that money is an integer number
@@ -99,9 +99,9 @@ nothing else.
 
 Where a lesson rests on somebody else's words — a statute, a regulation, an IRS
 publication — those words appear in an amber panel, quoted exactly. **Amber is
-always someone else's language and never my commentary.** 61 different
+always someone else's language and never my commentary.** 63 different
 authorities are cited across the course, and a test checks every single citation
-resolves to a real document. Sixteen of the 83 lessons cite nothing, because they
+resolves to a real document. Sixteen of the 84 lessons cite nothing, because they
 are teaching arithmetic or judgement rather than law; those say so explicitly
 rather than leaving a blank space where you would wonder if something failed to
 load.
@@ -110,7 +110,7 @@ load.
 
 ## The number at the top of the screen is not typed
 
-The screen says "83 lessons in 8 units". **Nobody wrote 83 anywhere.** It is
+The screen says "84 lessons in 8 units". **Nobody wrote 84 anywhere.** It is
 counted from the lesson files every time the page loads.
 
 This matters more than it sounds. If the count were typed, it would be correct on
@@ -142,6 +142,22 @@ above, the total row, and the number on the screen itself all moved on their own
 and the tests that re-count them from the code told me which sentences in *this
 file* had gone stale. That is exactly the behaviour the paragraph above promised,
 observed rather than asserted.
+
+**AND IT HAPPENED A SECOND TIME, IN books-65.** You asked for the ESD work code
+— *"for esd, they require a work code for each employee, so i will need a way to
+enter that code in. the code my employees use is, 41-2031."* Building the field
+meant a new piece of engine that decides whether a code is acceptable, and the
+rule holds: no engine ships without a lesson. So the course went from **83** to
+**84**, and unit 3, hiring, went from 22 lessons to 23.
+
+I want to be honest about how I found out. I did not remember to update this
+file. I added the lesson, ran the suite, and thirteen tests went red at once —
+the curriculum gate naming `onboarding:socCodeProblems` as a lesson that exists
+and that nothing teaches, and then every count in this document, in the roadmap,
+and on the screen. The message the gate printed said it better than I would
+have: *"that is the exact defect this whole slice was built to end — finished,
+tested work that no screen shows."* The machinery caught me, which is the entire
+point of having built it.
 
 There is also a **coverage banner** at the top of the screen. It is green when
 every lesson that exists is placed in the course. If one is ever written and not
@@ -261,7 +277,7 @@ that is where it would have shown up.
 
 ## What I would do with this, if I were you
 
-**Do not read it front to back.** It is 83 lessons and it is not a book.
+**Do not read it front to back.** It is 84 lessons and it is not a book.
 
 Read **Unit 1** properly, once. Seven lessons, and it explains why the system
 refuses numbers that look perfectly fine to you — that is the thing most likely
@@ -327,7 +343,7 @@ rates have to be in the system before it does.
 deliberately left as the books-44 figures rather than quietly restated: 429 test
 files, 10,320 tests, all passing. 82 lessons, 8 units, 0 unplaced, 0 broken
 references. 27 sabotage attempts, 27 caught, 3 controls correctly allowed
-through. The lesson count is **83** as of books-50, for the reason given in "the
+through. The lesson count is **84** as of books-65, for the reason given in "the
 number at the top of the screen is not typed" above; the count on the screen is
 recounted from the code on every page load, so it is the live figure and this
 line is a dated snapshot.*

@@ -123,6 +123,7 @@ const COMPLETE: OnboardingCandidate = {
   i9: I9,
   pay: HOURLY_PAY,
   newHireReportedYmd: HIRE,
+  socCode: "41-2031",
 };
 
 const EIGHTY_HOURS = 8_000; // hundredths
@@ -205,6 +206,7 @@ describe("buildChecklistView renders the checklist without deciding anything", (
       i9: null,
       pay: null,
       newHireReportedYmd: null,
+      socCode: "",
     });
     expect(view.canSave).toBe(false);
     const blocking = view.rows.filter((r) => r.state === "blocking");
@@ -216,6 +218,55 @@ describe("buildChecklistView renders the checklist without deciding anything", (
         `${row.key} blocks but highlights nothing`,
       ).toBeGreaterThan(0);
     }
+  });
+
+  /*
+   * D-16. Without this, the ESD work code box shows the LABOR ROLE's error
+   * message, and Michael reads "no labor role" while looking at a box that has
+   * a labor role in it - so he fixes the wrong thing, or concludes the
+   * highlighting is noise and stops reading it.
+   *
+   * The risk is structural rather than local: `highlightFields` and `problems`
+   * are two parallel arrays, and ANY lookup across them by index is wrong the
+   * moment a step raises more than one problem. So this asserts the PAIRING
+   * exists and is correct, and separately that index-0 would have been wrong -
+   * because a test that only checks the right answer would still pass against
+   * the broken implementation on a one-problem step.
+   */
+  it("D-16: each problem stays attached to its own field, even when one step has two", () => {
+    const view = buildChecklistView({
+      ...COMPLETE,
+      pay: { ...HOURLY_PAY, laborRoleCode: "" },
+      socCode: "41-20",
+    });
+    const row = view.rows.find((r) => r.key === "labor_role");
+    if (!row) throw new Error("no labor_role row - the step was renamed, fix this test");
+
+    // Existence before absence (rule 66c): this fixture must actually produce
+    // the two-problem condition, or the test proves nothing.
+    expect(row.highlightFields).toContain("pay.laborRoleCode");
+    expect(row.highlightFields).toContain("socCode");
+    expect(row.fieldProblems.length).toBeGreaterThan(1);
+
+    const soc = row.fieldProblems.filter((p) => p.field === "socCode");
+    expect(soc.length).toBe(1);
+    expect(soc[0]!.message).toContain("41-20");
+    expect(soc[0]!.severity).toBe("block");
+
+    const labor = row.fieldProblems.filter((p) => p.field === "pay.laborRoleCode");
+    expect(labor.length).toBe(1);
+    expect(labor[0]!.message).toMatch(/labor role/i);
+
+    // The bug itself: reading position 0 for the SOC field returns the labor
+    // role's sentence. If this ever stops being true the parallel arrays have
+    // been reordered, and the pairing above is what protects the screen either
+    // way - but it is asserted so the defect stays legible.
+    expect(row.problems[0]).not.toBe(soc[0]!.message);
+
+    // And the pairing must stay index-aligned with the two flat arrays, since
+    // the checklist still renders those.
+    expect(row.fieldProblems.map((p) => p.field)).toEqual([...row.highlightFields]);
+    expect(row.fieldProblems.map((p) => p.message)).toEqual([...row.problems]);
   });
 
   it("the blocked sentence counts the problems and quotes the first one", () => {

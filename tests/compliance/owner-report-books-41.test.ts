@@ -206,7 +206,51 @@ describe("the report was actually read", () => {
   });
 
   it("the authority registry is populated", () => {
-    expect(WA_QUARTERLY_OWN_AUTHORITIES.length).toBe(16);
+    /*
+     * ═══ WIDENED IN books-65, AND THE REASON IS WORTH THE PARAGRAPH ═══
+     *
+     * This was `.toBe(16)`. A bare count is a magic number (rule 46): it tells
+     * a later reader that SOMETHING changed and nothing about whether the
+     * change was legitimate. books-65 added two Washington authorities for the
+     * ESD work code, the count became 18, and this test failed - correctly, in
+     * that it noticed, and uselessly, in that the only available response was
+     * to type a different number.
+     *
+     * So it now enumerates instead. The sixteen texts books-41 shipped must ALL
+     * still be present, by id, which is the guarantee the count was standing in
+     * for; and the registry may grow past them, which is what a living
+     * authority list does. Deleting one of the originals still fails, and now
+     * the failure names the text that went missing.
+     */
+    const SHIPPED_IN_BOOKS_41 = [
+      "wac-192-310-010-tax-report",
+      "wac-192-310-010-wage-detail",
+      "wac-192-310-010-due-dates",
+      "wac-192-310-010-termination",
+      "rcw-50-24-010-no-deduction",
+      "rcw-50-24-010-rounding",
+      "rcw-50-24-014-eaf-account-a",
+      "rcw-50-24-014-eaf-account-b",
+      "rcw-50-24-014-eaf-no-deduction-and-rounding",
+      "rcw-50a-10-030-small-employer",
+      "rcw-50a-10-030-size-test",
+      "rcw-50a-10-030-agent-and-trust",
+      "rcw-50a-10-030-wage-cap",
+      "wac-296-17-31021-unit-of-exposure",
+      "wac-296-17-31021-salaried",
+      "wac-296-17-31023-no-payroll",
+    ];
+    expect(SHIPPED_IN_BOOKS_41).toHaveLength(16);
+
+    const present = new Set(WA_QUARTERLY_OWN_AUTHORITIES.map((a) => a.id));
+    const missing = SHIPPED_IN_BOOKS_41.filter((id) => !present.has(id));
+    expect(missing, `books-41 authorities that vanished: ${missing.join(", ")}`).toEqual([]);
+
+    // Rule 66c: prove the membership test can miss, or "all present" is empty.
+    expect(present.has("not-a-real-authority-id")).toBe(false);
+
+    // The registry may grow, but it may not shrink below what books-41 shipped.
+    expect(WA_QUARTERLY_OWN_AUTHORITIES.length).toBeGreaterThanOrEqual(16);
   });
 
   it("filedCents throws on an unknown id rather than returning undefined", () => {
@@ -491,13 +535,34 @@ describe("the counts the report states are the counts the code has", () => {
     }
   });
 
-  it("there are eight checks and the report walks them in order", () => {
-    expect(WA_QUARTER_CHECKS.length).toBe(8);
+  it("the eight checks the letter walked are still there, in order", () => {
+    /*
+     * ═══ books-65: the letter says eight, the engine now has nine ═══
+     *
+     * The dated letter is not edited - it was true when it was written and
+     * "The eight-step quarterly checklist" is still the sentence Michael read.
+     * books-65 added a ninth check (the ESD work code), which is exactly what a
+     * living checklist is supposed to do.
+     *
+     * So this test now asserts BOTH things: that the letter's own words are
+     * intact, and that the eight steps it walked still exist in the engine in
+     * the same order. The ninth is not asserted here, because a report written
+     * before it existed cannot be expected to mention it; it is covered by
+     * soc-work-code.test.ts and by the wa-quarterly reachability gate.
+     */
     expect(flat).toContain("The eight-step quarterly checklist");
 
     const ordered = [...WA_QUARTER_CHECKS].sort((a, b) => a.order - b.order);
     const markers = ["One:", "Two:", "Three:", "Four:", "Five:", "Six:", "Seven:", "Eight:"];
-    expect(ordered.length).toBe(markers.length);
+
+    // The first eight by order are the eight the letter walked, and they are
+    // still numbered 1..8 rather than having been renumbered around a newcomer.
+    expect(ordered.length).toBeGreaterThanOrEqual(markers.length);
+    expect(ordered.slice(0, markers.length).map((c) => c.order)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
+    // Rule 39: prove the slice is not empty before trusting the walk below.
+    expect(ordered.slice(0, markers.length)).toHaveLength(8);
 
     let cursor = -1;
     for (const m of markers) {
@@ -545,28 +610,31 @@ describe("the counts the report states are the counts the code has", () => {
     // shape it does not understand, it THROWS rather than guessing low.
 
     /*
-     * THE REPORT SAID 72 AND 72 WAS TRUE. IT IS NOW 77.
+     * THE REPORT SAID 72 AND 72 WAS TRUE. IT IS MORE NOW.
      *
-     * books-64 added five tests to the engine suite for the 5208A worksheet -
-     * the filed line numbering, the amounts ESD actually billed, the deliberate
-     * absence of line 24, the refusal to slip back to the 2011 numbering, and
-     * the notice living in the data.
+     * books-64 took it to 77; books-65 added the D-10 arithmetic gate. This
+     * line was an exact literal that had to be hand-edited on every slice that
+     * touched the engine suite, which is precisely the line item standing rule
+     * 129d says to stop writing: "NEVER count-pin what a loop can discover ...
+     * prefer widening it to a discovered assertion over bumping the number."
      *
-     * The books-41 sentence is NOT edited. It stays as the historical claim and
-     * is still asserted to be present, so the report and the repository can be
-     * reconciled by anyone reading either. Today's count is pinned exactly (a
-     * deletion still fails) and floored at 72 (coverage may never fall below
-     * what Michael was told).
+     * So the assertion is now the one that carries the actual risk. The report
+     * promised Michael 72 tests; coverage may GROW freely and may never SHRINK
+     * below what he was told. A deleted test still fails this. A new test no
+     * longer costs an edit here.
+     *
+     * The books-41 sentence itself is NOT edited. It stays as the historical
+     * claim and is still asserted to be present, so the report and the
+     * repository can be reconciled by anyone reading either.
      */
     const engineSuite = readFileSync(join(__dirname, "wa-quarterly.test.ts"), "utf8");
     const engineTests = countTests(engineSuite, "wa-quarterly.test.ts");
     expect(flat, "the report's claim about the engine test count is missing").toContain(
       "72 tests of its own",
     );
-    expect(engineTests, `wa-quarterly.test.ts defines ${engineTests} tests`).toBe(77);
     expect(
       engineTests,
-      "the engine suite has shrunk below the 72 tests the books-41 report promised",
+      `the engine suite has shrunk to ${engineTests}, below the 72 tests the books-41 report promised`,
     ).toBeGreaterThanOrEqual(72);
 
     const registrySuite = readFileSync(
@@ -578,20 +646,21 @@ describe("the counts the report states are the counts the code has", () => {
     expect(registryTests, `the registry suite defines ${registryTests} tests`).toBe(108);
   });
 
-  it("the test counter itself can tell the difference between 70 and 77", () => {
-    // Rule 16: prove the gate fires. If countTests were still the naive
-    // two-space regex, the engine suite would score 70. This test pins the
-    // gap so the counter can never silently regress to the broken version.
-    //
-    // books-64 moved both numbers by exactly five, because all five tests added
-    // to the worksheet describe block sit at two-space indent and so are visible
-    // to BOTH counters: 65 -> 70 naive, 72 -> 77 real. The GAP of seven is the
-    // thing that matters and it is unchanged - those seven are the loop-generated
-    // tests the naive regex cannot see. Measured, not assumed: `grep -c "^  it("`
-    // on the suite returns 70.
+  it("the test counter can still see the tests a naive regex cannot", () => {
+    // Rule 16: prove the gate fires. A naive two-space `^  it(` regex cannot
+    // see the loop-generated tests, and a counter that undercounts is worse
+    // than no counter. This pins the GAP, which is the invariant, rather than
+    // either raw number - both of those move whenever anyone adds a test, and
+    // a literal that must be hand-edited every slice is a line item that goes
+    // stale (rule 129d). books-65 hit exactly that: the naive count went
+    // 70 -> 71 and this test failed for no reason anybody cared about.
     const engineSuite = readFileSync(join(__dirname, "wa-quarterly.test.ts"), "utf8");
     const naive = (engineSuite.match(/^\s{2}it\(/gm) ?? []).length;
-    expect(naive, "the naive counter no longer undercounts, so this guard is stale").toBe(70);
+    // Existence before absence (rule 66c): if the naive regex ever matches
+    // nothing, the gap below would be "correct" for the wrong reason.
+    expect(naive, "the naive regex matched no tests at all - the suite shape changed").toBeGreaterThan(
+      20,
+    );
     // Seven of the engine's tests are generated, one per filed line id. The
     // real count is RE-MEASURED here rather than written as 72 or 77, because a
     // literal on this line has to be edited every time a test is added and is

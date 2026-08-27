@@ -371,7 +371,11 @@ export function build5208aWorksheet(ret: WaQuarterReturn): EsdWorksheet {
           `figure there would assert you owe no penalties, and only ESD's monthly billing ` +
           `statement can say that. Check this against what ESD bills. On your Q1 2026 filing the ` +
           `two differ by one cent — ESD charged $246.12 where rounding each fund separately gives ` +
-          `$246.13 — recorded as an open question (D-10) rather than quietly rounded to match.`,
+          `$246.13. The likely reason, worked out in books-65: ESD appears to drop the CENTS from ` +
+          `taxable wages before applying the rate, which reproduces all four figures across both ` +
+          `filed quarters where no rounding rule could. It is not implemented, because a pattern ` +
+          `that fits four numbers is not a published rule and a filed tax figure is not computed ` +
+          `from a guess. See D-10 for the one document that would settle it.`,
       },
     ],
   };

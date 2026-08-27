@@ -65,6 +65,10 @@ import { FORM_W3_BOX_LESSONS } from "../../src/lib/payroll/form-box-lessons-w3";
 import { WA_QUARTERLY_LESSONS } from "../../src/lib/payroll/form-box-lessons-wa";
 import { FORM_941_LESSONS } from "../../src/lib/payroll/form-box-lessons-941";
 import {
+  FORM_ID_941_SB,
+  scheduleBTeachingBoxes,
+} from "@/lib/payroll/form-941-schedule-b-boxes";
+import {
   I941_LINE_1_PAY_PERIOD_INCLUDING_THE_12TH,
   I941_LINE_5A_BOTH_HALVES_AND_THE_CAP,
 } from "../../src/lib/payroll/form-941-authorities";
@@ -164,9 +168,21 @@ describe("books-55/56 owner report: the figures are the engine's, not the prose'
     expect(ties, "no cross-references exist at all - has a lesson table emptied?").toBeGreaterThan(
       30,
     );
-    expect(() => assertEveryTieResolves(FORM_W3_BOX_LESSONS)).not.toThrow();
-    expect(() => assertEveryTieResolves(WA_QUARTERLY_LESSONS)).not.toThrow();
-    expect(() => assertEveryTieResolves(FORM_941_LESSONS)).not.toThrow();
+    /*
+     * books-65: the Schedule B specimen has to be handed in, because 941 line
+     * 12 now ties to its quarter total - the IRS checks those two against each
+     * other to the cent. Schedule B's specimen is GENERATED rather than
+     * declared, so without this map a legitimate tie reads as a tie into a form
+     * that does not exist. See the same change in owner-report-books-54.
+     */
+    const generated: Readonly<Record<string, readonly string[]>> = {
+      [FORM_ID_941_SB]: scheduleBTeachingBoxes({ year: 2028, quarter: 1 }).map((b) => b.box),
+    };
+    expect(generated[FORM_ID_941_SB]).toContain("quarterTotal");
+
+    expect(() => assertEveryTieResolves(FORM_W3_BOX_LESSONS, generated)).not.toThrow();
+    expect(() => assertEveryTieResolves(WA_QUARTERLY_LESSONS, generated)).not.toThrow();
+    expect(() => assertEveryTieResolves(FORM_941_LESSONS, generated)).not.toThrow();
   });
 });
 

@@ -312,6 +312,27 @@ describe("N3b owner-only pages that are NOT in the menu", () => {
        * the only arrangement in which the arithmetic can be checked by eye.
        */
       "/admin/books/form-940/sheet",
+      /*
+       * books-65: the four Washington returns, box by box. Exempt from the MENU
+       * for the same reason as the three above -- reached from the "View just
+       * the forms" door in the header of /admin/books/wa-quarterly, which IS in
+       * the menu -- but it exists for a different and sharper reason.
+       *
+       * Michael, books-65: "i can not figure out how to open and view the state
+       * forms. did they get wired in correctly?" They had not been. Measured:
+       * the 941, 940 and W-2 each had a sheet route AND a door; wa-quarterly
+       * had neither, so there was no state form to open at all. This entry is
+       * therefore the record of a route that had to be BUILT, not merely one
+       * that was left out of a menu on purpose.
+       *
+       * Unlike the three federal sheets it renders no agency artwork, and that
+       * is a measured refusal rather than an unfinished feature: both ESD PDFs
+       * carry zero fillable fields (so there is no agency answer to where a
+       * figure sits), and the published blank 5208A is the 2011 draft, which
+       * numbers the wage lines 12/13/14 and prints a $37,300 base against
+       * today's 13/14/16 and $78,200. The page says so on its face.
+       */
+      "/admin/books/wa-quarterly/sheet",
     ];
     const navHrefs = new Set(adminNav.map((i) => i.href));
     const ownerOnly = new Set<string>(ownerOnlyPermissions());

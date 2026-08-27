@@ -60,26 +60,66 @@ describe("books-60 report: it exists and is a real report", () => {
   });
 });
 
-describe("books-60 report: the box figures are the engine's own", () => {
+/*
+ * ======================================================================
+ * SUPERSEDED BY books-65, AND DELIBERATELY NOT REWRITTEN INTO A LIE
+ * ======================================================================
+ * This block used to re-derive the books-60 letter's coverage figures from the
+ * live engine: 941 27 boxes / 24 taught / 3 untaught, the untaught three being
+ * 12, 13 and 14, the 940 holding ten, and the standing to-do list totalling 13.
+ * Every one of those was true the day the letter was written and is checkable
+ * against it.
+ *
+ * books-65 changed the engine underneath them, on Michael's instruction:
+ *
+ *   "the boxes that dont have lessons, the boxes look like there is a red
+ *    squiggly line in it ... on the 941 schedule b, every single box opens with
+ *    an explanation. this is the level of thoroughness i want."
+ *
+ * All 23 remaining untaught boxes were written, and the 941's box count rose
+ * from 27 to 32 when the five identity boxes (EIN, name, trade name, address,
+ * city/state/ZIP) were finally emitted onto the specimen - which is D-15, the
+ * reason his company details were not appearing on the forms at all.
+ *
+ * THE LETTER IS NOT EDITED. It is dated, it was true, and back-dating it would
+ * destroy the only record of what was believed at the time. What changes here
+ * is what the tests CLAIM: they now assert the letter still says what it said,
+ * AND that today's engine reports the books-65 numbers. If either half drifts,
+ * this fires.
+ */
+describe("books-60 report: what the letter said, and what is true now", () => {
   const md = readFileSync(REPORT, "utf8");
 
-  it("the 941 really has 27 boxes, 24 taught and 3 untaught", () => {
-    const cov = coverageOf("form_941");
-    expect(cov.total).toBe(27);
-    expect(cov.teachable).toBe(24);
-    expect(cov.untaught).toBe(3);
-    expect(md).toMatch(/27 total · 24 teach · 3 left untaught on purpose/);
-  });
-
-  it("the three untaught 941 boxes really are 12, 13 and 14", () => {
-    expect(coverageOf("form_941").untaughtBoxes).toEqual(["12", "13", "14"]);
+  it("still contains its original 941 coverage sentence, unedited", () => {
+    // The letter's own words. Asserted so that nobody quietly rewrites history
+    // to make the block below agree with it.
+    expect(md).toMatch(/27 total \u00b7 24 teach \u00b7 3 left untaught on purpose/);
     expect(md).toMatch(/lines 12, 13 or 14/);
+    expect(md).toMatch(/13 boxes, down from 17/);
+    expect(md).toMatch(/The 940 has ten untaught boxes/);
   });
 
-  it("the standing to-do list really is 13 boxes", () => {
-    const total = ALL_TAUGHT_FORM_IDS.reduce((n, f) => n + coverageOf(f).untaught, 0);
-    expect(total).toBe(13);
-    expect(md).toMatch(/13 boxes, down from 17/);
+  it("the 941 now has 32 boxes and every one of them is taught", () => {
+    const cov = coverageOf("form_941");
+    // 27 + 5. The five are the identity boxes D-15 added; see the banner above.
+    expect(cov.total).toBe(32);
+    expect(cov.teachable).toBe(32);
+    expect(cov.untaught).toBe(0);
+    expect(cov.untaughtBoxes).toEqual([]);
+  });
+
+  it("the 940's ten untaught boxes are all taught now", () => {
+    const cov = coverageOf("form_940");
+    expect(cov.untaught).toBe(0);
+    expect(cov.untaughtBoxes).toEqual([]);
+  });
+
+  it("the standing to-do list is empty across every form", () => {
+    const remaining = ALL_TAUGHT_FORM_IDS.flatMap((f) =>
+      coverageOf(f).untaughtBoxes.map((b) => `${f}:${b}`),
+    );
+    // Named, not counted, so a regression says WHICH box came back.
+    expect(remaining).toEqual([]);
   });
 
   it("names the four boxes it claims to have taught, and they really are taught", () => {
@@ -91,9 +131,16 @@ describe("books-60 report: the box figures are the engine's own", () => {
     }
   });
 
-  it("the 940 really still has ten untaught boxes", () => {
-    expect(coverageOf("form_940").untaught).toBe(10);
-    expect(md).toMatch(/The 940 has ten untaught boxes/);
+  it("and the three the letter left on purpose are taught too", () => {
+    // The letter said 12, 13 and 14 were skipped deliberately. books-65 wrote
+    // them, so the specific claim that superseded the letter is checked here
+    // rather than left implicit in a count.
+    for (const box of ["12", "13", "14"]) {
+      expect(
+        FORM_941_LESSONS.some((l) => l.box === box),
+        `941 box ${box} was taught in books-65 but its lesson is gone`,
+      ).toBe(true);
+    }
   });
 });
 

@@ -71,19 +71,19 @@ nothing.
 This is the finding I most want you to understand, because it is a little
 embarrassing and very instructive.
 
-There are **six teaching modules** in this system — 83 individual lessons,
+There are **six teaching modules** in this system — 84 individual lessons,
 2,345 lines — that are **fully written, fully tested, and reachable from no
 screen whatsoever.** Every one has passing tests. Every one is invisible to you.
 
 | What it teaches | Lessons |
 |---|---|
-| Payroll onboarding (I-9, W-4, SSN handling, first paycheque) | 33 |
+| Payroll onboarding (I-9, W-4, SSN handling, first paycheque) | 34 |
 | Tax penalties | 20 |
 | Interest under §6621 | 11 |
 | Period close | 9 |
 | The S-corporation year | 5 |
 | Payroll reconciliation | 5 |
-| **Total** | **83** |
+| **Total** | **84** |
 
 > **A NOTE ON THE COUNT, ADDED LATER (books-50).** When this document was
 > written the total was **82**, and the interest module had **10** lessons. It has
@@ -101,6 +101,20 @@ screen whatsoever.** Every one has passing tests. Every one is invisible to you.
 > the table above are re-counted from the code by
 > `tests/compliance/books-roadmap-agreed-order.test.ts` on every run, which is
 > why you are reading a note instead of a quietly edited number.
+
+> **AND AGAIN (books-65), FOR A REASON YOU ASKED FOR YOURSELF.** The total is now
+> **84**, and payroll onboarding has **34**. You asked for the ESD work code:
+> *"for esd, they require a work code for each employee, so i will need a way to
+> enter that code in. the code my employees use is, 41-2031."* Adding the box
+> meant adding a piece of engine that decides whether a code is acceptable, and
+> a new piece of engine may not ship without a lesson — so the count moved by
+> one, on its own, and the test above told me which sentences in this file had
+> gone stale. Same machinery, second outing. One thing worth knowing while you
+> are here: I did **not** make the code compulsory. RCW 50.12.070 lets you report
+> the classification *or a job title*, and ESD's own file spec says the column
+> can be blank, so a missing code warns rather than stopping payroll. A code
+> that is **malformed** does stop it, because EAMS rejects the whole wage file
+> over one bad value rather than the single row.
 
 Each lesson has the same five parts, and I want you to see the shape because it
 is the shape of good teaching:

@@ -292,6 +292,78 @@ plain English and tells him to pay what ESD bills. Recording the discrepancy is
 worth more than resolving it wrongly: if a third quarter ever discriminates
 between the two readings, the evidence is here to settle it.
 
+### books-65 UPDATE — the premise above is wrong, and a single rule does fit
+
+Michael asked, verbatim: *"will you please clarify what D-10 means? what do i
+need to get for you to make it work?"* Answering that meant re-doing the
+arithmetic rather than re-reading the paragraph, and the paragraph did not
+survive it.
+
+**First correction.** The claim that "Q2 2026 is consistent with either reading"
+is FALSE. Q2 discriminates cleanly, and it rules out the combined-0.40% reading
+this entry proposed:
+
+```
+Q2 gross 6892345c
+  round each fund separately : 25502 + 2068 = 27570   ESD CHARGED 27570  MATCH
+  round combined 0.40% once  : 27569.38   ->   27569   ESD CHARGED 27570  MISS
+```
+
+So reading B explains Q1 and fails Q2; reading A explains Q2 and fails Q1. The
+variable was never the rounding rule. That was the wrong question, and it was
+asked for two slices.
+
+**What actually fits.** ESD applies the rate to the taxable wages WITH THE CENTS
+DROPPED. One rule, four figures, two quarters, no exceptions:
+
+| quarter | taxable | whole dollars | UI @0.37% | ESD | EAF @0.03% | ESD |
+| --- | --- | --- | --- | --- | --- | --- |
+| Q1 2026 | $61,531.21 | 61,531 | 227.6647 → **227.66** | 227.66 | 18.4593 → **18.46** | 18.46 |
+| Q2 2026 | $68,923.45 | 68,923 | 255.0151 → **255.02** | 255.02 | 20.6769 → **20.68** | 20.68 |
+
+Note what this explains that nothing else did: at $61,531.21 the exact-cents UI
+figure is 22766.5477c, which sits a hair ABOVE the half-cent and rounds up to
+22767. Drop the 21 cents of wages first and it becomes 22766.47c, which sits
+just BELOW and rounds down to 22766 — the figure ESD charged. The 0.5477 was
+never a rounding tie. It was 21 cents of wages that ESD had already discarded.
+
+**It is still not implemented, and the reason has changed.** It is no longer
+"no rule fits"; it is that a rule which fits four data points is a PATTERN, not
+an authority, and standing rule 62d does not allow a filed tax figure to be
+computed from a pattern. RCW 50.24.010 commands rounding of the CONTRIBUTION and
+says nothing about truncating the WAGE BASE first. Searched this slice and not
+found: any ESD publication, WAC, or EAMS help page stating a whole-dollar wage
+base. Until that document exists the engine keeps computing on exact cents, and
+the worksheet keeps telling Michael to pay what ESD bills.
+
+### What Michael needs to get, to close this
+
+Any ONE of these ends it. They are in order of how likely they are to work.
+
+1. **The monthly billing statement from ESD** (the return itself says: *"Employment
+   Security Department will mail you each month a complete billing statement"*).
+   If it shows a taxable-wage figure with no cents, that is the answer in his own
+   post, and it is the cheapest thing on this list.
+2. **Any further filed quarter's EAMS confirmation page** — Q3 2026 onwards. Not
+   every quarter settles it: the two readings agree about 81% of the time, so one
+   extra quarter has roughly a **1 in 5** chance of being decisive, and it needs
+   the cents on the gross to fall in the right band. Two or three quarters make
+   it likely. Cost: nothing, he files them anyway.
+3. **A written answer from the Account Management Center**, 855-829-9243 or
+   OlympiaAMC@esd.wa.gov (both printed on his own confirmation page). The question
+   to ask, in one sentence: *"When EAMS computes UI and EAF tax, does it apply the
+   rate to total taxable wages including cents, or to whole dollars with the cents
+   dropped?"* An email reply is a citable document; a phone call is not.
+4. **The ESD tax-rate notice for 2026**, if it prints a worked example.
+
+**What it is worth.** One cent per quarter, four cents a year, and ESD bills from
+its own computation either way — so no payment is ever wrong. What is actually
+at stake is whether his screen agrees with his invoice to the penny, which
+matters because a system that is reliably one cent off teaches him to ignore
+small differences, and small differences are how the large ones announce
+themselves. That is the reason to close it, and also the reason not to close it
+by guessing.
+
 ---
 
 ## D-11 — `buildPaidLeaveCsv` existed for eight slices with no caller
@@ -402,3 +474,119 @@ right would be exactly the wrong move — but it is recorded because a $166.14
 discrepancy per quarter in his own books is worth his knowing about, and because
 it is independent confirmation that this system's rate registry (0.37% / 0.03%,
 $78,200) matches what ESD actually billed.
+
+### books-65 — RESOLVED BY THE OWNER. Sage is wrong; the books are right.
+
+D-14 was written as an open question because it was not this system's place to
+declare a number in Michael's other software incorrect. He has now decided it,
+and the decision is his to make. Verbatim:
+
+> *"for D-14, sage is wrong, i need to update the formula. this is one of the
+> issues we are escaping sage from. we will build a compliance cron bot that
+> will poll the agencies for tax updates and such. that way our books never
+> lie to me."*
+
+**What this settles.** The 0.64% UI rate and the $72,800 wage base printed on
+his Sage record copy are stale. The rate registry in this system — 0.37% UI,
+0.03% EAF, $78,200 base — is correct and is the one ESD billed from. Nothing in
+the engine changes, because the engine was already right; what changes is that
+the discrepancy is no longer an open question with two candidate answers. There
+is one answer, and Sage does not have it.
+
+**The correction is his to make in Sage**, for the remainder of 2026. Worth
+$166.14 per quarter of overstated UI tax on the record copy — the document that
+would be handed to a CPA or an auditor. No money was ever overpaid, because ESD
+bills from its own computation; the exposure is entirely in what his own books
+say happened.
+
+**What he asked for next, recorded so it is not lost.** A compliance cron bot
+that polls the agencies for rate and threshold changes, so that a stale rate can
+never again sit in the books quietly producing confident wrong numbers. That is
+the correct generalisation of this defect: D-14 is not really about one rate, it
+is about the fact that a rate went stale and nothing noticed for two quarters.
+It is NOT built in this slice and is not claimed to be. Noted here as the
+owner's stated intent, and it belongs on the roadmap rather than in a defect
+entry.
+
+**Why this entry stays instead of being deleted.** The two figures and their
+sources are the evidence for the decision. A resolved defect that erases its own
+evidence leaves the next person no way to check the resolution.
+
+---
+
+## D-15 — the company profile was correct, and no form had a box to put it in
+
+**Found:** books-65, by Michael. Verbatim: *"the forms are not populating with my
+company data even though it is correctly stored in the company info page in
+accounting."*
+
+**Severity: high, and it had been visible on every form since the forms
+existed.** His EIN, legal name, trade name, address and city/state/ZIP were all
+stored, all validated, all showing green. Every sheet page read them. And every
+form printed the entity area blank.
+
+The instinct is to look for a broken read or a key mismatch. Both were measured
+and both were fine: `loadCompanyProfile` has four callers, and the profile keys
+(`ein`, `legal_name`, `trade_name`, `address_line1`, `city`, `state_code`,
+`zip_code`) match the sheet exactly. The fault was one layer further on. The
+identity values are joined onto the specimen by `identity[box.box]` — so a value
+is drawn only if a BOX EXISTS with that id. `teachingBoxes` emitted no entity
+boxes at all. Five values, zero homes, silent on every form.
+
+**Why it stayed hidden.** Nothing was throwing, nothing was null, and no test
+asked the only question that would have caught it: *does every identity value
+have somewhere to land?* Each half was correct in isolation. The defect lived in
+the space between them, which is where the expensive ones live.
+
+**Fixed in the class, not the instance.** `teachingBoxes` now emits the entity
+area for every form that prints one — the 941 went 27 → 32 boxes and the 940
+30 → 35. Both were measured against Michael's own filed returns with `pdftotext`
+first, because the question is whether the paper prints those fields, not
+whether we think it should.
+
+**The gate:** `assertEveryIdentityValueHasABox` fails if any of the five ever
+loses its home again, for every form and both modes. Confirmed visually this
+slice: `.render/30-wa-sheet-header-complete.png` shows all five populated.
+
+---
+
+## D-16 — the ESD work code box displayed the labor role's error message
+
+**Found:** books-65, by the rule 130c visual check — after the whole SOC feature
+had passed 11,616 tests, tsc, the pure self-tests, the verbatim verifier and
+eslint. It is the one defect this slice found that no gate was looking for.
+
+**Severity: it makes the highlighting untrustworthy, which is worse than not
+having it.** Typing `41-20` into the new ESD work code box produced, in red,
+underneath that box: *"No labor role. This is the field that decides whether the
+wage is cost of goods sold or a §280E-disallowed operating expense."* The labor
+role was fine. The work code was the problem, and the screen named the wrong
+one.
+
+**The mechanism, and why it is structural rather than a typo.** A checklist row
+carries two PARALLEL arrays — `highlightFields` and `problems` — index-aligned
+by construction. `problemFor(path)` found the row that mentioned the field and
+then returned `row.problems[0]`: the first complaint on the STEP, whichever
+field it belonged to. That is wrong for any step with more than one problem.
+For eight slices `labor_role` raised exactly one, so index 0 was the right
+answer by accident. books-65 gave it a second, and the accident ended.
+
+**Why every existing gate was blind to it.** The engine was correct — the right
+problem, on the right field, with the right severity. The view core was correct
+— it copied both arrays faithfully. Only the JOIN between them was wrong, and it
+lived in a component function that no test called. A screenshot found in one
+look what five green gates could not see.
+
+**Fixed in the class.** `ChecklistRow` now carries `fieldProblems`, where each
+message stays attached to its own field and severity, and `problemFor` looks up
+by field name instead of by position. It joins every matching sentence rather
+than the first, because two things being wrong with one box is not a reason to
+hide one of them. The parallel arrays are kept — the checklist renders them as
+flat lists, which is all they were ever asked for.
+
+**The gate:** `tests/compliance/payroll-onboarding-ui-core.test.ts`, "D-16: each
+problem stays attached to its own field, even when one step has two". It builds
+the two-problem condition, asserts existence before absence (rule 66c), checks
+the pairing, and separately asserts that index 0 WOULD have been wrong — because
+a test that only checks the right answer still passes against the broken code on
+a one-problem step. Mutation-proven: re-introducing the index-0 read fails it.

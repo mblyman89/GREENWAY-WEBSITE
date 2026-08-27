@@ -234,7 +234,43 @@ describe("every Form 940 quote is really in the IRS instructions", () => {
  * a paragraph of body text, and MISSED "5f" because a lowercase word followed
  * it. Every entry below was confirmed by reading its surrounding line.
  */
+/*
+ * ═══ books-65: THE LIST WAS SHORT BY FIVE, AND IT IS THE SAME CLASS AGAIN ═══
+ *
+ * The note above records that this list REPLACED an engine-derived one because
+ * the engine could only emit lines carrying an amount, which made twelve
+ * tickbox lines "permanently unteachable". Correct diagnosis, incomplete cure:
+ * the replacement enumerated the NUMBERED lines and stopped, while the gate
+ * below reads as "is this on the paper?".
+ *
+ * The five identifier boxes at the top of page 1 are on the paper. Measured on
+ * Michael's own filed return rather than argued:
+ *
+ *   $ pdftotext -layout -f 1 -l 1 "2025_FORM_940_-_SAGE.pdf" -
+ *     Employer identification number
+ *     (EIN)                    4 6   4 2 1 7 0 1 6
+ *     Trade name (if any)
+ *     Address
+ *     Name (not your trade name)
+ *
+ * They print, they carry his data, and until books-65 the teaching specimen had
+ * no box for them at all — which is defect D-15, the reason his company profile
+ * never appeared on any form. Adding the boxes fixed the printing; adding the
+ * lessons removed the untaught marker; and this list has to admit they exist or
+ * the gate rejects the lessons for boxes the form demonstrably has.
+ *
+ * They are listed by their box ID rather than by a line number because the IRS
+ * does not number them — the form prints them as captioned spaces above line
+ * 1a. The ids match the specimen and the facsimile, which is what makes a
+ * company-profile value reach paper.
+ */
 const LINES_ON_THE_PRINTED_940: readonly string[] = [
+  // The identifier spaces at the top of page 1. Not numbered by the IRS.
+  "ein", // Employer identification number (EIN)
+  "name", // Name (not your trade name)
+  "tradeName", // Trade name (if any)
+  "address", // Address - number, street, and suite or room number
+  "cityStateZip", // City, state, and ZIP code
   "1a", // If you had to pay state unemployment tax in one state only...
   "1b", // ...in more than one state, you are a multi-state employer
   "2", // If you paid wages in a state that is subject to CREDIT REDUCTION
@@ -269,7 +305,10 @@ const LINES_ON_THE_PRINTED_940: readonly string[] = [
 
 describe("every lesson is reachable from the real engine", () => {
   it("teaches only lines Form 940 actually has", () => {
-    expect(LINES_ON_THE_PRINTED_940).toHaveLength(30);
+    // 30 numbered lines plus the five unnumbered identifier spaces at the top
+    // of page 1 (books-65). Still a hard number rather than a floor: a line
+    // vanishing from this list should require someone to say so.
+    expect(LINES_ON_THE_PRINTED_940).toHaveLength(35);
     const onPaper = new Set(LINES_ON_THE_PRINTED_940);
 
     for (const lesson of FORM_940_LESSONS) {
@@ -340,7 +379,11 @@ describe("every lesson is reachable from the real engine", () => {
     for (const box of emitted) {
       expect(onPaper.has(box), `engine emits line ${box}, which is not on the form`).toBe(true);
     }
-    const notEmitted = LINES_ON_THE_PRINTED_940.filter((b) => !emitted.includes(b));
+    // books-65: compare against emittedAll, not emitted. LINES_ON_THE_PRINTED_940
+    // now names the five identity boxes as well, because pdftotext of Michael's
+    // filed 2025 940 prints them on page 1. They ARE emitted, so subtracting the
+    // entity-stripped list would falsely report them as missing from the engine.
+    const notEmitted = LINES_ON_THE_PRINTED_940.filter((b) => !emittedAll.includes(b));
     expect(notEmitted).toEqual([
       "1a",
       "1b",
@@ -364,9 +407,30 @@ describe("every lesson is reachable from the real engine", () => {
       expect(found, `lessonFor could not retrieve box ${lesson.box}`).toBeDefined();
       expect(found!.headline).toBe(lesson.headline);
     }
-    // And a line with no lesson must return undefined rather than something.
-    const untaught = boxes.find((b) => lessonFor(FORM_940_LESSONS, "form_940", b.box) === undefined);
-    expect(untaught, "expected at least one untaught line, or the test below is vacuous").toBeDefined();
+    // books-65: every box the engine emits is now taught, which is the whole
+    // point of the slice - Michael asked that no box be left with the dotted
+    // "red squiggly" marker. So state that as the positive claim.
+    for (const b of boxes) {
+      expect(
+        lessonFor(FORM_940_LESSONS, "form_940", b.box),
+        `box ${b.box} is emitted by the engine but has no lesson - it will render with the untaught marker`,
+      ).toBeDefined();
+    }
+
+    // The assertion above is only worth anything if lessonFor is capable of
+    // returning undefined at all. Until books-65 that was proven by finding a
+    // real untaught box; there are none left, so prove it against an id the
+    // form does not have. Rule 66d: assert the thing exists before asserting
+    // the other thing is absent - the loop above is the existence half.
+    const ABSENT_BOX = "line-that-form-940-does-not-have";
+    expect(
+      FORM_940_LESSONS.some((l) => l.box === ABSENT_BOX),
+      "the sentinel box id was accidentally taught, so the miss below proves nothing",
+    ).toBe(false);
+    expect(lessonFor(FORM_940_LESSONS, "form_940", ABSENT_BOX)).toBeUndefined();
+    // And a real box id looked up under the wrong form must also miss, because
+    // lessonFor keys on form as well as box.
+    expect(lessonFor(FORM_940_LESSONS, "form_941", boxes[0]!.box)).toBeUndefined();
   });
 
   it("carries no duplicate box, because a duplicate silently shadows", () => {

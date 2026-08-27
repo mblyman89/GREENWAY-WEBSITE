@@ -358,7 +358,60 @@ describe("books-43: the authority set is complete and correctly weighted", () =>
     // A floor would let an authority be DELETED and replaced with two others
     // while the test stayed green, and the whole point of the number is that
     // removing a quote should require someone to say so out loud.
-    expect(FORM_940_OWN_AUTHORITIES.length).toBe(34);
+    //
+    // books-65 added NINE more, taking this to 43, and this is the diff where
+    // it is said out loud. books-54's comment above claims it closed "the
+    // twelve lines that had nothing behind them", and it did - but twelve was
+    // not all of them. Michael, reading the rendered forms, reported that some
+    // boxes still carried the untaught marker: "the boxes that dont have
+    // lessons, the boxes look like there is a red squiggly line in it, but id
+    // rather they just open a box that says in plain english what it is and
+    // why it doesn't need a lesson."
+    //
+    // Measured, not guessed. Joining the teaching specimen against every
+    // lesson module in the repository printed fifteen untaught boxes on Form
+    // 940: the five identifier boxes at the top of the page (which books-65
+    // also had to ADD to the specimen - see D-15) plus lines 4, 6, 11, 13, 14,
+    // 15a and 16a-16d. Lines 4 and 14 already had authorities here; the nine
+    // below cover the rest:
+    //
+    //   i940-entity-top-of-form              the Name / Trade Name rule
+    //   i940-ein-must-match-exactly          why a wrong EIN is a penalty
+    //   i940-preparer-must-use-exact-name    the name must survive a handover
+    //   i940-line-6-subtotal                 lines 4 + 5
+    //   i940-line-11-credit-reduction-amount comes off Schedule A, not this form
+    //   i940-line-13-deposited               the only cash figure on the form
+    //   i940-line-15a-overpayment            the mirror of line 14
+    //   i940-line-16-quarterly-liability     liability, NOT deposits
+    //   i940-line-16d-is-a-residual          Q4 is line 12 less Q1-Q3
+    //
+    // Every one of the fifteen turned out to have real instruction text in the
+    // mirrored corpus, so none of them was a box that "doesn't need a lesson" -
+    // they were boxes nobody had written yet, and the fallback panel Michael
+    // asked for is not needed.
+    //
+    // A TENTH was then added later in the same slice, which is why this reads
+    // 44 and not 43:
+    //
+    //   i940-part-5-only-if-over-500         Part 5 applies above $500 ONLY
+    //
+    // It exists because `filed-940-threshold.test.ts` rejected the first draft
+    // of the 16a-16d lessons. Those lessons explained how to apportion FUTA by
+    // quarter without ever saying that Greenway's line 12 was 420.00 and all
+    // four boxes are therefore left blank. The lessons were fixed rather than
+    // the gate, and this authority is the IRS's own sentence that makes the
+    // correction citable instead of merely asserted.
+    expect(FORM_940_OWN_AUTHORITIES.length).toBe(44);
+
+    /*
+     * A FLOOR AS WELL AS A PIN (the books-60 pattern).
+     *
+     * The exact number above is the tripwire; this is the promise. Whatever
+     * the count becomes, it must never fall back below what books-54 had
+     * closed, because that would mean a line lost its authority and got the
+     * amber marker back without anybody saying so.
+     */
+    expect(FORM_940_OWN_AUTHORITIES.length).toBeGreaterThanOrEqual(34);
   });
 
   /**

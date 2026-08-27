@@ -72,6 +72,19 @@ import { PAY_FREQUENCY_LABELS, PAY_PERIODS_PER_YEAR } from "@/lib/payroll/payrol
 export type ChecklistRowState = "done" | "blocking" | "warning" | "not_started";
 
 /**
+ * One problem, still attached to the field it is about. See D-16.
+ *
+ * `severity` travels with it because a screen that shows every complaint in
+ * danger red teaches the reader that red means nothing. A blank ESD work code
+ * is lawful; a malformed one is not; they must not look the same.
+ */
+export type FieldProblemPair = {
+  readonly field: string;
+  readonly message: string;
+  readonly severity: "block" | "warn";
+};
+
+/**
  * Which statutory deadline belongs on which checklist row.
  *
  * `onboardingDeadlines()` returns three dated obligations keyed by their own
@@ -129,6 +142,21 @@ export type ChecklistRow = {
   highlightFields: readonly string[];
   /** What to fix, addressed to Michael. Empty when the step is done. */
   problems: readonly string[];
+  /**
+   * The SAME information as `highlightFields` and `problems`, but PAIRED - so
+   * that asking "what is wrong with this one box" cannot return the sentence
+   * belonging to a different box. See D-16 in docs/DEFECTS.md.
+   *
+   * The two arrays above are index-aligned by construction and are kept
+   * because the checklist renders them as flat lists, which is all they were
+   * ever asked for. What they cannot safely answer is a LOOKUP, and a screen
+   * that puts an error under a specific input is doing a lookup whether or not
+   * it says so. That is the shape of the bug: for eight slices the labor_role
+   * step raised exactly one problem, so index 0 was always the right answer by
+   * accident, and the day a second problem joined it the first field started
+   * displaying the second field's complaint.
+   */
+  fieldProblems: readonly FieldProblemPair[];
   /** The statutory deadline for this step, when it has one. */
   deadlineYmd: string | null;
 };
@@ -188,6 +216,11 @@ export function buildChecklistView(candidate: OnboardingCandidate): ChecklistVie
       blocksPayroll: step.blocksPayroll,
       highlightFields: problems.map((p) => p.field),
       problems: problems.map((p) => p.message),
+      fieldProblems: problems.map((p) => ({
+        field: p.field,
+        message: p.message,
+        severity: p.severity,
+      })),
       deadlineYmd: deadline?.dueYmd ?? null,
     };
   });

@@ -206,6 +206,10 @@ export default async function PayrollSetupPage({
             maskedSsnOnFile={
               selected.ssnLastFour ? maskFromLastFour(selected.ssnLastFour) : null
             }
+            /* books-65. Shipped in full, unlike the SSN: a work code is not a
+               secret, and seeding the box stops a re-save quietly dropping a
+               code that was already on file. */
+            socCodeOnFile={selected.socCode}
             defaultFormYear={W4_REDESIGN_YEAR + 6}
             todayYmd={todayYmd}
           />
@@ -228,6 +232,7 @@ export default async function PayrollSetupPage({
                     <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-muted)]">
                       <th className="py-2 pr-4 font-semibold">Employee</th>
                       <th className="py-2 pr-4 font-semibold">SSN</th>
+                      <th className="py-2 pr-4 font-semibold">Work code</th>
                       <th className="py-2 pr-4 font-semibold">W-4</th>
                       <th className="py-2 pr-4 font-semibold">I-9</th>
                       <th className="py-2 pr-4 font-semibold">Pay</th>
@@ -245,6 +250,14 @@ export default async function PayrollSetupPage({
                         </td>
                         <td className="py-2 pr-4 font-mono text-[var(--admin-text-faint)]">
                           {maskFromLastFour(r.ssnLastFour)}
+                        </td>
+                        {/* books-65. A missing code is shown as a dash and NOT as a
+                            red "missing" badge, because blank is lawful here - RCW
+                            50.12.070 takes a job title instead. Badging it red would
+                            teach Michael to fear a state of affairs the state
+                            permits. */}
+                        <td className="py-2 pr-4 font-mono text-[var(--admin-text-faint)]">
+                          {r.socCode === "" ? "—" : r.socCode}
                         </td>
                         <td className="py-2 pr-4">
                           <Badge tone={r.hasW4 ? "green" : "danger"}>
