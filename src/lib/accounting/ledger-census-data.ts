@@ -504,10 +504,18 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       reachable: {
         status: "MISSING",
         evidence:
-          "grep -n 'submitJournal|gl_' on src/app/admin/inventory/intake/actions.ts " +
-          "(821 lines, 21 exported actions incl. importManifestAction and " +
-          "finalizeManifestAction) -> 0 posting calls. BatchTransferImport.tsx " +
-          "states 'DRAFTS-ONLY'. Product reaches the shelf; value reaches nothing.",
+          "books-91 RE-MEASURED this row, which was STALE: it still claimed " +
+          "'0 posting calls' after books-83 had wired one. The call exists -- " +
+          "finalizeManifestAction (src/app/admin/inventory/intake/actions.ts) " +
+          "invokes vendor-bill-service.ts#postManifestVendorBill. This row stays " +
+          "MISSING for a DIFFERENT and still-true reason: the CCRS CSV import " +
+          "path hard-codes unit_cost_minor_units: null " +
+          "(ccrs-manifest-csv-core.ts:495, a CCRS transfer file carries no " +
+          "price), translateLotsToBillLines skips any line whose extended amount " +
+          "is zero, and a delivery of only zero-cost lots therefore refuses with " +
+          "BILL_NO_BILLABLE_LOTS. Value still reaches nothing on that path -- but " +
+          "it now refuses in writing on the manifest timeline (D-71) instead of " +
+          "silently.",
       },
       correct: {
         status: "PARTIAL",

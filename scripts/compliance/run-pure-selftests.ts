@@ -65,6 +65,17 @@ import { __runBankExpenseCoreTests } from "../../src/lib/accounting/bank-expense
 // books-85: the approval path (D-67) — decides approve-then-post vs post-only.
 import { __runApprovalCoreTests } from "../../src/lib/accounting/approval-core";
 import { __runLargeDraftNoticeCoreTests } from "../../src/lib/accounting/large-draft-notice-core";
+// books-91: journal-specimen-core's self-test is NOT registered here, and the
+// omission is deliberate rather than an oversight. The specimen is built by the
+// REAL engine, so it imports vendor-bill-service, which imports supabase/admin,
+// which imports "server-only" -- and this runner has no alias for that marker,
+// so importing it here would crash module resolution for every other test in
+// the file. It is therefore invoked from tests/compliance/journal-specimen.test.ts,
+// where vitest aliases the marker to a stub. Same arrangement, and same reason,
+// as product-lookup-core above. The alternative -- reimplementing the bill
+// engine in pure form so it could run here -- would make the specimen a
+// SECOND implementation that could disagree with the one Michael actually
+// uses, which is the exact failure this specimen exists to prevent.
 import { __runPayrollPostingCoreTests } from "../../src/lib/accounting/payroll-posting-core";
 import { __runRelatedPartyLoanCoreTests } from "../../src/lib/accounting/related-party-loan-core";
 import { __runSaleJournalCoreTests } from "../../src/lib/accounting/sale-journal-core";

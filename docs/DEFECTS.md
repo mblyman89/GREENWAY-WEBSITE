@@ -3686,3 +3686,88 @@ The census row question raised above still stands and the answer is still no: a
 lifecycle transition names no accounts, so it has no home in a census that
 measures whether EVENTS reach the ledger. The invariant stayed; the coverage
 lives in the inverted gate and in approval-core's own tests instead.
+
+## D-71 - the refusal that only existed in a URL
+
+**Reported by Michael, books-91, in his own words:** "I tested accepting an
+invoice into the system which works as it did before, the items are in inventory
+and available for sale on the menu. But I don't see the pending journal entry it
+was suppose to generate for me to approve."
+
+**The wire was NOT severed, and that was the surprising part.** The obvious
+suspect was another D-70-shaped hole - a finished poster nobody calls. It was
+measured first and cleared: `finalizeManifestAction`
+(src/app/admin/inventory/intake/actions.ts) really does call
+`vendor-bill-service.ts#postManifestVendorBill`, gated on `result.activated > 0`;
+the intake page really does render both a red `booksError` banner and a green
+`books` banner; and `/admin/books/drafts` applies no source-kind filter and
+prints `result.message` when a read fails. Every link in the chain existed.
+
+**What was actually wrong.** `postManifestVendorBill` refuses in nine
+distinguishable ways, and EVERY ONE of those refusals was delivered solely as a
+query parameter on a redirect. Nothing was written to the database. Navigate
+away, refresh the page, finalize from a phone that dropped the redirect, or
+simply look again tomorrow, and the reason no payable was raised is gone with no
+evidence the attempt was ever made. A receipt in disappearing ink. Worse, the
+`result.activated === 0` path called nothing at all and said nothing at all, so
+"the manifest was fully rejected, correctly raising no payable" and "the poster
+is broken" produced identical, empty evidence.
+
+**The most likely specific refusal for Michael's manifest, stated as a
+measurement and not as a diagnosis of his data.** The sandbox holds no Supabase
+credentials, so his actual manifest cannot be read and MUST NOT be guessed at.
+What can be measured is the code: `ccrs-manifest-csv-core.ts:495` hard-codes
+`unit_cost_minor_units: null` on the CCRS CSV import path, because a CCRS
+transfer file genuinely carries no price. `translateLotsToBillLines`
+(vendor-bill-service.ts:193-197) computes `extended = qty * unit` and skips any
+line where that is zero. A delivery whose lots all came from a CSV therefore
+yields zero billable lines and returns `BILL_NO_BILLABLE_LOTS` - "Every billable
+lot on this delivery carries a cost of zero, so there is nothing to owe. Add the
+unit costs from the vendor's invoice, then finalize again." That message was
+correct, actionable, and shown to nobody who had navigated away.
+
+**Not fixed by inventing costs.** The tempting repair is to default a missing
+unit cost to something. That would post a fabricated liability and a fabricated
+inventory value, and under 280E an overstated inventory cost becomes an
+overstated COGS deduction - the one direction of error that turns a bookkeeping
+shortcut into a tax position nobody can defend. The CSV has no price; the honest
+outcome is to refuse and say so loudly, which is what the engine already did.
+
+**The fix (books-91).** Every books outcome of a finalize is now written to
+`manifest_events`, which the manifest page already renders as a permanent
+timeline: `vendor_bill_posted` on success, `vendor_bill_refused` carrying the
+refusal CODE and MESSAGE verbatim (including from the `catch`), and
+`vendor_bill_skipped` when nothing was activated - because a deliberate dead end
+has to say so (rule 133f) or it is indistinguishable from a broken wire.
+`logManifestEvent` is best-effort and never throws, so recording the books
+outcome can never cost the operator their acceptance; the goods really did
+arrive either way. The on-screen banner is unchanged and a test pins it, because
+the durable record must not replace the immediate one.
+
+**Michael also asked to SEE one.** "I really want to see what a journal entry
+looks like in that page as well as the ledger after it's been approved." That is
+answered by `journal-specimen-core.ts`, rendered collapsed at the top of
+/admin/books/drafts. It states one small delivery - two lots, 12 x 875.50 and
+24 x 412.25 - and then hands it to the SAME three functions the real path uses
+(`translateLotsToBillLines`, `evaluateVendorBill`, `buildBillJournal`). Every
+account, debit, credit, cost class and the memo is whatever those return: the
+20,400.00 payable on screen is computed, not typed. The books-44 learn page
+header records why this matters - a worked example typed into markup once
+claimed a 47.9% gross margin where the arithmetic gave 42.71%. It renders even
+when Supabase is unconfigured, which is the one screen state where a reader most
+needs to know what they were meant to be looking at.
+
+**Also corrected here: a stale census row.** `ledger-census-data.ts` still
+claimed, for `cost_of_goods_sold.manifest_receipt`, that
+intake/actions.ts had "821 lines, 21 exported actions -> 0 posting calls". That
+stopped being true in books-83. The row stays MISSING, but now for the true
+reason - the zero-cost CSV path above - rather than a reason that had been
+false for eight slices. A census that measures the wrong thing confidently is
+worse than one that admits a gap.
+
+**What is NOT proven.** No entry has been posted against Michael's live database
+in this slice, and the specimen is explicitly labelled as not being his books.
+18 of 18 mutations were caught, including both door-severing probes required by
+rule 133g. Whether his particular manifest hit `BILL_NO_BILLABLE_LOTS` or one of
+the other eight refusals is now ANSWERABLE - the next finalize writes it to the
+timeline - but it is not yet answered, and this entry does not pretend otherwise.

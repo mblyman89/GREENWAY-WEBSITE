@@ -22,6 +22,10 @@ import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { listDraftJournals } from "@/lib/accounting/approval-service";
 import { DraftList } from "./DraftList";
+// books-91: the worked example. Rendered ABOVE the list and collapsed, so the
+// question "what am I actually looking at?" has an answer on this page even on
+// a day when the list is empty. Pure: it needs no database and no session.
+import { JournalSpecimen } from "./JournalSpecimen";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +40,17 @@ export default async function DraftsPage({
 
   if (!isSupabaseServiceConfigured) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-white/50">
-        Supabase isn&apos;t configured in this environment, so the books are unavailable.
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-white/50">
+          Supabase isn&apos;t configured in this environment, so the books are unavailable.
+        </div>
+        {/*
+          The worked example needs no database: it is built by the same pure
+          engine the real path uses. So it stays readable even here, which is
+          the one screen state where a person most needs to know what they were
+          supposed to be looking at.
+        */}
+        <JournalSpecimen />
       </div>
     );
   }
@@ -76,6 +89,8 @@ export default async function DraftsPage({
           </Link>
         </nav>
       </header>
+
+      <JournalSpecimen />
 
       {!result.ok ? (
         <div className="rounded-xl border border-[var(--admin-orange)]/45 bg-[var(--admin-orange)]/[0.08] p-4 text-sm text-white/80">

@@ -1627,6 +1627,10 @@ WHAT IS DEFERRED, AND IT IS THE PART HE ACTUALLY ASKED FOR:
       $2,000, no block at all", these must become two figures.
 
 STILL OPEN AFTER books-90: the ON-SCREEN marker (the two boxes above this one).
+books-91 did NOT close that marker, and deliberately so -- it answered a
+different question Michael asked in the same breath (why no draft appeared at
+all, D-71) and gave him the worked example he asked to see. The large-entry
+on-screen marker remains open.
 The email tells him a large entry is waiting; the drafts list still does not
 show WHICH one is large once he opens it. That is the remaining half.
 
@@ -3317,3 +3321,52 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
      (g) THE MUTATION PROBE FOR ANY WIRING SLICE MUST INCLUDE SEVERING THE
          DOOR. Cut the top link and the suite must go red. If it stays green
          the slice has re-created the defect it was fixing, with extra steps.
+
+134. **A REFUSAL THAT IS NOT WRITTEN DOWN DID NOT HAPPEN (books-91).**
+
+     Michael, verbatim, after accepting a delivery and finding no draft entry:
+
+       "I tested accepting an invoice into the system which works as it did
+        before, the items are in inventory and available for sale on the menu.
+        But I don't see the pending journal entry it was suppose to generate
+        for me to approve."
+
+     THE DEFECT SHAPE. Rule 133 killed the unreachable engine. This kills its
+     twin: the REACHABLE engine whose answer evaporates. The vendor-bill poster
+     was called, it decided correctly, it produced a specific and actionable
+     refusal -- and it handed that refusal to a redirect query parameter and
+     nothing else. One navigation later the reason was gone, with no row
+     anywhere recording that the attempt had even been made. From Michael's
+     chair that is indistinguishable from a broken wire, which is exactly how
+     he reported it. D-71.
+
+     (a) EVERY OUTCOME OF AN AUTOMATED POSTING ATTEMPT IS PERSISTED, not just
+         the successes. Posted, refused, and deliberately skipped each get a
+         durable row carrying the CODE and the MESSAGE verbatim. A log that
+         records only what worked cannot answer the only question anyone ever
+         asks it.
+
+     (b) A URL PARAMETER IS NOT A RECORD. Banners, redirect flags and toasts
+         are for the person standing at the screen right now. They are never
+         the only copy. Add the durable half; keep the immediate half.
+
+     (c) A DELIBERATE NO-OP MUST SAY SO IN THE SAME PLACE. "Nothing was owed,
+         so nothing was posted" and "the poster never ran" must not produce
+         identical silence. Extends 133(f) from code comments to runtime
+         evidence.
+
+     (d) WHEN THE ANSWER DEPENDS ON DATA THE SANDBOX CANNOT SEE, SAY SO AND
+         MAKE IT ANSWERABLE. The specific refusal Michael hit could not be
+         determined -- no database credentials exist here, and guessing his
+         data would break rule 1. The correct deliverable was to make the NEXT
+         occurrence self-evidencing rather than to invent a diagnosis.
+
+     (e) SHOW HIM ONE, BUILT BY THE REAL ENGINE. Michael: "I really want to see
+         what a journal entry looks like in that page as well as the ledger
+         after it's been approved." A worked example is a first-class
+         deliverable for a visual learner -- but every figure in it must be
+         COMPUTED by the same code the real path runs, never typed. A typed
+         example is a screenshot of an intention, and it keeps smiling after
+         the engine changes underneath it. See books-44's learn page header:
+         a hand-typed margin of "47.9%" survived review while the arithmetic
+         said 42.71%.

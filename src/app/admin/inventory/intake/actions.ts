@@ -825,6 +825,20 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
   // which renders it. The acceptance itself always stands — the goods really
   // did arrive, and rolling that back because the books had a question would
   // put the warehouse out of step with reality.
+  //
+  // ── books-91: THE OUTCOME IS NOW WRITTEN DOWN (D-71) ───────────────────
+  // Until this slice the books outcome lived ONLY in the redirect URL. That is
+  // a receipt written in disappearing ink: navigate away, refresh, or finalize
+  // from a phone that dropped the redirect, and the reason the payable was
+  // refused is gone forever, with no trace in the database that the attempt was
+  // ever made. Michael hit exactly that — inventory moved, the menu updated, and
+  // the pending journal entry he was promised never appeared, with nothing
+  // anywhere to say why.
+  //
+  // So every outcome, success and refusal alike, is now logged to
+  // manifest_events, which the manifest page already renders as the permanent
+  // timeline. The URL banner still fires for the person standing at the screen;
+  // the timeline is what is still there tomorrow.
   let booksNote = "";
   if (result.activated > 0) {
     try {
@@ -839,13 +853,35 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
       booksNote = billed.ok
         ? `&books=${encodeURIComponent(billed.code)}`
         : `&booksError=${encodeURIComponent(billed.message.slice(0, 300))}`;
+      // The durable half. `logManifestEvent` is best-effort by construction and
+      // never throws, so a timeline write can NEVER cost the operator their
+      // acceptance — the goods really did arrive either way.
+      await logManifestEvent(
+        manifestId,
+        billed.ok ? "vendor_bill_posted" : "vendor_bill_refused",
+        `${billed.code}: ${billed.message}`,
+        session.userId,
+      );
     } catch (err) {
-      booksNote = `&booksError=${encodeURIComponent(
-        `The delivery was accepted, but the payable could not be recorded: ${
-          err instanceof Error ? err.message : String(err)
-        }`.slice(0, 300),
-      )}`;
+      const reason = `The delivery was accepted, but the payable could not be recorded: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+      booksNote = `&booksError=${encodeURIComponent(reason.slice(0, 300))}`;
+      await logManifestEvent(manifestId, "vendor_bill_refused", reason, session.userId);
     }
+  } else {
+    // NOT a silent skip. A finalize that activates nothing raises no payable on
+    // purpose (nothing arrived, so nothing is owed) — but "on purpose" has to be
+    // written down, or it is indistinguishable from the wire being broken.
+    await logManifestEvent(
+      manifestId,
+      "vendor_bill_skipped",
+      "No lot was activated by this finalize, so no vendor bill was raised. " +
+        "Nothing arrived that is owed for. This is the correct outcome for a " +
+        "fully rejected or fully held manifest, and it is recorded here so the " +
+        "absence of a payable is evidence rather than a mystery.",
+      session.userId,
+    );
   }
 
   redirect(
