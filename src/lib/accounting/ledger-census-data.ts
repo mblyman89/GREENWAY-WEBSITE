@@ -692,6 +692,63 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
   },
 
   {
+    key: "vendor_cycle.goods_received",
+    family: "vendor_cycle",
+    event: "A delivery physically arrives and its cost becomes inventory.",
+    sourceKind: "purchase",
+    entityCode: "greenway",
+    accountCodes: ["20010", "20800", "20890"],
+    builder: "src/lib/accounting/receipt-journal-core.ts#buildReceiptJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "receipt-journal-core.ts debits the category inventory account (or " +
+          "20890 for an unmapped line) and credits 20800, balanced.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "grep for buildReceiptJournal across src/app and src/lib/purchasing " +
+          "-> 0 callers. po-store.ts#receivePoLine still only bumps received_qty.",
+      },
+      correct: {
+        status: "PARTIAL",
+        evidence:
+          "Balanced and integer-only, accepted by the real " +
+          "ledger-core.ts#validateJournalDraft for all 21 categories. NOT " +
+          "PRESENT: vendor-bill-core.ts#buildBillJournal was executed and " +
+          "measured to debit 20010 too, so the pair double counts (D-61).",
+      },
+      accepted: {
+        status: "MISSING",
+        evidence:
+          "No SQL door takes a receipt; gl_post_vendor_bill (0187) is the bill " +
+          "path, not the receiving path.",
+      },
+      idempotent: {
+        status: "PARTIAL",
+        evidence:
+          "sourceRef is `${receiptRef}#receipt`, deterministic and distinct " +
+          "from the bill's manifest:/bill: keys. Never yet exercised by a poster.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "receivedCentsForMatch feeds vendor-bill-core.ts#threeWayMatch, but " +
+          "nothing calls either, so the receipt and the invoice remain unlinked.",
+      },
+    },
+    defectId: "D-61",
+    consequence:
+      "This is where cost is born. Until it runs, inventory_lots.unit_cost_" +
+      "minor_units stays null and buildSaleJournal refuses with " +
+      "UNIT_COST_UNKNOWN, so no sale can post at all \u2014 and under 280E an " +
+      "unknown cost eventually becomes a lost deduction.",
+  },
+
+  {
     key: "vendor_cycle.vendor_bill_recorded",
     family: "vendor_cycle",
     event: "An invoice arrives from a vendor and becomes a payable.",

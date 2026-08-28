@@ -2894,3 +2894,66 @@ the tests, never to weaken the sweep -- an unreachable refusal code is
 decoration, and the branch must stay live for the next loan.
 
 ---
+
+## D-61 -- the receipt and the vendor bill both want to debit inventory for the same goods
+
+**Found:** books-78, while writing `receipt-journal-core.ts`. Found by executing
+`buildBillJournal` and reading its output, NOT by reading its documentation --
+which matters, because the first draft of the receipt module's own header
+asserted the opposite and was wrong.
+
+**What broke:** two builders capitalise the same delivery.
+
+`buildBillJournal` was run against a one-line cannabis-product bill. Measured
+output:
+
+    accountCode "20010"  amountCents  15000    <- category inventory, DEBIT
+    accountCode "30000"  amountCents -15000    <- accounts payable,   CREDIT
+
+So the bill debits the CATEGORY INVENTORY account directly. It never touches
+`20800 Inventory - In Transit`: `grep -c 20800 src/lib/accounting/vendor-bill-core.ts`
+returns 1, and that lone hit is a seeded-account list inside a self-test, not a
+posting path.
+
+`buildReceiptJournal` also debits the category inventory account -- because that
+is what receiving goods correctly does. If both entries ever post for one
+delivery, inventory is carried at twice its cost and, when the goods sell, so is
+COGS. Under 280E that is the single most dangerous direction an error can run:
+COGS is the only deduction this business gets, so an overstatement is the number
+an examiner tests hardest, and it would be defended by two internally consistent
+journals that each look correct in isolation.
+
+**Why it is not fixed in this slice.** The honest end state is that the receipt
+debits inventory and credits 20800, and the bill then DEBITS 20800 instead of
+inventory, so 20800 nets to zero for anything both received and invoiced and a
+residual balance is precisely the list of shipments missing one half. That
+requires changing `buildBillJournal`, which is shipped, heavily tested, and
+depended upon by migration 0187's `gl_post_vendor_bill`. Rewriting it as an
+unannounced side effect of adding a receipt is exactly the kind of silent change
+these rules exist to prevent, and the count of affected tests has not been
+measured. It is named here so the next slice starts from a written finding
+rather than rediscovering it.
+
+**Nothing is double counted today**, and that is a fact about wiring, not about
+correctness: neither builder is reachable. The census records `reachable:
+MISSING` for `vendor_cycle.vendor_bill_recorded` and for the new receipt row.
+This is a LATENT trap that springs on whoever wires the second door.
+
+**How it hid:** each module is correct on its own, and both have passing pure
+self-tests. Purity is the absence of the other module, so no pure test can see
+the collision -- the same archetype as D-34, one level up. It also hid behind
+plausible prose: the receipt module's first header stated as fact that the bill
+debits 20800, which is what a well-designed system WOULD do and what this one
+does not do. Rule 1 says never guess; a confident sentence about another
+module's behaviour is a guess unless that module was run.
+
+**Gate:** `tests/compliance/receipt-journal-core.test.ts` executes the REAL
+`buildBillJournal` and the REAL `buildReceiptJournal` for the same goods, asserts
+that they currently collide on the category account, and asserts that they are
+not both reachable. When someone fixes the bill to relieve 20800, the collision
+assertion fails and forces this defect to be closed deliberately rather than
+forgotten. A test that merely asserted today's behaviour would rot into
+protecting the bug; this one is written to fail on the FIX and on the DANGER
+both, so neither can pass silently.
+
+---

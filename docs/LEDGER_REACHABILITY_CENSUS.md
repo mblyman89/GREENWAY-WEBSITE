@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 34 money events that should reach the books. 32 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 33 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
-| Money events catalogued | 34 |
+| Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 32 |
+| Cannot reach the books at all | 33 |
 | Have nothing that even builds the entry | 20 |
 | Layers that could not be measured | 6 |
 
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 19 of 34 |
-| `reachable` | 32 of 34 |
-| `correct` | 15 of 34 |
-| `accepted` | 28 of 34 |
-| `idempotent` | 23 of 34 |
-| `married` | 13 of 34 |
+| `exists` | 19 of 35 |
+| `reachable` | 33 of 35 |
+| `correct` | 15 of 35 |
+| `accepted` | 29 of 35 |
+| `idempotent` | 23 of 35 |
+| `married` | 14 of 35 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -245,6 +245,7 @@ An inbound delivery charge that belongs in the cost of the product.
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `purchase_order_commitment` | NO | NO | n/a | n/a | n/a | n/a | D-35 |
+| `goods_received` | yes | NO | part | NO | part | NO | D-61 |
 | `vendor_bill_recorded` | yes | NO | yes | NO | part | NO | D-34 |
 | `expense_classified_to_account_and_entity` | yes | NO | part | NO | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
@@ -266,6 +267,23 @@ A purchase order is approved and sent to a vendor.
 - **married: NOT_APPLICABLE** -- No money has moved. _No entry is due at commitment._
 
 **If this stays broken:** The gap is not the missing entry — it is that nothing connects an approved PO to the receipt that SHOULD post. In-transit inventory (20800) is the account that would carry it if goods ship before they arrive.
+
+### `vendor_cycle.goods_received`
+
+A delivery physically arrives and its cost becomes inventory.
+
+- Accounts: `20010`, `20800`, `20890`
+- Builds the entry: `src/lib/accounting/receipt-journal-core.ts#buildReceiptJournal`
+- Posts the entry: **nothing**
+
+- **exists: PRESENT** -- receipt-journal-core.ts debits the category inventory account (or 20890 for an unmapped line) and credits 20800, balanced.
+- **reachable: MISSING** -- grep for buildReceiptJournal across src/app and src/lib/purchasing -> 0 callers. po-store.ts#receivePoLine still only bumps received_qty.
+- **correct: PARTIAL** -- Balanced and integer-only, accepted by the real ledger-core.ts#validateJournalDraft for all 21 categories. NOT PRESENT: vendor-bill-core.ts#buildBillJournal was executed and measured to debit 20010 too, so the pair double counts (D-61).
+- **accepted: MISSING** -- No SQL door takes a receipt; gl_post_vendor_bill (0187) is the bill path, not the receiving path.
+- **idempotent: PARTIAL** -- sourceRef is `${receiptRef}#receipt`, deterministic and distinct from the bill's manifest:/bill: keys. Never yet exercised by a poster.
+- **married: MISSING** -- receivedCentsForMatch feeds vendor-bill-core.ts#threeWayMatch, but nothing calls either, so the receipt and the invoice remain unlinked.
+
+**If this stays broken:** This is where cost is born. Until it runs, inventory_lots.unit_cost_minor_units stays null and buildSaleJournal refuses with UNIT_COST_UNKNOWN, so no sale can post at all — and under 280E an unknown cost eventually becomes a lost deduction.
 
 ### `vendor_cycle.vendor_bill_recorded`
 
@@ -728,6 +746,7 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
+- `vendor_cycle.goods_received` (D-61) -- `src/lib/accounting/receipt-journal-core.ts#buildReceiptJournal`
 - `vendor_cycle.vendor_bill_recorded` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `vendor_cycle.expense_classified_to_account_and_entity` (D-56) -- `src/lib/accounting/expense-classification-core.ts#classifyExpense`
 - `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`

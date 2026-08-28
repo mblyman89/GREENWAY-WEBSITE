@@ -1103,9 +1103,18 @@ describe("evidence cannot be softened without a test failing", () => {
     // Their reachable layers stay MISSING because nothing in src/app or
     // src/lib/pos calls the builder yet; the checkout wiring is its own slice,
     // and claiming otherwise here is exactly the softening this test prevents.
+    // 12 -> 13 in books-78: the new row vendor_cycle.goods_received gained a
+    // builder (receipt-journal-core.ts#buildReceiptJournal) while its reachable
+    // layer stayed MISSING. Deliberate, and the reason is worth stating because
+    // it is NOT the usual "wiring is a separate slice". Here wiring is actively
+    // unsafe: buildBillJournal was executed and measured to debit the SAME
+    // category inventory account this builder debits, so wiring the receipt
+    // while the bill still debits 20010 would capitalise every delivery twice
+    // and overstate 280E COGS. That is D-61. The receipt half is correct and
+    // shipped; the bill half must be reconciled before either becomes reachable.
     // THIS TEST FAILING IS THE SYSTEM WORKING — it is how a new unreachable
     // builder announces itself instead of quietly joining the backlog.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(12);
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(13);
 
     for (const r of drivers) {
       expect(
