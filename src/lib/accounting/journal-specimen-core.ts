@@ -92,6 +92,7 @@ export const SPECIMEN_LOTS: readonly BillLotRow[] = [
     received_qty: 12,
     unit_cost_minor_units: 87550,
     status: "active",
+    is_sample: false,
   },
   {
     id: "specimen-lot-2",
@@ -100,6 +101,20 @@ export const SPECIMEN_LOTS: readonly BillLotRow[] = [
     received_qty: 24,
     unit_cost_minor_units: 41225,
     status: "active",
+    is_sample: false,
+  },
+  {
+    // D-72 (books-92). A free trade sample rides in on the same manifest. It
+    // is lawfully zero-cost, so it must NOT appear on the bill and must NOT be
+    // mistaken for a lot whose price nobody keyed. The proof is arithmetic:
+    // adding this row does not move the specimen total by one cent.
+    id: "specimen-lot-3",
+    lot_code: "SPEC-SAMPLE-003",
+    category: "flower",
+    received_qty: 2,
+    unit_cost_minor_units: null,
+    status: "active",
+    is_sample: true,
   },
 ] as const;
 

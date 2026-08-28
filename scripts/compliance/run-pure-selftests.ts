@@ -176,6 +176,7 @@ import { __runLedgerCategoryMapCoreTests } from "../../src/lib/accounting/ledger
 // §280E lets Greenway keep (inventory → COGS) versus what it disallows, with
 // verbatim authority behind every call.
 import { __runVendorBillCoreTests } from "../../src/lib/accounting/vendor-bill-core";
+import { __runLotCostClassificationTests } from "../../src/lib/accounting/lot-cost-classification-core";
 // Slice books-04: payroll and the employee-as-COGS question. Reseller vs
 // producer character, the narrow evidence-gated acquisition-labor door, the
 // hard block on selling labor, and the balanced payroll journal.
@@ -845,6 +846,8 @@ async function main() {
   __runLedgerCategoryMapCoreTests();
   console.log("ledger-category-map-core self-tests: all passed");
   __runVendorBillCoreTests();
+  __runLotCostClassificationTests();
+  console.log("lot-cost-classification-core self-tests: all passed");
   __runPayrollCogsCoreTests();
   __runBankMatchCoreTests();
   console.log("bank-match-core self-tests: all passed");

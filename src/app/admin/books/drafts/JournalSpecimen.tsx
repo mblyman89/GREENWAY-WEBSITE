@@ -26,7 +26,11 @@
  * ledger's own Date / No. / Account / Detail / Debit / Credit / Balance shape.
  */
 
-import { buildJournalSpecimen } from "@/lib/accounting/journal-specimen-core";
+import {
+  buildJournalSpecimen,
+  SPECIMEN_LOTS,
+} from "@/lib/accounting/journal-specimen-core";
+import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
 
 export function JournalSpecimen() {
   const s = buildJournalSpecimen();
@@ -63,6 +67,58 @@ export function JournalSpecimen() {
                 now owe and writes this — a proposal, sitting on this page, touching
                 nothing.
               </p>
+
+              {/* D-72 (books-92): what came off the truck, and what each lot did
+                  to the bill. The sample line is the point: it is delivered, it
+                  is real, and it owes nothing. Every row is classified by the
+                  same classifyLotCost() the posting engine uses. */}
+              <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+                <p className="text-xs font-semibold text-white/70">
+                  What came off the truck
+                </p>
+                <table className="mt-2 w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-white/40">
+                      <th className="pb-1 font-medium">Lot</th>
+                      <th className="pb-1 font-medium">Units</th>
+                      <th className="pb-1 font-medium">Unit cost</th>
+                      <th className="pb-1 font-medium">On the bill?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {SPECIMEN_LOTS.map((lot) => {
+                      const cls = classifyLotCost(lot);
+                      return (
+                        <tr key={lot.id} className="border-t border-white/5">
+                          <td className="py-1 pr-2 font-mono text-white/70">
+                            {lot.lot_code}
+                          </td>
+                          <td className="py-1 pr-2 text-white/60">{lot.received_qty}</td>
+                          <td className="py-1 pr-2 text-white/60">
+                            {lot.unit_cost_minor_units === null
+                              ? "—"
+                              : `$${(lot.unit_cost_minor_units / 100).toFixed(2)}`}
+                          </td>
+                          <td className="py-1 text-white/60">
+                            {cls === "sample"
+                              ? "No — free sample, owes nothing"
+                              : cls === "unpriced"
+                                ? "Blocked — no cost keyed yet"
+                                : "Yes"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <p className="mt-2 text-xs text-white/45">
+                  A free trade sample is lawfully zero-cost, so it never reaches the
+                  bill. A purchased lot with no cost keyed is a different thing
+                  entirely — the system will not guess it, and it holds the whole
+                  entry until you key it, because billing only the priced half would
+                  understate your inventory and overstate your tax.
+                </p>
+              </div>
 
               <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">

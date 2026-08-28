@@ -3370,3 +3370,50 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
          the engine changes underneath it. See books-44's learn page header:
          a hand-typed margin of "47.9%" survived review while the arithmetic
          said 42.71%.
+
+135. **ZERO IS AN ANSWER; MISSING IS A QUESTION (books-92).**
+
+     Michael, verbatim, correcting the books-91 diagnosis:
+
+       "inventory intake has a manifest and invoice and a json. The cost lives
+        in the json and invoice. Sometimes it'll be on the manifest too I
+        think. The point is, the system needs to know that every product
+        coming in has a cost attached. Unless it is a sample. Those are zero
+        cost, and the system knows how to keep them separate from menu
+        products."
+
+     THE DEFECT SHAPE. `Number(x) || 0` answers "how much?" without ever
+     asking "do we KNOW?". Absence gets silently promoted to a real value, and
+     from that point on nothing downstream can tell a measured zero from a
+     number nobody supplied. In D-72 a lot nobody had priced and a lawfully
+     free trade sample became the same 0, so a half-priced manifest posted a
+     half bill: A/P short, inventory short, COGS short, and under 280E the
+     taxable income OVERSTATED. It balanced perfectly, so no gate caught it.
+
+     (a) NULL/UNDEFINED/NaN COERCED TO A DEFAULT IS BANNED at any boundary
+         where the value is money, a quantity, a rate, or a basis. Classify
+         first, then compute. `?? 0` is only permitted where a test proves the
+         absent case is genuinely, definitionally zero.
+
+     (b) WHEN ABSENCE AND ZERO ARE BOTH LAWFUL, THEY GET DIFFERENT NAMES in
+         the type system -- an enum, a tagged union, anything but a bare
+         number. Here: "sample" | "priced" | "unpriced".
+
+     (c) THE LAWFUL-ZERO TEST RUNS FIRST. A free sample HAS no cost, so asking
+         "is the cost missing?" before "is this free?" reports every sample as
+         an error and blocks legitimate work. Order the branches by which
+         condition EXPLAINS the absence.
+
+     (d) NEVER POST THE KNOWN PART OF AN INCOMPLETE SET. Posting the priced
+         half of a manifest is worse than posting nothing: it produces a
+         balanced, plausible, wrong number that no reviewer will question.
+         Refuse the whole thing and NAME the rows that are missing.
+
+     (e) ONE CLASSIFIER, SHARED BY EVERY CONSUMER. If the screen that shows a
+         total and the engine that posts it each decide "what does this cost"
+         separately, they will drift and disagree about money. D-72 had two
+         copies; there is now one, and both call it.
+
+     (f) A COUNT OF WHAT IS MISSING REACHES THE SCREEN WHERE THE MONEY MOVES.
+         An internally correct refusal plus a payment screen still showing a
+         confident total is rule 134's failure wearing a new coat.

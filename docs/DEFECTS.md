@@ -3771,3 +3771,71 @@ in this slice, and the specimen is explicitly labelled as not being his books.
 rule 133g. Whether his particular manifest hit `BILL_NO_BILLABLE_LOTS` or one of
 the other eight refusals is now ANSWERABLE - the next finalize writes it to the
 timeline - but it is not yet answered, and this entry does not pretend otherwise.
+
+## D-72 - "cost unknown" and "free sample" were the same number
+
+**Found:** books-92, from Michael's own correction. Verbatim: "inventory intake
+has a manifest and invoice and a json. The cost lives in the json and invoice.
+Sometimes it'll be on the manifest too I think. The point is, the system needs
+to know that every product coming in has a cost attached. Unless it is a sample.
+Those are zero cost, and the system knows how to keep them separate from menu
+products."
+
+That correction retired half of D-71's diagnosis. books-91 concluded the cost
+was absent because a CCRS manifest CSV carries no dollars. True, but only for
+that one input path. `manifest-merge-core.ts:196` already fills
+`unit_cost_minor_units` from the invoice when the manifest lacks it, so cost
+DOES arrive - and the interesting failure was never "no costs anywhere", it was
+"costs for SOME lots".
+
+**The defect.** Both the bill engine (`vendor-bill-service.ts:194`) and the
+payables screen (`vendor-payables-store.ts:94`) asked how much a lot cost with
+`Number(lot.unit_cost_minor_units) || 0`. That expression answers "how much?"
+without ever asking "do we KNOW?". Three genuinely different lots collapsed into
+one number:
+
+  - a free trade sample (WAC 314-55-096), lawfully zero -> correctly excluded
+  - a purchased lot nobody has keyed the invoice price for -> WRONGLY excluded
+  - a deliberately keyed zero -> excluded, harmlessly
+
+`inventory_lots.is_sample` has existed since migration 0024 and is written at
+intake (`intake-store.ts:418`), but neither consumer SELECTed it. The
+information needed to tell the first case from the second was sitting in the
+database, unread.
+
+**Why it mattered more than the refusal it hid.** A wholly unpriced manifest
+refused, so it looked like the system was working. A MIXED manifest - some lots
+priced, some not - silently dropped the unpriced lots and posted a PARTIAL bill.
+Accounts payable understated, inventory understated. Understated inventory is
+understated cost of goods sold, and under 280E that is OVERSTATED taxable
+income. Michael overpays. The entry still balances, so no gate, no reviewer and
+no report would ever flag it. A wrong number that balances is the worst kind.
+
+**Fixed.** One shared pure module, `lot-cost-classification-core.ts`, answers
+sample / priced / unpriced, and both callers ask it - because two copies of this
+rule would drift and then the screen and the ledger would disagree about money,
+which is exactly what `vendor-payables-store.ts`'s own header promises cannot
+happen. The sample test runs FIRST: a sample legitimately has no cost, so asking
+"is the cost missing?" first would report every sample as unpriced and block
+every sample delivery. New refusal `BILL_LOT_COST_UNKNOWN` names the offending
+lots and refuses the WHOLE bill before any partial can post. A sample-only
+delivery now gets its own message saying the outcome is correct, rather than
+telling Michael to go find prices that do not exist.
+
+**Wired to a screen, not just to a return value (rule 133).** The unpriced
+tally travels `aggregateLotCosts` -> `VendorPayableRow.unpricedLotCount` ->
+`PayableOption` -> both `VendorAchForm` and `ManualPaymentForm`, where it renders
+as "N lot(s) have no cost yet - total incomplete". Without that last hop the
+payment screen would still show a total that looks final while the bill engine
+refuses the same manifest. The specimen on /admin/books/drafts gained a third
+lot, `SPEC-SAMPLE-003`, delivered and free: it appears in the new "what came off
+the truck" table classified by the real `classifyLotCost`, and the pinned
+specimen total is unchanged at 2,040,000 cents, which is the arithmetic proof
+that a sample adds nothing to a bill.
+
+**What is NOT proven.** 26 of 26 mutations were caught, including four
+door-severing probes. One line - `unpricedLotCount: unpricedByManifest.get(m.id)`
+inside `listVendorPayables` - sits behind a live Supabase connection and cannot
+be executed by any test in this repo; it is pinned in source and that limit is
+stated in the test itself (rule 133f). Nothing here was verified against
+Michael's live database, because no credentials exist in this environment.

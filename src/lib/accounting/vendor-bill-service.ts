@@ -50,6 +50,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { submitJournal } from "@/lib/accounting/posting-service";
 import { findReceiptJournal } from "@/lib/accounting/receipt-evidence";
 import { mapReceiptCategory } from "@/lib/accounting/receipt-category-core";
+import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
 import {
   evaluateVendorBill,
   buildBillJournal,
@@ -73,6 +74,13 @@ export type BillLotRow = {
   readonly received_qty: number | null;
   readonly unit_cost_minor_units: number | null;
   readonly status: string | null;
+  /**
+   * D-72. A free trade sample (WAC 314-55-096) is LAWFULLY zero-cost. An
+   * ordinary lot whose cost has not been keyed yet is UNKNOWN. Before this
+   * column was read, `Number(null) || 0` collapsed those two into the same
+   * number and the unpriced lot was silently dropped from the bill.
+   */
+  readonly is_sample: boolean | null;
 };
 
 /**
@@ -88,6 +96,7 @@ export const VENDOR_BILL_SERVICE_CODES = [
   "BILL_NOT_CONFIGURED",
   "BILL_MANIFEST_NOT_FOUND",
   "BILL_NO_BILLABLE_LOTS",
+  "BILL_LOT_COST_UNKNOWN",
   "BILL_CATEGORY_REFUSED",
   "BILL_RECEIPT_EVIDENCE_UNKNOWN",
   "BILL_READ_FAILED",
@@ -132,7 +141,10 @@ export type LotBillTranslation =
   | { readonly kind: "ok"; readonly lines: readonly VendorBillLineInput[]; readonly totalCents: number }
   | {
       readonly kind: "refused";
-      readonly code: "BILL_NO_BILLABLE_LOTS" | "BILL_CATEGORY_REFUSED";
+      readonly code:
+        | "BILL_NO_BILLABLE_LOTS"
+        | "BILL_LOT_COST_UNKNOWN"
+        | "BILL_CATEGORY_REFUSED";
       readonly message: string;
     };
 
@@ -176,6 +188,10 @@ export function translateLotsToBillLines(
 
   const lines: VendorBillLineInput[] = [];
   const refusals: string[] = [];
+  /** D-72: lots that are lawfully free (samples) — never a missing cost. */
+  const sampleLots: string[] = [];
+  /** D-72: lots whose cost is UNKNOWN — the bill must refuse, never guess. */
+  const unpricedLots: string[] = [];
   let total = 0;
   let lineNo = 0;
 
@@ -191,10 +207,34 @@ export function translateLotsToBillLines(
     // refusal stands, instead of being pre-empted by a quieter one here.
     const categorySlug = mapping.kind === "mapped" ? mapping.slug : null;
 
+    // ── D-72: WHY the cost is zero decides everything ───────────────────
+    // `Number(null) || 0` used to answer "how much?" without ever asking
+    // "do we KNOW?". A free trade sample and a lot nobody has keyed the
+    // invoice price for both came out 0, and both were dropped. Dropping a
+    // sample is correct. Dropping an unpriced purchase understates A/P AND
+    // inventory, and understated inventory is understated COGS, which under
+    // 280E is OVERSTATED taxable income. Michael would overpay, and the
+    // entry would still balance, so nothing would look wrong.
+    // The verdict comes from the SHARED core so the payables screen and this
+    // ledger posting can never disagree about what a lot costs.
+    const costClass = classifyLotCost(lot);
+
+    if (costClass === "sample") {
+      // Lawfully free. It carries no money, so it belongs on no bill. It is
+      // NOT a missing cost and must never be reported as one.
+      sampleLots.push(lot.lot_code ?? lot.id);
+      continue;
+    }
+
+    if (costClass === "unpriced") {
+      unpricedLots.push(lot.lot_code ?? lot.id);
+      continue;
+    }
+
     const qty = Number(lot.received_qty) || 0;
-    const unit = Number(lot.unit_cost_minor_units) || 0;
+    const unit = Number(lot.unit_cost_minor_units);
     const extended = Math.round(qty * unit);
-    if (extended === 0) continue; // a zero line moves no money; the engine blocks it
+    if (extended === 0) continue; // a known, genuinely zero line moves no money
 
     lineNo += 1;
     total += extended;
@@ -219,7 +259,46 @@ export function translateLotsToBillLines(
     };
   }
 
+  // D-72: an UNKNOWN cost refuses the WHOLE bill, before any partial posts.
+  // This is checked ahead of the empty-lines case because a manifest that is
+  // half priced and half unpriced would otherwise post the priced half and
+  // look perfectly balanced while understating what we owe.
+  if (unpricedLots.length > 0) {
+    const priced = lines.length;
+    return {
+      kind: "refused",
+      code: "BILL_LOT_COST_UNKNOWN",
+      message:
+        `Nothing was recorded. ${unpricedLots.length} lot(s) on this delivery ` +
+        `have no unit cost yet: ${unpricedLots.join(", ")}. The cost is on the ` +
+        `vendor's invoice or the JSON, not always on the manifest. ` +
+        (priced > 0
+          ? `${priced} other lot(s) here ARE priced, and recording only those ` +
+            `would understate both the payable and the inventory value — which ` +
+            `understates cost of goods sold and overstates the tax owed. So the ` +
+            `whole bill waits. `
+          : "") +
+        `Key the unit costs, then finalize again. (If any of these were free ` +
+        `trade samples, mark them as samples at intake and they will be ` +
+        `excluded instead.)`,
+    };
+  }
+
   if (lines.length === 0) {
+    // Every remaining lot was a lawful free sample. That is a COMPLETE and
+    // correct outcome, not a missing cost, so it must not tell Michael to go
+    // find prices that do not exist.
+    if (sampleLots.length > 0) {
+      return {
+        kind: "refused",
+        code: "BILL_NO_BILLABLE_LOTS",
+        message:
+          `No payable was recorded, and that is correct. All ` +
+          `${sampleLots.length} lot(s) on this delivery are free trade samples ` +
+          `(${sampleLots.join(", ")}), so nothing is owed to the vendor. The ` +
+          `goods are in inventory at zero cost and no bill is due.`,
+      };
+    }
     return {
       kind: "refused",
       code: "BILL_NO_BILLABLE_LOTS",
@@ -277,7 +356,7 @@ export async function postManifestVendorBill(
 
   const { data: lotRows, error: lErr } = await admin
     .from("inventory_lots")
-    .select("id, lot_code, category, received_qty, unit_cost_minor_units, status")
+    .select("id, lot_code, category, received_qty, unit_cost_minor_units, status, is_sample")
     .eq("manifest_id", manifestId);
 
   if (lErr) {

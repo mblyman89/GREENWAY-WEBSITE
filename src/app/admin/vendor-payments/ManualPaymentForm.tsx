@@ -190,6 +190,12 @@ export function ManualPaymentForm() {
           </span>
           <span>
             {selected.lotCount} {selected.source === "noncannabis_invoice" ? "line(s)" : "lot(s)"}
+            {selected.unpricedLotCount > 0 ? (
+              /* D-72: paying against a total that is missing lots underpays. */
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">
+                {selected.unpricedLotCount} lot(s) have no cost yet &mdash; total incomplete
+              </span>
+            ) : null}
           </span>
         </div>
       )}

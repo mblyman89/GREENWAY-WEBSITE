@@ -131,20 +131,54 @@ describe("the specimen is built by the real engine", () => {
     expect(byAccount.get(AP_ACCOUNT_CODE)).toBe(-2_040_000);
   });
 
-  it("shows one debit line per priced lot, at that lot's own extended cost", () => {
+  it("shows one debit line per PURCHASED lot, at that lot's own extended cost", () => {
     const s = buildJournalSpecimen();
     if (!s.ok) throw new Error("specimen refused");
 
+    // D-72: the free sample is NOT a bill line, so the count is the number of
+    // purchased lots, not the number of lots on the truck.
+    const purchased = SPECIMEN_LOTS.filter((l) => l.is_sample !== true);
+    const samples = SPECIMEN_LOTS.filter((l) => l.is_sample === true);
+    // Rule 48: this test cannot classify unless the specimen actually contains
+    // both kinds. If it ever stops doing so, FAIL rather than pass vacuously.
+    expect(purchased.length).toBeGreaterThan(0);
+    expect(samples.length).toBeGreaterThan(0);
+
     const debits = s.lines.filter((l) => l.amountCents > 0);
-    expect(debits).toHaveLength(SPECIMEN_LOTS.length);
+    expect(debits).toHaveLength(purchased.length);
+    expect(debits.length).toBeLessThan(SPECIMEN_LOTS.length);
 
     // Computed here from the stated delivery, NOT read back from the engine.
-    for (const lot of SPECIMEN_LOTS) {
+    for (const lot of purchased) {
       const extended = Math.round(
         (lot.received_qty ?? 0) * (lot.unit_cost_minor_units ?? 0),
       );
       expect(debits.some((d) => d.amountCents === extended)).toBe(true);
     }
+  });
+
+  it("D-72: the free sample rides along without moving one cent of the bill", () => {
+    const s = buildJournalSpecimen();
+    if (!s.ok) throw new Error("specimen refused");
+
+    const sample = SPECIMEN_LOTS.find((l) => l.is_sample === true);
+    if (!sample) throw new Error("specimen must carry a sample lot to prove this");
+    // The sample is a real delivered lot with real units on the truck...
+    expect(Number(sample.received_qty)).toBeGreaterThan(0);
+    // ...and no cost at all. Under the OLD code `Number(null) || 0` made this
+    // indistinguishable from an unpriced purchase.
+    expect(sample.unit_cost_minor_units).toBeNull();
+
+    // Its lot code appears NOWHERE in the entry, and the total is exactly the
+    // two purchased lots. This is the arithmetic proof of exclusion.
+    for (const l of s.lines) {
+      expect(l.description).not.toContain(String(sample.lot_code));
+    }
+    const purchasedTotal = SPECIMEN_LOTS.filter((l) => l.is_sample !== true).reduce(
+      (sum, l) => sum + Math.round((l.received_qty ?? 0) * (l.unit_cost_minor_units ?? 0)),
+      0,
+    );
+    expect(s.totalCents).toBe(purchasedTotal);
   });
 
   it("never puts an amount in both the debit and the credit column", () => {

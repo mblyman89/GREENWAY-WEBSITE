@@ -240,6 +240,13 @@ export function VendorAchForm({
                   </span>
                   <span>
                     {p.lotCount} {p.source === "noncannabis_invoice" ? "line(s)" : "lot(s)"}
+                    {p.unpricedLotCount > 0 ? (
+                      /* D-72: this total is INCOMPLETE. Say so where the money
+                         is about to move, not only in the bill engine. */
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">
+                        {p.unpricedLotCount} lot(s) have no cost yet &mdash; total incomplete
+                      </span>
+                    ) : null}
                   </span>
                 </div>
               )}

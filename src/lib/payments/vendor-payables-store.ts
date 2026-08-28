@@ -15,6 +15,7 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   PAYABLE_MANIFEST_STATUSES,
@@ -26,10 +27,72 @@ export type VendorPayableRow = ManifestPayable & {
   acceptedAt: string | null;
   /** Number of non-rejected lots contributing to `owedMinorUnits`. */
   lotCount: number;
+  /**
+   * D-72. How many non-rejected, non-sample lots have NO unit cost yet. When
+   * this is above zero the owed figure is INCOMPLETE, and the bill engine will
+   * refuse the manifest with BILL_LOT_COST_UNKNOWN rather than post a partial
+   * payable. Surfaced so the screen can say so instead of showing a total that
+   * looks final.
+   */
+  unpricedLotCount: number;
 };
 
 /** Lots we EXCLUDE from cost basis (rejected at dock / rejected). */
 const EXCLUDED_LOT_STATUSES = new Set(["rejected"]);
+
+/** One lot row as the payables roll-up needs it. Exported for testing. */
+export type PayableLotRow = {
+  readonly manifest_id: string | null;
+  readonly received_qty: number | null;
+  readonly unit_cost_minor_units: number | null;
+  readonly status: string | null;
+  readonly is_sample: boolean | null;
+};
+
+export type PayableLotAggregate = {
+  /** Money owed per manifest, in integer cents. */
+  readonly owedByManifest: Map<string, number>;
+  /** Non-rejected lots per manifest (samples included: they were delivered). */
+  readonly lotCountByManifest: Map<string, number>;
+  /** D-72: non-sample lots per manifest whose unit cost is UNKNOWN. */
+  readonly unpricedByManifest: Map<string, number>;
+};
+
+/**
+ * Roll lot rows up into owed / counted / unpriced, per manifest.
+ *
+ * PURE and exported so it can be tested without a database. Before D-72 this
+ * logic lived inline and did `Number(lot.unit_cost_minor_units) || 0`, which
+ * scored a lot nobody had priced as $0.00 owed — while the bill engine refused
+ * that same manifest outright. The screen and the ledger disagreed about money
+ * and neither said so. Both now ask classifyLotCost().
+ */
+export function aggregateLotCosts(
+  lotRows: readonly PayableLotRow[],
+): PayableLotAggregate {
+  const owedByManifest = new Map<string, number>();
+  const lotCountByManifest = new Map<string, number>();
+  const unpricedByManifest = new Map<string, number>();
+
+  for (const lot of lotRows) {
+    if (!lot.manifest_id) continue;
+    if (EXCLUDED_LOT_STATUSES.has((lot.status || "").toLowerCase())) continue;
+    lotCountByManifest.set(lot.manifest_id, (lotCountByManifest.get(lot.manifest_id) ?? 0) + 1);
+
+    const costClass = classifyLotCost(lot);
+    if (costClass === "sample") continue; // lawfully free; owes nothing
+    if (costClass === "unpriced") {
+      unpricedByManifest.set(lot.manifest_id, (unpricedByManifest.get(lot.manifest_id) ?? 0) + 1);
+      continue; // cost UNKNOWN: not zero. Counted, not silently added as 0.
+    }
+
+    const qty = Number(lot.received_qty) || 0;
+    const line = Math.round(qty * Number(lot.unit_cost_minor_units));
+    owedByManifest.set(lot.manifest_id, (owedByManifest.get(lot.manifest_id) ?? 0) + line);
+  }
+
+  return { owedByManifest, lotCountByManifest, unpricedByManifest };
+}
 
 /**
  * List accepted (payable) manifests with computed owed + already-paid totals.
@@ -73,7 +136,7 @@ export async function listVendorPayables(opts?: {
   // 2) Non-rejected lots for those manifests → owed = SUM(received_qty * unit_cost).
   const { data: lots } = await admin
     .from("inventory_lots")
-    .select("manifest_id, received_qty, unit_cost_minor_units, status")
+    .select("manifest_id, received_qty, unit_cost_minor_units, status, is_sample")
     .in("manifest_id", manifestIds);
   const lotRows =
     (lots as
@@ -82,20 +145,12 @@ export async function listVendorPayables(opts?: {
           received_qty: number | null;
           unit_cost_minor_units: number | null;
           status: string | null;
+          is_sample: boolean | null;
         }[]
       | null) ?? [];
 
-  const owedByManifest = new Map<string, number>();
-  const lotCountByManifest = new Map<string, number>();
-  for (const lot of lotRows) {
-    if (!lot.manifest_id) continue;
-    if (EXCLUDED_LOT_STATUSES.has((lot.status || "").toLowerCase())) continue;
-    const qty = Number(lot.received_qty) || 0;
-    const unit = Number(lot.unit_cost_minor_units) || 0;
-    const line = Math.round(qty * unit);
-    owedByManifest.set(lot.manifest_id, (owedByManifest.get(lot.manifest_id) ?? 0) + line);
-    lotCountByManifest.set(lot.manifest_id, (lotCountByManifest.get(lot.manifest_id) ?? 0) + 1);
-  }
+  const { owedByManifest, lotCountByManifest, unpricedByManifest } =
+    aggregateLotCosts(lotRows);
 
   // 3) Prior payments already applied → paid = SUM(amount_minor_units).
   const { data: payments } = await admin
@@ -141,6 +196,7 @@ export async function listVendorPayables(opts?: {
       paidMinorUnits: paid,
       acceptedAt: m.accepted_at,
       lotCount: lotCountByManifest.get(m.id) ?? 0,
+      unpricedLotCount: unpricedByManifest.get(m.id) ?? 0,
     };
   });
 

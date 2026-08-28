@@ -78,6 +78,14 @@ export type PayableOption = {
   acceptedAt: string | null;
   lotCount: number;
   /**
+   * D-72 (books-92). Lots on this manifest that are NOT samples and have no
+   * unit cost keyed yet. When above zero the owed figure is INCOMPLETE: the
+   * bill engine refuses the manifest with BILL_LOT_COST_UNKNOWN rather than
+   * post a partial payable, so paying against this total would underpay.
+   * Zero for paper invoices, whose totals come from the invoice itself.
+   */
+  unpricedLotCount: number;
+  /**
    * W8 — invoice ↔ linked-PO cross-check (W5 link; read-only). `hasPo:false`
    * when the manifest isn't linked to a PO or migration 0102 isn't applied.
    */
@@ -149,6 +157,7 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
     remainingMinorUnits: Math.max(0, r.owedMinorUnits - r.paidMinorUnits),
     acceptedAt: r.acceptedAt,
     lotCount: r.lotCount,
+    unpricedLotCount: r.unpricedLotCount,
     poComparison: compareInvoiceToPo(r.owedMinorUnits, poFacts.get(r.manifestId) ?? null),
     vaultReady: vault.tableReady,
     vaultBank: vaultInfo(r.vendorId),
@@ -168,6 +177,8 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
     remainingMinorUnits: Math.max(0, r.totalMinorUnits - r.paidMinorUnits),
     acceptedAt: r.invoiceDate,
     lotCount: r.lineCount,
+    // A paper invoice states its own total; there is no per-lot cost to miss.
+    unpricedLotCount: 0,
     poComparison: { hasPo: false },
     vaultReady: vault.tableReady,
     vaultBank: vaultInfo(r.vendorId),

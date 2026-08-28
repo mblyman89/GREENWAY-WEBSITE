@@ -49,6 +49,9 @@ const lot = (over: Partial<BillLotRow> = {}): BillLotRow => ({
   received_qty: 10,
   unit_cost_minor_units: 1500,
   status: "active",
+  // D-72 default: an ordinary purchased lot. Tests that mean a free trade
+  // sample say so explicitly with `is_sample: true`.
+  is_sample: false,
   ...over,
 });
 
