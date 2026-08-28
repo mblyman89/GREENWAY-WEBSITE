@@ -264,7 +264,7 @@ export const TABLE_RULES: readonly TableRule[] = [
     table: "gl_approval_policy",
     disposition: "KEEP",
     because:
-      "The dollar threshold above which an entry needs a second pair of eyes — an internal control setting.",
+      "The dollar threshold above which an entry is flagged as large, and the sole-owner-operator decision that lets Michael approve his own (migration 0211) — internal control settings, not entries. A reset must not quietly re-impose a second approver who does not exist.",
   },
   {
     table: "gl_allocation_configs",

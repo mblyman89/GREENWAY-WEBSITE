@@ -27,6 +27,9 @@ import { ingestAtmCsvs, runAtmLiveSync } from "@/lib/atm/sync-server";
 import { discoverReportFilterFields, selectPaiReport, probeReportCandidates } from "@/lib/atm/pai-client";
 import type { PaiReportKind } from "@/lib/atm/pai-endpoints";
 import { validateManualCashLoad } from "@/lib/atm/atm-ui-core";
+import { postAtmSettlements } from "@/lib/atm/atm-settlement-service";
+import type { AtmPostRunResult } from "@/lib/atm/atm-settlement-service";
+import { requireBooksAccess } from "@/lib/accounting/books-access";
 
 const ROOT = "/admin/atm";
 
@@ -501,4 +504,51 @@ export async function probeReportCandidatesAction(formData: FormData): Promise<v
   });
 
   back({ tab: "health", msg: `${result.summary}${savedNote}` });
+}
+
+/**
+ * Turn every settled ATM day into a draft journal entry (books-89, D-40).
+ *
+ * WHY THE GATE IS `requireBooksAccess` AND NOT `finances.view` LIKE ITS
+ * NEIGHBOURS IN THIS FILE. Every other action here configures the ATM
+ * connection or imports a report — operational work. This one WRITES TO THE
+ * GENERAL LEDGER, and the books are owner-only (is_owner(), migration 0185).
+ * Matching the surrounding style would have quietly widened who can create
+ * journal entries, so the gate follows the destination of the data rather than
+ * the folder the file happens to live in.
+ *
+ * Returns the run result instead of redirecting. Every other action here ends
+ * in `back()` with a one-line message, which is right for "connection saved"
+ * and wrong for this: a run can record 112 days and refuse 3, and the three
+ * refusals are the part that needs reading. A query-string message cannot carry
+ * them, so the panel renders the whole result.
+ */
+export async function postAtmSettlementsAction(): Promise<AtmPostRunResult> {
+  const session = await requireBooksAccess();
+
+  const result = await postAtmSettlements();
+
+  // Audited whether or not it wrote anything: "the report was empty" and
+  // "nobody ever pressed the button" must stay distinguishable later.
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: null,
+    action: "books.atm_settlements.filed",
+    entityType: "atm_settlement",
+    entityId: null,
+    after: {
+      scanned: result.scanned,
+      recorded: result.recorded,
+      duplicates: result.duplicates,
+      refused: result.refused,
+      ok: result.ok,
+    },
+  });
+
+  if (result.recorded > 0) {
+    revalidatePath("/admin/books/drafts");
+    revalidatePath(ROOT);
+  }
+
+  return result;
 }

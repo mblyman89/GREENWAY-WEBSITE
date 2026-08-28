@@ -77,6 +77,11 @@ const POSTING_SERVICES = [
     entry: "recordBankExpenses",
     door: "the owner pressing a button on /admin/books/bank (books-88, D-70)",
   },
+  {
+    file: "src/lib/atm/atm-settlement-service.ts",
+    entry: "postAtmSettlements",
+    door: "the owner pressing a button on /admin/atm?tab=transactions (books-89, D-40)",
+  },
 ] as const;
 
 /**
@@ -109,6 +114,27 @@ describe("every posting service is reachable from something a human can press", 
   // than false, and every assertion below would fail for the wrong reason.
   it("the source walk actually reached the codebase", () => {
     expect(ALL_SOURCE.length).toBeGreaterThan(300);
+  });
+
+  // A guard on the guard on the guard. The books-89 mutation probe deleted one
+  // entry from POSTING_SERVICES and every other test in this file still passed:
+  // the list shrank, coverage shrank with it, and nothing said so. That is the
+  // rule 50 shape exactly -- the gate that watches for unreachable posters was
+  // itself unwatched. The count is STATED per rule 89 and rises only in a commit
+  // that adds the poster it counts.
+  it("watches every posting service the codebase has, and the count is stated", () => {
+    // STATED per rule 89: 4 -> 5 posters (books-89 adds the ATM settlement door).
+    expect(POSTING_SERVICES).toHaveLength(5);
+
+    // Names, not just a number, so a deletion cannot be papered over by an
+    // unrelated addition that happens to keep the total at five.
+    expect(POSTING_SERVICES.map((s) => s.entry).sort()).toEqual([
+      "postAtmSettlements",
+      "postAuditSession",
+      "postManifestVendorBill",
+      "postSaleForOrder",
+      "recordBankExpenses",
+    ]);
   });
 
   for (const svc of POSTING_SERVICES) {
@@ -197,5 +223,77 @@ describe("the bank expense door specifically (D-70)", () => {
 
   it("the panel sends the owner to the approvals screen, because nothing posted here", () => {
     expect(readFileSync(PANEL, "utf8")).toContain("/admin/books/drafts");
+  });
+});
+
+describe("the ATM settlement door specifically (D-40)", () => {
+  const SERVICE = "src/lib/atm/atm-settlement-service.ts";
+  const ACTION = "src/app/admin/atm/actions.ts";
+  const PAGE = "src/app/admin/atm/page.tsx";
+  const PANEL = "src/components/admin/atm/PostAtmSettlementsPanel.tsx";
+
+  it("the service submits through the ledger door, not by writing rows itself", () => {
+    const src = readFileSync(SERVICE, "utf8");
+    expect(/\bawait submitJournal\(/.test(src)).toBe(true);
+    // A direct table write would bypass every check in migration 0172.
+    expect(src).not.toContain('.from("gl_journals")');
+    expect(src).not.toContain('.from("gl_journal_lines")');
+  });
+
+  it("posts as sourceKind 'atm', because 10300 is a control account", () => {
+    // 0172 check (6) refuses a 'manual' journal touching a control account. The
+    // constant is read from the core rather than retyped, so the two cannot
+    // drift into different answers.
+    const src = readFileSync(SERVICE, "utf8");
+    expect(src).toContain("sourceKind: ATM_SOURCE_KIND");
+    expect(src).toContain('from "@/lib/atm/atm-posting-core"');
+  });
+
+  it("never auto-posts, so every settled day lands as a draft for review", () => {
+    // Every proposal carries postable:false — a person reconciles the ATM
+    // against a physical count. Creating the draft is the ask; posting is not.
+    expect(readFileSync(SERVICE, "utf8")).not.toContain("autoPost: true");
+  });
+
+  it("invents no account codes of its own", () => {
+    // All accounting judgment belongs to atm-posting-core. A literal account
+    // code appearing here would be a second source of truth.
+    const src = readFileSync(SERVICE, "utf8");
+    const body = src.slice(src.indexOf("export type AtmPostOutcome"));
+    expect(body).not.toMatch(/["']1030\d["']/);
+    expect(body).not.toMatch(/["']51000["']/);
+  });
+
+  it("reports a failed read as an error, never as zero days (rule 46)", () => {
+    const src = readFileSync(SERVICE, "utf8");
+    expect(src).toContain("could not be read, so nothing was written");
+  });
+
+  it("the action gates on BOOKS access, not the page's finances.view", () => {
+    const src = readFileSync(ACTION, "utf8");
+    const gate = src.indexOf("await requireBooksAccess()");
+    const call = src.indexOf("await postAtmSettlements()");
+    expect(gate).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(-1);
+    // Ordering, not mere presence: a gate after the write logs the break-in.
+    expect(gate).toBeLessThan(call);
+  });
+
+  it("the action audits the run", () => {
+    expect(readFileSync(ACTION, "utf8")).toContain("books.atm_settlements.filed");
+  });
+
+  it("the page renders the panel, not merely imports it", () => {
+    expect(/<PostAtmSettlementsPanel\s*\/>/.test(readFileSync(PAGE, "utf8"))).toBe(true);
+  });
+
+  it("the panel shows refusals before successes and sends the owner to approvals", () => {
+    const src = readFileSync(PANEL, "utf8");
+    const refused = src.indexOf("Not filed \u2014 these need you");
+    const filed = src.indexOf("Filed as drafts");
+    expect(refused).toBeGreaterThan(-1);
+    expect(filed).toBeGreaterThan(-1);
+    expect(refused).toBeLessThan(filed);
+    expect(src).toContain("/admin/books/drafts");
   });
 });

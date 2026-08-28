@@ -1937,6 +1937,23 @@ fixture is not a production mapping and must not be copied when this is wired.
 the reason that classification is proven while the journal is not built, and the
 validator forbids a PARTIAL verdict from carrying softening prose.
 
+**CLOSED books-89 for the SETTLEMENT half.** `atm-settlement-service.ts` converts
+the proposals `atm-posting-core.ts` has been building since books-69 into draft
+journals, and the chain now runs unbroken: `/admin/atm?tab=transactions` ->
+`PostAtmSettlementsPanel` -> `actions.ts#postAtmSettlementsAction` ->
+`atm-settlement-service.ts#postAtmSettlements` -> `buildAtmSettlementProposals`
+-> `submitJournal` -> draft. Surcharge income reaches 51000 and the vault
+movements reach 10300. The service is registered in the standing-rule-133
+reachability trap, so it cannot go dead again without a test failing.
+
+Two things stay deliberately unfinished and are NOT hidden (rule 133f). First,
+`postable: false` is unchanged and no ATM entry auto-posts: each day lands as a
+draft because the machine is reconciled against a physical count by a person.
+Second, this closes SETTLEMENTS only. The VAULT LOAD half - the
+`atm_vault_load` census row, 10300 against 10100 - still has no builder, because
+`atm-classification-core.ts` classifies debits and does not construct journals.
+That row keeps D-40 and keeps `exists: MISSING`.
+
 ---
 
 ## D-41 - Intercompany transfers have a working paired door and no caller

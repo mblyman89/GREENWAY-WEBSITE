@@ -1587,6 +1587,38 @@
       NOTE: deliberately deferred until the GL exists, so matching posts a real
       journal entry instead of a standalone link we'd rebuild later.
 
+## PR D — The $5,000 approval threshold: notify, do not block — DEFERRED BY MICHAEL (books-89)
+
+Michael, verbatim (books-89):
+
+  "I will need you to turn off the over 5k approval feature. I am the one and
+   only owner operator that will have access to the books. I liked it because
+   it flags large purchases, but I regularly have over 5k invoices, so I want
+   to be notified about it, then it needs to allow me to approve it. But we
+   will work on that later, just add it to the list of things to complete
+   later on."
+
+WHAT WAS DONE NOW (books-89): the BLOCK is off. `allow_self_approval` is true
+for every entity with the reason recorded in `self_approval_reason`, which the
+0174 check constraint requires. Michael can approve and post his own entries at
+any size. Nothing else changed.
+
+WHAT IS DEFERRED, AND IT IS THE PART HE ACTUALLY ASKED FOR:
+- [ ] The FLAG survives the block being removed. He said he LIKED being warned;
+      he only objected to being stopped. `SubmitJournalResult.needsSecondApprover`
+      already exists and is already computed by the database. Nothing renders it.
+- [ ] Show a prominent "this is a large entry" marker on the drafts list and on
+      the draft detail, driven by that flag, at the entity's own threshold.
+- [ ] Decide with Michael whether the notification should also reach him outside
+      the app (email/SMS) or only on screen. NOT GUESSED — ask.
+- [ ] Consider a per-entity "notify at" figure separate from "block at", so the
+      warning line and the segregation-of-duties line stop being the same
+      number. Today one column does both jobs.
+
+DO NOT re-enable the block to make the warning work. The warning is a screen
+concern; the block is a database concern; conflating them is what made a helpful
+flag into an obstacle.
+
 ## STRATEGY — Bookkeeping branch (decided with Michael, Aug 2026)
 Recommendation: BUILD THE BOOKS FIRST, then tie Timberland to loans as a
 posting rule into the ledger. Reasons: (1) matching is a POSTING problem — a
@@ -3215,3 +3247,58 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
            is spending his money to reassure me.
        (e) A rule may now be satisfied by a POINTER instead of a paragraph.
            Citing D-07 discharges the duty to explain the defect in full.
+
+133. **THE END-TO-END RULE: NOTHING SHIPS HALF-WIRED (books-89).**
+
+     Michael, verbatim, after finding D-70 himself by pressing refresh and
+     getting nothing:
+
+       "Please make sure that you wire everything end to end this time. Add
+        it as a standing rule please, that way we don't miss connecting
+        something important, a safety net of sorts I suppose."
+
+     THE DEFECT SHAPE THIS EXISTS TO KILL. Three times now the same thing has
+     happened: an engine was built correctly, tested thoroughly, mutation-
+     probed, and connected to NOTHING. D-56 and D-37 (the expense classifier),
+     D-40 (the ATM classifier), D-70 (the bank/ATM expense poster). Each was
+     green on every gate. Each was dead. The pattern is not carelessness about
+     code, it is measuring reachability ONE LINK TOO EARLY: proving that the
+     service calls the ledger, and never proving that anything calls the
+     service.
+
+     (a) A SLICE IS NOT DONE UNTIL A HUMAN CAN CAUSE THE EFFECT. The chain must
+         run unbroken from something Michael can physically press to the row
+         that lands in the database. Screen -> action -> service -> core ->
+         ledger. If any link is missing the slice is NOT shippable, regardless
+         of test count.
+
+     (b) THE CHAIN IS STATED IN THE COMMIT AND IN THE OWNER REPORT, link by
+         link, by file. Not "wired up" -- the actual path. If it cannot be
+         written down as a chain, it is not a chain.
+
+     (c) EVERY NEW BUILDER OR POSTER IS ADDED TO THE REACHABILITY TRAP in
+         tests/compliance/posting-services-are-reachable.test.ts, which walks
+         src/ for a real CALLER by word-boundary regex and excludes
+         ledger-census-data.ts (a census entry is a claim, not a call).
+         Adding the engine without adding the trap row is itself the defect.
+
+     (d) NEVER ASSERT REACHABILITY FROM INSIDE THE THING BEING REACHED. "The
+         service calls submitJournal" is a statement about the service. It is
+         not evidence that the feature is alive. Walk the tree from the OUTSIDE
+         in, starting at src/app.
+
+     (e) THE CENSUS MAY NOT RECORD `reachable: PRESENT` WITHOUT THE FULL CHAIN
+         NAMED IN THE EVIDENCE, beginning at a screen. A `poster:` string in
+         the census is a claim about code, and the census is not permitted to
+         be its own proof.
+
+     (f) IF A DELIBERATE END IS INTENDED -- a proposal for human review, an
+         engine parked ahead of its screen -- SAY SO OUT LOUD, in the census
+         row, in DEFECTS.md, and in the owner report, with the reason and the
+         slice that will finish it. "Proposed, not posted" is a legitimate
+         resting place. Silently unreachable is not. The difference is whether
+         Michael was told.
+
+     (g) THE MUTATION PROBE FOR ANY WIRING SLICE MUST INCLUDE SEVERING THE
+         DOOR. Cut the top link and the suite must go red. If it stays green
+         the slice has re-created the defect it was fixing, with extra steps.

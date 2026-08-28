@@ -86,6 +86,8 @@ function chipCls(tone: "neutral" | "green" | "orange"): string {
   return "border-white/15 bg-white/[0.04] text-white/70";
 }
 
+import PostAtmSettlementsPanel from "@/components/admin/atm/PostAtmSettlementsPanel";
+
 export default async function AtmPage({
   searchParams,
 }: {
@@ -634,6 +636,23 @@ function SettlementsTab({
               : "Across both deposit legs"
           }
         />
+      </div>
+
+      {/* ── FILE THESE DAYS INTO THE BOOKS (books-89, D-40) ────────────────
+          books-69 built the entry for a settled day and nothing ever filed it,
+          so the surcharge income of an entire separate business had never
+          reached the ledger. This is the missing button. It sits directly above
+          the table it acts on, because the days listed below are exactly the
+          days it files. */}
+      <div className={cardCls}>
+        <h2 className="mb-1 text-sm font-bold text-white">File these days into the books</h2>
+        <p className="mb-4 max-w-3xl text-sm leading-relaxed text-white/55">
+          Each settled day below becomes one journal entry: the money that arrived in
+          the ATM account, split between the surcharge you earned and the cash the
+          machine handed out. The fee is income of the ATM business, which is a
+          separate trade from the store and is not subject to 280E.
+        </p>
+        <PostAtmSettlementsPanel />
       </div>
 
       <div className={cardCls}>

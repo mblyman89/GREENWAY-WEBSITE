@@ -914,8 +914,21 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // vendor_cycle.operating_expense_from_bank to reachable, so the ratio
     // MEASURED 26/35 = 0.7429 and `> 0.75` began failing on real progress.
     // STATED per rule 89: unreachable 28 -> 26 of 35.
+    //
+    // books-89 lowers it a third time, 0.70 -> 0.65, and the arithmetic is the
+    // same story twice more. Building the door for the bank/ATM expense poster
+    // (D-70, books-88) and then for ATM settlements (D-40, books-89) each moved
+    // one row from unreachable to reachable, so the ratio MEASURED 24/35 =
+    // 0.6857 and `> 0.70` began failing on real progress.
+    // STATED per rule 89: unreachable 26 -> 24 of 35.
+    //
+    // WHY THIS BOUND IS NOT DELETED AS IT APPROACHES ZERO. It is not a
+    // prediction, it is a tripwire against quiet reclassification: the only
+    // legitimate way to move it is a commit that also contains the wiring which
+    // earned the move. Standing rule 133 now makes that wiring provable
+    // independently, so the two gates check each other.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.70);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.65);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {

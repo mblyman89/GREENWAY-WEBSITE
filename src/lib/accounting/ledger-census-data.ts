@@ -1384,8 +1384,14 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       reachable: {
         status: "MISSING",
         evidence:
-          "store.ts#listAtmClassificationProposals returns proposals for review and " +
-          "posts nothing, by design.",
+          "store.ts#listAtmClassificationProposals returns proposals for review " +
+          "and posts nothing. books-89 closed the SETTLEMENT half of D-40 and " +
+          "deliberately did NOT close this one: settlements had a finished " +
+          "builder waiting for a door, whereas a vault load has no builder at " +
+          "all — atm-classification-core.ts decides what a debit IS and does not " +
+          "construct a journal. Wiring a door to nothing would be theatre. " +
+          "Stated out loud per standing rule 133(f) rather than left to look " +
+          "like an oversight.",
       },
       correct: {
         status: "PARTIAL",
@@ -1424,23 +1430,74 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     sourceKind: "atm",
     entityCode: "atm",
     accountCodes: ["51000", "10300"],
-    builder: null,
-    poster: null,
+    builder: "src/lib/atm/atm-posting-core.ts#buildAtmSettlementProposal",
+    poster: "src/lib/atm/atm-settlement-service.ts#postAtmSettlements",
     layers: {
-      exists: { status: "MISSING", evidence: "No builder targets 51000." },
-      reachable: { status: "MISSING", evidence: "No ATM path posts." },
-      correct: {
-        status: "MISSING",
+      exists: {
+        status: "PRESENT",
         evidence:
-          "51000 ATM Surcharge Income is seeded. Note ledger-core.ts:770 uses code " +
-          "70100 named 'ATM Fee Income' in a self-test fixture, which is NOT the " +
-          "seeded account — a fixture, not a production mapping.",
+          "books-69 built buildAtmSettlementProposal, which debits 10300 for the " +
+          "money that arrived and credits 51000 for the fee portion. The previous " +
+          "verdict here said 'No builder targets 51000', which was wrong from the " +
+          "moment books-69 shipped: the builder existed and the census had not " +
+          "been re-read. Corrected in books-89 by measuring the file rather than " +
+          "trusting the row.",
       },
-      accepted: { status: "MISSING", evidence: "Never presented." },
-      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      reachable: {
+        status: "PRESENT",
+        evidence:
+          "books-89 built the door (D-40). The chain, stated link by link per " +
+          "standing rule 133: /admin/atm?tab=transactions -> " +
+          "components/admin/atm/PostAtmSettlementsPanel.tsx -> " +
+          "app/admin/atm/actions.ts#postAtmSettlementsAction (gated on " +
+          "requireBooksAccess, not the page's finances.view, because this writes " +
+          "to the ledger) -> atm-settlement-service.ts#postAtmSettlements -> " +
+          "buildAtmSettlementProposals -> posting-service.ts#submitJournal. " +
+          "Asserted by the reachability trap in " +
+          "tests/compliance/posting-services-are-reachable.test.ts, which walks " +
+          "src/ for a real caller and excludes this census file, because a " +
+          "poster: string is a claim and not a call.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "The fee is credited to 51000 in the ATM entity, so it is NOT cannabis " +
+          "revenue and not subject to 280E, and it is the .015 service-rate B&O " +
+          "base. The dispensed-cash leg debits and credits 10300 for the same " +
+          "figure deliberately: netting them would still balance and would " +
+          "destroy the only record of how much cash the machine handed out, which " +
+          "is the failure mode that announces itself to nobody. A test asserts " +
+          "the service passes the core's lines through unchanged in sign, count " +
+          "and description. Note ledger-core.ts:770 uses code 70100 named 'ATM " +
+          "Fee Income' in a self-test FIXTURE; the seeded account is 51000 and " +
+          "the fixture is not a production mapping.",
+      },
+      accepted: {
+        status: "PARTIAL",
+        evidence:
+          "Entries are created as DRAFTS and appear on /admin/books/drafts. " +
+          "autoPost is never requested, because every proposal carries " +
+          "postable: false — 'ATM cash movements are reconciled against a " +
+          "physical count, by a person.' PARTIAL and not PRESENT because no ATM " +
+          "settlement has yet made the round trip against a live database.",
+      },
+      idempotent: {
+        status: "PRESENT",
+        evidence:
+          "sourceRef is atm-settle:<TERMINAL>:<date>, built from the pair " +
+          "migration 0156 already declares unique for atm_settlements, and the " +
+          "terminal is upper-cased and trimmed so one machine on one day cannot " +
+          "produce two keys. PAI reports overlap by design, so this button WILL " +
+          "be pressed twice; a test proves the second press returns duplicate " +
+          "rather than doubling a separate entity's revenue.",
+      },
       married: {
-        status: "MISSING",
-        evidence: "Surcharge settlement arrives in the bank feed; nothing links it.",
+        status: "PARTIAL",
+        evidence:
+          "The entry is built from the PAI settlement report. The same money " +
+          "also arrives in the Timberland feed as a deposit, and nothing links " +
+          "the two yet — that is bank matching, which exists (migration 0189) " +
+          "but has no caller for this source. Recorded rather than claimed.",
       },
     },
     defectId: "D-40",

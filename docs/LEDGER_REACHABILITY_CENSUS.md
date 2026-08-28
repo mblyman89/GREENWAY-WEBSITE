@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 25 cannot reach them at all. 19 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 24 cannot reach them at all. 18 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 25 |
-| Have nothing that even builds the entry | 19 |
+| Cannot reach the books at all | 24 |
+| Have nothing that even builds the entry | 18 |
 | Layers that could not be measured | 5 |
 
 ## The six layers
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 18 of 35 |
-| `reachable` | 25 of 35 |
-| `correct` | 15 of 35 |
-| `accepted` | 23 of 35 |
-| `idempotent` | 22 of 35 |
-| `married` | 14 of 35 |
+| `exists` | 17 of 35 |
+| `reachable` | 24 of 35 |
+| `correct` | 14 of 35 |
+| `accepted` | 22 of 35 |
+| `idempotent` | 21 of 35 |
+| `married` | 13 of 35 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -437,7 +437,7 @@ A child-support or garnishment withholding is forwarded to the agency.
 | `cash_deposit_to_bank` | NO | NO | NO | NO | NO | NO | D-39 |
 | `till_over_short` | NO | NO | NO | NO | NO | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
-| `atm_surcharge_income` | NO | NO | NO | NO | NO | NO | D-40 |
+| `atm_surcharge_income` | yes | yes | yes | part | yes | part | D-40 |
 | `intercompany_transfer` | yes | NO | part | NO | ? | NO | D-41 |
 
 ### `cash_and_banking.cash_deposit_to_bank`
@@ -483,7 +483,7 @@ Cash is loaded into the ATM from the vault account.
 - Posts the entry: **nothing**
 
 - **exists: MISSING** -- books-69 built src/lib/atm/atm-classification-core.ts, which CLASSIFIES debits. It does not build journals.
-- **reachable: MISSING** -- store.ts#listAtmClassificationProposals returns proposals for review and posts nothing, by design.
+- **reachable: MISSING** -- store.ts#listAtmClassificationProposals returns proposals for review and posts nothing. books-89 closed the SETTLEMENT half of D-40 and deliberately did NOT close this one: settlements had a finished builder waiting for a door, whereas a vault load has no builder at all — atm-classification-core.ts decides what a debit IS and does not construct a journal. Wiring a door to nothing would be theatre. Stated out loud per standing rule 133(f) rather than left to look like an oversight.
 - **correct: PARTIAL** -- The classifier is effective-dated, proven by 80 tests, and 18/18 mutants were killed. Classification is proven; the journal is not built.
 - **accepted: MISSING** -- 10300 is a control account; migration 0172 REFUSES a 'manual' journal touching it, so this must post as sourceKind 'atm'.
 - **idempotent: MISSING** -- The Plaid transaction id is available but unused as a ref.
@@ -496,15 +496,15 @@ Cash is loaded into the ATM from the vault account.
 A customer pays the ATM fee, which is income to the ATM entity.
 
 - Accounts: `51000`, `10300`
-- Builds the entry: **nothing**
-- Posts the entry: **nothing**
+- Builds the entry: `src/lib/atm/atm-posting-core.ts#buildAtmSettlementProposal`
+- Posts the entry: `src/lib/atm/atm-settlement-service.ts#postAtmSettlements`
 
-- **exists: MISSING** -- No builder targets 51000.
-- **reachable: MISSING** -- No ATM path posts.
-- **correct: MISSING** -- 51000 ATM Surcharge Income is seeded. Note ledger-core.ts:770 uses code 70100 named 'ATM Fee Income' in a self-test fixture, which is NOT the seeded account — a fixture, not a production mapping.
-- **accepted: MISSING** -- Never presented.
-- **idempotent: MISSING** -- No ref convention.
-- **married: MISSING** -- Surcharge settlement arrives in the bank feed; nothing links it.
+- **exists: PRESENT** -- books-69 built buildAtmSettlementProposal, which debits 10300 for the money that arrived and credits 51000 for the fee portion. The previous verdict here said 'No builder targets 51000', which was wrong from the moment books-69 shipped: the builder existed and the census had not been re-read. Corrected in books-89 by measuring the file rather than trusting the row.
+- **reachable: PRESENT** -- books-89 built the door (D-40). The chain, stated link by link per standing rule 133: /admin/atm?tab=transactions -> components/admin/atm/PostAtmSettlementsPanel.tsx -> app/admin/atm/actions.ts#postAtmSettlementsAction (gated on requireBooksAccess, not the page's finances.view, because this writes to the ledger) -> atm-settlement-service.ts#postAtmSettlements -> buildAtmSettlementProposals -> posting-service.ts#submitJournal. Asserted by the reachability trap in tests/compliance/posting-services-are-reachable.test.ts, which walks src/ for a real caller and excludes this census file, because a poster: string is a claim and not a call.
+- **correct: PRESENT** -- The fee is credited to 51000 in the ATM entity, so it is NOT cannabis revenue and not subject to 280E, and it is the .015 service-rate B&O base. The dispensed-cash leg debits and credits 10300 for the same figure deliberately: netting them would still balance and would destroy the only record of how much cash the machine handed out, which is the failure mode that announces itself to nobody. A test asserts the service passes the core's lines through unchanged in sign, count and description. Note ledger-core.ts:770 uses code 70100 named 'ATM Fee Income' in a self-test FIXTURE; the seeded account is 51000 and the fixture is not a production mapping.
+- **accepted: PARTIAL** -- Entries are created as DRAFTS and appear on /admin/books/drafts. autoPost is never requested, because every proposal carries postable: false — 'ATM cash movements are reconciled against a physical count, by a person.' PARTIAL and not PRESENT because no ATM settlement has yet made the round trip against a live database.
+- **idempotent: PRESENT** -- sourceRef is atm-settle:<TERMINAL>:<date>, built from the pair migration 0156 already declares unique for atm_settlements, and the terminal is upper-cased and trimmed so one machine on one day cannot produce two keys. PAI reports overlap by design, so this button WILL be pressed twice; a test proves the second press returns duplicate rather than doubling a separate entity's revenue.
+- **married: PARTIAL** -- The entry is built from the PAI settlement report. The same money also arrives in the Timberland feed as a deposit, and nothing links the two yet — that is bank matching, which exists (migration 0189) but has no caller for this source. Recorded rather than claimed.
 
 **If this stays broken:** This is real taxable income in a non-cannabis entity, so it is NOT subject to 280E and is the ATM entity's B&O base at the .015 service rate.
 
@@ -727,7 +727,6 @@ all, so the work is to write it, then wire it.
 - `cash_and_banking.cash_deposit_to_bank` (D-39)
 - `cash_and_banking.till_over_short` (D-39)
 - `cash_and_banking.atm_vault_load` (D-40)
-- `cash_and_banking.atm_surcharge_income` (D-40)
 - `periodic_and_other.excise_tax_remitted` (D-32)
 - `periodic_and_other.depreciation_booked` (D-43)
 - `periodic_and_other.crypto_activity` (D-45)

@@ -505,7 +505,22 @@ describe("the migration list is ordered the way the database will see it", () =>
     // | grep -cvE '^[0-9]{4}_'` returns 0, so every name is still zero-padded to
     // four digits; `ls [0-9]*.sql | sort -c` exits clean, so the on-disk order
     // and the string sort still agree. Only then was 0209 changed to 0210.
-    expect(listed[listed.length - 1]).toMatch(/^0210_/);
+    //
+    // ─── IT FIRED A FOURTEENTH TIME, ON 0211 (books-89) ──────────────────
+    //
+    // 0211_owner_operator_self_approval.sql exists because Michael asked for it
+    // in these words: "I will need you to turn off the over 5k approval feature.
+    // I am the one and only owner operator that will have access to the books."
+    // Migration 0174 gave one switch to two different things — a WARNING at
+    // threshold_cents, which he likes, and a BLOCK on self-approval at the same
+    // figure, which he cannot satisfy because segregation of duties needs a
+    // second person and there is exactly one. 0211 sets allow_self_approval and
+    // leaves threshold_cents alone, so the flag survives the block being lifted.
+    //
+    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 211;
+    // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
+    // sort -c` exits clean. Only then was 0210 changed to 0211.
+    expect(listed[listed.length - 1]).toMatch(/^0211_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
