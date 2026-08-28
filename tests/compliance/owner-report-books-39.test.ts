@@ -501,13 +501,37 @@ describe("the places the report tells Michael to go actually exist", () => {
  * ══════════════════════════════════════════════════════════════════════════ */
 
 describe("the findings the report reports are still true", () => {
-  it("the approve button really is disabled and says so", () => {
+  // SUPERSEDED BY books-86, and handled the honest way.
+  //
+  // This test protected a claim the books-39 report made to Michael: that the
+  // button on the pay run screen was disabled and said "Not connected yet"
+  // rather than pretending to work. That was TRUE when he was told it, and the
+  // report is a document he has already read. It is not rewritten here -
+  // editing what an owner was told, after the fact, to keep a test green is the
+  // opposite of the discipline this file exists to enforce.
+  //
+  // books-86 wired the button (D-38). So the claim is now HISTORICAL, and this
+  // test asserts exactly that: the report still says what it said, and the code
+  // has moved on in the direction the report promised it would ("it lands in
+  // the next slice"). What it no longer does is demand that the code stay
+  // unwired forever.
+  it("the report's disabled-button claim is preserved as history, and the code has since been wired", () => {
+    // The report is unchanged. What Michael was told, he was told.
+    expect(flat).toContain("Not connected yet");
+    expect(flat).toContain("lands in the next slice");
+
+    // And the promise it made has been kept: the page no longer disclaims, and
+    // the write path the report was waiting for exists.
     const page = readFileSync(
       join(ROOT, "src", "app", "admin", "books", "pay-run", "page.tsx"),
       "utf8",
     );
-    expect(page).toContain("Not connected yet");
-    expect(flat).toContain("Not connected yet");
+    expect(page).not.toContain("Not connected yet");
+    expect(page).toContain("PostPayrollButton");
+    expect(
+      existsSync(join(ROOT, "src", "app", "admin", "books", "pay-run", "actions.ts")),
+      "the books-39 report promised this write path; books-86 must still provide it",
+    ).toBe(true);
   });
 
   it("four of the seven checks cannot be answered by software", () => {

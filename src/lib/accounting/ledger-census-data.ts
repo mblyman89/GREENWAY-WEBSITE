@@ -1111,9 +1111,15 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       "taxes, and the split between shop labour and inventory-handling labour.",
     sourceKind: "payroll",
     entityCode: "greenway",
-    accountCodes: ["71010", "61000", "31000", "31100", "31200"],
+    // 71040 and 31300 were ADDED in books-86. They were missing, and the
+    // omission was found by reading a real journal rather than by reading this
+    // row: buildPayrollJournal emits employer tax expense (71040) and
+    // garnishments payable (31300) whenever either is non-zero. A census that
+    // under-states the accounts an entry touches is a census that cannot be
+    // used to check a trial balance, which is the job it exists to do.
+    accountCodes: ["71010", "71040", "61000", "31000", "31100", "31200", "31300"],
     builder: "src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal",
-    poster: null,
+    poster: "src/lib/accounting/payroll-posting-service.ts#postPayrollRun",
     layers: {
       exists: {
         status: "PRESENT",
@@ -1122,46 +1128,57 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "journal including the 61000 allocable-labour split.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep -rn 'buildPayrollJournal' -> matches ONLY inside payroll-cogs-core.ts " +
-          "itself (its own self-tests). The single external caller is " +
-          "scripts/compliance/e2e-payroll-journal.ts, whose own header says " +
-          "'Not part of the app. Development verification only.'",
+          "books-86 wired it. The chain is payroll-posting-core.ts#planPayrollPosting " +
+          "-> payroll-posting-service.ts#postPayrollRun -> " +
+          "app/admin/books/pay-run/actions.ts#postPayrollAction, rendered by " +
+          "PostPayrollButton.tsx on /admin/books/pay-run. A test in " +
+          "ledger-census.test.ts re-derives this chain from disk and asserts the " +
+          "builder has exactly ONE caller, so a cut wire fails a gate.",
       },
       correct: {
         status: "PRESENT",
         evidence:
           "Balanced and 280E-classed in its own self-tests, which are registered " +
-          "in run-pure-selftests.ts.",
+          "in run-pure-selftests.ts. payroll-posting-core.ts adds 51 tests and a " +
+          "16-mutation probe (mutate-slice-books-86.py, 16/16 caught).",
       },
       accepted: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "Migration 0188_payroll_to_gl.sql supplies gl_post_payroll_run and the " +
-          "guard gl_payroll_allocation_guard. The only mention in src/ is a comment " +
-          "in books/payroll/page.tsx; no supabase.rpc() call names it.",
+          "postPayrollRun calls supabase.rpc('gl_post_payroll_run') on a " +
+          "createBooksClient() session, so auth.uid() is the signed-in human and " +
+          "is_owner() can pass. Refusals are translated by " +
+          "gl-refusal-core.ts#explainGlRefusal, which already carries plain-English " +
+          "text for GL_NOT_OWNER and every GL_PAYROLL_* code.",
       },
       idempotent: {
-        status: "UNKNOWN",
-        evidence: "No app path generates a ref for a payroll run.",
-        reason:
-          "The builder is pure and takes no ref. Whether two clicks of a future " +
-          "Post Payroll button would double-post is a property of the button.",
+        status: "PARTIAL",
+        evidence:
+          "payrollSourceRef gives a stable key (payroll:entity:start:end:paydate), " +
+          "so a second click is refused as a duplicate. But p_run_id is sent as " +
+          "null, because nothing links a pay PERIOD to a payroll_runs row, so the " +
+          "database cannot raise GL_PAYROLL_RUN_CHANGED when the money behind an " +
+          "already-posted run changes. The fingerprint travels in the assumption " +
+          "note so the change is at least visible on the entry. Double-posting is " +
+          "prevented; a CHANGED run is not yet detected by the database, and that " +
+          "missing link is recorded as D-68 rather than guessed at.",
       },
       married: {
         status: "MISSING",
         evidence:
           "src/lib/payroll/payroll-reconcile-core.ts#reconcilePayroll matches runs " +
-          "to bank withdrawals and posts nothing.",
+          "to bank withdrawals and posts nothing. Accruing payroll and clearing it " +
+          "against the ACH debit are two different slices; this row is the accrual.",
       },
     },
-    defectId: "D-38",
+    defectId: "D-68",
     consequence:
       "Wages are the largest expense after product. The 61000 split is also a 280E " +
       "matter: labour that handles inventory is deductible through COGS, and labour " +
-      "that sells is not. The logic to do this correctly already exists and is " +
-      "unreachable, which is the most frustrating finding in the census.",
+      "that sells is not. That logic is now reachable from the screen. What remains " +
+      "is the run link (D-68) and clearing the accrual against the bank.",
   },
 
   {

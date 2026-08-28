@@ -689,17 +689,51 @@ describe("6 the screen is reachable, not dead code with a green check", () => {
     expect(pageCode).toContain("PAY_RUN_RECOVERIES");
   });
 
-  it("the page writes nothing", () => {
-    // This slice reads and computes. Any insert/update/delete here would be a
-    // write with no audit trail and no confirmation.
+  // AMENDED in books-86. The original assertion was that the page contained no
+  // insert/update/delete AT ALL, because in books-39 this slice only read.
+  // books-86 gave the page a way to record payroll in the books, so the blunt
+  // assertion had to change - but the worry behind it is unchanged and is now
+  // stated more precisely: the PAGE still writes nothing directly. Every write
+  // goes through a server action, which goes through a service, which goes
+  // through a database function that gates on is_owner() and refuses a
+  // duplicate source ref. A raw table write on a page has no audit trail and no
+  // confirmation, and that is still forbidden here.
+  it("the page never writes to a table directly", () => {
     expect(pageCode).not.toMatch(/\.insert\(|\.update\(|\.delete\(|\.upsert\(/);
+    // Nor does it reach the ledger itself: it renders a button, and the button
+    // calls an action.
+    expect(pageCode).not.toContain(".rpc(");
   });
 
-  it("the approve button is honestly disabled rather than fake", () => {
-    // Shipping a button that half-works is worse than shipping one that says
-    // what it is waiting for.
-    expect(pageCode).toContain("disabled");
-    expect(pageSrc).toContain("Not connected yet");
+  // INVERTED in books-86, not deleted.
+  //
+  // The original: "the approve button is honestly disabled rather than fake",
+  // asserting the page said "Not connected yet". That was the honest thing to
+  // ship in books-39, when the payroll journal had no wire to the ledger
+  // (D-38). D-38 is closed, so the disclaimer would now be a lie and the test
+  // that demanded it had to be turned around.
+  //
+  // Kept rather than deleted because the shape it guards against is the one
+  // that keeps recurring in this repository (standing rule 50): a control that
+  // LOOKS like it does something and does not. The assertion is now that the
+  // button is real - it exists, it is wired to the action, and the page still
+  // knows how to disable it with a stated reason when posting is not possible.
+  it("the post button is real, and still explains itself when it cannot be used", () => {
+    expect(pageSrc).not.toContain("Not connected yet");
+
+    // The control exists and is connected.
+    expect(pageCode).toContain("PostPayrollButton");
+    expect(pageCode).toContain("previewPayrollPosting(");
+
+    // It can still be turned off, and turning it off carries a reason rather
+    // than leaving a dead grey button with no explanation.
+    expect(pageCode).toContain("postDisabledReason");
+    const button = readFileSync(
+      join(ROOT, "src/app/admin/books/pay-run/PostPayrollButton.tsx"),
+      "utf8",
+    );
+    expect(button).toContain("disabled");
+    expect(button).toContain("postPayrollAction");
   });
 });
 

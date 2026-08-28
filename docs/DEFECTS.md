@@ -1610,6 +1610,107 @@ verdict on the largest unwired subsystem in the platform.
 cannot be expressed. And the census test asserts that no file in `src/` outside
 `payroll-cogs-core.ts` mentions `buildPayrollJournal` at all.
 
+### RESOLVED in books-86. Status: **CLOSED (code shipped, application pending).**
+
+**What was built.** `src/lib/accounting/payroll-posting-core.ts` (pure, swept,
+mutation-tested), `src/lib/accounting/payroll-posting-service.ts`,
+`src/app/admin/books/pay-run/actions.ts`, and a `PostPayrollButton` on the
+existing `/admin/books/pay-run` screen. The chain is
+`planPayrollPosting` -> `buildPayrollJournal` -> `postPayrollRun` ->
+`rpc('gl_post_payroll_run')` on a `createBooksClient()` session, so `auth.uid()`
+is the signed-in human and `is_owner()` can actually pass. The screen's old
+"Not connected yet" control is gone.
+
+**Four things were MEASURED during the wiring that changed the design.** None
+was guessed; each was found by running the real engine or reading the real
+schema, and each became a refusal rather than an assumption.
+
+1. **A zero-gross run is `postable = true` and produces a journal with ZERO
+   lines.** Sending that to the database would have written an entry recording
+   that nothing happened. Refusal `PAYROLL_NOTHING_TO_POST`.
+2. **`PayrollEmployeeInput` has no slot for voluntary deductions.** The net
+   identity in payroll-cogs-core is
+   `gross - withheld - garnish - advance`, with no term for a health premium or
+   a retirement contribution, while net-pay-core subtracts them. The two agree
+   only while the list is empty - and `pay-run-store.ts:352` hard-codes it
+   empty, calling itself "A REAL GAP, NOT A CHOICE". Posting a cheque with one
+   would credit net pay short and STILL BALANCE. Refusal
+   `PAYROLL_VOLUNTARY_DEDUCTION_UNMAPPED`.
+3. **`employee_pay.cogs_split_basis_points` names ONE share and never records
+   the remainder role.** A 40% cultivation split says nothing about the other
+   60%. Both available guesses - "the rest is the same role", "the rest is
+   selling" - are wrong in a direction that shows up on a return. Refused
+   (`PAYROLL_SPLIT_AMBIGUOUS`) under standing rule 62d rather than resolved;
+   documented `gl_payroll_allocations` rows, which carry `document_ref` and
+   `basis_note` NOT NULL, are the only unambiguous source.
+4. **Nothing links a pay PERIOD to a `payroll_runs` row**, so `p_run_id` cannot
+   be resolved and is sent as an explicit `null`. Recorded as **D-68** below,
+   not papered over.
+
+**Also found while reading a real journal:** the census row listed five accounts
+and the builder emits seven. `71040` (employer tax expense) and `31300`
+(garnishments payable) were missing. A census that under-states the accounts an
+entry touches cannot be used to check a trial balance, which is its job. Added.
+
+**The two books-70 gates fired, as designed, and have been INVERTED rather than
+deleted** (standing rule 50: an unreachable finished feature is a recurring
+defect SHAPE). Both asserted the builder had no caller. They now assert it has
+EXACTLY ONE - `payroll-posting-core.ts` - and that the whole chain down to the
+server action is present on disk. A second door would mean two ways to post the
+same payroll; a cut wire brings D-38 straight back. Either fails a gate.
+
+**What is NOT proven, stated plainly.** No payroll has been posted against a
+live database. 51 tests and 16/16 mutations caught cover the decision logic and
+the wire; the first real post is Michael's, and the refusal messages are written
+so that if it goes wrong he can read why.
+
+---
+
+## D-68 - nothing links a pay period to a payroll run, so the database cannot tell a corrected payroll from a duplicate one
+
+**Found:** books-86, while wiring D-38.
+
+**What broke:** `gl_post_payroll_run` (migration 0188) takes `p_run_id uuid` and
+`p_content_fingerprint text` together for one purpose: to raise
+`GL_PAYROLL_RUN_CHANGED` when a run that has ALREADY been posted comes back with
+different money in it. That is the difference between "you clicked twice" and
+"the payroll was corrected after it was booked" - two situations that need
+opposite responses. The first should be ignored; the second must be reversed and
+re-posted.
+
+The application cannot supply `p_run_id`. The pay-run screen works from a
+`pay_periods` row; the fingerprint guard works from a `payroll_runs` row; and
+there is no column, join table, or foreign key connecting the two. Measured, not
+assumed: `p_run_id` is passed as an explicit `null` with the reasoning written at
+the call site.
+
+**What is protected anyway:** double-posting. `payrollSourceRef` produces a
+stable key (`payroll:entity:start:end:paydate`) and the ledger refuses a
+duplicate source ref, so clicking Post twice cannot book payroll twice. The
+fingerprint is also carried in `p_assumption_note`, so a changed run is at least
+VISIBLE on the entry to anyone who reads it.
+
+**What is not protected:** the database will not, on its own, notice that an
+already-posted payroll has changed. Today that gap is narrow, because payroll
+does not go live until 1 Jan 2027 and corrections will be rare. It widens the
+moment a real correction happens.
+
+**How it hid:** migration 0188 was written before the pay-period screen existed.
+Both halves are individually correct and neither one is responsible for the
+join, so nothing failed - the parameter simply had no value to receive.
+
+**Fix when it is time:** give `payroll_runs` a nullable reference to the pay
+period that produced it (or the reverse), populate it when a run is created,
+and pass the id. Then `p_content_fingerprint` starts doing the job it was
+written to do. Until then the census row for
+`payroll_cycle.payroll_run_accrued` stays `idempotent = PARTIAL` and says why.
+
+**Gate:** a test asserts the service sends the computed fingerprint - not a
+blank, not a literal - and that it also reaches the assumption note, because
+with `p_run_id` null the note is the only surviving record of which run produced
+the entry. A mutation probe confirmed that without this gate the fingerprint
+could be dropped entirely and every other test stayed green.
+
 ---
 
 ## D-39 - Cash movements from till to vault to bank are not booked

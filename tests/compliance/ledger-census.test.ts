@@ -404,9 +404,31 @@ describe("the unreachable subsystems really are unreachable (negative control)",
     });
   }
 
-  it("buildPayrollJournal has no caller in the application", () => {
-    const others = srcExcept(["payroll-cogs-core.ts"]);
-    expect(others.includes("buildPayrollJournal")).toBe(false);
+  // INVERTED in books-86, not deleted.
+  //
+  // This gate used to assert that buildPayrollJournal had NO caller in the
+  // application, which is what D-38 was: a builder that was proven, tested, and
+  // reachable only from a development script. books-86 wired it, so the old
+  // assertion is now false and keeping it would have meant deleting it.
+  //
+  // Deleting it would have been the wrong move. Standing rule 50: an
+  // unreachable finished feature is a recurring defect SHAPE, not a one-off. If
+  // the wire is ever cut - a refactor that drops the service, a page that stops
+  // importing it - the builder silently returns to being decoration and no test
+  // would notice. So the gate now asserts the OPPOSITE fact with the same
+  // precision: exactly one caller, and it is the one we put there.
+  it("buildPayrollJournal is reached from the application through exactly one door", () => {
+    const callers = walk("src")
+      .filter((f) => !f.endsWith("/ledger-census-data.ts"))
+      .filter((f) => !f.endsWith("/ledger-census-core.ts"))
+      .filter((f) => !f.endsWith("/payroll-cogs-core.ts"))
+      .filter((f) => read(f).includes("buildPayrollJournal"));
+
+    expect(
+      callers,
+      "payroll must reach the ledger through payroll-posting-core.ts and nowhere else - " +
+        "a second door means two ways to post the same payroll",
+    ).toEqual(["src/lib/accounting/payroll-posting-core.ts"]);
   });
 
   it("the B&O journal builders have no caller anywhere in src", () => {
@@ -521,8 +543,13 @@ describe("the unreachable subsystems really are unreachable (negative control)",
       // message -- "now has a caller, update the census" -- is what sent us
       // here. It moved to the positive control below rather than being
       // deleted, so the wire is now asserted to EXIST.
+      //
+      // gl_post_payroll_run LEFT THIS LIST IN books-86 (D-38), the same way and
+      // for the same reason. Migration 0188 had supplied it, fully guarded,
+      // since before the pay-run screen existed; nothing in TypeScript had ever
+      // called it. payroll-posting-service.ts does now, so it too moved to the
+      // positive control below.
       for (const door of [
-        "gl_post_payroll_run",
         "gl_post_vendor_bill",
         "gl_post_bank_match",
         "gl_unmatch_bank_row",
@@ -540,6 +567,10 @@ describe("the unreachable subsystems really are unreachable (negative control)",
       expect(
         called.has("gl_post_journal"),
         "gl_post_journal lost its caller: D-67 is back and every entry is stranded again",
+      ).toBe(true);
+      expect(
+        called.has("gl_post_payroll_run"),
+        "gl_post_payroll_run lost its caller: D-38 is back and payroll is unbooked again",
       ).toBe(true);
     },
   );
@@ -959,7 +990,12 @@ describe("the census can order the work by economic weight", () => {
       .all()
       .filter((r) => r.builder !== null && r.layers.reachable.status === "MISSING")
       .map((r) => r.key);
-    expect(cheap).toContain("payroll_cycle.payroll_run_accrued");
+    // books-86 REMOVED payroll_cycle.payroll_run_accrued from this list, the
+    // same way books-83 removed the vendor bill: it stopped being a cheap win
+    // by being done. It was the LARGEST one on the list, which is why D-38
+    // called itself "the most frustrating finding in the census" - the 280E
+    // labour split was finished, correct, and reachable only from a dev script.
+    expect(cheap).not.toContain("payroll_cycle.payroll_run_accrued");
     expect(cheap).toContain("periodic_and_other.bo_tax_accrual");
     // books-83 REMOVED vendor_cycle.vendor_bill_recorded from this list,
     // because it stopped being a cheap win by being done: the bill is wired
@@ -1006,47 +1042,60 @@ describe("the census can order the work by economic weight", () => {
 
 describe("evidence cannot be softened without a test failing", () => {
 
-  it("the payroll row still names the dev-only script, and that script still says so", () => {
+  // REWRITTEN in books-86. The original asserted that the payroll row's
+  // reachable evidence still named scripts/compliance/e2e-payroll-journal.ts
+  // and that the script still called itself dev-only. That WAS the evidence for
+  // D-38. The row is now reachable through the app, so the evidence changed and
+  // this gate had to change with it - but the underlying worry did not: the
+  // dev-only script must not quietly become the app's posting path.
+  it("the dev-only payroll script is still dev-only, and is no longer the census evidence", () => {
+    const script = "scripts/compliance/e2e-payroll-journal.ts";
+    expect(exists(script), `${script} is cited in DEFECTS.md but does not exist`).toBe(true);
+    expect(read(script)).toContain("Development verification only");
+
+    // It lives under scripts/, so it cannot be imported by the application.
+    const appCallers = walk("src").filter((f) => read(f).includes("e2e-payroll-journal"));
+    expect(appCallers, "a development script must never be part of the app").toEqual([]);
+
+    // And the census no longer leans on it: reachability is now claimed on the
+    // real chain, which the companion gate re-derives from disk.
     const row = census().byKey("payroll_cycle.payroll_run_accrued");
     expect(row, "the payroll row must exist").toBeDefined();
-
-    // The claim the census makes.
     const ev = row!.layers.reachable.evidence;
-    expect(ev).toContain("scripts/compliance/e2e-payroll-journal.ts");
-    expect(ev).toContain("Development verification only");
-
-    // The same claim, re-derived from disk. If the script is ever promoted
-    // into the app, or its header changes, this fails and the census must be
-    // re-measured rather than quietly kept.
-    const script = "scripts/compliance/e2e-payroll-journal.ts";
-    expect(exists(script), `${script} is cited as evidence but does not exist`).toBe(true);
-    expect(read(script)).toContain("Development verification only");
+    expect(ev).not.toContain("e2e-payroll-journal.ts");
+    expect(ev).toContain("payroll-posting-service.ts#postPayrollRun");
   });
 
-  it("buildPayrollJournal is called only by its own module, which is what MISSING means", () => {
-    // The measurement behind the payroll verdict, re-derived here.
-    //
-    // The first version of this test asserted that NO file under src/ mentions
-    // the symbol. That was wrong: payroll-cogs-core.ts calls its own builder
-    // five times in its own self-tests, which is precisely what the census
-    // evidence says ("matches ONLY inside payroll-cogs-core.ts itself"). The
-    // honest gate is therefore that no OTHER file calls it - a stronger claim,
-    // because it is the one that makes the builder unreachable from the app.
-    const callers = walk("src")
-      .filter((f) => !f.endsWith("/ledger-census-data.ts"))
-      .filter((f) => !f.endsWith("/ledger-census-core.ts"))
-      .filter((f) => !f.endsWith("/payroll-cogs-core.ts"))
-      .filter((f) => read(f).includes("buildPayrollJournal"));
-    expect(callers, "buildPayrollJournal now has a caller - re-measure the census").toEqual([]);
-
-    // And the module itself really does contain it, so this test cannot pass
-    // just because the symbol was renamed out from under the census.
+  // INVERTED in books-86, not deleted. See the companion gate above.
+  //
+  // The original text: "buildPayrollJournal is called only by its own module,
+  // which is what MISSING means". That was the measurement behind D-38. The
+  // wire closed D-38, so the census verdict moved from MISSING to PRESENT and
+  // this test now guards the new verdict with the same rigour - re-deriving the
+  // fact from disk instead of trusting the census to describe itself.
+  it("the payroll census row says PRESENT, and the repository agrees", () => {
+    // The builder still exists under the name the census cites, so this cannot
+    // pass merely because a symbol was renamed out from under it.
     expect(read("src/lib/accounting/payroll-cogs-core.ts")).toContain(
       "export function buildPayrollJournal(",
     );
 
+    // The chain the verdict depends on, each link re-measured: core calls the
+    // builder, the service calls the core, the database door is the one the
+    // service knocks on.
+    expect(read("src/lib/accounting/payroll-posting-core.ts")).toContain("buildPayrollJournal(");
+    expect(read("src/lib/accounting/payroll-posting-service.ts")).toContain(
+      "planPayrollPosting(",
+    );
+    expect(read("src/lib/accounting/payroll-posting-service.ts")).toContain(
+      'rpc("gl_post_payroll_run"',
+    );
+
+    // And a human can actually reach it: a server action the screen can call.
+    expect(read("src/app/admin/books/pay-run/actions.ts")).toContain("postPayrollRun");
+
     const row = census().byKey("payroll_cycle.payroll_run_accrued");
-    expect(row!.layers.reachable.status).toBe("MISSING");
+    expect(row!.layers.reachable.status).toBe("PRESENT");
   });
 
   it("gap evidence cannot be reworded to imply the work is already done", () => {
@@ -1088,14 +1137,35 @@ describe("evidence cannot be softened without a test failing", () => {
     expect(checked, "no gap verdicts were examined - the filter is broken").toBeGreaterThan(60);
   });
 
-  it("the payroll reachable evidence still reports a grep, not a conclusion", () => {
-    // Narrow companion to the gate above, aimed at the single most misread row
-    // in the census: the payroll builder that is finished and unreachable.
+  // REWRITTEN in books-86, and this one is worth explaining, because the
+  // rewrite looks like exactly the softening this section exists to prevent.
+  //
+  // The original assertion was that the payroll evidence reported a GREP and
+  // never used the word "wired" - a guard against a measured 0-hit result being
+  // reworded into a comfortable conclusion. books-86 wired payroll, so the
+  // evidence now legitimately says so, and the old assertion could not survive.
+  //
+  // The replacement keeps the principle by raising the price of the claim. It
+  // is no longer enough for the evidence to SAY the path is wired: every file
+  // and symbol it names is now checked to exist on disk, in order. Prose that
+  // claims a wire that is not there fails here.
+  it("the payroll reachable evidence names a chain that actually exists on disk", () => {
     const ev = census().byKey("payroll_cycle.payroll_run_accrued")!.layers.reachable.evidence;
-    expect(ev).toContain("grep -rn");
-    expect(ev).toContain("buildPayrollJournal");
-    expect(ev).toContain("ONLY inside payroll-cogs-core.ts");
-    expect(ev.toLowerCase()).not.toContain("wired");
+
+    expect(ev).toContain("payroll-posting-core.ts#planPayrollPosting");
+    expect(ev).toContain("payroll-posting-service.ts#postPayrollRun");
+    expect(ev).toContain("actions.ts#postPayrollAction");
+
+    // Each link, re-derived. The evidence is a claim; this is the measurement.
+    expect(read("src/lib/accounting/payroll-posting-core.ts")).toContain(
+      "export function planPayrollPosting(",
+    );
+    expect(read("src/lib/accounting/payroll-posting-service.ts")).toContain(
+      "export async function postPayrollRun(",
+    );
+    expect(read("src/app/admin/books/pay-run/actions.ts")).toContain(
+      "export async function postPayrollAction(",
+    );
   });
 
   it("the rows that drive the backlog cite a concrete artifact, not an opinion", () => {
@@ -1198,7 +1268,14 @@ describe("evidence cannot be softened without a test failing", () => {
     // both a builder and a poster. Only ONE row moved this time, not two:
     // vendor_cycle.expense_classified_to_account_and_entity became reachable in
     // the same slice but was never a driver, because it already had a builder.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
+    //
+    // 7 -> 6 in books-86: payroll_cycle.payroll_run_accrued left the backlog.
+    // payroll-cogs-core.ts#buildPayrollJournal was always the builder; what was
+    // missing was a caller, which payroll-posting-service.ts#postPayrollRun now
+    // supplies. One row, not two: payroll_cycle.net_pay_disbursed stays in the
+    // backlog because clearing the accrual against the bank is a separate entry
+    // that nothing builds yet.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(6);
 
     for (const r of drivers) {
       expect(

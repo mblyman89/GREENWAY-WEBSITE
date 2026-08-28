@@ -13,15 +13,15 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 26 cannot reach them at all. 19 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 25 cannot reach them at all. 19 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 26 |
+| Cannot reach the books at all | 25 |
 | Have nothing that even builds the entry | 19 |
-| Layers that could not be measured | 6 |
+| Layers that could not be measured | 5 |
 
 ## The six layers
 
@@ -44,9 +44,9 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 18 of 35 |
-| `reachable` | 26 of 35 |
+| `reachable` | 25 of 35 |
 | `correct` | 15 of 35 |
-| `accepted` | 24 of 35 |
+| `accepted` | 23 of 35 |
 | `idempotent` | 22 of 35 |
 | `married` | 14 of 35 |
 
@@ -357,7 +357,7 @@ A card or bank charge appears in the Plaid feed with no corresponding event insi
 
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `payroll_run_accrued` | yes | NO | yes | NO | ? | NO | D-38 |
+| `payroll_run_accrued` | yes | yes | yes | yes | part | NO | D-68 |
 | `net_pay_disbursed` | NO | NO | NO | NO | NO | part | D-38 |
 | `payroll_tax_remitted` | NO | NO | NO | NO | NO | NO | D-38 |
 | `garnishment_remitted` | NO | NO | NO | NO | NO | NO | D-38 |
@@ -366,18 +366,18 @@ A card or bank charge appears in the Plaid feed with no corresponding event insi
 
 A payroll run is calculated: gross wages, employee withholding, employer taxes, and the split between shop labour and inventory-handling labour.
 
-- Accounts: `71010`, `61000`, `31000`, `31100`, `31200`
+- Accounts: `71010`, `71040`, `61000`, `31000`, `31100`, `31200`, `31300`
 - Builds the entry: `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/payroll-posting-service.ts#postPayrollRun`
 
 - **exists: PRESENT** -- payroll-cogs-core.ts#buildPayrollJournal builds a complete payroll journal including the 61000 allocable-labour split.
-- **reachable: MISSING** -- grep -rn 'buildPayrollJournal' -> matches ONLY inside payroll-cogs-core.ts itself (its own self-tests). The single external caller is scripts/compliance/e2e-payroll-journal.ts, whose own header says 'Not part of the app. Development verification only.'
-- **correct: PRESENT** -- Balanced and 280E-classed in its own self-tests, which are registered in run-pure-selftests.ts.
-- **accepted: MISSING** -- Migration 0188_payroll_to_gl.sql supplies gl_post_payroll_run and the guard gl_payroll_allocation_guard. The only mention in src/ is a comment in books/payroll/page.tsx; no supabase.rpc() call names it.
-- **idempotent: UNKNOWN** -- No app path generates a ref for a payroll run. _The builder is pure and takes no ref. Whether two clicks of a future Post Payroll button would double-post is a property of the button._
-- **married: MISSING** -- src/lib/payroll/payroll-reconcile-core.ts#reconcilePayroll matches runs to bank withdrawals and posts nothing.
+- **reachable: PRESENT** -- books-86 wired it. The chain is payroll-posting-core.ts#planPayrollPosting -> payroll-posting-service.ts#postPayrollRun -> app/admin/books/pay-run/actions.ts#postPayrollAction, rendered by PostPayrollButton.tsx on /admin/books/pay-run. A test in ledger-census.test.ts re-derives this chain from disk and asserts the builder has exactly ONE caller, so a cut wire fails a gate.
+- **correct: PRESENT** -- Balanced and 280E-classed in its own self-tests, which are registered in run-pure-selftests.ts. payroll-posting-core.ts adds 51 tests and a 16-mutation probe (mutate-slice-books-86.py, 16/16 caught).
+- **accepted: PRESENT** -- postPayrollRun calls supabase.rpc('gl_post_payroll_run') on a createBooksClient() session, so auth.uid() is the signed-in human and is_owner() can pass. Refusals are translated by gl-refusal-core.ts#explainGlRefusal, which already carries plain-English text for GL_NOT_OWNER and every GL_PAYROLL_* code.
+- **idempotent: PARTIAL** -- payrollSourceRef gives a stable key (payroll:entity:start:end:paydate), so a second click is refused as a duplicate. But p_run_id is sent as null, because nothing links a pay PERIOD to a payroll_runs row, so the database cannot raise GL_PAYROLL_RUN_CHANGED when the money behind an already-posted run changes. The fingerprint travels in the assumption note so the change is at least visible on the entry. Double-posting is prevented; a CHANGED run is not yet detected by the database, and that missing link is recorded as D-68 rather than guessed at.
+- **married: MISSING** -- src/lib/payroll/payroll-reconcile-core.ts#reconcilePayroll matches runs to bank withdrawals and posts nothing. Accruing payroll and clearing it against the ACH debit are two different slices; this row is the accrual.
 
-**If this stays broken:** Wages are the largest expense after product. The 61000 split is also a 280E matter: labour that handles inventory is deductible through COGS, and labour that sells is not. The logic to do this correctly already exists and is unreachable, which is the most frustrating finding in the census.
+**If this stays broken:** Wages are the largest expense after product. The 61000 split is also a 280E matter: labour that handles inventory is deductible through COGS, and labour that sells is not. That logic is now reachable from the screen. What remains is the run link (D-68) and clearing the accrual against the bank.
 
 ### `payroll_cycle.net_pay_disbursed`
 
@@ -742,7 +742,6 @@ the path from the screen to the ledger is absent.
 
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
 - `periodic_and_other.fixed_asset_acquired` (D-43) -- `src/lib/accounting/fixed-assets-core.ts#accountCodeForClass`

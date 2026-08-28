@@ -50,13 +50,20 @@
  * THIS PAGE WRITES NOTHING
  * ─────────────────────────────────────────────────────────────────────────────
  *
- * `loadPayRun` reads and computes. It does not save, approve, or move money,
- * and neither does anything on this page — the approve control is rendered but
- * deliberately not wired, because approving is a write with its own audit
- * trail, its own permission and its own confirmation, and shipping a button
- * that half-works is worse than shipping one that says what it is waiting for.
- * The button therefore states plainly that it is not connected yet, rather than
- * appearing to work.
+ * `loadPayRun` reads and computes. It does not save, approve, or move money.
+ *
+ * ONE THING ON THIS PAGE NOW WRITES (books-86, closing D-38). The payroll can
+ * be posted to the general ledger, which records the wages, the tax withheld,
+ * the employer's own payroll taxes and any garnishment — each line carrying its
+ * §280E label. It lands as a DRAFT and is approved separately, because payroll
+ * is deliberately excluded from auto-posting: the labour split is a human
+ * judgement every period. No money moves; the ACH side is a different act on a
+ * different day.
+ *
+ * Whether that control is offered at all is decided by
+ * payroll-posting-core.ts#planPayrollPosting — pure, tested, and the same
+ * function the write itself uses, so the button cannot promise something the
+ * write would refuse.
  */
 
 import Link from "next/link";
@@ -66,6 +73,8 @@ import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { loadPayPeriods } from "@/lib/payroll/timesheet-store";
 import { loadPayRun } from "@/lib/payroll/pay-run-store";
 import { PAY_RUN_RECOVERIES } from "@/lib/payroll/pay-run-mentor";
+import { previewPayrollPosting } from "@/lib/accounting/payroll-posting-service";
+import { PostPayrollButton } from "./PostPayrollButton";
 import {
   checklistFor,
   employeeCard,
@@ -202,6 +211,30 @@ export default async function PayRunPage({
   }
 
   const load = await loadPayRun(selectedId);
+
+  /*
+   * WHAT WOULD HAPPEN IF THE BUTTON WERE PRESSED.
+   *
+   * Computed here, by the same pure planner the write uses, so the screen and
+   * the action cannot disagree. A preview produced by different code from the
+   * thing it previews is worse than no preview at all: it teaches the operator
+   * to trust a promise nothing keeps.
+   */
+  const preview = await previewPayrollPosting(selectedId);
+  const plan = preview.ok ? preview.plan : null;
+
+  const postDisabledReason =
+    plan === null
+      ? preview.ok
+        ? null
+        : preview.message
+      : plan.kind === "post"
+        ? null
+        : "This payroll cannot be recorded yet. What is standing in the way is set out below.";
+
+  const postRefusals = plan !== null && plan.kind === "refuse" ? plan.refusals : [];
+  const postAcknowledgements =
+    plan !== null && plan.kind === "post" ? plan.acknowledgements : [];
   const action = nextAction(load);
   const checklist = checklistFor(load);
 
@@ -234,26 +267,29 @@ export default async function PayRunPage({
               rather than hidden: a button that vanishes teaches nothing, while
               a greyed one with a sentence next to it teaches exactly what is
               standing between here and payday. */}
-          {action.canApprove ? (
-            <>
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-[var(--admin-radius-sm)] border border-white/15 px-4 py-2 text-sm font-semibold text-[var(--admin-text-dim)]"
-              >
-                {action.cta}
-              </button>
-              <span className="text-xs text-[var(--admin-text-faint)]">
-                Not connected yet — approving is a write with its own audit trail and
-                confirmation, and it lands in the next slice. This screen only reads.
-              </span>
-            </>
-          ) : null}
+
         </div>
       </div>
 
       {load.ok ? (
         <>
+          {/* ══ POSTING TO THE BOOKS ══════════════════════════════════════
+              Placed directly under the next action, because once a run is ready
+              this IS the next action. Every sentence in it is produced by the
+              pure planner rather than written here. */}
+          <Card>
+            <CardHeader
+              title="Record this payroll in the books"
+              subtitle="Wages, the tax you withheld, your own payroll taxes and any garnishment — each line labelled for §280E. Posts as a draft for you to approve. No money moves."
+            />
+            <PostPayrollButton
+              periodId={selectedId}
+              disabledReason={postDisabledReason}
+              refusals={postRefusals}
+              acknowledgements={postAcknowledgements}
+            />
+          </Card>
+
           {/* ══ 2) THE THREE COUNTS ═════════════════════════════════════════
               Always all three, including the zeroes. "0 cannot be paid" is one
               of the most reassuring things this page can say, and it can only
