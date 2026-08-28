@@ -807,8 +807,49 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
     }
     redirect(`/admin/inventory/intake/${manifestId}?error=finalize`);
   }
+  // ── books-83: THE VENDOR-BILL WIRE (D-34, closes D-61) ───────────────────
+  // Finalizing is the moment Greenway owes the vendor money: the lots have
+  // been accepted or refused, so what is owed is finally knowable. This repo
+  // has no separate bill-entry screen on purpose — vendor-payments/actions.ts
+  // records that an accepted manifest IS "the WCIA invoice" — so the payable
+  // is raised here, from the same lot arithmetic the payables screen uses.
+  //
+  // Only when something was actually ACCEPTED. A wholly rejected manifest
+  // (derivedStatus 'rejected') means nothing arrived and nothing is owed;
+  // posting a payable for it would invent a liability.
+  //
+  // The service derives `goodsAlreadyReceived` from the LEDGER rather than
+  // being told, and refuses when it cannot tell. See D-61 / D-66.
+  //
+  // Refusals are NOT swallowed: `booksError` carries the reason to the screen,
+  // which renders it. The acceptance itself always stands — the goods really
+  // did arrive, and rolling that back because the books had a question would
+  // put the warehouse out of step with reality.
+  let booksNote = "";
+  if (result.activated > 0) {
+    try {
+      const { postManifestVendorBill } = await import("@/lib/accounting/vendor-bill-service");
+      // Pacific business day, built from the repo's own helper rather than
+      // toISOString(), which would roll a late-afternoon Pacific finalize onto
+      // TOMORROW in UTC and land the payable in the wrong period.
+      const { pacificParts } = await import("@/lib/reports/timezone");
+      const p = pacificParts(new Date());
+      const invoiceDate = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+      const billed = await postManifestVendorBill(manifestId, invoiceDate);
+      booksNote = billed.ok
+        ? `&books=${encodeURIComponent(billed.code)}`
+        : `&booksError=${encodeURIComponent(billed.message.slice(0, 300))}`;
+    } catch (err) {
+      booksNote = `&booksError=${encodeURIComponent(
+        `The delivery was accepted, but the payable could not be recorded: ${
+          err instanceof Error ? err.message : String(err)
+        }`.slice(0, 300),
+      )}`;
+    }
+  }
+
   redirect(
-    `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}&held=${result.blocked.length}`,
+    `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}&held=${result.blocked.length}${booksNote}`,
   );
 }
 

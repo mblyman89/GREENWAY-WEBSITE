@@ -2988,7 +2988,26 @@ Deriving one from the other would mean accepting a manifest silently changed
 which account a bill debits, which is the same invisible coupling that produced
 this defect. Mutation N4 makes that substitution and is caught.
 
-**STILL OPEN, and this is the honest part.** The flag defaults to `false`, which
+**books-83 UPDATE -- closed on the live path; still open at the builder.**
+The bill is now wired: `finalizeManifestAction` calls
+`vendor-bill-service.ts#postManifestVendorBill`, which does NOT accept the flag
+from a caller. It DERIVES it by asking the ledger whether a receipt journal was
+already raised for this delivery (`receipt-evidence.ts#findReceiptJournal`,
+keyed on the `<ref>#receipt` source ref the receipt actually writes), and it
+REFUSES with `BILL_RECEIPT_EVIDENCE_UNKNOWN` when the ledger cannot be read
+rather than assuming "not received". Eight mutations were run against the wired
+path, including coercing `unknown` to false and hard-coding the flag; all eight
+were caught. See D-66 for the trap discovered while building that predicate.
+
+The entry stays OPEN because the DEFAULT has not changed. Any future caller that
+constructs a `VendorBillInput` by hand and forgets the flag still double counts.
+The correct end state is for the builder to require the evidence rather than a
+boolean; that is deliberately not attempted here, because changing the builder's
+signature touches every existing bill test and this slice's budget was spent
+proving the wire. What is now true: the only path that reaches the ledger cannot
+forget, and a test asserts it cannot.
+
+**Original books-79 note follows.** The flag defaults to `false`, which
 reproduces the old behaviour exactly. That default is the safe direction if a
 caller forgets -- stranding nothing beats stranding cost in a clearing account
 forever -- but it means the double count remains reachable BY OMISSION. The
@@ -3161,3 +3180,61 @@ Consequence if ignored: someone reorders the two side-effects in
 orders-store.ts for an unrelated reason, and every sale that finishes a lot
 silently stops costing -- revenue posts, COGS refuses, and income is overstated
 in exactly the periods with the most turnover.
+
+---
+## D-66 -- "has it hit the books?" is not `status = 'posted'`, and the obvious reading breaks the fix
+
+**Found:** books-83, by reading migration 0174 before trusting a predicate that
+had already been written.
+
+**What broke:** nothing shipped. This was caught in the same slice that
+introduced it, but it earns an entry under the rule's own test -- it would have
+shipped, and it would have looked correct to a reader. The module that answers
+"has the goods receipt already hit the books?" was first written to query
+`gl_journals` for `status = 'posted'`. That is what the column means, it is what
+the comment in 0172 implies, and it reads like the careful, conservative choice.
+
+**Why it was wrong.** `receipt-service.ts#postManifestReceipt` calls
+`submitJournal` without `autoPost`, so `gl_submit_journal` receives
+`p_auto_post = false` and returns at 0174 line 475 with `'status', 'draft'`.
+Even if it asked to post, a `purchase` entry without a three-way match is
+refused automation outright (0174 line 499), and `receipt-journal-core` stamps
+`sourceKind: 'purchase'`. So EVERY goods receipt Greenway raises is a draft
+until a human approves it, and there is no path in the app that approves them
+automatically.
+
+A `posted`-only predicate would therefore have answered "no receipt exists" for
+every real delivery, handed `goodsAlreadyReceived: false` to the bill, and
+reproduced D-61 IN FULL on every single manifest -- while the code, the comment
+and the census all said the defect was closed. The fix would have been
+decoration over the identical bug.
+
+**How it stayed hidden:** it did not, but only because the question "does this
+query ever match anything?" was asked against the migration rather than against
+intuition. Nothing in the type system, the tests or the column name would have
+objected. A unit test written from the same wrong mental model -- insert a
+posted row, assert it is found -- would have passed forever.
+
+**The fix.** The predicate is EXISTENCE MINUS UNDOING, not posting:
+`RECEIPT_EVIDENCE_STATUSES = ['draft', 'posted']`, with `reversed` excluded
+because a reversed debit no longer stands. Both halves of a delivery are drafts
+together and move through the same approval queue, so relieving 20800 keeps the
+pair consistent at every stage.
+
+**Residual risk, stated rather than hidden.** A draft receipt that is never
+approved, paired with a bill that is, leaves a debit in 20800 with nothing
+crediting it. Two measured facts bound it: no code path deletes from
+`gl_journals` (only 0209's explicit factory reset does), and a residual 20800
+balance is precisely the "shipments missing one half" worklist that account was
+seeded to display (0173: "Received not invoiced, or invoiced not received.
+Visible instead of absorbed."). A visible imbalance is a better failure than a
+silent double count of inventory.
+
+**The gate:** `vendor-bill-wiring.test.ts` asserts the status list by VALUE,
+asserts `reversed` is absent, and asserts against the source that
+`receipt-service.ts` never sets `autoPost: true` and that 0174 still branches on
+`if not p_auto_post then`. Mutation M3 narrows the list back to `['posted']` and
+is caught.
+
+Consequence if ignored: the double count D-61 describes, on every delivery,
+behind a fix that everyone believes is in place.

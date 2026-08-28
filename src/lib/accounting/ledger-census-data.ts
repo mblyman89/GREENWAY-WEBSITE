@@ -557,7 +557,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["20000", "30000"],
     builder: "src/lib/accounting/vendor-bill-core.ts#buildBillJournal",
-    poster: null,
+    poster: "src/lib/accounting/vendor-bill-service.ts#postManifestVendorBill",
     layers: {
       exists: {
         status: "PRESENT",
@@ -566,10 +566,17 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "and 280E cost classes.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "src/app/admin/books/bills/ has no actions.ts; gl_post_vendor_bill is " +
-          "referenced nowhere outside its own migration.",
+          "books-83 wired it. finalizeManifestAction (src/app/admin/inventory/" +
+          "intake/actions.ts) calls vendor-bill-service.ts#" +
+          "postManifestVendorBill when a finalize activates at least one lot; " +
+          "that service reads the manifest's non-rejected lots, builds via " +
+          "buildBillJournal and posts through posting-service.ts#submitJournal. " +
+          "There is no separate bill-entry screen by design: vendor-payments/" +
+          "actions.ts records that an accepted manifest IS the WCIA invoice. " +
+          "tests/compliance/vendor-bill-wiring.test.ts asserts the call, the " +
+          "activated>0 gate and the rendered refusal; 8 mutations, 8 caught.",
       },
       correct: {
         status: "PRESENT",
@@ -579,17 +586,22 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "for the operating chart, 0178 for the fixed-asset block.",
       },
       accepted: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "Migration 0187 supplies the door gl_post_vendor_bill and the checker " +
-          "gl_audit_vendor_bill_wiring. No supabase.rpc() call names either.",
+          "books-83: postManifestVendorBill posts through submitJournal, which " +
+          "calls the gl_submit_journal door and returns its refusal verbatim. " +
+          "Migration 0187's gl_post_vendor_bill remains uncalled; the entry " +
+          "reaches the ledger through the same door every other slice uses, so " +
+          "the 0187 door is redundant rather than missing.",
       },
       idempotent: {
-        status: "PARTIAL",
+        status: "PRESENT",
         evidence:
           "vendor-bill-core.ts#billSourceRef builds a real key: `manifest:<n>` when " +
           "the bill came from an accepted manifest, else `bill:<vendor>:<invoice>`. " +
-          "The key exists and is sound; no app path ever calls it.",
+          "books-83 made it live: re-finalizing a manifest returns outcome " +
+          "'duplicate' and writes nothing. The ref differs from the receipt's " +
+          "`<n>#receipt`, so the two events cannot be mistaken for each other.",
       },
       married: {
         status: "MISSING",
@@ -812,36 +824,43 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["30000", "20000"],
     builder: "src/lib/accounting/vendor-bill-core.ts#buildBillJournal",
-    poster: null,
+    poster: "src/lib/accounting/vendor-bill-service.ts#postManifestVendorBill",
     layers: {
       exists: {
         status: "PRESENT",
         evidence: "vendor-bill-core.ts builds a full bill journal with cost classes.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "No actions.ts under src/app/admin/books/bills/. The SQL door " +
-          "gl_post_vendor_bill has no caller outside its migration.",
+          "books-83 wired it into finalizeManifestAction (src/app/admin/" +
+          "inventory/intake/actions.ts), gated on a finalize that activated at " +
+          "least one lot so a wholly rejected manifest never invents a payable.",
       },
       correct: {
-        status: "PARTIAL",
+        status: "PRESENT",
         evidence:
-          "Balanced, and every account it names is seeded across 0173/0178. " +
-          "Downgraded from PRESENT in books-79: it double counts goods already " +
-          "received unless the caller passes goodsAlreadyReceived (D-61). " +
-          "Correct on the explicit path, wrong by omission.",
+          "Balanced, every account seeded across 0173/0178, and books-83 closed " +
+          "D-61 on the live path: vendor-bill-service derives " +
+          "goodsAlreadyReceived from the LEDGER via receipt-evidence.ts, and " +
+          "REFUSES (BILL_RECEIPT_EVIDENCE_UNKNOWN) when the ledger cannot be " +
+          "read rather than defaulting to false. The builder's own default is " +
+          "still false, which is why the D-61 entry stays open as a builder-" +
+          "level trap for any future caller that bypasses this service.",
       },
       accepted: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "gl_post_vendor_bill exists (0187); no supabase.rpc() call names it.",
+          "Posts through posting-service.ts#submitJournal, i.e. the " +
+          "gl_submit_journal door, and surfaces its refusal to the screen. " +
+          "0187's gl_post_vendor_bill stays uncalled and is now redundant.",
       },
       idempotent: {
-        status: "PARTIAL",
+        status: "PRESENT",
         evidence:
-          "billSourceRef prefers the manifest number as the strongest external key " +
-          "and falls back to vendor+invoice. Sound, and never invoked.",
+          "billSourceRef prefers the manifest number as the strongest external " +
+          "key and falls back to vendor+invoice. Live since books-83: a second " +
+          "finalize returns 'duplicate' and writes nothing.",
       },
       married: {
         status: "MISSING",

@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 30 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 28 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 30 |
+| Cannot reach the books at all | 28 |
 | Have nothing that even builds the entry | 20 |
 | Layers that could not be measured | 6 |
 
@@ -44,9 +44,9 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 19 of 35 |
-| `reachable` | 30 of 35 |
+| `reachable` | 28 of 35 |
 | `correct` | 15 of 35 |
-| `accepted` | 28 of 35 |
+| `accepted` | 26 of 35 |
 | `idempotent` | 23 of 35 |
 | `married` | 14 of 35 |
 
@@ -134,7 +134,7 @@ A customer returns product, or a sale is voided after tender.
 | `cogs_on_sale` | yes | yes | part | part | part | n/a | D-33 |
 | `cutover_inventory_load` | part | NO | ? | part | NO | n/a | D-48 |
 | `cultivera_manifest_import` | part | NO | part | NO | part | NO | D-49 |
-| `inventory_receipt` | yes | NO | yes | NO | part | NO | D-34 |
+| `inventory_receipt` | yes | yes | yes | yes | yes | NO | D-34 |
 | `inventory_audit_adjustment` | yes | yes | yes | yes | yes | n/a | -- |
 | `freight_in` | NO | NO | NO | NO | NO | NO | D-34 |
 
@@ -195,13 +195,13 @@ A vendor delivery is received and the product goes on the shelf.
 
 - Accounts: `20000`, `30000`
 - Builds the entry: `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/vendor-bill-service.ts#postManifestVendorBill`
 
 - **exists: PRESENT** -- vendor-bill-core.ts exports a journal builder with account mappings and 280E cost classes.
-- **reachable: MISSING** -- src/app/admin/books/bills/ has no actions.ts; gl_post_vendor_bill is referenced nowhere outside its own migration.
+- **reachable: PRESENT** -- books-83 wired it. finalizeManifestAction (src/app/admin/inventory/intake/actions.ts) calls vendor-bill-service.ts#postManifestVendorBill when a finalize activates at least one lot; that service reads the manifest's non-rejected lots, builds via buildBillJournal and posts through posting-service.ts#submitJournal. There is no separate bill-entry screen by design: vendor-payments/actions.ts records that an accepted manifest IS the WCIA invoice. tests/compliance/vendor-bill-wiring.test.ts asserts the call, the activated>0 gate and the rendered refusal; 8 mutations, 8 caught.
 - **correct: PRESENT** -- Builder balances in its own self-tests, and every account it targets (including capitalisation codes 21500/21600/21700) is seeded: 0173 for the operating chart, 0178 for the fixed-asset block.
-- **accepted: MISSING** -- Migration 0187 supplies the door gl_post_vendor_bill and the checker gl_audit_vendor_bill_wiring. No supabase.rpc() call names either.
-- **idempotent: PARTIAL** -- vendor-bill-core.ts#billSourceRef builds a real key: `manifest:<n>` when the bill came from an accepted manifest, else `bill:<vendor>:<invoice>`. The key exists and is sound; no app path ever calls it.
+- **accepted: PRESENT** -- books-83: postManifestVendorBill posts through submitJournal, which calls the gl_submit_journal door and returns its refusal verbatim. Migration 0187's gl_post_vendor_bill remains uncalled; the entry reaches the ledger through the same door every other slice uses, so the 0187 door is redundant rather than missing.
+- **idempotent: PRESENT** -- vendor-bill-core.ts#billSourceRef builds a real key: `manifest:<n>` when the bill came from an accepted manifest, else `bill:<vendor>:<invoice>`. books-83 made it live: re-finalizing a manifest returns outcome 'duplicate' and writes nothing. The ref differs from the receipt's `<n>#receipt`, so the two events cannot be mistaken for each other.
 - **married: MISSING** -- Receiving goods creates a payable; paying it later is the bank event. No link exists between the two.
 
 **If this stays broken:** Inventory purchases are the input to COGS. If receipts are not booked, the 20000 control account stays at zero and no COGS figure can be trusted.
@@ -246,7 +246,7 @@ An inbound delivery charge that belongs in the cost of the product.
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `purchase_order_commitment` | NO | NO | n/a | n/a | n/a | n/a | D-35 |
 | `goods_received` | yes | yes | part | yes | part | NO | D-61 |
-| `vendor_bill_recorded` | yes | NO | part | NO | part | NO | D-34 |
+| `vendor_bill_recorded` | yes | yes | yes | yes | yes | NO | D-34 |
 | `expense_classified_to_account_and_entity` | yes | NO | part | NO | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
 | `operating_expense_from_bank` | NO | NO | part | NO | NO | n/a | D-37 |
@@ -291,13 +291,13 @@ An invoice arrives from a vendor and becomes a payable.
 
 - Accounts: `30000`, `20000`
 - Builds the entry: `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/vendor-bill-service.ts#postManifestVendorBill`
 
 - **exists: PRESENT** -- vendor-bill-core.ts builds a full bill journal with cost classes.
-- **reachable: MISSING** -- No actions.ts under src/app/admin/books/bills/. The SQL door gl_post_vendor_bill has no caller outside its migration.
-- **correct: PARTIAL** -- Balanced, and every account it names is seeded across 0173/0178. Downgraded from PRESENT in books-79: it double counts goods already received unless the caller passes goodsAlreadyReceived (D-61). Correct on the explicit path, wrong by omission.
-- **accepted: MISSING** -- gl_post_vendor_bill exists (0187); no supabase.rpc() call names it.
-- **idempotent: PARTIAL** -- billSourceRef prefers the manifest number as the strongest external key and falls back to vendor+invoice. Sound, and never invoked.
+- **reachable: PRESENT** -- books-83 wired it into finalizeManifestAction (src/app/admin/inventory/intake/actions.ts), gated on a finalize that activated at least one lot so a wholly rejected manifest never invents a payable.
+- **correct: PRESENT** -- Balanced, every account seeded across 0173/0178, and books-83 closed D-61 on the live path: vendor-bill-service derives goodsAlreadyReceived from the LEDGER via receipt-evidence.ts, and REFUSES (BILL_RECEIPT_EVIDENCE_UNKNOWN) when the ledger cannot be read rather than defaulting to false. The builder's own default is still false, which is why the D-61 entry stays open as a builder-level trap for any future caller that bypasses this service.
+- **accepted: PRESENT** -- Posts through posting-service.ts#submitJournal, i.e. the gl_submit_journal door, and surfaces its refusal to the screen. 0187's gl_post_vendor_bill stays uncalled and is now redundant.
+- **idempotent: PRESENT** -- billSourceRef prefers the manifest number as the strongest external key and falls back to vendor+invoice. Live since books-83: a second finalize returns 'duplicate' and writes nothing.
 - **married: MISSING** -- The bill and its later ACH payment are two events; nothing links them.
 
 **If this stays broken:** Without payables, the balance sheet shows no money owed and cash-basis and accrual-basis results diverge silently.
@@ -743,8 +743,6 @@ the path from the screen to the ledger is absent.
 
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- `vendor_cycle.vendor_bill_recorded` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `vendor_cycle.expense_classified_to_account_and_entity` (D-56) -- `src/lib/accounting/expense-classification-core.ts#classifyExpense`
 - `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`

@@ -357,13 +357,33 @@ describe("D-61 — the receipt and the vendor bill collide on inventory", () => 
     expect(credits[0].accountCode).toBe(IN_TRANSIT_ACCOUNT);
   });
 
-  it("the danger is latent, not live: neither builder is reachable", () => {
-    // Rule 43's cousin — a trap that cannot spring today still must be recorded.
-    const census = readFileSync(
-      join(process.cwd(), "src/lib/accounting/ledger-census-data.ts"),
+  /**
+   * books-83 INVERTED THIS TEST, deliberately and with a reason.
+   *
+   * It used to assert "the danger is latent, not live: neither builder is
+   * reachable", by checking the census still said `gl_post_vendor_bill has no
+   * caller outside its migration.` That was honest while both builders sat
+   * unwired — a trap that cannot spring still had to be recorded (rule 43's
+   * cousin). It was written to fail on the FIX as well as on the DANGER,
+   * precisely so that whoever wired the bill had to come here and think.
+   *
+   * Both halves are now wired: books-81 wired the receipt, books-83 wired the
+   * bill. So the old assertion is no longer true, and leaving it would mean
+   * either deleting the wire or lying in the census. The replacement asserts
+   * the thing that now matters MORE: the live path derives the flag from the
+   * ledger rather than defaulting it, which is what keeps the trap shut.
+   */
+  it("both halves are wired, and the live path DERIVES the flag rather than defaulting it", () => {
+    const service = readFileSync(
+      join(process.cwd(), "src/lib/accounting/vendor-bill-service.ts"),
       "utf8",
     );
-    expect(census).toContain("gl_post_vendor_bill has no caller outside its migration.");
+    // The flag comes from ledger evidence...
+    expect(service.search(/await\s+findReceiptJournal\s*\(/)).toBeGreaterThan(-1);
+    expect(service).toMatch(/goodsAlreadyReceived\s*=\s*evidence\.kind\s*===\s*"raised"/);
+    // ...and an unreadable ledger refuses instead of assuming "not received".
+    expect(service).toMatch(/evidence\.kind\s*===\s*"unknown"/);
+    expect(service).toContain("BILL_RECEIPT_EVIDENCE_UNKNOWN");
   });
 });
 

@@ -90,6 +90,9 @@ export default async function ManifestReviewPage({
     filled?: string;
     role?: string;
     inv?: string;
+    /** books-81/books-83: the ledger's own answer, surfaced not swallowed. */
+    books?: string;
+    booksError?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -115,6 +118,8 @@ export default async function ManifestReviewPage({
     filled,
     role,
     inv,
+    books,
+    booksError,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -326,6 +331,27 @@ export default async function ManifestReviewPage({
                 .
               </>
             )}
+          </div>
+        )}
+        {/*
+          books-83. The receiving wire (books-81) and the vendor-bill wire both
+          push their result onto this URL. Until now nothing READ it, so a
+          refusal by the books was computed carefully and then shown to nobody
+          — a wire that looks connected and reports nothing. These two banners
+          are the other half of "never swallow a refusal".
+        */}
+        {booksError && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
+            <strong>The delivery stands, but the books were not updated.</strong>{" "}
+            {booksError} Nothing was posted, so no number is wrong — this is a
+            to-do, not a loss. Fix the reason above and finalize again; the entry
+            is keyed to this manifest, so re-running it cannot post twice.
+          </div>
+        )}
+        {books && !booksError && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Recorded in the books — the vendor payable for this delivery is on
+            the ledger, and the product was capitalised exactly once.
           </div>
         )}
         {held && held !== "0" && (

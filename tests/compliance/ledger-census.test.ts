@@ -857,9 +857,16 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     expect(s.fullyProven).toBe(c.fullyProven().length);
   });
 
-  it("reports that the overwhelming majority cannot reach the books", () => {
+  it("reports that the great majority still cannot reach the books", () => {
+    // books-83 lowered this bound from 0.8 to 0.75, and the reason is the
+    // point of the whole census: the ratio MEASURED 0.8 exactly once the two
+    // D-34 rows were wired, so `> 0.8` began failing on genuine progress.
+    // The bound is a floor on honesty, not a target — it exists so nobody can
+    // quietly reclassify rows to make the summary look better. It is lowered
+    // deliberately, in the same commit as the wiring that moved it, and it
+    // still fails loudly if the number is ever massaged rather than earned.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.8);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.75);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {
@@ -936,7 +943,12 @@ describe("the census can order the work by economic weight", () => {
       .map((r) => r.key);
     expect(cheap).toContain("payroll_cycle.payroll_run_accrued");
     expect(cheap).toContain("periodic_and_other.bo_tax_accrual");
-    expect(cheap).toContain("vendor_cycle.vendor_bill_recorded");
+    // books-83 REMOVED vendor_cycle.vendor_bill_recorded from this list,
+    // because it stopped being a cheap win by being done: the bill is wired
+    // through vendor-bill-service.ts#postManifestVendorBill. Asserting its
+    // ABSENCE is the anti-drift half — if the wire is ever deleted, the row
+    // returns to the cheap-wins list and this line fails.
+    expect(cheap).not.toContain("vendor_cycle.vendor_bill_recorded");
   });
 
   it("flags that a purchase order should NOT post, so nobody wires it by mistake", () => {
@@ -1152,7 +1164,17 @@ describe("evidence cannot be softened without a test failing", () => {
     // COGS half together and postSaleForOrder submits both, under distinct
     // source refs so the ledger's idempotency cannot merge them. A real
     // departure, not a relaxed filter.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(10);
+    //
+    // 10 -> 8 in books-83: cost_of_goods_sold.inventory_receipt and
+    // vendor_cycle.vendor_bill_recorded both left, again two rows from one
+    // slice, because both name buildBillJournal as their builder and
+    // vendor-bill-service.ts#postManifestVendorBill is now their poster.
+    // The comment above about D-61 being latent is superseded: the bill path
+    // IS wired, and the flag it needs is derived from the ledger by
+    // receipt-evidence.ts rather than passed by a caller who might forget.
+    // D-61 stays OPEN as a builder-level trap for any future caller that
+    // bypasses the service; the live path is closed and mutation-probed.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(8);
 
     for (const r of drivers) {
       expect(
