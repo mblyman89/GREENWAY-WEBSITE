@@ -1288,7 +1288,22 @@ describe("evidence cannot be softened without a test failing", () => {
     // supplies. One row, not two: payroll_cycle.net_pay_disbursed stays in the
     // backlog because clearing the accrual against the bank is a separate entry
     // that nothing builds yet.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(6);
+    //
+    // 6 -> 9 in books-93, and this one moves the WRONG WAY on purpose. Three
+    // cash_and_banking rows - till_open_from_vault, till_close_to_safe and
+    // till_over_short - gained a builder in register-cash-journal-core.ts and
+    // so became backlog drivers for the first time. They did NOT become
+    // reachable: rendering a worked example on /admin/registers/eod is a read,
+    // and no action Michael takes posts any of them.
+    //
+    // The count going UP is the honest outcome of building a half. The first
+    // attempt at this slice marked those three reachable=PARTIAL, which
+    // dropped the unreachable ratio to 0.6216 and tripped the tripwire twenty
+    // lines above. That is exactly the quiet reclassification the bound exists
+    // to catch, and it caught it. The reachable layer asks "can a real action
+    // in the app reach it?", and the answer is still no.
+    // STATED per rule 89: backlog drivers 6 -> 9 of 37 rows (was 35).
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(9);
 
     for (const r of drivers) {
       expect(

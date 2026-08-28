@@ -5,6 +5,7 @@ import { PrintButton } from "@/components/admin/orders/PrintButton";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { pacificToday } from "@/lib/reports/timezone";
 import { eodData } from "@/lib/registers/eod-store";
+import { RegisterCashSpecimen } from "./RegisterCashSpecimen";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export default async function EodReportPage({
       <div className="space-y-6">
         <Breadcrumbs items={[{ label: "Sell" }, { label: "Register Activity", href: BASE }, { label: "End-of-day report" }]} />
         <EmptyState title="Supabase not configured" description="Connect the service role key to build the end-of-day report." />
+        <RegisterCashSpecimen />
       </div>
     );
   }
@@ -250,6 +252,8 @@ export default async function EodReportPage({
         <p className="mt-3 text-center text-[0.6rem] uppercase tracking-[0.15em] text-black/40">
           Greenway Marijuana · WA license 413541 · file with the day&apos;s physical records
         </p>
+
+        <RegisterCashSpecimen />
       </div>
     </div>
   );

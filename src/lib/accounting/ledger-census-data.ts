@@ -1308,6 +1308,118 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
   /* ── FAMILY 5: CASH, BANKS AND THE ATM ───────────────────────────────── */
 
   {
+    key: "cash_and_banking.till_open_from_vault",
+    family: "cash_and_banking",
+    event: "A shift starts: the float moves from the vault into a drawer.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["10110", "10100"],
+    builder: "src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "books-93 built buildTillOpenJournal: 10110 debited, 10100 credited, " +
+          "two lines, sums to zero. A transfer, never income.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "RegisterCashSpecimen.tsx RENDERS the entry on /admin/registers/eod, but " +
+          "rendering is a read. No action Michael can take posts it: grep for " +
+          "submitJournal across src/lib/registers/ still returns 0 hits. Showing " +
+          "the entry is not reaching it.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "Michael's stated float of 5 tens, 10 fives, 50 ones and one roll each " +
+          "of quarters/dimes/nickels/pennies reconciles to $167.50 exactly, and a " +
+          "denomination count that disagrees with the stated float is REFUSED " +
+          "rather than averaged.",
+      },
+      accepted: {
+        status: "NOT_APPLICABLE",
+        evidence: "Cash moving between two accounts Michael already owns.",
+        reason:
+          "APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer " +
+          "changes no total and creates no obligation, so there is nothing for an " +
+          "approver to weigh.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence: "sourceRef is accepted but no shift-scoped convention is fixed yet.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "The money never leaves the building.",
+        reason: "There is no bank record of cash moving from a safe to a drawer.",
+      },
+    },
+    defectId: "D-39",
+    consequence:
+      "Without it the $1,502.50 of float on hand is invisible to the balance " +
+      "sheet, so cash on hand reads low by that amount every single day.",
+  },
+
+  {
+    key: "cash_and_banking.till_close_to_safe",
+    family: "cash_and_banking",
+    event: "A shift ends: the drawer is counted and its takings go to the safe.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["10400", "10110", "50920"],
+    builder: "src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "books-93 built buildTillCloseJournal: 10400 debited what physically " +
+          "left the drawer, 10110 relieved, the difference to 50920.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "Rendered as a worked example by RegisterCashSpecimen.tsx. No poster " +
+          "calls buildTillCloseJournal, so closing a shift still writes nothing " +
+          "to the ledger: grep submitJournal under src/lib/registers/ finds none.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "The close does NOT re-book cash sales - sale-journal-core already " +
+          "debits 10110 once per sale - so the two cannot double-count. A drawer " +
+          "counted below its own float is refused and escalated to a manager " +
+          "instead of posted. 43 of 43 mutations caught.",
+      },
+      accepted: {
+        status: "NOT_APPLICABLE",
+        evidence: "sourceKind bank is approval-exempt.",
+        reason:
+          "The drawer count is itself the human act. A second approval would " +
+          "delay the deposit without adding a second pair of eyes to the cash.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence: "No shift-scoped sourceRef convention is fixed yet.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "10400 is where the deposit will be matched from. Nothing links a " +
+          "drawer count to the Plaid credit yet.",
+      },
+    },
+    defectId: "D-39",
+    consequence:
+      "This is the entry that keeps 10110 honest. Every cash sale debits the " +
+      "till; if nothing ever credits it, the books claim the drawers hold more " +
+      "money every day forever.",
+  },
+
+  {
     key: "cash_and_banking.cash_deposit_to_bank",
     family: "cash_and_banking",
     event: "Till cash is counted, moved to the vault, and deposited at the bank.",
@@ -1317,16 +1429,22 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     builder: null,
     poster: null,
     layers: {
-      exists: { status: "MISSING", evidence: "No builder moves cash between 101xx and 10200." },
+      exists: {
+        status: "PARTIAL",
+        evidence:
+          "books-93 built the first leg - the drawer count into 10400 Undeposited " +
+          "Funds. The second leg, 10400 to 10200 when the deposit clears the bank, " +
+          "has no builder.",
+      },
       reachable: {
         status: "MISSING",
         evidence: "7 files under src/lib/registers/; 0 submitJournal hits.",
       },
       correct: {
-        status: "MISSING",
+        status: "PARTIAL",
         evidence:
-          "10400 Undeposited Funds and 10900 Cash Clearing are seeded precisely for " +
-          "this and are unused.",
+          "10400 Undeposited Funds is now used by buildTillCloseJournal. 10900 Cash " +
+          "Clearing is still seeded and unused.",
       },
       accepted: { status: "MISSING", evidence: "Never presented." },
       idempotent: { status: "MISSING", evidence: "No ref convention." },
@@ -1350,14 +1468,28 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     sourceKind: "bank",
     entityCode: "greenway",
     accountCodes: ["50920", "10110"],
-    builder: null,
+    builder: "src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal",
     poster: null,
     layers: {
-      exists: { status: "MISSING", evidence: "No builder targets 50920." },
-      reachable: { status: "MISSING", evidence: "0 ledger hits under src/lib/registers/." },
-      correct: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "books-93: the close builder emits a 50920 line whenever the count " +
+          "differs from expectation, and omits it entirely when it does not.",
+      },
+      reachable: {
         status: "MISSING",
-        evidence: "50920 Cash Over / (Short) is seeded and never referenced in src/.",
+        evidence:
+          "The worked example in RegisterCashSpecimen.tsx is deliberately $4.00 " +
+          "short so 50920 is visible rather than theoretical — but visible is not " +
+          "posted. grep submitJournal under src/lib/registers/ still finds 0 hits.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "50920 is seeded as an INCOME account, so an over is a credit and a " +
+          "short is a debit; both the amount and the wording are asserted, because " +
+          "a correct number under a backwards word is worse than a wrong one.",
       },
       accepted: { status: "MISSING", evidence: "Never presented." },
       idempotent: { status: "MISSING", evidence: "No ref convention." },

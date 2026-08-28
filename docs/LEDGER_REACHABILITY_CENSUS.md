@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 24 cannot reach them at all. 18 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 37 money events that should reach the books. 26 cannot reach them at all. 17 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
-| Money events catalogued | 35 |
+| Money events catalogued | 37 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 24 |
-| Have nothing that even builds the entry | 18 |
+| Cannot reach the books at all | 26 |
+| Have nothing that even builds the entry | 17 |
 | Layers that could not be measured | 5 |
 
 ## The six layers
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 17 of 35 |
-| `reachable` | 24 of 35 |
-| `correct` | 14 of 35 |
-| `accepted` | 22 of 35 |
-| `idempotent` | 21 of 35 |
-| `married` | 13 of 35 |
+| `exists` | 15 of 37 |
+| `reachable` | 26 of 37 |
+| `correct` | 12 of 37 |
+| `accepted` | 22 of 37 |
+| `idempotent` | 23 of 37 |
+| `married` | 14 of 37 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -434,11 +434,47 @@ A child-support or garnishment withholding is forwarded to the agency.
 
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `cash_deposit_to_bank` | NO | NO | NO | NO | NO | NO | D-39 |
-| `till_over_short` | NO | NO | NO | NO | NO | n/a | D-39 |
+| `till_open_from_vault` | yes | NO | yes | n/a | NO | n/a | D-39 |
+| `till_close_to_safe` | yes | NO | yes | n/a | NO | NO | D-39 |
+| `cash_deposit_to_bank` | part | NO | part | NO | NO | NO | D-39 |
+| `till_over_short` | yes | NO | yes | NO | NO | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
 | `atm_surcharge_income` | yes | yes | yes | part | yes | part | D-40 |
 | `intercompany_transfer` | yes | NO | part | NO | ? | NO | D-41 |
+
+### `cash_and_banking.till_open_from_vault`
+
+A shift starts: the float moves from the vault into a drawer.
+
+- Accounts: `10110`, `10100`
+- Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal`
+- Posts the entry: **nothing**
+
+- **exists: PRESENT** -- books-93 built buildTillOpenJournal: 10110 debited, 10100 credited, two lines, sums to zero. A transfer, never income.
+- **reachable: MISSING** -- RegisterCashSpecimen.tsx RENDERS the entry on /admin/registers/eod, but rendering is a read. No action Michael can take posts it: grep for submitJournal across src/lib/registers/ still returns 0 hits. Showing the entry is not reaching it.
+- **correct: PRESENT** -- Michael's stated float of 5 tens, 10 fives, 50 ones and one roll each of quarters/dimes/nickels/pennies reconciles to $167.50 exactly, and a denomination count that disagrees with the stated float is REFUSED rather than averaged.
+- **accepted: NOT_APPLICABLE** -- Cash moving between two accounts Michael already owns. _APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer changes no total and creates no obligation, so there is nothing for an approver to weigh._
+- **idempotent: MISSING** -- sourceRef is accepted but no shift-scoped convention is fixed yet.
+- **married: NOT_APPLICABLE** -- The money never leaves the building. _There is no bank record of cash moving from a safe to a drawer._
+
+**If this stays broken:** Without it the $1,502.50 of float on hand is invisible to the balance sheet, so cash on hand reads low by that amount every single day.
+
+### `cash_and_banking.till_close_to_safe`
+
+A shift ends: the drawer is counted and its takings go to the safe.
+
+- Accounts: `10400`, `10110`, `50920`
+- Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
+- Posts the entry: **nothing**
+
+- **exists: PRESENT** -- books-93 built buildTillCloseJournal: 10400 debited what physically left the drawer, 10110 relieved, the difference to 50920.
+- **reachable: MISSING** -- Rendered as a worked example by RegisterCashSpecimen.tsx. No poster calls buildTillCloseJournal, so closing a shift still writes nothing to the ledger: grep submitJournal under src/lib/registers/ finds none.
+- **correct: PRESENT** -- The close does NOT re-book cash sales - sale-journal-core already debits 10110 once per sale - so the two cannot double-count. A drawer counted below its own float is refused and escalated to a manager instead of posted. 43 of 43 mutations caught.
+- **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash._
+- **idempotent: MISSING** -- No shift-scoped sourceRef convention is fixed yet.
+- **married: MISSING** -- 10400 is where the deposit will be matched from. Nothing links a drawer count to the Plaid credit yet.
+
+**If this stays broken:** This is the entry that keeps 10110 honest. Every cash sale debits the till; if nothing ever credits it, the books claim the drawers hold more money every day forever.
 
 ### `cash_and_banking.cash_deposit_to_bank`
 
@@ -448,9 +484,9 @@ Till cash is counted, moved to the vault, and deposited at the bank.
 - Builds the entry: **nothing**
 - Posts the entry: **nothing**
 
-- **exists: MISSING** -- No builder moves cash between 101xx and 10200.
+- **exists: PARTIAL** -- books-93 built the first leg - the drawer count into 10400 Undeposited Funds. The second leg, 10400 to 10200 when the deposit clears the bank, has no builder.
 - **reachable: MISSING** -- 7 files under src/lib/registers/; 0 submitJournal hits.
-- **correct: MISSING** -- 10400 Undeposited Funds and 10900 Cash Clearing are seeded precisely for this and are unused.
+- **correct: PARTIAL** -- 10400 Undeposited Funds is now used by buildTillCloseJournal. 10900 Cash Clearing is still seeded and unused.
 - **accepted: MISSING** -- Never presented.
 - **idempotent: MISSING** -- No ref convention.
 - **married: MISSING** -- The deposit appears in Plaid as a credit; the count exists in the register system. Nothing links them.
@@ -462,12 +498,12 @@ Till cash is counted, moved to the vault, and deposited at the bank.
 A till count does not match what the system says it should be.
 
 - Accounts: `50920`, `10110`
-- Builds the entry: **nothing**
+- Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
 - Posts the entry: **nothing**
 
-- **exists: MISSING** -- No builder targets 50920.
-- **reachable: MISSING** -- 0 ledger hits under src/lib/registers/.
-- **correct: MISSING** -- 50920 Cash Over / (Short) is seeded and never referenced in src/.
+- **exists: PRESENT** -- books-93: the close builder emits a 50920 line whenever the count differs from expectation, and omits it entirely when it does not.
+- **reachable: MISSING** -- The worked example in RegisterCashSpecimen.tsx is deliberately $4.00 short so 50920 is visible rather than theoretical — but visible is not posted. grep submitJournal under src/lib/registers/ still finds 0 hits.
+- **correct: PRESENT** -- 50920 is seeded as an INCOME account, so an over is a credit and a short is a debit; both the amount and the wording are asserted, because a correct number under a backwards word is worse than a wrong one.
 - **accepted: MISSING** -- Never presented.
 - **idempotent: MISSING** -- No ref convention.
 - **married: NOT_APPLICABLE** -- A shortage never reaches a bank. _There is no second arrival for money that went missing._
@@ -725,7 +761,6 @@ all, so the work is to write it, then wire it.
 - `payroll_cycle.payroll_tax_remitted` (D-38)
 - `payroll_cycle.garnishment_remitted` (D-38)
 - `cash_and_banking.cash_deposit_to_bank` (D-39)
-- `cash_and_banking.till_over_short` (D-39)
 - `cash_and_banking.atm_vault_load` (D-40)
 - `periodic_and_other.excise_tax_remitted` (D-32)
 - `periodic_and_other.depreciation_booked` (D-43)
@@ -741,6 +776,9 @@ the path from the screen to the ledger is absent.
 
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
+- `cash_and_banking.till_open_from_vault` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal`
+- `cash_and_banking.till_close_to_safe` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
+- `cash_and_banking.till_over_short` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
 - `periodic_and_other.fixed_asset_acquired` (D-43) -- `src/lib/accounting/fixed-assets-core.ts#accountCodeForClass`
@@ -764,6 +802,9 @@ mistake later.
 - `vendor_cycle.purchase_order_commitment` / `married`: No entry is due at commitment.
 - `vendor_cycle.expense_classified_to_account_and_entity` / `married`: Classification decides how ONE arrival is characterised. The same dollar arriving twice -- once from the system that spent it, once from the Plaid debit that saw it leave -- is the payment event's problem, and it is already tracked on vendor_cycle.vendor_paid_by_ach. Marking this layer PRESENT here would double-count a control that lives elsewhere.
 - `vendor_cycle.operating_expense_from_bank` / `married`: There is no in-system counterpart to marry, which is what makes this family safe to auto-post and the right place to start wiring.
+- `cash_and_banking.till_open_from_vault` / `accepted`: APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer changes no total and creates no obligation, so there is nothing for an approver to weigh.
+- `cash_and_banking.till_open_from_vault` / `married`: There is no bank record of cash moving from a safe to a drawer.
+- `cash_and_banking.till_close_to_safe` / `accepted`: The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash.
 - `cash_and_banking.till_over_short` / `married`: There is no second arrival for money that went missing.
 - `periodic_and_other.manual_journal` / `idempotent`: A hand-keyed entry has no external event to key on. Two identical entries may be two genuine entries, so the ledger must not silently merge them.
 - `periodic_and_other.manual_journal` / `married`: Nothing automatic produced it, so nothing can duplicate it.

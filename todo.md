@@ -3417,3 +3417,35 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
      (f) A COUNT OF WHAT IS MISSING REACHES THE SCREEN WHERE THE MONEY MOVES.
          An internally correct refusal plus a payment screen still showing a
          confident total is rule 134's failure wearing a new coat.
+
+136. **AN EVENT WITH NO ECONOMIC CONSEQUENCE MUST SAY SO (books-93).**
+     Michael asked whether swapping large bills for small at the master till
+     needs a journal entry. It does not, and never will: the same cash, in the
+     same account, worth the same amount. But "no entry" and "we forgot" look
+     identical from the outside, and D-71 already proved what happens when an
+     outcome exists only as an absence. So:
+
+     (a) A DELIBERATE NON-EVENT RETURNS A VALUE, NOT NOTHING. Where a real
+         operation legitimately produces no journal, the builder returns an
+         explicit `no_entry` result carrying a stable code and a sentence
+         explaining WHY none is needed - not `null`, not an empty array, not a
+         silent early return.
+
+     (b) THE REASON REACHES THE SCREEN. A `no_entry` that only a developer can
+         read has not been said out loud. The panel that renders the journals
+         must render the non-journals too, labelled as such.
+
+     (c) "NO ENTRY" AND "REFUSED" ARE DIFFERENT ANSWERS AND MUST NOT SHARE A
+         CODE. `no_entry` means the operation was correct and complete;
+         `refused` means it could not be trusted. An equal swap is `no_entry`;
+         an unequal one is `refused`, because that is cash moving under a
+         label that says it is not.
+
+     (d) THE EXPLANATION MUST BE SPECIFIC ENOUGH TO FAIL. A sentence that
+         could describe any drawer on any day proves nothing. It must name the
+         register, the amount, or the rule - something a mutation can break.
+
+     (e) A TEST ASSERTS THE SILENCE. Every `no_entry` path gets an assertion on
+         its code AND on the substance of its explanation, or the next person
+         to touch the file will delete the sentence and nothing will notice.
+

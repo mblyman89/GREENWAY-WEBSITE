@@ -3839,3 +3839,82 @@ inside `listVendorPayables` - sits behind a live Supabase connection and cannot
 be executed by any test in this repo; it is pinned in source and that limit is
 stated in the test itself (rule 133f). Nothing here was verified against
 Michael's live database, because no credentials exist in this environment.
+
+## D-73 - the cash drawer had arithmetic but no accounting
+
+**Found:** books-93, while answering Michael's four questions about register
+cash.
+
+**What was already there.** `src/lib/registers/` holds seven files and knows a
+great deal about drawers: `denomTotalMinor` adds up bills and coins,
+`expectedClose` says what a till should hold, `overShort` computes the
+difference, and `buildEodModel` renders a printable end-of-day report. None of
+it reaches the ledger. Zero `submitJournal` hits across all seven files. The
+shop could count its money perfectly and the books would never hear about it.
+
+**Why that is worse than it sounds.** `sale-journal-core.ts` sets
+`TILL_ACCOUNT = "10110"` and DEBITS it on every single cash sale. So one half
+of the loop was already running at full speed while the other half did not
+exist. 10110 gains money every time a customer pays cash and is never once
+credited. On a $5,000 cash day the books would claim the three drawers hold
+$5,000 more than yesterday, and the day after that $10,000 more, forever, with
+nothing in any report to flag it. Meanwhile 10400 Undeposited Funds and 50920
+Cash Over / (Short) sat seeded in the chart of accounts since migration 0173
+and were referenced nowhere in `src/`.
+
+**The subtler half: two of the four answers are NO.** Opening a drawer whose
+float never left it overnight has no accounting consequence. Breaking a $100
+into small bills at the master till has no accounting consequence, ever - it is
+the same cash, in the same account, worth the same amount. Before this slice
+those two facts lived nowhere, which meant a future reader could only discover
+them by finding nothing and guessing why. That is the D-71 shape again: an
+absence that cannot be distinguished from a bug.
+
+**Fixed.** `register-cash-journal-core.ts` builds all three entries as pure
+functions returning a discriminated result - `journal`, `no_entry`, or
+`refused` - where every non-posting outcome carries a stable code AND a
+sentence a human can read. Opening from the vault debits 10110 and credits
+10100, two lines, sums to zero, never income. Closing debits 10400 with exactly
+what physically left the drawer, relieves 10110, and sends the difference to
+50920 with the correct sign: over is a credit, short is a debit. The close
+deliberately does NOT re-book the sales, because they were already booked one
+entry per sale as they were rung; doing both would double the day's revenue.
+The swap returns `SWAP_NO_ACCOUNTING_EFFECT` and explains itself, but refuses
+an exchange whose two sides are not equal - that is a cash movement wearing a
+swap's clothes.
+
+**Arithmetic caught what eyes did not.** Michael's stated master till - 32
+tens, 64 fives, 318 ones, 95 quarters, 120 dimes, 90 nickels, 125 pennies -
+comes to $999.50, not the $1,000.00 he intended. Rather than silently adjust
+it, the discrepancy was reported and he corrected it to 100 nickels. The
+original 90-nickel mix is now a permanent test case proving
+`reconcileDenominations` still catches it. Every count in this system states
+its total twice, once as coins and once as dollars, and when the two disagree
+the system refuses instead of picking a winner.
+
+**Wired to a screen (rule 133).** `RegisterCashSpecimen` renders on
+`/admin/registers/eod` in BOTH the Supabase-unconfigured branch and the normal
+report path, using Michael's own float - $167.50 a drawer, $1,000.00 in the
+master till, $1,502.50 on hand before a single sale. The worked close is
+deliberately $4.00 short so 50920 appears as a real line rather than a
+possibility. Every figure on the panel is computed by the same builders that
+would post the real thing; a mutation that hard-codes `$1,502.50` is caught.
+
+**What is NOT fixed.** Nothing posts these entries. Closing a shift still does
+not write to the ledger, and D-39 stays open for that reason. The limit is
+stated in the module header, asserted by a test, and shown to Michael on the
+panel itself as "these are not your books - no entry below has been posted."
+43 of 43 mutations were caught, including eight door-severing probes.
+
+The census records all three new rows as reachable=MISSING, not PARTIAL, and
+that wording was earned the hard way: the first attempt marked them PARTIAL on
+the grounds that Michael can now SEE the entries, which dropped the unreachable
+ratio from 0.7027 to 0.6216 and tripped the census tripwire. The tripwire was
+right. Rendering is a read; the reachable layer asks whether a real action in
+the app can reach the builder, and no action can. What did change is that three
+rows gained a builder and so became backlog drivers, 6 -> 9 of 37. A count that
+moves the wrong way is the correct report when you have built one half of a
+loop. No shift-scoped `sourceRef` convention exists yet, so idempotency is
+unproven. Nothing
+here was verified against Michael's live database, because no credentials exist
+in this environment.
