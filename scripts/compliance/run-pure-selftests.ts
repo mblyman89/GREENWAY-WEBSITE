@@ -60,6 +60,8 @@ import { __runFormBoxTeachingCoreTests } from "../../src/lib/payroll/form-box-te
 import { __runFormScopeCoreTests } from "../../src/lib/payroll/form-scope-core";
 import { __runEsdEamsCsvTests } from "../../src/lib/payroll/esd-eams-csv-core";
 import { __runExpenseClassificationCoreTests } from "../../src/lib/accounting/expense-classification-core";
+// books-84: the bank-feed expense wire (D-56 / D-37).
+import { __runBankExpenseCoreTests } from "../../src/lib/accounting/bank-expense-core";
 import { __runRelatedPartyLoanCoreTests } from "../../src/lib/accounting/related-party-loan-core";
 import { __runSaleJournalCoreTests } from "../../src/lib/accounting/sale-journal-core";
 import { __runReceiptJournalCoreTests } from "../../src/lib/accounting/receipt-journal-core";
@@ -884,6 +886,9 @@ async function main() {
 
   __runExpenseClassificationCoreTests();
   console.log("expense-classification-core self-tests: all passed");
+
+  __runBankExpenseCoreTests();
+  console.log("bank-expense-core self-tests: all passed");
 
   __runRelatedPartyLoanCoreTests();
   console.log("related-party-loan-core self-tests: all passed");

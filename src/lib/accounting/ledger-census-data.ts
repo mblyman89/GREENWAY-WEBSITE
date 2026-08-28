@@ -885,7 +885,8 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     accountCodes: ["70010", "70020", "70030", "70040", "71010", "76010"],
     builder:
       "src/lib/accounting/expense-classification-core.ts#classifyExpense",
-    poster: null,
+    poster:
+      "src/lib/accounting/bank-expense-service.ts#recordBankExpenseLines",
     layers: {
       exists: {
         status: "PRESENT",
@@ -896,12 +897,16 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "self-test in scripts/compliance/run-pure-selftests.ts.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep -rn 'classifyExpense' src/app -> 0 callers. Nothing reads or " +
-          "writes gl_account_rules from TypeScript either, so the seeded rules " +
-          "are not yet the rules the system uses. books-75 built the classifier " +
-          "only; wiring is a later slice.",
+          "books-84 wired it. bank-expense-service.ts#recordBankExpenseLines " +
+          "calls classifyExpense({ merchant }) on every settled row of a Plaid " +
+          "account and submits the result. Asserted by a test that greps for the " +
+          "CALL rather than the import, because an unused import is exactly how " +
+          "this stayed MISSING while the classifier was finished. Note the " +
+          "seeded gl_account_rules table still has no TypeScript reader: the " +
+          "live rules are SEED_EXPENSE_RULES in the module, which is what the " +
+          "classifier's own tests measure (D-30 is unchanged).",
       },
       correct: {
         status: "PARTIAL",
@@ -923,11 +928,13 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "D-58).",
       },
       accepted: {
-        status: "MISSING",
+        status: "PARTIAL",
         evidence:
-          "The classifier returns a decision; no door accepts it. gl_account_rules " +
-          "exists in migration 0173 with gl_guard_rule_target(), and has zero " +
-          "TypeScript readers or writers.",
+          "A door now accepts the decision: the classified account becomes the " +
+          "debit line of a 'bank' journal. PARTIAL and not PRESENT because the " +
+          "entry lands as a DRAFT and nothing in the application can approve or " +
+          "post a draft -- see D-67. The classification is accepted; the entry " +
+          "is not yet blessed.",
       },
       idempotent: {
         status: "UNKNOWN",
@@ -1023,34 +1030,56 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     sourceKind: "bank",
     entityCode: "greenway",
     accountCodes: ["76040", "10200"],
-    builder: null,
-    poster: null,
+    builder: "src/lib/accounting/bank-expense-core.ts#planBankExpense",
+    poster: "src/lib/accounting/bank-expense-service.ts#recordBankExpenses",
     layers: {
       exists: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "16 files under src/lib/plaid/; grep for submitJournal -> 0 hits. " +
-          "Migration 0189_bank_matching.sql supplies gl_post_bank_match, " +
-          "gl_unmatch_bank_row, gl_bank_reconcile and " +
-          "gl_sign_off_bank_reconciliation: a complete SQL-side reconciliation " +
-          "suite with no supabase.rpc() caller.",
+          "books-84. bank-expense-core.ts turns one settled Plaid row plus the " +
+          "owner-set account role into a balanced two-line entry; " +
+          "bank-expense-service.ts reads the feed and submits it. 24 tests, " +
+          "12/12 mutants killed. Migration 0189's reconciliation suite " +
+          "(gl_post_bank_match et al) remains uncalled and is REDUNDANT here " +
+          "rather than missing: matching means 'this bank row and this EXISTING " +
+          "journal are the same money', and this family has no in-system " +
+          "counterpart to match to, so the entry must be created first.",
       },
-      reachable: { status: "MISSING", evidence: "No Plaid path reaches the ledger." },
-      correct: {
-        status: "PARTIAL",
+      reachable: {
+        status: "PRESENT",
         evidence:
-          "gl_account_rules exists to map a description to an account, but it is " +
-          "empty and no code reads or writes it (D-30).",
+          "recordBankExpenses(plaidAccountId) reads plaid_accounts + " +
+          "plaid_transactions and calls submitJournal. A test asserts the CALL, " +
+          "not the import binding.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "The two failure modes that still BALANCE are both gated. SIGN: " +
+          "plaid-money-core.ts:18-20 defines POSITIVE amount_cents as money " +
+          "LEAVING, so the expense is debited +amountCents and the funding " +
+          "account credited -amountCents; mutants M1/M2 invert this and are " +
+          "caught. 280E: migration 0172 check (7) demands a real cost class on " +
+          "the expense line and 'none' on the balance-sheet line, so the two " +
+          "lines deliberately differ; mutant M5 unifies them and is caught.",
       },
       accepted: {
-        status: "MISSING",
-        evidence: "bank is autopostable per posting-core.ts:116; never presented.",
+        status: "PARTIAL",
+        evidence:
+          "Entries are created as DRAFTS. 'bank' is in AUTOPOSTABLE_SOURCE_KINDS, " +
+          "but auto-post also requires an approved template and no template rows " +
+          "are seeded, so nothing auto-posts in practice. Nothing in the " +
+          "application can approve or post a draft at all (D-67). This layer " +
+          "cannot reach PRESENT until that path exists.",
       },
       idempotent: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "The natural ref is the Plaid transaction id, which is stable — but no " +
-          "code uses it as a sourceRef.",
+          "sourceRef is the Plaid transaction_id, unique in plaid_transactions " +
+          "and stable for a settled row, so submitJournal's (entity, sourceKind, " +
+          "sourceRef) key makes a re-run return outcome 'duplicate'. Pending rows " +
+          "are refused precisely because their id is NOT stable: Plaid replaces " +
+          "them on settlement. Mutant M10 makes the ref date-dependent, caught.",
       },
       married: {
         status: "NOT_APPLICABLE",
@@ -1907,6 +1936,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       "balances are loaded, even perfectly wired activity produces a balance sheet " +
       "that starts from zero.",
   },
+
 ] as const;
 
 /* ═══════════════════════════════════════════════════════════════════════════

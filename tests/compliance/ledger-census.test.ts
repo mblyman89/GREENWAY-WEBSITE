@@ -865,8 +865,15 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // quietly reclassify rows to make the summary look better. It is lowered
     // deliberately, in the same commit as the wiring that moved it, and it
     // still fails loudly if the number is ever massaged rather than earned.
+    //
+    // books-84 lowers it again, 0.75 -> 0.70, for the same reason and with the
+    // same discipline. Wiring the bank-feed expense (D-56 / D-37) moved
+    // vendor_cycle.expense_classified_to_account_and_entity and
+    // vendor_cycle.operating_expense_from_bank to reachable, so the ratio
+    // MEASURED 26/35 = 0.7429 and `> 0.75` began failing on real progress.
+    // STATED per rule 89: unreachable 28 -> 26 of 35.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.75);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.70);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {
@@ -1174,7 +1181,13 @@ describe("evidence cannot be softened without a test failing", () => {
     // receipt-evidence.ts rather than passed by a caller who might forget.
     // D-61 stays OPEN as a builder-level trap for any future caller that
     // bypasses the service; the live path is closed and mutation-probed.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(8);
+    // 8 -> 7 in books-84: vendor_cycle.operating_expense_from_bank left the
+    // backlog. bank-expense-core.ts#planBankExpense builds the entry and
+    // bank-expense-service.ts#recordBankExpenses posts it, so the row now names
+    // both a builder and a poster. Only ONE row moved this time, not two:
+    // vendor_cycle.expense_classified_to_account_and_entity became reachable in
+    // the same slice but was never a driver, because it already had a builder.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
 
     for (const r of drivers) {
       expect(

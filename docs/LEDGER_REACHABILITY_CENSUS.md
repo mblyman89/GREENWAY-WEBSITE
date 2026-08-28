@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 28 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 26 cannot reach them at all. 19 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 28 |
-| Have nothing that even builds the entry | 20 |
+| Cannot reach the books at all | 26 |
+| Have nothing that even builds the entry | 19 |
 | Layers that could not be measured | 6 |
 
 ## The six layers
@@ -43,11 +43,11 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 19 of 35 |
-| `reachable` | 28 of 35 |
+| `exists` | 18 of 35 |
+| `reachable` | 26 of 35 |
 | `correct` | 15 of 35 |
-| `accepted` | 26 of 35 |
-| `idempotent` | 23 of 35 |
+| `accepted` | 24 of 35 |
+| `idempotent` | 22 of 35 |
 | `married` | 14 of 35 |
 
 ## Sales, and the tax you collect on someone else's behalf
@@ -247,9 +247,9 @@ An inbound delivery charge that belongs in the cost of the product.
 | `purchase_order_commitment` | NO | NO | n/a | n/a | n/a | n/a | D-35 |
 | `goods_received` | yes | yes | part | yes | part | NO | D-61 |
 | `vendor_bill_recorded` | yes | yes | yes | yes | yes | NO | D-34 |
-| `expense_classified_to_account_and_entity` | yes | NO | part | NO | ? | n/a | D-56 |
+| `expense_classified_to_account_and_entity` | yes | yes | part | part | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
-| `operating_expense_from_bank` | NO | NO | part | NO | NO | n/a | D-37 |
+| `operating_expense_from_bank` | yes | yes | yes | part | yes | n/a | D-37 |
 
 ### `vendor_cycle.purchase_order_commitment`
 
@@ -308,12 +308,12 @@ A card swipe or bank debit at a named vendor has to become a specific account, o
 
 - Accounts: `70010`, `70020`, `70030`, `70040`, `71010`, `76010`
 - Builds the entry: `src/lib/accounting/expense-classification-core.ts#classifyExpense`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/bank-expense-service.ts#recordBankExpenseLines`
 
 - **exists: PRESENT** -- expense-classification-core.ts exports classifyExpense and the parameterized classifyIn; 50 tests in tests/compliance/expense-classification-core.test.ts plus a registered self-test in scripts/compliance/run-pure-selftests.ts.
-- **reachable: MISSING** -- grep -rn 'classifyExpense' src/app -> 0 callers. Nothing reads or writes gl_account_rules from TypeScript either, so the seeded rules are not yet the rules the system uses. books-75 built the classifier only; wiring is a later slice.
+- **reachable: PRESENT** -- books-84 wired it. bank-expense-service.ts#recordBankExpenseLines calls classifyExpense({ merchant }) on every settled row of a Plaid account and submits the result. Asserted by a test that greps for the CALL rather than the import, because an unused import is exactly how this stayed MISSING while the classifier was finished. Note the seeded gl_account_rules table still has no TypeScript reader: the live rules are SEED_EXPENSE_RULES in the module, which is what the classifier's own tests measure (D-30 is unchanged).
 - **correct: PARTIAL** -- MEASURED from Michael's five Sage exports (550 rows, $368,276.34; 60 distinct vendors). PARTIAL is itself the measurement: 54 of 60 vendors map to exactly one G/L account and are seeded; the other 6 hit two or three accounts in his own history (LIQUOR & CANNABIS BOARD, MICHAEL LYMAN, OFFICE DEPOT, SECRETARY OF THE STATE, STAPLES, VENTURE LIFE AND HEALTH) and are REFUSED as MERCHANT_AMBIGUOUS, so the classifier cannot finish 6/60 of vendors alone. Any vendor outside the seeded 54 returns MERCHANT_UNKNOWN: there is no fallback account, because a silent 76010 would be indistinguishable from a correct answer in every report (rule 48). Entity assignment is read from Michael's own account suffixes -- 81001/81002/81003-LYMAN utilities, maintenance and property tax, 121 rows / $61,109.02 -- not from judgement. Chart facts are drift-tested against migration 0173; the reseller COGS bar is mutation-verified across all 14 barred accounts (6/6 mutants caught, D-58).
-- **accepted: MISSING** -- The classifier returns a decision; no door accepts it. gl_account_rules exists in migration 0173 with gl_guard_rule_target(), and has zero TypeScript readers or writers.
+- **accepted: PARTIAL** -- A door now accepts the decision: the classified account becomes the debit line of a 'bank' journal. PARTIAL and not PRESENT because the entry lands as a DRAFT and nothing in the application can approve or post a draft -- see D-67. The classification is accepted; the entry is not yet blessed.
 - **idempotent: UNKNOWN** -- The module is pure and deterministic -- no clock, no randomness, no I/O, all asserted by test; normalizeMerchant is idempotent and first-match-wins is pinned, so the same vendor text always yields the same account, entity, cost class and provenance across repeated runs. _Deterministic is NOT the same as idempotent, and recording it as PRESENT here would conflate them. Idempotence is a property of POSTING -- classify the same bank line twice and the ledger still shows one entry -- and this module never posts, so the property is untested rather than satisfied. It resolves when a caller carries the decision through a door with a source_ref; the ref will have to come from the bank transaction id, because merchant text repeats every month._
 - **married: NOT_APPLICABLE** -- classifyExpense takes merchant text and returns a decision; it never sees a bank feed and has no second arrival to reconcile against. _Classification decides how ONE arrival is characterised. The same dollar arriving twice -- once from the system that spent it, once from the Plaid debit that saw it leave -- is the payment event's problem, and it is already tracked on vendor_cycle.vendor_paid_by_ach. Marking this layer PRESENT here would double-count a control that lives elsewhere._
 
@@ -341,14 +341,14 @@ Greenway pays a vendor by ACH through the system, and days later the bank debit 
 A card or bank charge appears in the Plaid feed with no corresponding event inside the system.
 
 - Accounts: `76040`, `10200`
-- Builds the entry: **nothing**
-- Posts the entry: **nothing**
+- Builds the entry: `src/lib/accounting/bank-expense-core.ts#planBankExpense`
+- Posts the entry: `src/lib/accounting/bank-expense-service.ts#recordBankExpenses`
 
-- **exists: MISSING** -- 16 files under src/lib/plaid/; grep for submitJournal -> 0 hits. Migration 0189_bank_matching.sql supplies gl_post_bank_match, gl_unmatch_bank_row, gl_bank_reconcile and gl_sign_off_bank_reconciliation: a complete SQL-side reconciliation suite with no supabase.rpc() caller.
-- **reachable: MISSING** -- No Plaid path reaches the ledger.
-- **correct: PARTIAL** -- gl_account_rules exists to map a description to an account, but it is empty and no code reads or writes it (D-30).
-- **accepted: MISSING** -- bank is autopostable per posting-core.ts:116; never presented.
-- **idempotent: MISSING** -- The natural ref is the Plaid transaction id, which is stable — but no code uses it as a sourceRef.
+- **exists: PRESENT** -- books-84. bank-expense-core.ts turns one settled Plaid row plus the owner-set account role into a balanced two-line entry; bank-expense-service.ts reads the feed and submits it. 24 tests, 12/12 mutants killed. Migration 0189's reconciliation suite (gl_post_bank_match et al) remains uncalled and is REDUNDANT here rather than missing: matching means 'this bank row and this EXISTING journal are the same money', and this family has no in-system counterpart to match to, so the entry must be created first.
+- **reachable: PRESENT** -- recordBankExpenses(plaidAccountId) reads plaid_accounts + plaid_transactions and calls submitJournal. A test asserts the CALL, not the import binding.
+- **correct: PRESENT** -- The two failure modes that still BALANCE are both gated. SIGN: plaid-money-core.ts:18-20 defines POSITIVE amount_cents as money LEAVING, so the expense is debited +amountCents and the funding account credited -amountCents; mutants M1/M2 invert this and are caught. 280E: migration 0172 check (7) demands a real cost class on the expense line and 'none' on the balance-sheet line, so the two lines deliberately differ; mutant M5 unifies them and is caught.
+- **accepted: PARTIAL** -- Entries are created as DRAFTS. 'bank' is in AUTOPOSTABLE_SOURCE_KINDS, but auto-post also requires an approved template and no template rows are seeded, so nothing auto-posts in practice. Nothing in the application can approve or post a draft at all (D-67). This layer cannot reach PRESENT until that path exists.
+- **idempotent: PRESENT** -- sourceRef is the Plaid transaction_id, unique in plaid_transactions and stable for a settled row, so submitJournal's (entity, sourceKind, sourceRef) key makes a re-run return outcome 'duplicate'. Pending rows are refused precisely because their id is NOT stable: Plaid replaces them on settlement. Mutant M10 makes the ref date-dependent, caught.
 - **married: NOT_APPLICABLE** -- The bank feed IS the only source for this event. _There is no in-system counterpart to marry, which is what makes this family safe to auto-post and the right place to start wiring._
 
 **If this stays broken:** These are the expenses Michael's CPA needs categorised for the return. It is also the lowest-risk wiring target, because nothing else can duplicate it.
@@ -721,7 +721,6 @@ all, so the work is to write it, then wire it.
 - `cost_of_goods_sold.freight_in` (D-34)
 - `vendor_cycle.purchase_order_commitment` (D-35)
 - `vendor_cycle.vendor_paid_by_ach` (D-36)
-- `vendor_cycle.operating_expense_from_bank` (D-37)
 - `payroll_cycle.net_pay_disbursed` (D-38)
 - `payroll_cycle.payroll_tax_remitted` (D-38)
 - `payroll_cycle.garnishment_remitted` (D-38)
@@ -743,7 +742,6 @@ the path from the screen to the ledger is absent.
 
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- `vendor_cycle.expense_classified_to_account_and_entity` (D-56) -- `src/lib/accounting/expense-classification-core.ts#classifyExpense`
 - `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`

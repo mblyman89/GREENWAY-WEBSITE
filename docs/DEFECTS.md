@@ -3238,3 +3238,96 @@ is caught.
 
 Consequence if ignored: the double count D-61 describes, on every delivery,
 behind a fix that everyone believes is in place.
+
+---
+## D-67 -- every entry the system writes is stranded: a draft nothing can approve and nothing can post
+
+**Found:** books-84, answering the owner's direct question -- "Are there events
+that get auto posted to the ledger and others that are just drafts that need my
+approval? How do I approve a post to the books? Do we have a screen built for me
+to use to review journal entries waiting to be posted to the ledger?"
+
+**Severity: HIGH, and it is the silent kind.** Nothing crashes. Every wire built
+in books-81 (receiving), books-82 (the sale), books-83 (the vendor bill) and
+books-84 (bank expenses) reports success, returns a real journal id, and is
+genuinely idempotent. The entries are correct. They are also invisible to the
+financial statements, because a draft is not posted, and there is at present no
+way to change that from inside the application.
+
+**What is actually true, measured rather than recalled:**
+
+1. *Nothing auto-posts.* `submitJournal` passes `p_auto_post: input.autoPost ===
+   true`. No file in `src/lib/accounting/*.ts` ever sets `autoPost: true` --
+   `journal-entry-service.ts:357` is the only place it appears at all, set
+   explicitly to `false`. Migration 0174 line 475 (`if not p_auto_post then`)
+   therefore returns `'status','draft'` on every single call. Auto-post is
+   further gated on `AUTOPOSTABLE_SOURCE_KINDS` and on an approved template, and
+   no template rows are seeded.
+
+2. *Approval has no caller.* `approveJournal` (posting-service.ts:401) is
+   referenced in exactly two places in the repository: its own definition and
+   `tests/compliance/posting-service.test.ts`. `grep -rln
+   "approveJournal\|gl_approve\|needsSecondApprover" src/app` returns nothing.
+
+3. *There is no review screen.* No page under `src/app` reads `gl_journals` at
+   all. There are 24 directories under `src/app/admin/books/`, and not one of
+   them lists pending drafts. The journal screen tells the owner "Everything you
+   save here is a draft" and then offers nowhere to go.
+
+4. *Approving would still not post it.* This is the part that would have caught
+   out anyone who fixed only (2) and (3). `gl_approve_journal` sets
+   `approved_by`, `approved_at` and `approval_note`, writes a
+   `journal_approved` audit event -- and never touches `status`. Posting is a
+   SEPARATE function, `gl_post_journal` (migration 0172:668), which assigns the
+   gapless journal number. It has **no TypeScript caller anywhere**; the only
+   reference in the whole tree is `scripts/compliance/e2e-bank-matching.sql:68`.
+   So the pipeline is three steps -- submit, approve, post -- and steps two and
+   three are both unreachable from the application.
+
+5. *Even wired, approval would fail as currently plumbed.* `gl_approve_journal`
+   reads `v_actor := auth.uid()` and refuses with `GL_NO_APPROVER_IDENTITY` when
+   it is null, on the stated grounds that "an approval nobody can be held to is
+   not an approval". Every service in `src/lib/accounting` uses
+   `createSupabaseAdminClient()`, a service-role client carrying no user
+   identity. An approval routed through the admin client would be refused. The
+   approval path must run as the signed-in owner, not as the service role.
+   (The approval POLICY itself is fine, and this was verified rather than
+   assumed after a first draft of this entry claimed otherwise: migration
+   0174:724 seeds a row for every entity at a 500000-cent / $5,000.00 threshold.
+   `GL_NO_APPROVAL_POLICY` is therefore NOT the obstacle. The missing piece is
+   the identity, not the policy.)
+
+**How it hid:** every individual slice was honest. Each one reported "saved as a
+draft for you to review", which is true, and each one's tests asserted the draft
+was created correctly, which it was. The gap is not inside any slice -- it is
+the absence of the step AFTER all of them, and no single slice's tests could
+have been expected to notice. The census tracks whether an event *reaches* the
+ledger; it had no column for whether anything could ever *bless* what arrived.
+That is the blind spot, and it is why this was found by a question from the
+owner rather than by a gate.
+
+**Not fixed in books-84, deliberately.** The fix is not a screen; it is an
+authenticated approval path (identity, policy rows, approve-then-post
+sequencing, and the segregation-of-duties threshold the database already
+enforces), and it is worth its own slice rather than a rushed corner of this
+one. Wiring a button that calls the admin client would produce a screen that
+looks finished and refuses every click.
+
+**What books-84 does instead:** states the position plainly in the owner report,
+and adds a standing gate so this cannot quietly persist --
+`tests/compliance/bank-expense-core.test.ts` asserts, against the real source
+tree, that no caller of `approveJournal` or `gl_post_journal` exists. That test
+FAILS THE DAY SOMEBODY WIRES ONE, which is the intent: it forces this entry to
+be revisited and closed deliberately rather than being quietly outgrown.
+
+A census row was attempted first and then withdrawn, which is worth recording.
+`validateCensusRow` refuses a row naming fewer than two accounts ("every entry
+touches at least two"), and approval names none -- it is a lifecycle transition
+on an existing entry, not an entry. The invariant is right and the row was
+wrong, so the row went rather than the invariant. The census measures whether
+events REACH the ledger; "can anything bless what arrived?" is a different
+question and does not belong in it.
+
+Consequence if ignored: Michael opens for business, every transaction flows in
+correctly, the trial balance stays empty, and the first person to notice is
+whoever prepares the return.
