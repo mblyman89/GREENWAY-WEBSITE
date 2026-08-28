@@ -55,6 +55,36 @@
  * tell him what was broken before it started.
  */
 
+/*
+ * ── WHY THE FACTORY RESET IS NOT A ROW IN HERE (books-80, D-62) ────────────
+ *
+ * books-80 built `factory-reset-core.ts#buildResetPlan` and migration 0209
+ * `gl_factory_reset(...)`, and deliberately did NOT add a census row for them.
+ * This note exists so nobody later reads the absence as an oversight and
+ * "fixes" it.
+ *
+ * The census population is defined one screen above as economic events that
+ * "should leave a mark in the books". `validateCensusRow` enforces that
+ * definition structurally, not stylistically: it requires a `sourceKind` drawn
+ * from the ledger's own sixteen-value vocabulary, and it refuses any row naming
+ * fewer than two account codes that exist in the real chart of accounts.
+ *
+ * A factory reset produces no journal entry. It is the deletion of journal
+ * entries. There is no source kind for it — the sixteen are the sixteen — and
+ * there are no two accounts it debits and credits. Forcing a row in would mean
+ * inventing a source kind and naming two accounts the entry never touches,
+ * which is precisely what the header above forbids: "It does not invent an
+ * event."
+ *
+ * The reset is covered where coverage is meaningful and enforced:
+ * `tests/compliance/factory-reset-core.test.ts` reads the real migrations off
+ * disk and fails the build when a table exists that nobody classified, or when
+ * 0209 stops deleting something the core classifies WIPE. That is a stronger
+ * guarantee than a census row, because it is re-measured against the schema on
+ * every run rather than re-typed by hand — which is the exact failure mode
+ * (D-62) that produced the slice.
+ */
+
 import { LedgerCensus, type CensusRow } from "./ledger-census-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -441,9 +441,17 @@
   knowledge base, media, site content, product masters/enrichments,
   brands & vendors, non-cannabis products, promotions, people/hardware,
   and the audit log. Idempotent; safe to re-run.
-  **Until this is run, "Reset operational data" still works but leaves
-  test activity behind in those newer tables — run it BEFORE your final
-  pre-go-live reset so the November 1st start is truly clean.**
+  **SUPERSEDED for go-live purposes — see D-62.** This file was measured in
+  books-80 and it is sixty-eight migrations stale. It deletes from 66 of the
+  250 tables that now exist, and the 184 it never touches include the ENTIRE
+  general ledger (`gl_journals`, `gl_journal_lines`, `gl_periods`,
+  `gl_audit_events`), because the ledger was born at migration 0172 — thirty-two
+  migrations AFTER this sweep was written. It also leaves
+  `payroll_ytd_accumulators` and `sick_leave_ledger` behind, either of which
+  would corrupt the first real W-2. Running it before go-live would delete your
+  test SALES and keep every test JOURNAL ENTRY. Still apply it in numeric order
+  (it is harmless and keeps the numbering intact), but **do not rely on it for a
+  clean November 1st start.** Use `0209_factory_reset.sql` for that.
 
 ## SLICE 64 — manual classification at draft approval
 
@@ -906,3 +914,58 @@
   `/admin/crypto`, `/admin/loans`) already hide themselves from everyone but
   you — that half ships with the code. But the tables underneath stay readable
   by any active staff member until this file is applied.
+
+## BOOKKEEPING BRANCH — books-80 — the factory reset (D-62, D-63)
+
+- [ ] **`supabase/migrations/0209_factory_reset.sql`** — the clean-slate button
+  for November 1st. This is the answer to "can I test everything and then
+  completely wipe away all testing?" The answer is yes, but **only after this
+  file is applied**, because the reset that existed before it (0069 → 0097 →
+  0140) was sixty-eight migrations stale and would have left every test journal
+  entry sitting on the books. See D-62.
+
+  It runs **entirely inside your existing Supabase project.** No new project, no
+  new environment variables, nothing to re-enter in Vercel — `integration_credentials`
+  is deliberately on the KEEP list for exactly that reason.
+
+  What it adds:
+
+  1. `gl_factory_reset_preview()` — **read-only.** Owner-only. Tells you what is
+     in the database before you touch anything: completed orders, CCRS batches,
+     excise returns filed, posted journals. Run this first, every time.
+  2. `gl_factory_reset(confirm_phrase, acknowledge_wac_314_55_087)` — the wipe.
+     Owner-only. Refuses unless you type the phrase **`ERASE ALL TEST DATA`**
+     exactly, and refuses again unless you pass `true` to acknowledge the
+     five-year retention rule. Deletes from **134** tables in verified
+     child→parent order and KEEPS **116** — your chart of accounts, your four
+     entities, the shareholder register, staff, passkeys, the knowledge base,
+     product masters, brands, vendors, site content, and the audit log.
+  3. `gl_audit_factory_reset()` — the proof. **Returns only problems, so zero
+     rows is the all-clear.**
+
+  It temporarily lifts the ledger immutability triggers, and it does so through
+  a **transaction-local** setting rather than `alter table ... disable trigger` —
+  so if anything fails halfway, the exemption rolls back with the transaction and
+  the ledger locks itself again automatically. There is no window in which the
+  books are unprotected and nobody is looking.
+
+  The reset **logs itself** into `audit_logs` as `ops.factory_reset`, and
+  `audit_logs` is on the KEEP list. Your clean slate is clean, but it is not
+  amnesiac: there is a permanent record that a reset happened, who did it, and
+  when.
+
+  **Run in this order, on or before October 31st:**
+
+  ```sql
+  select * from gl_factory_reset_preview();                       -- 1. look
+  select * from gl_factory_reset('ERASE ALL TEST DATA', true);    -- 2. wipe
+  select * from gl_audit_factory_reset();                         -- 3. expect ZERO ROWS
+  ```
+
+  **Until this is run**, there is no safe way to clear test data — the old
+  "Reset operational data" button leaves the entire general ledger behind.
+
+  Also fixes **D-63**: the retention guard inherited from 0097 told you the
+  retention period was **three years**. WAC 314-55-087(1) has said **five years**
+  since 10/12/2024 (WSR 24-19-040). The stale number was in the exact sentence
+  shown to you at the moment of destruction. 0209 says five.

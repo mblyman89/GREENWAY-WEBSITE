@@ -3000,3 +3000,95 @@ default path, one asserts the cure works on the explicit path.
 Mutation campaign on the new logic: 7 deliberate defects, 7 caught, 0 survivors.
 
 ---
+## D-62 -- the factory reset was 68 migrations stale and left the entire ledger on the books
+
+**Found:** books-80, answering the owner's question "Is there a factory reset
+option we can use before we go live so I can have a clean completely empty
+database to work with? I don't want to have a bunch of stuff stuck on the books
+from all of my testing."
+
+**Severity: HIGH.** Silent. Nothing crashes; the owner simply opens for business
+on November 1st with rehearsal numbers in his trial balance and does not find out
+until a CPA asks why the books disagree with reality.
+
+A reset already existed -- `reset_operational_data()`, migration 0069, guarded in
+0097, extended in 0140 -- so the tempting answer was "yes, already built." That
+answer was wrong. Measured, not assumed:
+
+* Migrations on disk run 0001..0208. The reset was last extended at **0140**:
+  sixty-eight migrations stale.
+* Those migrations create **250** tables. The old reset deleted from **66**.
+* Of the **184** it never touched, the worst were the general ledger --
+  `gl_journals`, `gl_journal_lines`, `gl_periods`, `gl_audit_events`,
+  `gl_opening_balances`, `gl_bank_matches`, `gl_bank_reconciliations` -- because
+  the ledger was born at migration **0172**, thirty-two migrations AFTER the reset
+  was last taught anything. Also `payroll_ytd_accumulators` and
+  `sick_leave_ledger`, either of which would corrupt the first real W-2.
+
+So pressing "Reset operational data" would have deleted the test SALES and kept
+every test JOURNAL ENTRY -- the exact opposite of what the button promises.
+
+**The root cause is the shape of the fix, not the missing names.** 0140's own
+header says it exists because "0069 was written before many newer operational
+tables existed," and it fixed that by typing more table names. Then 68 more
+migrations landed and it rotted identically. A hand-typed list is not a fix; it
+is the same bug on a delay.
+
+**Closed by** `src/lib/accounting/factory-reset-core.ts`, which classifies every
+one of the 250 tables WIPE or KEEP and REFUSES on anything unclassified (rule 48
+-- no default disposition exists, because guessing WIPE destroys records WAC
+314-55-087 requires and guessing KEEP is this defect), plus migration 0209
+`gl_factory_reset(...)`. Two tests read the real migrations off disk: one fails
+when a table exists that nobody classified, one fails when 0209 does not delete
+something the core says to delete. The staleness is now a red build, not a wrong
+number on a tax return.
+
+**Found during the fix, by the guard catching its author.** My first table
+extraction used a grep that did not strip SQL comments, and
+`0175_gl_trial_balance.sql:425` mentions `create table secret_ledger(...)` inside
+a comment describing a manual penetration test. I wrote a rule for that phantom
+table. `RULE_FOR_MISSING_TABLE` refused on the first real run. Had the refusal
+been softer, a non-existent table would have reached a production DELETE and
+aborted the whole reset transaction. The rule was deleted; the refusal was not
+weakened. Family prefix rules also over-swept thirteen structural `gl_` tables
+(the chart of accounts, entities, the shareholder register, the cut-over config)
+on their first run; each was opened, read, and carved out with a specific rule.
+
+Mutation campaign: 19 deliberate defects, 19 caught, 0 survivors -- after three
+survivors on the first pass exposed that the SQL tests asserted only that a
+phrase appeared in the file, so replacing `if not public.is_owner() then` with
+`if false then` left the error message in place and the test still passed. Those
+tests now assert the CONDITION, not the message.
+
+---
+
+## D-63 -- the retention guard cited three years; the rule has said five since October 2024
+
+**Found:** books-80, reading `0097_reset_retention_guard.sql` while fixing D-62.
+
+Migrations 0097 and 0140 both refuse a wipe with: "Licensees must retain
+sales/inventory/transport records for 3 years."
+
+WAC 314-55-087(1), as amended by **WSR 24-19-040** (filed 9/11/2024, effective
+**10/12/2024**), requires records to be kept on the licensed premises for a
+**five-year period**. The repo already knew: `docs/COMPLIANCE_BIBLE.md` §3.6 and
+`docs/INVENTORY_COMPLIANCE_WA.md` §2 both record the current text from a verified
+scrape, and the Bible states plainly that "anything in this repo still saying
+three years is stale." `src/lib/admin/reset-service.ts` already said FIVE. Only
+the SQL the owner actually reads at the moment of destruction said three.
+
+**Why it matters here specifically.** This string is not documentation -- it is
+the sentence shown to the owner in the instant he decides whether to destroy
+records. Telling him three years understates how long the state can ask for them,
+and record-keeping violations are Category IV (WAC 314-55-523).
+
+**Closed** in migration 0209 and `factory-reset-core.ts`, which state five years,
+cite `WAC 314-55-087(1)` with the amending WSR, and are held by tests that read
+0097 (still three), the Bible (five), and 0209 (must be five, and must not
+reintroduce three). Note the repo's separate OWN policy is to retain at least six
+years as a margin of safety -- that is policy, not the requirement, and is not
+what the refusal message cites.
+
+Mutation M4 reverts the constant to 3 and is caught.
+
+---

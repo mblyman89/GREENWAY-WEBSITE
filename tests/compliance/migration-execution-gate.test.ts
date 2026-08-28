@@ -464,12 +464,26 @@ describe("the migration list is ordered the way the database will see it", () =>
     // defaulted to 'WA': an employee's home state is a fact about a person, not
     // about the employer, and a default would state it on everyone's behalf.
     //
-    // HONOURED THE SAME WAY AS 0198 AND 0199, re-verified before this line was
-    // touched: 208 files; `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0, so
-    // every name is still zero-padded to four digits; `ls [0-9]*.sql | sort -c`
-    // exits clean, so the on-disk order and the string sort still agree. Only
-    // then was 0207 changed to 0208.
-    expect(listed[listed.length - 1]).toMatch(/^0208_/);
+    // ─── IT FIRED A TWELFTH TIME, ON 0209 (books-80) ──────────────────────
+    //
+    // 0209_factory_reset.sql adds gl_factory_reset_preview(),
+    // gl_factory_reset(confirm_phrase, acknowledge_wac_314_55_087) and
+    // gl_audit_factory_reset() — the clean-slate button for the November 1st
+    // go-live (D-62). This assertion fired exactly as designed the moment the
+    // file landed, which is the whole point of it: it is the one place in the
+    // suite that CANNOT be satisfied by a passing build alone, so a new
+    // migration is forced to announce itself to a human rather than slipping in
+    // behind a green check. An anchor that auto-followed the highest file on
+    // disk would assert nothing at all (rule 13c: a test that cannot fail is
+    // worse than no test).
+    //
+    // HONOURED THE SAME WAY AS 0198, 0199, 0207 AND 0208, re-verified by running
+    // the commands before this line was touched, not by trusting the previous
+    // slice's note: `ls [0-9]*.sql | wc -l` returns 209; `ls [0-9]*.sql |
+    // grep -cvE '^[0-9]{4}_'` returns 0, so every name is still zero-padded to
+    // four digits; `ls [0-9]*.sql | sort -c` exits clean, so the on-disk order
+    // and the string sort still agree. Only then was 0208 changed to 0209.
+    expect(listed[listed.length - 1]).toMatch(/^0209_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

@@ -63,6 +63,7 @@ import { __runExpenseClassificationCoreTests } from "../../src/lib/accounting/ex
 import { __runRelatedPartyLoanCoreTests } from "../../src/lib/accounting/related-party-loan-core";
 import { __runSaleJournalCoreTests } from "../../src/lib/accounting/sale-journal-core";
 import { __runReceiptJournalCoreTests } from "../../src/lib/accounting/receipt-journal-core";
+import { __runFactoryResetCoreTests } from "../../src/lib/accounting/factory-reset-core";
 import { __runEsd5208WorksheetTests } from "../../src/lib/payroll/esd-5208-worksheet-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
@@ -890,6 +891,9 @@ async function main() {
 
   __runReceiptJournalCoreTests();
   console.log("receipt-journal-core self-tests: all passed");
+
+  __runFactoryResetCoreTests();
+  console.log("factory-reset-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
