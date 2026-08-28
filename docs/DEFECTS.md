@@ -2956,4 +2956,47 @@ forgotten. A test that merely asserted today's behaviour would rot into
 protecting the bug; this one is written to fail on the FIX and on the DANGER
 both, so neither can pass silently.
 
+### books-79 -- FIXED ON THE EXPLICIT PATH, still reachable by omission
+
+`VendorBillInput` gained `goodsAlreadyReceived?: boolean`. When it is true, a
+cannabis-product line debits `20800` instead of the category account, so:
+
+    GOODS ARRIVE     debit 2xxxx category   credit 20800
+    INVOICE ARRIVES  debit 20800            credit 30000
+
+Measured by adding the two real journals together for one $150.00 delivery:
+
+    goodsAlreadyReceived = false ->  20010: 30000   20800: -15000   30000: -15000
+    goodsAlreadyReceived = true  ->  20010: 15000   20800:      0   30000: -15000
+
+The second line is the fix: inventory capitalised ONCE and the clearing account
+netting to exactly zero. All 42 combinations (21 categories x received/not) were
+run through the real `ledger-core#validateJournalDraft` with zero issues.
+
+**Scope, deliberately narrow.** Only `isCannabisProduct` lines move. The other
+three `treatment: 'inventory'` kinds are `freight_in` and `product_packaging`
+(60800) and `purchase_discount` (60900) -- costs known WITH THE INVOICE, not
+with the truck, which `receipt-journal-core` deliberately never books. Redirecting
+them would credit a clearing account nothing ever debited and leave a permanent
+phantom balance in 20800. Mutation N1 tries exactly that and is caught.
+
+**Why a new flag instead of reusing `fromAcceptedManifest`.** They look
+interchangeable and are not. Migration 0059 lists the manifest statuses as
+`pending | in_transit | received | accepted | rejected | partially_accepted`, so
+"accepted" is a COMPLIANCE state -- it does not prove an accounting entry exists.
+Deriving one from the other would mean accepting a manifest silently changed
+which account a bill debits, which is the same invisible coupling that produced
+this defect. Mutation N4 makes that substitution and is caught.
+
+**STILL OPEN, and this is the honest part.** The flag defaults to `false`, which
+reproduces the old behaviour exactly. That default is the safe direction if a
+caller forgets -- stranding nothing beats stranding cost in a clearing account
+forever -- but it means the double count remains reachable BY OMISSION. The
+defect is fixable, not automatically fixed. It closes fully when the receiving
+screen is wired and passes the flag, at which point the wiring itself must be
+tested. Two tests hold the line: one asserts the danger still exists on the
+default path, one asserts the cure works on the explicit path.
+
+Mutation campaign on the new logic: 7 deliberate defects, 7 caught, 0 survivors.
+
 ---

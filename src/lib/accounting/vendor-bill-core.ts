@@ -863,6 +863,25 @@ export type VendorBillInput = {
   fromAcceptedManifest?: boolean;
   /** Manifest number when fromAcceptedManifest. Becomes the idempotency ref. */
   manifestNumber?: string | null;
+  /**
+   * TRUE only when a goods-receipt journal has ALREADY posted for these goods,
+   * i.e. `receipt-journal-core.ts#buildReceiptJournal` ran and its entry reached
+   * the ledger. This is what closes D-61.
+   *
+   * WHY THIS IS A SEPARATE FLAG, AND NOT DERIVED FROM `fromAcceptedManifest`.
+   * Those two facts look interchangeable and are not. `fromAcceptedManifest`
+   * says the TRACEABILITY PAPERWORK was accepted; migration 0059 lists the
+   * manifest statuses as `pending | in_transit | received | accepted | rejected
+   * | partially_accepted`, so "accepted" is a compliance state, not proof that
+   * an accounting entry exists. Inferring one from the other would mean that
+   * accepting a manifest silently changed which account a bill debits — the
+   * exact class of invisible coupling that produced D-61 in the first place.
+   *
+   * Default is `false`, and that default is deliberate: it reproduces today's
+   * behaviour exactly. A caller must state affirmatively that the receipt
+   * posted. Guessing in the other direction would strand cost in 20800 forever.
+   */
+  goodsAlreadyReceived?: boolean;
 };
 
 // ===========================================================================
@@ -1623,6 +1642,21 @@ export type BillJournal = {
 export const AP_ACCOUNT_CODE = "30000";
 
 /**
+ * Inventory — In Transit. The clearing account that sits between the truck and
+ * the invoice, seeded in 0173 with the description "Received not invoiced, or
+ * invoiced not received. Visible instead of absorbed."
+ *
+ * The receipt credits it; the bill debits it when the goods already arrived. It
+ * therefore nets to zero for any purchase that completed both halves, and any
+ * balance left behind is a real to-do list rather than a rounding artefact:
+ * a CREDIT balance is goods received and never billed, a DEBIT balance is goods
+ * billed and never received. Mirrors IN_TRANSIT_ACCOUNT in
+ * receipt-journal-core.ts, and a test asserts the two constants are equal so
+ * they cannot drift apart.
+ */
+export const IN_TRANSIT_ACCOUNT_CODE = "20800";
+
+/**
  * Build the idempotency reference. The same invoice submitted twice — a retry, a
  * double-click, a re-run of the November cut-over — must produce exactly ONE
  * journal. Manifest number wins when present because it is the strongest
@@ -1658,11 +1692,42 @@ export function buildBillJournal(bill: VendorBillInput, verdict: BillVerdict): B
     const line = bill.lines.find((l) => l.lineNo === c.lineNo);
     if (!line) continue;
     const kind = findPurchaseKind(c.kindCode);
+
+    // ── D-61 ─────────────────────────────────────────────────────────────
+    // If the goods were already received, the receipt entry ALREADY debited
+    // the category inventory account and credited 20800. Debiting inventory
+    // again here would capitalise the same goods twice and, when they sell,
+    // overstate COGS — the one direction of error §280E punishes hardest,
+    // because COGS is the only deduction this business gets.
+    //
+    // So the bill RELIEVES the clearing account instead:
+    //
+    //   GOODS ARRIVE     debit 2xxxx category   credit 20800
+    //   INVOICE ARRIVES  debit 20800            credit 30000
+    //
+    // 20800 nets to zero for anything both received and invoiced. A residual
+    // balance is not noise — it is the list of shipments missing one half.
+    //
+    // SCOPE, deliberately narrow. Only `isCannabisProduct` lines move, because
+    // only those are goods that physically arrive on a manifest and only those
+    // are what the receipt debited. The other three inventory-treatment kinds
+    // are freight_in and product_packaging (60800) and purchase_discount
+    // (60900): those are costs that become known WITH THE INVOICE, not with
+    // the truck, and receipt-journal-core deliberately does not book them. If
+    // they were redirected here they would credit a clearing account nothing
+    // ever debited, leaving a permanent phantom balance in 20800.
+    const relievesInTransit =
+      bill.goodsAlreadyReceived === true && kind?.isCannabisProduct === true;
+
     lines.push({
-      accountCode: c.accountCode,
+      accountCode: relievesInTransit ? IN_TRANSIT_ACCOUNT_CODE : c.accountCode,
       amountCents: line.amountCents,
       costClass: c.costClass,
-      description: line.description?.trim() || kind?.label || "Vendor bill line",
+      description: relievesInTransit
+        ? `Relieves goods received not invoiced — ${
+            line.description?.trim() || kind?.label || "cannabis product"
+          }`
+        : line.description?.trim() || kind?.label || "Vendor bill line",
     });
   }
 

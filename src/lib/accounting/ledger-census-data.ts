@@ -716,10 +716,11 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       correct: {
         status: "PARTIAL",
         evidence:
-          "Balanced and integer-only, accepted by the real " +
-          "ledger-core.ts#validateJournalDraft for all 21 categories. NOT " +
-          "PRESENT: vendor-bill-core.ts#buildBillJournal was executed and " +
-          "measured to debit 20010 too, so the pair double counts (D-61).",
+          "Balanced and integer-only; the receipt and the bill were added " +
+          "together and measured to net 20800 to 0 with inventory debited once " +
+          "(books-79). NOT PRESENT: the bill's goodsAlreadyReceived flag " +
+          "defaults false, so D-61 is still reachable by omission until a " +
+          "caller passes it.",
       },
       accepted: {
         status: "MISSING",
@@ -769,10 +770,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "gl_post_vendor_bill has no caller outside its migration.",
       },
       correct: {
-        status: "PRESENT",
+        status: "PARTIAL",
         evidence:
-          "Balanced in self-tests; every account it names is seeded across 0173 " +
-          "and 0178.",
+          "Balanced, and every account it names is seeded across 0173/0178. " +
+          "Downgraded from PRESENT in books-79: it double counts goods already " +
+          "received unless the caller passes goodsAlreadyReceived (D-61). " +
+          "Correct on the explicit path, wrong by omission.",
       },
       accepted: {
         status: "MISSING",

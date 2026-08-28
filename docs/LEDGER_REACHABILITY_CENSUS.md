@@ -246,7 +246,7 @@ An inbound delivery charge that belongs in the cost of the product.
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `purchase_order_commitment` | NO | NO | n/a | n/a | n/a | n/a | D-35 |
 | `goods_received` | yes | NO | part | NO | part | NO | D-61 |
-| `vendor_bill_recorded` | yes | NO | yes | NO | part | NO | D-34 |
+| `vendor_bill_recorded` | yes | NO | part | NO | part | NO | D-34 |
 | `expense_classified_to_account_and_entity` | yes | NO | part | NO | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
 | `operating_expense_from_bank` | NO | NO | part | NO | NO | n/a | D-37 |
@@ -278,7 +278,7 @@ A delivery physically arrives and its cost becomes inventory.
 
 - **exists: PRESENT** -- receipt-journal-core.ts debits the category inventory account (or 20890 for an unmapped line) and credits 20800, balanced.
 - **reachable: MISSING** -- grep for buildReceiptJournal across src/app and src/lib/purchasing -> 0 callers. po-store.ts#receivePoLine still only bumps received_qty.
-- **correct: PARTIAL** -- Balanced and integer-only, accepted by the real ledger-core.ts#validateJournalDraft for all 21 categories. NOT PRESENT: vendor-bill-core.ts#buildBillJournal was executed and measured to debit 20010 too, so the pair double counts (D-61).
+- **correct: PARTIAL** -- Balanced and integer-only; the receipt and the bill were added together and measured to net 20800 to 0 with inventory debited once (books-79). NOT PRESENT: the bill's goodsAlreadyReceived flag defaults false, so D-61 is still reachable by omission until a caller passes it.
 - **accepted: MISSING** -- No SQL door takes a receipt; gl_post_vendor_bill (0187) is the bill path, not the receiving path.
 - **idempotent: PARTIAL** -- sourceRef is `${receiptRef}#receipt`, deterministic and distinct from the bill's manifest:/bill: keys. Never yet exercised by a poster.
 - **married: MISSING** -- receivedCentsForMatch feeds vendor-bill-core.ts#threeWayMatch, but nothing calls either, so the receipt and the invoice remain unlinked.
@@ -295,7 +295,7 @@ An invoice arrives from a vendor and becomes a payable.
 
 - **exists: PRESENT** -- vendor-bill-core.ts builds a full bill journal with cost classes.
 - **reachable: MISSING** -- No actions.ts under src/app/admin/books/bills/. The SQL door gl_post_vendor_bill has no caller outside its migration.
-- **correct: PRESENT** -- Balanced in self-tests; every account it names is seeded across 0173 and 0178.
+- **correct: PARTIAL** -- Balanced, and every account it names is seeded across 0173/0178. Downgraded from PRESENT in books-79: it double counts goods already received unless the caller passes goodsAlreadyReceived (D-61). Correct on the explicit path, wrong by omission.
 - **accepted: MISSING** -- gl_post_vendor_bill exists (0187); no supabase.rpc() call names it.
 - **idempotent: PARTIAL** -- billSourceRef prefers the manifest number as the strongest external key and falls back to vendor+invoice. Sound, and never invoked.
 - **married: MISSING** -- The bill and its later ACH payment are two events; nothing links them.

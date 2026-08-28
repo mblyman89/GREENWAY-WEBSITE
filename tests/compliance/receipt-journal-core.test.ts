@@ -35,6 +35,7 @@ import {
   evaluateVendorBill,
   buildBillJournal,
   threeWayMatch,
+  IN_TRANSIT_ACCOUNT_CODE,
   type VendorBillInput,
 } from "../../src/lib/accounting/vendor-bill-core";
 
@@ -200,27 +201,30 @@ describe("D-61 — the receipt and the vendor bill collide on inventory", () => 
     expect(j.lines.some((l) => l.accountCode === IN_TRANSIT_ACCOUNT)).toBe(false);
   });
 
+  const RECEIPT_FOR_SAME_GOODS = {
+    receivedDate: "2026-03-14",
+    receiptRef: "M-2026-03-14-001",
+    vendorName: "Northwest Cannabis Solutions",
+    lines: [{ categorySlug: "flower", quantityReceived: 10, unitCostCents: 1500 }],
+  } as const;
+
   /**
-   * THE GATE. Written to fail in BOTH directions:
+   * D-61, books-79: the collision is now FIXABLE but is NOT fixed by default.
    *
-   *  - if someone fixes the bill to relieve 20800, the collision disappears and
-   *    this test fails, forcing D-61 to be closed deliberately;
-   *  - if someone changes the receipt to credit A/P instead, the second
-   *    expectation fails, because that is the double-count itself.
+   * `goodsAlreadyReceived` defaults to false, which reproduces the original
+   * behaviour exactly. That default is deliberate — it is the safe direction if
+   * a caller forgets, because stranding nothing is better than stranding cost
+   * in a clearing account forever. But it means the double count is still
+   * REACHABLE by omission, and pretending otherwise would be the softening this
+   * file exists to prevent.
    *
-   * Rule 13c: a test that cannot fail is worse than no test. This one is
-   * deliberately aimed at the fix as well as the bug so it cannot rot into
-   * protecting the defect.
+   * So this test asserts the DANGER still exists on the default path, and the
+   * test below it asserts the CURE works on the explicit path. Both must hold.
    */
-  it("both builders debit 20010 for the same goods — the latent double count", () => {
+  it("still double counts when the caller does not say the goods arrived", () => {
     const verdict = evaluateVendorBill(bill, { vendorIsLicensedCannabis: true });
     const billJournal = buildBillJournal(bill, verdict);
-    const receipt = buildReceiptJournal({
-      receivedDate: "2026-03-14",
-      receiptRef: "M-2026-03-14-001",
-      vendorName: "Northwest Cannabis Solutions",
-      lines: [{ categorySlug: "flower", quantityReceived: 10, unitCostCents: 1500 }],
-    });
+    const receipt = buildReceiptJournal(RECEIPT_FOR_SAME_GOODS);
     expect(receipt.kind).toBe("built");
     if (billJournal === null || receipt.kind !== "built") return;
 
@@ -233,12 +237,113 @@ describe("D-61 — the receipt and the vendor bill collide on inventory", () => 
 
     expect(
       billDebits20010 && receiptDebits20010,
-      "D-61 is resolved or has changed shape — re-read docs/DEFECTS.md D-61 " +
-        "before editing this assertion",
+      "D-61's default path changed — re-read docs/DEFECTS.md D-61 before editing",
     ).toBe(true);
-
-    // Same goods, same amount, counted twice if both ever post.
     expect(receipt.totalCostCents).toBe(CENTS);
+  });
+
+  /**
+   * THE CURE, proven by adding the two journals together rather than by reading
+   * either one. This is the assertion that actually protects Michael: whatever
+   * the accounts are called, the same goods must be capitalised exactly ONCE
+   * and the clearing account must end at zero.
+   */
+  it("nets 20800 to ZERO and capitalises the goods exactly once when received", () => {
+    const received: VendorBillInput = { ...bill, goodsAlreadyReceived: true };
+    const verdict = evaluateVendorBill(received, { vendorIsLicensedCannabis: true });
+    const billJournal = buildBillJournal(received, verdict);
+    const receipt = buildReceiptJournal(RECEIPT_FOR_SAME_GOODS);
+    expect(billJournal).not.toBeNull();
+    expect(receipt.kind).toBe("built");
+    if (billJournal === null || receipt.kind !== "built") return;
+
+    const net = new Map<string, number>();
+    for (const l of [...receipt.journal.lines, ...billJournal.lines]) {
+      net.set(l.accountCode, (net.get(l.accountCode) ?? 0) + l.amountCents);
+    }
+
+    // Inventory ONCE, not twice. This is the whole point.
+    expect(net.get("20010")).toBe(CENTS);
+    // The clearing account nets to nothing when both halves happened.
+    expect(net.get(IN_TRANSIT_ACCOUNT)).toBe(0);
+    // And the vendor is owed exactly once.
+    expect(net.get("30000")).toBe(-CENTS);
+    // Both entries balance on their own, so either can post alone.
+    expect(sum(receipt.journal.lines)).toBe(0);
+    expect(sum(billJournal.lines)).toBe(0);
+  });
+
+  it("leaves a VISIBLE 20800 balance when goods arrive and no bill follows", () => {
+    // A credit balance in 20800 is "received not invoiced" — the vendor has not
+    // billed you yet. It is a to-do list, not an error, and it must not vanish.
+    const receipt = buildReceiptJournal(RECEIPT_FOR_SAME_GOODS);
+    if (receipt.kind !== "built") throw new Error("must build");
+    const inTransit = receipt.journal.lines.filter((l) => l.accountCode === IN_TRANSIT_ACCOUNT);
+    expect(inTransit.length).toBe(1);
+    expect(inTransit[0].amountCents).toBe(-CENTS);
+  });
+
+  it("only cannabis product relieves 20800 — freight and discounts do not", () => {
+    // freight_in and product_packaging debit 60800, purchase_discount 60900.
+    // The receipt never books those, so redirecting them to 20800 would credit
+    // a clearing account nothing ever debited and leave a phantom balance.
+    const mixed: VendorBillInput = {
+      ...bill,
+      invoiceNumber: "INV-MIX",
+      statedTotalCents: 10_000 + 500 - 250,
+      goodsAlreadyReceived: true,
+      lines: [
+        {
+          lineNo: 1,
+          purchaseKindCode: "cannabis_product",
+          amountCents: 10_000,
+          description: "flower",
+          categorySlug: "flower",
+        },
+        { lineNo: 2, purchaseKindCode: "freight_in", amountCents: 500, description: "delivery" },
+        {
+          lineNo: 3,
+          purchaseKindCode: "purchase_discount",
+          amountCents: -250,
+          description: "volume discount",
+        },
+      ],
+    };
+    const verdict = evaluateVendorBill(mixed, { vendorIsLicensedCannabis: true });
+    const j = buildBillJournal(mixed, verdict);
+    expect(j).not.toBeNull();
+    if (j === null) return;
+    const byAccount = new Map(j.lines.map((l) => [l.accountCode, l.amountCents]));
+    expect(byAccount.get(IN_TRANSIT_ACCOUNT)).toBe(10_000); // product only
+    expect(byAccount.get("60800")).toBe(500); // freight stays put
+    expect(byAccount.get("60900")).toBe(-250); // discount stays put
+    expect(byAccount.get("20010")).toBeUndefined(); // not debited twice
+    expect(sum(j.lines)).toBe(0);
+  });
+
+  it("does not disturb a bill with no goods on it at all", () => {
+    // Rent with the flag set true must be byte-identical to rent without it.
+    // A change that leaks into unrelated bills is a change nobody can review.
+    const rent: VendorBillInput = {
+      entityCode: "greenway",
+      vendorName: "Landlord",
+      invoiceNumber: "R-1",
+      invoiceDate: "2026-03-14",
+      statedTotalCents: 500_000,
+      lines: [
+        { lineNo: 1, purchaseKindCode: "rent", amountCents: 500_000, description: "March rent" },
+      ],
+    };
+    const a = buildBillJournal(rent, evaluateVendorBill(rent, {}));
+    const b = buildBillJournal(
+      { ...rent, goodsAlreadyReceived: true },
+      evaluateVendorBill({ ...rent, goodsAlreadyReceived: true }, {}),
+    );
+    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+  });
+
+  it("the two modules agree on the clearing account, so they cannot drift", () => {
+    expect(IN_TRANSIT_ACCOUNT_CODE).toBe(IN_TRANSIT_ACCOUNT);
   });
 
   it("the receipt NEVER touches accounts payable — that is the half we control", () => {
