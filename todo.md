@@ -1609,11 +1609,26 @@ WHAT IS DEFERRED, AND IT IS THE PART HE ACTUALLY ASKED FOR:
       already exists and is already computed by the database. Nothing renders it.
 - [ ] Show a prominent "this is a large entry" marker on the drafts list and on
       the draft detail, driven by that flag, at the entity's own threshold.
-- [ ] Decide with Michael whether the notification should also reach him outside
+- [x] Decide with Michael whether the notification should also reach him outside
       the app (email/SMS) or only on screen. NOT GUESSED — ask.
+      ANSWERED (books-90), verbatim: "We have an email push feature built for
+      the compliance calendar, or somewhere I forget if it's not in compliance
+      calendar. Let's use it to send me an email about it." — EMAIL, and
+      specifically the existing engine. DONE in books-90: a fifth planner on
+      src/lib/notifications/compliance-reminders.ts sends a daily digest of
+      large unapproved drafts, deduped per Pacific day, and goes quiet by
+      itself the day the list is empty.
 - [ ] Consider a per-entity "notify at" figure separate from "block at", so the
       warning line and the segregation-of-duties line stop being the same
-      number. Today one column does both jobs.
+      number. Today one column does both jobs. STILL OPEN after books-90: the
+      email reads threshold_cents, the same column the (now-lifted) block used.
+      That is correct for today because Michael wants to hear about exactly the
+      entries the database calls large — but the day he wants "warn me at
+      $2,000, no block at all", these must become two figures.
+
+STILL OPEN AFTER books-90: the ON-SCREEN marker (the two boxes above this one).
+The email tells him a large entry is waiting; the drafts list still does not
+show WHICH one is large once he opens it. That is the remaining half.
 
 DO NOT re-enable the block to make the warning work. The warning is a screen
 concern; the block is a database concern; conflating them is what made a helpful

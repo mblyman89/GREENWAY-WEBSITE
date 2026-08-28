@@ -13,6 +13,7 @@ import {
   type CalendarEntry,
 } from "@/lib/compliance/compliance-calendar-core";
 import { setPeriodDoneAction } from "./actions";
+import SendRemindersNowPanel from "@/components/admin/compliance/SendRemindersNowPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,20 @@ export default async function ComplianceCalendarPage({
           <StatCard label="Overdue" value={String(overdue)} accent={overdue > 0 ? "orange" : "green"} />
           <StatCard label="Due within 3 days" value={String(dueSoon)} accent={dueSoon > 0 ? "gold" : "muted"} />
         </div>
+
+        {/* books-90: the reminder engine, made pressable. Sits above the task
+            list because it acts on ALL of them plus the books' large-entry
+            check, rather than belonging to any one obligation. */}
+        <Card className="p-5">
+          <h2 className="text-sm font-bold text-[var(--admin-text)]">Reminder emails</h2>
+          <p className="mt-1 mb-3 max-w-3xl text-sm text-[var(--admin-muted)]">
+            Every morning the system checks these obligations, the register exception
+            queue, wage-order deadlines, and any large entries waiting for your approval
+            in the books — then emails you about anything that needs you. Press this to
+            run the same check right now.
+          </p>
+          <SendRemindersNowPanel />
+        </Card>
 
         <div className="space-y-4">
           {entries.map((entry) => (

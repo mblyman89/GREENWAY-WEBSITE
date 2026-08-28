@@ -64,6 +64,7 @@ import { __runExpenseClassificationCoreTests } from "../../src/lib/accounting/ex
 import { __runBankExpenseCoreTests } from "../../src/lib/accounting/bank-expense-core";
 // books-85: the approval path (D-67) — decides approve-then-post vs post-only.
 import { __runApprovalCoreTests } from "../../src/lib/accounting/approval-core";
+import { __runLargeDraftNoticeCoreTests } from "../../src/lib/accounting/large-draft-notice-core";
 import { __runPayrollPostingCoreTests } from "../../src/lib/accounting/payroll-posting-core";
 import { __runRelatedPartyLoanCoreTests } from "../../src/lib/accounting/related-party-loan-core";
 import { __runSaleJournalCoreTests } from "../../src/lib/accounting/sale-journal-core";
@@ -896,6 +897,9 @@ async function main() {
   __runApprovalCoreTests();
   // approval-core prints its own line; this is the registry's confirmation.
   console.log("approval-core registered in the pure self-test sweep");
+
+  __runLargeDraftNoticeCoreTests();
+  console.log("large-draft-notice-core self-tests: all passed");
 
   __runPayrollPostingCoreTests();
   console.log("payroll-posting-core registered in the pure self-test sweep");

@@ -38,6 +38,8 @@ import { getWeekResolutions } from "@/lib/compliance/ccrs-week-store";
 import { planMonthlyReminders } from "@/lib/compliance/ccrs-deadline-core";
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
+import { planLargeDraftNotice } from "@/lib/accounting/large-draft-notice-core";
+import { loadUnapprovedDrafts } from "@/lib/accounting/large-draft-notice-store";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
@@ -284,6 +286,54 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
   } catch (e) {
     result.notes.push(
       `Wage order watch planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
+    );
+  }
+
+  // 5) books-90 (PR D): large entries sitting unapproved in the books.
+  //
+  //    THE HALF books-89 LEFT UNDONE, AND SAID SO. Michael asked for the
+  //    $5,000 block off and the $5,000 FLAG kept: "I liked it because it flags
+  //    large purchases, but I regularly have over 5k invoices, so I want to be
+  //    notified about it, then it needs to allow me to approve it." Migration
+  //    0211 removed the block and left the flag computing correctly in the
+  //    database, where nobody could see it. A warning nobody is told is not a
+  //    warning. He then chose the channel himself: "We have an email push
+  //    feature built for the compliance calendar... Let's use it to send me an
+  //    email about it."
+  //
+  //    So it rides this engine rather than growing a second notifier, and
+  //    inherits dedupe, Resend email, Web Push, urgency and the deep link for
+  //    free (standing rule 25: extend, do not duplicate).
+  //
+  //    Own try/catch, like the four above: a books read that fails at 4 a.m.
+  //    must not take the CCRS and wage-order deadlines down with it.
+  try {
+    const draftRead = await loadUnapprovedDrafts();
+    if (!draftRead.ok) {
+      // Rule 46: a failed read is NOT an empty result. Staying silent here
+      // would tell Michael "no large entries" when the truth is "I could not
+      // look" - the exact inversion this rule exists to prevent.
+      result.notes.push(
+        `Large-entry check could not run, so NO email was sent about it - ${
+          draftRead.message ?? "unknown error"
+        }`,
+      );
+    } else {
+      const notice = planLargeDraftNotice(todayIso, draftRead.drafts);
+      if (notice) reminders.push(notice);
+      if (draftRead.unreadable > 0) {
+        result.notes.push(
+          `${draftRead.unreadable} draft entr${
+            draftRead.unreadable === 1 ? "y" : "ies"
+          } could not be totalled, so ${
+            draftRead.unreadable === 1 ? "it was" : "they were"
+          } NOT judged against the threshold.`,
+        );
+      }
+    }
+  } catch (e) {
+    result.notes.push(
+      `Large-entry planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
     );
   }
 
