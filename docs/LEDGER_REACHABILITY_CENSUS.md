@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 32 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 30 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 32 |
+| Cannot reach the books at all | 30 |
 | Have nothing that even builds the entry | 20 |
 | Layers that could not be measured | 6 |
 
@@ -44,7 +44,7 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 19 of 35 |
-| `reachable` | 32 of 35 |
+| `reachable` | 30 of 35 |
 | `correct` | 15 of 35 |
 | `accepted` | 28 of 35 |
 | `idempotent` | 23 of 35 |
@@ -54,7 +54,7 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `retail_sale` | yes | NO | part | part | part | n/a | D-31 |
+| `retail_sale` | yes | yes | part | part | part | n/a | D-31 |
 | `excise_liability_split` | NO | NO | NO | NO | NO | n/a | D-32 |
 | `discount_and_comp` | NO | NO | NO | NO | NO | n/a | D-31 |
 | `refund_or_return` | NO | NO | NO | NO | NO | n/a | D-31 |
@@ -65,11 +65,11 @@ A customer buys product at the counter and pays. The price on the shelf already 
 
 - Accounts: `10110`, `50010`, `32000`, `32100`
 - Builds the entry: `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/sale-posting-service.ts#postSaleForOrder`
 
 - **exists: PRESENT** -- books-77 built sale-journal-core.ts#buildSaleJournal; grep -rn 'sourceKind: "pos_sale"' src/ -> 2 hits, both in that builder (the revenue half and the COGS half).
-- **reachable: MISSING** -- grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. The builder exists and is tested but no checkout path invokes it, so a real sale still reaches no journal.
-- **correct: PARTIAL** -- Both halves pass the real ledger-core.ts#validateJournalDraft with zero issues, balance to the cent, and reconstitute the tax-inclusive price exactly across a sweep of all 21 categories. 8 of 8 mutants caught. PARTIAL not PRESENT because line-level lot costing is supplied by the caller, not yet sourced from the inventory subledger.
+- **reachable: PRESENT** -- books-82 wired it. orders-store.ts#setOrderStatus calls sale-posting-service.ts#postSaleForOrder on the transition into 'completed' — the same status revenue-basis.ts pins revenue to — and that service posts the revenue half via posting-service.ts#submitJournal. tests/compliance/sale-posting-wiring.test.ts asserts the call, the completion gate and the pre-decrement ordering; each was mutation-probed and fails when broken.
+- **correct: PARTIAL** -- Both halves pass the real ledger-core.ts#validateJournalDraft with zero issues, balance to the cent, and reconstitute the tax-inclusive price exactly across a sweep of all 21 categories. 8 of 8 mutants caught. books-82 closed the costing half: sale-cogs-core.ts#costSaleFromDraws now sources line cost from the actual FIFO lot draw, replanned with the decrement's own buildLotDecrementPlan. STILL PARTIAL: the draw is reconstructed rather than read back from the decrement, which persists no machine-readable per-lot draw (D-65).
 - **accepted: PARTIAL** -- pos_sale is in AUTOPOSTABLE_SOURCE_KINDS (posting-core.ts:112) and the 0172 GL_CONTROL_ACCOUNT refusal is gated on source_kind='manual', so a pos_sale entry may legitimately touch 32000/32100. Never yet presented to a live gl_post_journal().
 - **idempotent: PARTIAL** -- sourceRef is the POS order ref, and the COGS half uses '<ref>#cogs' so the two halves cannot collide on the natural key. Untested against a live unique index.
 - **married: NOT_APPLICABLE** -- Cash and card settlement are separate events, censused below. _The sale itself has no second arrival. The DEPOSIT of its proceeds does, and that is a different row._
@@ -131,7 +131,7 @@ A customer returns product, or a sale is voided after tender.
 
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `cogs_on_sale` | yes | NO | part | part | part | n/a | D-33 |
+| `cogs_on_sale` | yes | yes | part | part | part | n/a | D-33 |
 | `cutover_inventory_load` | part | NO | ? | part | NO | n/a | D-48 |
 | `cultivera_manifest_import` | part | NO | part | NO | part | NO | D-49 |
 | `inventory_receipt` | yes | NO | yes | NO | part | NO | D-34 |
@@ -144,11 +144,11 @@ Product leaves the shelf, so its cost has to move from asset to expense.
 
 - Accounts: `60010`, `20010`
 - Builds the entry: `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/sale-posting-service.ts#postSaleForOrder`
 
 - **exists: PRESENT** -- books-77: buildSaleJournal returns cogsJournal alongside revenueJournal and there is no way to ask for the revenue half alone. Re-measured the old 'cogs-position-core -> 0 importers' claim: 5 files mention the name but grep for a real 'from ".../cogs-position-core"' -> 0, so the original 0 was right and is now stated precisely.
-- **reachable: MISSING** -- grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. Same wiring gap as retail_sale; the two ship together or not at all.
-- **correct: PARTIAL** -- Debits 6xxxx and credits the mirrored 2xxxx on the same category slug via coa-core helpers, carries cost_class 'cogs_direct' as 0173 requires (GL_COST_CLASS_REQUIRED), and refuses with UNIT_COST_UNKNOWN rather than booking a sale at zero cost. PARTIAL: lot-level cost still comes from the caller rather than the inventory subledger.
+- **reachable: PRESENT** -- books-82 wired it with retail_sale, as predicted — the two shipped together. postSaleForOrder posts the COGS half under sourceRef 'order:<id>#cogs', distinct from the revenue half's '#revenue' so the ledger's own (entity, kind, ref) idempotency cannot collapse them.
+- **correct: PARTIAL** -- Debits 6xxxx and credits the mirrored 2xxxx on the same category slug via coa-core helpers, carries cost_class 'cogs_direct' as 0173 requires (GL_COST_CLASS_REQUIRED), and refuses with UNIT_COST_UNKNOWN rather than booking a sale at zero cost. books-82 supplied the missing half: sale-cogs-core.ts extends the FIFO lot draw by inventory_lots.unit_cost_minor_units and REFUSES (LOT_COST_MISSING) rather than averaging over an uncosted lot. Split costs were measured exact across 500 three-way splits. STILL PARTIAL for the D-65 reconstruction gap.
 - **accepted: PARTIAL** -- Passes validateJournalDraft against 0173-shaped accounts with zero issues. Not yet presented to a live gl_post_journal().
 - **idempotent: PARTIAL** -- sourceRef '<orderRef>#cogs'. Untested against a live unique index.
 - **married: NOT_APPLICABLE** -- COGS is an internal reclass. _No cash moves, so no bank line can duplicate it._
@@ -741,8 +741,6 @@ all, so the work is to write it, then wire it.
 The cheapest real progress available. The accounting logic is written and tested; only
 the path from the screen to the ledger is absent.
 
-- `revenue_and_tax_collected.retail_sale` (D-31) -- `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
-- `cost_of_goods_sold.cogs_on_sale` (D-33) -- `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`

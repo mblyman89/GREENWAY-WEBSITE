@@ -104,7 +104,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["10110", "50010", "32000", "32100"],
     builder: "src/lib/accounting/sale-journal-core.ts#buildSaleJournal",
-    poster: null,
+    poster: "src/lib/accounting/sale-posting-service.ts#postSaleForOrder",
     layers: {
       exists: {
         status: "PRESENT",
@@ -114,11 +114,15 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "revenue half and the COGS half).",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. The " +
-          "builder exists and is tested but no checkout path invokes it, so a real " +
-          "sale still reaches no journal.",
+          "books-82 wired it. orders-store.ts#setOrderStatus calls " +
+          "sale-posting-service.ts#postSaleForOrder on the transition into " +
+          "'completed' \u2014 the same status revenue-basis.ts pins revenue to \u2014 " +
+          "and that service posts the revenue half via posting-service.ts#" +
+          "submitJournal. tests/compliance/sale-posting-wiring.test.ts asserts " +
+          "the call, the completion gate and the pre-decrement ordering; each " +
+          "was mutation-probed and fails when broken.",
       },
       correct: {
         status: "PARTIAL",
@@ -126,8 +130,11 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "Both halves pass the real ledger-core.ts#validateJournalDraft with zero " +
           "issues, balance to the cent, and reconstitute the tax-inclusive price " +
           "exactly across a sweep of all 21 categories. 8 of 8 mutants caught. " +
-          "PARTIAL not PRESENT because line-level lot costing is supplied by the " +
-          "caller, not yet sourced from the inventory subledger.",
+          "books-82 closed the costing half: sale-cogs-core.ts#costSaleFromDraws " +
+          "now sources line cost from the actual FIFO lot draw, replanned with " +
+          "the decrement's own buildLotDecrementPlan. STILL PARTIAL: the draw is " +
+          "reconstructed rather than read back from the decrement, which persists " +
+          "no machine-readable per-lot draw (D-65).",
       },
       accepted: {
         status: "PARTIAL",
@@ -288,7 +295,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["60010", "20010"],
     builder: "src/lib/accounting/sale-journal-core.ts#buildSaleJournal",
-    poster: null,
+    poster: "src/lib/accounting/sale-posting-service.ts#postSaleForOrder",
     layers: {
       exists: {
         status: "PRESENT",
@@ -300,10 +307,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "original 0 was right and is now stated precisely.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. Same wiring " +
-          "gap as retail_sale; the two ship together or not at all.",
+          "books-82 wired it with retail_sale, as predicted \u2014 the two shipped " +
+          "together. postSaleForOrder posts the COGS half under sourceRef " +
+          "'order:<id>#cogs', distinct from the revenue half's '#revenue' so the " +
+          "ledger's own (entity, kind, ref) idempotency cannot collapse them.",
       },
       correct: {
         status: "PARTIAL",
@@ -311,8 +320,11 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "Debits 6xxxx and credits the mirrored 2xxxx on the same category slug " +
           "via coa-core helpers, carries cost_class 'cogs_direct' as 0173 requires " +
           "(GL_COST_CLASS_REQUIRED), and refuses with UNIT_COST_UNKNOWN rather than " +
-          "booking a sale at zero cost. PARTIAL: lot-level cost still comes from the " +
-          "caller rather than the inventory subledger.",
+          "booking a sale at zero cost. books-82 supplied the missing half: " +
+          "sale-cogs-core.ts extends the FIFO lot draw by inventory_lots." +
+          "unit_cost_minor_units and REFUSES (LOT_COST_MISSING) rather than " +
+          "averaging over an uncosted lot. Split costs were measured exact across " +
+          "500 three-way splits. STILL PARTIAL for the D-65 reconstruction gap.",
       },
       accepted: {
         status: "PARTIAL",

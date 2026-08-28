@@ -3124,3 +3124,40 @@ column, which is a migration this slice did not take.
 Consequence if ignored: someone under time pressure at the loading dock adds
 `return "concentrate"` to stop the refusal, and 280E-exempt purchases start silently
 capitalising into cannabis inventory.
+
+## D-65 -- the inventory decrement knows which lots a sale consumed, and tells no one
+
+Found: books-82, while wiring the sale to the ledger.
+
+`src/lib/inventory/sale-decrement.ts` plans the real FIFO draw when an order
+completes -- `buildLotDecrementPlan` returns `lotUpdates[]` of `{ id,
+posProductKey, delta }`, the exact units taken from each lot. It then writes
+those quantities to the database and throws the plan away, leaving only a prose
+summary on `order_events` ("3 lot touch(es)"). Nothing machine-readable records
+which lot supplied which unit.
+
+Consequence for the books. Cost of goods sold must follow the SAME lots the sale
+consumed, so `sale-posting-service.ts` has to reconstruct the draw by replanning
+it with the same planner against the same oldest-first lots. Two things follow:
+
+1. The posting MUST run before the decrement. Afterwards `on_hand_qty` is
+   already reduced, and a lot that this sale drained to exactly zero can no
+   longer supply the replan -- the plan reports a shortfall and a perfectly good
+   sale refuses. The ordering is asserted in
+   tests/compliance/sale-posting-wiring.test.ts and was mutation-probed.
+2. Two implementations of one policy now exist in sequence. They agree today
+   because they are literally the same function over the same inputs, which is
+   why it was done this way rather than with a second hand-written FIFO rule.
+   They would stop agreeing if either caller's lot query drifted -- hence the
+   test asserting the filters (`status = active`, `on_hand_qty > 0`, oldest
+   first) match the decrement's exactly.
+
+The durable repair is for the decrement to persist its per-lot draw (a
+`sale_lot_draws` row, or a JSON column on the marker event) so cost is READ
+rather than re-derived, and the ordering constraint disappears. That is a
+migration this slice did not take.
+
+Consequence if ignored: someone reorders the two side-effects in
+orders-store.ts for an unrelated reason, and every sale that finishes a lot
+silently stops costing -- revenue posts, COGS refuses, and income is overstated
+in exactly the periods with the most turnover.

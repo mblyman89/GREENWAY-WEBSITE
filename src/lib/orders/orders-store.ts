@@ -426,7 +426,18 @@ export type SetStatusOptions = {
 };
 
 export type SetOrderStatusResult =
-  | { ok: true; order: OrderRow }
+  | {
+      ok: true;
+      order: OrderRow;
+      /**
+       * Set when the status change succeeded but the LEDGER did not record the
+       * sale (books-82). The sale itself still stands — the customer has the
+       * product — but the books are incomplete until this is dealt with, so it
+       * is carried back to the caller instead of being swallowed. Absent on
+       * every non-completion transition and on a clean post.
+       */
+       ledgerWarning?: string;
+    }
   | { ok: false; refusal: string | null };
 
 export async function setOrderStatus(
@@ -542,6 +553,33 @@ export async function setOrderStatus(
   // published menu variant levels and consume inventory lots FIFO. Idempotent
   // per order (order_events marker); best-effort — a stock-write failure
   // leaves a visible note but NEVER blocks the completed sale.
+  // Ledger (books-82): record the sale — revenue, the two tax liabilities,
+  // and COGS — at the one moment money actually changes hands.
+  //
+  // ORDER MATTERS: this runs BEFORE the decrement. Cost is established by
+  // replanning the FIFO draw from the pre-sale lot picture with the same
+  // planner the decrement uses; once the decrement has run, a lot drained to
+  // zero by this sale can no longer supply that replan. See the ordering note
+  // in sale-posting-service.ts.
+  //
+  // Like the side-effects below it, it must NEVER block a completed sale —
+  // the customer already has the product. Unlike them, it must never fail
+  // silently either: every outcome is stamped on the order's event trail, and
+  // a refusal is surfaced on the returned order so staff can see it.
+  let ledgerNote: string | null = null;
+  if (toStatus === "completed" && fromStatus !== "completed") {
+    try {
+      const { postSaleForOrder } = await import("@/lib/accounting/sale-posting-service");
+      const posted = await postSaleForOrder(id);
+      if (!posted.ok) ledgerNote = posted.message;
+    } catch (err) {
+      // A throw here is itself the news. Record it; never swallow it.
+      ledgerNote = `The sale could not be recorded in the books: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+    }
+  }
+
   if (toStatus === "completed" && fromStatus !== "completed") {
     try {
       const { decrementInventoryForOrder } = await import("@/lib/inventory/sale-decrement");
@@ -572,7 +610,9 @@ export async function setOrderStatus(
     }
   }
 
-  return { ok: true, order: updated };
+  return ledgerNote === null
+    ? { ok: true, order: updated }
+    : { ok: true, order: updated, ledgerWarning: ledgerNote };
 }
 
 // ---------------------------------------------------------------------------

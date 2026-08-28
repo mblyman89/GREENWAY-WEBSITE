@@ -470,22 +470,33 @@ describe("the unreachable subsystems really are unreachable (negative control)",
     // hits in them are census ROWS describing a pos_sale event (and a fakeRow
     // test fixture), not journals being built. Measured, not assumed: the
     // ledger-census-core hit is inside `function fakeRow(...)`.
+    //
+    // books-82: the POSTER now also names the kind, because submitJournal takes
+    // sourceKind as an argument. Two files legitimately mention it: the builder
+    // that produces the draft and the service that submits it. Both are listed
+    // explicitly so a THIRD producer still fails this test.
     const producers = walk("src")
       .filter((f) => !f.endsWith("/ledger-census-data.ts"))
       .filter((f) => !f.endsWith("/ledger-census-core.ts"))
       .filter((f) => read(f).includes('sourceKind: "pos_sale"'));
-    expect(producers).toEqual(["src/lib/accounting/sale-journal-core.ts"]);
+    expect(producers.sort()).toEqual([
+      "src/lib/accounting/sale-journal-core.ts",
+      "src/lib/accounting/sale-posting-service.ts",
+    ]);
   });
 
-  it("the sale builder is still not wired to any checkout path", () => {
-    // The honest state as of books-77: the entry is computable and correct, and
-    // nothing calls it. When this test fails, the census row for retail_sale
-    // must move its `reachable` layer off MISSING in the same commit.
+  it("the sale builder is wired to exactly one caller — the posting service", () => {
+    // INVERTED in books-82. This test previously asserted `[]` and carried the
+    // instruction: "when this test fails, the census row for retail_sale must
+    // move its reachable layer off MISSING in the same commit." It failed
+    // because the sale was wired; retail_sale and cogs_on_sale both moved to
+    // reachable=PRESENT in this same commit, and the test now pins the caller
+    // so a SECOND, competing checkout path cannot appear unnoticed.
     const callers = walk("src")
       .filter((f) => !f.endsWith("/sale-journal-core.ts"))
       .filter((f) => !f.endsWith("/ledger-census-data.ts"))
       .filter((f) => /\bbuildSaleJournal\s*\(/.test(read(f)));
-    expect(callers).toEqual([]);
+    expect(callers).toEqual(["src/lib/accounting/sale-posting-service.ts"]);
   });
 
   it("the vendor bill screen still has no server action", () => {
@@ -902,10 +913,14 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
 
 describe("the census can order the work by economic weight", () => {
 
-  it("puts revenue and COGS in the backlog, because they are the largest numbers", () => {
+  it("no longer puts revenue and COGS in the backlog — books-82 wired them", () => {
+    // INVERTED in books-82. These were the two largest numbers in the business
+    // and the headline of the backlog for five slices. They left it together,
+    // because buildSaleJournal returns both halves and there is no way to post
+    // one without the other.
     const unreachable = census().unreachable().map((r) => r.key);
-    expect(unreachable).toContain("revenue_and_tax_collected.retail_sale");
-    expect(unreachable).toContain("cost_of_goods_sold.cogs_on_sale");
+    expect(unreachable).not.toContain("revenue_and_tax_collected.retail_sale");
+    expect(unreachable).not.toContain("cost_of_goods_sold.cogs_on_sale");
   });
 
   it("does NOT put the two working paths in the backlog", () => {
@@ -1130,7 +1145,14 @@ describe("evidence cannot be softened without a test failing", () => {
     // bill path is wired, and whoever wires it must pass
     // goodsAlreadyReceived=true so the bill credits 20800 instead of debiting
     // inventory a second time.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(12);
+    //
+    // 12 -> 10 in books-82: revenue_and_tax_collected.retail_sale and
+    // cost_of_goods_sold.cogs_on_sale both left the backlog. One wiring slice
+    // moved two rows because buildSaleJournal returns the revenue half and the
+    // COGS half together and postSaleForOrder submits both, under distinct
+    // source refs so the ledger's idempotency cannot merge them. A real
+    // departure, not a relaxed filter.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(10);
 
     for (const r of drivers) {
       expect(
