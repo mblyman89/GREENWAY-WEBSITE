@@ -1114,7 +1114,23 @@ describe("evidence cannot be softened without a test failing", () => {
     // shipped; the bill half must be reconciled before either becomes reachable.
     // THIS TEST FAILING IS THE SYSTEM WORKING — it is how a new unreachable
     // builder announces itself instead of quietly joining the backlog.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(13);
+    //
+    // 13 -> 12 in books-81: vendor_cycle.goods_received left the backlog. Its
+    // reachable layer is now PRESENT because setManifestLifecycleAction calls
+    // receipt-service.ts#postManifestReceipt, which posts through
+    // gl_submit_journal. It is a real departure, not a relaxed filter.
+    //
+    // The D-61 hazard quoted above was RE-MEASURED before this count moved,
+    // because books-78 gave it as the reason NOT to wire this builder. Result:
+    // grep for buildBillJournal and gl_post_vendor_bill across src/ and
+    // scripts/ returns no executable caller — only string mentions inside
+    // ledger-census-data.ts and one comment. So nothing debits 20010 today
+    // except the receipt, and the double-capitalisation books-78 feared cannot
+    // currently happen. D-61 is NOT closed: it becomes live the instant the
+    // bill path is wired, and whoever wires it must pass
+    // goodsAlreadyReceived=true so the bill credits 20800 instead of debiting
+    // inventory a second time.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(12);
 
     for (const r of drivers) {
       expect(

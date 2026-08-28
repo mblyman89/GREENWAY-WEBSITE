@@ -3092,3 +3092,35 @@ what the refusal message cites.
 Mutation M4 reverts the constant to 3 and is caught.
 
 ---
+
+## D-64 -- the category that decides the account is free text, and the only existing mapper guesses
+
+Found: books-81, while wiring the receiving path.
+
+`inventory_lots.category` is a free-text column (migration 0024_pos_coa_potency.sql:28).
+Nothing in the codebase mapped it to the accounting vocabulary. The one mapper that
+exists, `src/lib/pos/transform.ts#categoryWithFallback`, ends with `return "concentrate"`
+for anything it does not recognise.
+
+Why that cannot be reused for the books. `coa-core.ts` gives all 21 categories distinct
+slots, so each resolves to its own inventory account (20010..20220). Three of them --
+`accessories`, `paraphernalia`, `merch` -- are `isCannabis: false`. A silent fallback to
+`concentrate` therefore moves a 280E-exempt purchase into a cannabis inventory account and
+changes the tax owed. The same fallback collapses RSO into concentrate, Tincture into
+edible-liquid, Blunt into preroll and Infused Blunt into infused-preroll, which would leave
+accounts 20150, 20180, 20070 and 20100 permanently dark -- balances that can never be
+reconciled because nothing can ever land in them.
+
+Response: `src/lib/accounting/receipt-category-core.ts` maps ~110 spellings onto the 21
+slugs with NO default branch. Unrecognised input returns `kind: "refused"`, and
+`receipt-service.ts` refuses the delivery AS A UNIT rather than post a partly-guessed
+journal. Measured: 21 of 21 slugs reachable, no dark accounts.
+
+Still open. Refusing is correct but it is not finished. Receiving will block on any
+spelling the table does not carry, and the fix at that moment must be to add the spelling
+to the table -- never to add a fallback. The durable repair is a constrained category
+column, which is a migration this slice did not take.
+
+Consequence if ignored: someone under time pressure at the loading dock adds
+`return "concentrate"` to stop the refusal, and 280E-exempt purchases start silently
+capitalising into cannabis inventory.

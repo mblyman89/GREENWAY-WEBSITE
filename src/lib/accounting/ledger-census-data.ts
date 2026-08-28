@@ -729,7 +729,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["20010", "20800", "20890"],
     builder: "src/lib/accounting/receipt-journal-core.ts#buildReceiptJournal",
-    poster: null,
+    poster: "src/lib/accounting/receipt-service.ts#postManifestReceipt",
     layers: {
       exists: {
         status: "PRESENT",
@@ -738,10 +738,15 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "20890 for an unmapped line) and credits 20800, balanced.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep for buildReceiptJournal across src/app and src/lib/purchasing " +
-          "-> 0 callers. po-store.ts#receivePoLine still only bumps received_qty.",
+          "books-81 wired it. setManifestLifecycleAction (src/app/admin/" +
+          "inventory/intake/actions.ts) calls receipt-service.ts#" +
+          "postManifestReceipt when status flips to 'received'; that service " +
+          "translates lots, calls buildReceiptJournal, and posts via " +
+          "posting-service.ts#submitJournal. tests/compliance/receipt-wiring." +
+          "test.ts asserts the call, the 'received' gate and the ordering, and " +
+          "all three were mutation-probed to confirm they fail when broken.",
       },
       correct: {
         status: "PARTIAL",
@@ -750,19 +755,27 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "together and measured to net 20800 to 0 with inventory debited once " +
           "(books-79). NOT PRESENT: the bill's goodsAlreadyReceived flag " +
           "defaults false, so D-61 is still reachable by omission until a " +
-          "caller passes it.",
+          "caller passes it. Also D-64: inventory_lots.category is free text, " +
+          "so receipt-category-core.ts refuses the whole delivery rather than " +
+          "guess an account, which is safe but blocks receiving on any " +
+          "spelling it does not know.",
       },
       accepted: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "No SQL door takes a receipt; gl_post_vendor_bill (0187) is the bill " +
-          "path, not the receiving path.",
+          "The receipt does not need a bespoke SQL door: postManifestReceipt " +
+          "posts through posting-service.ts#submitJournal, which calls the " +
+          "generic rpc('gl_submit_journal') door from migration 0174.",
       },
       idempotent: {
         status: "PARTIAL",
         evidence:
           "sourceRef is `${receiptRef}#receipt`, deterministic and distinct " +
-          "from the bill's manifest:/bill: keys. Never yet exercised by a poster.",
+          "from the bill's manifest:/bill: keys, and it is now genuinely " +
+          "supplied by postManifestReceipt. NOT PRESENT: re-flipping a " +
+          "manifest to 'received' has not been measured end-to-end against " +
+          "gl_submit_journal's duplicate handling, so the guarantee is " +
+          "designed but unproven.",
       },
       married: {
         status: "MISSING",

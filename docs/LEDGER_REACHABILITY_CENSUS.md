@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 35 money events that should reach the books. 33 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 35 money events that should reach the books. 32 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 35 |
 | Proven on all six layers | 2 |
-| Cannot reach the books at all | 33 |
+| Cannot reach the books at all | 32 |
 | Have nothing that even builds the entry | 20 |
 | Layers that could not be measured | 6 |
 
@@ -44,9 +44,9 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 19 of 35 |
-| `reachable` | 33 of 35 |
+| `reachable` | 32 of 35 |
 | `correct` | 15 of 35 |
-| `accepted` | 29 of 35 |
+| `accepted` | 28 of 35 |
 | `idempotent` | 23 of 35 |
 | `married` | 14 of 35 |
 
@@ -245,7 +245,7 @@ An inbound delivery charge that belongs in the cost of the product.
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `purchase_order_commitment` | NO | NO | n/a | n/a | n/a | n/a | D-35 |
-| `goods_received` | yes | NO | part | NO | part | NO | D-61 |
+| `goods_received` | yes | yes | part | yes | part | NO | D-61 |
 | `vendor_bill_recorded` | yes | NO | part | NO | part | NO | D-34 |
 | `expense_classified_to_account_and_entity` | yes | NO | part | NO | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
@@ -274,13 +274,13 @@ A delivery physically arrives and its cost becomes inventory.
 
 - Accounts: `20010`, `20800`, `20890`
 - Builds the entry: `src/lib/accounting/receipt-journal-core.ts#buildReceiptJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/accounting/receipt-service.ts#postManifestReceipt`
 
 - **exists: PRESENT** -- receipt-journal-core.ts debits the category inventory account (or 20890 for an unmapped line) and credits 20800, balanced.
-- **reachable: MISSING** -- grep for buildReceiptJournal across src/app and src/lib/purchasing -> 0 callers. po-store.ts#receivePoLine still only bumps received_qty.
-- **correct: PARTIAL** -- Balanced and integer-only; the receipt and the bill were added together and measured to net 20800 to 0 with inventory debited once (books-79). NOT PRESENT: the bill's goodsAlreadyReceived flag defaults false, so D-61 is still reachable by omission until a caller passes it.
-- **accepted: MISSING** -- No SQL door takes a receipt; gl_post_vendor_bill (0187) is the bill path, not the receiving path.
-- **idempotent: PARTIAL** -- sourceRef is `${receiptRef}#receipt`, deterministic and distinct from the bill's manifest:/bill: keys. Never yet exercised by a poster.
+- **reachable: PRESENT** -- books-81 wired it. setManifestLifecycleAction (src/app/admin/inventory/intake/actions.ts) calls receipt-service.ts#postManifestReceipt when status flips to 'received'; that service translates lots, calls buildReceiptJournal, and posts via posting-service.ts#submitJournal. tests/compliance/receipt-wiring.test.ts asserts the call, the 'received' gate and the ordering, and all three were mutation-probed to confirm they fail when broken.
+- **correct: PARTIAL** -- Balanced and integer-only; the receipt and the bill were added together and measured to net 20800 to 0 with inventory debited once (books-79). NOT PRESENT: the bill's goodsAlreadyReceived flag defaults false, so D-61 is still reachable by omission until a caller passes it. Also D-64: inventory_lots.category is free text, so receipt-category-core.ts refuses the whole delivery rather than guess an account, which is safe but blocks receiving on any spelling it does not know.
+- **accepted: PRESENT** -- The receipt does not need a bespoke SQL door: postManifestReceipt posts through posting-service.ts#submitJournal, which calls the generic rpc('gl_submit_journal') door from migration 0174.
+- **idempotent: PARTIAL** -- sourceRef is `${receiptRef}#receipt`, deterministic and distinct from the bill's manifest:/bill: keys, and it is now genuinely supplied by postManifestReceipt. NOT PRESENT: re-flipping a manifest to 'received' has not been measured end-to-end against gl_submit_journal's duplicate handling, so the guarantee is designed but unproven.
 - **married: MISSING** -- receivedCentsForMatch feeds vendor-bill-core.ts#threeWayMatch, but nothing calls either, so the receipt and the invoice remain unlinked.
 
 **If this stays broken:** This is where cost is born. Until it runs, inventory_lots.unit_cost_minor_units stays null and buildSaleJournal refuses with UNIT_COST_UNKNOWN, so no sale can post at all — and under 280E an unknown cost eventually becomes a lost deduction.
@@ -746,7 +746,6 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
-- `vendor_cycle.goods_received` (D-61) -- `src/lib/accounting/receipt-journal-core.ts#buildReceiptJournal`
 - `vendor_cycle.vendor_bill_recorded` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `vendor_cycle.expense_classified_to_account_and_entity` (D-56) -- `src/lib/accounting/expense-classification-core.ts#classifyExpense`
 - `payroll_cycle.payroll_run_accrued` (D-38) -- `src/lib/accounting/payroll-cogs-core.ts#buildPayrollJournal`

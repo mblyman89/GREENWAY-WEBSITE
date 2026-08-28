@@ -201,7 +201,49 @@ export async function setManifestLifecycleAction(manifestId: string, status: "in
   if (!result.ok) {
     redirect(`/admin/inventory/intake/${manifestId}?error=lifecycle`);
   }
-  redirect(`/admin/inventory/intake/${manifestId}?lifecycle=${status}`);
+
+  // ── books-81: THE RECEIVING WIRE ──────────────────────────────────────
+  // Marking a delivery "received" is the moment its cost becomes inventory,
+  // so this is where the goods-receipt journal is raised. Until now the
+  // builder existed and nothing called it, which is why the census scored
+  // vendor_cycle.goods_received as reachable=MISSING (D-61 / D-34).
+  //
+  // The physical fact and the accounting fact are recorded SEPARATELY and in
+  // that order, deliberately. The goods really did arrive; refusing to record
+  // that because the books had a question would put the warehouse out of step
+  // with reality and encourage people to work around the system. So the
+  // status flip above always stands, and a refusal here is surfaced as a
+  // banner on the same page rather than by rolling back the receipt.
+  //
+  // The refusal is NOT swallowed: `booksError` carries the reason to the
+  // screen. A silent catch would recreate the exact defect this slice closes
+  // — a wire that looks connected and posts nothing.
+  let booksNote = "";
+  if (status === "received") {
+    try {
+      const { postManifestReceipt } = await import("@/lib/accounting/receipt-service");
+      // The Pacific business date the goods physically arrived. Built from
+      // the repo's existing `pacificParts` helper rather than `toISOString()`,
+      // which would roll a late-afternoon Pacific delivery onto TOMORROW's
+      // date in UTC and land it in the wrong accounting period. Passed
+      // explicitly so the caller owns the business-date decision.
+      const { pacificParts } = await import("@/lib/reports/timezone");
+      const p = pacificParts(new Date());
+      const receivedDate = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+      const booked = await postManifestReceipt(manifestId, receivedDate);
+      booksNote = booked.ok
+        ? `&books=${encodeURIComponent(booked.code)}`
+        : `&booksError=${encodeURIComponent(booked.message.slice(0, 300))}`;
+    } catch (err) {
+      booksNote = `&booksError=${encodeURIComponent(
+        `The delivery was marked received, but the books could not be updated: ${
+          err instanceof Error ? err.message : String(err)
+        }`.slice(0, 300),
+      )}`;
+    }
+  }
+
+  redirect(`/admin/inventory/intake/${manifestId}?lifecycle=${status}${booksNote}`);
 }
 
 /**
