@@ -899,14 +899,20 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       reachable: {
         status: "PRESENT",
         evidence:
-          "books-84 wired it. bank-expense-service.ts#recordBankExpenseLines " +
-          "calls classifyExpense({ merchant }) on every settled row of a Plaid " +
-          "account and submits the result. Asserted by a test that greps for the " +
-          "CALL rather than the import, because an unused import is exactly how " +
-          "this stayed MISSING while the classifier was finished. Note the " +
-          "seeded gl_account_rules table still has no TypeScript reader: the " +
-          "live rules are SEED_EXPENSE_RULES in the module, which is what the " +
-          "classifier's own tests measure (D-30 is unchanged).",
+          "books-88 finished this. It was claimed PRESENT in books-84 on the " +
+          "strength of recordBankExpenseLines calling classifyExpense({ merchant }) " +
+          "on every settled row -- true, but one link short of the owner: NOTHING " +
+          "CALLED THE SERVICE, so no merchant was ever classified in practice " +
+          "(D-70, found by Michael refreshing his ATM feed and getting no drafts). " +
+          "The full chain is now bank/page.tsx -> RecordBankExpensesPanel -> " +
+          "bank/actions.ts#recordBankExpensesAction -> recordBankExpenses -> " +
+          "recordBankExpenseLines -> classifyExpense -> submitJournal. Asserted " +
+          "by a reachability trap that walks src/ for a caller of the SERVICE and " +
+          "excludes this census file, because citing yourself is how a poster " +
+          "counts as reached while being dead. Note the seeded gl_account_rules " +
+          "table still has no TypeScript reader: the live rules are " +
+          "SEED_EXPENSE_RULES in the module, which is what the classifier's own " +
+          "tests measure (D-30 is unchanged).",
       },
       correct: {
         status: "PARTIAL",
@@ -1051,9 +1057,19 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       reachable: {
         status: "PRESENT",
         evidence:
-          "recordBankExpenses(plaidAccountId) reads plaid_accounts + " +
-          "plaid_transactions and calls submitJournal. A test asserts the CALL, " +
-          "not the import binding.",
+          "books-88 built the door. recordBankExpenses(plaidAccountId) reads " +
+          "plaid_accounts + plaid_transactions and calls submitJournal, and that " +
+          "much was true in books-84 -- but the books-84 test asserted only that " +
+          "the SERVICE calls submitJournal, never that anything calls the service, " +
+          "and nothing did (D-70). The other three posters survived because each " +
+          "hangs off an event the system already raises (a sale, an intake, an " +
+          "audit); a bank feed raises none, which is precisely why this one was " +
+          "forgotten. The door is deliberately a button the owner presses on " +
+          "/admin/books/bank, not a background job: classification refuses " +
+          "unknown and ambiguous merchants by name, and a refusal nobody is " +
+          "looking at is a refusal nobody acts on. Asserted by a reachability " +
+          "trap covering all four posting services that walks src/ and excludes " +
+          "this census file.",
       },
       correct: {
         status: "PRESENT",

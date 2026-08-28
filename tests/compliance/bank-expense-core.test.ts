@@ -235,6 +235,20 @@ describe("bank expense: the service actually calls the ledger", () => {
   // Rule: assert the CALL, not the import binding. An import can be present
   // while the function is never invoked -- that is exactly how D-56 and D-37
   // stayed open with a finished classifier sitting unused.
+  //
+  // books-88, D-70 -- READ THIS BEFORE TRUSTING THIS BLOCK. Everything below
+  // is true and was true the whole time the feature was dead. It proves the
+  // SERVICE calls submitJournal. It does NOT prove anything calls the SERVICE,
+  // and for two slices nothing did: Michael refreshed his ATM feed, got no
+  // drafts, and found it by hand. Reachability was measured one link too early
+  // and the census believed it.
+  //
+  // Standing rule 50 says invert such a gate rather than delete it, so this
+  // block stays exactly as it was and the missing half now lives in
+  // tests/compliance/posting-services-are-reachable.test.ts, which walks src/
+  // for a real caller of all four posting services. If you add a fifth poster,
+  // add it there; passing tests in THIS file mean nothing about whether a
+  // human can reach the feature.
   const service = readFileSync("src/lib/accounting/bank-expense-service.ts", "utf8");
 
   it("invokes submitJournal, not merely imports it", () => {

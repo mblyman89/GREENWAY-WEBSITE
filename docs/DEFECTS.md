@@ -1822,6 +1822,76 @@ That gate paid for itself here.
 
 ---
 
+## D-70 - the bank and ATM expense poster is finished, tested, and called by nothing
+
+**Found:** books-88, from the owner's own observation. Michael: "I did refresh
+the atm connection to bring in new atm fees, but those didn't land in the
+pending page." He was right, and the census said otherwise.
+
+**What broke:** `bank-expense-service.ts` exports `recordBankExpenses` and
+`recordBankExpenseLines`. Between them they read a connected account's Plaid
+feed, classify each settled charge, build a balanced two-line entry and submit
+it as a draft. All of that works and is covered by 24 tests with 12/12 mutants
+killed. Nothing anywhere calls either function.
+
+Measured twice, both empty:
+
+```
+grep -rn "bank-expense-service" src/   ->  only ledger-census-data.ts
+grep -rn "\brecordBankExpenses\b" src/ ->  only its own definition
+```
+
+So no bank charge and no ATM fee can become a draft journal, which is why the
+approvals page stays empty no matter how many times the feed is refreshed. The
+fees arrive in `plaid_transactions` and stop there.
+
+**The census was overstated, which is the worse half of this.** Both affected
+rows claimed `reachable = PRESENT`: `expense_classified` (naming
+`bank-expense-service.ts#recordBankExpenseLines`) and `bank_fee` (naming
+`#recordBankExpenses`). A census that reports a dead path as live is not a
+neutral error - it is the one document that is supposed to catch exactly this,
+and it was pointing the other way.
+
+**How it hid, and this is the part worth learning.** There WAS a gate. It is
+`tests/compliance/bank-expense-core.test.ts:240`:
+
+```ts
+it("invokes submitJournal, not merely imports it", () => {
+  expect(service).toContain("await submitJournal(");
+});
+```
+
+Its own comment, three lines above, warns about "a finished classifier sitting
+unused" and names D-56 and D-37. The gate is correct and it passes. It proves
+the SERVICE calls `submitJournal`. It never asks whether anything calls the
+SERVICE. Reachability was measured one link too early in the chain, so the
+final link - screen to service - was the only one nobody checked.
+
+This is D-50's shape one level up: an unreachable finished feature. The lesson
+is that "is it wired?" is not a property of a file, it is a property of a PATH,
+and a test that reads a single file cannot answer it. The fix walks `src/` from
+the outside in.
+
+**Why the other three posters were fine.** `sale-posting-service` is called by
+`orders-store.ts` on an order transition, `vendor-bill-service` by
+`inventory/intake/actions.ts`, and `inventory-audit-store` by the audit session.
+Only the bank door was missing, because a bank feed has no in-system event to
+hang off - somebody has to ask for it. That absence of a natural trigger is
+precisely why it was the one that got forgotten.
+
+**Fixed in books-88.** A door on the bank screen: pick a connected account, and
+the system reads its settled charges, classifies them and files each one as a
+draft for approval. Owner-gated, audited, and refusing rather than guessing when
+an account has no role assigned.
+
+**Gate:** inverted, not deleted (rule 50). The books-84 assertion still stands;
+a new one beside it walks every file under `src/` and fails if the service has
+no caller outside the census document. It is written as a reachability trap over
+ALL four posting services, so the next service to lose its caller fails the same
+way rather than needing its own test.
+
+---
+
 ## D-39 - Cash movements from till to vault to bank are not booked
 
 **Found:** books-70.

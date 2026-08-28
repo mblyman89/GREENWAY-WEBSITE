@@ -69,6 +69,9 @@ import {
   STRUCTURING_NEAR_MISS_CENTS,
   LINE_IN_THE_SAND,
 } from "@/lib/accounting/bank-match-core";
+import { ROLE_TO_CASH_ACCOUNT } from "@/lib/accounting/bank-expense-core";
+import { listPlaidAccounts } from "@/lib/plaid/store";
+import RecordBankExpensesPanel from "@/components/admin/books/RecordBankExpensesPanel";
 import {
   SignWall,
   TiesIsNotDone,
@@ -171,6 +174,28 @@ const COST_CLASS_PLAIN: Record<string, string> = {
 export default async function BankBooksPage() {
   await requireBooksAccess();
 
+  // books-88 (D-70). The accounts the owner can file charges from. The `role`
+  // is read here rather than accepted from the browser: it decides which chart
+  // account the money came out of, and a client-supplied role is how the wrong
+  // bank account ends up funding an entry that still balances perfectly.
+  const plaidAccounts = await listPlaidAccounts();
+  const bankChoices = plaidAccounts
+    .filter((a) => a.active)
+    .map((a) => ({
+      accountId: a.accountId,
+      label:
+        [a.customName ?? a.name ?? a.officialName ?? "Account", a.mask ? `••${a.mask}` : null]
+          .filter(Boolean)
+          .join(" ") || a.accountId,
+      role: a.role,
+      // `postable` mirrors resolveCashAccount(): a role only counts if it maps
+      // to a chart account. Reading ROLE_TO_CASH_ACCOUNT rather than repeating
+      // the list of roles means the screen cannot drift from the engine.
+      postable:
+        a.role !== null &&
+        Object.prototype.hasOwnProperty.call(ROLE_TO_CASH_ACCOUNT, a.role.trim().toLowerCase()),
+    }));
+
   const headline = HEADLINE_AUTHORITY_IDS.map((id) => findBankAuthority(id)).filter(
     (a): a is NonNullable<typeof a> => a !== undefined,
   );
@@ -191,6 +216,28 @@ export default async function BankBooksPage() {
           before you touch it.
         </p>
       </header>
+
+      {/* ── THE DOOR (books-88, D-70) ─────────────────────────────────────
+          This control did not exist until books-88. `bank-expense-service.ts`
+          was finished in books-84 and called by nothing, so no bank charge and
+          no ATM fee could ever reach the approvals screen no matter how often
+          the feed was refreshed. Michael found it by using the system. */}
+      <section className="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.05] p-5">
+        <h2 className="text-sm font-semibold text-emerald-300">
+          File bank &amp; ATM charges as drafts
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/65">
+          Refreshing a bank or ATM connection brings the transactions in, but it does
+          not decide what they are — that is this button. It reads the charges that
+          have already settled, works out which expense account each one belongs to,
+          and files each as a draft entry for you to approve. Anything it cannot
+          classify with confidence is refused by name and listed below rather than
+          guessed at.
+        </p>
+        <div className="mt-4">
+          <RecordBankExpensesPanel accounts={bankChoices} />
+        </div>
+      </section>
 
       {/* ── THE STRAIGHT ANSWER, FIRST ─────────────────────────────────────── */}
       <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.05] p-5">
