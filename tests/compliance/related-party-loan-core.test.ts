@@ -190,12 +190,51 @@ describe("related-party-loan-core: Michael's loan, as he actually described it",
     expect(choice.requiresSubledger).toBe(false);
   });
 
-  it("is UNDETERMINED rather than favourable, and names the open questions", () => {
+  /*
+   * books-77 CHANGED THIS TEST, and the change is the finding.
+   *
+   * In books-76 this asserted UNDETERMINED, because two facts were unasked.
+   * Michael was asked and answered both against his own interest: "The
+   * outstanding inter company balance is not tracked anywhere" and "Demand has
+   * never been made." Neither the gate nor the regulation moved. Only the
+   * evidence did, and the evidence decided it. See D-60.
+   */
+  it("is NOT_BONA_FIDE now that both questions are answered", () => {
     const a = assessBonaFide(MICHAELS_ATM_LOAN_AS_STATED, "out");
-    expect(a.verdict).toBe("UNDETERMINED");
-    // The value is in WHICH questions are open, not in the count.
-    expect(a.unknown.join(" ")).toContain("tracked");
-    expect(a.unknown.join(" ")).toContain("demand");
+    expect(a.verdict).toBe("NOT_BONA_FIDE");
+    expect(a.unknown).toHaveLength(0);
+    // Money OUT that is not debt is a distribution, not a contribution.
+    expect(a.substanceIfNotDebt).toBe("distribution");
+    expect(a.undermining.join(" ")).toContain("not tracked anywhere");
+    expect(a.undermining.join(" ")).toContain("Demand has never been made");
+  });
+
+  it("would be a contribution, not a distribution, if the money went IN", () => {
+    // Same facts, opposite direction, opposite tax result. Asserting both ways
+    // is what stops a caller from getting a plausible answer to the wrong
+    // question: a distribution is taxable above basis, a contribution raises it.
+    expect(assessBonaFide(MICHAELS_ATM_LOAN_AS_STATED, "in").substanceIfNotDebt).toBe(
+      "contribution_to_capital",
+    );
+  });
+
+  it("still returns UNDETERMINED if either answer is taken back", () => {
+    // Rule 43: an unreachable branch is decoration. This also proves the
+    // verdict moved because of his ANSWER and not because the gate was edited.
+    for (const field of ["balanceIsTracked", "demandEverMade"] as const) {
+      const a = assessBonaFide({ ...MICHAELS_ATM_LOAN_AS_STATED, [field]: null }, "out");
+      expect(a.verdict).toBe("UNDETERMINED");
+      expect(a.substanceIfNotDebt).toBeNull();
+    }
+  });
+
+  it("still routes to 36000, because the verdict does not pick the account", () => {
+    // Deliberate: NOT_BONA_FIDE is a conclusion about SUBSTANCE, and the
+    // control account is a function of TERM and SCHEDULE. Coupling them would
+    // silently reroute the balance the moment an opinion changed.
+    expect(loanControlAccountFor(MICHAELS_ATM_LOAN_AS_STATED).account).toBe(
+      RELATED_PARTY_LOAN_ACCOUNTS.DUE_TO_FROM,
+    );
   });
 
   it("refuses to compute interest today, and says which input is missing", () => {
@@ -209,7 +248,8 @@ describe("related-party-loan-core: Michael's loan, as he actually described it",
     });
     expect(r.kind).toBe("refused");
     if (r.kind === "refused") {
-      expect(r.code).toBe("BONA_FIDE_UNDETERMINED");
+      // books-77: was BONA_FIDE_UNDETERMINED. The gate now resolves.
+      expect(r.code).toBe("NOT_BONA_FIDE_INDEBTEDNESS");
       expect(r.resolution.length).toBeGreaterThan(40);
     }
   });

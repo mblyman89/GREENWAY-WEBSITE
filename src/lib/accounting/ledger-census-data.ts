@@ -72,38 +72,47 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       "already includes both taxes.",
     sourceKind: "pos_sale",
     entityCode: "greenway",
-    accountCodes: ["10110", "50000", "32000", "32100"],
-    builder: null,
+    accountCodes: ["10110", "50010", "32000", "32100"],
+    builder: "src/lib/accounting/sale-journal-core.ts#buildSaleJournal",
     poster: null,
     layers: {
       exists: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep -rn 'sourceKind: \"pos_sale\"' src/ -> 0 hits. No module builds a " +
-          "sale journal.",
+          "books-77 built sale-journal-core.ts#buildSaleJournal; grep -rn " +
+          "'sourceKind: \"pos_sale\"' src/ -> 2 hits, both in that builder (the " +
+          "revenue half and the COGS half).",
       },
       reachable: {
         status: "MISSING",
         evidence:
-          "97 files under src/lib/pos/ and src/app/api/pos/; grep for submitJournal " +
-          "across all of them -> 0 hits.",
+          "grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. The " +
+          "builder exists and is tested but no checkout path invokes it, so a real " +
+          "sale still reaches no journal.",
       },
       correct: {
-        status: "MISSING",
+        status: "PARTIAL",
         evidence:
-          "Nothing to evaluate. Prices are tax-inclusive (CANNABIS_EXCISE_TAX_BPS " +
-          "= 3700, back-out divisor 1.463, RCW 69.50.535) so the entry must EXTRACT " +
-          "excise before it can be correct.",
+          "Both halves pass the real ledger-core.ts#validateJournalDraft with zero " +
+          "issues, balance to the cent, and reconstitute the tax-inclusive price " +
+          "exactly across a sweep of all 21 categories. 8 of 8 mutants caught. " +
+          "PARTIAL not PRESENT because line-level lot costing is supplied by the " +
+          "caller, not yet sourced from the inventory subledger.",
       },
       accepted: {
-        status: "MISSING",
+        status: "PARTIAL",
         evidence:
-          "pos_sale is in AUTOPOSTABLE_SOURCE_KINDS (posting-core.ts:112) so the " +
-          "door would accept it, but nothing has ever presented one.",
+          "pos_sale is in AUTOPOSTABLE_SOURCE_KINDS (posting-core.ts:112) and the " +
+          "0172 GL_CONTROL_ACCOUNT refusal is gated on source_kind='manual', so a " +
+          "pos_sale entry may legitimately touch 32000/32100. Never yet presented " +
+          "to a live gl_post_journal().",
       },
       idempotent: {
-        status: "MISSING",
-        evidence: "No sourceRef convention exists for a sale; nothing to key on.",
+        status: "PARTIAL",
+        evidence:
+          "sourceRef is the POS order ref, and the COGS half uses '<ref>#cogs' so " +
+          "the two halves cannot collide on the natural key. Untested against a " +
+          "live unique index.",
       },
       married: {
         status: "NOT_APPLICABLE",
@@ -115,9 +124,11 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     },
     defectId: "D-31",
     consequence:
-      "This is the single largest number in the business and the books currently " +
-      "contain none of it. Revenue, excise trust liability and sales tax trust " +
-      "liability are all absent.",
+      "This is the single largest number in the business. books-77 built the " +
+      "entry that records it: revenue NET of excise, and both taxes EXTRACTED " +
+      "from the tax-inclusive shelf price into trust liabilities rather than " +
+      "added on top. It is still not WIRED, so today the books remain empty of " +
+      "sales — the gap moved from 'nothing computes this' to 'nothing calls it'.",
   },
 
   {
@@ -245,28 +256,44 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     event: "Product leaves the shelf, so its cost has to move from asset to expense.",
     sourceKind: "inventory",
     entityCode: "greenway",
-    accountCodes: ["60000", "20000"],
-    builder: null,
+    accountCodes: ["60010", "20010"],
+    builder: "src/lib/accounting/sale-journal-core.ts#buildSaleJournal",
     poster: null,
     layers: {
       exists: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "grep -rn 'cogs-position-core' src/ -> 0 importers. The costing module " +
-          "exists but no journal builder consumes it.",
+          "books-77: buildSaleJournal returns cogsJournal alongside revenueJournal " +
+          "and there is no way to ask for the revenue half alone. Re-measured the " +
+          "old 'cogs-position-core -> 0 importers' claim: 5 files mention the name " +
+          "but grep for a real 'from \".../cogs-position-core\"' -> 0, so the " +
+          "original 0 was right and is now stated precisely.",
       },
       reachable: {
         status: "MISSING",
-        evidence: "No COGS-on-sale path reaches submitJournal.",
+        evidence:
+          "grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. Same wiring " +
+          "gap as retail_sale; the two ship together or not at all.",
       },
       correct: {
-        status: "MISSING",
+        status: "PARTIAL",
         evidence:
-          "coa-core mirrors 20xxx inventory to 60xxx COGS per category, so the " +
-          "account pairs exist; nothing selects them at sale time.",
+          "Debits 6xxxx and credits the mirrored 2xxxx on the same category slug " +
+          "via coa-core helpers, carries cost_class 'cogs_direct' as 0173 requires " +
+          "(GL_COST_CLASS_REQUIRED), and refuses with UNIT_COST_UNKNOWN rather than " +
+          "booking a sale at zero cost. PARTIAL: lot-level cost still comes from the " +
+          "caller rather than the inventory subledger.",
       },
-      accepted: { status: "MISSING", evidence: "Never presented." },
-      idempotent: { status: "MISSING", evidence: "No sourceRef convention." },
+      accepted: {
+        status: "PARTIAL",
+        evidence:
+          "Passes validateJournalDraft against 0173-shaped accounts with zero " +
+          "issues. Not yet presented to a live gl_post_journal().",
+      },
+      idempotent: {
+        status: "PARTIAL",
+        evidence: "sourceRef '<orderRef>#cogs'. Untested against a live unique index.",
+      },
       married: {
         status: "NOT_APPLICABLE",
         evidence: "COGS is an internal reclass.",
@@ -277,7 +304,8 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     consequence:
       "Under IRC 280E, COGS is the ONLY deduction a cannabis retailer gets. An " +
       "unbooked COGS is tax paid on gross receipts instead of gross profit — the " +
-      "most expensive single gap in this census.",
+      "most expensive single gap in this census. books-77 closed the arithmetic " +
+      "and bound it to the sale so it cannot be forgotten; the wiring remains.",
   },
 
   {

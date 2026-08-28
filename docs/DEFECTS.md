@@ -1356,6 +1356,48 @@ seeded in 0173 and have never been touched.
 reports an error, because posting to the ledger was never wired rather than
 wired wrongly. A missing feature has no failure mode to notice.
 
+### books-77 -- the arithmetic now exists; the wire does not
+
+`src/lib/accounting/sale-journal-core.ts#buildSaleJournal` turns a POS order into
+the two entries it implies, and passes the REAL `ledger-core.ts#validateJournalDraft`
+with zero issues on both halves.
+
+The load-bearing idea is that the shelf price is **tax-inclusive**, so both taxes
+are EXTRACTED from what the customer paid and never added to it. Adding 37% to a
+$10.00 sticker would invent $3.70 of excise the customer never handed over and
+inflate revenue by the same amount. Worked in full for a $10.00 bag of flower:
+
+```
+excise   = round(1000 x 3700 / 14630) = 253c   -> 32000, TRUST, RCW 69.50.535(4)
+salesTax = round(1000 x  930 / 14630) =  64c   -> 32100, TRUST
+revenue  = 1000 - 253 - 64            = 683c   -> 50010, NET of excise
+                                        1000c  <- debit 10110, what was paid
+```
+
+The 9.3% is computed on a base that EXCLUDES the 37% excise, which is not a
+simplification: account 32100's own chart description says so, and 50000's says
+revenue is recognised net of the excise. Both taxes therefore share one base,
+which is why a single 1.463 divisor does the whole job. Accessories,
+paraphernalia and merch (`isCannabis: false`) take the 9.3% only, and the excise
+account does not appear on their entries at all -- not as a zero line, since
+migration 0172 forbids a zero-amount line.
+
+**Where the residual goes, stated rather than silent.** Extracting three integers
+from one leaves a sub-cent remainder. Each tax is computed at its own statutory
+rate and **revenue absorbs the fraction**, reported on every entry as
+`roundingResidualCents`. The direction is deliberate: pushing the residual into a
+tax account would mean remitting a number not derived from the statute, dressing
+a rounding convenience up as a trust liability. Taking it from Michael's own
+revenue can never overstate what the State is owed. All money math is integer;
+`divRoundHalfUp` never routes a value through a float.
+
+**Still MISSING: reachable.** `grep -rn 'buildSaleJournal' src/app src/lib/pos`
+-> 0 callers. The builder is correct and tested and nothing calls it, so the
+books still contain no sales. The gap moved from "nothing computes this" to
+"nothing calls it", and the census says exactly that rather than claiming the row
+is closed. A dedicated test asserts the caller list is empty, so wiring it will
+fail that test and force the census row to be updated in the same commit.
+
 **Gate:** `tests/compliance/ledger-census.test.ts` asserts that nothing under
 `src/lib/pos` reaches a ledger door, and separately that no module anywhere
 emits `sourceKind: "pos_sale"`. Both tests FAIL the moment sales are wired,
@@ -1407,6 +1449,35 @@ a ledger nobody was reading yet.
 **Why this is the most expensive record in the register:** under IRC 280E a
 cannabis retailer may deduct essentially nothing except cost of goods sold. An
 unbooked COGS is tax paid on gross receipts instead of gross profit.
+
+### books-77 -- COGS is now welded to the sale, so it cannot be forgotten
+
+`buildSaleJournal` returns `cogsJournal` alongside `revenueJournal`, and there is
+no way to ask for the revenue half alone. That coupling is the design decision,
+not an implementation detail: a sale that credits revenue and never relieves
+inventory overstates 280E income by the entire cost of the product, and the only
+reliable way to stop that is to make the two inseparable at the type level.
+
+The entry debits the 6xxxx COGS account and credits the mirrored 2xxxx inventory
+account on the same category slug, routed through `coa-core`'s existing
+`cogsAccountCode` / `inventoryAccountCode` helpers rather than a second copy of
+the taxonomy. Every 6xxxx line carries `cost_class: 'cogs_direct'`, because 0173
+seeds those accounts with `requires_cost_class` and 0172 would otherwise raise
+`GL_COST_CLASS_REQUIRED`; the 2xxxx lines carry `'none'`, or 0172 raises
+`GL_COST_CLASS_NOT_ALLOWED` on a balance-sheet line.
+
+**The refusal that matters most is `UNIT_COST_UNKNOWN`.** When a lot cost is not
+known the builder refuses the whole order rather than booking the sale at zero
+cost. A zero would look like a working system and quietly produce the single most
+expensive error available here -- full revenue recognised with no deduction
+against it. Standing rule 1: never guess.
+
+**Correction to this record.** The original entry said `cogs-position-core.ts`
+has "ZERO importers", and a later re-measurement appeared to contradict it with
+5 hits. Re-measured properly in books-77: those 5 are comments and a runtime
+path string; `grep` for an actual `import ... from ".../cogs-position-core"`
+returns **0**. The original claim was correct and is now stated precisely enough
+that it cannot be misread again.
 
 **Gate:** census test asserts `cogs-position-core` has no importer, and the
 census row for `cost_of_goods_sold.cogs_on_sale` carries the consequence in
@@ -2779,5 +2850,47 @@ term, therefore no amortization schedule, therefore the subledger that drives
 36000 holds an intercompany balance without one. `loanControlAccountFor` returns
 34000 the moment a term AND a schedule both exist, so the decision is a function
 of the facts rather than a constant someone would have to remember to change.
+
+### books-77 update -- the two open questions were answered, and the answer is bad
+
+Michael was asked the two facts the verdict was waiting on, and he answered both
+against his own interest, unprompted:
+
+> "The outstanding inter company balance is not tracked anywhere. I never thought
+> to track it before. We will now."
+
+> "Demand has never been made. It's just me moving my money around as I please
+> with out structure."
+
+`MICHAELS_ATM_LOAN_AS_STATED` now records `balanceIsTracked: false` and
+`demandEverMade: false`. **Measured, not predicted:** `assessBonaFide` moved from
+`UNDETERMINED` to **`NOT_BONA_FIDE`**, with `substanceIfNotDebt` of
+**`distribution`** for money moving OUT and `contribution_to_capital` for money
+moving IN. `imputedInterestRequirement` correspondingly moved from the refusal
+code `BONA_FIDE_UNDETERMINED` to `NOT_BONA_FIDE_INDEBTEDNESS`.
+
+Nothing in the gate or the regulation changed. Only the evidence did. The gate
+requires `hasActualRepayments && balanceIsTracked`, and an untracked balance is
+fatal to it for a reason that survives restatement: if no one knows the amount,
+there is no sum that could be demanded, and a debt nobody can quantify or enforce
+is not a debt. Sec. 1.482-2(a)(1)(ii)(B) is explicit that the safe haven cannot
+rescue this -- the regime applies only to bona fide indebtedness "even if the
+stated rate of interest thereon would be within the safe haven rates", and
+payments are "treated according to their substance".
+
+**This is the system working, not the system failing.** Michael's stated purpose
+for it is "forcing me to behave properly bookkeeping wise so I can have
+defensible evidence our system follows the law." A tool that returned a
+comfortable answer to those two admissions would be useless for that purpose. The
+verdict is also not permanent: it is a function of facts, and he has already
+begun changing them ("We will now"). Tracking the balance plus executing the
+contract in `CONTRACT_REQUIREMENTS` moves `balanceIsTracked` to true and the
+verdict with it.
+
+**Reachability preserved deliberately.** `BONA_FIDE_UNDETERMINED` lost its only
+emitter when his facts resolved, and the rule 43 sweep in the self-tests caught
+that immediately. The fix was to keep an explicitly unanswered fact set alive in
+the tests, never to weaken the sweep -- an unreachable refusal code is
+decoration, and the branch must stay live for the next loan.
 
 ---

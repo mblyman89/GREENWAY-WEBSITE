@@ -292,10 +292,13 @@ export type BonaFideFacts = {
 /**
  * Michael's ATM loan exactly as he has described it, and nothing more.
  *
- * This is EVIDENCE, not design. It is what he said, transcribed. Two fields are
- * `null` rather than `false` because he has not been asked, and one — the
- * contract — is `false` today because he said "I suppose I could create" one,
- * which is an intention and not an instrument.
+ * This is EVIDENCE, not design. It is what he said, transcribed. As of books-76
+ * two fields were `null` because he had not been asked. In books-77 he answered
+ * both, unprompted and against his own interest, so they are now `false` — not
+ * inferred, quoted. The contract field stays `false` because he said "I suppose
+ * I could create" one, which is an intention and not an instrument.
+ *
+ * Recording these two answers changes the verdict. That is the point of asking.
  */
 export const MICHAELS_ATM_LOAN_AS_STATED: BonaFideFacts = {
   // "I suppose I could create a contract" — offered, not written.
@@ -312,12 +315,14 @@ export const MICHAELS_ATM_LOAN_AS_STATED: BonaFideFacts = {
   hasActualRepayments: true,
   // Same sentence: it moves both ways. This is the fact that helps him most.
   balanceCyclesBothWays: true,
-  // Not asked. Sage holds no due-to/due-from account (books-73 measured 288
-  // accounts, none of them intercompany), so this is probably false — but
-  // "probably" is a guess and rule 1 forbids recording it as an answer.
-  balanceIsTracked: null,
-  // Not asked.
-  demandEverMade: null,
+  // books-77, asked and answered: "The outstanding inter company balance is not
+  // tracked anywhere. I never thought to track it before." books-73 measured
+  // 288 Sage accounts with no due-to/due-from among them, which agrees, but the
+  // authority for this `false` is his answer and not that measurement.
+  balanceIsTracked: false,
+  // books-77, asked and answered: "Demand has never been made. It's just me
+  // moving my money around as I please with out structure."
+  demandEverMade: false,
 };
 
 export type BonaFideVerdict = "BONA_FIDE" | "NOT_BONA_FIDE" | "UNDETERMINED";
@@ -914,14 +919,32 @@ export function __runRelatedPartyLoanCoreTests(): void {
     "zero surcharge must give 0, never Infinity",
   );
 
-  // --- Michael's loan as stated is UNDETERMINED, not favourable. -----------
+  // --- Michael's loan as stated is NOT_BONA_FIDE, and that is books-77. ----
+  // In books-76 this asserted UNDETERMINED with two open questions. He answered
+  // both, and the answers were unfavourable, so the verdict moved. Rule 89: the
+  // change is STATED here rather than quietly absorbed.
   const asStated = assessBonaFide(MICHAELS_ATM_LOAN_AS_STATED, "out");
   assert(
-    asStated.verdict === "UNDETERMINED",
-    "unanswered facts must give UNDETERMINED, got " + asStated.verdict,
+    asStated.verdict === "NOT_BONA_FIDE",
+    "answered facts must give NOT_BONA_FIDE, got " + asStated.verdict,
   );
-  assert(asStated.unknown.length === 2, "exactly two facts are unasked");
-  assert(asStated.substanceIfNotDebt === null, "UNDETERMINED names no substance");
+  assert(asStated.unknown.length === 0, "no fact is unasked any more");
+  assert(
+    asStated.substanceIfNotDebt === "distribution",
+    "money OUT that is not debt is a distribution, got " + asStated.substanceIfNotDebt,
+  );
+
+  // UNDETERMINED must still be REACHABLE, or rule 43 makes it decoration. The
+  // same facts with the tracking question put back to unasked prove the branch
+  // is live and that it was Michael's ANSWER, not a code change, that moved it.
+  const stillAsking = assessBonaFide(
+    { ...MICHAELS_ATM_LOAN_AS_STATED, balanceIsTracked: null },
+    "out",
+  );
+  assert(
+    stillAsking.verdict === "UNDETERMINED",
+    "an open question must still outrank a tally, got " + stillAsking.verdict,
+  );
 
   // --- Direction decides the substance, and it is not symmetric. -----------
   const bad: BonaFideFacts = {
@@ -1005,7 +1028,12 @@ export function __runRelatedPartyLoanCoreTests(): void {
       chargedRateMilliPct: 0,
       termMonths: null,
       afrLowerLimitMilliPct: 4000,
-      facts: MICHAELS_ATM_LOAN_AS_STATED,
+      // books-77: this used to pass MICHAELS_ATM_LOAN_AS_STATED and that is how
+      // BONA_FIDE_UNDETERMINED got covered. His answers made his own facts
+      // resolve, which silently removed the only emitter of that code and the
+      // rule 43 sweep below caught it. The fix is to keep an explicitly
+      // unanswered fact set, NOT to weaken the sweep.
+      facts: { ...MICHAELS_ATM_LOAN_AS_STATED, balanceIsTracked: null },
       direction: "out",
     }),
   );
@@ -1073,11 +1101,31 @@ export function __runRelatedPartyLoanCoreTests(): void {
   if (today.kind === "refused") {
     // The bona fide gate is reached before the AFR gate, and that ordering is
     // deliberate: there is no point pricing a loan that may not be a loan.
+    // books-77: this was BONA_FIDE_UNDETERMINED until he answered the two
+    // questions. Now the gate resolves against him and the refusal is harder.
     assert(
-      today.code === "BONA_FIDE_UNDETERMINED",
-      "the open questions outrank the missing rate, got " + today.code,
+      today.code === "NOT_BONA_FIDE_INDEBTEDNESS",
+      "the failed bona fide gate outranks the missing rate, got " + today.code,
+    );
+    assert(
+      today.explanation.includes("distribution"),
+      "the refusal must name the substance it would be instead",
     );
   }
+
+  // BONA_FIDE_UNDETERMINED must stay reachable too (rule 43).
+  const whileAsking = imputedInterestRequirement({
+    principalCents: MEASURED_SWEEP_CENTS,
+    chargedRateMilliPct: 0,
+    termMonths: null,
+    afrLowerLimitMilliPct: null,
+    facts: { ...MICHAELS_ATM_LOAN_AS_STATED, demandEverMade: null },
+    direction: "out",
+  });
+  assert(
+    whileAsking.kind === "refused" && whileAsking.code === "BONA_FIDE_UNDETERMINED",
+    "the undetermined refusal must remain reachable",
+  );
 
   // --- FIFO, oldest first. -------------------------------------------------
   const fifo = applyRepaymentsFifo([

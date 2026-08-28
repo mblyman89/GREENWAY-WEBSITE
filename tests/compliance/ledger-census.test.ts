@@ -441,14 +441,51 @@ describe("the unreachable subsystems really are unreachable (negative control)",
     }
   });
 
-  it("no module builds a POS sale, excise, loan, close or reversal journal", () => {
+  it("no module builds an excise, loan, close or reversal journal", () => {
+    /*
+     * books-77 REMOVED "pos_sale" from this list, and that is the slice.
+     *
+     * This negative control existed to prove the census was telling the truth
+     * when it said nothing builds these entries. In books-77 something finally
+     * does build a pos_sale — sale-journal-core.ts#buildSaleJournal — so leaving
+     * pos_sale in this list would make the control fail forever, and deleting
+     * the control would lose the guarantee for the other four. The list shrinks
+     * by exactly one, with the reason recorded (rule 89).
+     *
+     * The replacement guarantee is the assertion below: pos_sale is produced by
+     * that ONE builder and nothing else, so a second, divergent sale entry
+     * cannot appear quietly somewhere in src/.
+     */
     const all = srcExcept([]);
-    for (const kind of ["pos_sale", "excise", "loan", "close", "reversal"]) {
+    for (const kind of ["excise", "loan", "close", "reversal"]) {
       expect(
         all.includes(`sourceKind: "${kind}"`),
         `something now produces ${kind} — update the census`,
       ).toBe(false);
     }
+  });
+
+  it("exactly one module builds a pos_sale journal, and it is the sale builder", () => {
+    // ledger-census-data.ts and ledger-census-core.ts are excluded because both
+    // hits in them are census ROWS describing a pos_sale event (and a fakeRow
+    // test fixture), not journals being built. Measured, not assumed: the
+    // ledger-census-core hit is inside `function fakeRow(...)`.
+    const producers = walk("src")
+      .filter((f) => !f.endsWith("/ledger-census-data.ts"))
+      .filter((f) => !f.endsWith("/ledger-census-core.ts"))
+      .filter((f) => read(f).includes('sourceKind: "pos_sale"'));
+    expect(producers).toEqual(["src/lib/accounting/sale-journal-core.ts"]);
+  });
+
+  it("the sale builder is still not wired to any checkout path", () => {
+    // The honest state as of books-77: the entry is computable and correct, and
+    // nothing calls it. When this test fails, the census row for retail_sale
+    // must move its `reachable` layer off MISSING in the same commit.
+    const callers = walk("src")
+      .filter((f) => !f.endsWith("/sale-journal-core.ts"))
+      .filter((f) => !f.endsWith("/ledger-census-data.ts"))
+      .filter((f) => /\bbuildSaleJournal\s*\(/.test(read(f)));
+    expect(callers).toEqual([]);
   });
 
   it("the vendor bill screen still has no server action", () => {
@@ -1056,9 +1093,19 @@ describe("evidence cannot be softened without a test failing", () => {
     // that the shipped loan engine returns an empty schedule for a zero-term
     // loan, and FEDERAL_SHORT_TERM_RATES is empty on purpose, so a poster today
     // would have to invent both the schedule and the rate.
+    // 10 -> 12 in books-77: BOTH halves of the retail sale gained the same
+    // builder (sale-journal-core.ts#buildSaleJournal) while both reachable
+    // layers stayed MISSING. Two rows, not one, because retail_sale (D-31) and
+    // cogs_on_sale (D-33) are separate census events that this slice
+    // deliberately binds to a single function — a sale that credits revenue
+    // without relieving inventory overstates 280E income by the whole cost of
+    // the product, so there is no way to ask for the revenue half alone.
+    // Their reachable layers stay MISSING because nothing in src/app or
+    // src/lib/pos calls the builder yet; the checkout wiring is its own slice,
+    // and claiming otherwise here is exactly the softening this test prevents.
     // THIS TEST FAILING IS THE SYSTEM WORKING — it is how a new unreachable
     // builder announces itself instead of quietly joining the backlog.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(10);
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(12);
 
     for (const r of drivers) {
       expect(

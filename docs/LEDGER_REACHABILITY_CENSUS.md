@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 34 money events that should reach the books. 32 cannot reach them at all. 22 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
+> 34 money events that should reach the books. 32 cannot reach them at all. 20 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 6 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 34 |
 | Proven on all six layers | 2 |
 | Cannot reach the books at all | 32 |
-| Have nothing that even builds the entry | 22 |
+| Have nothing that even builds the entry | 20 |
 | Layers that could not be measured | 6 |
 
 ## The six layers
@@ -43,18 +43,18 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 21 of 34 |
+| `exists` | 19 of 34 |
 | `reachable` | 32 of 34 |
-| `correct` | 17 of 34 |
-| `accepted` | 30 of 34 |
-| `idempotent` | 25 of 34 |
+| `correct` | 15 of 34 |
+| `accepted` | 28 of 34 |
+| `idempotent` | 23 of 34 |
 | `married` | 13 of 34 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `retail_sale` | NO | NO | NO | NO | NO | n/a | D-31 |
+| `retail_sale` | yes | NO | part | part | part | n/a | D-31 |
 | `excise_liability_split` | NO | NO | NO | NO | NO | n/a | D-32 |
 | `discount_and_comp` | NO | NO | NO | NO | NO | n/a | D-31 |
 | `refund_or_return` | NO | NO | NO | NO | NO | n/a | D-31 |
@@ -63,18 +63,18 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 A customer buys product at the counter and pays. The price on the shelf already includes both taxes.
 
-- Accounts: `10110`, `50000`, `32000`, `32100`
-- Builds the entry: **nothing**
+- Accounts: `10110`, `50010`, `32000`, `32100`
+- Builds the entry: `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
 - Posts the entry: **nothing**
 
-- **exists: MISSING** -- grep -rn 'sourceKind: "pos_sale"' src/ -> 0 hits. No module builds a sale journal.
-- **reachable: MISSING** -- 97 files under src/lib/pos/ and src/app/api/pos/; grep for submitJournal across all of them -> 0 hits.
-- **correct: MISSING** -- Nothing to evaluate. Prices are tax-inclusive (CANNABIS_EXCISE_TAX_BPS = 3700, back-out divisor 1.463, RCW 69.50.535) so the entry must EXTRACT excise before it can be correct.
-- **accepted: MISSING** -- pos_sale is in AUTOPOSTABLE_SOURCE_KINDS (posting-core.ts:112) so the door would accept it, but nothing has ever presented one.
-- **idempotent: MISSING** -- No sourceRef convention exists for a sale; nothing to key on.
+- **exists: PRESENT** -- books-77 built sale-journal-core.ts#buildSaleJournal; grep -rn 'sourceKind: "pos_sale"' src/ -> 2 hits, both in that builder (the revenue half and the COGS half).
+- **reachable: MISSING** -- grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. The builder exists and is tested but no checkout path invokes it, so a real sale still reaches no journal.
+- **correct: PARTIAL** -- Both halves pass the real ledger-core.ts#validateJournalDraft with zero issues, balance to the cent, and reconstitute the tax-inclusive price exactly across a sweep of all 21 categories. 8 of 8 mutants caught. PARTIAL not PRESENT because line-level lot costing is supplied by the caller, not yet sourced from the inventory subledger.
+- **accepted: PARTIAL** -- pos_sale is in AUTOPOSTABLE_SOURCE_KINDS (posting-core.ts:112) and the 0172 GL_CONTROL_ACCOUNT refusal is gated on source_kind='manual', so a pos_sale entry may legitimately touch 32000/32100. Never yet presented to a live gl_post_journal().
+- **idempotent: PARTIAL** -- sourceRef is the POS order ref, and the COGS half uses '<ref>#cogs' so the two halves cannot collide on the natural key. Untested against a live unique index.
 - **married: NOT_APPLICABLE** -- Cash and card settlement are separate events, censused below. _The sale itself has no second arrival. The DEPOSIT of its proceeds does, and that is a different row._
 
-**If this stays broken:** This is the single largest number in the business and the books currently contain none of it. Revenue, excise trust liability and sales tax trust liability are all absent.
+**If this stays broken:** This is the single largest number in the business. books-77 built the entry that records it: revenue NET of excise, and both taxes EXTRACTED from the tax-inclusive shelf price into trust liabilities rather than added on top. It is still not WIRED, so today the books remain empty of sales — the gap moved from 'nothing computes this' to 'nothing calls it'.
 
 ### `revenue_and_tax_collected.excise_liability_split`
 
@@ -131,7 +131,7 @@ A customer returns product, or a sale is voided after tender.
 
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `cogs_on_sale` | NO | NO | NO | NO | NO | n/a | D-33 |
+| `cogs_on_sale` | yes | NO | part | part | part | n/a | D-33 |
 | `cutover_inventory_load` | part | NO | ? | part | NO | n/a | D-48 |
 | `cultivera_manifest_import` | part | NO | part | NO | part | NO | D-49 |
 | `inventory_receipt` | yes | NO | yes | NO | part | NO | D-34 |
@@ -142,18 +142,18 @@ A customer returns product, or a sale is voided after tender.
 
 Product leaves the shelf, so its cost has to move from asset to expense.
 
-- Accounts: `60000`, `20000`
-- Builds the entry: **nothing**
+- Accounts: `60010`, `20010`
+- Builds the entry: `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
 - Posts the entry: **nothing**
 
-- **exists: MISSING** -- grep -rn 'cogs-position-core' src/ -> 0 importers. The costing module exists but no journal builder consumes it.
-- **reachable: MISSING** -- No COGS-on-sale path reaches submitJournal.
-- **correct: MISSING** -- coa-core mirrors 20xxx inventory to 60xxx COGS per category, so the account pairs exist; nothing selects them at sale time.
-- **accepted: MISSING** -- Never presented.
-- **idempotent: MISSING** -- No sourceRef convention.
+- **exists: PRESENT** -- books-77: buildSaleJournal returns cogsJournal alongside revenueJournal and there is no way to ask for the revenue half alone. Re-measured the old 'cogs-position-core -> 0 importers' claim: 5 files mention the name but grep for a real 'from ".../cogs-position-core"' -> 0, so the original 0 was right and is now stated precisely.
+- **reachable: MISSING** -- grep -rn 'buildSaleJournal' src/app src/lib/pos -> 0 callers. Same wiring gap as retail_sale; the two ship together or not at all.
+- **correct: PARTIAL** -- Debits 6xxxx and credits the mirrored 2xxxx on the same category slug via coa-core helpers, carries cost_class 'cogs_direct' as 0173 requires (GL_COST_CLASS_REQUIRED), and refuses with UNIT_COST_UNKNOWN rather than booking a sale at zero cost. PARTIAL: lot-level cost still comes from the caller rather than the inventory subledger.
+- **accepted: PARTIAL** -- Passes validateJournalDraft against 0173-shaped accounts with zero issues. Not yet presented to a live gl_post_journal().
+- **idempotent: PARTIAL** -- sourceRef '<orderRef>#cogs'. Untested against a live unique index.
 - **married: NOT_APPLICABLE** -- COGS is an internal reclass. _No cash moves, so no bank line can duplicate it._
 
-**If this stays broken:** Under IRC 280E, COGS is the ONLY deduction a cannabis retailer gets. An unbooked COGS is tax paid on gross receipts instead of gross profit — the most expensive single gap in this census.
+**If this stays broken:** Under IRC 280E, COGS is the ONLY deduction a cannabis retailer gets. An unbooked COGS is tax paid on gross receipts instead of gross profit — the most expensive single gap in this census. books-77 closed the arithmetic and bound it to the sale so it cannot be forgotten; the wiring remains.
 
 ### `cost_of_goods_sold.cutover_inventory_load`
 
@@ -697,11 +697,9 @@ Historical balances are loaded when the books are first stood up.
 These rows are not a wiring job. There is no code that produces the journal entry at
 all, so the work is to write it, then wire it.
 
-- `revenue_and_tax_collected.retail_sale` (D-31)
 - `revenue_and_tax_collected.excise_liability_split` (D-32)
 - `revenue_and_tax_collected.discount_and_comp` (D-31)
 - `revenue_and_tax_collected.refund_or_return` (D-31)
-- `cost_of_goods_sold.cogs_on_sale` (D-33)
 - `cost_of_goods_sold.freight_in` (D-34)
 - `vendor_cycle.purchase_order_commitment` (D-35)
 - `vendor_cycle.vendor_paid_by_ach` (D-36)
@@ -725,6 +723,8 @@ all, so the work is to write it, then wire it.
 The cheapest real progress available. The accounting logic is written and tested; only
 the path from the screen to the ledger is absent.
 
+- `revenue_and_tax_collected.retail_sale` (D-31) -- `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
+- `cost_of_goods_sold.cogs_on_sale` (D-33) -- `src/lib/accounting/sale-journal-core.ts#buildSaleJournal`
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cost_of_goods_sold.inventory_receipt` (D-34) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
