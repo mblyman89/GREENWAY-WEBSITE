@@ -505,7 +505,7 @@ describe("the unreachable subsystems really are unreachable (negative control)",
 
   it(
     "the only ledger WRITE doors any code actually calls are gl_submit_journal, " +
-      "gl_submit_intercompany_pair and gl_approve_journal",
+      "gl_submit_intercompany_pair, gl_approve_journal and gl_post_journal",
     () => {
       const all = srcExcept([]);
       const called = new Set(
@@ -513,8 +513,15 @@ describe("the unreachable subsystems really are unreachable (negative control)",
       );
       // The write doors that exist in SQL but nothing invokes. Each one is a
       // finished database feature with no wire attached.
+      //
+      // gl_post_journal LEFT THIS LIST IN books-85 (D-67). It sat here for six
+      // slices: a finished posting gate that no TypeScript could reach, which
+      // meant every entry the system wrote stayed a draft forever. This test
+      // fired the moment approval-service.ts called it, and its own assertion
+      // message -- "now has a caller, update the census" -- is what sent us
+      // here. It moved to the positive control below rather than being
+      // deleted, so the wire is now asserted to EXIST.
       for (const door of [
-        "gl_post_journal",
         "gl_post_payroll_run",
         "gl_post_vendor_bill",
         "gl_post_bank_match",
@@ -530,6 +537,10 @@ describe("the unreachable subsystems really are unreachable (negative control)",
       // And the ones that genuinely are wired, as a positive control.
       expect(called.has("gl_submit_journal")).toBe(true);
       expect(called.has("gl_submit_intercompany_pair")).toBe(true);
+      expect(
+        called.has("gl_post_journal"),
+        "gl_post_journal lost its caller: D-67 is back and every entry is stranded again",
+      ).toBe(true);
     },
   );
 });

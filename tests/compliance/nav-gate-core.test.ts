@@ -450,7 +450,7 @@ describe("N4 the Accounting and Lyman tabs", () => {
     expect(navGroups).toContain(LYMAN_GROUP);
   });
 
-  it("Accounting holds the twenty-one books screens plus Inventory Auditing", () => {
+  it("Accounting holds the twenty-two books screens plus Inventory Auditing", () => {
     /*
      * books-31 added Company Information; books-32 added Timesheets & Overtime;
      * books-35 added Sick Leave Approvals. This assertion is an exact list on
@@ -605,6 +605,25 @@ describe("N4 the Accounting and Lyman tabs", () => {
         "/admin/books/bank",
         "/admin/books/bills",
         "/admin/books/conversion",
+        /*
+         * books-85. The drafts queue -- "Waiting to Post".
+         *
+         * This entry exists because of D-67, which is the largest rule 50
+         * finding since /admin/books/learn and has the same shape: six slices
+         * (books-80 through books-84) built receiving, sales, vendor bills and
+         * bank expenses, every one of them correct, every one of them writing
+         * a DRAFT -- into a queue with no outlet. Nothing in the application
+         * could approve or post a draft, and no screen listed them, so every
+         * entry the system had ever written was invisible to the trial
+         * balance. It was found by Michael asking "do we have a screen built
+         * for me to review journal entries waiting to be posted?", not by a
+         * gate, which is exactly the failure mode this list exists to prevent.
+         *
+         * It sits directly under General Journal in the menu because that page
+         * ends by telling the owner "everything you save here is a draft".
+         * This is where those drafts go.
+         */
+        "/admin/books/drafts",
         /*
          * books-40. The quarterly federal return. Added here for the same
          * reason the Pay Run entry above was: the engine, the store, the

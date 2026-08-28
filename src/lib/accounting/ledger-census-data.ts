@@ -931,10 +931,13 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
         status: "PARTIAL",
         evidence:
           "A door now accepts the decision: the classified account becomes the " +
-          "debit line of a 'bank' journal. PARTIAL and not PRESENT because the " +
-          "entry lands as a DRAFT and nothing in the application can approve or " +
-          "post a draft -- see D-67. The classification is accepted; the entry " +
-          "is not yet blessed.",
+          "debit line of a 'bank' journal. The entry lands as a DRAFT, and " +
+          "books-85 built the path that drains drafts -- /admin/books/drafts " +
+          "plus approveAndPostJournal(), which calls gl_post_journal (D-67, " +
+          "closed). Still PARTIAL rather than PRESENT for one honest reason: no " +
+          "entry from this wire has been posted against a live database yet. " +
+          "The logic is swept and mutation-tested; the round trip is not " +
+          "proven. This reaches PRESENT on the first real post, not before.",
       },
       idempotent: {
         status: "UNKNOWN",
@@ -1068,9 +1071,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
         evidence:
           "Entries are created as DRAFTS. 'bank' is in AUTOPOSTABLE_SOURCE_KINDS, " +
           "but auto-post also requires an approved template and no template rows " +
-          "are seeded, so nothing auto-posts in practice. Nothing in the " +
-          "application can approve or post a draft at all (D-67). This layer " +
-          "cannot reach PRESENT until that path exists.",
+          "are seeded, so nothing auto-posts in practice. The draft is no longer " +
+          "stranded: books-85 shipped the review screen and the approve/post " +
+          "service (D-67, closed), and 'bank' is one of the source kinds " +
+          "gl_guard_journal_approval exempts from a second signature, so it " +
+          "posts on one click. PARTIAL and not PRESENT because no bank entry " +
+          "has yet made that round trip against a live database.",
       },
       idempotent: {
         status: "PRESENT",

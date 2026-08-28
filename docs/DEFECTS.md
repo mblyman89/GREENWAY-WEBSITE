@@ -3331,3 +3331,61 @@ question and does not belong in it.
 Consequence if ignored: Michael opens for business, every transaction flows in
 correctly, the trial balance stays empty, and the first person to notice is
 whoever prepares the return.
+
+---
+
+### RESOLVED in books-85. Status: **CLOSED (code shipped, application pending).**
+
+Everything above is left exactly as written. It was true when it was written and
+it is the reason the fix exists; editing it away would hide how the gap was
+found.
+
+**What was built.** `src/lib/accounting/approval-core.ts` (pure, swept,
+mutation-tested), `src/lib/accounting/approval-service.ts`, and the screen at
+`src/app/admin/books/drafts/`. Facts (1)-(5) above are each answered:
+
+- (1) and (4) -- the service calls BOTH functions, in order:
+  `gl_approve_journal` then `gl_post_journal`. `approveAndPostJournal()` is the
+  first TypeScript caller of `gl_post_journal` in the history of this
+  repository.
+- (2) `approveJournal` now has a real caller.
+- (3) `/admin/books/drafts` lists every draft with all of its lines, debits and
+  credits in separate columns, and one button per entry.
+- (5) **The identity problem was already solved and nobody had noticed.**
+  `createBooksClient()` (src/lib/supabase/books-client.ts) wraps the
+  `@supabase/ssr` server client bound to the request cookies, so `auth.uid()` is
+  the signed-in human. Its own header documents a shipped bug where the admin
+  client was used instead and every books RPC refused. The approval service uses
+  it, and a test asserts the module never imports `supabase/admin`.
+
+**What the fix nearly got wrong, and this is the part worth reading.** The
+obvious implementation -- "approve, then post" -- is WRONG, and wrong in a way
+that would have looked like a working feature while reintroducing this very
+defect. `gl_guard_journal_approval` (0174:817, 0174:823) returns early, with no
+approver required, for `pos_sale`, `excise`, `purchase`, `bank` and `reversal`,
+and (0174:838) for anything below the entity's threshold. Michael is the author
+of essentially every entry in this system. So calling `gl_approve_journal` on a
+$90,000 day of POS sales he "authored" raises `GL_SELF_APPROVAL_REFUSED` -- and
+the entry stays stranded, exactly as before, except now there is a button that
+fails. `planApproval()` therefore decides per entry between `approve_then_post`,
+`post_only` and `refuse`, and a test pins the exempt list to the literal text of
+migration 0174 so the two cannot drift apart silently.
+
+**The books-84 gate fired, as designed, and has been inverted rather than
+deleted.** Both of its assertions failed the moment the path was wired. The same
+two questions are now asked with the answers the other way round -- there MUST
+be a caller and there MUST be a screen -- plus a third that the path runs on the
+session client. If a future refactor removes any of it, D-67 comes straight
+back.
+
+**What is NOT proven, stated plainly.** No entry has been posted against a live
+database in this slice. The pure decision logic is swept and 14/14 mutations
+were caught; the service and screen are wired and type-checked. The first real
+post is Michael's, on his own books, and the refusal messages are written so
+that if it goes wrong he can read why. The census rows for the wired builders
+stay PARTIAL on `accepted` until that happens -- see the note on D-56/D-37.
+
+The census row question raised above still stands and the answer is still no: a
+lifecycle transition names no accounts, so it has no home in a census that
+measures whether EVENTS reach the ledger. The invariant stayed; the coverage
+lives in the inverted gate and in approval-core's own tests instead.

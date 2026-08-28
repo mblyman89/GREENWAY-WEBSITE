@@ -262,19 +262,27 @@ describe("bank expense: the service actually calls the ledger", () => {
 });
 
 /**
- * THE D-67 GATE.
+ * THE D-67 GATE — NOW INVERTED, DELIBERATELY (slice books-85).
  *
- * Not a test of this slice's code -- a test of the step that comes after it.
- * Every entry this wire creates is a draft, and at the time of writing nothing
- * in the application can approve or post a draft. That is D-67.
+ * WHAT THIS BLOCK USED TO SAY. In books-84 these two tests asserted that the
+ * approval path did NOT exist: no caller of approveJournal or gl_post_journal
+ * anywhere in src/, and no screen reading gl_journals. That was the true,
+ * measured position at the time, and the block was written to FAIL the day
+ * somebody wired the path -- so that a stale HIGH-severity defect could not sit
+ * in the register describing a problem that had been quietly fixed.
  *
- * This test asserts the CURRENT, MEASURED position. It is written to FAIL the
- * day somebody wires an approval path, and that is deliberate: the failure is
- * the reminder to go and close D-67 rather than let a stale HIGH-severity entry
- * sit in the register describing a problem that was quietly fixed. A gate that
- * only ever confirms bad news is worth little; this one changes state.
+ * IT FIRED. books-85 built approval-core.ts, approval-service.ts and the
+ * /admin/books/drafts screen, and both assertions failed exactly as designed.
+ * That is the gate working, not the gate being wrong.
+ *
+ * WHY IT IS INVERTED RATHER THAN DELETED. Deleting it would throw away the only
+ * automated statement that the outlet exists at all. The queue had no outlet for
+ * six slices precisely because nothing was watching for one. So the same two
+ * questions are still asked, with the answers the other way round: there MUST be
+ * a real caller, and there MUST be a screen. If a future refactor removes either,
+ * D-67 comes straight back and this block says so immediately.
  */
-describe("D-67: the approval path still does not exist (fails when it does)", () => {
+describe("D-67 is closed: the approval path exists (fails if it is ever removed)", () => {
   const files = execSync(
     "grep -rl 'approveJournal\\|gl_post_journal' src/ --include=*.ts --include=*.tsx || true",
     { encoding: "utf8" },
@@ -283,24 +291,66 @@ describe("D-67: the approval path still does not exist (fails when it does)", ()
     .map((f) => f.trim())
     .filter(Boolean);
 
-  it("has no caller of approveJournal or gl_post_journal outside posting-service itself", () => {
+  it("has a real caller of approveJournal or gl_post_journal outside posting-service", () => {
     // posting-service.ts DEFINES approveJournal; a mere mention in a comment
-    // elsewhere is not a caller. Anything else in src/ that references these is
-    // a real wiring attempt and should flip this test.
+    // elsewhere is not a caller. This looks for an actual call.
     const callers = files.filter((f) => !f.endsWith("posting-service.ts"));
     const realCallers = callers.filter((f) => {
       const body = readFileSync(f, "utf8");
       return /\bapproveJournal\s*\(/.test(body) || /gl_post_journal["']/.test(body);
     });
-    expect(realCallers).toEqual([]);
+    expect(realCallers.length).toBeGreaterThan(0);
+    expect(realCallers.some((f) => f.includes("approval-service"))).toBe(true);
   });
 
-  it("has no screen that lists drafts from gl_journals", () => {
+  it("has a screen that lists drafts waiting to be posted", () => {
     const pages = execSync(
-      "grep -rl 'gl_journals' src/app --include=*.tsx --include=*.ts || true",
+      "grep -rl 'listDraftJournals' src/app --include=*.tsx --include=*.ts || true",
       { encoding: "utf8" },
     ).trim();
-    expect(pages).toBe("");
+    expect(pages).not.toBe("");
+    expect(pages).toContain("drafts");
+  });
+
+  it("actually EXPORTS the reader that screen imports", () => {
+    // A mutation probe found this hole: deleting the `export` keyword from
+    // listDraftJournals left the grep above perfectly happy -- the page still
+    // MENTIONED the name, it just could no longer import it. The screen would
+    // have failed to build while the suite stayed green, which is exactly the
+    // kind of test that buys confidence without paying for it (rule 13c).
+    //
+    // So both ends of the wire are checked: the module must export it, and the
+    // page must import it from that module by name.
+    const svc = readFileSync("src/lib/accounting/approval-service.ts", "utf8");
+    expect(svc).toMatch(/export\s+async\s+function\s+listDraftJournals\s*\(/);
+    expect(svc).toMatch(/export\s+async\s+function\s+approveAndPostJournal\s*\(/);
+
+    const page = readFileSync("src/app/admin/books/drafts/page.tsx", "utf8");
+    expect(page).toContain("listDraftJournals");
+    expect(page).toContain("@/lib/accounting/approval-service");
+
+    // And the button really reaches the service, not a stub.
+    const action = readFileSync("src/app/admin/books/drafts/actions.ts", "utf8");
+    expect(action).toMatch(/approveAndPostJournal\s*\(/);
+  });
+
+  it("posts through the SESSION client, never the admin client", () => {
+    // The whole reason D-67 called this hard: gl_approve_journal refuses a null
+    // auth.uid(), and gl_post_journal writes posted_by = auth.uid(). The admin
+    // client has neither. If this file ever reaches for it, approvals become
+    // anonymous or impossible, so the check is here rather than in a comment.
+    //
+    // The file's own header WARNS against the admin client by name, so a naive
+    // substring search matches that warning and fails on a correct file. The
+    // check therefore looks at what the module IMPORTS -- prose cannot import
+    // anything, and nothing can be called that was not first imported.
+    const svc = readFileSync("src/lib/accounting/approval-service.ts", "utf8");
+    const imports = svc
+      .split("\n")
+      .filter((l) => /^\s*import\b/.test(l) || /^\s*}\s*from\s/.test(l))
+      .join("\n");
+    expect(imports).toContain("books-client");
+    expect(imports).not.toContain("supabase/admin");
   });
 });
 
