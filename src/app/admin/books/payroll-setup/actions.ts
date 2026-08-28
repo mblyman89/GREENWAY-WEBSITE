@@ -69,8 +69,10 @@ import {
   type OnboardingCandidate,
 } from "@/lib/payroll/payroll-onboarding-core";
 import {
+  addPersonToPayroll,
   revealSsn,
   saveEmployeePayrollSetup,
+  type AddPersonResult,
   type RevealResult,
   type SaveResult,
 } from "@/lib/payroll/payroll-onboarding-store";
@@ -141,4 +143,33 @@ export async function revealSsnAction(input: {
     actorId: session.userId,
     reason: input.reason,
   });
+}
+
+/**
+ * Add a person to payroll, without giving them a back-office login.
+ *
+ * books-87. Michael: "I want to create the employee in payroll/ W-4 setup, then
+ * I will give them access to the back office if they need access to it."
+ *
+ * The two halves of that sentence are two different screens on purpose, and the
+ * order matters. This one creates somebody the business employs and can pay.
+ * Granting them a login, IF they need one, happens afterwards under Users and
+ * is a separate decision with a separate audit trail. Neither creates the
+ * other - which is the whole correction this slice makes.
+ */
+export async function addPersonAction(input: { fullName: string }): Promise<AddPersonResult> {
+  const session = await requireBooksAccess();
+
+  const result = await addPersonToPayroll({
+    fullName: input.fullName,
+    actorId: session.userId,
+  });
+
+  if (result.ok) {
+    // The new person appears on both rosters immediately.
+    revalidatePath("/admin/books/payroll-setup");
+    revalidatePath("/admin/staffing/employees");
+  }
+
+  return result;
 }

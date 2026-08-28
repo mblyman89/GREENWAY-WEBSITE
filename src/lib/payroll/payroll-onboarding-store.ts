@@ -35,6 +35,7 @@
  * because $0.16445/hour is a real rate and cents cannot hold it.
  */
 import "server-only";
+import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { requiredBigint } from "@/lib/supabase/pg-bigint";
@@ -152,6 +153,27 @@ export type EmployeeSetupRow = {
  * on a table that now holds a full SSN. Naming the columns means the SSN cannot
  * arrive here by accident, which is a stronger guarantee than remembering to
  * delete it afterwards.
+ *
+ * WHO APPEARS HERE, AND WHY IT CHANGED IN books-87
+ *
+ * This screen asks one question: who do we need payroll paperwork for? Until
+ * books-87 it answered with EVERY row in `employees`, which was the least
+ * filtered view of the roster anywhere in the app - `listEmployees` defaults to
+ * `active = true` and `rosterOverview` drops `terminated`, but this did neither.
+ * So people who had left still appeared, badged red for a missing W-4 they were
+ * never going to file.
+ *
+ * Worse, `employees` had been seeded from back-office LOGINS by migration 0037,
+ * so an outside accountant with a read-only account showed up as somebody to
+ * pay. Michael: "I would rather users be people who have access to the system,
+ * and be separate from employees."
+ *
+ * Migration 0210 retires those seeded rows and states the definition once, as
+ * `employees_on_payroll`. The filter here is written out in full rather than
+ * reading that view, for a measured reason: this function must keep working on
+ * a database where 0210 has not been applied yet, and selecting from a missing
+ * view fails the whole read. The two definitions are pinned to each other by a
+ * test, so they cannot drift.
  */
 export async function listEmployeeSetup(): Promise<{
   rows: EmployeeSetupRow[];
@@ -163,6 +185,10 @@ export async function listEmployeeSetup(): Promise<{
   const { data: emps, error } = await admin
     .from("employees")
     .select("id, full_name, ssn_last_four, soc_code")
+    // Currently employed, and not somebody who has left. Matches
+    // public.employees_on_payroll (migration 0210 §3) exactly.
+    .eq("active", true)
+    .neq("employment_status", "terminated")
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -1003,4 +1029,124 @@ function writeFailed(detail: string, evaluation: OnboardingEvaluation): SaveRefu
     fields: [],
     evaluation,
   };
+}
+
+// ---------------------------------------------------------------------------
+// ADDING A PERSON, FROM THE PAYROLL SCREEN (books-87)
+//
+// Michael: "I want to create the employee in payroll/ W-4 setup, then I will
+// give them access to the back office if they need access to it."
+//
+// Until books-87 this screen refused and sent him to Staffing: "this screen
+// sets up their payroll, it does not create people." That was a defensible
+// separation of concerns and it was the wrong order of work. Payroll setup is
+// where a new hire's paperwork actually gets done, so it is where the person
+// should come into existence.
+//
+// THE ONE THING THIS FUNCTION MUST NEVER DO is set `staff_id`. That column is
+// what links an employee row to a back-office LOGIN, and migration 0037 filling
+// it in automatically is the entire reason this slice exists. A person created
+// here can work here and be paid; whether they can also sign into the admin app
+// is a separate decision, made separately, in Users.
+// ---------------------------------------------------------------------------
+
+export type AddPersonResult =
+  | { ok: true; employeeId: string }
+  | { ok: false; code: "no_name" | "duplicate" | "not_configured" | "write_failed"; message: string };
+
+/**
+ * The name rule, pure so it can be tested without a database.
+ *
+ * Deliberately permissive about SHAPE and strict about EMPTINESS. Requiring a
+ * surname, or two words, or letters only, would refuse real people - mononyms
+ * exist, hyphens and apostrophes and accents are ordinary, and a payroll system
+ * that will not spell somebody's name correctly is a payroll system that gets
+ * their W-2 wrong. The only thing genuinely disqualifying is nothing at all.
+ */
+export function normalisePersonName(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Create a person who works here, with no back-office login attached.
+ *
+ * Returns the new id so the caller can open the W-4 form on them immediately,
+ * which is the whole point: add the person, then do their paperwork, without
+ * leaving the screen.
+ */
+export async function addPersonToPayroll(input: {
+  fullName: string;
+  actorId?: string | null;
+}): Promise<AddPersonResult> {
+  if (!isSupabaseServiceConfigured) {
+    return {
+      ok: false,
+      code: "not_configured",
+      message: "The database is not configured, so nobody was added.",
+    };
+  }
+
+  const fullName = normalisePersonName(input.fullName);
+  if (fullName.length === 0) {
+    return {
+      ok: false,
+      code: "no_name",
+      message: "A name is required. Nobody was added.",
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  // A soft duplicate check, because two people CAN share a name and the system
+  // must not pretend otherwise. This refuses only an exact match among people
+  // currently on payroll, and says how to proceed - it does not silently merge.
+  const { data: existing } = await admin
+    .from("employees")
+    .select("id, full_name")
+    .eq("active", true)
+    .neq("employment_status", "terminated")
+    .ilike("full_name", fullName);
+
+  if (((existing as { id: string }[]) ?? []).length > 0) {
+    return {
+      ok: false,
+      code: "duplicate",
+      message:
+        `${fullName} is already on the payroll list, so nobody was added. If this is a ` +
+        `genuinely different person with the same name, add a middle initial or suffix ` +
+        `so the two can be told apart on a W-2.`,
+    };
+  }
+
+  // staff_id is ABSENT on purpose. See the header above.
+  const { data, error } = await admin
+    .from("employees")
+    .insert({
+      full_name: fullName,
+      active: true,
+      employment_status: "active",
+      job_role: "sales",
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      code: "write_failed",
+      message: `The database refused to add this person: ${error?.message ?? "unknown error"}. Nothing was saved.`,
+    };
+  }
+
+  const employeeId = (data as { id: string }).id;
+
+  await recordAudit({
+    actorId: input.actorId ?? null,
+    actorEmail: null,
+    action: "employee.created.from_payroll_setup",
+    entityType: "employee",
+    entityId: employeeId,
+  });
+
+  return { ok: true, employeeId };
 }

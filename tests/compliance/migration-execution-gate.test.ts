@@ -483,7 +483,29 @@ describe("the migration list is ordered the way the database will see it", () =>
     // grep -cvE '^[0-9]{4}_'` returns 0, so every name is still zero-padded to
     // four digits; `ls [0-9]*.sql | sort -c` exits clean, so the on-disk order
     // and the string sort still agree. Only then was 0208 changed to 0209.
-    expect(listed[listed.length - 1]).toMatch(/^0209_/);
+    //
+    // ─── IT FIRED A THIRTEENTH TIME, ON 0210 (books-87) ────────────────────
+    //
+    // 0210_separate_logins_from_employees.sql exists because migration 0037
+    // contained a one-time seed that copied every active back-office login into
+    // `public.employees`. That is measured, not inferred: 0037 lines 125-132
+    // read `insert into public.employees (full_name, staff_id, job_role) select
+    // ... from public.staff_profiles sp where sp.active = true`. Nothing else in
+    // the app couples the two - `createEmployeeAction` never sets staff_id,
+    // `inviteUser` writes staff_profiles only, and a grep for triggers on either
+    // table returns none. The seed was the whole of it (D-69).
+    //
+    // 0210 records the retired policy in a one-row table so a fresh database
+    // cannot repeat it, quarantines the seeded rows, and states the payroll
+    // roster once as the view `employees_on_payroll`.
+    //
+    // HONOURED THE SAME WAY AS 0198, 0199, 0207, 0208 AND 0209, re-verified by
+    // running the commands before this line was touched rather than trusting the
+    // previous slice's note: `ls [0-9]*.sql | wc -l` returns 210; `ls [0-9]*.sql
+    // | grep -cvE '^[0-9]{4}_'` returns 0, so every name is still zero-padded to
+    // four digits; `ls [0-9]*.sql | sort -c` exits clean, so the on-disk order
+    // and the string sort still agree. Only then was 0209 changed to 0210.
+    expect(listed[listed.length - 1]).toMatch(/^0210_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

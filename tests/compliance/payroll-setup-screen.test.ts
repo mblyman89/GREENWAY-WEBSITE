@@ -39,7 +39,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -486,13 +486,44 @@ describe("3) nothing fails silently: the server refuses on its own authority", (
     // Every action this file exports must be imported by something that is not
     // a test. An exported server action with no caller is a live, authenticated
     // endpoint that no reviewer is watching.
+    //
+    // books-87: this fired, correctly, and its CALLER LIST was the thing that
+    // was wrong. `addPersonAction` is called by
+    // components/admin/payroll/AddPersonToPayrollForm.tsx, a third file the
+    // hard-coded pair FORM_CODE + PAGE_CODE could not see. Widening the search
+    // to the whole of src/ is the honest fix: the claim being made is "nothing
+    // in src/ calls it", so src/ is what must be read. Pinning the search to two
+    // files meant the gate was really asserting "no NEW screen may call these",
+    // which is not the rule and would have pushed the next slice to weaken it.
     const exported = [...ACTIONS_CODE.matchAll(/export async function (\w+)/g)].map(
       (m) => m[1],
     );
     expect(exported.length).toBeGreaterThanOrEqual(2); // rule 39
-    const callers = FORM_CODE + PAGE_CODE;
+
+    const SRC = path.resolve(__dirname, "../../src");
+    const callSites: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry.name) && full !== ACTIONS_PATH) {
+          callSites.push(codeOnly(readFileSync(full, "utf8")));
+        }
+      }
+    };
+    walk(SRC);
+    // If the walk found nothing, the loop below would pass on an empty haystack.
+    expect(callSites.length).toBeGreaterThan(50);
+    const callers = callSites.join("\n");
+
+    // Matched on a WORD BOUNDARY, not as a substring. Verified by mutation:
+    // renaming the call site to `addPersonActionZZZ` orphaned the action and a
+    // `toContain` check still passed, because the old name is a prefix of the
+    // new one. That is the same false negative that showed up in books-86, and
+    // it is the failure mode of every "does the file mention X" assertion.
     for (const name of exported) {
-      expect(callers, `${name} is exported but nothing in src/ calls it`).toContain(name);
+      const called = new RegExp(`\\b${name}\\b`).test(callers);
+      expect(called, `${name} is exported but nothing in src/ calls it`).toBe(true);
     }
   });
 });

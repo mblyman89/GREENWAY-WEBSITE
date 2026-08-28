@@ -526,6 +526,11 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "employee_onboarding_tasks", disposition: "KEEP", because: "Onboarding checklists per employee." },
   { table: "employee_training_log", disposition: "KEEP", because: "Training records — required for LCB compliance." },
   { table: "employee_scorp_health_premiums", disposition: "KEEP", because: "S-corp health premium elections that belong on a W-2." },
+  // books-87. One row, and it is a DECISION rather than data: it records that a
+  // back-office login must never create an employee. Wiping it would restore
+  // the default the owner deliberately turned off, so a reset would quietly
+  // undo a policy choice. KEEP is the only safe answer.
+  { table: "employee_provisioning_policy", disposition: "KEEP", because: "Your standing decision that a back-office login and a job are separate things. Wiping it would let the old behaviour creep back." },
   { table: "sick_leave_policy", disposition: "KEEP", because: "Your sick-leave policy — configuration." },
   { table: "handbook_acknowledgments", disposition: "KEEP", because: "Signed handbook acknowledgments — real signatures." },
   { table: "ach_company_settings", disposition: "KEEP", because: "Your ACH originator details for paying people." },

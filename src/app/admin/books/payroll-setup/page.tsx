@@ -47,6 +47,7 @@
 import Link from "next/link";
 
 import { Badge, Card, CardHeader, Section } from "@/components/admin/ui";
+import { AddPersonToPayrollForm } from "@/components/admin/payroll/AddPersonToPayrollForm";
 import { EmployeePayrollSetupForm } from "@/components/admin/payroll/EmployeePayrollSetupForm";
 import { requireBooksAccess } from "@/lib/accounting/books-access";
 import { listEmployeeSetup } from "@/lib/payroll/payroll-onboarding-store";
@@ -255,6 +256,20 @@ export default async function PayrollSetupPage({
           />
         </Section>
       ) : (
+        <>
+        <Section
+          title="Add someone to payroll"
+          description="Creates a person you employ. It does not create a back-office login — those are granted separately under Users."
+        >
+          {/* books-87. This screen used to refuse to create people and send
+              Michael to Staffing. He asked for the opposite order, and he is
+              right: payroll setup is where a new hire's paperwork gets done, so
+              it is where the person should come into existence. The form writes
+              an employee with NO staff_id, which is the column migration 0037
+              used to fill in automatically and 0210 stops filling in. */}
+          <AddPersonToPayrollForm />
+        </Section>
+
         <Section
           title="Who needs setting up"
           description="A tick means the record exists. It does not mean payroll can run - open the employee to see what is still outstanding."
@@ -262,8 +277,10 @@ export default async function PayrollSetupPage({
           <Card>
             {roster.length === 0 ? (
               <p className="text-sm leading-relaxed text-[var(--admin-text-faint)]">
-                No employees on file yet. Add them under Staffing first; this
-                screen sets up their payroll, it does not create people.
+                Nobody is on payroll yet. Add your first person above, then set up
+                their W-4, I-9 and pay rate. People who only need to sign in to the
+                back office do not belong here — give them a login under Users
+                instead.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -330,6 +347,7 @@ export default async function PayrollSetupPage({
             )}
           </Card>
         </Section>
+        </>
       )}
 
       {/* ---------------------------------------------------------------- */}

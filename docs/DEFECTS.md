@@ -1713,6 +1713,115 @@ could be dropped entirely and every other test stayed green.
 
 ---
 
+## D-69 - a back-office login silently became a person on the payroll
+
+**Found:** books-87, from the owner's own report. Michael, verbatim: "right now
+the system is using the users who have access to the back office app, which is
+not how I would like the system to behave... I would rather users be people who
+have access to the system, and be separate from employees."
+
+**What broke:** the payroll setup screen listed people who do not work here.
+An outside accountant, a bookkeeper, anyone given a read-only back-office
+account appeared on the roster of people needing a W-4, badged red for paperwork
+they were never going to file.
+
+**Where it actually came from - measured, not inferred.** Not the payroll code.
+The payroll screen reads `public.employees` and always has. The contamination
+was poured in ONCE, by `0037_staffing_timeclock.sql:125-132`:
+
+```sql
+insert into public.employees (full_name, staff_id, job_role)
+select coalesce(sp.full_name, sp.email), sp.id, ...
+from public.staff_profiles sp
+where sp.active = true
+  and not exists (select 1 from public.employees e where e.staff_id = sp.id);
+```
+
+Its own comment states the intent: "Seed the workforce roster from existing
+back-office staff (idempotent) so the time clock has people on day one." That
+was a defensible convenience for a TIME CLOCK in 2024. It became wrong the day
+those same rows started answering a different question - "who do we pay?" -
+which is a question nobody was asking when the line was written.
+
+**Everything else in the schema already agreed with Michael**, which is why this
+is a repair and not a redesign. `employees.staff_id` is nullable and 0037 itself
+comments it "NULL for floor-only staff". `createEmployeeAction` never sets it.
+`inviteUser` writes `staff_profiles` only. No trigger syncs the two tables. A
+scan of all eight statements in `src/` that write `employees` found none that
+writes `staff_id`. The one-time seed was the entire coupling.
+
+**How it hid for 173 migrations.** It never failed. Both tables were correct on
+their own terms and the seeded rows were valid employee records in every
+respect except the one that mattered - that no one had hired those people. A
+row that is well-formed and wrong is invisible to every constraint in the
+database, and there was no screen that made the population look strange until
+payroll setup started asking each of them for a W-4.
+
+**Fixed in books-87.** Migration 0210 does three things. It records the retired
+policy in a locked one-row table (`employee_provisioning_policy`), so a factory
+reset or a fresh environment cannot let 0037's seed re-contaminate a new
+database. It quarantines the seeded rows behind a seven-part discriminator - has
+a staff_id, is active, has NO hire date, and has no W-4, no I-9, no pay record,
+no time punches and no shifts - every clause of which is a reason to KEEP a
+person, so the statement fails safe. And it states the roster rule once, as the
+view `employees_on_payroll`.
+
+**Why it deactivates and does not delete.** `employees.id` is referenced by
+audit history and 0037 cascades `shifts` and `time_punches` on delete. A row
+seeded by mistake may still be the actor on a real audit entry. Quarantined rows
+are marked terminated, have their clock PIN cleared, and carry a
+`termination_reason` naming this migration in plain English, so a human can read
+what happened and undo it. Destroying evidence to tidy a roster is a bad trade
+and an irreversible one.
+
+**The discriminator is the risky part, and it is deliberately narrow.** Michael
+himself is an employee WITH a login. A discriminator of merely "has a staff_id"
+would have terminated the owner. Every clause was chosen to make a false
+positive require a person who has a login, is active, has never been given a
+hire date, and has never filed a form or worked a shift - which describes a
+seeded row and nothing else.
+
+**Also fixed:** `listEmployeeSetup` had no `active` filter at all, the least
+filtered view of the roster anywhere in the app - `listEmployees` filters
+`active = true` and `rosterOverview` drops `terminated`. So people who had left
+were being asked for W-4s too. That is now pinned by a test to the same
+definition the SQL view uses.
+
+**What Michael asked for, and got:** "I want to create the employee in payroll/
+W-4 setup, then I will give them access to the back office if they need access
+to it." Payroll setup now creates people. It does not, and deliberately cannot,
+grant a login - there is no checkbox for it, and a test asserts the form has no
+role field and never touches `staff_profiles`.
+
+**Gate:** `tests/compliance/logins-are-not-employees.test.ts`, 35 tests. Several
+are traps rather than checks: they read every migration and every `.ts`/`.tsx`
+file on disk, so they cover files that do not exist yet. One fails if any
+migration after 0037 inserts into `employees` from `staff_profiles`. One resolves
+variable payload objects and fails if any of the (currently eight, asserted)
+statements that write `employees` sets `staff_id`. The next person to solve
+0037's day-one problem will hit them.
+
+**What the mutation probe found, which is the part worth recording.** The first
+draft caught 18 of 26 mutations. Three survivors shared one shape: migration
+0210's quarantine has TWO branches (one for a database with 0195 applied, one
+without), and assertions written as `toContain` against the whole file passed
+when only ONE branch was correct. Breaking half the migration left the string
+present in the other half. Both branches are now extracted and asserted
+individually. A fourth survivor was `if (false)` replacing the blank-name guard:
+the refusal text was still in the file, so a test checking for the message
+stayed green while an empty name reached the database - standing rule 43, an
+unreachable refusal is decoration. A fifth was replacing the rendered
+`<AddPersonToPayrollForm />` with a placeholder, which left the import intact
+and the string still findable. Final: 31/31.
+
+**Also caught by an existing gate, and worth naming:** the first version of 0210
+created `employee_provisioning_policy` with no RLS. `rls-coverage.test.ts` failed
+immediately. Every table in `public` is reachable through PostgREST with the
+anon key, so a table created without RLS is a table published to the internet.
+That gate paid for itself here.
+
+---
+
 ## D-39 - Cash movements from till to vault to bank are not booked
 
 **Found:** books-70.
