@@ -3989,3 +3989,59 @@ posts, and the refusal names all three figures.
 `scripts/compliance/mutate-slice-books-94.py` - 36 of 36 mutations caught,
 including four door-severing probes. Nothing here was verified against
 Michael's live database, because no credentials exist in this environment.
+
+---
+
+## D-75 — books-94 left `10400 Undeposited Funds` a one-way account
+
+**Found:** books-95, while surveying for the next slice.
+
+**Severity:** high. It does not show up as an error, a warning, or an
+out-of-balance journal. Every entry involved balances perfectly.
+
+**What was wrong.** books-94 made every reconciled drawer close DEBIT
+`10400 Undeposited Funds`. Nothing anywhere credited it. A grep for `10400`
+across `src/` returned the close builder, the specimen, the census and the
+drawer poster — four places that put money IN and not one that took money out.
+
+Left alone, the balance sheet would have grown a permanently rising asset
+called "cash in transit". Once Plaid started reporting the real bank balance,
+the same dollar would have been counted twice: once sitting in 10400 because
+nothing ever cleared it, and once in 10200 because the bank genuinely received
+it. Cash would have looked larger than it is, by an amount that grows every
+single trading day. In a cash business this is the one figure a regulator or an
+auditor checks first, and it is also the figure that hides theft: cash counted
+out of a drawer and never banked is indistinguishable from cash banked but
+never matched, if the account only ever goes up.
+
+**Why it happened.** The slice before it was scoped to the close half of D-39
+and did that correctly. The defect is not in the code books-94 wrote; it is in
+the SHAPE of shipping one leg of a two-leg movement. A half-loop is not a
+smaller version of a loop — it is a different thing, and it is wrong in a way
+that the individual entry cannot reveal, because the individual entry balances.
+
+**Fix (books-95).** `deposit-clearing-core.ts` builds the second leg: debit
+`10200 Bank — Operating`, credit `10400`, no income line, refusing thirteen
+ways when the two sides do not plausibly describe the same money. The sign is
+delegated to `plaidToLedgerCashCents`, the single sanctioned crossing between
+the Plaid convention and the ledger convention, because a wrongly-signed match
+still balances and this business has already had backwards signs once, in Sage
+(rule 19). `deposit-clearing-service.ts` reads the REAL posted balance of
+10400 rather than being handed a number to trust, and returns null — never
+zero — when that read fails (rule 46).
+
+**The part that is not code.** The balance is now on the end-of-day page,
+because an account that only a developer can query is not a control. If the
+figure stops falling, the person holding the cash sees it the next morning
+next to the two questions it should provoke.
+
+**Gate:** `tests/compliance/deposit-clearing.test.ts` — 54 assertions,
+including four that RENDER the panel rather than reading its source.
+`scripts/compliance/mutate-slice-books-95.py` — 36 of 36 mutations caught,
+including every sign flip, the account swap, both boundary loosenings, and
+four door-severing probes. Two of those door probes initially SURVIVED because
+the tests were reading source text: `undepositedBalanceMinor` still appears in
+the import line after the call is replaced by a hardcoded zero, and `=== null`
+still appears inside `if (false && pool === null)`. Rendering the component
+closed both. Nothing here was verified against Michael's live database,
+because no credentials exist in this environment.

@@ -179,6 +179,7 @@ import { __runVendorBillCoreTests } from "../../src/lib/accounting/vendor-bill-c
 import { __runLotCostClassificationTests } from "../../src/lib/accounting/lot-cost-classification-core";
 import { __runRegisterCashJournalTests } from "../../src/lib/accounting/register-cash-journal-core";
 import { __runRegisterCashSpecimenTests } from "../../src/lib/accounting/register-cash-specimen-core";
+import { __runDepositClearingTests } from "../../src/lib/accounting/deposit-clearing-core";
 // Slice books-04: payroll and the employee-as-COGS question. Reseller vs
 // producer character, the narrow evidence-gated acquisition-labor door, the
 // hard block on selling labor, and the balanced payroll journal.
@@ -854,6 +855,7 @@ async function main() {
   console.log("register-cash-journal-core self-tests: all passed");
   __runRegisterCashSpecimenTests();
   console.log("register-cash-specimen-core self-tests: all passed");
+  __runDepositClearingTests();
   __runPayrollCogsCoreTests();
   __runBankMatchCoreTests();
   console.log("bank-match-core self-tests: all passed");

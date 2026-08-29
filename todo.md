@@ -3503,3 +3503,43 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
      (b) A DEFECT FOUND BY A MUTATION PROBE GETS A DEFECTS.md NUMBER. It was
          not found by reading the code, so the next reader will not find it by
          reading the code either.
+
+140. A HALF-LOOP IS A DEFECT, NOT A MILESTONE. (books-95, D-75.)
+
+     books-94 shipped the leg that DEBITS `10400 Undeposited Funds` and nothing
+     that credits it. Every entry balanced, no test failed, no screen turned
+     red - and the account would have climbed forever, counting the same cash
+     twice the moment the bank balance was read alongside it.
+
+     Money movements come in pairs: till to bank, vault to till, accrual to
+     payment, purchase to consumption. Shipping one direction of a pair is not
+     "half done", it is a working mechanism that produces a wrong number, and
+     the wrongness grows with use rather than showing up on day one.
+
+     (a) WHEN A SLICE ADDS AN ACCOUNT TO ONE SIDE OF AN ENTRY, GREP FOR THE
+         OTHER SIDE BEFORE CALLING IT DONE. If nothing credits what you just
+         debited, say so in the slice report and name the account.
+
+     (b) IF THE RETURN LEG IS DEFERRED, THE BALANCE MUST BE VISIBLE TO THE
+         OWNER IN THE MEANTIME. A one-way account nobody can see is a silent
+         error; a one-way account on the end-of-day screen is a known one.
+
+     (c) THE CENSUS ROW IS NOT `PRESENT` UNTIL BOTH LEGS EXIST. `PARTIAL` is
+         the honest status for one direction of a pair, whatever the code
+         quality of that direction.
+
+141. A TEST THAT READS SOURCE TEXT IS A LAST RESORT, NOT A DEFAULT. (books-95.)
+
+     Two door-severing probes in books-95 survived against tests that looked
+     right. `expect(src).toContain("undepositedBalanceMinor")` passed after the
+     call was replaced with a hardcoded zero, because the NAME survives in the
+     import line. `expect(src).toContain("=== null")` passed after the branch
+     was disabled, because the text survives inside `if (false && ...)`.
+
+     (a) IF THE THING CAN BE RUN, RUN IT. A server component can be awaited and
+         rendered to static markup; asserting on the HTML costs three lines and
+         cannot be fooled by an import statement.
+
+     (b) IF SOURCE TEXT IS GENUINELY THE ONLY OPTION - proving a call ORDER, or
+         proving something is ABSENT - assert the whole expression, not the
+         identifier, and prove the mutation probe can kill it.

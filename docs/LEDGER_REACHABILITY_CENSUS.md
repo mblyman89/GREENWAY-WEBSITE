@@ -13,14 +13,14 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 37 money events that should reach the books. 24 cannot reach them at all. 17 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 37 money events that should reach the books. 23 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 37 |
 | Proven on all six layers | 3 |
-| Cannot reach the books at all | 24 |
-| Have nothing that even builds the entry | 17 |
+| Cannot reach the books at all | 23 |
+| Have nothing that even builds the entry | 16 |
 | Layers that could not be measured | 5 |
 
 ## The six layers
@@ -44,11 +44,11 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 15 of 37 |
-| `reachable` | 24 of 37 |
+| `reachable` | 23 of 37 |
 | `correct` | 12 of 37 |
 | `accepted` | 21 of 37 |
-| `idempotent` | 21 of 37 |
-| `married` | 14 of 37 |
+| `idempotent` | 20 of 37 |
+| `married` | 13 of 37 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -436,7 +436,7 @@ A child-support or garnishment withholding is forwarded to the agency.
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `till_open_from_vault` | yes | NO | yes | n/a | NO | n/a | D-39 |
 | `till_close_to_safe` | yes | yes | yes | n/a | yes | NO | D-39 |
-| `cash_deposit_to_bank` | part | NO | part | NO | NO | NO | D-39 |
+| `cash_deposit_to_bank` | yes | yes | part | NO | yes | part | D-39 |
 | `till_over_short` | yes | yes | yes | n/a | yes | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
 | `atm_surcharge_income` | yes | yes | yes | part | yes | part | D-40 |
@@ -481,15 +481,15 @@ A shift ends: the drawer is counted and its takings go to the safe.
 Till cash is counted, moved to the vault, and deposited at the bank.
 
 - Accounts: `10200`, `10400`, `10100`
-- Builds the entry: **nothing**
-- Posts the entry: **nothing**
+- Builds the entry: `src/lib/accounting/deposit-clearing-core.ts#buildDepositClearingJournal`
+- Posts the entry: `src/lib/accounting/deposit-clearing-service.ts#clearDepositForBankRow`
 
-- **exists: PARTIAL** -- books-93 built the first leg - the drawer count into 10400 Undeposited Funds. The second leg, 10400 to 10200 when the deposit clears the bank, has no builder.
-- **reachable: MISSING** -- 7 files under src/lib/registers/; 0 submitJournal hits.
-- **correct: PARTIAL** -- 10400 Undeposited Funds is now used by buildTillCloseJournal. 10900 Cash Clearing is still seeded and unused.
+- **exists: PRESENT** -- books-93 built the first leg - the drawer count into 10400 Undeposited Funds. books-95 built the second: buildDepositClearingJournal debits 10200 and credits 10400 when the bank confirms the money arrived.
+- **reachable: PRESENT** -- books-95: clearDepositForBankRow reads the real 10400 balance and calls submitJournal with autoPost. The balance itself is on the end-of-day page via <UndepositedFunds />, so a pool that stops falling is visible to the manager rather than only to a developer with SQL.
+- **correct: PARTIAL** -- The sign is delegated to plaidToLedgerCashCents, the one sanctioned crossing, and 36/36 mutations - including every sign flip and account swap - are caught. 10900 Cash Clearing is still seeded and unused.
 - **accepted: MISSING** -- Never presented.
-- **idempotent: MISSING** -- No ref convention.
-- **married: MISSING** -- The deposit appears in Plaid as a credit; the count exists in the register system. Nothing links them.
+- **idempotent: PRESENT** -- sourceRef deposit-clear:<transactionId>, so a second attempt on the same bank row returns duplicate and writes nothing. The builder also refuses a row the caller already knows is matched.
+- **married: PARTIAL** -- The deposit is matched against the POOL in 10400, within 30 days and never for more than was counted. It is NOT attributed to named register sessions: one bank credit can cover a bag holding several shifts and the feed does not say how it was composed.
 
 **If this stays broken:** In a cash business this is the reconciliation regulators look at first. Without it there is no audit trail from till to bank.
 
@@ -760,7 +760,6 @@ all, so the work is to write it, then wire it.
 - `payroll_cycle.net_pay_disbursed` (D-38)
 - `payroll_cycle.payroll_tax_remitted` (D-38)
 - `payroll_cycle.garnishment_remitted` (D-38)
-- `cash_and_banking.cash_deposit_to_bank` (D-39)
 - `cash_and_banking.atm_vault_load` (D-40)
 - `periodic_and_other.excise_tax_remitted` (D-32)
 - `periodic_and_other.depreciation_booked` (D-43)

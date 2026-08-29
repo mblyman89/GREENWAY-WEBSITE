@@ -985,8 +985,20 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // clicking Reconcile actually writes to the ledger, so the same bound
     // moves without complaint. The tripwire did not get weaker - the code got
     // better.
+    // books-95 lowers it a fifth time, 0.63 -> 0.62, and the arithmetic is one
+    // row again. The deposit that clears 10400 (D-39's open half) moved
+    // cash_and_banking.cash_deposit_to_bank from unreachable to reachable, so
+    // the ratio MEASURED 23/37 = 0.6216 and `> 0.63` began failing on real
+    // progress.
+    // STATED per rule 89: unreachable 24 -> 23 of 37.
+    //
+    // WORTH NOTING: 0.6216 is the EXACT number books-93 produced and this line
+    // rejected. The difference is not the arithmetic, it is what earned it.
+    // books-93 had a builder rendering an entry on a screen; books-95 has a
+    // poster that writes to gl_journals with autoPost and 36/36 mutations
+    // caught, including four that sever the door. Same ratio, different fact.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.63);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.62);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {

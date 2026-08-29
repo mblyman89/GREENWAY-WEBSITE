@@ -1434,33 +1434,46 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     sourceKind: "bank",
     entityCode: "greenway",
     accountCodes: ["10200", "10400", "10100"],
-    builder: null,
-    poster: null,
+    builder: "src/lib/accounting/deposit-clearing-core.ts#buildDepositClearingJournal",
+    poster: "src/lib/accounting/deposit-clearing-service.ts#clearDepositForBankRow",
     layers: {
       exists: {
-        status: "PARTIAL",
+        status: "PRESENT",
         evidence:
           "books-93 built the first leg - the drawer count into 10400 Undeposited " +
-          "Funds. The second leg, 10400 to 10200 when the deposit clears the bank, " +
-          "has no builder.",
+          "Funds. books-95 built the second: buildDepositClearingJournal debits " +
+          "10200 and credits 10400 when the bank confirms the money arrived.",
       },
       reachable: {
-        status: "MISSING",
-        evidence: "7 files under src/lib/registers/; 0 submitJournal hits.",
+        status: "PRESENT",
+        evidence:
+          "books-95: clearDepositForBankRow reads the real 10400 balance and calls " +
+          "submitJournal with autoPost. The balance itself is on the end-of-day " +
+          "page via <UndepositedFunds />, so a pool that stops falling is visible " +
+          "to the manager rather than only to a developer with SQL.",
       },
       correct: {
         status: "PARTIAL",
         evidence:
-          "10400 Undeposited Funds is now used by buildTillCloseJournal. 10900 Cash " +
-          "Clearing is still seeded and unused.",
+          "The sign is delegated to plaidToLedgerCashCents, the one sanctioned " +
+          "crossing, and 36/36 mutations - including every sign flip and account " +
+          "swap - are caught. 10900 Cash Clearing is still seeded and unused.",
       },
       accepted: { status: "MISSING", evidence: "Never presented." },
-      idempotent: { status: "MISSING", evidence: "No ref convention." },
-      married: {
-        status: "MISSING",
+      idempotent: {
+        status: "PRESENT",
         evidence:
-          "The deposit appears in Plaid as a credit; the count exists in the " +
-          "register system. Nothing links them.",
+          "sourceRef deposit-clear:<transactionId>, so a second attempt on the " +
+          "same bank row returns duplicate and writes nothing. The builder also " +
+          "refuses a row the caller already knows is matched.",
+      },
+      married: {
+        status: "PARTIAL",
+        evidence:
+          "The deposit is matched against the POOL in 10400, within 30 days and " +
+          "never for more than was counted. It is NOT attributed to named register " +
+          "sessions: one bank credit can cover a bag holding several shifts and " +
+          "the feed does not say how it was composed.",
       },
     },
     defectId: "D-39",

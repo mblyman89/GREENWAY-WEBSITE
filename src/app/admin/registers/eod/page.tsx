@@ -6,6 +6,7 @@ import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { pacificToday } from "@/lib/reports/timezone";
 import { eodData } from "@/lib/registers/eod-store";
 import { RegisterCashSpecimen } from "./RegisterCashSpecimen";
+import { UndepositedFunds } from "./UndepositedFunds";
 
 export const dynamic = "force-dynamic";
 
@@ -253,6 +254,7 @@ export default async function EodReportPage({
           Greenway Marijuana · WA license 413541 · file with the day&apos;s physical records
         </p>
 
+        <UndepositedFunds />
         <RegisterCashSpecimen />
       </div>
     </div>
