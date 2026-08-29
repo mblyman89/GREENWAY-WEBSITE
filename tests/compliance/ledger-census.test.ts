@@ -1387,8 +1387,14 @@ describe("evidence cannot be softened without a test failing", () => {
     // against a credit to 10100 would assert the vault was drawn down when it
     // may not have been. That is a guess about real money, so the row is left
     // honestly unwired rather than wired on an assumption.
-    // STATED per rule 89: backlog drivers 9 -> 7 of 37.
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
+    // books-98 adds TWO new drivers, deliberately (rule 50, rule 133f):
+    // seal_deposit_bag and employee_supply_advance. Both builders exist, are
+    // tested, and are proved by 20/20 mutations - and neither has a screen
+    // that calls it yet. They are recorded as unreachable rather than quietly
+    // omitted, because a finished feature nobody can find is exactly the
+    // shape of D-39, and the census is where that debt is supposed to show.
+    // STATED per rule 89: backlog drivers 7 -> 9 of 39.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(9);
 
     for (const r of drivers) {
       expect(

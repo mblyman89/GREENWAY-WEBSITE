@@ -4134,3 +4134,56 @@ asserted directly by a property test over 2,000 generated pools.
 recorded in `deposit-clearing-core.ts`: refusing a deposit that really happened
 does not un-happen it, it makes the money unrecordable, and a control people
 route around is worse than a loud note they read.
+
+## D-77 — the till close said "to safe" and booked a deposit
+
+**Found:** books-98, while building the store-safe layer Michael asked for.
+Not found by any test. Every test agreed with the code, because the tests were
+written from the same wrong assumption (rule 142 in miniature: the tests
+restated the bug).
+
+**Severity:** medium. Nothing was out of balance and no total was wrong, which
+is exactly why it survived four slices. It made the books say a thing had
+happened hours before it happened.
+
+**What is wrong.** `buildTillCloseJournal` emitted this line:
+
+    line(n++, UNDEPOSITED_ACCOUNT, removedMinor, `Cash from ${registerName} to safe`)
+
+The description says the money went to the SAFE. The account says it went to
+`10400 Undeposited Funds` — money committed to a deposit. Those are two
+different places and two different times. At Greenway three tills close at
+three different times, by three different people, and the cash sits in the
+store safe until somebody counts it all into one numbered bag at the end of the
+night. Between those two moments the money is in the safe and is not part of
+any deposit.
+
+The consequence is not a wrong number, it is a wrong CLAIM: `10400` asserted
+that a deposit existed from the moment a single drawer was counted, before
+anyone had counted a bag, and `10100 Vault` — which already existed, and which
+till OPEN already drew its float from — never saw the money come back. Cash
+flowed out of the vault every morning and never returned to it, so the safe's
+balance drifted down forever while `10400` carried cash that no bag contained.
+
+**Why it matters beyond tidiness.** `10400` is the account the deposit matcher
+reads. If it contains cash that is still loose in the safe, the pool the
+matcher works from is larger than the cash actually committed to any bag, and
+FIFO attributes a bank credit to money that was never in that deposit.
+
+**The fix.** books-98 restored the third layer, mirroring Oracle Retail Xstore,
+which runs cash as till → store safe → bank deposit and prepares the bank
+deposit FROM THE SAFE under "Store Safe Maintenance", not from any one till:
+
+  * a till close now debits `10100 Vault`, and never touches `10400`;
+  * a NEW entry, `buildSealBagJournal`, debits `10400` and credits `10100`
+    when safe cash is counted into a numbered bag and sealed.
+
+`10400` now means exactly one thing: money in a sealed bag, committed to a
+deposit, waiting on the bank.
+
+**How it is held shut.** `mutate-slice-books-98.py` mutation 1 puts the old
+account back and the suite fails. The module self-test now asserts positively
+that a till close does NOT touch `10400` — an absence assertion, because the
+original bug was an account that should not have been there.
+
+**Related:** D-39 (the close entry itself), D-76 (the pool that never aged).

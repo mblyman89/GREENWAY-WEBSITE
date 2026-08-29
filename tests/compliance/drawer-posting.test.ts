@@ -49,7 +49,7 @@ import {
 } from "@/lib/registers/drawer-posting-service";
 import {
   TILLS_ACCOUNT,
-  UNDEPOSITED_ACCOUNT,
+  VAULT_ACCOUNT,
   OVER_SHORT_ACCOUNT,
 } from "@/lib/accounting/register-cash-journal-core";
 
@@ -124,10 +124,10 @@ describe("books-94 · a reconciled drawer posts", () => {
     expect(submit).toHaveBeenCalledTimes(1);
   });
 
-  it("sends the takings to Undeposited Funds and relieves the till", async () => {
+  it("sends the takings to the SAFE and relieves the till", async () => {
     session.mockResolvedValue(reconciled());
     await postDrawerCloseForSession("s-1");
-    expect(sentAmount(UNDEPOSITED_ACCOUNT)).toBe(SALES);
+    expect(sentAmount(VAULT_ACCOUNT)).toBe(SALES);
     expect(sentAmount(TILLS_ACCOUNT)).toBe(-SALES);
   });
 
@@ -179,7 +179,7 @@ describe("books-94 · a reconciled drawer posts", () => {
       }),
     );
     await postDrawerCloseForSession("s-1");
-    expect(sentAmount(UNDEPOSITED_ACCOUNT)).toBe(SALES - 20_000);
+    expect(sentAmount(VAULT_ACCOUNT)).toBe(SALES - 20_000);
     expect(sentAmount(OVER_SHORT_ACCOUNT)).toBeUndefined();
   });
 });
@@ -192,7 +192,7 @@ describe("books-94 · tips are never swept", () => {
   it("a $42.50 tip jar changes nothing about what goes to the safe", async () => {
     session.mockResolvedValue(reconciled());
     await postDrawerCloseForSession("s-1");
-    const withoutTips = sentAmount(UNDEPOSITED_ACCOUNT);
+    const withoutTips = sentAmount(VAULT_ACCOUNT);
 
     session.mockResolvedValue(reconciled(0, { tips_minor: 4_250 }));
     await postDrawerCloseForSession("s-1");
@@ -200,8 +200,8 @@ describe("books-94 · tips are never swept", () => {
     // Migration 0134: tips are the employee's money and are counted separately
     // from the drawer. Sweeping them would balance perfectly and quietly move
     // somebody's wages into the company's bank account.
-    expect(sentAmount(UNDEPOSITED_ACCOUNT)).toBe(withoutTips);
-    expect(sentAmount(UNDEPOSITED_ACCOUNT)).toBe(SALES);
+    expect(sentAmount(VAULT_ACCOUNT)).toBe(withoutTips);
+    expect(sentAmount(VAULT_ACCOUNT)).toBe(SALES);
   });
 
   it("a recorded tip never becomes an over/short either", async () => {
@@ -308,7 +308,7 @@ describe("books-94 · what it refuses", () => {
       }),
     );
     mustPost(await postDrawerCloseForSession("s-1"));
-    expect(sentAmount(UNDEPOSITED_ACCOUNT)).toBe(SALES);
+    expect(sentAmount(VAULT_ACCOUNT)).toBe(SALES);
   });
 
   it("a drawer counted below its own float is refused by the builder", async () => {

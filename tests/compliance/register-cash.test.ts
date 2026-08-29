@@ -25,6 +25,10 @@ import {
   buildTillOpenJournal,
   buildTillCloseJournal,
   buildBillSwapJournal,
+  buildSealBagJournal,
+  buildSupplyAdvanceJournal,
+  buildSupplySettleJournal,
+  EMPLOYEE_ADVANCE_ACCOUNT,
   SALES_POST_PER_SALE,
   SALES_POSTING_EXPLANATION,
   __runRegisterCashJournalTests,
@@ -285,9 +289,9 @@ describe("books-93 · Q2 closing a till", () => {
       ...over,
     });
 
-  it("a drawer that counts right sends exactly the takings to Undeposited Funds", () => {
+  it("a drawer that counts right sends exactly the takings to the SAFE", () => {
     const j = mustPost(close());
-    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBe(50_000);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(50_000);
   });
 
   it("and relieves the till by exactly the same amount, so the entry balances", () => {
@@ -336,13 +340,13 @@ describe("books-93 · Q2 closing a till", () => {
   it("a short drawer still moves only the cash that is physically there", () => {
     // The shortage is NOT sent to the safe: only $495 of the $500 exists.
     const j = mustPost(close({ countedMinor: FLOAT_MINOR + 50_000 - 500 }));
-    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBe(49_500);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(49_500);
     expect(amountOn(j, TILLS_ACCOUNT)).toBe(-50_000);
   });
 
   it("when the whole drawer goes to the safe, the float travels with it", () => {
     const j = mustPost(close({ floatStaysInDrawer: false }));
-    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBe(FLOAT_MINOR + 50_000);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(FLOAT_MINOR + 50_000);
     expect(sum(j)).toBe(0);
   });
 
@@ -351,7 +355,7 @@ describe("books-93 · Q2 closing a till", () => {
       close({ dropsMinor: 20_000, countedMinor: FLOAT_MINOR + 50_000 - 20_000 }),
     );
     expect(amountOn(j, OVER_SHORT_ACCOUNT)).toBeUndefined();
-    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBe(30_000);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(30_000);
   });
 
   it("the close does NOT re-book the cash sales — that would count them twice", () => {
@@ -359,7 +363,7 @@ describe("books-93 · Q2 closing a till", () => {
     // 10110 AND credited a revenue account, the day's income would double.
     const j = mustPost(close());
     const accounts = j.lines.map((l) => l.accountCode);
-    expect(accounts).toEqual(expect.arrayContaining([UNDEPOSITED_ACCOUNT, TILLS_ACCOUNT]));
+    expect(accounts).toEqual(expect.arrayContaining([VAULT_ACCOUNT, TILLS_ACCOUNT]));
     expect(accounts).toHaveLength(2);
   });
 
@@ -589,7 +593,7 @@ describe("books-93 · the worked example", () => {
   it("shows a close that is short, so 50920 is visible rather than theoretical", () => {
     const j = mustPost(s.close);
     expect(amountOn(j, OVER_SHORT_ACCOUNT)).toBe(SPECIMEN_SHORTAGE_MINOR);
-    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBe(
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(
       SPECIMEN_CASH_SALES_MINOR - SPECIMEN_SHORTAGE_MINOR,
     );
     expect(sum(j)).toBe(0);
@@ -603,5 +607,169 @@ describe("books-93 · the worked example", () => {
     expect(s.tillFloatMinor).toBe(denomTotalMinor(SPECIMEN_TILL_COUNTS));
     expect(s.masterFloatMinor).toBe(denomTotalMinor(SPECIMEN_MASTER_COUNTS));
     expect(s.totalFloatMinor).toBe(s.tillCount * s.tillFloatMinor + s.masterFloatMinor);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * books-98 — THE SAFE LAYER, THE BAG, AND THE SUPPLY RUN
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-98 · closing a till lands in the SAFE, not in a deposit", () => {
+  // D-77. The close line always SAID "to safe" while debiting 10400
+  // Undeposited Funds. The words and the account disagreed, and the account
+  // was the wrong one: cash pulled from a drawer sits in the store safe for
+  // hours, mixed with two other drawers, before anyone seals a bag. Calling
+  // that "undeposited funds" claims a deposit exists that nobody has counted.
+  const close = () =>
+    buildTillCloseJournal({
+      journalDate: "2026-11-02",
+      registerName: "Register 1",
+      openingFloatMinor: 16_750,
+      cashSalesMinor: 50_000,
+      dropsMinor: 0,
+      countedMinor: 16_750 + 50_000,
+      floatStaysInDrawer: true,
+    });
+
+  it("debits the vault, and does NOT touch Undeposited Funds", () => {
+    const j = mustPost(close());
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(50_000);
+    // The whole point of the fix: 10400 must not appear until a bag is sealed.
+    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBeUndefined();
+  });
+
+  it("keeps Michael's $167.50 float in the drawer, per his own workflow", () => {
+    // "167.50 is left in the register and the rest goes into the safe."
+    const j = mustPost(close());
+    expect(amountOn(j, TILLS_ACCOUNT)).toBe(-50_000);
+    expect(sum(j)).toBe(0);
+  });
+});
+
+describe("books-98 · sealing a numbered deposit bag", () => {
+  const seal = (over: Partial<Parameters<typeof buildSealBagJournal>[0]> = {}) =>
+    buildSealBagJournal({
+      journalDate: "2026-11-02",
+      bagNo: "GW-00412",
+      amountMinor: 150_000,
+      ...over,
+    });
+
+  it("moves money out of the safe and into Undeposited Funds", () => {
+    const j = mustPost(seal());
+    expect(amountOn(j, UNDEPOSITED_ACCOUNT)).toBe(150_000);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(-150_000);
+    expect(sum(j)).toBe(0);
+  });
+
+  it("writes the bag number onto the lines AND the memo, because that is what is matched later", () => {
+    const j = mustPost(seal());
+    expect(j.memo).toContain("GW-00412");
+    for (const l of j.lines) expect(l.description).toContain("GW-00412");
+  });
+
+  it("refuses a bag with no id rather than posting an untraceable deposit", () => {
+    // A bag with no number cannot be matched to the bank credit that arrives
+    // four days later. Posting it anyway would create exactly the guesswork
+    // the bag id exists to remove.
+    for (const bagNo of [null, undefined, "", "   "]) {
+      const why = mustNotPost(seal({ bagNo }), "refused");
+      expect(why).toMatch(/no id/i);
+      expect(why).toMatch(/nothing was recorded/i);
+    }
+  });
+
+  it("trims a bag number rather than storing two different ids for one bag", () => {
+    const j = mustPost(seal({ bagNo: "  GW-00412  " }));
+    expect(j.memo).toContain("Seal deposit bag GW-00412");
+    expect(j.memo).not.toContain("  GW-00412");
+  });
+
+  it("refuses an empty or fractional bag, and says which", () => {
+    expect(mustNotPost(seal({ amountMinor: 0 }), "refused")).toMatch(/cannot be filled/i);
+    expect(mustNotPost(seal({ amountMinor: -1 }), "refused")).toMatch(/cannot be filled/i);
+    expect(mustNotPost(seal({ amountMinor: 10.5 }), "refused")).toMatch(/whole number/i);
+  });
+});
+
+describe("books-98 · the supply run (Michael's question)", () => {
+  // "Sometimes my employees need to run to the store and buy some supplies, so
+  // they take cash from the master, and replace it with a receipt."
+  const advance = (over: Partial<Parameters<typeof buildSupplyAdvanceJournal>[0]> = {}) =>
+    buildSupplyAdvanceJournal({
+      journalDate: "2026-11-02",
+      employeeName: "Dana",
+      amountMinor: 5_000,
+      ...over,
+    });
+
+  it("books cash out as a RECEIVABLE, not an expense — nothing has been bought yet", () => {
+    const j = mustPost(advance());
+    expect(amountOn(j, EMPLOYEE_ADVANCE_ACCOUNT)).toBe(5_000);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(-5_000);
+    expect(sum(j)).toBe(0);
+  });
+
+  it("puts the employee's name on the entry, since the balance is a claim on a person", () => {
+    const j = mustPost(advance());
+    expect(j.memo).toContain("Dana");
+    expect(mustNotPost(advance({ employeeName: "   " }), "refused")).toMatch(/no name/i);
+  });
+
+  it("says out loud that this is not yet an expense", () => {
+    const r = advance();
+    if (r.kind !== "journal") throw new Error("expected a journal");
+    expect(r.explanation).toMatch(/NOT an expense/);
+  });
+
+  it("settles the advance: expense at the receipt amount, change back to the safe", () => {
+    const j = mustPost(
+      buildSupplySettleJournal({
+        journalDate: "2026-11-02",
+        employeeName: "Dana",
+        advancedMinor: 5_000,
+        receiptMinor: 4_387,
+        expenseAccount: "60400",
+      }),
+    );
+    expect(amountOn(j, "60400")).toBe(4_387);
+    expect(amountOn(j, VAULT_ACCOUNT)).toBe(613);
+    // 12100 goes back to zero for this trip. That is the test that the
+    // receivable is actually cleared rather than left dangling forever.
+    expect(amountOn(j, EMPLOYEE_ADVANCE_ACCOUNT)).toBe(-5_000);
+    expect(sum(j)).toBe(0);
+  });
+
+  it("handles the exact-change case without inventing a zero line", () => {
+    const j = mustPost(
+      buildSupplySettleJournal({
+        journalDate: "2026-11-02",
+        employeeName: "Dana",
+        advancedMinor: 5_000,
+        receiptMinor: 5_000,
+        expenseAccount: "60400",
+      }),
+    );
+    expect(amountOn(j, VAULT_ACCOUNT)).toBeUndefined();
+    expect(amountOn(j, EMPLOYEE_ADVANCE_ACCOUNT)).toBe(-5_000);
+    expect(sum(j)).toBe(0);
+  });
+
+  it("refuses when the receipt exceeds the advance — that is a reimbursement OWED to the employee", () => {
+    // Silently flipping the sign here would hide the fact that the business
+    // now owes the employee money, and would book a negative "change" line.
+    const why = mustNotPost(
+      buildSupplySettleJournal({
+        journalDate: "2026-11-02",
+        employeeName: "Dana",
+        advancedMinor: 5_000,
+        receiptMinor: 6_200,
+        expenseAccount: "60400",
+      }),
+      "refused",
+    );
+    expect(why).toMatch(/own pocket/i);
+    expect(why).toMatch(/reimbursement/i);
+    expect(why).toMatch(/nothing was recorded/i);
   });
 });

@@ -59,6 +59,9 @@
  */
 import type { JournalDraft, JournalLineDraft } from "./ledger-core";
 import { denomTotalMinor, type DenomCounts } from "@/lib/registers/cash";
+// The bag id and amount rules live in ONE place (rule 25). This module books
+// the journal; safe-bag-core decides what a valid bag is.
+import { normaliseBagNo, validateBagAmount } from "./safe-bag-core";
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * 1) ACCOUNTS
@@ -289,8 +292,14 @@ export function buildTillCloseJournal(input: CloseTillInput): RegisterCashResult
   let n = 1;
 
   if (removedMinor > 0) {
+    // THE SAFE, NOT THE DEPOSIT (D-77). Until books-98 this line debited
+    // 10400 Undeposited Funds while its own description said "to safe" - the
+    // text and the account disagreed, and the account was the wrong one. Cash
+    // pulled from a drawer at close is in the STORE SAFE; it is not on its way
+    // to the bank until it has been counted into a sealed bag. 10400 now means
+    // exactly one thing: money in a sealed bag, committed to a deposit.
     lines.push(
-      line(n++, UNDEPOSITED_ACCOUNT, removedMinor, `Cash from ${input.registerName} to safe`),
+      line(n++, VAULT_ACCOUNT, removedMinor, `Cash from ${input.registerName} to safe`),
     );
   }
 
@@ -346,6 +355,291 @@ export function buildTillCloseJournal(input: CloseTillInput): RegisterCashResult
       sourceKind: "bank",
       sourceRef: input.sourceRef ?? null,
       memo: `Close ${input.registerName} — ${overShortText}`,
+      lines,
+    },
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 5b) SEALING THE DEPOSIT BAG — the safe layer's second leg (books-98)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Michael: "The end of the day, the safe money goes into the deposit bag with
+ * an id."
+ *
+ * This is the entry that was missing entirely before books-98. Closing a till
+ * now leaves cash in 10100 Vault (the safe). It does not become "undeposited
+ * funds" until somebody counts it into a numbered bag and seals it. THAT is
+ * what this books:
+ *
+ *     DEBIT  10400 Undeposited Funds   (money committed to a deposit)
+ *     CREDIT 10100 Vault               (money that left the safe)
+ *
+ * WHY THE TWO LEGS ARE SEPARATE ENTRIES. Three tills close at three different
+ * times, by three different people. One bag is sealed once, at the end of the
+ * day, by one person. Collapsing both legs into the close entry would force
+ * the books to claim a deposit was committed at 4pm when the bag was not
+ * sealed until 9pm, and would make it impossible to say which drawers a bag
+ * contains. The safe is the join point — exactly as Oracle Xstore does it,
+ * where "Deposits from the reconciled till are made to the store safe" and the
+ * bank deposit is prepared FROM THE SAFE, not from any one till.
+ *
+ * ── DELIBERATE LIMIT (rule 133f) ─────────────────────────────────────────────
+ * This does NOT verify the bag total against the day's till closes. A bag can
+ * legitimately hold less than the safe holds — Michael keeps a float in the
+ * safe, and a bag sealed on Tuesday may carry Monday's cash too. Bag-to-day
+ * attribution is FIFO's job (deposit-fifo-core), keyed on the bag id. What
+ * this function refuses is only what it can actually see: a bag with no id,
+ * and an amount that is not real money.
+ */
+
+export type SealBagInput = {
+  readonly journalDate: string;
+  /** The bag's printed id. Required: a bag with no id cannot be traced. */
+  readonly bagNo: string | null | undefined;
+  /** What was counted into the bag, in cents. */
+  readonly amountMinor: number;
+  readonly sourceRef?: string | null;
+};
+
+export function buildSealBagJournal(input: SealBagInput): RegisterCashResult {
+  const bagNo = normaliseBagNo(input.bagNo);
+  if (bagNo === null) {
+    return {
+      kind: "refused",
+      code: "BAG_NO_ID",
+      explanation:
+        "This bag has no id. The id is the only thing that ties a sealed bag " +
+        "to the deposit the bank confirms days later, so a bag without one " +
+        "cannot be matched and nothing was recorded. Write the bag number " +
+        "down, then seal it again.",
+    };
+  }
+
+  const bad = validateBagAmount(input.amountMinor);
+  if (bad !== null) {
+    return { kind: "refused", code: bad.code, explanation: bad.message };
+  }
+
+  return {
+    kind: "journal",
+    explanation:
+      `${fmt(input.amountMinor)} was counted out of the safe and sealed into ` +
+      `bag ${bagNo}. The money has not reached the bank yet — this entry only ` +
+      `says it is committed to a deposit and is no longer available to spend ` +
+      `from the safe.`,
+    journal: {
+      entityCode: "greenway",
+      journalDate: input.journalDate,
+      sourceKind: "bank",
+      sourceRef: input.sourceRef ?? null,
+      memo: `Seal deposit bag ${bagNo}`,
+      lines: [
+        line(1, UNDEPOSITED_ACCOUNT, input.amountMinor, `Sealed into bag ${bagNo}`),
+        line(2, VAULT_ACCOUNT, -input.amountMinor, `Cash out of safe into bag ${bagNo}`),
+      ],
+    },
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 5c) THE SUPPLY RUN — cash out of the master till against a receipt
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Michael: "Sometimes my employees need to run to the store and buy some
+ * supplies, so they take cash from the master, and replace it with a receipt.
+ * How do we account for this and replace the receipt with cash again?"
+ *
+ * There are TWO events here, not one, and the whole answer turns on that.
+ *
+ * EVENT 1 — cash leaves, nothing has been bought yet. The employee is holding
+ * the company's money. That is not an expense: nobody knows yet what was
+ * bought, or whether anything was. It is a receivable from a named person.
+ *
+ *     DEBIT  12100 Employee Advances Receivable
+ *     CREDIT 10100 Vault
+ *
+ * EVENT 2 — the employee comes back with a receipt and the change. NOW the
+ * expense is known, because the receipt says what it was.
+ *
+ *     DEBIT  <the expense account the receipt maps to>
+ *     DEBIT  10100 Vault                         (the change handed back)
+ *     CREDIT 12100 Employee Advances Receivable  (the advance is settled)
+ *
+ * WHY NOT JUST EXPENSE IT AT STEP 1. Because between step 1 and step 2 the
+ * books would be wrong in a way nothing could detect: an expense recorded for
+ * a purchase that had not happened, against an account nobody chose, for an
+ * amount that is about to change when the employee brings back $6.13 in
+ * change. If the employee never comes back with a receipt, 12100 is the
+ * account that still says so — out loud, with a name on it. An expense booked
+ * at step 1 says nothing and is never followed up.
+ *
+ * THE RECEIPT IS NOT MONEY. A receipt sitting in the till is evidence, not
+ * cash. That is why the drawer still counts SHORT until step 2 is booked, and
+ * why 12100 exists: it is the ledger's way of saying "this money is out with a
+ * named person", which is precisely the question an auditor asks.
+ *
+ * ── DELIBERATE LIMIT (rule 133f) ─────────────────────────────────────────────
+ * This builder does the CASH legs only. It does not choose the expense account
+ * at step 2 — receipt-category-core already classifies a receipt, and picking
+ * the account in two places would let the two drift (rule 25). The caller
+ * passes the account it decided on.
+ */
+
+/** Employee Advances Receivable. Cash that is out with a named person. */
+export const EMPLOYEE_ADVANCE_ACCOUNT = "12100";
+
+export type SupplyAdvanceInput = {
+  readonly journalDate: string;
+  /** Who took the cash. Named, because the balance is a claim on a person. */
+  readonly employeeName: string;
+  readonly amountMinor: number;
+  readonly sourceRef?: string | null;
+};
+
+/** EVENT 1: cash leaves the master till with an employee. */
+export function buildSupplyAdvanceJournal(
+  input: SupplyAdvanceInput,
+): RegisterCashResult {
+  if (!Number.isInteger(input.amountMinor) || input.amountMinor <= 0) {
+    return {
+      kind: "refused",
+      code: "ADVANCE_BAD_AMOUNT",
+      explanation:
+        "The cash taken must be a whole number of cents and more than zero. " +
+        "Nothing was recorded.",
+    };
+  }
+
+  const who = input.employeeName.trim();
+  if (who === "") {
+    return {
+      kind: "refused",
+      code: "ADVANCE_NO_EMPLOYEE",
+      explanation:
+        "This advance has no name on it. The whole point of the entry is to " +
+        "record WHO is holding the money, so an unnamed advance cannot be " +
+        "recorded. Enter the employee, then take the cash.",
+    };
+  }
+
+  return {
+    kind: "journal",
+    explanation:
+      `${fmt(input.amountMinor)} left the master till with ${who}. This is NOT ` +
+      `an expense yet — it is money owed back to the business until a receipt ` +
+      `and the change come back. The drawer will count short by this amount ` +
+      `until then, and that is correct.`,
+    journal: {
+      entityCode: "greenway",
+      journalDate: input.journalDate,
+      sourceKind: "bank",
+      sourceRef: input.sourceRef ?? null,
+      memo: `Cash advance to ${who} — supply run`,
+      lines: [
+        line(1, EMPLOYEE_ADVANCE_ACCOUNT, input.amountMinor, `Advance to ${who}`),
+        line(2, VAULT_ACCOUNT, -input.amountMinor, "Cash out of safe"),
+      ],
+    },
+  };
+}
+
+export type SupplySettleInput = {
+  readonly journalDate: string;
+  readonly employeeName: string;
+  /** What was advanced at event 1. */
+  readonly advancedMinor: number;
+  /** What the receipt totals. */
+  readonly receiptMinor: number;
+  /** The expense account the receipt maps to. Chosen by the caller. */
+  readonly expenseAccount: string;
+  readonly sourceRef?: string | null;
+};
+
+/** EVENT 2: the receipt and the change come back; the advance is settled. */
+export function buildSupplySettleJournal(
+  input: SupplySettleInput,
+): RegisterCashResult {
+  for (const [label, v] of [
+    ["advance", input.advancedMinor],
+    ["receipt total", input.receiptMinor],
+  ] as const) {
+    if (!Number.isInteger(v) || v < 0) {
+      return {
+        kind: "refused",
+        code: "SETTLE_BAD_AMOUNT",
+        explanation:
+          `The ${label} must be a whole number of cents and cannot be ` +
+          "negative. Nothing was recorded.",
+      };
+    }
+  }
+
+  const changeMinor = input.advancedMinor - input.receiptMinor;
+
+  // The receipt is bigger than the advance: the employee spent their own
+  // money. That is a real thing that happens, but it is a REIMBURSEMENT, not a
+  // settlement, and it is owed OUT rather than back IN. Refusing here is
+  // deliberate: silently flipping the sign would book a negative change line
+  // and hide the fact that the business now owes the employee money.
+  if (changeMinor < 0) {
+    return {
+      kind: "refused",
+      code: "SETTLE_RECEIPT_EXCEEDS_ADVANCE",
+      explanation:
+        `The receipt is ${fmt(input.receiptMinor)} but only ` +
+        `${fmt(input.advancedMinor)} was taken from the till, so ` +
+        `${fmt(Math.abs(changeMinor))} came out of ` +
+        `${input.employeeName.trim()}'s own pocket. That is a reimbursement ` +
+        `owed TO the employee, not change owed back to the till, and it is ` +
+        `recorded as a bill to be paid rather than here. Nothing was recorded.`,
+    };
+  }
+
+  const lines: JournalLineDraft[] = [];
+  let n = 1;
+
+  if (input.receiptMinor > 0) {
+    lines.push(
+      line(n++, input.expenseAccount, input.receiptMinor, "Supplies purchased"),
+    );
+  }
+  if (changeMinor > 0) {
+    lines.push(line(n++, VAULT_ACCOUNT, changeMinor, "Change returned to safe"));
+  }
+  if (input.advancedMinor > 0) {
+    lines.push(
+      line(
+        n++,
+        EMPLOYEE_ADVANCE_ACCOUNT,
+        -input.advancedMinor,
+        `Advance to ${input.employeeName.trim()} settled`,
+      ),
+    );
+  }
+
+  if (lines.length === 0) {
+    return {
+      kind: "no_entry",
+      code: "SETTLE_NOTHING_TO_SETTLE",
+      explanation:
+        "There was no advance and no receipt, so there is nothing to settle.",
+    };
+  }
+
+  return {
+    kind: "journal",
+    explanation:
+      `${input.employeeName.trim()} spent ${fmt(input.receiptMinor)} and ` +
+      `returned ${fmt(changeMinor)} in change. The advance is now settled and ` +
+      `12100 is back to zero for this trip — the expense is on the books at ` +
+      `the amount the receipt actually says.`,
+    journal: {
+      entityCode: "greenway",
+      journalDate: input.journalDate,
+      sourceKind: "bank",
+      sourceRef: input.sourceRef ?? null,
+      memo: `Settle supply run — ${input.employeeName.trim()}`,
       lines,
     },
   };
@@ -510,8 +804,14 @@ export function __runRegisterCashJournalTests(): void {
   ok(clean.kind === "journal", "a clean close posts");
   if (clean.kind === "journal") {
     ok(sum(clean.journal) === 0, "the close entry balances");
-    const und = clean.journal.lines.find((l) => l.accountCode === UNDEPOSITED_ACCOUNT);
-    ok(!!und && und.amountCents === 50_000, "exactly the takings go to 10400");
+    // books-98 / D-77: the takings go to the SAFE (10100), not straight to
+    // 10400. They only reach Undeposited Funds when a bag is sealed.
+    const vault = clean.journal.lines.find((l) => l.accountCode === VAULT_ACCOUNT);
+    ok(!!vault && vault.amountCents === 50_000, "exactly the takings go to the safe");
+    ok(
+      !clean.journal.lines.some((l) => l.accountCode === UNDEPOSITED_ACCOUNT),
+      "a till close never touches 10400 - only sealing a bag does",
+    );
     const tl = clean.journal.lines.find((l) => l.accountCode === TILLS_ACCOUNT);
     ok(!!tl && tl.amountCents === -50_000, "10110 is relieved of the takings");
     ok(
@@ -552,8 +852,8 @@ export function __runRegisterCashJournalTests(): void {
     countedMinor: 66_750, floatStaysInDrawer: false,
   });
   if (whole.kind === "journal") {
-    const und = whole.journal.lines.find((l) => l.accountCode === UNDEPOSITED_ACCOUNT);
-    ok(!!und && und.amountCents === 66_750, "the whole drawer, float included, goes to 10400");
+    const und = whole.journal.lines.find((l) => l.accountCode === VAULT_ACCOUNT);
+    ok(!!und && und.amountCents === 66_750, "the whole drawer, float included, goes to the safe");
     ok(sum(whole.journal) === 0, "it still balances");
   }
 

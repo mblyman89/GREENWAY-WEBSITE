@@ -313,6 +313,11 @@ begin
   delete from public.drawer_counts where true;             get diagnostics n = row_count; counts := counts || jsonb_build_object('drawer_counts', n);
   delete from public.safe_swaps where true;                get diagnostics n = row_count; counts := counts || jsonb_build_object('safe_swaps', n);
   delete from public.safe_counts where true;               get diagnostics n = row_count; counts := counts || jsonb_build_object('safe_counts', n);
+  -- books-98: bags before sessions. deposit_bag_sessions references BOTH
+  -- deposit_bags and drawer_sessions, so it has to go first or the delete
+  -- trips a foreign key on a table the reset is about to empty anyway.
+  delete from public.deposit_bag_sessions where true;      get diagnostics n = row_count; counts := counts || jsonb_build_object('deposit_bag_sessions', n);
+  delete from public.deposit_bags where true;              get diagnostics n = row_count; counts := counts || jsonb_build_object('deposit_bags', n);
   delete from public.drawer_sessions where true;           get diagnostics n = row_count; counts := counts || jsonb_build_object('drawer_sessions', n);
 
   -- ══ 2. Tax and compliance filings ════════════════════════════════════════

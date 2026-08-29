@@ -520,7 +520,21 @@ describe("the migration list is ordered the way the database will see it", () =>
     // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 211;
     // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
     // sort -c` exits clean. Only then was 0210 changed to 0211.
-    expect(listed[listed.length - 1]).toMatch(/^0211_/);
+    //
+    // ─── IT FIRED A FIFTEENTH TIME, ON 0212 (books-98) ──────────────────────
+    //
+    // 0212_deposit_bags.sql exists because Michael described his real cash
+    // workflow in these words: "The end of the day, the safe money goes into
+    // the deposit bag with an id." Before it, a bank credit was matched to the
+    // cash it came from by FIFO on DATE alone, which is a convention rather
+    // than evidence: two bags sealed on one day, or a bag held over a weekend,
+    // cannot be told apart by their date. The bag number can tell them apart,
+    // because it is written on the bag AND on the bank's deposit slip.
+    //
+    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 212;
+    // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
+    // sort -c` exits clean. Only then was 0211 changed to 0212.
+    expect(listed[listed.length - 1]).toMatch(/^0212_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

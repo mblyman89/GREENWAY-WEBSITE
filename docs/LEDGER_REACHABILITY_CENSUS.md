@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 37 money events that should reach the books. 23 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 39 money events that should reach the books. 25 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
-| Money events catalogued | 37 |
+| Money events catalogued | 39 |
 | Proven on all six layers | 3 |
-| Cannot reach the books at all | 23 |
+| Cannot reach the books at all | 25 |
 | Have nothing that even builds the entry | 16 |
 | Layers that could not be measured | 5 |
 
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 15 of 37 |
-| `reachable` | 23 of 37 |
-| `correct` | 12 of 37 |
-| `accepted` | 21 of 37 |
-| `idempotent` | 20 of 37 |
-| `married` | 13 of 37 |
+| `exists` | 15 of 39 |
+| `reachable` | 25 of 39 |
+| `correct` | 12 of 39 |
+| `accepted` | 22 of 39 |
+| `idempotent` | 22 of 39 |
+| `married` | 14 of 39 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -437,6 +437,8 @@ A child-support or garnishment withholding is forwarded to the agency.
 | `till_open_from_vault` | yes | NO | yes | n/a | NO | n/a | D-39 |
 | `till_close_to_safe` | yes | yes | yes | n/a | yes | NO | D-39 |
 | `cash_deposit_to_bank` | yes | yes | part | NO | yes | part | D-39 |
+| `seal_deposit_bag` | yes | NO | yes | n/a | NO | NO | D-77 |
+| `employee_supply_advance` | yes | NO | yes | NO | NO | n/a | D-77 |
 | `till_over_short` | yes | yes | yes | n/a | yes | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
 | `atm_surcharge_income` | yes | yes | yes | part | yes | part | D-40 |
@@ -463,16 +465,16 @@ A shift starts: the float moves from the vault into a drawer.
 
 A shift ends: the drawer is counted and its takings go to the safe.
 
-- Accounts: `10400`, `10110`, `50920`
+- Accounts: `10100`, `10110`, `50920`
 - Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
 - Posts the entry: `src/lib/registers/drawer-posting-service.ts#postDrawerCloseForSession`
 
-- **exists: PRESENT** -- books-93 built buildTillCloseJournal: 10400 debited what physically left the drawer, 10110 relieved, the difference to 50920.
+- **exists: PRESENT** -- books-98 fixed D-77: the close debits 10100 Vault - the SAFE - not 10400. Its own line always said "to safe"; the account did not agree until now. 10400 is reached only by sealing a numbered bag. books-93 built buildTillCloseJournal: the safe debited what physically left the drawer, 10110 relieved, the difference to 50920.
 - **reachable: PRESENT** -- books-94: reconcileDrawerAction in actions.ts calls postDrawerCloseForSession, which submits with autoPost. grep submitJournal under src/lib/registers/ now finds it. The post is placed AFTER the reconcile succeeded and its outcome is written to the audit log and shown on /admin/registers.
 - **correct: PRESENT** -- The close does NOT re-book cash sales - sale-journal-core already debits 10110 once per sale - so the two cannot double-count. A drawer counted below its own float is refused and escalated to a manager instead of posted. 43 of 43 mutations caught.
 - **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash._
 - **idempotent: PRESENT** -- sourceRef is till-close:<sessionId>, keyed on the SHIFT and not on the register-plus-date, because two shifts on one register in one day is normal and a date key would silently merge them. A replay returns outcome duplicate and writes nothing twice.
-- **married: MISSING** -- 10400 is where the deposit will be matched from. Nothing links a drawer count to the Plaid credit yet.
+- **married: MISSING** -- The safe is where the deposit is built from. books-98 added the numbered bag that will carry a day's cash to the bank, but the bank-side match on bag id is not wired yet.
 
 **If this stays broken:** This is the entry that keeps 10110 honest. Every cash sale debits the till; if nothing ever credits it, the books claim the drawers hold more money every day forever.
 
@@ -492,6 +494,40 @@ Till cash is counted, moved to the vault, and deposited at the bank.
 - **married: PARTIAL** -- books-96: the deposit is attributed to the BUSINESS DAYS it banked, oldest first, with one credit line per day naming that day - so one bank credit ties to named Z-reports. It is still NOT attributed to named register SESSIONS: two tills on one day are folded together because the feed does not say how the bag was composed. Cash older than 30 days now POSTS with a warning rather than being refused, by the owner's decision.
 
 **If this stays broken:** In a cash business this is the reconciliation regulators look at first. Without it there is no audit trail from till to bank.
+
+### `cash_and_banking.seal_deposit_bag`
+
+Safe cash is counted into a numbered deposit bag and sealed.
+
+- Accounts: `10400`, `10100`
+- Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildSealBagJournal`
+- Posts the entry: **nothing**
+
+- **exists: PRESENT** -- books-98 built buildSealBagJournal: 10400 Undeposited Funds debited, 10100 Vault credited, with the bag number written onto both lines and the memo. safe-bag-core enforces the lifecycle around it.
+- **reachable: MISSING** -- No screen seals a bag yet. The builder and the deposit_bags table in 0212_deposit_bags.sql exist; grep buildSealBagJournal under src/app finds nothing. Rule 50: a finished feature nobody can reach.
+- **correct: PRESENT** -- 20/20 books-98 mutations caught, including both DOOR probes that strip the bag number from the memo and from the lines. A bag with no id, a zero bag and a fractional bag are all refused.
+- **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _Counting the bag IS the human act, and it is witnessed. A second approval would delay the bank run without adding a second pair of eyes to the cash._
+- **idempotent: MISSING** -- The source ref will be seal-bag:<bagId>, but there is no poster yet to key it on.
+- **married: MISSING** -- This is the entry that will END the guesswork: the bag number is also on the bank's deposit slip, so a Plaid credit can be matched to counted cash by evidence rather than by date. Not wired yet.
+
+**If this stays broken:** Without the bag layer a deposit is matched to the cash it came from by FIFO on date alone. That is a convention, not a fact: two bags sealed on one day, or a bag held over a weekend, cannot be told apart.
+
+### `cash_and_banking.employee_supply_advance`
+
+An employee takes cash from the master till for supplies and later returns a receipt and the change.
+
+- Accounts: `12100`, `10100`
+- Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal`
+- Posts the entry: **nothing**
+
+- **exists: PRESENT** -- books-98 built both halves. buildSupplyAdvanceJournal debits 12100 Employee Advances Receivable and credits 10100 - NOT an expense, because nothing has been bought yet. buildSupplySettleJournal books the expense at the receipt amount, returns the change to the safe, and clears 12100 to zero.
+- **reachable: MISSING** -- No screen records a supply run yet: grep buildSupplyAdvanceJournal under src/app finds nothing. Rule 50: finished, unreachable.
+- **correct: PRESENT** -- An advance with no employee name is refused - the balance is a claim on a person, so an unnamed one is meaningless. A receipt larger than the advance is refused rather than sign-flipped, because that is a reimbursement owed TO the employee.
+- **accepted: MISSING** -- Never presented.
+- **idempotent: MISSING** -- No poster yet, so no source ref to key on.
+- **married: NOT_APPLICABLE** -- The cash never touches the bank. _Money moves from the safe to a person and back. There is no bank record of either leg._
+
+**If this stays broken:** Expensing the cash as it leaves the till records a purchase that has not happened, against an account nobody chose, for an amount that changes when the change comes back - and nothing ever asks for the receipt, because no account is left carrying the employee's name.
 
 ### `cash_and_banking.till_over_short`
 
@@ -776,6 +812,8 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cash_and_banking.till_open_from_vault` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal`
+- `cash_and_banking.seal_deposit_bag` (D-77) -- `src/lib/accounting/register-cash-journal-core.ts#buildSealBagJournal`
+- `cash_and_banking.employee_supply_advance` (D-77) -- `src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
 - `periodic_and_other.fixed_asset_acquired` (D-43) -- `src/lib/accounting/fixed-assets-core.ts#accountCodeForClass`
@@ -802,6 +840,8 @@ mistake later.
 - `cash_and_banking.till_open_from_vault` / `accepted`: APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer changes no total and creates no obligation, so there is nothing for an approver to weigh.
 - `cash_and_banking.till_open_from_vault` / `married`: There is no bank record of cash moving from a safe to a drawer.
 - `cash_and_banking.till_close_to_safe` / `accepted`: The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash.
+- `cash_and_banking.seal_deposit_bag` / `accepted`: Counting the bag IS the human act, and it is witnessed. A second approval would delay the bank run without adding a second pair of eyes to the cash.
+- `cash_and_banking.employee_supply_advance` / `married`: Money moves from the safe to a person and back. There is no bank record of either leg.
 - `cash_and_banking.till_over_short` / `accepted`: The manager's reconcile IS the acceptance. Asking the same person to approve the entry their own count produced adds a click, not a check.
 - `cash_and_banking.till_over_short` / `married`: There is no second arrival for money that went missing.
 - `periodic_and_other.manual_journal` / `idempotent`: A hand-keyed entry has no external event to key on. Two identical entries may be two genuine entries, so the ledger must not silently merge them.

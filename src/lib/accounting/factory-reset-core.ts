@@ -424,6 +424,8 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "drawer_sessions", disposition: "WIPE", because: "Test drawer open/close sessions." },
   { table: "drawer_counts", disposition: "WIPE", because: "Drawer counts recorded while testing the register." },
   { table: "drawer_drops", disposition: "WIPE", because: "Test cash drops to the safe." },
+  { table: "deposit_bags", disposition: "WIPE", because: "Test deposit bags. The physical bags are reusable; the records of what was sealed in them during testing are not." },
+  { table: "deposit_bag_sessions", disposition: "WIPE", because: "Test links from a bag to the drawer sessions it carried." },
   { table: "safe_counts", disposition: "WIPE", because: "Safe counts recorded while testing cash handling." },
   { table: "safe_swaps", disposition: "WIPE", because: "Test till/safe swaps." },
   { table: "registers", disposition: "KEEP", because: "Your physical registers. Hardware you own; deleting them would stop the POS from opening." },

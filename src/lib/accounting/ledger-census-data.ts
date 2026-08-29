@@ -1371,14 +1371,17 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     event: "A shift ends: the drawer is counted and its takings go to the safe.",
     sourceKind: "bank",
     entityCode: "greenway",
-    accountCodes: ["10400", "10110", "50920"],
+    accountCodes: ["10100", "10110", "50920"],
     builder: "src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal",
     poster: "src/lib/registers/drawer-posting-service.ts#postDrawerCloseForSession",
     layers: {
       exists: {
         status: "PRESENT",
         evidence:
-          "books-93 built buildTillCloseJournal: 10400 debited what physically " +
+          "books-98 fixed D-77: the close debits 10100 Vault - the SAFE - not " +
+          "10400. Its own line always said \"to safe\"; the account did not " +
+          "agree until now. 10400 is reached only by sealing a numbered bag. " +
+          "books-93 built buildTillCloseJournal: the safe debited what physically " +
           "left the drawer, 10110 relieved, the difference to 50920.",
       },
       reachable: {
@@ -1416,8 +1419,9 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       married: {
         status: "MISSING",
         evidence:
-          "10400 is where the deposit will be matched from. Nothing links a " +
-          "drawer count to the Plaid credit yet.",
+          "The safe is where the deposit is built from. books-98 added the " +
+          "numbered bag that will carry a day's cash to the bank, but the " +
+          "bank-side match on bag id is not wired yet.",
       },
     },
     defectId: "D-39",
@@ -1484,6 +1488,123 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     consequence:
       "In a cash business this is the reconciliation regulators look at first. " +
       "Without it there is no audit trail from till to bank.",
+  },
+
+  {
+    key: "cash_and_banking.seal_deposit_bag",
+    family: "cash_and_banking",
+    event: "Safe cash is counted into a numbered deposit bag and sealed.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["10400", "10100"],
+    builder: "src/lib/accounting/register-cash-journal-core.ts#buildSealBagJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "books-98 built buildSealBagJournal: 10400 Undeposited Funds debited, " +
+          "10100 Vault credited, with the bag number written onto both lines " +
+          "and the memo. safe-bag-core enforces the lifecycle around it.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "No screen seals a bag yet. The builder and the deposit_bags table " +
+          "in 0212_deposit_bags.sql exist; grep buildSealBagJournal under " +
+          "src/app finds nothing. Rule 50: a finished feature nobody can reach.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "20/20 books-98 mutations caught, including both DOOR probes that " +
+          "strip the bag number from the memo and from the lines. A bag with " +
+          "no id, a zero bag and a fractional bag are all refused.",
+      },
+      accepted: {
+        status: "NOT_APPLICABLE",
+        evidence: "sourceKind bank is approval-exempt.",
+        reason:
+          "Counting the bag IS the human act, and it is witnessed. A second " +
+          "approval would delay the bank run without adding a second pair of " +
+          "eyes to the cash.",
+      },
+      idempotent: {
+        status: "MISSING",
+        evidence:
+          "The source ref will be seal-bag:<bagId>, but there is no poster yet " +
+          "to key it on.",
+      },
+      married: {
+        status: "MISSING",
+        evidence:
+          "This is the entry that will END the guesswork: the bag number is " +
+          "also on the bank's deposit slip, so a Plaid credit can be matched " +
+          "to counted cash by evidence rather than by date. Not wired yet.",
+      },
+    },
+    defectId: "D-77",
+    consequence:
+      "Without the bag layer a deposit is matched to the cash it came from by " +
+      "FIFO on date alone. That is a convention, not a fact: two bags sealed " +
+      "on one day, or a bag held over a weekend, cannot be told apart.",
+  },
+
+  {
+    key: "cash_and_banking.employee_supply_advance",
+    family: "cash_and_banking",
+    event:
+      "An employee takes cash from the master till for supplies and later " +
+      "returns a receipt and the change.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["12100", "10100"],
+    builder:
+      "src/lib/accounting/register-cash-journal-core.ts#buildSupplyAdvanceJournal",
+    poster: null,
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "books-98 built both halves. buildSupplyAdvanceJournal debits 12100 " +
+          "Employee Advances Receivable and credits 10100 - NOT an expense, " +
+          "because nothing has been bought yet. buildSupplySettleJournal books " +
+          "the expense at the receipt amount, returns the change to the safe, " +
+          "and clears 12100 to zero.",
+      },
+      reachable: {
+        status: "MISSING",
+        evidence:
+          "No screen records a supply run yet: grep buildSupplyAdvanceJournal " +
+          "under src/app finds nothing. Rule 50: finished, unreachable.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "An advance with no employee name is refused - the balance is a " +
+          "claim on a person, so an unnamed one is meaningless. A receipt " +
+          "larger than the advance is refused rather than sign-flipped, " +
+          "because that is a reimbursement owed TO the employee.",
+      },
+      accepted: { status: "MISSING", evidence: "Never presented." },
+      idempotent: {
+        status: "MISSING",
+        evidence: "No poster yet, so no source ref to key on.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence: "The cash never touches the bank.",
+        reason:
+          "Money moves from the safe to a person and back. There is no bank " +
+          "record of either leg.",
+      },
+    },
+    defectId: "D-77",
+    consequence:
+      "Expensing the cash as it leaves the till records a purchase that has " +
+      "not happened, against an account nobody chose, for an amount that " +
+      "changes when the change comes back - and nothing ever asks for the " +
+      "receipt, because no account is left carrying the employee's name.",
   },
 
   {
