@@ -1326,10 +1326,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       reachable: {
         status: "MISSING",
         evidence:
-          "RegisterCashSpecimen.tsx RENDERS the entry on /admin/registers/eod, but " +
-          "rendering is a read. No action Michael can take posts it: grep for " +
-          "submitJournal across src/lib/registers/ still returns 0 hits. Showing " +
-          "the entry is not reaching it.",
+          "STILL MISSING after books-94, deliberately. That slice wired the CLOSE " +
+          "only: grep submitJournal under src/lib/registers/ now finds " +
+          "drawer-posting-service.ts, but nothing calls buildTillOpenJournal. " +
+          "openDrawer in store.ts records the float it counted and NOT where that " +
+          "cash came from, so whether the vault was drawn down is unknown - and " +
+          "guessing it would credit 10100 for money that may never have moved.",
       },
       correct: {
         status: "PRESENT",
@@ -1371,7 +1373,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["10400", "10110", "50920"],
     builder: "src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal",
-    poster: null,
+    poster: "src/lib/registers/drawer-posting-service.ts#postDrawerCloseForSession",
     layers: {
       exists: {
         status: "PRESENT",
@@ -1380,11 +1382,13 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "left the drawer, 10110 relieved, the difference to 50920.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "Rendered as a worked example by RegisterCashSpecimen.tsx. No poster " +
-          "calls buildTillCloseJournal, so closing a shift still writes nothing " +
-          "to the ledger: grep submitJournal under src/lib/registers/ finds none.",
+          "books-94: reconcileDrawerAction in actions.ts calls " +
+          "postDrawerCloseForSession, which submits with autoPost. grep " +
+          "submitJournal under src/lib/registers/ now finds it. The post is " +
+          "placed AFTER the reconcile succeeded and its outcome is written to " +
+          "the audit log and shown on /admin/registers.",
       },
       correct: {
         status: "PRESENT",
@@ -1402,8 +1406,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "delay the deposit without adding a second pair of eyes to the cash.",
       },
       idempotent: {
-        status: "MISSING",
-        evidence: "No shift-scoped sourceRef convention is fixed yet.",
+        status: "PRESENT",
+        evidence:
+          "sourceRef is till-close:<sessionId>, keyed on the SHIFT and not on " +
+          "the register-plus-date, because two shifts on one register in one " +
+          "day is normal and a date key would silently merge them. A replay " +
+          "returns outcome duplicate and writes nothing twice.",
       },
       married: {
         status: "MISSING",
@@ -1469,7 +1477,7 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
     entityCode: "greenway",
     accountCodes: ["50920", "10110"],
     builder: "src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal",
-    poster: null,
+    poster: "src/lib/registers/drawer-posting-service.ts#postDrawerCloseForSession",
     layers: {
       exists: {
         status: "PRESENT",
@@ -1478,11 +1486,12 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "differs from expectation, and omits it entirely when it does not.",
       },
       reachable: {
-        status: "MISSING",
+        status: "PRESENT",
         evidence:
-          "The worked example in RegisterCashSpecimen.tsx is deliberately $4.00 " +
-          "short so 50920 is visible rather than theoretical — but visible is not " +
-          "posted. grep submitJournal under src/lib/registers/ still finds 0 hits.",
+          "books-94: the over/short line rides on the same posted close entry. " +
+          "postDrawerCloseForSession fires at RECONCILE, not at blind close, " +
+          "because over/short is genuinely unknown until a manager supplies the " +
+          "expected figure - see reconcileDrawerAction in actions.ts.",
       },
       correct: {
         status: "PRESENT",
@@ -1491,8 +1500,19 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "short is a debit; both the amount and the wording are asserted, because " +
           "a correct number under a backwards word is worse than a wrong one.",
       },
-      accepted: { status: "MISSING", evidence: "Never presented." },
-      idempotent: { status: "MISSING", evidence: "No ref convention." },
+      accepted: {
+        status: "NOT_APPLICABLE",
+        evidence: "sourceKind bank is approval-exempt; it rides the close entry.",
+        reason:
+          "The manager's reconcile IS the acceptance. Asking the same person to " +
+          "approve the entry their own count produced adds a click, not a check.",
+      },
+      idempotent: {
+        status: "PRESENT",
+        evidence:
+          "Same till-close:<sessionId> ref as the close entry it rides on, so " +
+          "the shortage cannot be booked twice by a double-submitted form.",
+      },
       married: {
         status: "NOT_APPLICABLE",
         evidence: "A shortage never reaches a bank.",

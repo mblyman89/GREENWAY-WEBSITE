@@ -1909,8 +1909,16 @@ elsewhere.
 industry the till-to-bank trail is the first thing an examiner asks for, and
 over/short is the earliest signal of both honest error and theft.
 
-**Gate:** census test asserts nothing under `src/lib/registers` reaches a ledger
-door.
+**Gate:** SUPERSEDED in books-94. The census test used to assert that nothing
+under `src/lib/registers` reaches a ledger door; that is no longer true, so the
+negative control was inverted rather than deleted. It now asserts that EXACTLY
+ONE file there may post - `drawer-posting-service.ts` - so a second, undeclared
+poster still fails the build.
+
+**Status:** HALF CLOSED in books-94. The close half is wired: reconciling a
+drawer posts 10400 / 10110 / 50920 under `till-close:<sessionId>`. The OPEN half
+(`10110` from `10100` when a float leaves the vault) is still unposted, and
+deliberately so - see D-74.
 
 ---
 
@@ -3918,3 +3926,66 @@ loop. No shift-scoped `sourceRef` convention exists yet, so idempotency is
 unproven. Nothing
 here was verified against Michael's live database, because no credentials exist
 in this environment.
+
+---
+
+## D-74 - a reconciled drawer could be posted from figures nobody counted
+
+**Found:** books-94, by the mutation probe on the slice that wired the drawer
+close. Not found by reading the code, which is the point of recording it.
+
+**What broke:** `postDrawerCloseForSession` guarded two of the three figures it
+needs and defaulted the third. It refused to post when `closing_count_minor` or
+`expected_close_minor` was NULL on a row marked `reconciled`, but wrote
+`const openingMinor = session.opening_count_minor ?? 0;` for the opening float.
+
+**Why that is not a rounding error.** The opening float is not decoration; it is
+subtracted out to derive the day's cash sales. The service works backwards from
+what reconcile already stored - `expected = opening + sales - drops`, so
+`sales = expected - opening + drops` - rather than asking a caller to pass sales
+in again, because a re-passed figure can disagree with the row Michael sees on
+the history screen. Substitute a silent zero for a $167.50 float and the entry
+claims the register took $167.50 more than it did. Every register in the
+building is pinned to that float by migration 0077, so the error is the same
+size on every drawer, every day, and it lands in `50920 Cash Over / (Short)` -
+the one account whose whole job is to say whether a cashier can be trusted with
+money. A reporting bug that manufactures shortages is worse than no report.
+
+**How it hid:** every test fixture supplied an opening float, because every
+drawer opened through the UI has one. The defect needed a row where the status
+says `reconciled` but the opening count was never written - which is precisely
+the case the other two guards already existed to catch. Two thirds of a rule-135
+guard reads like a whole one.
+
+**How it was caught:** mutation 15 replaced the `?? 0` with
+`?? session.closing_count_minor ?? 0` and the suite stayed green, proving no
+test exercised the fallback at all. That survivor was the evidence. This is the
+same shape as D-72, where "cost unknown" and "free sample" collapsed into the
+same zero, now appearing in cash instead of inventory - which is why it is
+written down separately rather than quietly patched.
+
+**Fix:** all three figures are checked in one guard and NONE is defaulted;
+`openingMinor` is now read straight off the session with no coalesce, so the
+type system will not allow the fallback to come back. The refusal message names
+all three fields so the person reading it knows which row to go look at. A
+companion test pins the other half of rule 135: an opening float of ZERO is a
+real drawer and still posts, so nobody can "fix" the guard into
+`!session.opening_count_minor` and sweep up a legitimate empty-float shift.
+
+**What this cost.** Two of the four mutation survivors in this slice were real
+holes; one was an equivalent mutant that could never be caught and was replaced
+rather than tolerated, and one - the door probe - had an ambiguous anchor and
+was cutting the wrong action's guard. That last one matters on its own: there
+are five identical `if (!result.ok) redirect(...)` lines in `actions.ts`, and
+both the probe and the test that was supposed to catch it were searching the
+whole file, so `indexOf` kept finding an earlier action's guard. The ordering
+test now narrows to the body of `reconcileDrawerAction` before looking, and a
+companion test proves the file really does contain more than one such line, so
+the narrowing cannot silently stop being necessary.
+
+**Gate:** `tests/compliance/drawer-posting.test.ts` - a NULL opening float is
+refused with `TILL_POST_INCOMPLETE_RECONCILE`, an opening float of zero still
+posts, and the refusal names all three figures.
+`scripts/compliance/mutate-slice-books-94.py` - 36 of 36 mutations caught,
+including four door-severing probes. Nothing here was verified against
+Michael's live database, because no credentials exist in this environment.

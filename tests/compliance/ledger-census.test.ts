@@ -354,12 +354,52 @@ describe("the two working paths really are wired (positive control)", () => {
     expect(txt).toContain("submitManualJournal");
   });
 
+  it("the drawer close really does call submitJournal (books-94)", () => {
+    const txt = read("src/lib/registers/drawer-posting-service.ts");
+    expect(txt).toContain("submitJournal(");
+    expect(txt).toContain("autoPost: true");
+  });
+
+  it("the drawer close keys its journal per SHIFT, not per register-day", () => {
+    // Two shifts on one register in one day is normal. A register+date key
+    // would make the second shift look like a duplicate of the first and
+    // silently discard it - the D-24 shape.
+    const txt = read("src/lib/registers/drawer-posting-service.ts");
+    expect(txt).toContain("till-close");
+    expect(txt).toContain("${sessionId}");
+  });
+
+  it("exactly ONE file under src/lib/registers may post (books-94)", () => {
+    // The negative control for this subtree is retired, so this replaces it:
+    // the door is open, but only this one door. Anything else that starts
+    // posting from the register subsystem is undeclared in the census.
+    const offenders = walk("src/lib/registers").filter((f) => {
+      const stripped = read(f)
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      return /\bsubmitJournal\s*\(|\bgl_post_|\bgl_submit_/.test(stripped);
+    });
+    expect(offenders).toEqual(["src/lib/registers/drawer-posting-service.ts"]);
+  });
+
   it("exactly these two rows are marked fully proven", () => {
     const keys = census()
       .fullyProven()
       .map((r) => r.key)
       .sort();
+    // books-94 adds a THIRD. cash_and_banking.till_over_short now has every
+    // layer PRESENT or a reasoned NOT_APPLICABLE: the builder existed from
+    // books-93, the poster arrived in books-94, the shift-scoped source ref
+    // makes it idempotent, approval is exempt by sourceKind, and there is no
+    // bank line to marry a shortage to.
+    //
+    // Its sibling cash_and_banking.till_close_to_safe deliberately did NOT
+    // join this list. Its `married` layer is still MISSING because nothing
+    // yet matches the safe drop against the Plaid deposit credit, and the
+    // whole point of that layer is that cash counted is not cash banked.
+    // STATED per rule 89: fully proven 2 -> 3 of 37.
     expect(keys).toEqual([
+      "cash_and_banking.till_over_short",
       "cost_of_goods_sold.inventory_audit_adjustment",
       "periodic_and_other.manual_journal",
     ]);
@@ -380,7 +420,10 @@ describe("the unreachable subsystems really are unreachable (negative control)",
     ["src/lib/purchasing", "purchasing"],
     ["src/lib/plaid", "the bank feed"],
     ["src/lib/crypto", "crypto"],
-    ["src/lib/registers", "cash registers"],
+    // src/lib/registers moved OUT of this list in books-94, when the drawer
+    // close was wired. It is not simply deleted: it becomes a positive control
+    // below, pinned to the ONE file allowed to post, so a second undeclared
+    // poster appearing under src/lib/registers still fails the build.
     ["src/lib/payments", "vendor payments"],
   ];
 
@@ -927,8 +970,23 @@ describe("the summary tells Michael the truth and leads with the bad news", () =
     // legitimate way to move it is a commit that also contains the wiring which
     // earned the move. Standing rule 133 now makes that wiring provable
     // independently, so the two gates check each other.
+    // books-94 lowers it a fourth time, 0.65 -> 0.63, and once again only
+    // because wiring in the SAME commit earned it. Posting the drawer close
+    // (D-39's close half) moved cash_and_banking.till_close_to_safe and
+    // cash_and_banking.till_over_short from unreachable to reachable, so the
+    // ratio MEASURED 24/37 = 0.6486 and `> 0.65` began failing on real
+    // progress.
+    // STATED per rule 89: unreachable 26 -> 24 of 37.
+    //
+    // Note the contrast with books-93, which is the reason this bound is
+    // trusted. That slice built the same three cash builders and tried to call
+    // them PARTIAL; the ratio fell to 0.6216 and this line refused it, because
+    // rendering an entry on a screen is not reaching it. This time a manager
+    // clicking Reconcile actually writes to the ledger, so the same bound
+    // moves without complaint. The tripwire did not get weaker - the code got
+    // better.
     const s = summariseCensus(census());
-    expect(s.unreachable / s.total).toBeGreaterThan(0.65);
+    expect(s.unreachable / s.total).toBeGreaterThan(0.63);
   });
 
   it("leads with what cannot post rather than with how much was catalogued", () => {
@@ -1303,7 +1361,22 @@ describe("evidence cannot be softened without a test failing", () => {
     // to catch, and it caught it. The reachable layer asks "can a real action
     // in the app reach it?", and the answer is still no.
     // STATED per rule 89: backlog drivers 6 -> 9 of 37 rows (was 35).
-    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(9);
+    //
+    // 9 -> 7 in books-94, and this is the count coming back DOWN the way it
+    // went up. Two of the three cash rows that became drivers in books-93 left
+    // the backlog in books-94: till_close_to_safe and till_over_short now name
+    // drawer-posting-service.ts#postDrawerCloseForSession as their poster, so
+    // they have a builder AND a caller and no longer qualify.
+    //
+    // till_open_from_vault STAYS a driver, deliberately (rule 133f). Its
+    // builder exists and is unreached, which is exactly what this filter is
+    // for. openDrawer in store.ts records the float that was counted into the
+    // drawer but not where that cash came from, so posting a debit to 10110
+    // against a credit to 10100 would assert the vault was drawn down when it
+    // may not have been. That is a guess about real money, so the row is left
+    // honestly unwired rather than wired on an assumption.
+    // STATED per rule 89: backlog drivers 9 -> 7 of 37.
+    expect(drivers.length, "no backlog drivers found - the filter is broken").toBe(7);
 
     for (const r of drivers) {
       expect(
@@ -1432,11 +1505,19 @@ describe("the good news cannot be inflated", () => {
     expect(LedgerCensus.create([proven], COA_CODES).fullyProven().length).toBe(1);
   });
 
-  it("the proven count is small, and the two proven rows are the ones measured", () => {
+  it("the proven count is small, and the three proven rows are the ones measured", () => {
     // If this ever rises, it is either real progress or a broken measurement.
     // Either way it must be looked at rather than absorbed.
+    //
+    // It rose in books-94, and it was looked at: cash_and_banking.till_over_short
+    // earned its last two layers when the drawer close got a poster and a
+    // shift-scoped source ref. This is the second, independent pin on that same
+    // fact - the other is in the positive-control block above - and both were
+    // updated deliberately rather than one being loosened to match the other.
+    // STATED per rule 89: fully proven 2 -> 3 of 37.
     const proven = census().fullyProven().map((r) => r.key).sort();
     expect(proven).toEqual([
+      "cash_and_banking.till_over_short",
       "cost_of_goods_sold.inventory_audit_adjustment",
       "periodic_and_other.manual_journal",
     ]);

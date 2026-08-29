@@ -13,13 +13,13 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 37 money events that should reach the books. 26 cannot reach them at all. 17 have nothing that builds the entry, so wiring alone will not fix them. 2 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 37 money events that should reach the books. 24 cannot reach them at all. 17 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
 | Money events catalogued | 37 |
-| Proven on all six layers | 2 |
-| Cannot reach the books at all | 26 |
+| Proven on all six layers | 3 |
+| Cannot reach the books at all | 24 |
 | Have nothing that even builds the entry | 17 |
 | Layers that could not be measured | 5 |
 
@@ -44,10 +44,10 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 | layer | rows missing |
 |---|---:|
 | `exists` | 15 of 37 |
-| `reachable` | 26 of 37 |
+| `reachable` | 24 of 37 |
 | `correct` | 12 of 37 |
-| `accepted` | 22 of 37 |
-| `idempotent` | 23 of 37 |
+| `accepted` | 21 of 37 |
+| `idempotent` | 21 of 37 |
 | `married` | 14 of 37 |
 
 ## Sales, and the tax you collect on someone else's behalf
@@ -435,9 +435,9 @@ A child-support or garnishment withholding is forwarded to the agency.
 | event | exists | reachable | correct | accepted | idempotent | married | defect |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `till_open_from_vault` | yes | NO | yes | n/a | NO | n/a | D-39 |
-| `till_close_to_safe` | yes | NO | yes | n/a | NO | NO | D-39 |
+| `till_close_to_safe` | yes | yes | yes | n/a | yes | NO | D-39 |
 | `cash_deposit_to_bank` | part | NO | part | NO | NO | NO | D-39 |
-| `till_over_short` | yes | NO | yes | NO | NO | n/a | D-39 |
+| `till_over_short` | yes | yes | yes | n/a | yes | n/a | D-39 |
 | `atm_vault_load` | NO | NO | part | NO | NO | part | D-40 |
 | `atm_surcharge_income` | yes | yes | yes | part | yes | part | D-40 |
 | `intercompany_transfer` | yes | NO | part | NO | ? | NO | D-41 |
@@ -451,7 +451,7 @@ A shift starts: the float moves from the vault into a drawer.
 - Posts the entry: **nothing**
 
 - **exists: PRESENT** -- books-93 built buildTillOpenJournal: 10110 debited, 10100 credited, two lines, sums to zero. A transfer, never income.
-- **reachable: MISSING** -- RegisterCashSpecimen.tsx RENDERS the entry on /admin/registers/eod, but rendering is a read. No action Michael can take posts it: grep for submitJournal across src/lib/registers/ still returns 0 hits. Showing the entry is not reaching it.
+- **reachable: MISSING** -- STILL MISSING after books-94, deliberately. That slice wired the CLOSE only: grep submitJournal under src/lib/registers/ now finds drawer-posting-service.ts, but nothing calls buildTillOpenJournal. openDrawer in store.ts records the float it counted and NOT where that cash came from, so whether the vault was drawn down is unknown - and guessing it would credit 10100 for money that may never have moved.
 - **correct: PRESENT** -- Michael's stated float of 5 tens, 10 fives, 50 ones and one roll each of quarters/dimes/nickels/pennies reconciles to $167.50 exactly, and a denomination count that disagrees with the stated float is REFUSED rather than averaged.
 - **accepted: NOT_APPLICABLE** -- Cash moving between two accounts Michael already owns. _APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer changes no total and creates no obligation, so there is nothing for an approver to weigh._
 - **idempotent: MISSING** -- sourceRef is accepted but no shift-scoped convention is fixed yet.
@@ -465,13 +465,13 @@ A shift ends: the drawer is counted and its takings go to the safe.
 
 - Accounts: `10400`, `10110`, `50920`
 - Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/registers/drawer-posting-service.ts#postDrawerCloseForSession`
 
 - **exists: PRESENT** -- books-93 built buildTillCloseJournal: 10400 debited what physically left the drawer, 10110 relieved, the difference to 50920.
-- **reachable: MISSING** -- Rendered as a worked example by RegisterCashSpecimen.tsx. No poster calls buildTillCloseJournal, so closing a shift still writes nothing to the ledger: grep submitJournal under src/lib/registers/ finds none.
+- **reachable: PRESENT** -- books-94: reconcileDrawerAction in actions.ts calls postDrawerCloseForSession, which submits with autoPost. grep submitJournal under src/lib/registers/ now finds it. The post is placed AFTER the reconcile succeeded and its outcome is written to the audit log and shown on /admin/registers.
 - **correct: PRESENT** -- The close does NOT re-book cash sales - sale-journal-core already debits 10110 once per sale - so the two cannot double-count. A drawer counted below its own float is refused and escalated to a manager instead of posted. 43 of 43 mutations caught.
 - **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt. _The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash._
-- **idempotent: MISSING** -- No shift-scoped sourceRef convention is fixed yet.
+- **idempotent: PRESENT** -- sourceRef is till-close:<sessionId>, keyed on the SHIFT and not on the register-plus-date, because two shifts on one register in one day is normal and a date key would silently merge them. A replay returns outcome duplicate and writes nothing twice.
 - **married: MISSING** -- 10400 is where the deposit will be matched from. Nothing links a drawer count to the Plaid credit yet.
 
 **If this stays broken:** This is the entry that keeps 10110 honest. Every cash sale debits the till; if nothing ever credits it, the books claim the drawers hold more money every day forever.
@@ -499,13 +499,13 @@ A till count does not match what the system says it should be.
 
 - Accounts: `50920`, `10110`
 - Builds the entry: `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
-- Posts the entry: **nothing**
+- Posts the entry: `src/lib/registers/drawer-posting-service.ts#postDrawerCloseForSession`
 
 - **exists: PRESENT** -- books-93: the close builder emits a 50920 line whenever the count differs from expectation, and omits it entirely when it does not.
-- **reachable: MISSING** -- The worked example in RegisterCashSpecimen.tsx is deliberately $4.00 short so 50920 is visible rather than theoretical — but visible is not posted. grep submitJournal under src/lib/registers/ still finds 0 hits.
+- **reachable: PRESENT** -- books-94: the over/short line rides on the same posted close entry. postDrawerCloseForSession fires at RECONCILE, not at blind close, because over/short is genuinely unknown until a manager supplies the expected figure - see reconcileDrawerAction in actions.ts.
 - **correct: PRESENT** -- 50920 is seeded as an INCOME account, so an over is a credit and a short is a debit; both the amount and the wording are asserted, because a correct number under a backwards word is worse than a wrong one.
-- **accepted: MISSING** -- Never presented.
-- **idempotent: MISSING** -- No ref convention.
+- **accepted: NOT_APPLICABLE** -- sourceKind bank is approval-exempt; it rides the close entry. _The manager's reconcile IS the acceptance. Asking the same person to approve the entry their own count produced adds a click, not a check._
+- **idempotent: PRESENT** -- Same till-close:<sessionId> ref as the close entry it rides on, so the shortage cannot be booked twice by a double-submitted form.
 - **married: NOT_APPLICABLE** -- A shortage never reaches a bank. _There is no second arrival for money that went missing._
 
 **If this stays broken:** Over/short is the earliest signal of both honest error and theft. Unbooked, the difference silently distorts revenue instead.
@@ -777,8 +777,6 @@ the path from the screen to the ledger is absent.
 - `cost_of_goods_sold.cutover_inventory_load` (D-48) -- `src/lib/accounting/cutover-inventory-core.ts#buildCutoverInventoryPlan`
 - `cost_of_goods_sold.cultivera_manifest_import` (D-49) -- `src/lib/accounting/vendor-bill-core.ts#buildBillJournal`
 - `cash_and_banking.till_open_from_vault` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillOpenJournal`
-- `cash_and_banking.till_close_to_safe` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
-- `cash_and_banking.till_over_short` (D-39) -- `src/lib/accounting/register-cash-journal-core.ts#buildTillCloseJournal`
 - `cash_and_banking.intercompany_transfer` (D-41) -- `src/lib/accounting/posting-service.ts#submitIntercompanyPair`
 - `periodic_and_other.bo_tax_accrual` (D-42) -- `src/lib/accounting/bo-tax-core.ts#boAccrualEntry`
 - `periodic_and_other.fixed_asset_acquired` (D-43) -- `src/lib/accounting/fixed-assets-core.ts#accountCodeForClass`
@@ -805,6 +803,7 @@ mistake later.
 - `cash_and_banking.till_open_from_vault` / `accepted`: APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer changes no total and creates no obligation, so there is nothing for an approver to weigh.
 - `cash_and_banking.till_open_from_vault` / `married`: There is no bank record of cash moving from a safe to a drawer.
 - `cash_and_banking.till_close_to_safe` / `accepted`: The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash.
+- `cash_and_banking.till_over_short` / `accepted`: The manager's reconcile IS the acceptance. Asking the same person to approve the entry their own count produced adds a click, not a check.
 - `cash_and_banking.till_over_short` / `married`: There is no second arrival for money that went missing.
 - `periodic_and_other.manual_journal` / `idempotent`: A hand-keyed entry has no external event to key on. Two identical entries may be two genuine entries, so the ledger must not silently merge them.
 - `periodic_and_other.manual_journal` / `married`: Nothing automatic produced it, so nothing can duplicate it.

@@ -3449,3 +3449,57 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
          its code AND on the substance of its explanation, or the next person
          to touch the file will delete the sentence and nothing will notice.
 
+137. A PROBE WITH AN AMBIGUOUS ANCHOR IS NOT A PROBE. (books-94, D-74.)
+
+     A mutation probe or a source-reading test that searches a whole file for a
+     string which appears more than once is measuring a coincidence, not the
+     thing it names. books-94's door probe deleted the reconcile action's
+     success guard and the suite stayed green, because `actions.ts` holds five
+     identical `if (!result.ok) redirect(...)` lines and `indexOf` kept finding
+     an earlier one. The probe reported PASS while the door hung open.
+
+     (a) NARROW BEFORE YOU LOOK. A test about one function must slice that
+         function's body out of the file first, and must assert that the slice
+         was actually found before asserting anything about its contents.
+
+     (b) PROVE THE NARROWING WAS NECESSARY. Add a companion assertion showing
+         the file really does contain more than one match. Otherwise the
+         narrowing can quietly stop being needed, and nobody learns that the
+         original test was only ever passing by luck.
+
+     (c) A STALE ANCHOR MUST FAIL THE RUN, NEVER SKIP IT. If a probe's search
+         text no longer exists, the code moved and the probe is now measuring
+         nothing. Rule 48 applies: it FAILS. books-94's runner caught its own
+         stale anchor this way, on purpose, and that is the behaviour to keep.
+
+138. AN EQUIVALENT MUTANT IS REPLACED, NOT TOLERATED. (books-94.)
+
+     A mutation that no test could ever catch, because a guard upstream makes
+     it unreachable, is not a hole in the tests - it is a broken probe. Leaving
+     it in the list teaches the next person that surviving mutations are normal,
+     which is the exact habit rule 13c exists to prevent.
+
+     (a) DELETE IT AND WRITE THE LIVE VERSION OF THE SAME RISK. When books-94
+         tightened its NULL guard, the `countedMinor ?? 0` mutation became
+         unreachable. It was replaced with a probe that removes the opening
+         float from the guard itself - same risk, still killable.
+
+     (b) SAY IN THE PROBE FILE WHY IT WAS SWAPPED. A silently deleted mutation
+         looks like a lowered bar. The comment is the difference between
+         raising the standard and quietly relaxing it.
+
+139. FIXING THE TEST IS NOT THE SAME AS FIXING THE CODE. (books-94, D-74.)
+
+     When a surviving mutation is investigated, ask first whether the mutation
+     revealed a real defect. Two of books-94's four survivors did: the service
+     genuinely defaulted a NULL opening float to zero, which would have
+     manufactured a $167.50 shortage on every drawer every day. The reflex to
+     "add an assertion so the mutant dies" would have pinned the bug in place.
+
+     (a) FIX THE CODE FIRST, THEN THE TEST. If the mutant describes something
+         the code should never do, make it impossible - remove the fallback,
+         tighten the type - before adding the assertion.
+
+     (b) A DEFECT FOUND BY A MUTATION PROBE GETS A DEFECTS.md NUMBER. It was
+         not found by reading the code, so the next reader will not find it by
+         reading the code either.

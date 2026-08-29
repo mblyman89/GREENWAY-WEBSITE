@@ -13,6 +13,10 @@ import {
   reconcileDrawer,
   verifyTill,
 } from "@/lib/registers/store";
+import {
+  postDrawerCloseForSession,
+  describeDrawerPostOutcome,
+} from "@/lib/registers/drawer-posting-service";
 
 const BASE = "/admin/registers";
 
@@ -112,15 +116,29 @@ export async function reconcileDrawerAction(formData: FormData): Promise<void> {
     reconciledBy: str(formData, "reconciled_by") || null,
   });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
+
+  // Reconcile is the first moment over/short is a FACT rather than an unknown,
+  // so it is the first honest moment to write to the ledger (books-94, D-39).
+  // The post never blocks the reconcile: the count is already durable, and a
+  // ledger problem must not make a manager re-count a drawer.
+  const posted = await postDrawerCloseForSession(sessionId);
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "drawer.reconciled",
     entityType: "drawer_session",
     entityId: sessionId,
+    // Rule 134: an outcome that is not written down did not happen. Whatever
+    // the ledger did — posted, duplicate, skipped, refused or failed — lands
+    // in the audit trail, not only in a redirect that the next click erases.
+    after: { ledger_kind: posted.kind, ledger_code: posted.code },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?reconciled=${result.overShortMinor ?? 0}`);
+  redirect(
+    `${BASE}?reconciled=${result.overShortMinor ?? 0}&posted=` +
+      encodeURIComponent(describeDrawerPostOutcome(posted)),
+  );
 }
 
 /** Manager till next-morning verify/validate. */

@@ -23,6 +23,7 @@ export default async function RegisterActivityPage({
     error?: string;
     reconciled?: string;
     verified?: string;
+    posted?: string;
   }>;
 }) {
   const session = await requirePermission("orders.manage");
@@ -447,7 +448,7 @@ export default async function RegisterActivityPage({
 function Flash({
   sp,
 }: {
-  sp: { error?: string; reconciled?: string; verified?: string };
+  sp: { error?: string; reconciled?: string; verified?: string; posted?: string };
 }) {
   if (sp.error) {
     return (
@@ -460,6 +461,12 @@ function Flash({
     return (
       <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
         Drawer reconciled · {overShortLabel(Number(sp.reconciled) || 0)}
+        {/* What the LEDGER did. Without this the manager sees a friendly
+            green banner whether the entry posted or was silently refused,
+            which is the D-71 failure shape exactly. */}
+        {sp.posted ? (
+          <span className="mt-1 block text-xs opacity-80">{sp.posted}</span>
+        ) : null}
       </div>
     );
   }
