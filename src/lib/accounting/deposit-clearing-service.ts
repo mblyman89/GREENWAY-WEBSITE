@@ -45,13 +45,36 @@ import "server-only";
  * guess standing rule 1 forbids. The caller states the kind; the pure core
  * refuses every kind except `deposit_of_sales`, BY NAME.
  *
+ * WHAT books-96 CHANGED HERE
+ * --------------------------
+ * books-95 read `10400` as a single number and took the oldest date from any
+ * line that ever added to it. Nothing retired a day once its cash was banked,
+ * so that date only ever got older; after a month every deposit was refused as
+ * too old. That is D-76, and it made a finished, tested, wired feature unusable
+ * in practice - the rule 50 shape the census exists to catch.
+ *
+ * The read is now BY BUSINESS DAY. Debits are folded under the journal date
+ * (a close entry is dated on its business day); credits are folded under the
+ * day named in their description, because a clearing credit is dated when the
+ * BANK received the money. A day whose debits and credits cancel drops out of
+ * the pool entirely, which is what makes the aging figure age.
+ *
  * DELIBERATE LIMIT (rule 133f)
  * ----------------------------
- * This clears the deposit against the 10400 balance AS A POOL. It does not
- * record WHICH till closes make up a given deposit, because the bank reports
- * one credit for a bag that may hold several shifts and nothing in the feed
- * says how it was composed. Attributing a deposit to specific sessions would be
- * an invention. The census row keeps `married` honest about that.
+ * A deposit is attributed to the DAYS it banked, oldest first, and not to
+ * named register SESSIONS. Two tills on the same day are folded into one day
+ * because the bank reports one credit for a bag and the feed does not say how
+ * it was composed; splitting a day between two sessions would be an invention.
+ * The day is as fine as the evidence goes. The census row keeps `married`
+ * honest about that.
+ *
+ * FIFO IS A CONVENTION, NOT A FACT (rule 133f)
+ * -------------------------------------------
+ * Cash is fungible. Nothing in a sealed bag says which day's twenty-dollar bill
+ * it holds, so "oldest first" is a stated convention, chosen because it matches
+ * the owner's actual procedure - one bag per day, banked in order - and because
+ * it is the only convention under which a pool can be shown to age. It is not a
+ * measurement, and `deposit-fifo-core.ts` says so at its head.
  */
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -63,7 +86,14 @@ import {
   money,
   UNDEPOSITED_ACCOUNT,
   type DepositResult,
+  type DepositWarning,
 } from "@/lib/accounting/deposit-clearing-core";
+import {
+  foldDaysFromLines,
+  parseClearedDay,
+  oldestOpenDate,
+  type UndepositedDay,
+} from "@/lib/accounting/deposit-fifo-core";
 import type { BankRow } from "@/lib/accounting/bank-match-core";
 
 /** The entity these registers belong to. */
@@ -79,6 +109,13 @@ export type DepositClearOutcome =
       readonly outcome: string | null;
       readonly code: string | null;
       readonly message: string;
+      /**
+       * Things that are true and were posted anyway. Never empty-by-accident:
+       * an ordinary same-week deposit legitimately produces none.
+       */
+      readonly warnings: readonly DepositWarning[];
+      /** The business days this deposit banked, oldest first. */
+      readonly clearedDays: readonly string[];
     }
   | {
       readonly kind: "refused";
@@ -94,24 +131,47 @@ export type DepositClearOutcome =
       readonly message: string;
     };
 
+/** What the pool looks like right now, broken down by the day it came from. */
+export type UndepositedPool = {
+  /** Sum of every open day. Equals the 10400 debit balance. */
+  readonly balanceMinor: number;
+  /** The oldest day still OPEN, or null when nothing is waiting. */
+  readonly oldestDate: string | null;
+  /** Every day still waiting to be banked, oldest first. */
+  readonly days: readonly UndepositedDay[];
+  /**
+   * Days whose credits exceed their debits - more banked for a day than was
+   * ever counted for it. Rule 135: reported, never clamped to zero. An empty
+   * array means the books agree with themselves.
+   */
+  readonly negativeDays: readonly UndepositedDay[];
+};
+
 /**
- * The debit balance of `10400`, in cents, counting POSTED lines only.
+ * `10400` read BY BUSINESS DAY, counting POSTED lines only.
  *
  * Returns `null` on a read failure. Standing rule 46: a failed read is NOT an
  * empty result. Zero and "the query broke" mean opposite things here — the
  * first says there is nothing to clear, the second says we do not know, and
  * treating the second as the first would refuse a legitimate deposit with a
  * sentence that is a lie.
+ *
+ * WHY `description` IS SELECTED. A close DEBIT is dated on its business day, so
+ * the journal date is the right bucket for it. A clearing CREDIT is dated when
+ * the bank received the money, which is precisely the date that differs. If
+ * credits were bucketed by journal date they would never cancel the debits they
+ * paid off and every day would look open forever - D-76 exactly. So each credit
+ * carries its day in the line description and `parseClearedDay` reads it back.
  */
 export async function undepositedBalanceMinor(
   client?: ReturnType<typeof createSupabaseAdminClient>,
-): Promise<{ balanceMinor: number; oldestDate: string | null } | null> {
+): Promise<UndepositedPool | null> {
   if (!client && !isSupabaseServiceConfigured) return null;
   const admin = client ?? createSupabaseAdminClient();
 
   const { data, error } = await admin
     .from("gl_journal_lines")
-    .select("amount_cents, gl_journals!inner(status, journal_date)")
+    .select("amount_cents, description, gl_journals!inner(status, journal_date, source_ref)")
     .eq("account_code", UNDEPOSITED_ACCOUNT)
     .eq("gl_journals.status", "posted");
 
@@ -119,24 +179,53 @@ export async function undepositedBalanceMinor(
 
   const rows = data as unknown as Array<{
     amount_cents: number | string;
-    gl_journals: { status: string; journal_date: string } | null;
+    description: string | null;
+    gl_journals: {
+      status: string;
+      journal_date: string;
+      source_ref: string | null;
+    } | null;
   }>;
 
-  let balance = 0;
-  let oldest: string | null = null;
+  const lines: { date: string; amountMinor: number; sourceRef: string }[] = [];
 
   for (const r of rows) {
+    // Rule 46, and the sharpest edge in this file. If `description` was never
+    // selected, every credit loses its marker, every credit silently falls back
+    // to its journal date, no day ever cancels, and D-76 comes back looking
+    // exactly like correct arithmetic. An absent KEY and a null COLUMN are
+    // therefore different facts: the first says the query was wrong.
+    if (!("description" in r)) return null;
+
     const cents = typeof r.amount_cents === "string" ? Number(r.amount_cents) : r.amount_cents;
     if (!Number.isFinite(cents)) return null;
-    balance += cents;
 
-    // The oldest date among lines that ADDED to the pool. A credit clearing a
-    // previous deposit says nothing about how old the remaining cash is.
-    const d = r.gl_journals?.journal_date ?? null;
-    if (cents > 0 && d !== null && (oldest === null || d < oldest)) oldest = d;
+    const journalDate = r.gl_journals?.journal_date ?? null;
+
+    // A credit says which day it cleared; a debit is dated on its own day.
+    // parseClearedDay returns null when the line does not carry a marker, and
+    // that is the ONLY case where the journal date is used for a credit — a
+    // pre-books-96 lumped credit, which has no day to name.
+    const marked = parseClearedDay(r.description);
+    const date = marked ?? journalDate;
+
+    // Rule 46 again: a line with no date at all cannot be bucketed, and
+    // guessing one would put real money on a day it did not happen.
+    if (date === null) return null;
+
+    lines.push({
+      date,
+      amountMinor: cents,
+      sourceRef: r.gl_journals?.source_ref ?? "",
+    });
   }
 
-  return { balanceMinor: balance, oldestDate: oldest };
+  const { days, negativeDays } = foldDaysFromLines(lines);
+  const balanceMinor =
+    days.reduce((a, d) => a + d.amountMinor, 0) +
+    negativeDays.reduce((a, d) => a + d.amountMinor, 0);
+
+  return { balanceMinor, oldestDate: oldestOpenDate(days), days, negativeDays };
 }
 
 /**
@@ -168,15 +257,33 @@ export async function clearDepositForBankRow(
     };
   }
 
+  // Rule 135: a day banked for more than it was ever counted is the books
+  // disagreeing with themselves. Netting it against a healthy day would hide
+  // the contradiction inside a correct-looking total, so it stops here BY NAME
+  // and by date, before any money is attributed to any day.
+  if (pool.negativeDays.length > 0) {
+    const named = pool.negativeDays
+      .map((d) => `${d.date} (${money(d.amountMinor)})`)
+      .join(", ");
+    return {
+      kind: "refused",
+      transactionId: row.transactionId,
+      code: "DEPOSIT_POOL_NOT_POSITIVE",
+      message:
+        `Undeposited Funds shows more banked than counted for ${named}. That ` +
+        "means a deposit was cleared against a day that never held that much, " +
+        "so the day-by-day record contradicts itself. Nothing was posted, " +
+        "because clearing more cash against those days would bury the problem " +
+        "in a total that still looks right.",
+    };
+  }
+
   const built: DepositResult = buildDepositClearingJournal({
     row,
     eventKind,
-    undepositedBalanceMinor: pool.balanceMinor,
-    // Rule 135: a missing oldest date is a question, not today's date. If the
-    // pool is non-empty the balance read must have found a debit line, so a
-    // null here means the data disagrees with itself; passing an empty string
-    // makes the core's own date guard refuse rather than inventing a window.
-    oldestUndepositedDate: pool.oldestDate ?? "",
+    // The days ARE the pool. books-95 passed a total and an oldest date as two
+    // separate arguments, which allowed a pair that could not both be true.
+    days: pool.days,
     alreadyMatched: opts?.alreadyMatched,
   });
 
@@ -231,14 +338,25 @@ export async function clearDepositForBankRow(
         ? `That deposit was already cleared. Nothing was written twice, and ` +
           `Undeposited Funds still stands at ${money(pool.balanceMinor)}.`
         : built.explanation,
+    warnings: built.warnings,
+    clearedDays: built.allocation.days.map((d) => d.date),
   };
 }
 
-/** One sentence per outcome, for a banner. No outcome may become a shrug. */
+/**
+ * One sentence per outcome, for a banner. No outcome may become a shrug.
+ *
+ * A posted-with-warnings deposit reads as POSTED FIRST and then the caveat.
+ * The owner's decision was that these post; a sentence that led with the
+ * complaint would read like a failure and send someone looking for a problem
+ * that has already been handled.
+ */
 export function describeDepositOutcome(o: DepositClearOutcome): string {
   switch (o.kind) {
     case "posted":
-      return o.message;
+      return o.warnings.length === 0
+        ? o.message
+        : `${o.message} Worth a look: ${o.warnings.map((w) => w.message).join(" ")}`;
     case "refused":
       return `Not cleared: ${o.message}`;
     case "failed":

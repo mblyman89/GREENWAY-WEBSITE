@@ -57,8 +57,15 @@ vi.mock("@/lib/accounting/posting-service", () => ({
 // The service reads the ledger through the admin client. Only the one query it
 // makes is modelled, and the shape mirrors the real column names so a rename
 // cannot pass silently.
-let LINES: Array<{ amount_cents: number; gl_journals: { status: string; journal_date: string } }> = [];
+type MockLine = {
+  amount_cents: number;
+  description?: string | null;
+  gl_journals: { status: string; journal_date: string; source_ref?: string | null };
+};
+let LINES: MockLine[] = [];
 let READ_FAILS = false;
+/** Models a SELECT that forgot `description` — the D-76 relapse shape. */
+let DROP_COLUMN = false;
 let LAST_QUERY: Record<string, unknown> = {};
 
 vi.mock("@/lib/supabase/env", () => ({ isSupabaseServiceConfigured: true }));
@@ -74,7 +81,14 @@ vi.mock("@/lib/supabase/admin", () => ({
         filters.table = table;
         return q;
       },
-      select: () => q,
+      // The SELECT LIST IS RECORDED AND HONOURED. Postgres returns the columns
+      // you asked for and no others; a stub that hands back `description`
+      // whether or not the query requested it cannot notice a query that
+      // forgot to ask, which is exactly how the D-76 relapse would return.
+      select: (cols: string) => {
+        filters.select = cols;
+        return q;
+      },
       eq: (col: string, val: unknown) => {
         filters[col] = val;
         return q;
@@ -93,7 +107,19 @@ vi.mock("@/lib/supabase/admin", () => ({
         (l) =>
           l.gl_journals.status === wantStatus &&
           (wantAccount === UNDEPOSITED_ACCOUNT || wantAccount === undefined),
-      );
+      ).map((l) => {
+        // Postgres returns every SELECTED column on every row, null when empty
+        // - and returns nothing at all for a column that was not asked for.
+        // Both halves are modelled, because only the second one can catch a
+        // SELECT that quietly stopped requesting `description`.
+        const asked = String(filters.select ?? "").includes("description");
+        if (!asked || DROP_COLUMN) {
+          const withheld: Partial<MockLine> = { ...l };
+          delete withheld.description;
+          return withheld;
+        }
+        return { ...l, description: l.description ?? null };
+      });
       return resolve({ data: rows, error: null });
     };
     return q;
@@ -110,6 +136,12 @@ import {
   type DepositInput,
   type DepositResult,
 } from "@/lib/accounting/deposit-clearing-core";
+import {
+  clearedDayDescription,
+  parseClearedDay,
+  CLEARED_DAY_PREFIX,
+  type UndepositedDay,
+} from "@/lib/accounting/deposit-fifo-core";
 import {
   clearDepositForBankRow,
   undepositedBalanceMinor,
@@ -146,12 +178,20 @@ function row(over: Partial<BankRow> = {}): BankRow {
   };
 }
 
+/** One day, one bag, banked the next morning: the ordinary case. */
+function days(...d: Array<[string, number]>): UndepositedDay[] {
+  return d.map(([date, amountMinor]) => ({
+    date,
+    amountMinor,
+    sourceRef: `till-close:${date}`,
+  }));
+}
+
 function input(over: Partial<DepositInput> = {}): DepositInput {
   return {
     row: row(),
     eventKind: "deposit_of_sales",
-    undepositedBalanceMinor: 50_000,
-    oldestUndepositedDate: "2026-11-02",
+    days: days(["2026-11-02", 50_000]),
     ...over,
   };
 }
@@ -176,9 +216,18 @@ function amountOn(r: DepositResult, account: string): number {
 beforeEach(() => {
   submit.mockClear();
   READ_FAILS = false;
+  DROP_COLUMN = false;
   LAST_QUERY = {};
   LINES = [
-    { amount_cents: 50_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+    {
+      amount_cents: 50_000,
+      description: "Cash counted out of the drawer",
+      gl_journals: {
+        status: "posted",
+        journal_date: "2026-11-02",
+        source_ref: "till-close:s1",
+      },
+    },
   ];
 });
 
@@ -273,11 +322,16 @@ describe("books-95 · what it refuses", () => {
     ["an own transfer", { eventKind: "own_transfer" }, "DEPOSIT_WRONG_EVENT_KIND"],
     ["an ATM settlement", { eventKind: "atm_vault" }, "DEPOSIT_WRONG_EVENT_KIND"],
     ["an owner contribution", { eventKind: "owner_contribution" }, "DEPOSIT_WRONG_EVENT_KIND"],
-    ["an empty pool", { undepositedBalanceMinor: 0 }, "DEPOSIT_NOTHING_UNDEPOSITED"],
-    ["more than was counted", { undepositedBalanceMinor: 10_000 }, "DEPOSIT_EXCEEDS_UNDEPOSITED"],
-    ["a pairing 30+ days apart", { oldestUndepositedDate: "2026-08-01" }, "DEPOSIT_DATE_TOO_FAR"],
+    ["an empty pool", { days: [] }, "DEPOSIT_NOTHING_UNDEPOSITED"],
+    ["more than was counted", { days: days(["2026-11-02", 10_000]) }, "DEPOSIT_EXCEEDS_UNDEPOSITED"],
     ["a bank row already used", { alreadyMatched: true }, "DEPOSIT_ALREADY_MATCHED"],
-    ["an unreadable date", { oldestUndepositedDate: "" }, "DEPOSIT_INVALID_DATE"],
+    ["an unreadable business day", { days: days(["", 50_000]) }, "DEPOSIT_INVALID_DATE"],
+    ["a day worth nothing", { days: days(["2026-11-02", 0]) }, "DEPOSIT_POOL_NOT_POSITIVE"],
+    [
+      "a day banked for more than it held",
+      { days: days(["2026-11-01", -1], ["2026-11-02", 50_001]) },
+      "DEPOSIT_POOL_NOT_POSITIVE",
+    ],
   ];
 
   for (const [label, over, code] of cases) {
@@ -288,7 +342,7 @@ describe("books-95 · what it refuses", () => {
 
   it("banking EXACTLY what was counted is allowed", () => {
     // `>` versus `>=` differ by precisely the everyday case.
-    expect(buildDepositClearingJournal(input({ undepositedBalanceMinor: 50_000 })).kind)
+    expect(buildDepositClearingJournal(input({ days: days(["2026-11-02", 50_000]) })).kind)
       .toBe("journal");
   });
 
@@ -298,7 +352,7 @@ describe("books-95 · what it refuses", () => {
     // cent is enough to prove 10400 is allowed to go negative, which is the
     // whole thing the guard exists to prevent.
     const r = buildDepositClearingJournal(
-      input({ row: row({ amountCents: -50_001 }), undepositedBalanceMinor: 50_000 }),
+      input({ row: row({ amountCents: -50_001 }), days: days(["2026-11-02", 50_000]) }),
     );
     expect(mustRefuse(r).code).toBe("DEPOSIT_EXCEEDS_UNDEPOSITED");
   });
@@ -308,13 +362,13 @@ describe("books-95 · what it refuses", () => {
     // own whole-cent check. A fractional pool means the ledger read returned
     // something that is not money, and guessing which way to round it would
     // invent or destroy a cent of somebody's cash.
-    const r = buildDepositClearingJournal(input({ undepositedBalanceMinor: 50_000.5 }));
+    const r = buildDepositClearingJournal(input({ days: days(["2026-11-02", 50_000.5]) }));
     expect(mustRefuse(r).code).toBe("DEPOSIT_NON_INTEGER_CENTS");
   });
 
   it("the too-large refusal shows BOTH figures, so the gap is obvious", () => {
     const r = mustRefuse(
-      buildDepositClearingJournal(input({ undepositedBalanceMinor: 10_000 })),
+      buildDepositClearingJournal(input({ days: days(["2026-11-02", 10_000]) })),
     );
     expect(r.explanation).toContain("$500.00");
     expect(r.explanation).toContain("$100.00");
@@ -327,7 +381,9 @@ describe("books-95 · what it refuses", () => {
 
   it("a partial deposit posts and names what is still outstanding", () => {
     const r = mustJournal(
-      buildDepositClearingJournal(input({ undepositedBalanceMinor: 80_000 })),
+      buildDepositClearingJournal(
+        input({ days: days(["2026-11-01", 50_000], ["2026-11-02", 30_000]) }),
+      ),
     );
     expect(amountOn(r, UNDEPOSITED_ACCOUNT)).toBe(-50_000);
     expect(r.explanation).toContain("$300.00");
@@ -378,6 +434,8 @@ describe("books-95 · the balance is read, not taken on trust", () => {
     ];
     const pool = await undepositedBalanceMinor();
     expect(pool?.balanceMinor).toBe(50_000);
+    // and it is broken down by the day the cash came from, not lumped
+    expect(pool?.days.map((d) => d.date)).toEqual(["2026-11-02", "2026-11-03"]);
   });
 
   it("reports the OLDEST date among lines that added to the pool", async () => {
@@ -391,10 +449,17 @@ describe("books-95 · the balance is read, not taken on trust", () => {
   it("a previous clearing credit does not make the pool look older than it is", async () => {
     // A credit is a deposit that already left. Letting it set the oldest date
     // would age the pool with cash that is no longer in it, and could trip the
-    // 30-day refusal on money that is only days old.
+    // 30-day warning on money that is only days old.
     LINES = [
-      { amount_cents: -40_000, gl_journals: { status: "posted", journal_date: "2026-01-05" } },
-      { amount_cents: 50_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+      {
+        amount_cents: -40_000,
+        description: clearedDayDescription("2026-01-05"),
+        gl_journals: { status: "posted", journal_date: "2026-01-20" },
+      },
+      {
+        amount_cents: 50_000,
+        gl_journals: { status: "posted", journal_date: "2026-11-02" },
+      },
     ];
     const pool = await undepositedBalanceMinor();
     expect(pool?.oldestDate).toBe("2026-11-02");
@@ -432,6 +497,8 @@ describe("books-95 · the balance is read, not taken on trust", () => {
     expect(sent.sourceKind).toBe("bank");
     const bank = sent.lines.find((l) => l.accountCode === BANK_OPERATING_ACCOUNT);
     expect(bank?.amountCents).toBe(50_000);
+    // and the outcome names the day it banked, so the screen can show it
+    if (o.kind === "posted") expect(o.clearedDays).toEqual(["2026-11-02"]);
   });
 
   it("a refusal never reaches the ledger", async () => {
@@ -482,7 +549,7 @@ describe("books-95 · the balance is read, not taken on trust", () => {
 
   it("every outcome kind gets its own sentence", () => {
     const kinds: DepositClearOutcome[] = [
-      { kind: "posted", transactionId: "t", sourceRef: "r", journalId: "j", journalNo: 1, outcome: "created", code: "C", message: "money arrived" },
+      { kind: "posted", transactionId: "t", sourceRef: "r", journalId: "j", journalNo: 1, outcome: "created", code: "C", message: "money arrived", warnings: [], clearedDays: ["2026-11-02"] },
       { kind: "refused", transactionId: "t", code: "C", message: "not a deposit" },
       { kind: "failed", transactionId: "t", sourceRef: "r", code: "C", message: "ledger said no" },
     ];
@@ -584,6 +651,75 @@ describe("books-95 · reachability", () => {
   it("the panel names the account, so it can be checked against the books", () => {
     expect(read(PANEL)).toContain("10400");
   });
+
+  it("books-96: the panel LISTS the waiting days, not just a total", async () => {
+    // A single figure cannot tell one busy Saturday from eleven quiet days
+    // piling up, and those want different reactions. Rendered, not grepped
+    // (rule 141): source text proves the string exists, not that it reaches
+    // a screen.
+    LINES = [
+      { amount_cents: 30_000, gl_journals: { status: "posted", journal_date: "2026-11-01" } },
+      { amount_cents: 20_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+    ];
+    const html = renderToStaticMarkup(await UndepositedFunds());
+    expect(html).toContain("2026-11-01");
+    expect(html).toContain("2026-11-02");
+    expect(html).toContain("$300.00");
+    expect(html).toContain("$200.00");
+    expect(html).toContain("$500.00");
+  });
+
+  it("books-96: the days appear OLDEST FIRST on the screen too", async () => {
+    LINES = [
+      { amount_cents: 20_000, gl_journals: { status: "posted", journal_date: "2026-11-05" } },
+      { amount_cents: 30_000, gl_journals: { status: "posted", journal_date: "2026-11-01" } },
+    ];
+    const html = renderToStaticMarkup(await UndepositedFunds());
+    expect(html.indexOf("2026-11-01")).toBeLessThan(html.indexOf("2026-11-05"));
+  });
+
+  it("books-96: a banked day disappears from the list", async () => {
+    // D-76 seen from the screen. Nov 1 was banked; only Nov 2 should remain.
+    LINES = [
+      { amount_cents: 30_000, gl_journals: { status: "posted", journal_date: "2026-11-01" } },
+      {
+        amount_cents: -30_000,
+        description: clearedDayDescription("2026-11-01"),
+        gl_journals: { status: "posted", journal_date: "2026-11-04" },
+      },
+      { amount_cents: 20_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+    ];
+    const html = renderToStaticMarkup(await UndepositedFunds());
+    expect(html).not.toContain("2026-11-01");
+    expect(html).toContain("2026-11-02");
+    expect(html).toContain("$200.00");
+  });
+
+  it("books-96: an over-cleared day is shown in red, never netted into the total", async () => {
+    // Rule 135. The total here is a perfectly innocent $0.00 and the books are
+    // broken; a panel that only printed the total would show all-clear.
+    LINES = [
+      {
+        amount_cents: -10_000,
+        description: clearedDayDescription("2026-11-01"),
+        gl_journals: { status: "posted", journal_date: "2026-11-04" },
+      },
+      { amount_cents: 10_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+    ];
+    const html = renderToStaticMarkup(await UndepositedFunds());
+    expect(html).toMatch(/More was banked than was counted/i);
+    expect(html).toContain("2026-11-01");
+    expect(html).not.toMatch(/Every dollar counted out of a drawer has been matched/i);
+  });
+
+  it("books-96: the panel ties a listed day to a physical bag", async () => {
+    // The control only works if the list is checkable against the safe.
+    LINES = [
+      { amount_cents: 30_000, gl_journals: { status: "posted", journal_date: "2026-11-01" } },
+    ];
+    const html = renderToStaticMarkup(await UndepositedFunds());
+    expect(html).toMatch(/sealed deposit bag/i);
+  });
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -602,5 +738,421 @@ describe("books-95 · what this slice deliberately does NOT do", () => {
     const src = stripComments(read(CORE));
     expect(src).not.toContain("10100");
     expect(src).not.toContain("10300");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 9) books-96 — D-76: THE POOL MUST AGE OUT
+ *
+ * books-95 shipped a working deposit and an unusable one. The credit was a
+ * single lump, so nothing retired a banked day; the pool's oldest date only
+ * ever got older, and after a month every deposit was refused as too old. The
+ * feature passed its tests and would have failed in the shop.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-96 · a banked day leaves the pool", () => {
+  it("D-76: a fully cleared day stops setting the pool's age", async () => {
+    // THE DEFECT, REPRODUCED AGAINST THE READER. Jan 5 was counted and banked;
+    // Nov 2 is still waiting. Before this slice the pool reported Jan 5 as its
+    // oldest cash forever, because the credit never cancelled the debit.
+    LINES = [
+      {
+        amount_cents: 50_000,
+        gl_journals: { status: "posted", journal_date: "2026-01-05" },
+      },
+      {
+        amount_cents: -50_000,
+        description: clearedDayDescription("2026-01-05"),
+        gl_journals: { status: "posted", journal_date: "2026-01-20" },
+      },
+      {
+        amount_cents: 30_000,
+        gl_journals: { status: "posted", journal_date: "2026-11-02" },
+      },
+    ];
+    const pool = await undepositedBalanceMinor();
+    expect(pool?.oldestDate).toBe("2026-11-02");
+    expect(pool?.balanceMinor).toBe(30_000);
+    // and the settled day is gone entirely, not carried as a zero
+    expect(pool?.days.map((d) => d.date)).toEqual(["2026-11-02"]);
+  });
+
+  it("the credit is bucketed by the day it CLEARED, not the day it banked", async () => {
+    // The distinction the whole fix rests on. Both lines below are Jan 5 cash;
+    // the credit's JOURNAL date is Jan 20. If the reader used the journal date
+    // the two would never cancel and Jan 5 would stay open forever.
+    LINES = [
+      {
+        amount_cents: 50_000,
+        gl_journals: { status: "posted", journal_date: "2026-01-05" },
+      },
+      {
+        amount_cents: -50_000,
+        description: clearedDayDescription("2026-01-05"),
+        gl_journals: { status: "posted", journal_date: "2026-01-20" },
+      },
+    ];
+    const pool = await undepositedBalanceMinor();
+    expect(pool?.balanceMinor).toBe(0);
+    expect(pool?.days).toEqual([]);
+    expect(pool?.oldestDate).toBeNull();
+  });
+
+  it("a credit with no marker falls back to its journal date, and says so", async () => {
+    // Rule 133f: books-95's lumped credits exist in no real ledger yet, but the
+    // code path is reachable and must not silently vanish money. Without a
+    // marker the only date the line has is the journal's, and using it is a
+    // stated fallback rather than a guess.
+    LINES = [
+      {
+        amount_cents: 50_000,
+        gl_journals: { status: "posted", journal_date: "2026-11-02" },
+      },
+      {
+        amount_cents: -50_000,
+        description: "Till cash cleared out of Undeposited Funds",
+        gl_journals: { status: "posted", journal_date: "2026-11-02" },
+      },
+    ];
+    const pool = await undepositedBalanceMinor();
+    expect(pool?.balanceMinor).toBe(0);
+  });
+
+  it("a day banked for MORE than it held is reported, never netted away", async () => {
+    // Rule 135. Nov 1 is over-cleared by $100 and Nov 2 holds $100. The total
+    // is a perfectly innocent zero; the day-by-day view is not.
+    LINES = [
+      {
+        amount_cents: -10_000,
+        description: clearedDayDescription("2026-11-01"),
+        gl_journals: { status: "posted", journal_date: "2026-11-03" },
+      },
+      {
+        amount_cents: 10_000,
+        gl_journals: { status: "posted", journal_date: "2026-11-02" },
+      },
+    ];
+    const pool = await undepositedBalanceMinor();
+    expect(pool?.negativeDays.map((d) => d.date)).toEqual(["2026-11-01"]);
+    expect(pool?.balanceMinor).toBe(0);
+  });
+
+  it("and the service refuses to clear against a pool that contradicts itself", async () => {
+    LINES = [
+      {
+        amount_cents: -10_000,
+        description: clearedDayDescription("2026-11-01"),
+        gl_journals: { status: "posted", journal_date: "2026-11-03" },
+      },
+      {
+        amount_cents: 60_000,
+        gl_journals: { status: "posted", journal_date: "2026-11-02" },
+      },
+    ];
+    const o = await clearDepositForBankRow(row(), "deposit_of_sales");
+    expect(o.kind).toBe("refused");
+    if (o.kind === "refused") {
+      expect(o.code).toBe("DEPOSIT_POOL_NOT_POSITIVE");
+      // it must name the offending day, or nobody can go and fix it
+      expect(o.message).toContain("2026-11-01");
+    }
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("a line with no date at all is a NULL read, not a day called undefined", async () => {
+    // Rule 46. Bucketing money under a missing date would put real cash on a
+    // day that does not exist, and the total would still look right.
+    LINES = [
+      {
+        amount_cents: 50_000,
+        description: null,
+        gl_journals: {
+          status: "posted",
+          journal_date: null as unknown as string,
+        },
+      },
+    ];
+    expect(await undepositedBalanceMinor()).toBeNull();
+  });
+
+  it("the query actually ASKS for `description`", async () => {
+    // The other half of the guard below. That test proves the service copes
+    // when the column is absent; this one proves it never asks for a row
+    // shape that would make the column absent in the first place.
+    await undepositedBalanceMinor();
+    expect(String(LAST_QUERY["select"])).toContain("description");
+  });
+
+  it("a SELECT that forgot `description` is a failed read, not a silent relapse", async () => {
+    // THE DOOR THIS FIX CLOSES. Drop the column and every credit loses its
+    // marker, falls back to its journal date, never cancels its debit, and the
+    // pool ages forever again - D-76 wearing the face of correct arithmetic.
+    // Rule 46: that is a question, so it comes back null and nothing posts.
+    DROP_COLUMN = true;
+    expect(await undepositedBalanceMinor()).toBeNull();
+    const o = await clearDepositForBankRow(row(), "deposit_of_sales");
+    expect(o.kind).toBe("refused");
+    expect(submit).not.toHaveBeenCalled();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 10) books-96 — ONE CREDIT PER BUSINESS DAY
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-96 · the deposit names the days it banked", () => {
+  const threeDays = () =>
+    days(["2026-11-01", 30_000], ["2026-11-02", 10_000], ["2026-11-03", 10_000]);
+
+  it("a bag covering three days writes three credits, not one lump", () => {
+    const r = mustJournal(buildDepositClearingJournal(input({ days: threeDays() })));
+    const credits = r.journal.lines.filter((l) => l.accountCode === UNDEPOSITED_ACCOUNT);
+    expect(credits).toHaveLength(3);
+    expect(credits.map((l) => parseClearedDay(l.description))).toEqual([
+      "2026-11-01",
+      "2026-11-02",
+      "2026-11-03",
+    ]);
+  });
+
+  it("and the whole entry still balances", () => {
+    const r = mustJournal(buildDepositClearingJournal(input({ days: threeDays() })));
+    expect(r.journal.lines.reduce((a, l) => a + l.amountCents, 0)).toBe(0);
+    expect(amountOn(r, BANK_OPERATING_ACCOUNT)).toBe(50_000);
+    expect(amountOn(r, UNDEPOSITED_ACCOUNT)).toBe(-50_000);
+  });
+
+  it("no line is ever zero — the schema forbids it", () => {
+    // `gl_journal_lines.amount_cents` carries a `<> 0` check. A day worth
+    // nothing would be rejected by the database at post time, which is a
+    // 500 error on a real deposit rather than a sentence anyone can read.
+    const r = mustJournal(buildDepositClearingJournal(input({ days: threeDays() })));
+    expect(r.journal.lines.every((l) => l.amountCents !== 0)).toBe(true);
+  });
+
+  it("line numbers stay unique as the credits multiply", () => {
+    const r = mustJournal(buildDepositClearingJournal(input({ days: threeDays() })));
+    const nos = r.journal.lines.map((l) => l.lineNo);
+    expect(new Set(nos).size).toBe(nos.length);
+  });
+
+  it("OLDEST FIRST: a short deposit takes the oldest day, not the newest", () => {
+    // If this ever flipped, every total in the system would stay correct and
+    // the pool would age forever — D-76 wearing a different hat.
+    const r = mustJournal(
+      buildDepositClearingJournal(
+        input({ row: row({ amountCents: -30_000 }), days: threeDays() }),
+      ),
+    );
+    const credits = r.journal.lines.filter((l) => l.accountCode === UNDEPOSITED_ACCOUNT);
+    expect(credits).toHaveLength(1);
+    expect(parseClearedDay(credits[0].description)).toBe("2026-11-01");
+    expect(r.allocation.oldestOpenDate).toBe("2026-11-02");
+  });
+
+  it("the sentence the owner reads names the same days as the lines", () => {
+    // Two renderings of one fact. If they can drift, one of them is a lie.
+    const r = mustJournal(buildDepositClearingJournal(input({ days: threeDays() })));
+    for (const d of ["2026-11-01", "2026-11-02", "2026-11-03"]) {
+      expect(r.explanation).toContain(d);
+    }
+  });
+
+  it("the credits reach the LEDGER, not just the return value", async () => {
+    LINES = [
+      { amount_cents: 30_000, gl_journals: { status: "posted", journal_date: "2026-11-01" } },
+      { amount_cents: 20_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+    ];
+    const o = await clearDepositForBankRow(row(), "deposit_of_sales");
+    expect(o.kind).toBe("posted");
+    const sent = submit.mock.calls[0][0] as unknown as {
+      lines: Array<{ accountCode: string; amountCents: number; description: string }>;
+    };
+    const credits = sent.lines.filter((l) => l.accountCode === UNDEPOSITED_ACCOUNT);
+    expect(credits).toHaveLength(2);
+    expect(credits.map((l) => l.description)).toEqual([
+      clearedDayDescription("2026-11-01"),
+      clearedDayDescription("2026-11-02"),
+    ]);
+    if (o.kind === "posted") {
+      expect(o.clearedDays).toEqual(["2026-11-01", "2026-11-02"]);
+    }
+  });
+
+  it("what this entry writes, the reader can read back", async () => {
+    // THE LOOP, CLOSED (rule 140). The credits produced by the builder are fed
+    // straight back through the pool reader. If the marker the writer emits and
+    // the marker the reader parses ever diverge, this fails — and nothing else
+    // would, because each side is self-consistent.
+    const r = mustJournal(
+      buildDepositClearingJournal(input({ days: days(["2026-11-02", 50_000]) })),
+    );
+    LINES = [
+      { amount_cents: 50_000, gl_journals: { status: "posted", journal_date: "2026-11-02" } },
+      ...r.journal.lines
+        .filter((l) => l.accountCode === UNDEPOSITED_ACCOUNT)
+        .map((l) => ({
+          amount_cents: l.amountCents,
+          description: l.description,
+          gl_journals: { status: "posted", journal_date: r.journal.journalDate },
+        })),
+    ];
+    const pool = await undepositedBalanceMinor();
+    expect(pool?.balanceMinor).toBe(0);
+    expect(pool?.oldestDate).toBeNull();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 11) books-96 — THE WARNING THAT POSTS
+ *
+ * Michael, verbatim: "For question 1, post with a warning."
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-96 · aged cash posts with a warning", () => {
+  const aged = () => input({ days: days(["2026-08-01", 50_000]) });
+
+  it("cash older than the 30-day window POSTS — it is no longer refused", () => {
+    // books-95 refused this outright. The owner overruled it, and the reason
+    // matters: refusing a deposit that really happened does not un-happen it,
+    // it just sends the money somewhere it does not belong.
+    const r = buildDepositClearingJournal(aged());
+    expect(r.kind).toBe("journal");
+  });
+
+  it("and it carries a warning that says why it is odd", () => {
+    const r = mustJournal(buildDepositClearingJournal(aged()));
+    expect(r.warnings.map((w) => w.code)).toContain("DEPOSIT_AGED_PAST_WINDOW");
+    expect(r.warnings[0].message).toContain("2026-08-01");
+    expect(r.warnings[0].message).toMatch(/94 days/);
+  });
+
+  it("the warning survives on the JOURNAL, not only on the screen", () => {
+    // A warning that lives in a banner is gone when the banner closes. The
+    // ledger is the thing anyone will still be reading in a year.
+    const r = mustJournal(buildDepositClearingJournal(aged()));
+    expect(r.journal.memo).toContain("DEPOSIT_AGED_PAST_WINDOW");
+  });
+
+  it("an ordinary same-week deposit is NOT warned about", () => {
+    // Rule 135 in the other direction: if everything warns, nothing does.
+    const r = mustJournal(buildDepositClearingJournal(input()));
+    expect(r.warnings).toEqual([]);
+    expect(r.journal.memo).not.toContain("[");
+  });
+
+  it("banking part of a day warns that a bag was split", () => {
+    // Under the owner's stated procedure — one sealed bag per business day —
+    // this cannot happen by accident, so it is worth a sentence.
+    const r = mustJournal(
+      buildDepositClearingJournal(
+        input({ row: row({ amountCents: -20_000 }), days: days(["2026-11-02", 50_000]) }),
+      ),
+    );
+    expect(r.warnings.map((w) => w.code)).toContain("DEPOSIT_SPLITS_A_DAY");
+    expect(r.warnings[0].message).toContain("$200.00");
+    expect(r.warnings[0].message).toContain("$500.00");
+  });
+
+  it("a whole-day bag does NOT trip the split warning", () => {
+    const r = mustJournal(
+      buildDepositClearingJournal(input({ days: days(["2026-11-02", 50_000]) })),
+    );
+    expect(r.warnings.map((w) => w.code)).not.toContain("DEPOSIT_SPLITS_A_DAY");
+  });
+
+  it("the service posts the aged deposit and hands the warning on", async () => {
+    LINES = [
+      { amount_cents: 50_000, gl_journals: { status: "posted", journal_date: "2026-08-01" } },
+    ];
+    const o = await clearDepositForBankRow(row(), "deposit_of_sales");
+    expect(o.kind).toBe("posted");
+    expect(submit).toHaveBeenCalledTimes(1);
+    if (o.kind === "posted") {
+      expect(o.warnings.map((w) => w.code)).toContain("DEPOSIT_AGED_PAST_WINDOW");
+    }
+  });
+
+  it("the sentence leads with the posting and follows with the caveat", async () => {
+    // It posted. A sentence that led with the complaint would read like a
+    // failure and send someone looking for a problem already handled.
+    LINES = [
+      { amount_cents: 50_000, gl_journals: { status: "posted", journal_date: "2026-08-01" } },
+    ];
+    const said = describeDepositOutcome(
+      await clearDepositForBankRow(row(), "deposit_of_sales"),
+    );
+    expect(said).toMatch(/reached the bank/i);
+    expect(said).toMatch(/worth a look/i);
+    expect(said.indexOf("reached the bank")).toBeLessThan(said.indexOf("Worth a look"));
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 12) books-96 — THE LIMITS THE OWNER SET
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+describe("books-96 · no home safe, by decision", () => {
+  it("no intermediate cash account was invented between the drawer and the bank", () => {
+    // Michael: "I don't want to include the home safe... I don't want to add
+    // complexity by routing money around before it hits the bank." An account
+    // for a place the money no longer goes would be a second 10400 with the
+    // same one-way defect.
+    const src = stripComments(read(CORE)) + stripComments(read(SERVICE));
+    expect(src).not.toContain("10150");
+    expect(src).not.toMatch(/home_?safe/i);
+  });
+
+  it("the deposit still moves cash from 10400 to 10200 and nowhere else", () => {
+    const r = mustJournal(
+      buildDepositClearingJournal(
+        input({ days: days(["2026-11-01", 30_000], ["2026-11-02", 20_000]) }),
+      ),
+    );
+    const accounts = new Set(r.journal.lines.map((l) => l.accountCode));
+    expect([...accounts].sort()).toEqual([BANK_OPERATING_ACCOUNT, UNDEPOSITED_ACCOUNT].sort());
+  });
+
+  it("the marker is one string, defined once", () => {
+    // If the writer and the reader ever hold separate copies of this prefix,
+    // they can drift apart and every test on each side still passes.
+    expect(clearedDayDescription("2026-11-02")).toBe(`${CLEARED_DAY_PREFIX}2026-11-02`);
+    expect(parseClearedDay(clearedDayDescription("2026-11-02"))).toBe("2026-11-02");
+  });
+
+  it("the FIFO split always accounts for every cent it was given", () => {
+    // WHY THIS IS A PROPERTY AND NOT AN EXAMPLE. The builder carries a guard
+    // for a split that does not add up (DEPOSIT_ALLOCATION_MISMATCH). A
+    // mutation probe showed that guard can never fire: once the pool is all
+    // positive and the deposit is no larger than the pool, FIFO cannot come up
+    // short. Rule 138 says an equivalent mutant is replaced rather than
+    // tolerated, and rule 133f says a dead end must SAY SO - so the guard is
+    // documented as belt-and-braces and the invariant behind it is asserted
+    // directly here, over many shapes rather than one.
+    let worstGap = 0;
+    for (let i = 0; i < 2_000; i++) {
+      const n = 1 + (i % 5);
+      const pool = Array.from({ length: n }, (_, k) => ({
+        date: `2026-11-${String(k + 1).padStart(2, "0")}`,
+        amountMinor: 1 + ((i * 7 + k * 13) % 997),
+        sourceRef: `till-close:${k}`,
+      }));
+      const total = pool.reduce((a, d) => a + d.amountMinor, 0);
+      const deposit = 1 + ((i * 31) % total);
+      const r = buildDepositClearingJournal(
+        input({ row: row({ amountCents: -deposit }), days: pool }),
+      );
+      const j = mustJournal(r);
+      worstGap = Math.max(worstGap, Math.abs(j.allocation.appliedMinor - deposit));
+      // and the entry balances, every time
+      expect(j.journal.lines.reduce((a, l) => a + l.amountCents, 0)).toBe(0);
+    }
+    expect(worstGap).toBe(0);
+  });
+
+  it("a malformed marker is refused rather than half-read", () => {
+    expect(parseClearedDay(`${CLEARED_DAY_PREFIX}2026-1-1`)).toBeNull();
+    expect(parseClearedDay("something else entirely")).toBeNull();
+    expect(parseClearedDay(null)).toBeNull();
   });
 });

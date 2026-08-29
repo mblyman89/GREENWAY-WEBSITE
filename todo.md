@@ -3543,3 +3543,35 @@ correctness, the earlier rule wins. Nothing here licenses a guess.
      (b) IF SOURCE TEXT IS GENUINELY THE ONLY OPTION - proving a call ORDER, or
          proving something is ABSENT - assert the whole expression, not the
          identifier, and prove the mutation probe can kill it.
+
+## 142. A FIX THAT RESTATES THE BUG'S OWN ASSUMPTION IS NOT A FIX
+
+books-96 set out to kill D-76: the undeposited pool's "oldest date" never aged
+out, because nothing retired a day once its cash was banked. The fix was to
+match deposits to days and let a settled day drop out of the pool.
+
+The first version of that fix left D-76 completely intact.
+
+It folded every 10400 line under its journal date. That is correct for a close
+entry, which is dated on its business day - and wrong for a clearing credit,
+which is dated when the BANK received the money. Those two dates differing IS
+the defect. So the credits never cancelled the debits they paid off, every day
+stayed open forever, and the fix reproduced the bug while looking like a cure.
+Its own self-test caught it on the first run, before anything shipped.
+
+  (a) WHEN FIXING A DEFECT, NAME THE ASSUMPTION THAT CAUSED IT, AND CHECK THE
+      FIX DOES NOT MAKE THE SAME ONE. Here it was "a line's date is its
+      journal's date". The fix quietly assumed it again.
+
+  (b) THE TEST FOR A FIX MUST FAIL AGAINST THE UNFIXED CODE. A test that only
+      exercises the new function proves the new function is self-consistent. It
+      does not prove the defect is gone. The D-76 test asserts the ORIGINAL
+      symptom - a stale date - against the real reader.
+
+  (c) IF THE FIX DEPENDS ON DATA THE OLD CODE NEVER WROTE, THE READ THAT
+      SUPPLIES IT IS PART OF THE FIX AND MUST BE GUARDED LIKE ONE. This fix
+      depends on each credit carrying its business day. Drop that column from
+      the SELECT and every credit silently reverts to its journal date, with
+      every total still correct and every existing test still green. A missing
+      column is therefore a FAILED READ (rule 46), not an empty value, and a
+      mutation probe severs the query to prove it.

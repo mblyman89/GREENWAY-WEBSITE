@@ -1448,16 +1448,17 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
         status: "PRESENT",
         evidence:
           "books-95: clearDepositForBankRow reads the real 10400 balance and calls " +
-          "submitJournal with autoPost. The balance itself is on the end-of-day " +
-          "page via <UndepositedFunds />, so a pool that stops falling is visible " +
-          "to the manager rather than only to a developer with SQL.",
+          "submitJournal with autoPost. books-96: the end-of-day panel lists the " +
+          "open days one by one with what each is worth, so a manager can check " +
+          "the list against the bags in the safe instead of reading one total.",
       },
       correct: {
         status: "PARTIAL",
         evidence:
           "The sign is delegated to plaidToLedgerCashCents, the one sanctioned " +
-          "crossing, and 36/36 mutations - including every sign flip and account " +
-          "swap - are caught. 10900 Cash Clearing is still seeded and unused.",
+          "crossing. books-96 fixed D-76, so a banked day retires and the pool " +
+          "ages honestly; 36/36 books-95 mutations and 36/36 books-96 mutations " +
+          "are caught. 10900 Cash Clearing is still seeded and unused.",
       },
       accepted: { status: "MISSING", evidence: "Never presented." },
       idempotent: {
@@ -1470,10 +1471,13 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       married: {
         status: "PARTIAL",
         evidence:
-          "The deposit is matched against the POOL in 10400, within 30 days and " +
-          "never for more than was counted. It is NOT attributed to named register " +
-          "sessions: one bank credit can cover a bag holding several shifts and " +
-          "the feed does not say how it was composed.",
+          "books-96: the deposit is attributed to the BUSINESS DAYS it banked, " +
+          "oldest first, with one credit line per day naming that day - so one " +
+          "bank credit ties to named Z-reports. It is still NOT attributed to " +
+          "named register SESSIONS: two tills on one day are folded together " +
+          "because the feed does not say how the bag was composed. Cash older " +
+          "than 30 days now POSTS with a warning rather than being refused, by " +
+          "the owner's decision.",
       },
     },
     defectId: "D-39",

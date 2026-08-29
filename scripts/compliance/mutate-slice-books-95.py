@@ -25,6 +25,17 @@ WRONG action's guard because five lines shared its shape, and it "survived"
 for a reason that had nothing to do with the test suite. So this harness
 requires EXACTLY ONE match for every anchor and fails otherwise.
 
+books-96 UPDATED NINE ANCHORS IN THIS FILE. The code they cut changed shape:
+the single lumped credit to 10400 became one credit per business day, and the
+scalar `undepositedBalanceMinor` / `oldestUndepositedDate` pair became a list
+of days. The RISKS are identical, so the probes were re-pointed rather than
+deleted - a probe quietly dropped because its anchor went stale is a hole that
+looks like a clean run. The harness fails on a stale anchor for that reason.
+
+Probe 24 changed MEANING, not just shape: clearing cash older than the window
+used to be a refusal and is now a warning that posts, by the owner's explicit
+decision. Cutting the guard must now be caught by the absence of the WARNING.
+
 Usage:  python3 scripts/compliance/mutate-slice-books-95.py
 """
 import io
@@ -44,10 +55,9 @@ BANK_LINE = """    {
       accountCode: BANK_OPERATING_ACCOUNT,
       amountCents: depositMinor,"""
 
-UNDEPOSITED_LINE = """    {
-      lineNo: 2,
-      accountCode: UNDEPOSITED_ACCOUNT,
-      amountCents: -depositMinor,"""
+# books-96: the credit is now emitted once per banked day, so the anchor is the
+# mapping expression rather than a literal object.
+UNDEPOSITED_LINE = """      amountCents: -d.appliedMinor,"""
 
 TESTS = [
     "tests/compliance/deposit-clearing.test.ts",
@@ -65,7 +75,7 @@ MUTATIONS = [
     ("2  Undeposited Funds is debited instead of credited (the pool grows on a deposit)",
      CORE,
      UNDEPOSITED_LINE,
-     UNDEPOSITED_LINE.replace("amountCents: -depositMinor,", "amountCents: depositMinor,")),
+     "      amountCents: d.appliedMinor,"),
 
     ("3  the two accounts are swapped (right amounts, wrong places)",
      CORE,
@@ -95,15 +105,15 @@ MUTATIONS = [
     # ── INVENTING INCOME ─────────────────────────────────────────────────────
     ("6  a revenue line is added, counting the day's sales twice",
      CORE,
-     "  const remaining = input.undepositedBalanceMinor - depositMinor;",
-     '  lines.push({ lineNo: 3, accountCode: "40100", amountCents: -depositMinor,\n'
+     "  const remaining = allocation.remainingMinor;",
+     '  lines.push({ lineNo: 99, accountCode: "40100", amountCents: -depositMinor,\n'
      '    description: "Sales" });\n'
-     "  const remaining = input.undepositedBalanceMinor - depositMinor;"),
+     "  const remaining = allocation.remainingMinor;"),
 
     ("7  the explanation stops saying the sale was already booked",
      CORE,
-     "No income is recorded — the sale was already booked ` +",
-     "` +"),
+     "`the operating account. No income is recorded — the sale was already ` +",
+     "`the operating account. ` +"),
 
     # ── DIRECTION AND SHAPE OF THE BANK ROW ──────────────────────────────────
     ("8  an outflow is accepted as a deposit",
@@ -155,33 +165,33 @@ MUTATIONS = [
     # ── THE POOL ─────────────────────────────────────────────────────────────
     ("17 a deposit clears an empty pool, inventing cash in transit",
      CORE,
-     "  if (input.undepositedBalanceMinor <= 0) {",
+     "  if (poolMinor <= 0) {",
      "  if (false) {"),
 
     ("18 the pool guard accepts zero (off by one)",
      CORE,
-     "  if (input.undepositedBalanceMinor <= 0) {",
-     "  if (input.undepositedBalanceMinor < 0) {"),
+     "  if (poolMinor <= 0) {",
+     "  if (poolMinor < 0) {"),
 
     ("19 a deposit larger than the pool drives 10400 negative",
      CORE,
-     "  if (depositMinor > input.undepositedBalanceMinor) {",
+     "  if (depositMinor > poolMinor) {",
      "  if (false) {"),
 
     ("20 the over-clear guard is off by one",
      CORE,
-     "  if (depositMinor > input.undepositedBalanceMinor) {",
-     "  if (depositMinor > input.undepositedBalanceMinor + 1) {"),
+     "  if (depositMinor > poolMinor) {",
+     "  if (depositMinor > poolMinor + 1) {"),
 
     ("21 the over-clear refusal stops showing the two figures",
      CORE,
-     "      `The bank received ${money(depositMinor)} but only ` +",
+     "      `The bank received ${money(depositMinor)} but only ${money(poolMinor)} ` +",
      '      "The bank received more than was counted. " +'),
 
-    ("22 a non-integer pool balance is accepted",
+    ("22 a non-integer day amount is accepted",
      CORE,
-     "  if (!Number.isInteger(input.undepositedBalanceMinor)) {",
-     "  if (false) {"),
+     "    if (!Number.isInteger(d.amountMinor)) {",
+     "    if (false) {"),
 
     # ── TIME ─────────────────────────────────────────────────────────────────
     ("23 an unparseable oldest-date is treated as fine",
@@ -189,7 +199,10 @@ MUTATIONS = [
      "  if (gap === null) {",
      "  if (false) {"),
 
-    ("24 a deposit is matched to cash counted a year earlier",
+    # books-96: this is no longer a refusal. The owner decided aged cash POSTS
+    # with a warning, so cutting the guard now means the deposit goes through
+    # SILENTLY - which is the actual risk, and worse than a wrong refusal.
+    ("24 cash counted a year earlier is banked with no warning at all",
      CORE,
      "  if (gap > MATCH_WINDOW_HARD_DAYS) {",
      "  if (false) {"),
@@ -219,7 +232,8 @@ MUTATIONS = [
     ("29 a failed read is reported as an empty pool (rule 46)",
      SERVICE,
      "  if (error || !data) return null;",
-     "  if (error || !data) return { balanceMinor: 0, oldestDate: null };",),
+     "  if (error || !data) return { balanceMinor: 0, oldestDate: null,\n"
+     "    days: [], negativeDays: [] };",),
 
     ("30 an unreadable balance is passed to the builder as zero anyway",
      SERVICE,
@@ -245,7 +259,8 @@ MUTATIONS = [
     ("34 DOOR: the panel shows a hardcoded zero instead of reading the books",
      PANEL,
      "  const pool = await undepositedBalanceMinor();",
-     "  const pool = { balanceMinor: 0, oldestDate: null };"),
+     "  const pool = { balanceMinor: 0, oldestDate: null,\n"
+     "    days: [], negativeDays: [] };"),
 
     ("35 DOOR: an unreadable balance renders as a clean $0.00 (rule 46)",
      PANEL,

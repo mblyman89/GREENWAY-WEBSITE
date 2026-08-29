@@ -4085,11 +4085,52 @@ response to a control that always cries wolf is to switch it off.
 The poster works, is tested, and is wired to a screen, and it would still have
 declined every deposit Michael ever made.
 
-**Not yet fixed.** The fix is bound up with the FIFO deposit-batch work in
-books-96, because "which counted days is this deposit clearing" and "how old is
-the oldest cash still in the pool" are the same question. Recording it here
-first so the fix is a stated correction rather than a silent one.
+**FIXED in books-96.** The pool is now read BY BUSINESS DAY rather than as a
+total with a date bolted on. `undepositedBalanceMinor()` folds every posted
+10400 line into per-day balances, a day whose debits and credits cancel drops
+out of the pool entirely, and `oldestDate` is the first day still genuinely
+OPEN. A deposit is applied to those days oldest first and emits ONE CREDIT PER
+DAY, so the retirement is recorded in the ledger rather than inferred.
 
-**Gate when fixed:** a test in which an older month is fully cleared and a
-newer count remains must report the NEWER date, and a deposit against it must
-post rather than being refused with `DEPOSIT_DATE_TOO_FAR`.
+**The fix needed a second fix, and that is the interesting part.** A close
+entry is dated on its business day, but a clearing credit is dated when the
+BANK received the money - precisely the date that differs. Folding credits by
+journal date means they never cancel the debits they paid off, so the first
+version of the fix left D-76 completely intact while looking correct. Its own
+self-test caught it before anything shipped. Each credit now carries its
+business day explicitly in the line description (`CLEARED_DAY_PREFIX`), and
+`parseClearedDay` is the single place that reads it back.
+
+**Gate, as written above and now met:** `tests/compliance/deposit-clearing.test.ts`
+"D-76: a fully cleared day stops setting the pool's age" - January's $500 is
+counted and fully banked, a $300 count from November remains, and the pool
+reports `2026-11-02`, not `2026-01-05`. The cleared day is gone from `days`
+entirely rather than lingering as a zero.
+
+**Two doors were nailed shut behind it,** because this defect's whole character
+is that it looks like correct arithmetic:
+
+  * *Silent relapse via the query.* If the `SELECT` ever stops requesting
+    `description`, every credit loses its marker, falls back to its journal
+    date, and D-76 returns with every total still correct. The service now
+    treats a missing column as a FAILED READ (rule 46), the test suite asserts
+    the query asks for it, and mutation probe 15 proves both.
+  * *Silent relapse via the order.* Applying a deposit newest-first leaves
+    every total correct and the pool ageing forever. Mutation probes 1, 2 and
+    10 sever that.
+
+**A related invariant was reclassified rather than deleted.** The builder
+carries a `DEPOSIT_ALLOCATION_MISMATCH` guard for a split that does not add up.
+The probe showed it cannot fire: with every day positive and the deposit no
+larger than the pool, FIFO cannot come up short. Per rule 138 the probe was
+re-aimed at something reachable, the guard is kept as belt-and-braces with its
+unreachability stated in the code (rule 133f), and the invariant is now
+asserted directly by a property test over 2,000 generated pools.
+
+**Also changed here, by the owner's decision, not by the defect.**
+`DEPOSIT_DATE_TOO_FAR` no longer exists as a refusal. Michael: *"For question
+1, post with a warning."* Aged cash now POSTS and carries a
+`DEPOSIT_AGED_PAST_WINDOW` warning on the journal memo. The reasoning is
+recorded in `deposit-clearing-core.ts`: refusing a deposit that really happened
+does not un-happen it, it makes the money unrecordable, and a control people
+route around is worse than a loud note they read.

@@ -64,6 +64,45 @@
  * that the stated kind is one this entry is allowed to book, and refuses the
  * rest by name.
  *
+ * WHAT books-96 CHANGED, AND WHY
+ * ------------------------------
+ * books-95 credited `10400` with ONE lumped line. That was enough to make the
+ * balance fall, but it threw away the only fact an auditor asks for: WHICH
+ * DAYS did this deposit bank? It also left D-76 alive - nothing retired a
+ * banked day, so the pool's "oldest uncleared" date never aged out and after
+ * one month every deposit was refused as too old.
+ *
+ * So the credit is now split: ONE CREDIT LINE PER BUSINESS DAY the deposit
+ * clears, oldest first, each line naming its day. The ledger itself now
+ * answers "which days are in this bag", and a fully banked day genuinely
+ * leaves the pool.
+ *
+ * THE OWNER'S PROCEDURE, WHICH THIS ENTRY IS SHAPED AROUND (rule 24)
+ * -----------------------------------------------------------------
+ *     "I will keep cash at the shop and start doing daily deposit bags. Even
+ *     if I don't make it to the bank for 15 days, each deposit will still
+ *     match the day it came from. I don't want to add complexity by routing
+ *     money around before it hits the bank."
+ *
+ * Two consequences are wired in rather than assumed. First, a deposit is
+ * EXPECTED to land on whole-day boundaries, so one that stops in the middle of
+ * a day says the bag was broken open, and that earns a warning. Second, there
+ * is no in-between account.
+ *
+ * DELIBERATE LIMIT: THERE IS NO HOME-SAFE ACCOUNT (rule 133f)
+ * -----------------------------------------------------------
+ * An obvious-looking design would add a `10150 Cash in Owner's Safe` between
+ * the drawer and the bank, because that is physically where the money used to
+ * sit. It is NOT built, and its absence is a decision, not an oversight:
+ *
+ *     "I don't want to include the home safe."
+ *
+ * Cash now stays at the shop in sealed daily bags. Adding an account for a
+ * place the money no longer goes would create a balance nobody counts and
+ * nobody clears - a second `10400` with the same one-way defect. If that ever
+ * changes, the change is a new account plus a new leg, not a quiet reuse of
+ * this one.
+ *
  * MONEY RULE: integer CENTS, never a float.
  *
  * PURE. No I/O, no clock, no database. Every input is an argument.
@@ -77,6 +116,12 @@ import {
   MATCH_WINDOW_HARD_DAYS,
   type BankRow,
 } from "./bank-match-core";
+import {
+  allocateDepositFifo,
+  clearedDayDescription,
+  type UndepositedDay,
+  type FifoAllocation,
+} from "./deposit-fifo-core";
 
 /** `10200 Bank — Operating`. Where the money actually lands. */
 export const BANK_OPERATING_ACCOUNT = "10200";
@@ -95,8 +140,26 @@ export const UNDEPOSITED_ACCOUNT = "10400";
 export const DEPOSIT_SOURCE_KIND = "bank" as const;
 
 /**
- * Every way this entry can be silently wrong. Each is a REFUSAL, never a
- * warning: a warning that can be clicked past is not a control.
+ * Every way this entry is REFUSED outright.
+ *
+ * books-95 said here that every one of these was a refusal and that "a warning
+ * that can be clicked past is not a control." That sentence was too broad, and
+ * the owner overruled the case it got wrong:
+ *
+ *     "For question 1, post with a warning."
+ *
+ * The reasoning behind the correction is worth keeping, because it is the test
+ * for which bucket any future case belongs in. A refusal is right when posting
+ * would write something FALSE - money arriving that did not arrive, a sale
+ * counted twice, cash credited below zero. Every code below is one of those.
+ *
+ * A refusal is WRONG when the event really happened and the only complaint is
+ * that the books find it surprising. Cash that sat in the shop for six weeks is
+ * still cash that reached the bank; refusing it does not make the deposit go
+ * away, it makes the deposit unrecordable, and the owner's next move is to
+ * force it in somewhere it does not belong. A control that people route around
+ * is worse than a loud note they read. So "this is odd" is a WARNING that
+ * posts, and it is carried on the journal itself - see `DepositWarningCode`.
  */
 export type DepositRefusalCode =
   /** The bank row shows money LEAVING. That is not a deposit. */
@@ -117,12 +180,39 @@ export type DepositRefusalCode =
   | "DEPOSIT_NOTHING_UNDEPOSITED"
   /** The deposit is larger than everything counted into 10400. */
   | "DEPOSIT_EXCEEDS_UNDEPOSITED"
-  /** The bank row and the counted cash are too far apart in time to be the same money. */
-  | "DEPOSIT_DATE_TOO_FAR"
+  /** A day in the pool is zero or negative, so the pool disagrees with itself. */
+  | "DEPOSIT_POOL_NOT_POSITIVE"
+  /** The day-by-day split did not add up to the deposit. Never post an entry that limps. */
+  | "DEPOSIT_ALLOCATION_MISMATCH"
   /** A date that is not a real ISO date. */
   | "DEPOSIT_INVALID_DATE"
   /** This bank row already cleared something. */
   | "DEPOSIT_ALREADY_MATCHED";
+
+/**
+ * Things that are TRUE, POSTED, and worth saying out loud.
+ *
+ * A warning never blocks the entry. It travels on the journal memo so it is
+ * still there in a year when someone reads the ledger without this screen.
+ */
+export type DepositWarningCode =
+  /**
+   * The oldest cash in this deposit is more than `MATCH_WINDOW_HARD_DAYS` old.
+   * books-95 refused this. The owner's decision was to post it and say so.
+   */
+  | "DEPOSIT_AGED_PAST_WINDOW"
+  /**
+   * The deposit ran out part-way through a business day, so one day's takings
+   * are split across two bank deposits. Under the owner's stated procedure -
+   * one sealed bag per business day - that should not happen, so it is a
+   * signal that a bag was opened or a day was banked in pieces.
+   */
+  | "DEPOSIT_SPLITS_A_DAY";
+
+export type DepositWarning = {
+  readonly code: DepositWarningCode;
+  readonly message: string;
+};
 
 /** One line of the entry, in ledger convention: positive = debit. */
 export type DepositLine = {
@@ -141,7 +231,15 @@ export type DepositJournal = {
 };
 
 export type DepositResult =
-  | { readonly kind: "journal"; readonly journal: DepositJournal; readonly explanation: string }
+  | {
+      readonly kind: "journal";
+      readonly journal: DepositJournal;
+      readonly explanation: string;
+      /** Empty when nothing is odd. Never used to block. */
+      readonly warnings: readonly DepositWarning[];
+      /** Which days this deposit banked, oldest first. */
+      readonly allocation: FifoAllocation;
+    }
   | {
       readonly kind: "refused";
       readonly code: DepositRefusalCode;
@@ -157,17 +255,16 @@ export type DepositInput = {
    */
   readonly eventKind: string;
   /**
-   * Total currently sitting in `10400`, in ledger convention (positive =
-   * debit balance = cash counted but not yet banked). Supplied by the caller
-   * because reading the ledger is I/O and this module is pure.
+   * The pool in `10400`, ALREADY BROKEN DOWN BY BUSINESS DAY and sorted oldest
+   * first. Supplied by the caller because reading the ledger is I/O.
+   *
+   * books-95 took a total and an oldest-date as two separate numbers. That let
+   * a caller hand over a pair that could not both be true, and made the total
+   * the only thing the entry could talk about. The days ARE the pool: the
+   * balance is their sum and the oldest date is the first one, so neither can
+   * drift from the other.
    */
-  readonly undepositedBalanceMinor: number;
-  /**
-   * The business day of the OLDEST till close making up that balance, ISO
-   * `YYYY-MM-DD`. Used only to refuse a pairing that is too far apart to be
-   * the same money.
-   */
-  readonly oldestUndepositedDate: string;
+  readonly days: readonly UndepositedDay[];
   /** True when this bank row has already cleared a deposit. */
   readonly alreadyMatched?: boolean;
 };
@@ -269,15 +366,34 @@ export function buildDepositClearingJournal(input: DepositInput): DepositResult 
     );
   }
 
-  // ── What is actually waiting to be cleared ────────────────────────────────
-  if (!Number.isInteger(input.undepositedBalanceMinor)) {
-    return refuse(
-      "DEPOSIT_NON_INTEGER_CENTS",
-      "The Undeposited Funds balance is not a whole number of cents.",
-    );
+  // ── What is actually waiting to be cleared ──────────────────────────────
+  // The pool is a list of days, so every check below is asked of the days
+  // themselves. There is no separate "balance" that could disagree with them.
+  for (const d of input.days) {
+    if (!Number.isInteger(d.amountMinor)) {
+      return refuse(
+        "DEPOSIT_NON_INTEGER_CENTS",
+        `The counted cash for ${d.date} is not a whole number of cents.`,
+      );
+    }
+    if (d.amountMinor <= 0) {
+      // Rule 135: zero is an answer and it is the wrong one here. A day worth
+      // nothing should have been dropped when the pool was folded; a day worth
+      // less than nothing means more was banked for it than was ever counted.
+      // Either way the pool disagrees with itself, and silently skipping the
+      // day would bank the discrepancy.
+      return refuse(
+        "DEPOSIT_POOL_NOT_POSITIVE",
+        `Undeposited Funds shows ${money(d.amountMinor)} for ${d.date}. A day ` +
+          "waiting to be banked must be worth more than nothing, so the books " +
+          "disagree with themselves and nothing was cleared against them.",
+      );
+    }
   }
 
-  if (input.undepositedBalanceMinor <= 0) {
+  const poolMinor = input.days.reduce((a, d) => a + d.amountMinor, 0);
+
+  if (poolMinor <= 0) {
     return refuse(
       "DEPOSIT_NOTHING_UNDEPOSITED",
       "Nothing is sitting in Undeposited Funds, so there is no counted cash for " +
@@ -286,18 +402,50 @@ export function buildDepositClearingJournal(input: DepositInput): DepositResult 
     );
   }
 
-  if (depositMinor > input.undepositedBalanceMinor) {
+  if (depositMinor > poolMinor) {
     return refuse(
       "DEPOSIT_EXCEEDS_UNDEPOSITED",
-      `The bank received ${money(depositMinor)} but only ` +
-        `${money(input.undepositedBalanceMinor)} was counted out of the tills. ` +
-        "Clearing the larger figure would credit Undeposited Funds below zero, " +
-        "which says more cash left the drawers than was ever put in them.",
+      `The bank received ${money(depositMinor)} but only ${money(poolMinor)} ` +
+        "was counted out of the tills. Clearing the larger figure would credit " +
+        "Undeposited Funds below zero, which says more cash left the drawers " +
+        "than was ever put in them.",
     );
   }
 
-  // ── Are these plausibly the same money? ───────────────────────────────────
-  const gap = daysApart(input.oldestUndepositedDate, row.date);
+  // ── Split it across the days it came from, oldest first ──────────────────────────────
+  const allocation = allocateDepositFifo(depositMinor, input.days);
+
+  // The split must account for every cent. If it does not, something upstream
+  // is wrong in a way this module cannot see, and a journal that limps is worse
+  // than no journal: it balances, so nothing downstream would ever notice.
+  //
+  // THIS GUARD CANNOT CURRENTLY FIRE, AND THAT IS STATED ON PURPOSE (133f).
+  // Every day above is positive, the pool is positive, and the deposit is no
+  // larger than the pool, so FIFO cannot come up short. A books-96 mutation
+  // probe proved it: disabling this branch changed no test, because no input
+  // reaches it. It is kept as belt-and-braces against a future change to the
+  // guards above, and the invariant it depends on is asserted directly by a
+  // property test rather than left to this unreachable line to notice.
+  if (allocation.appliedMinor !== depositMinor) {
+    return refuse(
+      "DEPOSIT_ALLOCATION_MISMATCH",
+      `The deposit is ${money(depositMinor)} but only ` +
+        `${money(allocation.appliedMinor)} could be matched to counted days. ` +
+        "Nothing was posted, because an entry that quietly drops the difference " +
+        "would still balance and nobody would ever find it.",
+    );
+  }
+
+  // ── Is this pairing plausible in time? ──────────────────────────────
+  const oldestBanked = allocation.days[0]?.date ?? null;
+  if (oldestBanked === null) {
+    return refuse(
+      "DEPOSIT_NOTHING_UNDEPOSITED",
+      "No counted day was matched to this deposit, so there is nothing to clear.",
+    );
+  }
+
+  const gap = daysApart(oldestBanked, row.date);
   if (gap === null) {
     return refuse(
       "DEPOSIT_INVALID_DATE",
@@ -306,21 +454,54 @@ export function buildDepositClearingJournal(input: DepositInput): DepositResult 
     );
   }
 
+  // ── Warnings: true, posted, and said out loud ──────────────────────────────
+  const warnings: DepositWarning[] = [];
+
   if (gap > MATCH_WINDOW_HARD_DAYS) {
-    return refuse(
-      "DEPOSIT_DATE_TOO_FAR",
-      `The oldest uncleared till cash is from ${input.oldestUndepositedDate} and ` +
-        `this deposit is dated ${row.date} — ${gap} days apart. Beyond ` +
-        `${MATCH_WINDOW_HARD_DAYS} days these are two events that happen to ` +
-        "share a number, not the same money.",
-    );
+    // books-95 REFUSED this. The owner overruled it: "For question 1, post with
+    // a warning." The deposit really happened, and refusing a real deposit does
+    // not un-happen it - it teaches people to book the money somewhere it does
+    // not belong. So it posts, and the note rides on the journal.
+    warnings.push({
+      code: "DEPOSIT_AGED_PAST_WINDOW",
+      message:
+        `The oldest cash in this deposit is from ${oldestBanked}, ${gap} days ` +
+        `before it reached the bank on ${row.date}. Anything past ` +
+        `${MATCH_WINDOW_HARD_DAYS} days is worth a second look: cash that sits ` +
+        "that long is usually a bag that was missed, not a bag that was late. " +
+        "It was posted anyway, because the money did arrive.",
+    });
   }
 
-  // ── The entry ─────────────────────────────────────────────────────────────
-  // Two lines, summing to zero. Debit the bank because the money arrived there;
-  // credit Undeposited Funds because it is no longer in limbo. No income line:
-  // the revenue was recognised at the sale, and recognising it again here would
-  // double the day's takings.
+  const partialDay = allocation.days.find((d) => !d.full);
+  if (partialDay !== undefined) {
+    warnings.push({
+      code: "DEPOSIT_SPLITS_A_DAY",
+      message:
+        `This deposit covers only ${money(partialDay.appliedMinor)} of the ` +
+        `${money(partialDay.dayTotalMinor)} counted on ${partialDay.date}, so ` +
+        "that day's takings are split across two bank deposits. With one sealed " +
+        "bag per business day that should not happen, so either a bag was " +
+        "opened or part of the day was banked separately.",
+    });
+  }
+
+  // ── The entry ──────────────────────────────
+  // ONE debit to the bank, then ONE CREDIT PER BUSINESS DAY this deposit
+  // banked. The whole thing sums to zero. No income line: the revenue was
+  // recognised at the sale, and recognising it again would double the takings.
+  //
+  // WHY THE CREDIT IS SPLIT rather than lumped. books-95 wrote a single credit,
+  // which balanced but recorded nothing about WHICH days were in the bag. Three
+  // things now depend on the split, and none can be recovered later from a
+  // lumped line: an auditor can tie one bank credit to named Z-reports; a fully
+  // banked day genuinely retires from the pool, which is D-76; and the aging
+  // figure comes to mean the oldest day still OPEN rather than the oldest day
+  // that ever existed.
+  //
+  // Each credit carries its day in the description via `clearedDayDescription`,
+  // because the journal header is dated when the BANK received the money, which
+  // is exactly the date that differs from the business day.
   const lines: DepositLine[] = [
     {
       lineNo: 1,
@@ -328,19 +509,32 @@ export function buildDepositClearingJournal(input: DepositInput): DepositResult 
       amountCents: depositMinor,
       description: `Deposit reached the bank ${row.date}`,
     },
-    {
-      lineNo: 2,
+    // `amount_cents` carries a `<> 0` check in the schema, and a day worth zero
+    // was refused above, so every line here is non-zero by construction.
+    ...allocation.days.map((d, i) => ({
+      lineNo: i + 2,
       accountCode: UNDEPOSITED_ACCOUNT,
-      amountCents: -depositMinor,
-      description: "Till cash cleared out of Undeposited Funds",
-    },
+      amountCents: -d.appliedMinor,
+      description: clearedDayDescription(d.date),
+    })),
   ];
 
-  const remaining = input.undepositedBalanceMinor - depositMinor;
+  const remaining = allocation.remainingMinor;
   const tail =
     remaining === 0
       ? "That clears Undeposited Funds back to zero."
       : `${money(remaining)} of counted cash is still waiting to reach the bank.`;
+
+  // Name the days in the sentence, not only in the lines. The owner reads the
+  // sentence; the auditor reads the lines. Both must say the same thing.
+  const dayList = allocation.days.map((d) => d.date).join(", ");
+  const covers =
+    allocation.days.length === 1
+      ? `It covers the takings counted on ${dayList}.`
+      : `It covers ${allocation.days.length} business days: ${dayList}.`;
+
+  const memoWarn =
+    warnings.length === 0 ? "" : ` [${warnings.map((w) => w.code).join(" ")}]`;
 
   return {
     kind: "journal",
@@ -348,14 +542,19 @@ export function buildDepositClearingJournal(input: DepositInput): DepositResult 
       journalDate: row.date,
       sourceKind: DEPOSIT_SOURCE_KIND,
       sourceRef: depositSourceRef(row.transactionId),
-      memo: `Deposit ${money(depositMinor)} cleared to bank`,
+      // The warning code rides on the memo so it survives in the ledger itself.
+      // A warning that exists only on the screen that posted it is gone the
+      // moment the screen closes.
+      memo: `Deposit ${money(depositMinor)} cleared to bank${memoWarn}`,
       lines,
     },
     explanation:
       `${money(depositMinor)} counted out of the tills reached the bank on ` +
-      `${row.date}. This moves it out of Undeposited Funds and into the ` +
-      `operating account. No income is recorded — the sale was already booked ` +
-      `when it was rung up. ${tail}`,
+      `${row.date}. ${covers} This moves it out of Undeposited Funds and into ` +
+      `the operating account. No income is recorded — the sale was already ` +
+      `booked when it was rung up. ${tail}`,
+    warnings,
+    allocation,
   };
 }
 
@@ -393,23 +592,30 @@ function rowFixture(over: Partial<BankRow> = {}): BankRow {
   };
 }
 
+/**
+ * The pool as DAYS. The default is the ordinary case: one sealed bag, one
+ * business day, banked the next morning.
+ */
+function daysFixture(): UndepositedDay[] {
+  return [{ date: "2026-11-02", amountMinor: 50_000, sourceRef: "till-close:s1" }];
+}
+
 function inputFixture(over: Partial<DepositInput> = {}): DepositInput {
   return {
     row: rowFixture(),
     eventKind: "deposit_of_sales",
-    undepositedBalanceMinor: 50_000,
-    oldestUndepositedDate: "2026-11-02",
+    days: daysFixture(),
     ...over,
   };
 }
 
 export function __runDepositClearingTests(): void {
-  // ── the happy path ────────────────────────────────────────────────────────
+  // ── the happy path ──────────────────────────────
   const ok = buildDepositClearingJournal(inputFixture());
   expect("a settled sales deposit produces a journal", ok.kind === "journal");
   if (ok.kind !== "journal") return;
 
-  expect("two lines", ok.journal.lines.length === 2);
+  expect("one day banked means two lines", ok.journal.lines.length === 2);
   expect(
     "the entry sums to zero",
     ok.journal.lines.reduce((a, l) => a + l.amountCents, 0) === 0,
@@ -431,10 +637,73 @@ export function __runDepositClearingTests(): void {
     ok.explanation.includes("already booked"));
   expect("a full clear says so", ok.explanation.includes("back to zero"));
   expect("the ref is the plaid id", ok.journal.sourceRef === "deposit-clear:txn_dep_1");
+  expect("an ordinary deposit warns about nothing", ok.warnings.length === 0);
+  expect("and the memo stays clean", !ok.journal.memo.includes("["));
 
-  // ── a partial deposit leaves the rest visible ─────────────────────────────
+  // ── the credit names the day it cleared, not the day it banked ──────────────────────────────
+  // This is the D-76 fix seen from the outside. The journal is dated 2026-11-03
+  // (the bank), the day banked is 2026-11-02 (the till). If the credit carried
+  // the journal date it would never cancel the debit it paid off.
+  expect("the journal is dated when the bank got it", ok.journal.journalDate === "2026-11-03");
+  expect("but the credit names the business day",
+    und?.description === clearedDayDescription("2026-11-02"));
+  expect("and the sentence names it too", ok.explanation.includes("2026-11-02"));
+
+  // ── a deposit covering several days gets a credit for each ──────────────────────────────
+  const threeDays: UndepositedDay[] = [
+    { date: "2026-11-01", amountMinor: 30_000, sourceRef: "till-close:a" },
+    { date: "2026-11-02", amountMinor: 10_000, sourceRef: "till-close:b" },
+    { date: "2026-11-03", amountMinor: 10_000, sourceRef: "till-close:c" },
+  ];
+  const multi = buildDepositClearingJournal(inputFixture({ days: threeDays }));
+  expect("a three-day bag posts", multi.kind === "journal");
+  if (multi.kind === "journal") {
+    const credits = multi.journal.lines.filter(
+      (l) => l.accountCode === UNDEPOSITED_ACCOUNT);
+    expect("one credit per day, not one lump", credits.length === 3);
+    expect("the debit is still a single line",
+      multi.journal.lines.filter((l) => l.accountCode === BANK_OPERATING_ACCOUNT).length === 1);
+    expect("it still sums to zero",
+      multi.journal.lines.reduce((a, l) => a + l.amountCents, 0) === 0);
+    expect("line numbers are unique and dense",
+      new Set(multi.journal.lines.map((l) => l.lineNo)).size === 4 &&
+      Math.max(...multi.journal.lines.map((l) => l.lineNo)) === 4);
+    expect("every credit names a distinct day",
+      new Set(credits.map((l) => l.description)).size === 3);
+    expect("the days are named oldest first",
+      credits[0].description === clearedDayDescription("2026-11-01") &&
+      credits[2].description === clearedDayDescription("2026-11-03"));
+    expect("and the sentence counts them", multi.explanation.includes("3 business days"));
+    expect("a whole-day bag warns about nothing", multi.warnings.length === 0);
+  }
+
+  // ── oldest first is not decorative ──────────────────────────────
+  // Handed the same days, a deposit too small to cover them all must take the
+  // OLDEST, leaving the newest open. If this ever became newest-first the pool
+  // would age forever while the totals stayed perfect.
+  const partialPool = buildDepositClearingJournal(
+    inputFixture({ row: rowFixture({ amountCents: -30_000 }), days: threeDays }),
+  );
+  expect("a short deposit still posts", partialPool.kind === "journal");
+  if (partialPool.kind === "journal") {
+    const credits = partialPool.journal.lines.filter(
+      (l) => l.accountCode === UNDEPOSITED_ACCOUNT);
+    expect("it clears exactly the oldest day",
+      credits.length === 1 && credits[0].description === clearedDayDescription("2026-11-01"));
+    expect("and 2026-11-02 is now the oldest still open",
+      partialPool.allocation.oldestOpenDate === "2026-11-02");
+    expect("the rest is reported as still waiting",
+      partialPool.allocation.remainingMinor === 20_000);
+  }
+
+  // ── a partial deposit leaves the rest visible ──────────────────────────────
   const partial = buildDepositClearingJournal(
-    inputFixture({ undepositedBalanceMinor: 80_000 }),
+    inputFixture({
+      days: [
+        { date: "2026-11-01", amountMinor: 50_000, sourceRef: "till-close:a" },
+        { date: "2026-11-02", amountMinor: 30_000, sourceRef: "till-close:b" },
+      ],
+    }),
   );
   expect("a partial deposit still posts", partial.kind === "journal");
   if (partial.kind === "journal") {
@@ -442,7 +711,46 @@ export function __runDepositClearingTests(): void {
       partial.explanation.includes("$300.00"));
   }
 
-  // ── refusals ──────────────────────────────────────────────────────────────
+  // ── WARNINGS: true, posted, and said out loud ──────────────────────────────
+  // Michael: "For question 1, post with a warning." Aged cash must POST.
+  const aged = buildDepositClearingJournal(
+    inputFixture({
+      days: [{ date: "2026-08-01", amountMinor: 50_000, sourceRef: "till-close:old" }],
+    }),
+  );
+  expect("cash older than the window POSTS, it is not refused",
+    aged.kind === "journal");
+  if (aged.kind === "journal") {
+    expect("and it carries the aged warning",
+      aged.warnings.some((w) => w.code === "DEPOSIT_AGED_PAST_WINDOW"));
+    expect("the warning names the day and the gap",
+      aged.warnings[0].message.includes("2026-08-01") &&
+      aged.warnings[0].message.includes("94 days"));
+    expect("the warning survives on the journal memo",
+      aged.journal.memo.includes("DEPOSIT_AGED_PAST_WINDOW"));
+    expect("and it still says the money arrived",
+      aged.warnings[0].message.includes("posted anyway"));
+  }
+
+  // Half a day banked = a bag was opened. True, posted, worth saying.
+  const splitDay = buildDepositClearingJournal(
+    inputFixture({
+      row: rowFixture({ amountCents: -20_000 }),
+      days: [{ date: "2026-11-02", amountMinor: 50_000, sourceRef: "till-close:s1" }],
+    }),
+  );
+  expect("banking half a day POSTS", splitDay.kind === "journal");
+  if (splitDay.kind === "journal") {
+    expect("and warns that the day was split",
+      splitDay.warnings.some((w) => w.code === "DEPOSIT_SPLITS_A_DAY"));
+    expect("naming both figures",
+      splitDay.warnings[0].message.includes("$200.00") &&
+      splitDay.warnings[0].message.includes("$500.00"));
+    expect("the day stays open because it was not fully banked",
+      splitDay.allocation.oldestOpenDate === "2026-11-02");
+  }
+
+  // ── refusals ──────────────────────────────
   const outflow = buildDepositClearingJournal(
     inputFixture({ row: rowFixture({ amountCents: 50_000 }) }),
   );
@@ -483,14 +791,14 @@ export function __runDepositClearingTests(): void {
       wrongKind.explanation.includes("own_transfer"));
   }
 
-  const nothing = buildDepositClearingJournal(
-    inputFixture({ undepositedBalanceMinor: 0 }),
-  );
+  const nothing = buildDepositClearingJournal(inputFixture({ days: [] }));
   expect("nothing undeposited is refused",
     nothing.kind === "refused" && nothing.code === "DEPOSIT_NOTHING_UNDEPOSITED");
 
   const tooBig = buildDepositClearingJournal(
-    inputFixture({ undepositedBalanceMinor: 10_000 }),
+    inputFixture({
+      days: [{ date: "2026-11-02", amountMinor: 10_000, sourceRef: "till-close:s1" }],
+    }),
   );
   expect("a deposit bigger than the counted cash is refused",
     tooBig.kind === "refused" && tooBig.code === "DEPOSIT_EXCEEDS_UNDEPOSITED");
@@ -499,11 +807,45 @@ export function __runDepositClearingTests(): void {
       tooBig.explanation.includes("$500.00") && tooBig.explanation.includes("$100.00"));
   }
 
-  const far = buildDepositClearingJournal(
-    inputFixture({ oldestUndepositedDate: "2026-08-01" }),
+  // A day worth zero or less means the pool contradicts itself. Rule 135: that
+  // is a question, and the answer is not "skip the day and bank the rest".
+  const negDay = buildDepositClearingJournal(
+    inputFixture({
+      days: [
+        { date: "2026-11-01", amountMinor: -1, sourceRef: "till-close:a" },
+        { date: "2026-11-02", amountMinor: 50_001, sourceRef: "till-close:b" },
+      ],
+    }),
   );
-  expect("a pairing 30+ days apart is refused",
-    far.kind === "refused" && far.code === "DEPOSIT_DATE_TOO_FAR");
+  expect("a negative day is refused, not netted away",
+    negDay.kind === "refused" && negDay.code === "DEPOSIT_POOL_NOT_POSITIVE");
+
+  const zeroDay = buildDepositClearingJournal(
+    inputFixture({
+      days: [
+        { date: "2026-11-01", amountMinor: 0, sourceRef: "till-close:a" },
+        { date: "2026-11-02", amountMinor: 50_000, sourceRef: "till-close:b" },
+      ],
+    }),
+  );
+  expect("a zero day is refused too",
+    zeroDay.kind === "refused" && zeroDay.code === "DEPOSIT_POOL_NOT_POSITIVE");
+
+  const fractional = buildDepositClearingJournal(
+    inputFixture({
+      days: [{ date: "2026-11-02", amountMinor: 50_000.5, sourceRef: "till-close:s1" }],
+    }),
+  );
+  expect("a fractional day is refused",
+    fractional.kind === "refused" && fractional.code === "DEPOSIT_NON_INTEGER_CENTS");
+
+  const badDate = buildDepositClearingJournal(
+    inputFixture({
+      days: [{ date: "not-a-date", amountMinor: 50_000, sourceRef: "till-close:s1" }],
+    }),
+  );
+  expect("an unparseable business day is refused",
+    badDate.kind === "refused" && badDate.code === "DEPOSIT_INVALID_DATE");
 
   const dup = buildDepositClearingJournal(inputFixture({ alreadyMatched: true }));
   expect("a bank row that already cleared is refused",
@@ -511,10 +853,15 @@ export function __runDepositClearingTests(): void {
 
   // An exact-size deposit is the normal case and must NOT trip the exceeds
   // guard: `>` and `>=` differ by exactly the everyday scenario.
-  const exact = buildDepositClearingJournal(
-    inputFixture({ undepositedBalanceMinor: 50_000 }),
-  );
+  const exact = buildDepositClearingJournal(inputFixture());
   expect("banking exactly what was counted is allowed", exact.kind === "journal");
+
+  // One cent over is the other side of that boundary.
+  const oneOver = buildDepositClearingJournal(
+    inputFixture({ row: rowFixture({ amountCents: -50_001 }) }),
+  );
+  expect("one cent more than was counted is refused",
+    oneOver.kind === "refused" && oneOver.code === "DEPOSIT_EXCEEDS_UNDEPOSITED");
 
   console.log("deposit-clearing-core self-tests: all passed");
 }

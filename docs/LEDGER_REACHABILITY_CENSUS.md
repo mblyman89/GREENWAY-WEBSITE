@@ -485,11 +485,11 @@ Till cash is counted, moved to the vault, and deposited at the bank.
 - Posts the entry: `src/lib/accounting/deposit-clearing-service.ts#clearDepositForBankRow`
 
 - **exists: PRESENT** -- books-93 built the first leg - the drawer count into 10400 Undeposited Funds. books-95 built the second: buildDepositClearingJournal debits 10200 and credits 10400 when the bank confirms the money arrived.
-- **reachable: PRESENT** -- books-95: clearDepositForBankRow reads the real 10400 balance and calls submitJournal with autoPost. The balance itself is on the end-of-day page via <UndepositedFunds />, so a pool that stops falling is visible to the manager rather than only to a developer with SQL.
-- **correct: PARTIAL** -- The sign is delegated to plaidToLedgerCashCents, the one sanctioned crossing, and 36/36 mutations - including every sign flip and account swap - are caught. 10900 Cash Clearing is still seeded and unused.
+- **reachable: PRESENT** -- books-95: clearDepositForBankRow reads the real 10400 balance and calls submitJournal with autoPost. books-96: the end-of-day panel lists the open days one by one with what each is worth, so a manager can check the list against the bags in the safe instead of reading one total.
+- **correct: PARTIAL** -- The sign is delegated to plaidToLedgerCashCents, the one sanctioned crossing. books-96 fixed D-76, so a banked day retires and the pool ages honestly; 36/36 books-95 mutations and 36/36 books-96 mutations are caught. 10900 Cash Clearing is still seeded and unused.
 - **accepted: MISSING** -- Never presented.
 - **idempotent: PRESENT** -- sourceRef deposit-clear:<transactionId>, so a second attempt on the same bank row returns duplicate and writes nothing. The builder also refuses a row the caller already knows is matched.
-- **married: PARTIAL** -- The deposit is matched against the POOL in 10400, within 30 days and never for more than was counted. It is NOT attributed to named register sessions: one bank credit can cover a bag holding several shifts and the feed does not say how it was composed.
+- **married: PARTIAL** -- books-96: the deposit is attributed to the BUSINESS DAYS it banked, oldest first, with one credit line per day naming that day - so one bank credit ties to named Z-reports. It is still NOT attributed to named register SESSIONS: two tills on one day are folded together because the feed does not say how the bag was composed. Cash older than 30 days now POSTS with a warning rather than being refused, by the owner's decision.
 
 **If this stays broken:** In a cash business this is the reconciliation regulators look at first. Without it there is no audit trail from till to bank.
 

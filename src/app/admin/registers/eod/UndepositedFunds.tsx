@@ -17,6 +17,19 @@ import { money } from "@/lib/accounting/deposit-clearing-core";
  * So the number is put on the screen where the money physically is — the
  * end-of-day report — with the two questions it should provoke printed next to
  * it. Reading it is not the same as clearing it, and this panel says so.
+ *
+ * WHAT books-96 ADDED, AND WHY A TOTAL WAS NOT ENOUGH
+ * ---------------------------------------------------
+ * The panel used to show one number and one date. A single figure cannot tell
+ * "one busy Saturday not yet banked" from "eleven ordinary days quietly piling
+ * up", and those call for completely different reactions. It now lists the
+ * days themselves, oldest first, which is also the list a manager can carry to
+ * the safe and check bag by bag.
+ *
+ * The owner's procedure is one sealed bag per business day, so a day on this
+ * list should correspond to a bag that physically exists. That correspondence
+ * is the whole control: a day here with no bag in the safe is missing money,
+ * and no total will ever tell you that.
  */
 export async function UndepositedFunds() {
   const pool = await undepositedBalanceMinor();
@@ -36,8 +49,8 @@ export async function UndepositedFunds() {
     );
   }
 
-  const { balanceMinor, oldestDate } = pool;
-  const clear = balanceMinor === 0;
+  const { balanceMinor, oldestDate, days, negativeDays } = pool;
+  const clear = balanceMinor === 0 && negativeDays.length === 0;
 
   return (
     <section
@@ -75,6 +88,34 @@ export async function UndepositedFunds() {
               The oldest uncleared cash is from <strong>{oldestDate}</strong>.
             </p>
           ) : null}
+
+          {days.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-slate-700">
+                {days.length === 1
+                  ? "One business day is waiting to be banked:"
+                  : `${days.length} business days are waiting to be banked, oldest first:`}
+              </p>
+              <ul className="mt-1 divide-y divide-slate-200 rounded-lg border border-slate-200">
+                {days.map((d) => (
+                  <li
+                    key={d.date}
+                    className="flex items-baseline justify-between px-3 py-1.5"
+                  >
+                    <span className="text-slate-800">{d.date}</span>
+                    <span className="tabular-nums font-medium text-slate-900">
+                      {money(d.amountMinor)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-slate-500">
+                Each line should be one sealed deposit bag. A day listed here
+                with no bag in the safe is cash that was counted and never
+                banked.
+              </p>
+            </div>
+          ) : null}
           <p className="mt-2 text-slate-700">
             If this number keeps climbing, one of two things is true, and both
             are worth knowing: deposits are reaching the bank but nobody is
@@ -84,10 +125,36 @@ export async function UndepositedFunds() {
         </>
       )}
 
+      {negativeDays.length > 0 ? (
+        // Rule 135. A day banked for more than it held is the books
+        // contradicting themselves, and netting it into the total would hide
+        // that inside a figure that still looks reasonable.
+        <div className="mt-3 rounded-lg border border-rose-300 bg-rose-50 p-3">
+          <p className="font-semibold text-rose-900">
+            More was banked than was counted, on{" "}
+            {negativeDays.length === 1 ? "one day" : `${negativeDays.length} days`}
+          </p>
+          <ul className="mt-1">
+            {negativeDays.map((d) => (
+              <li key={d.date} className="text-rose-900">
+                <strong>{d.date}</strong> is over-cleared by{" "}
+                <span className="tabular-nums">{money(-d.amountMinor)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-sm text-rose-800">
+            A deposit was cleared against a day that never held that much. Until
+            it is corrected, no further deposit can be cleared — adding to it
+            would bury the difference in a total that still adds up.
+          </p>
+        </div>
+      ) : null}
+
       <p className="mt-3 text-xs text-slate-500">
         Showing this figure does not clear it. Clearing happens when a bank
         deposit is confirmed against it, which credits this account and debits
-        10200 Bank — Operating.
+        10200 Bank — Operating. Each deposit is applied to the oldest days
+        first, and the entry names every day it covered.
       </p>
     </section>
   );
