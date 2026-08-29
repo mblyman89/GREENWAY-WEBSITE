@@ -9,7 +9,8 @@
  *                             plaid-core.mapItemStatus so the page never re-derives copy).
  *   3) buildAccountSummary  — one account row → display strings (name, mask, type,
  *                             role label, balances formatted from CENTS).
- *   4) roleAssignmentCheck  — enforce "one account per role" BEFORE writing, with a
+ *   4) roleAssignmentCheck  — validate a role BEFORE writing; only `main` is
+ *                            unique (books-101, D-79). Previously all roles, with a
  *                             friendly conflict message (never guess; validate first).
  *   5) formatCentsUsd / maskLabel — tiny money & mask formatters (money stays in cents).
  *
@@ -18,6 +19,7 @@
  */
 
 import { ACCOUNT_ROLES, mapItemStatus, validateRoleAssignment, type AccountRole, type ItemStatusView } from "./plaid-core";
+import { roleMustBeUnique } from "./account-classification-core";
 
 // ---------------------------------------------------------------------------
 // 1) Tab resolver — the page has two tabs in P2. Unknown/empty → "connections".
@@ -221,11 +223,32 @@ export function buildAccountSummary(a: AccountSummaryInput): AccountSummaryView 
 export type ExistingRoleAssignment = { accountId: string; role: string | null };
 
 /**
- * Enforce "one account per role" for BOTH canonical and custom roles, BEFORE
- * writing. Accepts a canonical role or a typed custom name (validated +
- * normalized via validateRoleAssignment). Returns the role string to write
- * (canonical value or normalized custom key), or a friendly error. NEVER
- * throws. Clearing a role (role=null) is always allowed.
+ * Validate a role assignment BEFORE writing, and enforce uniqueness only for
+ * the roles that actually require it. Accepts a canonical role or a typed
+ * custom name (validated + normalized via validateRoleAssignment). Returns the
+ * role string to write, or a friendly error. NEVER throws. Clearing a role
+ * (role=null) is always allowed.
+ *
+ * BOOKS-101 (D-79): THIS USED TO REFUSE EVERY REPEATED ROLE.
+ * ---------------------------------------------------------
+ * One account per role was correct when there was one business checking
+ * account and one card. It became a wall the moment Michael went to connect
+ * his Citi Mastercard, Alyssa's accounts, their investment portfolios and
+ * their debt: tagging a second account `credit` returned "That \"Credit card\"
+ * role is already assigned to another account", and the only way to make the
+ * screen accept the new card was to UNTAG the old one — which silently stops
+ * that card's feed from posting at all (CASH_ACCOUNT_UNASSIGNED). A model that
+ * allows one of each made the true state of his finances unenterable.
+ *
+ * Repeating costs nothing for almost every role. Two business cards both
+ * credit 33000, and 0173 seeds that account saying "WHICH card is a dimension."
+ *
+ * `main` is the exception, and roleMustBeUnique() carries the reason: two
+ * reconcilers filter on role==="main" and then LOOP over every match to pull
+ * bank withdrawals, so a second main account starts dragging its transactions
+ * into vendor and payroll reconciliation. Uniqueness is now a property OF THE
+ * ROLE rather than a blanket rule, which is why the list lives in
+ * account-classification-core next to the reason for it, not here.
  */
 export function roleAssignmentCheck(
   targetAccountId: string,
@@ -238,13 +261,20 @@ export function roleAssignmentCheck(
   const role = validated.role;
   if (role === null) return { ok: true, role: null }; // clearing is always fine
 
+  // Only roles that must be unique are checked for a collision at all.
+  if (!roleMustBeUnique(role)) return { ok: true, role };
+
   // Is this exact role key already held by a DIFFERENT account? Compare on the
   // normalized key so "Petty Cash" and "petty cash" count as the same role.
   const holder = existing.find((e) => e.role === role && e.accountId !== targetAccountId);
   if (holder) {
     return {
       ok: false,
-      error: `That "${roleLabel(role)}" role is already assigned to another account. Clear it there first, then assign it here.`,
+      error:
+        `That "${roleLabel(role)}" role is already assigned to another account, and it is the one role ` +
+        `that can only belong to one account: vendor and payroll reconciliation both read every account ` +
+        `tagged "${roleLabel(role)}" looking for the withdrawals they need to match. Clear it there first, ` +
+        `then assign it here.`,
     };
   }
   return { ok: true, role };
@@ -423,6 +453,20 @@ export function __runPlaidUiCoreTests(): void {
   const assignFree = roleAssignmentCheck("acc_new", "credit", existing);
   ok(assignFree.ok && assignFree.role === "credit", "free role assigns");
 
+  // D-79: a SECOND credit card must be taggable. Before books-101 this refused,
+  // which is what made Michael's Citi Mastercard unenterable alongside the
+  // card already tagged. Two cards both credit 33000; which card is a
+  // dimension (0173), not a different account.
+  const secondCard = roleAssignmentCheck("acc_card2", "credit", [
+    ...existing,
+    { accountId: "acc_card1", role: "credit" },
+  ]);
+  ok(secondCard.ok && secondCard.role === "credit", "a SECOND credit card assigns (D-79)");
+  const thirdSavings = roleAssignmentCheck("acc_sav2", "savings", [
+    { accountId: "acc_sav1", role: "savings" },
+  ]);
+  ok(thirdSavings.ok, "a second savings account assigns (D-79)");
+
   const clear = roleAssignmentCheck("acc_main", "", existing);
   ok(clear.ok && clear.role === null, "empty → clear (always allowed)");
   const clearNone = roleAssignmentCheck("acc_x", "none", existing);
@@ -450,12 +494,22 @@ export function __runPlaidUiCoreTests(): void {
   ];
   const newCustom = roleAssignmentCheck("acc_new", "Petty Cash", customExisting);
   ok(newCustom.ok && newCustom.role === "petty cash", "custom role normalized + assigned");
-  const customConflict = roleAssignmentCheck("acc_new", "ESCROW", customExisting);
-  ok(!customConflict.ok, "custom role already held by another account → conflict");
+  // A repeated CUSTOM role is also fine now (D-79) — two escrow accounts are a
+  // perfectly ordinary thing to have, and refusing simply hid the second one.
+  const customRepeat = roleAssignmentCheck("acc_new", "ESCROW", customExisting);
+  ok(customRepeat.ok && customRepeat.role === "escrow", "a repeated custom role assigns (D-79)");
   const customSameAcct = roleAssignmentCheck("acc_escrow", "escrow", customExisting);
   ok(customSameAcct.ok && customSameAcct.role === "escrow", "same account re-asserting its custom role is fine");
+  // `main` is the ONE role that still refuses, and the message must say why:
+  // vendor + payroll reconciliation each loop over every account tagged main.
   const shadowReserved = roleAssignmentCheck("acc_new", "main", customExisting);
-  ok(!shadowReserved.ok, "reserved role already taken still conflicts");
+  ok(!shadowReserved.ok, "'main' is still unique — two reconcilers trawl every main account");
+  if (!shadowReserved.ok) {
+    ok(
+      shadowReserved.error.includes("reconciliation"),
+      "the refusal explains WHY main is the exception, not just that it is",
+    );
+  }
 
   // roleLabel on custom keys
   ok(roleLabel("petty cash") === "Petty Cash", "custom role Title-Cased");

@@ -531,10 +531,17 @@ describe("the migration list is ordered the way the database will see it", () =>
     // cannot be told apart by their date. The bag number can tell them apart,
     // because it is written on the bag AND on the bank's deposit slip.
     //
-    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 212;
+    // 0213_plaid_account_owner_and_books.sql exists because nothing on a Plaid
+    // account said whose it was (D-80), so the entity of a posted expense came
+    // from the merchant rule alone and a personal charge landed in a 280E
+    // business. Michael: "I want to make sure we are very deliberate and clear
+    // about what accounts are for business and which ones are my wife and my
+    // personal accounts."
+    //
+    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 213;
     // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
-    // sort -c` exits clean. Only then was 0211 changed to 0212.
-    expect(listed[listed.length - 1]).toMatch(/^0212_/);
+    // sort -c` exits clean. Only then was 0212 changed to 0213.
+    expect(listed[listed.length - 1]).toMatch(/^0213_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

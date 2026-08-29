@@ -939,7 +939,16 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
           "tax, 121 rows / $61,109.02 -- not from judgement. Chart facts are " +
           "drift-tested against migration 0173; the reseller COGS bar is " +
           "mutation-verified across all 14 barred accounts (6/6 mutants caught, " +
-          "D-58).",
+          "D-58). books-101 REMOVED THE CLASSIFIER'S VOTE ON THE ENTITY: it used " +
+          "to be the only thing deciding whose books a cost landed on, so " +
+          "classifyExpense({merchant:'AMAZON'}) returned entity 'greenway' " +
+          "whoever swiped and a personal charge posted into a 280E business " +
+          "(D-80). The ENTITY now comes from the funding account's books_entity " +
+          "tag (migration 0213), which the owner sets; the classifier still " +
+          "chooses the ACCOUNT and the COST CLASS, which is what merchant text " +
+          "can actually know. When the two disagree about which business, " +
+          "planBankExpense refuses ACCOUNT_BOOKS_MISMATCH rather than preferring " +
+          "either. Held by mutate-slice-books-101.py, 21 mutations, 21 caught.",
       },
       accepted: {
         status: "PARTIAL",

@@ -301,7 +301,11 @@ export async function recordBankExpenses(
 
   const { data: acct, error: acctError } = await admin
     .from("plaid_accounts")
-    .select("account_id,role,active")
+    // books_entity is what makes the entity come from the ACCOUNT instead of
+    // the merchant rule (D-80). Drop it from this select and every account
+    // reads as unclassified, so the door refuses everything -- loudly, which is
+    // the safe way for this particular wire to break.
+    .select("account_id,role,books_entity,active")
     .eq("account_id", plaidAccountId)
     .maybeSingle();
 
@@ -358,5 +362,12 @@ export async function recordBankExpenses(
   });
 
   const role = typeof acct.role === "string" && acct.role.trim() !== "" ? acct.role : null;
-  return recordBankExpenseLines(lines, { accountId: plaidAccountId, role }, admin);
+  // Read, never inferred. A caller passing the books from memory is exactly how
+  // a personal charge would end up on a business return -- the same reasoning
+  // that made this function read the role rather than accept it.
+  const booksEntity =
+    typeof acct.books_entity === "string" && acct.books_entity.trim() !== ""
+      ? acct.books_entity
+      : null;
+  return recordBankExpenseLines(lines, { accountId: plaidAccountId, role, booksEntity }, admin);
 }

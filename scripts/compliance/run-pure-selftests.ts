@@ -468,6 +468,7 @@ import { __runPlaidCoreTests } from "../../src/lib/plaid/plaid-core";
 import { __runPlaidWebhookCoreTests } from "../../src/lib/plaid/plaid-webhook-core";
 import { __runPlaidMoneyCoreTests } from "../../src/lib/plaid/plaid-money-core";
 import { __runPlaidCredentialsCoreTests } from "../../src/lib/plaid/plaid-credentials-core";
+import { __runAccountClassificationTests } from "../../src/lib/plaid/account-classification-core";
 import { __runPlaidLiabilitiesCoreTests } from "../../src/lib/plaid/liabilities-core";
 import { __runPlaidInvestmentsCoreTests } from "../../src/lib/plaid/investments-core";
 import { __runLoanCoreTests } from "../../src/lib/loans/loan-core";
@@ -772,6 +773,7 @@ async function main() {
   __runPlaidWebhookCoreTests();
   __runPlaidMoneyCoreTests();
   __runPlaidCredentialsCoreTests();
+  __runAccountClassificationTests();
   __runPlaidLiabilitiesCoreTests();
   __runPlaidInvestmentsCoreTests();
   __runLoanCoreTests();

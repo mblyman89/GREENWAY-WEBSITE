@@ -40,8 +40,13 @@ vi.mock("@/lib/accounting/posting-service", () => ({
 const { submitJournal } = await import("@/lib/accounting/posting-service");
 const { recordBankExpenseLines } = await import("@/lib/accounting/bank-expense-service");
 
-const CHECKING: FundingAccount = { accountId: "acct_main", role: "main" };
-const CARD: FundingAccount = { accountId: "acct_card", role: "credit" };
+// booksEntity is set on both because books-101 makes the ENTITY come from the
+// account rather than the merchant (D-80); an unclassified account refuses
+// before any of the card-bill logic below is reached. The card is Michael's own
+// Citi Mastercard, which is on GREENWAY's books: it "stays with me always and
+// is only used for greenway marijuana purchases."
+const CHECKING: FundingAccount = { accountId: "acct_main", role: "main", booksEntity: "greenway" };
+const CARD: FundingAccount = { accountId: "acct_card", role: "credit", booksEntity: "greenway" };
 
 function line(over: Partial<BankFeedLine> = {}): BankFeedLine {
   return {

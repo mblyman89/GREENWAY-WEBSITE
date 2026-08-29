@@ -4265,3 +4265,90 @@ rule 133g's entire point.
 
 **Related:** D-56 / D-37 (the bank-expense wire this extends), D-67 (drafts, not
 auto-posts).
+
+## D-79 — the role tag is a global unique key, so the second card cannot be tagged
+
+**Found:** books-100, auditing the Plaid connection system before Michael links
+his Citi Mastercard, his wife Alyssa's accounts, their investment portfolios and
+their debt. Found by EXECUTING `roleAssignmentCheck`, not by reading it.
+
+**Severity:** high. It does not corrupt anything already written; it makes
+correct data impossible to enter, which is the failure mode that looks like the
+owner's fault rather than the program's.
+
+**What is wrong.** `plaid-ui-core.ts` `roleAssignmentCheck()` enforces ONE
+account per role key, for canonical and custom roles alike. Executed against two
+accounts, tagging the second one `credit` returns:
+
+    {"ok":false,"error":"That \"Credit card\" role is already assigned to
+     another account. Clear it there first, then assign it here."}
+
+The same happens for `main`. Michael is about to connect his business checking,
+his Citi Mastercard, his personal checking, Alyssa's checking, Alyssa's cards,
+two investment portfolios and their debt — across up to twenty connections. The
+model permits exactly ONE of each. The second real credit card is unenterable,
+and the only way to make the screen accept it is to UNTAG the first, which
+silently stops that card's feed from posting at all (`CASH_ACCOUNT_UNASSIGNED`).
+
+**Why it was built this way, and why that reasoning expired.** When the roles
+were introduced there was one business checking account and one card, and
+uniqueness was doing real work: it guaranteed `ROLE_TO_CASH_ACCOUNT` had exactly
+one account behind each chart code, so "the operating account" was never
+ambiguous. That guarantee is still needed for `main` and is NOT needed for the
+rest. Verified by reading both consumers:
+`payments/vendor-reconcile-store.ts:110` and `payroll/payroll-store.ts:595` are
+each `accounts.filter((a) => a.role === "main" && a.active)` followed by a LOOP
+over the result. They already tolerate several main accounts; they would simply
+pull payroll withdrawals out of a personal checking account if one were tagged
+`main`, which is the actual reason to keep `main` singular. Uniqueness for
+`credit`, `savings`, `mortgage`, `loan` and the rest buys nothing: crediting
+`33000` is correct for every business card, and WHICH card is a dimension —
+0173 seeds 33000 saying exactly that, "WHICH card is a dimension."
+
+**The fix.** Uniqueness becomes a property OF THE ROLE rather than a rule about
+all roles. `main` stays unique. Everything else repeats.
+
+**Related:** D-80 (the same screen cannot say whose account it is).
+
+
+## D-80 — nothing on an account says whose it is, so a personal charge posts to Greenway
+
+**Found:** books-100, same audit. Proven by executing `classifyExpense`.
+
+**Severity:** high. This one does write wrong numbers, into the return of a
+280E business, and it writes them silently.
+
+**What is wrong.** `plaid_accounts` has `name`, `official_name`, `mask`, `type`,
+`subtype`, `role`, `custom_name` and balances. It has NO owner column and NO
+entity column. `plaid_items.owner` exists (migration 0159) but is only a display
+label read from the `PLAID_OWNER_NAME` env var for sidebar grouping; no posting
+path consults it. So when a transaction becomes a journal entry, the entity is
+decided ENTIRELY by the merchant rule:
+
+    classifyExpense({ merchant: "AMAZON" })
+      -> { ok:true, account:"76010", entity:"greenway",
+           costClass:"nondeductible_280e" }
+
+That result does not change with the account. Michael's Amazon order, Alyssa's
+Amazon order and a Greenway supply order are the same three fields, so all three
+land in Greenway as non-deductible 280E overhead. Michael's instruction was the
+opposite: "I want to make sure we are very deliberate and clear about what
+accounts are for business and which ones are my wife and my personal accounts."
+
+The nickname field is the tell. Migration 0184's own comment offers the example
+nickname "Wife's Citi Costco Visa" — ownership was already being recorded, in a
+display string, where no code can read it.
+
+**Root cause.** One `role` field is doing three unrelated jobs: which chart
+account to post to, what the account is FOR, and whose money it is. Those three
+change independently — Michael's Citi Mastercard is his own personal card that
+belongs entirely to Greenway's books, because it "stays with me always and is
+only used for greenway marijuana purchases" — so no single field can express
+them without lying about one of the three.
+
+**The fix.** Split the three jobs into three fields — Owner, Books, Posts to —
+and make Books, not the merchant, decide the entity. An account whose books are
+`personal` must never post to a business ledger.
+
+**Related:** D-79 (the same field, its other failure), D-75 (the classifier this
+now sits in front of).

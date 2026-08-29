@@ -56,7 +56,13 @@ import type {
   ExpenseCostClass,
   ExpenseEntity,
 } from "@/lib/accounting/expense-classification-core";
+import type { EntityCode } from "@/lib/accounting/ledger-core";
 import { isCardPaymentCategory } from "@/lib/accounting/card-payment-core";
+import {
+  decideEntityForAccount,
+  booksEntityLabel,
+  BOOKS_ENTITY_CODES,
+} from "@/lib/plaid/account-classification-core";
 
 /* ------------------------------------------------------------------ *
  * 1) The cash side: owner-set role -> chart account
@@ -139,9 +145,31 @@ export type BankExpenseRefusalCode =
    * purchases were already expensed at the swipe. See the guard in
    * `planBankExpense` for why this refusal has to exist.
    */
-  | "CARD_PAYMENT_NOT_AN_EXPENSE";
+  | "CARD_PAYMENT_NOT_AN_EXPENSE"
+  /**
+   * D-80. Nobody has said which set of books this account belongs to, so there
+   * is no honest way to know whose expense this is. Distinct from
+   * CASH_ACCOUNT_UNASSIGNED, which is about the missing ROLE (which chart
+   * account) rather than the missing BOOKS (whose ledger) -- two different
+   * questions with two different answers on the Plaid screen.
+   */
+  | "ACCOUNT_BOOKS_UNASSIGNED"
+  /**
+   * D-80. The account is classified, and classified as PERSONAL. Nothing is
+   * broken; this is Michael's or Alyssa's own money and it does not belong on a
+   * business return. Refusing here is a decision, not a failure.
+   */
+  | "ACCOUNT_BOOKS_ARE_PERSONAL"
+  /**
+   * D-80. The account belongs to one business's books and the expense was
+   * classified into another's. Before books-101 the merchant silently won.
+   */
+  | "ACCOUNT_BOOKS_MISMATCH";
 
 export const ALL_BANK_EXPENSE_REFUSAL_CODES: readonly BankExpenseRefusalCode[] = [
+  "ACCOUNT_BOOKS_UNASSIGNED",
+  "ACCOUNT_BOOKS_ARE_PERSONAL",
+  "ACCOUNT_BOOKS_MISMATCH",
   "CASH_ACCOUNT_UNASSIGNED",
   "CASH_ACCOUNT_UNMAPPED",
   "NOT_AN_OUTFLOW",
@@ -204,6 +232,14 @@ export type BankFeedLine = {
 export type FundingAccount = {
   readonly accountId: string;
   readonly role: string | null;
+  /**
+   * Which set of books this account belongs to (migration 0213), or null when
+   * nobody has classified it yet. OPTIONAL on the type only so that the many
+   * existing call sites that build a funding account in a test keep compiling;
+   * an ABSENT value is treated exactly like an unclassified one, i.e. it
+   * refuses. Absent must not mean "assume business" -- that assumption IS D-80.
+   */
+  readonly booksEntity?: string | null;
 };
 
 export type BankExpenseLine = {
@@ -308,6 +344,27 @@ export function resolveCashAccount(account: FundingAccount): CashAccountResoluti
  * and so the caller cannot accidentally classify different text than the text
  * this module reports.
  */
+/**
+ * Narrow a stored books tag to an EntityCode, or null.
+ *
+ * The column is `text` with a check constraint (0213), so what arrives here is
+ * a string the compiler knows nothing about. Anything that is not one of the
+ * four known codes -- blank, null, absent, or a value some future migration
+ * added without teaching this file about it -- becomes null, which means
+ * UNCLASSIFIED and therefore REFUSES.
+ *
+ * That direction is chosen deliberately. The alternative, treating an
+ * unrecognised tag as a business entity, would post entries under a name the
+ * ledger does not have; coa-core.ts:80 records what that already cost once,
+ * when 18 accounts tagged 'GRWNY' instead of 'GRNWY' silently vanished from
+ * every entity-filtered report. A refusal is loud and takes ten seconds to fix.
+ */
+function asBooksEntity(v: string | null | undefined): EntityCode | null {
+  const key = (v ?? "").trim().toLowerCase();
+  if (key === "") return null;
+  return BOOKS_ENTITY_CODES.find((c) => c === key) ?? null;
+}
+
 export function planBankExpense(
   line: BankFeedLine,
   account: FundingAccount,
@@ -360,7 +417,44 @@ export function planBankExpense(
     };
   }
 
-  // (3) DIRECTION. POSITIVE = money OUT (plaid-money-core.ts:18-20).
+  // (3) WHOSE BOOKS IS THIS ACCOUNT'S? (D-80)
+  //
+  // This runs BEFORE the direction check and before anything looks at the
+  // classification, because if we do not know whose money this is then no
+  // later question is worth asking. The entity used to come from the merchant
+  // rule alone -- classifyExpense({merchant:'AMAZON'}) returns entity
+  // 'greenway' whoever swiped -- so Alyssa's Amazon order posted into a 280E
+  // business and looked perfectly ordinary doing it.
+  //
+  // Note what is NOT consulted: who OWNS the account. Michael's Citi Mastercard
+  // is his own card and belongs entirely to Greenway's books, because it
+  // "stays with me always and is only used for greenway marijuana purchases."
+  // Reading the owner here would push his shop card's expenses into the
+  // personal pile, which is D-80 again with the sign flipped.
+  const booksDecision = decideEntityForAccount({
+    ownerCode: null, // deliberately not consulted; see above.
+    booksEntity: asBooksEntity(account.booksEntity),
+  });
+
+  if (booksDecision.kind === "unclassified") {
+    return {
+      ok: false,
+      code: "ACCOUNT_BOOKS_UNASSIGNED",
+      underlyingCode: null,
+      message: booksDecision.explanation,
+    };
+  }
+
+  if (booksDecision.kind === "personal") {
+    return {
+      ok: false,
+      code: "ACCOUNT_BOOKS_ARE_PERSONAL",
+      underlyingCode: null,
+      message: booksDecision.explanation,
+    };
+  }
+
+  // (4) DIRECTION. POSITIVE = money OUT (plaid-money-core.ts:18-20).
   if (line.amountCents === 0) {
     return {
       ok: false,
@@ -380,7 +474,7 @@ export function planBankExpense(
     };
   }
 
-  // (4) THE EXPENSE SIDE.
+  // (5) THE EXPENSE SIDE.
   if (!classification.ok) {
     return {
       ok: false,
@@ -390,13 +484,13 @@ export function planBankExpense(
     };
   }
 
-  // (5) THE CASH SIDE.
+  // (6) THE CASH SIDE.
   const cash = resolveCashAccount(account);
   if (!cash.ok) {
     return { ok: false, code: cash.code, underlyingCode: null, message: cash.message };
   }
 
-  // (6) THE TWO SIDES MUST AGREE ON WHOSE BOOKS THIS IS.
+  // (7) THE TWO SIDES MUST AGREE ON WHOSE BOOKS THIS IS.
   //
   // A personal expense paid from a business account is NOT an expense on the
   // business books -- it is an owner distribution, and booking it as an expense
@@ -416,6 +510,29 @@ export function planBankExpense(
     };
   }
 
+  // THE ACCOUNT OUTRANKS THE MERCHANT (D-80).
+  //
+  // `booksDecision.entity` is what the OWNER said this account is; the
+  // classification's entity is what a merchant-text rule GUESSED. When they
+  // disagree, one of them is wrong and neither is safe to prefer silently, so
+  // this refuses rather than picking. That is the whole inversion this slice
+  // exists for: before books-101 the guess won by default and never said so.
+  //
+  // A personal-books account cannot reach here -- it was refused above -- so
+  // this compares two BUSINESS entities only.
+  if (classification.entity !== "personal" && classification.entity !== booksDecision.entity) {
+    return {
+      ok: false,
+      code: "ACCOUNT_BOOKS_MISMATCH",
+      underlyingCode: null,
+      message:
+        `This account is set to the ${booksEntityLabel(booksDecision.entity)} books, but this charge was ` +
+        `read as belonging to the ${booksEntityLabel(classification.entity)} books. One of the two is wrong: ` +
+        `either the account is tagged to the wrong business on the Plaid screen, or this merchant needs its ` +
+        `own rule. Rather than guess which, nothing was written.`,
+    };
+  }
+
   const allowed = CASH_ACCOUNT_ENTITY_RESTRICTIONS[cash.accountCode];
   if (allowed && !allowed.includes(classification.entity)) {
     return {
@@ -428,7 +545,7 @@ export function planBankExpense(
     };
   }
 
-  // (7) THE ENTRY. Debit the expense, credit what funded it.
+  // (8) THE ENTRY. Debit the expense, credit what funded it.
   //
   // The 280E class goes on the EXPENSE line only; the funding line is an asset
   // (10200/10300) or a liability (33000) and migration 0172 check (7) refuses a
@@ -500,7 +617,7 @@ function line(over: Partial<BankFeedLine> = {}): BankFeedLine {
 
 export function __runBankExpenseCoreTests(): void {
   // --- the sign convention, the thing most likely to be silently wrong ---
-  const plan = planBankExpense(line(), { accountId: "a1", role: "main" }, OK_CLASS);
+  const plan = planBankExpense(line(), { accountId: "a1", role: "main", booksEntity: "greenway" }, OK_CLASS);
   expect("a positive Plaid amount is an OUTFLOW and plans", plan.ok);
   if (plan.ok) {
     const [debit, credit] = plan.lines;
@@ -520,30 +637,83 @@ export function __runBankExpenseCoreTests(): void {
   // the feed books as an expense.
   const inflow = planBankExpense(
     line({ amountCents: -2500 }),
-    { accountId: "a1", role: "main" },
+    { accountId: "a1", role: "main", booksEntity: "greenway" },
     OK_CLASS,
   );
   expect("an inflow is refused", !inflow.ok);
   expect("an inflow refuses as NOT_AN_OUTFLOW", !inflow.ok && inflow.code === "NOT_AN_OUTFLOW");
 
-  const zero = planBankExpense(line({ amountCents: 0 }), { accountId: "a1", role: "main" }, OK_CLASS);
+  const zero = planBankExpense(line({ amountCents: 0 }), { accountId: "a1", role: "main", booksEntity: "greenway" }, OK_CLASS);
   expect("a zero row is refused", !zero.ok && zero.code === "ZERO_AMOUNT");
 
   // --- pending is checked BEFORE anything else ---
   const pending = planBankExpense(
     line({ pending: true }),
-    { accountId: "a1", role: "main" },
+    { accountId: "a1", role: "main", booksEntity: "greenway" },
     OK_CLASS,
   );
   expect("a pending row is refused", !pending.ok && pending.code === "TRANSACTION_PENDING");
 
+  // --- WHOSE BOOKS (D-80) ---
+  // The account decides the entity now, so these run before the cash side.
+  const noBooks = planBankExpense(line(), { accountId: "a1", role: "main" }, OK_CLASS);
+  expect(
+    "an account with no books refuses rather than assuming the business",
+    !noBooks.ok && noBooks.code === "ACCOUNT_BOOKS_UNASSIGNED",
+  );
+  const nullBooks = planBankExpense(
+    line(), { accountId: "a1", role: "main", booksEntity: null }, OK_CLASS,
+  );
+  expect(
+    "an explicitly null books tag refuses the same as an absent one",
+    !nullBooks.ok && nullBooks.code === "ACCOUNT_BOOKS_UNASSIGNED",
+  );
+  const blankBooks = planBankExpense(
+    line(), { accountId: "a1", role: "main", booksEntity: "   " }, OK_CLASS,
+  );
+  expect(
+    "a blank books tag is 'nobody said', not a value",
+    !blankBooks.ok && blankBooks.code === "ACCOUNT_BOOKS_UNASSIGNED",
+  );
+  const unknownBooks = planBankExpense(
+    line(), { accountId: "a1", role: "main", booksEntity: "GRWNY" }, OK_CLASS,
+  );
+  expect(
+    "a books tag the ledger does not know refuses instead of posting under it",
+    !unknownBooks.ok && unknownBooks.code === "ACCOUNT_BOOKS_UNASSIGNED",
+  );
+  const personalAcct = planBankExpense(
+    line(), { accountId: "a1", role: "main", booksEntity: "personal" }, OK_CLASS,
+  );
+  expect(
+    "a personal account does not post to a business ledger",
+    !personalAcct.ok && personalAcct.code === "ACCOUNT_BOOKS_ARE_PERSONAL",
+  );
+  expect(
+    "and it says so as a decision, not as a fault",
+    !personalAcct.ok && /net worth/i.test(personalAcct.message),
+  );
+  // The account outranks the merchant: same charge, account says landholding.
+  const outranked = planBankExpense(
+    line(), { accountId: "a1", role: "main", booksEntity: "landholding" }, OK_CLASS,
+  );
+  expect(
+    "account books and merchant books disagreeing refuses rather than picking",
+    !outranked.ok && outranked.code === "ACCOUNT_BOOKS_MISMATCH",
+  );
+  // Books is upper-cased in the column? Still understood, not refused.
+  const casedBooks = planBankExpense(
+    line(), { accountId: "a1", role: "main", booksEntity: "GREENWAY" }, OK_CLASS,
+  );
+  expect("a books tag is matched case-insensitively", casedBooks.ok);
+
   // --- the cash side refuses rather than defaulting ---
-  const unassigned = planBankExpense(line(), { accountId: "a1", role: null }, OK_CLASS);
+  const unassigned = planBankExpense(line(), { accountId: "a1", role: null, booksEntity: "greenway" }, OK_CLASS);
   expect(
     "an unassigned role refuses",
     !unassigned.ok && unassigned.code === "CASH_ACCOUNT_UNASSIGNED",
   );
-  const custom = planBankExpense(line(), { accountId: "a1", role: "tax hold" }, OK_CLASS);
+  const custom = planBankExpense(line(), { accountId: "a1", role: "tax hold", booksEntity: "greenway" }, OK_CLASS);
   expect("a custom role refuses", !custom.ok && custom.code === "CASH_ACCOUNT_UNMAPPED");
   expect(
     "the custom-role refusal quotes the role back",
@@ -559,7 +729,7 @@ export function __runBankExpenseCoreTests(): void {
   expect("role matching is trimmed + case-insensitive", upper.ok && upper.accountCode === "10200");
 
   // --- the classifier's refusal is carried through, never swallowed ---
-  const refused = planBankExpense(line(), { accountId: "a1", role: "main" }, {
+  const refused = planBankExpense(line(), { accountId: "a1", role: "main", booksEntity: "greenway" }, {
     ok: false,
     code: "MERCHANT_UNKNOWN",
     message: "No rule matched.",
@@ -574,7 +744,7 @@ export function __runBankExpenseCoreTests(): void {
   // --- entity discipline ---
   const personal = planBankExpense(
     line(),
-    { accountId: "a1", role: "main" },
+    { accountId: "a1", role: "main", booksEntity: "greenway" },
     classified({ account: "79010", entity: "personal", costClass: "personal" }),
   );
   expect(
@@ -584,7 +754,7 @@ export function __runBankExpenseCoreTests(): void {
 
   const mismatch = planBankExpense(
     line(),
-    { accountId: "a1", role: "atm" },
+    { accountId: "a1", role: "atm", booksEntity: "landholding" },
     classified({ entity: "landholding", costClass: "separate_business" }),
   );
   expect(
@@ -595,7 +765,7 @@ export function __runBankExpenseCoreTests(): void {
   // 10200 is unrestricted in the chart, so landholding from 'main' is allowed.
   const unrestricted = planBankExpense(
     line(),
-    { accountId: "a1", role: "main" },
+    { accountId: "a1", role: "main", booksEntity: "landholding" },
     classified({ entity: "landholding", costClass: "separate_business" }),
   );
   expect("10200 is not entity-restricted", unrestricted.ok);
@@ -626,7 +796,7 @@ export function __runBankExpenseCoreTests(): void {
   // become ok:true and the double count is back.
   const cardBill = planBankExpense(
     line({ categoryDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" }),
-    { accountId: "a1", role: "main" },
+    { accountId: "a1", role: "main", booksEntity: "greenway" },
     classified({}),
   );
   expect(
@@ -639,7 +809,7 @@ export function __runBankExpenseCoreTests(): void {
   // or the reason a human reads would be wrong.
   const cardMirror = planBankExpense(
     line({ categoryDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", amountCents: -15_000 }),
-    { accountId: "a1", role: "credit" },
+    { accountId: "a1", role: "credit", booksEntity: "greenway" },
     classified({}),
   );
   expect(
@@ -651,7 +821,7 @@ export function __runBankExpenseCoreTests(): void {
   // A guard that swallowed this would silently delete a deduction.
   const interest = planBankExpense(
     line({ categoryDetailed: "BANK_FEES_INTEREST_CHARGE" }),
-    { accountId: "a1", role: "credit" },
+    { accountId: "a1", role: "credit", booksEntity: "greenway" },
     classified({}),
   );
   expect("card interest is still a real expense", interest.ok);
@@ -659,7 +829,7 @@ export function __runBankExpenseCoreTests(): void {
   // An ordinary purchase on the card is untouched by any of this.
   const swipe = planBankExpense(
     line({ categoryDetailed: "GENERAL_MERCHANDISE_OFFICE_SUPPLIES" }),
-    { accountId: "a1", role: "credit" },
+    { accountId: "a1", role: "credit", booksEntity: "greenway" },
     classified({}),
   );
   expect("a card swipe still posts an expense against 33000", swipe.ok);
@@ -670,15 +840,15 @@ export function __runBankExpenseCoreTests(): void {
 
   // Absent and null both mean "nobody said", and must behave exactly as before.
   expect("an absent category still posts", planBankExpense(
-    line(), { accountId: "a1", role: "main" }, classified({}),
+    line(), { accountId: "a1", role: "main", booksEntity: "greenway" }, classified({}),
   ).ok);
   expect("a null category still posts", planBankExpense(
-    line({ categoryDetailed: null }), { accountId: "a1", role: "main" }, classified({}),
+    line({ categoryDetailed: null }), { accountId: "a1", role: "main", booksEntity: "greenway" }, classified({}),
   ).ok);
 
   // --- every declared refusal code is reachable from the shipped door ---
   expect(
     "the refusal code list matches the union",
-    ALL_BANK_EXPENSE_REFUSAL_CODES.length === 9,
+    ALL_BANK_EXPENSE_REFUSAL_CODES.length === 12,
   );
 }

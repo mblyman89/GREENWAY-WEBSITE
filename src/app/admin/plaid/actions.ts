@@ -42,6 +42,12 @@ import { plaidCredentialSets } from "@/lib/plaid/env";
 import { chooseSetForLink } from "@/lib/plaid/plaid-credentials-core";
 import { plaidDollarsToCents, extractPlaidError, describeLinkTokenError } from "@/lib/plaid/plaid-core";
 import { roleAssignmentCheck, normalizeCustomName } from "@/lib/plaid/plaid-ui-core";
+import {
+  validateOwnerCode,
+  validateBooksEntity,
+  ownerCodeLabel,
+  booksEntityLabel,
+} from "@/lib/plaid/account-classification-core";
 import { runAllPlaidSync } from "@/lib/plaid/sync-server";
 import { syncItemLiabilities } from "@/lib/plaid/liabilities-server";
 import { syncItemInvestments } from "@/lib/plaid/investments-server";
@@ -52,6 +58,8 @@ import {
   listPlaidAccounts,
   setPlaidAccountRole,
   setPlaidAccountCustomName,
+  setPlaidAccountOwner,
+  setPlaidAccountBooks,
 } from "@/lib/plaid/store";
 
 const ROOT = "/admin/plaid";
@@ -323,6 +331,83 @@ export async function setPlaidAccountNameAction(formData: FormData): Promise<voi
   back({
     tab: "health",
     msg: customName ? `Account named "${customName}".` : "Account name cleared.",
+  });
+}
+
+/**
+ * Say WHOSE account this is (migration 0213, D-80).
+ *
+ * Owner is a fact about the account, not an accounting decision: it drives
+ * reporting, net worth and knowing who to ask, and it deliberately has NO
+ * effect on which ledger an entry lands in. Michael's Citi Mastercard is his
+ * own card and belongs entirely to Greenway's books.
+ */
+export async function setPlaidAccountOwnerAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("finances.view");
+
+  const accountId = String(formData.get("account_id") ?? "").trim();
+  if (!accountId) back({ tab: "health", error: "Missing account. Please try again." });
+
+  const checked = validateOwnerCode(String(formData.get("owner_code") ?? ""));
+  if (!checked.ok) back({ tab: "health", error: checked.error });
+
+  const result = await setPlaidAccountOwner(accountId, checked.owner);
+  if (!result.ok) back({ tab: "health", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "plaid.account.owner_assigned",
+    entityType: "plaid_account",
+    entityId: accountId,
+    after: { account_id: accountId, owner_code: checked.owner },
+  });
+
+  back({
+    tab: "health",
+    msg: checked.owner
+      ? `Account marked as ${ownerCodeLabel(checked.owner)}'s.`
+      : "Account owner cleared.",
+  });
+}
+
+/**
+ * Say WHICH SET OF BOOKS this account belongs to (migration 0213, D-80).
+ *
+ * This is the one that changes the numbers. Until books-101 the entity of a
+ * posted expense came from the merchant rule, so the same Amazon charge landed
+ * in Greenway whoever swiped. From here the ACCOUNT decides, and an account on
+ * personal books never posts to a business ledger.
+ *
+ * Clearing is allowed and makes the account inert again: it keeps syncing and
+ * stops posting, which is the safe direction to be wrong in.
+ */
+export async function setPlaidAccountBooksAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("finances.view");
+
+  const accountId = String(formData.get("account_id") ?? "").trim();
+  if (!accountId) back({ tab: "health", error: "Missing account. Please try again." });
+
+  const checked = validateBooksEntity(String(formData.get("books_entity") ?? ""));
+  if (!checked.ok) back({ tab: "health", error: checked.error });
+
+  const result = await setPlaidAccountBooks(accountId, checked.books);
+  if (!result.ok) back({ tab: "health", error: result.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.profile.email,
+    action: "plaid.account.books_assigned",
+    entityType: "plaid_account",
+    entityId: accountId,
+    after: { account_id: accountId, books_entity: checked.books },
+  });
+
+  back({
+    tab: "health",
+    msg: checked.books
+      ? `Account set to the ${booksEntityLabel(checked.books)} books.`
+      : "Account books cleared. It will keep syncing, but nothing from it will post.",
   });
 }
 

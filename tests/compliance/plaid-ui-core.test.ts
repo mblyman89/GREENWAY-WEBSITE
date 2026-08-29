@@ -132,7 +132,7 @@ describe("custom account name (owner-assigned nickname)", () => {
   });
 });
 
-describe("one account per role guard (never auto-confirm a conflict)", () => {
+describe("role assignment: only `main` is unique (books-101, D-79)", () => {
   const existing = [
     { accountId: "acc_main", role: "main" as const },
     { accountId: "acc_atm", role: "atm" as const },
@@ -142,17 +142,47 @@ describe("one account per role guard (never auto-confirm a conflict)", () => {
     expect(roleAssignmentCheck("acc_main", "", existing)).toEqual({ ok: true, role: null });
     expect(roleAssignmentCheck("acc_main", "main", existing)).toEqual({ ok: true, role: "main" });
   });
-  it("blocks assigning a role already held by a different account", () => {
+
+  // THE DEFECT. Michael's Citi Mastercard could not be tagged while any other
+  // card held `credit`, and the only way to make the screen accept it was to
+  // untag the other one -- which silently stops that card's feed from posting.
+  it("allows a SECOND credit card, which D-79 refused", () => {
+    const withCard = [...existing, { accountId: "acc_card1", role: "credit" }];
+    expect(roleAssignmentCheck("acc_card2", "credit", withCard)).toEqual({
+      ok: true,
+      role: "credit",
+    });
+  });
+
+  it("allows repeats of every non-main role Michael is about to link", () => {
+    for (const role of ["credit", "savings", "reserve", "mortgage", "loan", "personal"]) {
+      const held = [{ accountId: "acc_first", role }];
+      const r = roleAssignmentCheck("acc_second", role, held);
+      expect(r, `"${role}" must be repeatable`).toEqual({ ok: true, role });
+    }
+  });
+
+  it("still blocks a SECOND `main`, because two reconcilers loop over every one", () => {
     const r = roleAssignmentCheck("acc_new", "main", existing);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.toLowerCase()).toContain("already assigned");
   });
+
+  // Rule 26: a refusal that does not explain itself gets worked around. If the
+  // message only says "taken", the obvious move is to untag the real operating
+  // account -- which breaks vendor and payroll reconciliation silently.
+  it("explains WHY main is the exception rather than just refusing", () => {
+    const r = roleAssignmentCheck("acc_new", "main", existing);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("reconciliation");
+  });
+
   it("rejects a punctuation-only custom role string", () => {
     expect(roleAssignmentCheck("acc_new", "###", existing).ok).toBe(false);
   });
 });
 
-describe("custom (free-text) roles keep the one-account-per-role rule", () => {
+describe("custom (free-text) roles normalize, and repeat like any non-main role", () => {
   const existing = [
     { accountId: "acc_main", role: "main" },
     { accountId: "acc_escrow", role: "escrow" },
@@ -160,8 +190,8 @@ describe("custom (free-text) roles keep the one-account-per-role rule", () => {
   it("assigns a normalized custom role", () => {
     expect(roleAssignmentCheck("acc_new", "Petty Cash", existing)).toEqual({ ok: true, role: "petty cash" });
   });
-  it("blocks a custom role already held by another account (case-insensitive)", () => {
-    expect(roleAssignmentCheck("acc_new", "ESCROW", existing).ok).toBe(false);
+  it("allows a repeated custom role, normalizing the case (books-101, D-79)", () => {
+    expect(roleAssignmentCheck("acc_new", "ESCROW", existing)).toEqual({ ok: true, role: "escrow" });
   });
   it("lets the same account re-assert its own custom role", () => {
     expect(roleAssignmentCheck("acc_escrow", "escrow", existing)).toEqual({ ok: true, role: "escrow" });

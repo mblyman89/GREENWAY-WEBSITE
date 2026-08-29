@@ -77,7 +77,19 @@ import {
 import { ACCOUNT_ROLES } from "@/lib/plaid/plaid-core";
 import { PlaidLinkButton } from "./PlaidLinkButton";
 import { RemoveConnectionButton } from "./RemoveConnectionButton";
-import { assignPlaidAccountRoleAction, runPlaidSyncNowAction, setPlaidAccountNameAction } from "./actions";
+import {
+  assignPlaidAccountRoleAction,
+  runPlaidSyncNowAction,
+  setPlaidAccountNameAction,
+  setPlaidAccountOwnerAction,
+  setPlaidAccountBooksAction,
+} from "./actions";
+import {
+  OWNER_CODES,
+  BOOKS_ENTITY_CODES,
+  ownerCodeLabel,
+  booksEntityLabel,
+} from "@/lib/plaid/account-classification-core";
 
 export const dynamic = "force-dynamic";
 
@@ -876,7 +888,11 @@ export default async function PlaidPage({
                                 Save role
                               </button>
                             </form>
-                            {/* Or type your own role name (one account per role still applies). */}
+                            {/* Or type your own role name. Roles repeat freely
+                                since books-101 (D-79); only "Main operating"
+                                stays unique, because vendor and payroll
+                                reconciliation both loop over every account
+                                holding it. */}
                             <form
                               action={assignPlaidAccountRoleAction}
                               className="flex items-center gap-2"
@@ -903,6 +919,78 @@ export default async function PlaidPage({
                               </button>
                             </form>
                           </div>
+                        </div>
+                        {/* WHOSE ACCOUNT, AND WHOSE BOOKS (books-101, D-80).
+                            Two separate questions on purpose. Owner is a fact
+                            about the account; Books is an accounting decision,
+                            and only Books changes where money lands. Michael's
+                            Citi Mastercard is owner=Michael, books=Greenway:
+                            his card, the shop's books. */}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/5 pt-2">
+                          <form
+                            action={setPlaidAccountOwnerAction}
+                            className="flex items-center gap-2"
+                          >
+                            <input type="hidden" name="account_id" value={a.accountId} />
+                            <label
+                              className="text-xs text-white/40"
+                              htmlFor={`owner-${a.accountId}`}
+                            >
+                              Owner
+                            </label>
+                            <select
+                              id={`owner-${a.accountId}`}
+                              name="owner_code"
+                              defaultValue={a.ownerCode ?? ""}
+                              className={selectCls}
+                            >
+                              <option value="">Unassigned</option>
+                              {OWNER_CODES.map((code) => (
+                                <option key={code} value={code}>
+                                  {ownerCodeLabel(code)}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={btnGhost}>
+                              Save owner
+                            </button>
+                          </form>
+
+                          <form
+                            action={setPlaidAccountBooksAction}
+                            className="flex items-center gap-2"
+                          >
+                            <input type="hidden" name="account_id" value={a.accountId} />
+                            <label
+                              className="text-xs text-white/40"
+                              htmlFor={`books-${a.accountId}`}
+                            >
+                              Books
+                            </label>
+                            <select
+                              id={`books-${a.accountId}`}
+                              name="books_entity"
+                              defaultValue={a.booksEntity ?? ""}
+                              className={selectCls}
+                            >
+                              <option value="">Unassigned</option>
+                              {BOOKS_ENTITY_CODES.map((code) => (
+                                <option key={code} value={code}>
+                                  {booksEntityLabel(code)}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={btnGhost}>
+                              Save books
+                            </button>
+                          </form>
+
+                          {a.booksEntity === null ? (
+                            <p className="text-xs text-amber-300/80">
+                              Not classified yet, so nothing from this account will be
+                              written to the books. It still downloads normally.
+                            </p>
+                          ) : null}
                         </div>
                         <form
                           action={setPlaidAccountNameAction}

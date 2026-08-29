@@ -77,7 +77,7 @@ describe("D-78: the card bill can never be expensed", () => {
     // which passes every OTHER check is still stopped.
     const plan = planBankExpense(
       feedLine({ categoryDetailed: CARD_PAYMENT_CATEGORY }),
-      { accountId: "a1", role: "main" },
+      { accountId: "a1", role: "main", booksEntity: "greenway" },
       GOOD,
     );
     expect(plan.ok).toBe(false);
@@ -91,7 +91,7 @@ describe("D-78: the card bill can never be expensed", () => {
     // that gets "fixed" later by someone who reads the message and believes it.
     const plan = planBankExpense(
       feedLine({ categoryDetailed: CARD_PAYMENT_CATEGORY, amountCents: -15_000 }),
-      { accountId: "a1", role: "credit" },
+      { accountId: "a1", role: "credit", booksEntity: "greenway" },
       GOOD,
     );
     expect(plan.ok === false && plan.code).toBe("CARD_PAYMENT_NOT_AN_EXPENSE");
@@ -100,7 +100,7 @@ describe("D-78: the card bill can never be expensed", () => {
   it("tells Michael, in the refusal itself, why nothing was recorded", () => {
     const plan = planBankExpense(
       feedLine({ categoryDetailed: CARD_PAYMENT_CATEGORY }),
-      { accountId: "a1", role: "main" },
+      { accountId: "a1", role: "main", booksEntity: "greenway" },
       GOOD,
     );
     expect(plan.ok === false && /twice/i.test(plan.message)).toBe(true);
@@ -110,8 +110,9 @@ describe("D-78: the card bill can never be expensed", () => {
     // A code the door can emit but the list does not name is invisible to every
     // screen that renders refusals by iterating this array.
     expect(ALL_BANK_EXPENSE_REFUSAL_CODES).toContain("CARD_PAYMENT_NOT_AN_EXPENSE");
-    // Rule 89: 8 -> 9, stated out loud.
-    expect(ALL_BANK_EXPENSE_REFUSAL_CODES.length).toBe(9);
+    // Rule 89: 8 -> 9 in books-99, then 9 -> 12 in books-101 when the three
+    // account-books refusals arrived (D-80). Stated out loud.
+    expect(ALL_BANK_EXPENSE_REFUSAL_CODES.length).toBe(12);
   });
 });
 
@@ -119,7 +120,7 @@ describe("what must STILL be an expense", () => {
   it("posts card interest as a real expense against 33000", () => {
     const plan = planBankExpense(
       feedLine({ categoryDetailed: CARD_INTEREST_CATEGORY }),
-      { accountId: "a1", role: "credit" },
+      { accountId: "a1", role: "credit", booksEntity: "greenway" },
       GOOD,
     );
     expect(plan.ok).toBe(true);
@@ -129,7 +130,7 @@ describe("what must STILL be an expense", () => {
   it("posts an ordinary swipe as an expense that INCREASES the card balance", () => {
     const plan = planBankExpense(
       feedLine({ categoryDetailed: "GENERAL_MERCHANDISE_OFFICE_SUPPLIES" }),
-      { accountId: "a1", role: "credit" },
+      { accountId: "a1", role: "credit", booksEntity: "greenway" },
       GOOD,
     );
     expect(plan.ok).toBe(true);
@@ -139,11 +140,11 @@ describe("what must STILL be an expense", () => {
 
   it("leaves rows with no category alone, whether absent or null", () => {
     // Rule 135: missing is a question, not a "no". Neither may change behaviour.
-    expect(planBankExpense(feedLine(), { accountId: "a1", role: "main" }, GOOD).ok).toBe(true);
+    expect(planBankExpense(feedLine(), { accountId: "a1", role: "main", booksEntity: "greenway" }, GOOD).ok).toBe(true);
     expect(
       planBankExpense(
         feedLine({ categoryDetailed: null }),
-        { accountId: "a1", role: "main" },
+        { accountId: "a1", role: "main", booksEntity: "greenway" },
         GOOD,
       ).ok,
     ).toBe(true);

@@ -59,6 +59,20 @@ export type PlaidAccountRecord = {
   subtype: string | null;
   /** Canonical role value OR a custom (typed) role key; null = unassigned. */
   role: string | null;
+  /**
+   * Whose account this is (migration 0213): "michael" | "alyssa", or null when
+   * nobody has said yet. Reporting and net worth only -- it deliberately has NO
+   * effect on which ledger an entry lands in, because Michael's own Citi
+   * Mastercard belongs to Greenway's books.
+   */
+  ownerCode: string | null;
+  /**
+   * Which set of books this account's activity belongs to (migration 0213):
+   * one of gl_entities' four codes, or null when unclassified. THIS decides the
+   * entity of anything posted from the account (D-80); before books-101 the
+   * merchant rule decided it, so a personal charge landed in Greenway.
+   */
+  booksEntity: string | null;
   currentBalanceCents: number | null;
   availableBalanceCents: number | null;
   isoCurrencyCode: string | null;
@@ -243,6 +257,8 @@ type AccountRow = {
   type: string | null;
   subtype: string | null;
   role: string | null;
+  owner_code: string | null;
+  books_entity: string | null;
   current_balance_cents: number | null;
   available_balance_cents: number | null;
   iso_currency_code: string | null;
@@ -250,8 +266,12 @@ type AccountRow = {
   active: boolean | null;
 };
 
+// ONE unbroken string literal, deliberately. supabase-js infers the row type
+// FROM this literal; splitting it across a `+` concatenation collapses that
+// inference to GenericStringError and silently disables type-checking of the
+// mapping in toAccountRecord. Learned the hard way in books-99.
 const ACCOUNT_COLS =
-  "id,account_id,item_id,name,official_name,custom_name,mask,type,subtype,role,current_balance_cents,available_balance_cents,iso_currency_code,balances_updated_at,active";
+  "id,account_id,item_id,name,official_name,custom_name,mask,type,subtype,role,owner_code,books_entity,current_balance_cents,available_balance_cents,iso_currency_code,balances_updated_at,active";
 
 function toAccountRecord(row: AccountRow): PlaidAccountRecord {
   // Roles may be one of the 8 canonical values OR a custom (typed) key. Accept
@@ -268,6 +288,8 @@ function toAccountRecord(row: AccountRow): PlaidAccountRecord {
     type: row.type,
     subtype: row.subtype,
     role,
+    ownerCode: blankToNull(row.owner_code),
+    booksEntity: blankToNull(row.books_entity),
     currentBalanceCents: row.current_balance_cents,
     availableBalanceCents: row.available_balance_cents,
     isoCurrencyCode: row.iso_currency_code,
@@ -348,6 +370,54 @@ export async function setPlaidAccountRole(
  * Pass null/blank to clear it (falls back to the bank name). Written ONLY here,
  * never by a sync, so /accounts refreshes can't clobber the owner's name.
  */
+/**
+ * A stored classification is either a real value or "nobody has said yet".
+ * A blank string is the latter wearing the former's clothes, so it is folded to
+ * null here rather than being allowed to reach a posting decision as "" and be
+ * compared against an entity code it can never equal (rule 135).
+ */
+function blankToNull(v: string | null | undefined): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+}
+
+/**
+ * Set (or clear) who owns an account (migration 0213). Written ONLY here and
+ * never by a sync, so a Plaid /accounts refresh cannot clobber the answer.
+ * Validation happens in account-classification-core BEFORE this is called.
+ */
+export async function setPlaidAccountOwner(
+  accountId: string,
+  ownerCode: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("plaid_accounts")
+    .update({ owner_code: ownerCode })
+    .eq("account_id", accountId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Set (or clear) which books an account belongs to (migration 0213). Clearing
+ * is allowed and makes the account inert again: it keeps syncing and stops
+ * posting, which is the safe direction to be wrong in.
+ */
+export async function setPlaidAccountBooks(
+  accountId: string,
+  booksEntity: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("plaid_accounts")
+    .update({ books_entity: booksEntity })
+    .eq("account_id", accountId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function setPlaidAccountCustomName(
   accountId: string,
   customName: string | null,

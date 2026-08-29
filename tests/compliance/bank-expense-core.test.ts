@@ -41,6 +41,22 @@ function classified(
   return { ...(CLASSIFIED as Extract<ExpenseClassification, { ok: true }>), ...over };
 }
 
+/**
+ * A funding account with its books already set (migration 0213).
+ *
+ * books-101 made the ENTITY of a posted expense come from the ACCOUNT rather
+ * than the merchant rule (D-80), so an account with no books refuses outright.
+ * Defaulting to "greenway" here keeps every test below aimed at the thing it
+ * was written to prove; the refusals for an UNCLASSIFIED and a PERSONAL account
+ * get their own tests rather than being smuggled into all of these.
+ */
+function funding(
+  role: string | null,
+  booksEntity: string | null = "greenway",
+): { accountId: string; role: string | null; booksEntity: string | null } {
+  return { accountId: "a", role, booksEntity };
+}
+
 function feedLine(over: Partial<BankFeedLine> = {}): BankFeedLine {
   return {
     transactionId: "txn_abc",
@@ -56,7 +72,7 @@ function feedLine(over: Partial<BankFeedLine> = {}): BankFeedLine {
 describe("bank expense: the sign convention", () => {
   // plaid-money-core.ts:18-20 -- POSITIVE = money LEFT the account.
   it("books a POSITIVE Plaid amount as a DEBIT to the expense account", () => {
-    const plan = planBankExpense(feedLine(), { accountId: "a", role: "main" }, CLASSIFIED);
+    const plan = planBankExpense(feedLine(), funding("main"), CLASSIFIED);
     expect(plan.ok).toBe(true);
     if (!plan.ok) return;
     const [debit, credit] = plan.lines;
@@ -67,7 +83,7 @@ describe("bank expense: the sign convention", () => {
   });
 
   it("balances", () => {
-    const plan = planBankExpense(feedLine(), { accountId: "a", role: "main" }, CLASSIFIED);
+    const plan = planBankExpense(feedLine(), funding("main"), CLASSIFIED);
     if (!plan.ok) throw new Error("expected a plan");
     expect(plan.lines[0].amountCents + plan.lines[1].amountCents).toBe(0);
   });
@@ -77,7 +93,7 @@ describe("bank expense: the sign convention", () => {
   it("REFUSES a negative amount, which is money coming IN", () => {
     const plan = planBankExpense(
       feedLine({ amountCents: -2500 }),
-      { accountId: "a", role: "main" },
+      funding("main"),
       CLASSIFIED,
     );
     expect(plan.ok).toBe(false);
@@ -88,7 +104,7 @@ describe("bank expense: the sign convention", () => {
   it("refuses a zero-dollar row", () => {
     const plan = planBankExpense(
       feedLine({ amountCents: 0 }),
-      { accountId: "a", role: "main" },
+      funding("main"),
       CLASSIFIED,
     );
     expect(plan.ok).toBe(false);
@@ -98,7 +114,7 @@ describe("bank expense: the sign convention", () => {
 
 describe("bank expense: 280E cost class, both halves of migration 0172 check (7)", () => {
   it("puts a real cost class on the expense line and 'none' on the funding line", () => {
-    const plan = planBankExpense(feedLine(), { accountId: "a", role: "main" }, CLASSIFIED);
+    const plan = planBankExpense(feedLine(), funding("main"), CLASSIFIED);
     if (!plan.ok) throw new Error("expected a plan");
     // requires_cost_class = true on every 7xxxx account -> 'none' is refused.
     expect(plan.lines[0].costClass).toBe("nondeductible_280e");
@@ -109,7 +125,7 @@ describe("bank expense: 280E cost class, both halves of migration 0172 check (7)
 
 describe("bank expense: the cash side is never guessed", () => {
   it("refuses when the owner has not assigned a role", () => {
-    const plan = planBankExpense(feedLine(), { accountId: "a", role: null }, CLASSIFIED);
+    const plan = planBankExpense(feedLine(), funding(null), CLASSIFIED);
     expect(plan.ok).toBe(false);
     if (!plan.ok) expect(plan.code).toBe("CASH_ACCOUNT_UNASSIGNED");
   });
@@ -117,7 +133,7 @@ describe("bank expense: the cash side is never guessed", () => {
   it("refuses a custom typed role rather than defaulting to the operating account", () => {
     // Migration 0169 relaxed `role` to any 1..32 char key, so this is reachable
     // in production the moment Michael types a role of his own.
-    const plan = planBankExpense(feedLine(), { accountId: "a", role: "escrow" }, CLASSIFIED);
+    const plan = planBankExpense(feedLine(), funding("escrow"), CLASSIFIED);
     expect(plan.ok).toBe(false);
     if (!plan.ok) {
       expect(plan.code).toBe("CASH_ACCOUNT_UNMAPPED");
@@ -139,7 +155,7 @@ describe("bank expense: entity discipline", () => {
   it("refuses a personal charge funded from a business bank account", () => {
     const plan = planBankExpense(
       feedLine(),
-      { accountId: "a", role: "main" },
+      funding("main"),
       classified({ account: "79010", entity: "personal", costClass: "personal" }),
     );
     expect(plan.ok).toBe(false);
@@ -148,9 +164,12 @@ describe("bank expense: entity discipline", () => {
 
   it("refuses an entity the funding account is restricted away from", () => {
     // 0173 seeds 10300 as array['atm','greenway'].
+    // The ACCOUNT agrees it is landholding, so books-101's account-vs-merchant
+    // check passes cleanly and what is left under test is the CHART's own
+    // restriction, which is the point of this test.
     const plan = planBankExpense(
       feedLine(),
-      { accountId: "a", role: "atm" },
+      funding("atm", "landholding"),
       classified({ entity: "landholding", costClass: "separate_business" }),
     );
     expect(plan.ok).toBe(false);
@@ -162,7 +181,7 @@ describe("bank expense: entity discipline", () => {
     // restriction is real and not blanket.
     const plan = planBankExpense(
       feedLine(),
-      { accountId: "a", role: "main" },
+      funding("main", "landholding"),
       classified({ entity: "landholding", costClass: "separate_business" }),
     );
     expect(plan.ok).toBe(true);
@@ -171,7 +190,7 @@ describe("bank expense: entity discipline", () => {
 
 describe("bank expense: refusals are carried, never swallowed", () => {
   it("passes the classifier's own code through", () => {
-    const plan = planBankExpense(feedLine(), { accountId: "a", role: "main" }, {
+    const plan = planBankExpense(feedLine(), funding("main"), {
       ok: false,
       code: "MERCHANT_AMBIGUOUS",
       message: "Costco could be several accounts.",
@@ -190,7 +209,7 @@ describe("bank expense: refusals are carried, never swallowed", () => {
     // transaction_id, so posting one both books a stale number and duplicates.
     const plan = planBankExpense(
       feedLine({ pending: true, amountCents: -1 }),
-      { accountId: "a", role: null },
+      funding(null),
       CLASSIFIED,
     );
     expect(plan.ok).toBe(false);
@@ -205,7 +224,7 @@ describe("bank expense: idempotency key", () => {
     // is ever anything but the stable transaction id, a re-run double-books.
     const plan = planBankExpense(
       feedLine({ transactionId: "txn_stable_99" }),
-      { accountId: "a", role: "main" },
+      funding("main"),
       CLASSIFIED,
     );
     if (!plan.ok) throw new Error("expected a plan");
@@ -215,7 +234,7 @@ describe("bank expense: idempotency key", () => {
   it("dates the entry to the bank's date, not today", () => {
     const plan = planBankExpense(
       feedLine({ date: "2026-01-09" }),
-      { accountId: "a", role: "main" },
+      funding("main"),
       CLASSIFIED,
     );
     if (!plan.ok) throw new Error("expected a plan");
