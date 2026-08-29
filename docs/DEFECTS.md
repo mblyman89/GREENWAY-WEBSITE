@@ -4045,3 +4045,51 @@ the import line after the call is replaced by a hardcoded zero, and `=== null`
 still appears inside `if (false && pool === null)`. Rendering the component
 closed both. Nothing here was verified against Michael's live database,
 because no credentials exist in this environment.
+
+---
+
+## D-76 — the undeposited pool reports an "oldest date" that never ages out
+
+**Found:** books-96 planning, from Michael's description of how he actually
+banks cash. Not found by any test, and not by reading the code.
+
+**Severity:** medium now, high once the deposit poster runs on real data. It
+does not corrupt a balance; it makes a correct balance carry a wrong date, and
+that date is an input to a REFUSAL.
+
+**What is wrong.** `undepositedBalanceMinor()` computes `oldestDate` as the
+minimum `journal_date` across every line that ADDED to 10400, for all time. The
+credits that cleared those debits are deliberately excluded from the date scan
+— which is right in itself, since a clearing credit says nothing about how old
+the remaining cash is — but nothing ever retires a debit that has already been
+cleared. So the date is the first day the business ever counted a till, forever.
+
+Measured, on a fixture where January's $5,000 was counted and then fully
+banked, and the only cash actually on hand is a $3,000 count from three days
+ago:
+
+    balance = 300000   oldestDate = 2026-01-05
+
+The balance is right. The date is two months stale and describes money that
+reached the bank in January.
+
+**Why it matters.** `buildDepositClearingJournal` refuses with
+`DEPOSIT_DATE_TOO_FAR` when the gap between `oldestUndepositedDate` and the
+bank row exceeds `MATCH_WINDOW_HARD_DAYS` (30). Once the pool has been running
+for a month, that date is permanently older than 30 days, so EVERY deposit is
+refused — including correct ones, on day one of real use. A guard that refuses
+everything is not a strict guard, it is a broken one, and the predictable human
+response to a control that always cries wolf is to switch it off.
+
+**This is a rule 50 shape**: a finished feature that is unreachable in practice.
+The poster works, is tested, and is wired to a screen, and it would still have
+declined every deposit Michael ever made.
+
+**Not yet fixed.** The fix is bound up with the FIFO deposit-batch work in
+books-96, because "which counted days is this deposit clearing" and "how old is
+the oldest cash still in the pool" are the same question. Recording it here
+first so the fix is a stated correction rather than a silent one.
+
+**Gate when fixed:** a test in which an older month is fully cleared and a
+newer count remains must report the NEWER date, and a deposit against it must
+post rather than being refused with `DEPOSIT_DATE_TOO_FAR`.
