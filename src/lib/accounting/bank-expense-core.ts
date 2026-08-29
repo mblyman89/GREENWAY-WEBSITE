@@ -56,6 +56,7 @@ import type {
   ExpenseCostClass,
   ExpenseEntity,
 } from "@/lib/accounting/expense-classification-core";
+import { isCardPaymentCategory } from "@/lib/accounting/card-payment-core";
 
 /* ------------------------------------------------------------------ *
  * 1) The cash side: owner-set role -> chart account
@@ -132,7 +133,13 @@ export type BankExpenseRefusalCode =
   /** Expense says one entity, the funding account belongs to another. */
   | "ENTITY_MISMATCH"
   /** A personal expense funded from a business account. See below. */
-  | "PERSONAL_ON_BUSINESS_ACCOUNT";
+  | "PERSONAL_ON_BUSINESS_ACCOUNT"
+  /**
+   * D-78. Paying the shop card's bill is a TRANSFER, not an expense: the
+   * purchases were already expensed at the swipe. See the guard in
+   * `planBankExpense` for why this refusal has to exist.
+   */
+  | "CARD_PAYMENT_NOT_AN_EXPENSE";
 
 export const ALL_BANK_EXPENSE_REFUSAL_CODES: readonly BankExpenseRefusalCode[] = [
   "CASH_ACCOUNT_UNASSIGNED",
@@ -143,6 +150,7 @@ export const ALL_BANK_EXPENSE_REFUSAL_CODES: readonly BankExpenseRefusalCode[] =
   "NOT_CLASSIFIED",
   "ENTITY_MISMATCH",
   "PERSONAL_ON_BUSINESS_ACCOUNT",
+  "CARD_PAYMENT_NOT_AN_EXPENSE",
 ] as const;
 
 /**
@@ -178,6 +186,18 @@ export type BankFeedLine = {
   readonly merchantName: string | null;
   readonly name: string | null;
   readonly pending: boolean;
+  /**
+   * Plaid's `personal_finance_category.detailed`, stored since books-88 as
+   * `plaid_transactions.personal_finance_category_detailed`.
+   *
+   * OPTIONAL ON PURPOSE, and the distinction matters (rule 135). Absent means
+   * the caller did not ask the database for the column; null means Plaid had no
+   * opinion about this row. Neither is a licence to invent one, so both fall
+   * through to the ordinary merchant-text path, which is what every row did
+   * before D-78 was found. What the field DOES do is let the one row that must
+   * never be expensed -- the card bill -- identify itself.
+   */
+  readonly categoryDetailed?: string | null;
 };
 
 /** The owner-set role for the account the line belongs to. */
@@ -307,7 +327,40 @@ export function planBankExpense(
     };
   }
 
-  // (2) DIRECTION. POSITIVE = money OUT (plaid-money-core.ts:18-20).
+  // (2) THE CARD BILL IS NOT AN EXPENSE (D-78).
+  //
+  // When the shop card's statement is paid from checking, Plaid reports an
+  // ordinary OUTFLOW on the operating account. Nothing below could tell that
+  // row apart from a real purchase, so it was classified on its merchant text
+  // ("CHASE CARD PMT" and the like) and booked as a SECOND expense.
+  //
+  // That is a double count, not a rounding error. The things bought on the card
+  // were already expensed at the swipe, when `ROLE_TO_CASH_ACCOUNT.credit`
+  // credited 33000. Expensing the payment as well would count every card
+  // purchase twice on a 280E return and leave 33000 growing forever, because
+  // nothing would ever debit the liability back down.
+  //
+  // The right entry -- DEBIT 33000, CREDIT 10200 -- touches no expense account
+  // at all, and `card-payment-core.ts` builds it. This guard's whole job is to
+  // make sure the row cannot ALSO travel the expense path.
+  //
+  // IT IS DELIBERATELY SIGN-BLIND. The same payment appears on BOTH feeds with
+  // OPPOSITE signs (Plaid: "positive amounts for credit card subtypes and
+  // negative for depository subtypes"), so refusing before the direction check
+  // means neither copy can ever reach a classifier, whichever way it points.
+  if (isCardPaymentCategory(line.categoryDetailed)) {
+    return {
+      ok: false,
+      code: "CARD_PAYMENT_NOT_AN_EXPENSE",
+      underlyingCode: null,
+      message:
+        "This is the shop card's bill being paid, which is a transfer rather than an expense. " +
+        "Whatever was bought on the card was already recorded as an expense when it was purchased, " +
+        "so recording this too would count it twice. It is booked against the card balance instead.",
+    };
+  }
+
+  // (3) DIRECTION. POSITIVE = money OUT (plaid-money-core.ts:18-20).
   if (line.amountCents === 0) {
     return {
       ok: false,
@@ -327,7 +380,7 @@ export function planBankExpense(
     };
   }
 
-  // (3) THE EXPENSE SIDE.
+  // (4) THE EXPENSE SIDE.
   if (!classification.ok) {
     return {
       ok: false,
@@ -337,13 +390,13 @@ export function planBankExpense(
     };
   }
 
-  // (4) THE CASH SIDE.
+  // (5) THE CASH SIDE.
   const cash = resolveCashAccount(account);
   if (!cash.ok) {
     return { ok: false, code: cash.code, underlyingCode: null, message: cash.message };
   }
 
-  // (5) THE TWO SIDES MUST AGREE ON WHOSE BOOKS THIS IS.
+  // (6) THE TWO SIDES MUST AGREE ON WHOSE BOOKS THIS IS.
   //
   // A personal expense paid from a business account is NOT an expense on the
   // business books -- it is an owner distribution, and booking it as an expense
@@ -375,7 +428,7 @@ export function planBankExpense(
     };
   }
 
-  // (6) THE ENTRY. Debit the expense, credit what funded it.
+  // (7) THE ENTRY. Debit the expense, credit what funded it.
   //
   // The 280E class goes on the EXPENSE line only; the funding line is an asset
   // (10200/10300) or a liability (33000) and migration 0172 check (7) refuses a
@@ -565,9 +618,67 @@ export function __runBankExpenseCoreTests(): void {
     merchantTextFor(line({ merchantName: null, name: null })) === null,
   );
 
+  // --- D-78: the card bill can never travel the expense path ---------------
+  //
+  // The classification handed in below is a PERFECTLY GOOD one. That is the
+  // point: before this guard existed, a card payment classified cleanly on its
+  // merchant text and posted a second expense. If the guard is removed, these
+  // become ok:true and the double count is back.
+  const cardBill = planBankExpense(
+    line({ categoryDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" }),
+    { accountId: "a1", role: "main" },
+    classified({}),
+  );
+  expect(
+    "paying the shop card bill is refused, not expensed",
+    !cardBill.ok && cardBill.code === "CARD_PAYMENT_NOT_AN_EXPENSE",
+  );
+
+  // SIGN-BLIND ON PURPOSE. The mirror row on the card feed carries the opposite
+  // sign; it must be refused for being a card payment, NOT for its direction,
+  // or the reason a human reads would be wrong.
+  const cardMirror = planBankExpense(
+    line({ categoryDetailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", amountCents: -15_000 }),
+    { accountId: "a1", role: "credit" },
+    classified({}),
+  );
+  expect(
+    "the card-side mirror is refused as a card payment, not as an inflow",
+    !cardMirror.ok && cardMirror.code === "CARD_PAYMENT_NOT_AN_EXPENSE",
+  );
+
+  // THE BOUNDARY. Interest on the card IS a real expense and must still post.
+  // A guard that swallowed this would silently delete a deduction.
+  const interest = planBankExpense(
+    line({ categoryDetailed: "BANK_FEES_INTEREST_CHARGE" }),
+    { accountId: "a1", role: "credit" },
+    classified({}),
+  );
+  expect("card interest is still a real expense", interest.ok);
+
+  // An ordinary purchase on the card is untouched by any of this.
+  const swipe = planBankExpense(
+    line({ categoryDetailed: "GENERAL_MERCHANDISE_OFFICE_SUPPLIES" }),
+    { accountId: "a1", role: "credit" },
+    classified({}),
+  );
+  expect("a card swipe still posts an expense against 33000", swipe.ok);
+  expect(
+    "and credits the card liability",
+    swipe.ok && swipe.lines[1].accountCode === "33000" && swipe.lines[1].amountCents < 0,
+  );
+
+  // Absent and null both mean "nobody said", and must behave exactly as before.
+  expect("an absent category still posts", planBankExpense(
+    line(), { accountId: "a1", role: "main" }, classified({}),
+  ).ok);
+  expect("a null category still posts", planBankExpense(
+    line({ categoryDetailed: null }), { accountId: "a1", role: "main" }, classified({}),
+  ).ok);
+
   // --- every declared refusal code is reachable from the shipped door ---
   expect(
     "the refusal code list matches the union",
-    ALL_BANK_EXPENSE_REFUSAL_CODES.length === 8,
+    ALL_BANK_EXPENSE_REFUSAL_CODES.length === 9,
   );
 }

@@ -13,11 +13,11 @@ The answer is measured, never assumed. Each cell cites what was checked.
 
 ## The headline
 
-> 39 money events that should reach the books. 25 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
+> 40 money events that should reach the books. 25 cannot reach them at all. 16 have nothing that builds the entry, so wiring alone will not fix them. 3 are proven on all six layers. 5 carry a layer this census could not measure, and say so.
 
 | | count |
 |---|---:|
-| Money events catalogued | 39 |
+| Money events catalogued | 40 |
 | Proven on all six layers | 3 |
 | Cannot reach the books at all | 25 |
 | Have nothing that even builds the entry | 16 |
@@ -43,12 +43,12 @@ Legend: `yes` proven, `NO` missing, `part` partial, `n/a` not applicable, `?` un
 
 | layer | rows missing |
 |---|---:|
-| `exists` | 15 of 39 |
-| `reachable` | 25 of 39 |
-| `correct` | 12 of 39 |
-| `accepted` | 22 of 39 |
-| `idempotent` | 22 of 39 |
-| `married` | 14 of 39 |
+| `exists` | 15 of 40 |
+| `reachable` | 25 of 40 |
+| `correct` | 12 of 40 |
+| `accepted` | 22 of 40 |
+| `idempotent` | 22 of 40 |
+| `married` | 14 of 40 |
 
 ## Sales, and the tax you collect on someone else's behalf
 
@@ -250,6 +250,7 @@ An inbound delivery charge that belongs in the cost of the product.
 | `expense_classified_to_account_and_entity` | yes | yes | part | part | ? | n/a | D-56 |
 | `vendor_paid_by_ach` | NO | NO | NO | NO | NO | part | D-36 |
 | `operating_expense_from_bank` | yes | yes | yes | part | yes | n/a | D-37 |
+| `card_bill_paid` | yes | yes | yes | part | yes | n/a | D-78 |
 
 ### `vendor_cycle.purchase_order_commitment`
 
@@ -352,6 +353,23 @@ A card or bank charge appears in the Plaid feed with no corresponding event insi
 - **married: NOT_APPLICABLE** -- The bank feed IS the only source for this event. _There is no in-system counterpart to marry, which is what makes this family safe to auto-post and the right place to start wiring._
 
 **If this stays broken:** These are the expenses Michael's CPA needs categorised for the return. It is also the lowest-risk wiring target, because nothing else can duplicate it.
+
+### `vendor_cycle.card_bill_paid`
+
+The shop credit card's statement is paid from the operating account. The purchases were already expensed at the swipe, so this moves the liability, not the P&L.
+
+- Accounts: `33000`, `10200`
+- Builds the entry: `src/lib/accounting/card-payment-core.ts#planCardPayment`
+- Posts the entry: `src/lib/accounting/bank-expense-service.ts#recordBankExpenseLines`
+
+- **exists: PRESENT** -- books-99. card-payment-core.ts recognises Plaid's LOAN_PAYMENTS_CREDIT_CARD_PAYMENT category and builds DR 33000 / CR 10200, touching no expense account. Before it existed the row was classified on merchant text and expensed a second time (D-78).
+- **reachable: PRESENT** -- Same door as the expense path: recordBankExpenseLines offers every row to planCardPayment BEFORE planBankExpense, reached from the button on /admin/books/bank via bank-expense-service.ts. The category column is named in that service's select literal, without which the guard sees undefined and the defect returns; mutate-slice-books-99.py mutations 13-15 sever exactly that path and are caught.
+- **correct: PRESENT** -- The failure modes all BALANCE. DIRECTION: paying the bill must DEBIT 33000 (owe less) and CREDIT 10200; mutation 8 reverses it and is caught. DOUBLE COUNT: the same payment arrives on both feeds with opposite signs, so the card-side mirror is declined CARD_SIDE_MIRROR and planBankExpense refuses the row ahead of its direction check; mutations 2 and 11 are caught. GREED: BANK_FEES_INTEREST_CHARGE is a real expense and must still post; mutation 5 swallows it, caught.
+- **accepted: PARTIAL** -- Created as a DRAFT, exactly like every other bank-feed entry, and approved on /admin/books/bank. PARTIAL because no card payment has yet made the round trip against a live database; Michael is opening the card now.
+- **idempotent: PRESENT** -- sourceRef is `card-payment:${transactionId}`, so submitJournal's (entity, sourceKind, sourceRef) key returns 'duplicate' on a re-run. The prefix keeps it distinct from the expense entry for the same id. Mutation 16 nulls the ref and is caught.
+- **married: NOT_APPLICABLE** -- Both sides of this entry are bank-fed: the payment leaves the checking feed and lands on the card feed. _There is no in-system counterpart. The card feed's own copy is the mirror, and it is deliberately declined rather than matched, because booking both would pay the liability down twice._
+
+**If this stays broken:** Without this entry every card purchase is deducted twice and 33000 grows forever. An inflated deductible total is the first thing a 280E examination tests.
 
 ## Paying people, and the taxes that go with it
 
@@ -837,6 +855,7 @@ mistake later.
 - `vendor_cycle.purchase_order_commitment` / `married`: No entry is due at commitment.
 - `vendor_cycle.expense_classified_to_account_and_entity` / `married`: Classification decides how ONE arrival is characterised. The same dollar arriving twice -- once from the system that spent it, once from the Plaid debit that saw it leave -- is the payment event's problem, and it is already tracked on vendor_cycle.vendor_paid_by_ach. Marking this layer PRESENT here would double-count a control that lives elsewhere.
 - `vendor_cycle.operating_expense_from_bank` / `married`: There is no in-system counterpart to marry, which is what makes this family safe to auto-post and the right place to start wiring.
+- `vendor_cycle.card_bill_paid` / `married`: There is no in-system counterpart. The card feed's own copy is the mirror, and it is deliberately declined rather than matched, because booking both would pay the liability down twice.
 - `cash_and_banking.till_open_from_vault` / `accepted`: APPROVAL_EXEMPT_SOURCE_KINDS includes bank. A vault-to-till transfer changes no total and creates no obligation, so there is nothing for an approver to weigh.
 - `cash_and_banking.till_open_from_vault` / `married`: There is no bank record of cash moving from a safe to a drawer.
 - `cash_and_banking.till_close_to_safe` / `accepted`: The drawer count is itself the human act. A second approval would delay the deposit without adding a second pair of eyes to the cash.

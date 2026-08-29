@@ -1125,6 +1125,82 @@ export const LEDGER_CENSUS_ROWS: readonly CensusRow[] = [
       "is also the lowest-risk wiring target, because nothing else can duplicate it.",
   },
 
+  {
+    key: "vendor_cycle.card_bill_paid",
+    family: "vendor_cycle",
+    event:
+      "The shop credit card's statement is paid from the operating account. The " +
+      "purchases were already expensed at the swipe, so this moves the liability, " +
+      "not the P&L.",
+    sourceKind: "bank",
+    entityCode: "greenway",
+    accountCodes: ["33000", "10200"],
+    builder: "src/lib/accounting/card-payment-core.ts#planCardPayment",
+    poster: "src/lib/accounting/bank-expense-service.ts#recordBankExpenseLines",
+    layers: {
+      exists: {
+        status: "PRESENT",
+        evidence:
+          "books-99. card-payment-core.ts recognises Plaid's " +
+          "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT category and builds DR 33000 / " +
+          "CR 10200, touching no expense account. Before it existed the row was " +
+          "classified on merchant text and expensed a second time (D-78).",
+      },
+      reachable: {
+        status: "PRESENT",
+        evidence:
+          "Same door as the expense path: recordBankExpenseLines offers every row " +
+          "to planCardPayment BEFORE planBankExpense, reached from the button on " +
+          "/admin/books/bank via bank-expense-service.ts. The category column is " +
+          "named in that service's select literal, without which the guard sees " +
+          "undefined and the defect returns; mutate-slice-books-99.py mutations " +
+          "13-15 sever exactly that path and are caught.",
+      },
+      correct: {
+        status: "PRESENT",
+        evidence:
+          "The failure modes all BALANCE. DIRECTION: paying the bill must DEBIT " +
+          "33000 (owe less) and CREDIT 10200; mutation 8 reverses it and is " +
+          "caught. DOUBLE COUNT: the same payment arrives on both feeds with " +
+          "opposite signs, so the card-side mirror is declined CARD_SIDE_MIRROR " +
+          "and planBankExpense refuses the row ahead of its direction check; " +
+          "mutations 2 and 11 are caught. GREED: BANK_FEES_INTEREST_CHARGE is a " +
+          "real expense and must still post; mutation 5 swallows it, caught.",
+      },
+      accepted: {
+        status: "PARTIAL",
+        evidence:
+          "Created as a DRAFT, exactly like every other bank-feed entry, and " +
+          "approved on /admin/books/bank. PARTIAL because no card payment has yet " +
+          "made the round trip against a live database; Michael is opening the " +
+          "card now.",
+      },
+      idempotent: {
+        status: "PRESENT",
+        evidence:
+          "sourceRef is `card-payment:${transactionId}`, so submitJournal's " +
+          "(entity, sourceKind, sourceRef) key returns 'duplicate' on a re-run. " +
+          "The prefix keeps it distinct from the expense entry for the same id. " +
+          "Mutation 16 nulls the ref and is caught.",
+      },
+      married: {
+        status: "NOT_APPLICABLE",
+        evidence:
+          "Both sides of this entry are bank-fed: the payment leaves the checking " +
+          "feed and lands on the card feed.",
+        reason:
+          "There is no in-system counterpart. The card feed's own copy is the " +
+          "mirror, and it is deliberately declined rather than matched, because " +
+          "booking both would pay the liability down twice.",
+      },
+    },
+    defectId: "D-78",
+    consequence:
+      "Without this entry every card purchase is deducted twice and 33000 grows " +
+      "forever. An inflated deductible total is the first thing a 280E examination " +
+      "tests.",
+  },
+
   /* ── FAMILY 4: PAYROLL ───────────────────────────────────────────────── */
 
   {

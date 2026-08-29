@@ -4187,3 +4187,81 @@ that a till close does NOT touch `10400` — an absence assertion, because the
 original bug was an account that should not have been there.
 
 **Related:** D-39 (the close entry itself), D-76 (the pool that never aged).
+
+---
+
+## D-78 — paying the shop card's bill would have been expensed a second time
+
+**Found:** books-99, while building the low-limit shop card Michael is putting
+in the store so employees stop taking cash out of the master till. Not found by
+any test. Nothing was looking, because the purchase side had been correct since
+books-49 and the payment side had never been thought about.
+
+**Severity:** high, and quiet. Every entry involved BALANCES. Debits equalled
+credits, the bank reconciled to the penny, and the books were wrong.
+
+**What is wrong.** Buying supplies on the card posts correctly:
+`ROLE_TO_CASH_ACCOUNT.credit` maps the card feed to `33000 Credit Cards
+Payable`, so a $15 swipe debits the expense and credits the liability. That is
+right and books-99 did not change it.
+
+The bug is the other half. When the statement is paid from checking, Plaid
+reports an ordinary OUTFLOW on the account whose role is `main`. Nothing in
+`planBankExpense` could tell that row apart from a real purchase, so it was
+classified on its merchant text — "CHASE CARD PMT" and the like — and booked as
+a SECOND expense against `10200`.
+
+**The consequence.** Every single card purchase would be expensed twice: once at
+the swipe, once again when the bill was paid. And because nothing ever debited
+`33000`, the liability would grow forever — a balance that only ever went up,
+for a card that was in fact being paid off every month. On a 280E return, where
+the deductible side is already the scrutinised half, an expense total inflated
+by a duplicated card bill is precisely the finding that turns an examination
+into an adjustment.
+
+**How it hid.** A doubled expense does not look like a bug from any angle a
+report offers. The entry balances. The bank statement reconciles, because the
+cash side of the duplicate is real cash that really left. The only symptom is a
+liability that never decreases, and nothing was reading `33000` to notice.
+
+**The trap inside the fix.** The same payment appears on BOTH feeds with
+OPPOSITE signs. From Plaid's published taxonomy, verbatim:
+
+    LOAN_PAYMENTS_CREDIT_CARD_PAYMENT — "Payments to a credit card. These are
+    positive amounts for credit card subtypes and negative for depository
+    subtypes"
+
+So a fix that simply booked "the card payment" would double-count from the other
+end, paying the liability down twice. Exactly one side has to be bookable. The
+CHECKING side wins, because it carries the real cash movement and the date the
+bank statement reconciles to; the card-side mirror is recognised and
+deliberately DECLINED with a reason (rule 136), not dropped through a gap.
+
+**The fix.** Recognition is by Plaid's structured category, never by merchant
+text — a descriptor match would break the first time the bank reworded it, and
+would also catch a genuine purchase made AT a bank. Three parts:
+
+  * `card-payment-core.ts` builds the correct entry, `DR 33000 / CR 10200`,
+    which touches no expense account at all;
+  * `planBankExpense` refuses the row outright with
+    `CARD_PAYMENT_NOT_AN_EXPENSE`, placed AHEAD of the direction check so the
+    mirror is refused for being a card payment rather than for its sign;
+  * `bank-expense-service.ts` offers each row to the transfer path before the
+    expense path, so refusing is never half a loop (rule 140).
+
+**What must NOT be swallowed.** Interest is a real expense
+(`BANK_FEES_INTEREST_CHARGE`) and still posts through the ordinary path. A guard
+greedy enough to eat it would silently delete a deduction, which is the more
+expensive direction to be wrong in and leaves no evidence of itself.
+
+**How it is held shut.** `mutate-slice-books-99.py`, 20 mutations, 20 caught.
+Five of them survived the first run and were real holes: a prefix match that
+would have swept up car and mortgage payments, a transfer paying from the ATM
+account, and three DOOR mutations that left the guard perfectly correct and
+simply unreachable — the service not selecting the category column, reading it
+and passing `null`, and planning the transfer without submitting it. Any one of
+those restores this defect in full while every unit test stays green, which is
+rule 133g's entire point.
+
+**Related:** D-56 / D-37 (the bank-expense wire this extends), D-67 (drafts, not
+auto-posts).

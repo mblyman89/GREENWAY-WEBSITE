@@ -59,6 +59,10 @@ import {
   type BankFeedLine,
   type FundingAccount,
 } from "@/lib/accounting/bank-expense-core";
+import {
+  planCardPayment,
+  type CardPaymentDeclineCode,
+} from "@/lib/accounting/card-payment-core";
 
 /** One row's outcome, for a screen to render. Refusals are never swallowed. */
 export type BankExpenseOutcome =
@@ -78,7 +82,7 @@ export type BankExpenseOutcome =
       readonly transactionId: string;
       readonly merchant: string;
       readonly amountCents: number;
-      readonly code: BankExpenseRefusalCode | "GL_REFUSED";
+      readonly code: BankExpenseRefusalCode | CardPaymentDeclineCode | "GL_REFUSED";
       readonly underlyingCode: string | null;
       readonly message: string;
     };
@@ -124,6 +128,87 @@ export async function recordBankExpenseLines(
 
   for (const line of lines) {
     const merchant = merchantTextFor(line);
+
+    // THE CARD BILL (D-78). `planBankExpense` refuses this row, and refusing is
+    // only half an answer: if nothing posted the transfer, 33000 would still
+    // never come down and the refusal would look like a bug to whoever read the
+    // screen. So the same row is offered to `planCardPayment` FIRST, and the
+    // expense path is only reached when that says the row is something else.
+    //
+    // The two are mutually exclusive by construction: both ask the same
+    // question of the same field, so a row can be a transfer or an expense but
+    // never both, and never neither.
+    const card = planCardPayment({
+      transactionId: line.transactionId,
+      amountCents: line.amountCents,
+      date: line.date,
+      categoryDetailed: line.categoryDetailed ?? null,
+      role: account.role,
+    });
+
+    if (card.kind === "declined") {
+      // The mirror row on the card's own feed. Recognised, and deliberately not
+      // recorded, because the checking side already booked it (rule 136).
+      refused += 1;
+      outcomes.push({
+        kind: "refused",
+        transactionId: line.transactionId,
+        merchant: merchant ?? "(no merchant)",
+        amountCents: line.amountCents,
+        code: card.code,
+        underlyingCode: null,
+        message: card.explanation,
+      });
+      continue;
+    }
+
+    if (card.kind === "transfer") {
+      const moved = await submitJournal(
+        // JournalDraft and SubmitJournalInput differ in two nullable spots:
+        // sourceRef may be absent, and a line description may be null. Both are
+        // normalised here rather than loosened at either type, because the
+        // draft type is shared and the posting type is the stricter one.
+        // planCardPayment always sets both, so nothing is invented.
+        {
+          ...card.journal,
+          sourceRef: card.journal.sourceRef ?? null,
+          lines: card.journal.lines.map((l) => ({
+            accountCode: l.accountCode,
+            amountCents: l.amountCents,
+            costClass: l.costClass,
+            description: l.description ?? undefined,
+          })),
+        },
+        client,
+      );
+      if (!moved.ok) {
+        refused += 1;
+        outcomes.push({
+          kind: "refused",
+          transactionId: line.transactionId,
+          merchant: merchant ?? "(no merchant)",
+          amountCents: line.amountCents,
+          code: "GL_REFUSED",
+          underlyingCode: moved.code,
+          message: moved.message,
+        });
+        continue;
+      }
+      if (moved.outcome === "duplicate") duplicates += 1;
+      else recorded += 1;
+      outcomes.push({
+        kind: "recorded",
+        transactionId: line.transactionId,
+        merchant: merchant ?? "(no merchant)",
+        amountCents: line.amountCents,
+        account: card.journal.lines[0].accountCode,
+        journalId: moved.journalId,
+        status: moved.status,
+        outcome: moved.outcome,
+      });
+      continue;
+    }
+
     const plan = planBankExpense(line, account, classifyExpense({ merchant }));
 
     if (!plan.ok) {
@@ -230,7 +315,16 @@ export async function recordBankExpenses(
   const { data: rows, error: txnError } = await admin
     .from("plaid_transactions")
     .select(
-      "transaction_id,amount_cents,date,merchant_name,name,pending",
+      // personal_finance_category_detailed is what lets a card-bill payment
+      // identify itself before it can be mistaken for an expense (D-78).
+      // Without it in this select the guard in planBankExpense sees `undefined`
+      // and every row falls through to the merchant-text path, which is
+      // precisely the bug. The column has been stored since books-88.
+      // NOTE: one unbroken string literal on purpose. supabase-js infers the
+      // row type FROM this text, so splitting it across a `+` concatenation
+      // collapses the inference to GenericStringError and the mapping below
+      // stops being type-checked at all.
+      "transaction_id,amount_cents,date,merchant_name,name,pending,personal_finance_category_detailed",
     )
     .eq("account_id", plaidAccountId)
     .eq("removed", false)
@@ -249,6 +343,7 @@ export async function recordBankExpenses(
       merchant_name: string | null;
       name: string | null;
       pending: boolean | null;
+      personal_finance_category_detailed: string | null;
     };
     return {
       transactionId: row.transaction_id,
@@ -258,6 +353,7 @@ export async function recordBankExpenses(
       merchantName: row.merchant_name,
       name: row.name,
       pending: !!row.pending,
+      categoryDetailed: row.personal_finance_category_detailed,
     };
   });
 
