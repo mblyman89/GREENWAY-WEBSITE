@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -13,6 +14,7 @@ import {
   type FactReviewRow,
 } from "@/lib/pos/fact-review-core";
 import { groupPendingReviews } from "@/lib/pos/fact-review-bulk-core";
+import { NO_PRODUCT_MASTER } from "@/lib/pos/missing-product-master-core";
 import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import { formatDateTime } from "@/lib/pos/format";
 import { resolveFactReview, resolveFactReviewGroup } from "../../actions";
@@ -81,6 +83,12 @@ export default async function FactReviewPage({
   // the machine's own verbatim reason so ONE named human decision can cover a
   // whole reason at once -- still written as one audit row per product.
   const groups = groupPendingReviews(pending);
+  // SLICE 6B: how many of the rejected rows are the "in inventory, not in the
+  // products file" case. Counted from the SAME staged rows the buckets were
+  // built from, so this can never disagree with the Rejected count above it.
+  const missingMasterCount = items.filter(
+    (i) => i.hidden && i.hidden_reason === NO_PRODUCT_MASTER,
+  ).length;
 
   return (
     <div>
@@ -291,13 +299,32 @@ export default async function FactReviewPage({
 
         {/* Rejected */}
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-          <h2 className="text-sm font-semibold text-white">
-            Rejected <span className="ml-1 text-white/40">({buckets.rejected.length})</span>
-          </h2>
-          <p className="mt-1 text-xs text-white/45">
-            Not going to the public menu — every one with its documented reason. Nothing is dropped
-            silently.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">
+                Rejected <span className="ml-1 text-white/40">({buckets.rejected.length})</span>
+              </h2>
+              <p className="mt-1 max-w-2xl text-xs text-white/45">
+                Not going to the public menu — every one with its documented reason. Nothing is
+                dropped silently.{" "}
+                <strong className="text-white/70">These do not block publishing.</strong>
+              </p>
+            </div>
+            {/* SLICE 6B: this section used to dead-end. The owner reported
+                "the rejected ones, i can not fix or do anything with them at
+                all" — correct, it rendered name + notes and nothing else.
+                Measured on his real files: ALL of them are the one reason
+                `no_product_master`, and they are a data-completeness worklist
+                with its own screen and a rep-ready export. */}
+            {missingMasterCount > 0 && (
+              <Link
+                href={`/admin/menu-imports/${id}/missing-products?back=${encodeURIComponent(`/admin/menu-imports/${id}/facts`)}`}
+                className="shrink-0 rounded-full border border-[var(--admin-accent)]/50 px-4 py-2 text-xs font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/10"
+              >
+                Work the {missingMasterCount} missing product{missingMasterCount === 1 ? "" : "s"} →
+              </Link>
+            )}
+          </div>
           {buckets.rejected.length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer text-xs font-semibold text-red-400">Show rows</summary>
