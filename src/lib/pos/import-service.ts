@@ -19,7 +19,8 @@ import { transformWorkbooks, type TransformResult } from "@/lib/pos/transform";
 import type { GreenwayMenuItem } from "@/lib/pos/transform";
 import type { MenuVersion, PosImport } from "@/lib/pos/db-types";
 import { injectApprovedDraftsIntoVersion } from "@/lib/pos/draft-injection";
-import { planImportLots } from "@/lib/pos/import-lot-core";
+import { planImportLots, resolveLotCreatedAt, assertUniformInsertKeys } from "@/lib/pos/import-lot-core";
+import { storeNow } from "@/lib/reports/timezone";
 import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { getImportDiagnostics, getVersionItems } from "@/lib/pos/menu-version";
@@ -531,6 +532,22 @@ async function createImportLots(importId: string, actorId: string | null): Promi
   }
 
   // 5 + 6. Insert in batches (plan order = oldest received first).
+  //
+  // SLICE 1 — created_at must be present on EVERY row.
+  // `inventory_lots.created_at` is NOT NULL (migration 0023:112). postgrest-js
+  // builds `columns=` from the UNION of the keys of every row in an array
+  // insert and does not send `Prefer: missing=default`
+  // (node_modules/@supabase/postgrest-js/dist/index.mjs:4189-4201), so a row
+  // that OMITS created_at inside a batch where another row SETS it is written
+  // as an explicit NULL -> not-null violation. The Cultivera export has 203
+  // rows with a blank Received date, so real batches are mixed and the publish
+  // aborted mid-run, before publish_menu_version could execute (which is why
+  // the customer-facing menu stayed empty).
+  //
+  // One instant for the whole run, taken from the store clock (Rule 8), so
+  // undated lots share a single deterministic timestamp that is younger than
+  // every real received date -- preserving the planner's FIFO ordering.
+  const importCreatedAtFallback = storeNow().toISOString();
   let created = 0;
   for (let start = 0; start < toCreate.length; start += LOT_BATCH) {
     const batch = toCreate.slice(start, start + LOT_BATCH);
@@ -564,11 +581,17 @@ async function createImportLots(importId: string, actorId: string | null): Promi
         notes: lot.notes,
         created_by: actorId,
         updated_by: actorId,
-        ...(lot.createdAtIso ? { created_at: lot.createdAtIso } : {}),
+        // NEVER conditional: see the SLICE 1 note above. Received date when the
+        // POS export had one, otherwise this run's store-clock instant.
+        created_at: resolveLotCreatedAt(lot.createdAtIso, importCreatedAtFallback),
       });
     }
+    const batchNumber = start / LOT_BATCH + 1;
+    // Fail loudly and precisely BEFORE the network call if the row builder ever
+    // regresses into a ragged key set (Rule 3: precise warnings, never invent).
+    assertUniformInsertKeys(rows, `inventory_lots batch ${batchNumber}`);
     const { error: insErr } = await admin.from("inventory_lots").insert(rows);
-    if (insErr) throw new Error(`Lot creation failed while inserting batch ${start / LOT_BATCH + 1}: ${insErr.message}`);
+    if (insErr) throw new Error(`Lot creation failed while inserting batch ${batchNumber}: ${insErr.message}`);
     created += rows.length;
   }
 
