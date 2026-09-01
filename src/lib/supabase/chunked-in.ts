@@ -34,6 +34,11 @@
  * or pagination is not deterministic.
  */
 
+import {
+  evaluateReadCompleteness,
+  type ReadCompletenessVerdict,
+} from "./read-completeness-core";
+
 export const CHUNKED_IN_CHUNK_SIZE = 200;
 export const CHUNKED_IN_PAGE_SIZE = 1000;
 
@@ -93,6 +98,95 @@ export async function pagedAll<Row>(
     from += pageSize;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 5A — paging that can PROVE it was complete
+// ---------------------------------------------------------------------------
+
+/**
+ * One page's outcome. Unlike `pagedAll`'s fetcher (which returns `Row[]`, so a
+ * failed page is indistinguishable from end-of-data), this fetcher reports
+ * whether the read itself succeeded.
+ */
+export type CheckedPage<Row> = {
+  rows: Row[];
+  /** False when the query errored. The loop STOPS and the verdict says so. */
+  ok: boolean;
+};
+
+export type PagedAllCheckedResult<Row> = {
+  rows: Row[];
+  verdict: ReadCompletenessVerdict;
+};
+
+/**
+ * `pagedAll` with an honest failure signal.
+ *
+ * WHY: `pagedAll` breaks on `rows.length < pageSize` (chunked-in.ts:92). A page
+ * that FAILED returns `[]`, which satisfies that condition — so a mid-read
+ * outage silently produces a SHORT list that every caller treats as the whole
+ * table. For an advisory list that is survivable; for the recall-hold gate
+ * (completion-gate.ts:103) or the acquisition-cost floor
+ * (discount-engine-core.ts:592, where an unknown cost DISABLES the below-cost
+ * clamp) it is fail-open.
+ *
+ * This variant returns the rows AND a verdict. Callers decide what to do:
+ * a statutory gate refuses on `!verdict.complete`; an advisory panel ships the
+ * partial data and flags it. This function never makes that choice for them.
+ *
+ * `maxRows` is a memory ceiling, not a row cap — hitting it is REPORTED as
+ * `limit_reached` rather than silently accepted (the exact mistake that
+ * `.limit(5000)` makes today).
+ *
+ * The fetcher MUST apply a stable `.order(...)` on a UNIQUE column plus the
+ * given `.range(from, to)`, or pagination is not deterministic.
+ */
+export async function pagedAllChecked<Row>(
+  fetchPage: (fromIndex: number, toIndex: number) => Promise<CheckedPage<Row>>,
+  opts: { pageSize?: number; maxRows?: number; expectedTotal?: number | null } = {},
+): Promise<PagedAllCheckedResult<Row>> {
+  const pageSize = Math.max(1, opts.pageSize ?? CHUNKED_IN_PAGE_SIZE);
+  const maxRows = opts.maxRows != null && opts.maxRows > 0 ? opts.maxRows : Number.POSITIVE_INFINITY;
+  const rows: Row[] = [];
+  let pagesFetched = 0;
+  let readFailed = false;
+  let hitCeiling = false;
+  let from = 0;
+
+  for (;;) {
+    const page = await fetchPage(from, from + pageSize - 1);
+    pagesFetched++;
+    const got = Array.isArray(page?.rows) ? page.rows : [];
+    if (got.length > 0) rows.push(...got);
+
+    // A failed page ends the loop AND is remembered — the whole point.
+    if (!page?.ok) {
+      readFailed = true;
+      break;
+    }
+    // Short page = the only reliable end-of-data signal (see pagedAll above).
+    if (got.length < pageSize) break;
+
+    from += pageSize;
+    if (rows.length >= maxRows) {
+      // Full pages were still coming when we stopped ourselves.
+      hitCeiling = true;
+      break;
+    }
+  }
+
+  return {
+    rows,
+    verdict: evaluateReadCompleteness({
+      rowsRead: rows.length,
+      pagesFetched,
+      pageSize,
+      readFailed,
+      hitCeiling,
+      expectedTotal: opts.expectedTotal ?? null,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +269,76 @@ export async function __runChunkedInTests(): Promise<void> {
   const pagedSum = paged.reduce((a, r) => a + r.i, 0);
   const wantSum = (2344 * 2345) / 2;
   ok(pagedSum === wantSum, "pagedAll preserves every row exactly once");
+
+  // ── SLICE 5A: pagedAllChecked ────────────────────────────────────────────
+
+  // Happy path: 4,179 rows (the real inventory_lots size) behind a 1,000 cap.
+  {
+    const lots = Array.from({ length: 4179 }, (_, i) => ({ i }));
+    const res = await pagedAllChecked<{ i: number }>(async (from, to) => ({
+      rows: lots.slice(from, to + 1).slice(0, SERVER_CAP),
+      ok: true,
+    }));
+    ok(res.rows.length === 4179, `checked paging complete (got ${res.rows.length}, want 4179)`);
+    ok(res.verdict.complete, "verdict says complete");
+    ok(res.verdict.reason === "complete", "reason complete");
+  }
+
+  // THE fail-open this exists to close: page 2 errors. Plain pagedAll would
+  // return 1,000 rows and the caller would treat that as the whole table.
+  {
+    const lots = Array.from({ length: 4179 }, (_, i) => ({ i }));
+    let call = 0;
+    const res = await pagedAllChecked<{ i: number }>(async (from, to) => {
+      call++;
+      if (call === 2) return { rows: [], ok: false };
+      return { rows: lots.slice(from, to + 1).slice(0, SERVER_CAP), ok: true };
+    });
+    ok(res.rows.length === 1000, "partial rows are still returned");
+    ok(!res.verdict.complete, "a failed page is REPORTED, not swallowed");
+    ok(res.verdict.reason === "read_failed", "reason read_failed");
+  }
+
+  // A failed FIRST page must not look like an empty table.
+  {
+    const res = await pagedAllChecked<{ i: number }>(async () => ({ rows: [], ok: false }));
+    ok(res.rows.length === 0, "no rows recovered");
+    ok(!res.verdict.complete, "empty-because-failed is NOT empty-because-empty");
+    ok(res.verdict.reason === "read_failed", "reason read_failed on first page");
+  }
+
+  // A genuinely empty table is complete, not an error.
+  {
+    const res = await pagedAllChecked<{ i: number }>(async () => ({ rows: [], ok: true }));
+    ok(res.rows.length === 0 && res.verdict.complete, "truly empty table reads complete");
+  }
+
+  // Safety ceiling is REPORTED rather than silently accepted.
+  {
+    const many = Array.from({ length: 9000 }, (_, i) => ({ i }));
+    const res = await pagedAllChecked<{ i: number }>(
+      async (from, to) => ({ rows: many.slice(from, to + 1).slice(0, SERVER_CAP), ok: true }),
+      { maxRows: 3000 },
+    );
+    ok(res.rows.length === 3000, "ceiling bounds memory");
+    ok(!res.verdict.complete, "hitting the ceiling is not complete");
+    ok(res.verdict.reason === "limit_reached", "reason limit_reached");
+  }
+
+  // A server-side COUNT witness quantifies a silent shortfall exactly.
+  {
+    const lots = Array.from({ length: 4179 }, (_, i) => ({ i }));
+    let call = 0;
+    const res = await pagedAllChecked<{ i: number }>(
+      async (from, to) => {
+        call++;
+        if (call === 3) return { rows: [], ok: false };
+        return { rows: lots.slice(from, to + 1).slice(0, SERVER_CAP), ok: true };
+      },
+      { expectedTotal: 4179 },
+    );
+    ok(res.verdict.missing === 4179 - res.rows.length, "witness quantifies the shortfall exactly");
+  }
 
   console.log(`chunked-in self-tests: ${n} assertions passed`);
 }

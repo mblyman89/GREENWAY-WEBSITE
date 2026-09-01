@@ -29,8 +29,20 @@ import {
   type EngineRule,
   type EngineCartLine,
 } from "./discount-engine-core";
+import {
+  evaluateReadCompleteness,
+  type ReadCompletenessVerdict,
+} from "@/lib/supabase/read-completeness-core";
 
 export * from "./discount-engine-core";
+
+/**
+ * Memory ceiling for the acquisition-cost read. Reaching it is REPORTED as an
+ * incomplete read rather than silently accepted — the mistake `.limit(10000)`
+ * made. `inventory_lots` held 4,179 rows when SLICE 3 measured it, so this
+ * leaves a wide margin while still bounding memory.
+ */
+const COST_READ_MAX_ROWS = 100_000;
 
 // Pure promotion helpers (parseEngineConfig, promotionToRule, isActiveNow,
 // seedConfigFor, the serialisable PublishedRuleSnapshot, and the card-preview
@@ -177,20 +189,77 @@ async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]
  * and the below-cost audit lists them as "cost unknown").
  */
 export async function loadProductCosts(): Promise<Map<string, number>> {
+  return (await loadProductCostsChecked()).costs;
+}
+
+/**
+ * SLICE 5A — the same cost map, plus an honest completeness signal.
+ *
+ * WHY THIS EXISTS: the old read was `.limit(10000)` on `inventory_lots`, the
+ * largest table in the system (SLICE 3 proved 4,179 rows survive the cap).
+ * `.limit()` cannot RAISE PostgREST's `db.max_rows` ceiling of 1,000 — it can
+ * only lower it (chunked-in.ts:13-14) — and a capped read reports **no error**.
+ *
+ * The consequence was silent and one-directional, in the store's disfavour:
+ *   - a lot past row 1,000 never entered the map;
+ *   - a product key absent from the map has cost `null`;
+ *   - `costFloorMinorUnits(null, …)` returns **0** (discount-engine-core.ts:226);
+ *   - `atCostFloor: floor > 0 && …` is then false (discount-engine-core.ts:592),
+ *     so the acquisition-cost clamp DOES NOT BIND.
+ *
+ * In other words, truncation quietly switched OFF below-cost protection for
+ * every product past the cap — on live register pricing (order-pricing.ts:175,
+ * api/pos/menu/route.ts:67, api/pos/loyalty/route.ts:95, promo-guard.ts:54).
+ * No error, no warning, no audit entry.
+ *
+ * This paged variant reads every costed lot and reports whether it managed to.
+ * `loadProductCosts()` above keeps the original signature so the seven existing
+ * call sites are unchanged; callers that must not price on partial cost data
+ * can use this one and inspect `verdict.complete`.
+ */
+export async function loadProductCostsChecked(): Promise<{
+  costs: Map<string, number>;
+  verdict: ReadCompletenessVerdict;
+}> {
   const costs = new Map<string, number>();
   const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
-  if (!isSupabaseServiceConfigured) return costs;
+  if (!isSupabaseServiceConfigured) {
+    return {
+      costs,
+      // Not a failure: dev/build contexts have no database at all.
+      verdict: evaluateReadCompleteness({ rowsRead: 0, pagesFetched: 0, pageSize: 1000 }),
+    };
+  }
   const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  const { pagedAllChecked } = await import("@/lib/supabase/chunked-in");
   const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("inventory_lots")
-    .select("pos_product_key, received_qty, unit_cost_minor_units")
-    .not("pos_product_key", "is", null)
-    .not("unit_cost_minor_units", "is", null)
-    .limit(10000);
+
+  type CostRow = {
+    id: string;
+    pos_product_key: string | null;
+    received_qty: number | null;
+    unit_cost_minor_units: number | null;
+  };
+
+  const { rows: data, verdict } = await pagedAllChecked<CostRow>(
+    async (from, to) => {
+      const { data: page, error } = await admin
+        .from("inventory_lots")
+        .select("id, pos_product_key, received_qty, unit_cost_minor_units")
+        .not("pos_product_key", "is", null)
+        .not("unit_cost_minor_units", "is", null)
+        // Stable UNIQUE ordering — REQUIRED for deterministic .range() paging.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (page as CostRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: COST_READ_MAX_ROWS },
+  );
+
   const num = new Map<string, number>();
   const den = new Map<string, number>();
-  for (const row of (data ?? []) as { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]) {
+  for (const row of data as { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]) {
     const key = row.pos_product_key;
     if (!key || row.unit_cost_minor_units == null) continue;
     const qty = Math.max(1, Math.round(row.received_qty ?? 1));
@@ -201,7 +270,7 @@ export async function loadProductCosts(): Promise<Map<string, number>> {
     const d = den.get(key) ?? 0;
     if (d > 0) costs.set(key, Math.round(total / d));
   }
-  return costs;
+  return { costs, verdict };
 }
 
 export type SimBasketItem = { productKey: string; quantity: number };
