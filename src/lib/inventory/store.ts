@@ -9,6 +9,9 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
+import { pagedAll } from "@/lib/supabase/chunked-in";
+import { pacificToday, addPacificDays } from "@/lib/reports/timezone";
+import type { ReceivedDateLot } from "@/lib/inventory/received-date-core";
 import type { SortColumn } from "@/lib/admin/list-filter-core";
 import type {
   InboundManifest,
@@ -27,16 +30,23 @@ type LotFilter = {
   limit?: number;
 };
 
-/** Today as an ISO date string (UTC) for date comparisons. */
+/**
+ * Today as an ISO date string for date comparisons.
+ *
+ * SLICE 2 (Rule 8): this used to be `new Date().toISOString().slice(0,10)`,
+ * i.e. the UTC day. This host runs UTC, which is 7–8 hours AHEAD of Port
+ * Orchard, so from ~4–5pm Pacific onward the "today" used to bucket expiries
+ * was already tomorrow's date. A lot expiring today would flip into the
+ * "expired" count most of the evening, every evening. The business clock is
+ * America/Los_Angeles.
+ */
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return pacificToday();
 }
 
-/** Date N days from now as an ISO date string. */
+/** Date N days from now as an ISO date string, on the Pacific calendar (Rule 8). */
 function isoDaysFromNow(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addPacificDays(pacificToday(), days);
 }
 
 /**
@@ -62,6 +72,12 @@ export async function listLotsPaged(
     expiringWithinDays?: number;
     /** SLICE 77: only lots supplied by this vendor (vendors ⇄ inventory link). */
     vendorId?: string;
+    /**
+     * SLICE 2: only lots with NO evidenced received date (excluding destroyed
+     * lots, which are out of inventory). This is the owner's worklist filter,
+     * reached from the "Received dates missing" banner.
+     */
+    needsReceivedDate?: boolean;
   },
 ): Promise<{ rows: LotWithDetail[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
@@ -87,6 +103,11 @@ export async function listLotsPaged(
   }
   if (opts.hasCoa === true) query = query.not("lab_result_id", "is", null);
   if (opts.hasCoa === false) query = query.is("lab_result_id", null);
+  if (opts.needsReceivedDate) {
+    // Mirrors the pure core's CLOSED_STATUSES and computeInventoryStats(), so
+    // the banner's count and this list can never disagree.
+    query = query.is("received_on", null).neq("status", "destroyed");
+  }
   if (opts.isSample !== undefined) query = query.eq("is_sample", opts.isSample);
   if (opts.isMedical !== undefined) query = query.eq("is_medical", opts.isMedical);
   if (opts.expiringWithinDays != null) {
@@ -208,6 +229,16 @@ export type InventoryStats = {
   expired: number;
   /** Total inventory cost at hand in MINOR UNITS (sum of on_hand * unit_cost). */
   onHandCostMinor: number;
+  /**
+   * SLICE 2 — lots with NO received date on file (excluding destroyed lots).
+   * NULL received_on means UNKNOWN, never "today" (migration 0214, following
+   * the 0191.last_counted_at doctrine). This is the count the owner is asked
+   * to clear, because CCRS Inventory.CreatedDate falls back to the import
+   * instant while it is unknown.
+   */
+  missingReceivedDate: number;
+  /** The urgent subset: missing a received date AND still holding sellable stock. */
+  missingReceivedDateWithStock: number;
 };
 
 export async function computeInventoryStats(): Promise<InventoryStats> {
@@ -224,28 +255,54 @@ export async function computeInventoryStats(): Promise<InventoryStats> {
     expiringSoon: 0,
     expired: 0,
     onHandCostMinor: 0,
+    missingReceivedDate: 0,
+    missingReceivedDateWithStock: 0,
   };
   if (!isSupabaseServiceConfigured) return empty;
 
   const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("inventory_lots")
-    .select(
-      "status, on_hand_qty, unit_cost_minor_units, lab_result_id, pos_product_key, expires_on",
-    )
-    .limit(5000);
 
-  const rows =
-    (data as
-      | {
-          status: string;
-          on_hand_qty: number;
-          unit_cost_minor_units: number | null;
-          lab_result_id: string | null;
-          pos_product_key: string | null;
-          expires_on: string | null;
-        }[]
-      | null) ?? [];
+  // ═══════════════════════════════════════════════════════════════════════
+  // SLICE 2 — THE HEADER THAT LIED.
+  //
+  // This read used to be `.select(...).limit(5000)`. `.limit()` does NOT
+  // raise the PostgREST per-response row cap (`db.max_rows`, default 1000);
+  // it only lowers it. So with 4,179 lots in the table this returned exactly
+  // 1,000 rows, silently, with no error — and every number built from it was
+  // wrong: "Total lots" read 1,000 instead of 4,179, and "cost on hand"
+  // showed roughly a quarter of the true figure (~$37K against ~$197K).
+  // The owner reported exactly that: "the inventory page seems to be capped
+  // at 1000 products and shows strange numbers in the header section like
+  // the total cost on hand is way off."
+  //
+  // pagedAll() walks `.range()` until a short page comes back, so the totals
+  // are computed over EVERY lot. The `.order("id")` is not decorative — it
+  // is what makes pagination deterministic (see chunked-in.ts:33-34); without
+  // a stable sort, PostgREST may return rows in an arbitrary order per page
+  // and the pages can overlap or skip.
+  //
+  // `received_on` is selected here so the header can flag lots with no
+  // received date on file (migration 0214).
+  // ═══════════════════════════════════════════════════════════════════════
+  type StatsRow = {
+    status: string;
+    on_hand_qty: number;
+    unit_cost_minor_units: number | null;
+    lab_result_id: string | null;
+    pos_product_key: string | null;
+    expires_on: string | null;
+    received_on: string | null;
+  };
+  const rows = await pagedAll<StatsRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select(
+        "status, on_hand_qty, unit_cost_minor_units, lab_result_id, pos_product_key, expires_on, received_on, id",
+      )
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as StatsRow[] | null) ?? [];
+  });
 
   const today = todayIso();
   const soon = isoDaysFromNow(EXPIRING_SOON_DAYS);
@@ -273,6 +330,17 @@ export async function computeInventoryStats(): Promise<InventoryStats> {
 
     if (r.on_hand_qty != null && r.unit_cost_minor_units != null) {
       stats.onHandCostMinor += Math.round(r.on_hand_qty * r.unit_cost_minor_units);
+    }
+
+    // SLICE 2: the received-date flag. Destroyed lots are excluded — they are
+    // out of inventory and no longer reported, so chasing their paperwork
+    // would only bury the rows that still matter. Kept identical to the pure
+    // core's CLOSED_STATUSES in received-date-core.ts.
+    if (!r.received_on && r.status !== "destroyed") {
+      stats.missingReceivedDate += 1;
+      if (r.status === "active" && (r.on_hand_qty ?? 0) > 0) {
+        stats.missingReceivedDateWithStock += 1;
+      }
     }
 
     if (r.status === "active") {
@@ -393,6 +461,70 @@ export async function updateLotDetails(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * SLICE 2 — set (or clear) a lot's RECEIVED DATE.
+ *
+ * Deliberately its own writer rather than another key in `updateLotDetails`,
+ * because this field carries provenance and attribution that the four
+ * descriptive fields do not. Every write records WHO set it and WHEN, so the
+ * date can always be traced back to a person (standing rule 3).
+ *
+ * `receivedOn` MUST already have passed `parseReceivedDateInput()`. A null
+ * clears the value back to unknown, which re-raises the flag — that is a
+ * legitimate action, not an error: a known-wrong date is worse than an
+ * honest blank.
+ *
+ * NOTE: this NEVER touches `created_at`. `created_at` is the immutable
+ * row-birth timestamp that FIFO costing is ordered by; rewriting it by hand
+ * would silently reorder cost layers. CCRS reads the received date through
+ * `ccrsInventoryCreatedDate()` instead.
+ */
+export async function updateLotReceivedDate(
+  id: string,
+  receivedOn: string | null,
+  actorId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("inventory_lots")
+    .update({
+      received_on: receivedOn,
+      // Clearing the date also clears its provenance — an empty value has no
+      // source, and leaving a stale "owner_entered" behind would misrepresent
+      // the record.
+      received_on_source: receivedOn ? "owner_entered" : null,
+      received_on_set_by: receivedOn ? actorId : null,
+      received_on_set_at: receivedOn ? new Date().toISOString() : null,
+      updated_by: actorId,
+    })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * SLICE 2 — every lot still missing a received date, for the owner's
+ * worklist. Paged: this is exactly the population that was truncated before.
+ */
+export async function listLotsMissingReceivedDate(): Promise<ReceivedDateLot[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const rows = await pagedAll<ReceivedDateLot>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("id, lot_code, product_name, status, on_hand_qty, received_on, created_at")
+      .is("received_on", null)
+      .neq("status", "destroyed")
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as ReceivedDateLot[] | null) ?? [];
+  });
+  return rows;
 }
 
 /**

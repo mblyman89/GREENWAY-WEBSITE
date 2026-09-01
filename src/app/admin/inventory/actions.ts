@@ -4,8 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { createAdjustment, updateLotStatus, updateLotDetails, getLotById } from "@/lib/inventory/store";
+import {
+  createAdjustment,
+  updateLotStatus,
+  updateLotDetails,
+  updateLotReceivedDate,
+  getLotById,
+} from "@/lib/inventory/store";
 import { parseLotEditInput, brandMatchesVendor, buildLotEditSummary } from "@/lib/inventory/lot-edit-core";
+import { parseReceivedDateInput, buildReceivedDateSummary } from "@/lib/inventory/received-date-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
 // Option A: per-product website Type/Category override (migration 0150).
 import {
@@ -87,6 +94,63 @@ export async function setLotStatusAction(lotId: string, formData: FormData) {
   if (!result.ok) {
     redirect(`/admin/inventory/${lotId}?error=save`);
   }
+  redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+/**
+ * SLICE 2 — set a lot's RECEIVED DATE (owner-mandated compliance fix).
+ *
+ * Owner request, verbatim: "For lots that don't have a receive date, I want
+ * them flagged for me to add one." Before this there was no such capability
+ * anywhere in the app — `lot-edit-core.ts` whitelists four descriptive fields
+ * and explicitly locks dates.
+ *
+ * Why this date IS safe to hand-enter when the others are not: the received
+ * date is not a derived number, it is a FACT FROM THE PAPERWORK that the
+ * Cultivera export simply failed to carry. The owner reading it off the
+ * manifest is the most authoritative source available. What stays locked is
+ * `created_at` (the immutable FIFO ordering key) and `expires_on` (which comes
+ * from the COA).
+ *
+ * Validated by the PURE core, attributed to whoever set it, audited.
+ */
+export async function updateLotReceivedDateAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const parsed = parseReceivedDateInput(formData.get("received_on") as string | null);
+  if (!parsed.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(parsed.error));
+  }
+
+  const before = await getLotById(lotId);
+  if (!before) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("That lot no longer exists."));
+  }
+  // `received_on` is now a first-class column on InventoryLot (migration 0214),
+  // so this reads straight off the typed row — no cast needed.
+  const beforeReceivedOn = before.received_on ?? null;
+
+  const result = await updateLotReceivedDate(lotId, parsed.receivedOn, session.userId);
+  if (!result.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(result.error));
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.received_date_set",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { received_on: beforeReceivedOn },
+    after: {
+      received_on: parsed.receivedOn,
+      received_on_source: parsed.receivedOn ? "owner_entered" : null,
+      changes: [buildReceivedDateSummary(beforeReceivedOn, parsed.receivedOn)],
+    },
+  });
+
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
 

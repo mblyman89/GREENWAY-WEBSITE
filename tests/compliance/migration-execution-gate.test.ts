@@ -538,10 +538,26 @@ describe("the migration list is ordered the way the database will see it", () =>
     // about what accounts are for business and which ones are my wife and my
     // personal accounts."
     //
-    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 213;
+    // ─── IT FIRED A SIXTEENTH TIME, ON 0214 (SLICE 2) ─────────────────────
+    //
+    // 0214_inventory_lot_received_date.sql exists because Michael said, of the
+    // lots the Cultivera export left undated: "For lots that don't have a
+    // receive date, I want them flagged for me to add one... this is a
+    // compliance issue and we can't be breaking the rules."
+    //
+    // Before it, `inventory_lots` had no received-date column at all, so CCRS
+    // Inventory.CreatedDate was sourced from `created_at` — the instant of the
+    // import. For the lots whose POS export had a blank received date, that
+    // would have told the LCB the lot was created on migration day. 0214 adds
+    // `received_on` (plus provenance, actor and timestamp) as a SEPARATE,
+    // nullable column: NULL means "not known", it is never backfilled from
+    // `created_at`, and it is surfaced to the owner as a worklist instead —
+    // the same discipline migration 0191 set for `last_counted_at`.
+    //
+    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 214;
     // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
-    // sort -c` exits clean. Only then was 0212 changed to 0213.
-    expect(listed[listed.length - 1]).toMatch(/^0213_/);
+    // sort -c` exits clean. Only then was 0213 changed to 0214.
+    expect(listed[listed.length - 1]).toMatch(/^0214_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {
