@@ -103,8 +103,14 @@ export type PlannedImportLot = {
   receivedOn: string | null;
   /**
    * Explicit created_at for the insert (noon UTC on the received date) so the
-   * sale path's created_at-ordered FIFO consumes oldest stock first. Null →
-   * caller omits the column and the DB default now() applies.
+   * sale path's created_at-ordered FIFO consumes oldest stock first.
+   *
+   * Null means the POS export had no Received date. SLICE 1: the caller must
+   * NOT omit the column in that case — it resolves the value through
+   * resolveLotCreatedAt(), which substitutes the publish run's "now". Omitting
+   * the key makes postgrest-js write an explicit NULL (it unions the keys of
+   * every row in the batch into `columns=`), which violates the NOT NULL
+   * constraint on inventory_lots.created_at.
    */
   createdAtIso: string | null;
   /** Whether the POS export says a COA is on file. */
@@ -178,6 +184,108 @@ export function parseUsDate(raw: string | null | undefined): string | null {
 /** "Y"/"yes"/"true" → true; anything else (incl. blank) → false. */
 export function coaFlagToBool(raw: string | null | undefined): boolean {
   return /^(y|yes|true|1)$/i.test((raw ?? "").trim());
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 1 — created_at safety at the insert boundary
+//
+// THE BUG THIS FIXES (proven, not guessed):
+// `@supabase/postgrest-js` builds the PostgREST `columns=` list from the UNION
+// of the keys of EVERY row in an array insert, and does NOT send
+// `Prefer: missing=default` unless the caller passes `defaultToNull: false`:
+//
+//   node_modules/@supabase/postgrest-js/dist/index.mjs:4189-4201
+//     insert(values, { count, defaultToNull = true } = {}) {
+//       if (!defaultToNull) headers.append("Prefer", `missing=default`)
+//       if (Array.isArray(values)) {
+//         const columns = values.reduce((acc, x) => acc.concat(Object.keys(x)), [])
+//         url.searchParams.set("columns", [...new Set(columns)].join(","))
+//
+// Consequence: if ONE row in a batch carries `created_at` and another OMITS it,
+// `created_at` still lands in `columns=`, and the omitting rows are written as
+// an explicit NULL — never the column default. Against
+// `supabase/migrations/0023_pos_inventory_lots.sql:112`
+// (`created_at timestamptz not null default now()`) that is a hard failure:
+//   'null value in column "created_at" of relation "inventory_lots"
+//    violates not-null constraint'
+//
+// The Cultivera export has 203 rows with a blank "Received date", so real
+// batches are MIXED (dated + undated) and the publish aborts mid-run — before
+// `publish_menu_version` ever executes, which is why the customer-facing menu
+// stayed empty.
+//
+// THE FIX: never omit the column. Every row carries a real timestamp, so the
+// key-set is uniform and no NULL can be synthesized. Undated lots get the
+// publish run's "now", which is younger than every real received date and
+// therefore preserves the planner's documented FIFO intent (dated oldest-first,
+// undated last — see the sort at the end of planImportLots).
+// ---------------------------------------------------------------------------
+
+/**
+ * The `created_at` an inventory_lots row must carry.
+ *
+ * @param plannedIso  PlannedImportLot.createdAtIso — noon UTC on the POS
+ *                    "Received date", or null when the export had no date.
+ * @param fallbackIso One instant for the whole publish run (the caller passes
+ *                    `storeNow().toISOString()`), used for undated lots.
+ *
+ * Always returns a non-empty ISO string: `created_at` is NOT NULL, so there is
+ * no legal "omit it" branch at the insert boundary.
+ */
+export function resolveLotCreatedAt(plannedIso: string | null, fallbackIso: string): string {
+  const planned = (plannedIso ?? "").trim();
+  if (planned) return planned;
+  const fallback = (fallbackIso ?? "").trim();
+  if (!fallback) {
+    throw new Error(
+      "resolveLotCreatedAt: fallbackIso is required — inventory_lots.created_at is NOT NULL and postgrest-js writes an explicit NULL for omitted keys.",
+    );
+  }
+  return fallback;
+}
+
+/** Stable, order-independent fingerprint of a row's column set. */
+export function insertKeySignature(row: Record<string, unknown>): string {
+  return Object.keys(row).sort().join(",");
+}
+
+/**
+ * Find the first row whose column set differs from row 0's.
+ *
+ * This is the guardrail for the postgrest-js union-of-keys behaviour above: any
+ * divergence means some row is about to be written as an explicit NULL in a
+ * column it never intended to set. Returns null when the batch is uniform.
+ */
+export function findNonUniformInsertRow(
+  rows: readonly Record<string, unknown>[],
+): { index: number; missing: string[]; extra: string[] } | null {
+  if (rows.length < 2) return null;
+  const baseline = new Set(Object.keys(rows[0]));
+  for (let i = 1; i < rows.length; i++) {
+    const keys = new Set(Object.keys(rows[i]));
+    const missing = [...baseline].filter((k) => !keys.has(k)).sort();
+    const extra = [...keys].filter((k) => !baseline.has(k)).sort();
+    if (missing.length || extra.length) return { index: i, missing, extra };
+  }
+  return null;
+}
+
+/**
+ * Throw a PRECISE error (Rule 3: surface precise warnings, never invent values)
+ * if an array insert would send a ragged column set. Fails BEFORE the network
+ * call, so the operator sees the real cause instead of a Postgres NOT NULL
+ * violation on a column nobody meant to touch.
+ */
+export function assertUniformInsertKeys(rows: readonly Record<string, unknown>[], label: string): void {
+  const bad = findNonUniformInsertRow(rows);
+  if (!bad) return;
+  const parts: string[] = [];
+  if (bad.missing.length) parts.push(`missing [${bad.missing.join(", ")}]`);
+  if (bad.extra.length) parts.push(`unexpected [${bad.extra.join(", ")}]`);
+  throw new Error(
+    `${label}: row ${bad.index} has a different column set than row 0 (${parts.join("; ")}). ` +
+      "postgrest-js unions the keys of every row into `columns=`, so the differing rows would be written as explicit NULLs. Build every row with an identical key set.",
+  );
 }
 
 function lotNote(opts: { receivedOn: string | null; coaPresent: boolean; merged: number }): string {
@@ -338,8 +446,10 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
     });
   }
 
-  // FIFO-friendly insert order: oldest received first (nulls last so they get
-  // the youngest DB-default timestamps).
+  // FIFO-friendly insert order: oldest received first, undated last. Undated
+  // lots are stamped with the publish run's "now" (resolveLotCreatedAt), which
+  // is younger than every real received date, so they stay at the end of the
+  // FIFO queue exactly as this ordering intends.
   lots.sort((a, b) => {
     if (a.receivedOn && b.receivedOn) return a.receivedOn.localeCompare(b.receivedOn) || a.ccrsExternalId.localeCompare(b.ccrsExternalId);
     if (a.receivedOn) return -1;
@@ -510,15 +620,125 @@ export function __runImportLotCoreTests(): void {
     ok(plan.diagnostics.some((d) => d.code === "import_lot_missing_barcode" && d.severity === "warning"), "missing barcode warned");
   }
 
-  // Missing received date -> null createdAtIso (DB default now()), sorted last.
+  // Missing received date -> null createdAtIso in the PLAN, sorted last. The
+  // insert boundary resolves it (see resolveLotCreatedAt cases below) because
+  // omitting the column makes postgrest-js write an explicit NULL.
   {
     const plan = planImportLots([
       src({ barcode: "B-NEW", receivedDateRaw: "" }),
       src({ barcode: "B-OLD", receivedDateRaw: "01/02/2026" }),
     ]);
     ok(plan.lots[0].ccrsExternalId === "B-OLD" && plan.lots[1].ccrsExternalId === "B-NEW", "oldest received first; dateless last");
-    ok(plan.lots[1].createdAtIso === null, "dateless lot leaves created_at to the DB default");
+    ok(plan.lots[1].createdAtIso === null, "dateless lot plans a null created_at (resolved at the insert boundary)");
     ok(plan.diagnostics.some((d) => d.code === "import_lot_received_date_missing"), "missing received date logged");
+  }
+
+  // -------------------------------------------------------------------------
+  // SLICE 1: created_at is NOT NULL — the insert boundary must never omit it.
+  // -------------------------------------------------------------------------
+
+  // resolveLotCreatedAt: dated lots keep their FIFO timestamp verbatim.
+  {
+    const NOW = "2026-09-01T07:00:00.000Z";
+    ok(resolveLotCreatedAt("2026-06-17T12:00:00.000Z", NOW) === "2026-06-17T12:00:00.000Z", "dated lot keeps its received-date created_at");
+    ok(resolveLotCreatedAt(null, NOW) === NOW, "undated lot falls back to the publish run's now");
+    ok(resolveLotCreatedAt("", NOW) === NOW, "empty-string created_at falls back to now");
+    ok(resolveLotCreatedAt("   ", NOW) === NOW, "whitespace-only created_at falls back to now");
+    let threw = false;
+    try {
+      resolveLotCreatedAt(null, "");
+    } catch {
+      threw = true;
+    }
+    ok(threw, "missing fallback throws rather than emitting a NULL created_at");
+  }
+
+  // The resolved value is never null/empty for ANY planned lot, dated or not.
+  {
+    const NOW = "2026-09-01T07:00:00.000Z";
+    const plan = planImportLots([
+      src({ barcode: "D1", receivedDateRaw: "01/02/2026" }),
+      src({ barcode: "U1", receivedDateRaw: "" }),
+      src({ barcode: "D2", receivedDateRaw: "03/04/2026" }),
+      src({ barcode: "U2", receivedDateRaw: "" }),
+    ]);
+    ok(plan.lots.length === 4, "mixed dated/undated batch plans all four lots");
+    const resolved = plan.lots.map((l) => resolveLotCreatedAt(l.createdAtIso, NOW));
+    ok(resolved.every((v) => typeof v === "string" && v.length > 0), "every lot resolves a non-empty created_at");
+    ok(resolved.filter((v) => v === NOW).length === 2, "exactly the two undated lots take the now fallback");
+    // FIFO intent survives: undated lots stay youngest, so they sell last.
+    ok(
+      resolved[0] <= resolved[1] && resolved[1] <= resolved[2] && resolved[2] <= resolved[3],
+      "resolved created_at is non-decreasing in plan order (FIFO preserved)",
+    );
+  }
+
+  // Key-set uniformity guardrail (postgrest-js unions keys across the array).
+  {
+    ok(insertKeySignature({ b: 1, a: 2 }) === "a,b", "key signature is order-independent");
+    ok(findNonUniformInsertRow([]) === null, "empty batch is uniform");
+    ok(findNonUniformInsertRow([{ a: 1 }]) === null, "single-row batch is uniform");
+    ok(findNonUniformInsertRow([{ a: 1, b: null }, { a: 2, b: 3 }]) === null, "explicit nulls still count as present keys");
+    const bad = findNonUniformInsertRow([{ a: 1, created_at: "x" }, { a: 2 }]);
+    ok(bad !== null && bad.index === 1 && bad.missing.join() === "created_at", "omitted created_at is detected with its column name");
+    const extra = findNonUniformInsertRow([{ a: 1 }, { a: 2, created_at: "x" }]);
+    ok(extra !== null && extra.index === 1 && extra.extra.join() === "created_at", "unexpected extra key is detected");
+  }
+
+  // assertUniformInsertKeys throws with an actionable message, or stays silent.
+  {
+    let threw = false;
+    let message = "";
+    try {
+      assertUniformInsertKeys([{ a: 1, created_at: "x" }, { a: 2 }], "inventory_lots batch 1");
+    } catch (e) {
+      threw = true;
+      message = e instanceof Error ? e.message : String(e);
+    }
+    ok(threw, "ragged batch is rejected before the network call");
+    ok(message.includes("inventory_lots batch 1") && message.includes("created_at"), "error names the batch and the offending column");
+    let ok2 = true;
+    try {
+      assertUniformInsertKeys([{ a: 1, created_at: "x" }, { a: 2, created_at: "y" }], "uniform");
+    } catch {
+      ok2 = false;
+    }
+    ok(ok2, "uniform batch passes the guardrail");
+  }
+
+  // End-to-end shape check: rows built the SLICE 1 way are always uniform, even
+  // when dated and undated lots land in the same batch (the real failure mode:
+  // 203 blank Received dates in the Cultivera export).
+  {
+    const NOW = "2026-09-01T07:00:00.000Z";
+    const plan = planImportLots([
+      src({ barcode: "D1", receivedDateRaw: "01/02/2026" }),
+      src({ barcode: "U1", receivedDateRaw: "" }),
+      src({ barcode: "D2", receivedDateRaw: "03/04/2026" }),
+    ]);
+    const rows = plan.lots.map((l) => ({
+      ccrs_inventory_external_id: l.ccrsExternalId,
+      received_qty: l.receivedQty,
+      expires_on: l.expiresOn,
+      created_at: resolveLotCreatedAt(l.createdAtIso, NOW),
+    }));
+    ok(new Set(rows.map(insertKeySignature)).size === 1, "mixed dated/undated batch produces one key signature");
+    ok(rows.every((r) => r.created_at !== null && r.created_at !== undefined), "no row carries a null created_at");
+    let clean = true;
+    try {
+      assertUniformInsertKeys(rows, "inventory_lots");
+    } catch {
+      clean = false;
+    }
+    ok(clean, "guardrail accepts the SLICE 1 row builder output");
+    // The pre-SLICE-1 builder (conditional spread) would have been rejected.
+    const legacyRows = plan.lots.map((l) => ({
+      ccrs_inventory_external_id: l.ccrsExternalId,
+      received_qty: l.receivedQty,
+      expires_on: l.expiresOn,
+      ...(l.createdAtIso ? { created_at: l.createdAtIso } : {}),
+    }));
+    ok(findNonUniformInsertRow(legacyRows) !== null, "the old conditional-spread builder is caught by the guardrail");
   }
 
   // Mixed-size card -> FIFO pool warning.
