@@ -31,7 +31,12 @@ import {
   extractLicenseFromLabel,
   type VendorNameCandidate,
 } from "@/lib/inventory/vendor-resolve-core";
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAllChecked } from "@/lib/supabase/chunked-in";
+import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
+import {
+  decideVendorCreate,
+  licenseFilterCandidates,
+} from "@/lib/inventory/vendor-search-safety-core";
 import { quarterKeyFromYmd } from "@/lib/compliance/trade-samples-core";
 import { getSampleSettings, incomingUnitsForProcessor } from "@/lib/compliance/trade-samples";
 import { sampleProductTypeForLine } from "@/lib/compliance/sample-product-type-core";
@@ -68,6 +73,17 @@ import {
   normalizePartialNote,
 } from "@/lib/inventory/intake-disposition-core";
 
+/**
+ * Memory ceiling for a full vendors scan. `vendors` held 1,775 rows when last
+ * measured (docs/ROADMAP_VENDORS_AND_KB_ENRICHMENT.md:30); reaching this
+ * ceiling is REPORTED as an incomplete search (which blocks vendor
+ * auto-creation) rather than silently accepted.
+ */
+const VENDOR_SCAN_MAX_ROWS = 50_000;
+
+/** Memory ceiling for a full inbound_manifests scan (stage counts). */
+const MANIFEST_SCAN_MAX_ROWS = 100_000;
+
 export async function listManifests(opts?: {
   status?: string;
   limit?: number;
@@ -93,8 +109,26 @@ export async function listManifests(opts?: {
 export async function countManifestsByStatus(): Promise<StageCounts> {
   if (!isSupabaseServiceConfigured) return emptyStageCounts();
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("inbound_manifests").select("status").limit(2000);
-  const rows = (data as { status: string }[] | null) ?? [];
+  // SLICE 5B: `.limit(2000)` could not exceed PostgREST's 1,000-row cap, so
+  // every dashboard stage count silently stopped at 1,000 manifests. Paged
+  // completely instead. A per-status `count:"exact"` would be cheaper but
+  // would NOT be equivalent: countStages() routes unrecognised statuses
+  // through normalizeStage() (manifest-pipeline-core.ts:135-144), so counting
+  // only the known enum values would silently drop rows. Reading the statuses
+  // and rolling them up preserves that behaviour exactly.
+  const { rows } = await pagedAllChecked<{ id: string; status: string }>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("inbound_manifests")
+        .select("id, status")
+        // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as { id: string; status: string }[] | null) ?? [], ok: true };
+    },
+    { maxRows: MANIFEST_SCAN_MAX_ROWS },
+  );
   return countStages(rows.map((r) => r.status));
 }
 
@@ -133,19 +167,74 @@ export async function resolveOrCreateVendor(
   const cleanLabel = (label ?? "").trim();
   const licenseKey = normalizeLicense(license);
 
+  // SLICE 5B — evidence that the SEARCH steps below actually read everything.
+  // Step 5 auto-creates a vendor, which is irreversible without a merge, so it
+  // may only run when a MISS was genuinely established. See
+  // vendor-search-safety-core.ts for the full reasoning.
+  let searchComplete = true;
+  let incompleteStep: string | null = null;
+  let incompleteVerdict: ReadCompletenessVerdict | null = null;
+  const noteIncomplete = (step: string, verdict: ReadCompletenessVerdict) => {
+    if (searchComplete) {
+      searchComplete = false;
+      incompleteStep = step;
+      incompleteVerdict = verdict;
+    }
+  };
+
   // 1) License number — the stable identifier.
+  //
+  // SLICE 5B: this used to fetch up to 2,000 vendors and filter in JS. The
+  // table holds 1,775 rows, PostgREST caps the response at 1,000, and
+  // `.limit(2000)` cannot raise that cap — so ~775 vendors were invisible and
+  // (with no .order()) which 775 was arbitrary. A miss then fell through to
+  // step 5 and DUPLICATED an existing vendor.
+  //
+  // Fixed in two parts:
+  //   (a) a targeted DB filter as a FAST PATH — the server finds the row
+  //       instead of us downloading the table. `license_number` is free-form
+  //       text (migration 0064, no normalizing constraint), so a single .eq()
+  //       could miss "417-068"; we try the known formattings.
+  //   (b) on a miss, a COMPLETE paged scan preserving the original digits-only
+  //       JS comparison EXACTLY, so matching semantics never regress.
   if (licenseKey) {
     try {
-      const { data } = await admin
-        .from("vendors")
-        .select("id, license_number")
-        .not("license_number", "is", null)
-        .limit(2000);
-      const rows = (data as { id: string; license_number: string | null }[] | null) ?? [];
+      const candidates = licenseFilterCandidates(licenseKey);
+      if (candidates.length) {
+        const { data } = await admin
+          .from("vendors")
+          .select("id, license_number")
+          .in("license_number", candidates)
+          .limit(1);
+        const row = (data as { id: string }[] | null)?.[0];
+        if (row) return row.id;
+      }
+
+      // Fast path missed — scan every vendor that has a license, completely.
+      const { rows, verdict } = await pagedAllChecked<{ id: string; license_number: string | null }>(
+        async (from, to) => {
+          const { data, error } = await admin
+            .from("vendors")
+            .select("id, license_number")
+            .not("license_number", "is", null)
+            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) return { rows: [], ok: false };
+          return {
+            rows: (data as { id: string; license_number: string | null }[] | null) ?? [],
+            ok: true,
+          };
+        },
+        { maxRows: VENDOR_SCAN_MAX_ROWS },
+      );
       const hit = rows.find((r) => normalizeLicense(r.license_number) === licenseKey);
       if (hit) return hit.id;
+      if (!verdict.complete) noteIncomplete("license lookup", verdict);
     } catch (err) {
       console.error("[intake-store] vendor license lookup failed:", err);
+      searchComplete = false;
+      incompleteStep = incompleteStep ?? "license lookup";
     }
   }
 
@@ -176,18 +265,57 @@ export async function resolveOrCreateVendor(
   }
 
   // 4) Normalized-name scan (pure core decides; we just fetch candidates).
+  //
+  // SLICE 5B: same 1,775-vs-1,000 truncation as step 1 — this scan could not
+  // see every vendor, so a name that DID exist was reported missing and step 5
+  // duplicated it. Now paged completely. The rows are still sorted by
+  // display_name before matching, because pickVendorByNormalizedName returns
+  // the FIRST match and its callers pass rows in a stable order
+  // (vendor-resolve-core.ts:66-67) — preserved exactly.
   try {
-    const { data } = await admin
-      .from("vendors")
-      .select("id, display_name, dba, legal_name")
-      .limit(2000);
-    const rows = ((data as VendorNameCandidate[] | null) ?? []).sort((a, b) =>
+    const { rows: scanned, verdict } = await pagedAllChecked<VendorNameCandidate & { id: string }>(
+      async (from, to) => {
+        const { data, error } = await admin
+          .from("vendors")
+          .select("id, display_name, dba, legal_name")
+          // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) return { rows: [], ok: false };
+        return {
+          rows: (data as (VendorNameCandidate & { id: string })[] | null) ?? [],
+          ok: true,
+        };
+      },
+      { maxRows: VENDOR_SCAN_MAX_ROWS },
+    );
+    const rows = [...scanned].sort((a, b) =>
       (a.display_name ?? "").localeCompare(b.display_name ?? ""),
     );
     const hit = pickVendorByNormalizedName(cleanLabel, rows);
     if (hit) return hit.id;
+    if (!verdict.complete) noteIncomplete("normalized name scan", verdict);
   } catch (err) {
     console.error("[intake-store] vendor normalized scan failed:", err);
+    searchComplete = false;
+    incompleteStep = incompleteStep ?? "normalized name scan";
+  }
+
+  // SLICE 5B — the create guard. Steps 1–4 all missed. That is only a genuine
+  // "this vendor does not exist" if every search READ EVERYTHING; otherwise
+  // "not found" is merely unknown, and creating a row here is how an existing
+  // vendor gets duplicated (splitting its lots, drafts and CCRS lineage).
+  // Leaving vendor_id null is recoverable and visible; a duplicate is neither.
+  {
+    const decision = decideVendorCreate({
+      searchComplete,
+      incompleteStep,
+      verdict: incompleteVerdict,
+    });
+    if (!decision.mayCreate) {
+      console.error(`[intake-store] vendor auto-create SKIPPED: ${decision.message}`);
+      return null;
+    }
   }
 
   // 5) Auto-create a DRAFT vendor from the manifest header.

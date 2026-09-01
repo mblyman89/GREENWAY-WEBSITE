@@ -17,6 +17,10 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+
+/** Memory ceiling for a full active-authorizations scan (DOH card health). */
+const CARD_SCAN_MAX_ROWS = 100_000;
 
 import {
   buildComplianceHealth,
@@ -179,23 +183,39 @@ async function readMedicalCardHealth(
   if (!isSupabaseServiceConfigured) return { available: false, activeCards: 0, expiringSoon: 0, expired: 0 };
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("patient_authorizations")
-      .select("unique_patient_identifier, effective_on, issued_on, expires_on, in_doh_database, status")
-      .eq("status", "active")
-      .limit(2000);
-    if (error) return { available: false, activeCards: 0, expiringSoon: 0, expired: 0 };
-    const rows =
-      (data as
-        | {
-            unique_patient_identifier: string | null;
-            effective_on: string | null;
-            issued_on: string | null;
-            expires_on: string | null;
-            in_doh_database: boolean | null;
-            status: string;
-          }[]
-        | null) ?? [];
+    // SLICE 5B: `.limit(2000)` could not exceed PostgREST's 1,000-row cap
+    // (chunked-in.ts:13-14), so once the store held more than 1,000 active
+    // authorizations the DOH card health panel silently under-reported
+    // expiring and expired cards — the exact numbers a compliance officer
+    // relies on. Paged completely, and a read that could not finish reports
+    // `available: false` rather than a confident wrong number.
+    type CardRow = {
+      id: string;
+      unique_patient_identifier: string | null;
+      effective_on: string | null;
+      issued_on: string | null;
+      expires_on: string | null;
+      in_doh_database: boolean | null;
+      status: string;
+    };
+    const { rows, verdict } = await pagedAllChecked<CardRow>(
+      async (from, to) => {
+        const { data, error } = await admin
+          .from("patient_authorizations")
+          .select(
+            "id, unique_patient_identifier, effective_on, issued_on, expires_on, in_doh_database, status",
+          )
+          .eq("status", "active")
+          // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) return { rows: [], ok: false };
+        return { rows: (data as CardRow[] | null) ?? [], ok: true };
+      },
+      { maxRows: CARD_SCAN_MAX_ROWS },
+    );
+    // An incomplete read must not masquerade as a complete tally.
+    if (!verdict.complete) return { available: false, activeCards: 0, expiringSoon: 0, expired: 0 };
 
     const onDate = new Date(`${todayIso}T00:00:00Z`);
     let expiringSoon = 0;

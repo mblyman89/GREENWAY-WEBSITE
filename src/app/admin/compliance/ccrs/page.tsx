@@ -24,6 +24,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button } from "@/components/admin/ui";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -138,23 +139,47 @@ export default async function CcrsCommandCenterPage({
   const qs = `from=${week.start}&to=${week.end}`;
 
   // ── DOH / medical evidence for the week ────────────────────────────────────
+  const EXEMPT_SCAN_MAX_ROWS = 100_000;
   const endorsement = await getEndorsementConfig();
   let medicalExemptCount = 0;
   let medicalExemptMinor = 0;
+  // SLICE 5B: this is the WAC 314-55-090(2) excise-exemption evidence (5-year
+  // retention duty), and it sat EXACTLY on PostgREST's 1,000-row cap — the one
+  // value where `.limit(1000)` looks deliberate but silently becomes a ceiling
+  // the moment a busy week crosses it. A short read under-reports exempt
+  // excise with no visible sign. Paged completely, and when the read cannot be
+  // proven complete the panel says so instead of showing a confident wrong
+  // total.
+  let medicalExemptComplete = true;
   if (isSupabaseServiceConfigured) {
     try {
       const admin = createSupabaseAdminClient();
-      const { data } = await admin
-        .from("medical_exempt_sales")
-        .select("sales_price_minor, excise_amount_exempt_minor")
-        .gte("sale_date", week.start)
-        .lte("sale_date", week.end)
-        .limit(1000);
-      const rows = (data as { sales_price_minor: number; excise_amount_exempt_minor: number }[] | null) ?? [];
+      type ExemptRow = {
+        id: string;
+        sales_price_minor: number;
+        excise_amount_exempt_minor: number;
+      };
+      const { rows, verdict } = await pagedAllChecked<ExemptRow>(
+        async (from, to) => {
+          const { data, error } = await admin
+            .from("medical_exempt_sales")
+            .select("id, sales_price_minor, excise_amount_exempt_minor")
+            .gte("sale_date", week.start)
+            .lte("sale_date", week.end)
+            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) return { rows: [], ok: false };
+          return { rows: (data as ExemptRow[] | null) ?? [], ok: true };
+        },
+        { maxRows: EXEMPT_SCAN_MAX_ROWS },
+      );
+      medicalExemptComplete = verdict.complete;
       medicalExemptCount = rows.length;
       medicalExemptMinor = rows.reduce((a, r) => a + (r.excise_amount_exempt_minor ?? 0), 0);
     } catch {
       /* evidence panel is best-effort */
+      medicalExemptComplete = false;
     }
   }
   const medicalSaleRows = batch
@@ -524,6 +549,12 @@ export default async function CcrsCommandCenterPage({
               change). {medicalExemptCount} exempt sale line(s) recorded this week
               {medicalExemptMinor > 0 ? ` ($${(medicalExemptMinor / 100).toFixed(2)} excise exempted)` : ""}.
             </p>
+            {!medicalExemptComplete ? (
+              <p className="mt-1 font-semibold text-amber-300">
+                ⚠ This count could not be read completely, so it is a MINIMUM — the real figure may
+                be higher. Do not rely on it as WAC 314-55-090(2) evidence until it reads clean.
+              </p>
+            ) : null}
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <p className="font-bold text-white/80">3. IsMedical=TRUE inventory</p>
