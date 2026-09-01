@@ -268,6 +268,7 @@ import { __runVendorRelationsCoreTests } from "../../src/lib/vendors/vendor-rela
 import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extraction-core";
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
+import { __runCommitIntegrityCoreTests } from "../../src/lib/pos/commit-integrity-core";
 import { __runIntakePotencyCoreTests } from "../../src/lib/pos/intake-potency-core";
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
 import { __runIntakeMenuStagingCoreTests } from "../../src/lib/pos/intake-menu-staging-core";
@@ -585,6 +586,8 @@ async function main() {
   __runFactExtractionCoreTests();
   __runFactReviewCoreTests();
   __runImportCommitCoreTests();
+  __runCommitIntegrityCoreTests();
+  console.log("commit-integrity-core self-tests: all passed");
   __runIntakePotencyCoreTests();
   __runIntakeMasteringCoreTests();
   __runIntakeMenuStagingCoreTests();

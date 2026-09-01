@@ -23,7 +23,7 @@ import { planImportLots, resolveLotCreatedAt, assertUniformInsertKeys } from "@/
 import { storeNow } from "@/lib/reports/timezone";
 import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
-import { getImportDiagnostics, getVersionItems } from "@/lib/pos/menu-version";
+import { getImportDiagnostics, getVersionItems, countVersionItems } from "@/lib/pos/menu-version";
 import { listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import {
   buildFactReviewBuckets,
@@ -332,7 +332,11 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
   // Guard: refuse to publish a version that has error-severity diagnostics.
   const { data: version } = await admin
     .from("menu_versions")
-    .select("id, status, error_count, import_id, is_test")
+    // SLICE 4A: `item_count` joins the select so the commit gate has an
+    // INDEPENDENT witness for how many products this version really holds.
+    // It is written by the parser from the workbook before any row is read
+    // back, so it never passes through PostgREST's 1,000-row ceiling.
+    .select("id, status, error_count, import_id, is_test, item_count")
     .eq("id", versionId)
     .single();
   if (!version) throw new Error("Menu version not found.");
@@ -348,7 +352,7 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
     // exception is still awaiting a human decision. The gate also verifies
     // the Rule 3.3 reconciliation arithmetic (rows in = going live +
     // documented rejects + resolved flags) instead of assuming it.
-    const [diagnostics, reviews, items] = await Promise.all([
+    const [diagnostics, reviews, items, serverItemCount] = await Promise.all([
       // SLICE 3: no `limit`. `.limit(5000)` never raised PostgREST's 1,000-row
       // ceiling, so on a large import this gate was counting pending
       // fact-reviews from a TRUNCATED list and could open with real reviews
@@ -356,13 +360,28 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
       getImportDiagnostics(importId),
       listFactReviews(importId),
       getVersionItems(versionId),
+      // SLICE 4A: a THIRD witness. `count: "exact", head: true` is a
+      // server-side COUNT(*) -- it returns a number, not rows, so the
+      // db.max_rows cap cannot touch it. null means "witness unavailable",
+      // never "zero".
+      countVersionItems(versionId),
     ]);
     const buckets = buildFactReviewBuckets(
       items.map(menuItemRowToFactReviewItem),
       diagnostics.map(posDiagnosticToFactReviewDiagnostic),
       factReviewsToResolutions(reviews),
     );
-    const gate = evaluateCommitGate(buckets);
+    // SLICE 4A: the reconciliation arithmetic is computed FROM these buckets,
+    // so it cannot detect that its own inputs came back short. Corroborate the
+    // read against independent witnesses BEFORE trusting the equation.
+    // `getVersionItems` returns [] on a read error, which previously
+    // reconciled as a "trivially balanced" empty import and OPENED the gate --
+    // the evidence check turns that fail-open into a refusal.
+    const gate = evaluateCommitGate(buckets, {
+      observedItems: items.length,
+      recordedItemCount: (version as MenuVersion).item_count,
+      serverItemCount,
+    });
     if (!gate.ready) throw new Error(gate.message);
     // Persist the balanced equation so the audit trail shows exactly what
     // this publish committed (idempotent by code+import via the review UI).

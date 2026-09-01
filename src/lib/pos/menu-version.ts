@@ -238,6 +238,37 @@ export async function getImportDiagnostics(
  * tiebreaker. Without it two rows sharing a `sort_order` could swap between
  * page requests and be duplicated or skipped.
  */
+/**
+ * SLICE 4A: server-side COUNT of the staged items in a version.
+ *
+ * `count: "exact", head: true` asks Postgres to COUNT(*) and return only the
+ * number -- no rows travel back, so PostgREST's `db.max_rows` ceiling (the
+ * cause of every silent truncation in SLICES 2-3) cannot apply. That makes it
+ * an INDEPENDENT witness for the publish commit gate: it does not share a
+ * failure mode with the paged read it corroborates.
+ *
+ * Returns `null` when the count is unavailable. Callers MUST treat null as
+ * "this witness could not be consulted" and never as zero -- reporting zero
+ * here would invent the very false confidence the gate exists to prevent.
+ */
+export async function countVersionItems(versionId: string): Promise<number | null> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count, error } = await admin
+      .from("menu_items")
+      .select("id", { count: "exact", head: true })
+      .eq("menu_version_id", versionId);
+    if (error) {
+      console.error("[menu-version] countVersionItems error:", error.message);
+      return null;
+    }
+    return typeof count === "number" ? count : null;
+  } catch (err) {
+    console.error("[menu-version] countVersionItems exception:", err);
+    return null;
+  }
+}
+
 export async function getVersionItems(versionId: string): Promise<MenuItemWithVariants[]> {
   try {
     const admin = createSupabaseAdminClient();

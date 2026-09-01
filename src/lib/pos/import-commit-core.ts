@@ -43,6 +43,11 @@ import {
   type FactReviewItemInput,
   type FactReviewDiagnosticInput,
 } from "@/lib/pos/fact-review-core";
+import {
+  evaluateEvidenceIntegrity,
+  type CommitEvidenceInput,
+  type CommitEvidenceVerdict,
+} from "@/lib/pos/commit-integrity-core";
 
 // ---------------------------------------------------------------------------
 // Reconciliation arithmetic (Rule 3.3)
@@ -145,10 +150,63 @@ export type CommitGateVerdict = {
   reconciliation: CommitReconciliation;
   /** Plain-English verdict -- the exact refusal or the balanced equation. */
   message: string;
+  /**
+   * SLICE 4A: the evidence-integrity verdict, when the caller supplied
+   * independent witnesses. `null` when no evidence was provided (pure
+   * arithmetic callers and the existing self-tests).
+   */
+  evidence?: CommitEvidenceVerdict | null;
 };
 
-export function evaluateCommitGate(buckets: FactReviewBuckets): CommitGateVerdict {
+/**
+ * SLICE 4A: evaluate the gate.
+ *
+ * `evidence` is OPTIONAL and checked FIRST. The reconciliation arithmetic
+ * below is self-referential -- it is computed from the same buckets it
+ * validates -- so it cannot detect that its own inputs came back short. When
+ * the caller can supply independent witnesses (the parser's recorded
+ * item_count, a server-side COUNT), we verify the evidence is trustworthy
+ * BEFORE reasoning about it. Balanced arithmetic over missing rows is not a
+ * pass; it is a smaller universe that happens to add up.
+ *
+ * Omitting `evidence` preserves the previous behaviour exactly.
+ */
+export function evaluateCommitGate(
+  buckets: FactReviewBuckets,
+  evidence?: CommitEvidenceInput,
+): CommitGateVerdict {
   const reconciliation = buildCommitReconciliation(buckets);
+
+  if (evidence) {
+    const verdict = evaluateEvidenceIntegrity(evidence);
+    if (!verdict.trustworthy) {
+      return { ready: false, reconciliation, message: verdict.message, evidence: verdict };
+    }
+    if (reconciliation.pending > 0) {
+      return {
+        ready: false,
+        reconciliation,
+        message:
+          `Cannot publish: ${reconciliation.pending} fact-review row(s) still await a human decision. ` +
+          `Open Fact Review and approve, fix, or reject each one -- this import never guesses.`,
+        evidence: verdict,
+      };
+    }
+    if (!reconciliation.balanced) {
+      return {
+        ready: false,
+        reconciliation,
+        message:
+          `Cannot publish: the reconciliation arithmetic does not balance ` +
+          `(${reconciliation.rowsIn} row(s) in vs ${reconciliation.goingLive} going live + ` +
+          `${reconciliation.documentedRejects} reject(s) + ${reconciliation.flagsResolved} resolved flag(s) + ` +
+          `${reconciliation.pending} pending). Re-stage the import and report this.`,
+        evidence: verdict,
+      };
+    }
+    return { ready: true, reconciliation, message: reconciliation.summaryLine, evidence: verdict };
+  }
+
   if (reconciliation.pending > 0) {
     return {
       ready: false,
@@ -323,9 +381,73 @@ export function __runImportCommitCoreTests(): void {
   }
 
   // -- Empty import: trivially balanced --------------------------------------
+  // Unchanged: with NO evidence supplied the gate behaves exactly as before.
+  // This is precisely the hole SLICE 4A closes when evidence IS supplied --
+  // see the evidence cases below.
   {
     const verdict = evaluateCommitGate(buildFactReviewBuckets([], []));
     ok(verdict.ready === true && verdict.reconciliation.rowsIn === 0, "empty import trivially passes");
+    ok(verdict.evidence == null, "no evidence supplied => no evidence verdict");
+  }
+
+  // -- SLICE 4A: evidence integrity gates the arithmetic ----------------------
+  {
+    // The fail-open regression: a failed read yields zero items, which used to
+    // reconcile as a trivially-balanced empty import and OPEN the gate.
+    const verdict = evaluateCommitGate(buildFactReviewBuckets([], []), {
+      observedItems: 0,
+      recordedItemCount: 4179,
+    });
+    ok(verdict.ready === false, "empty read + non-empty version REFUSES (fail-open closed)");
+    ok(verdict.evidence?.reason === "empty_but_expected", "refusal cites empty_but_expected");
+  }
+  {
+    // Truncation: the arithmetic balances over 1,000 rows, but the version
+    // records 4,179. Balanced-but-short must not publish.
+    const items = Array.from({ length: 1000 }, (_, i) =>
+      item({ sourceItemId: `pos-${i}`, name: `P${i}` }),
+    );
+    const buckets = buildFactReviewBuckets(items, []);
+    const balancedOnly = evaluateCommitGate(buckets);
+    ok(balancedOnly.ready === true, "arithmetic alone cannot see the truncation");
+    const withEvidence = evaluateCommitGate(buckets, {
+      observedItems: 1000,
+      recordedItemCount: 4179,
+    });
+    ok(withEvidence.ready === false, "evidence check catches the truncated publish");
+    ok(withEvidence.evidence?.reason === "short_read", "refusal cites short_read");
+    ok(withEvidence.message.includes("3179 missing"), "owner is told how many are missing");
+  }
+  {
+    // Healthy import with corroborating witnesses still publishes.
+    const items = [item({ sourceItemId: "pos-a", name: "A" }), item({ sourceItemId: "pos-b", name: "B" })];
+    const verdict = evaluateCommitGate(buildFactReviewBuckets(items, []), {
+      observedItems: 2,
+      recordedItemCount: 2,
+      serverItemCount: 2,
+    });
+    ok(verdict.ready === true, "corroborated healthy import publishes");
+    ok(verdict.evidence?.trustworthy === true, "evidence verdict recorded on success");
+  }
+  {
+    // A genuinely empty import with corroborating witnesses is still fine.
+    const verdict = evaluateCommitGate(buildFactReviewBuckets([], []), {
+      observedItems: 0,
+      recordedItemCount: 0,
+      serverItemCount: 0,
+    });
+    ok(verdict.ready === true, "a truly empty version still publishes");
+  }
+  {
+    // Evidence is checked BEFORE pending reviews: an untrustworthy read must
+    // not be reported as a review problem.
+    const verdict = evaluateCommitGate(buildFactReviewBuckets([], []), {
+      observedItems: 0,
+      recordedItemCount: 10,
+      readFailed: true,
+    });
+    ok(verdict.ready === false, "read failure refuses");
+    ok(verdict.evidence?.reason === "read_failed", "read failure reported as such");
   }
 
   // -- Defensive imbalance branch (hand-built impossible buckets) ------------
