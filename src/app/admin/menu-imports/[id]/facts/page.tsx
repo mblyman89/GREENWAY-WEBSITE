@@ -4,7 +4,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
 import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
-import { getImport, getImportDiagnostics, listVersions, getVersionItems } from "@/lib/pos/menu-version";
+import { getImport, getImportDiagnosticsChecked, listVersions, getVersionItems } from "@/lib/pos/menu-version";
 import { listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import {
   buildFactReviewBuckets,
@@ -12,8 +12,10 @@ import {
   posDiagnosticToFactReviewDiagnostic,
   type FactReviewRow,
 } from "@/lib/pos/fact-review-core";
+import { groupPendingReviews } from "@/lib/pos/fact-review-bulk-core";
+import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import { formatDateTime } from "@/lib/pos/format";
-import { resolveFactReview } from "../../actions";
+import { resolveFactReview, resolveFactReviewGroup } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -40,14 +42,28 @@ export default async function FactReviewPage({
   if (!imp) notFound();
 
   let versions: Awaited<ReturnType<typeof listVersions>> = [];
-  let diagnostics: Awaited<ReturnType<typeof getImportDiagnostics>> = [];
+  let diagnostics: Awaited<ReturnType<typeof getImportDiagnosticsChecked>>["rows"] = [];
+  // SLICE 6A: the read is only trustworthy if it is provably WHOLE. This screen
+  // is where the owner clears the publish gate, so showing a silently-truncated
+  // queue is worse than showing an error -- it reads as "nothing left to do".
+  let diagVerdict: ReadCompletenessVerdict | null = null;
   let reviews: Awaited<ReturnType<typeof listFactReviews>> = [];
   try {
-    [versions, diagnostics, reviews] = await Promise.all([
+    const [v, d, r] = await Promise.all([
       listVersions(50),
-      getImportDiagnostics(id, { limit: 5000 }),
+      // SLICE 6A: was `getImportDiagnostics(id, { limit: 5000 })`, which
+      // PostgREST capped at 1,000 -- and because the old read ordered by the
+      // `severity` ENUM ('error','warning','info') ascending, `info` sorted
+      // LAST and 4,160 warnings consumed the entire ceiling. Every
+      // `fact_extraction_review` and `cannabinoid_missing` row (745 of 764)
+      // was therefore invisible on the one screen built to decide them.
+      getImportDiagnosticsChecked(id),
       listFactReviews(id),
     ]);
+    versions = v;
+    diagnostics = d.rows;
+    diagVerdict = d.verdict;
+    reviews = r;
   } catch (err) {
     console.error("[menu-imports/:id/facts] load error:", err);
   }
@@ -61,6 +77,10 @@ export default async function FactReviewPage({
   );
   const pending = buckets.needsReview.filter((r) => r.resolution === null);
   const decided = buckets.needsReview.filter((r) => r.resolution !== null);
+  // SLICE 6A: one row per product is unusable at 614 rows. Group the queue by
+  // the machine's own verbatim reason so ONE named human decision can cover a
+  // whole reason at once -- still written as one audit row per product.
+  const groups = groupPendingReviews(pending);
 
   return (
     <div>
@@ -87,6 +107,17 @@ export default async function FactReviewPage({
         {sp.saved && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Decision saved.
+          </div>
+        )}
+
+        {/* SLICE 6A: an incomplete read is stated OUT LOUD. Before this, a
+            capped diagnostics read made a 614-row queue render as "Queue
+            clear" while the publish gate refused on all 614. */}
+        {diagVerdict && !diagVerdict.complete && (
+          <div className="rounded-lg border border-orange-500/50 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">
+            <strong>This queue is incomplete.</strong> {diagVerdict.message} Decisions you make here
+            are still saved, but do not treat an empty queue as &ldquo;nothing left to do&rdquo; until
+            this reads clean.
           </div>
         )}
 
@@ -121,11 +152,79 @@ export default async function FactReviewPage({
           {pending.length === 0 ? (
             <p className="mt-4 text-sm text-[var(--admin-accent)]">Queue clear — every flagged row has a decision.</p>
           ) : (
-            <div className="mt-4 space-y-4">
-              {pending.map((row) => (
-                <ReviewCard key={row.sourceItemId} importId={id} row={row} />
-              ))}
-            </div>
+            <>
+              {/* SLICE 6A — DECIDE BY REASON.
+                  Rule 3.1 is intact: nothing is auto-decided. One human still
+                  presses approve or reject; it just covers every product that
+                  shares the machine's identical stated reason, and each product
+                  still gets its own recorded, attributed decision row. Bulk
+                  FIX is deliberately absent — corrected values are per-product
+                  facts, and typing one number across hundreds of products
+                  would be inventing data. */}
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-white/50">
+                  {pending.length} product(s) await a decision, grouped into {groups.length} shared
+                  reason(s). Deciding a whole reason at once records a separate, attributed decision
+                  for every product in it — nothing is auto-approved.
+                </p>
+                {groups.map((g) => (
+                  <div
+                    key={g.key}
+                    className="rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-4"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-sm font-semibold text-white">
+                        {g.count} product{g.count === 1 ? "" : "s"}
+                        <span className="ml-2 text-xs font-normal text-white/50">share one reason</span>
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs text-white/70">{g.reason}</p>
+                    <p className="mt-1 text-[11px] text-white/40">
+                      e.g. {g.sampleNames.join(", ")}
+                      {g.count > g.sampleNames.length ? ` … and ${g.count - g.sampleNames.length} more` : ""}
+                    </p>
+                    <form action={resolveFactReviewGroup} className="mt-3 flex flex-wrap items-center gap-2">
+                      <input type="hidden" name="importId" value={id} />
+                      <input type="hidden" name="groupKey" value={g.key} />
+                      <input
+                        type="text"
+                        name="note"
+                        placeholder="Why (optional) — recorded on every row"
+                        className="min-w-56 flex-1 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/30"
+                      />
+                      <button
+                        type="submit"
+                        name="action"
+                        value="approve"
+                        className={CHIP_ACTION}
+                      >
+                        Approve all {g.count}
+                      </button>
+                      <button
+                        type="submit"
+                        name="action"
+                        value="reject"
+                        className="rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10"
+                      >
+                        Reject all {g.count}
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+
+              {/* Per-product decisions (including inline fix) remain available. */}
+              <details className="mt-5">
+                <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-accent)]">
+                  Decide products one at a time ({pending.length}) — the only way to enter corrected values
+                </summary>
+                <div className="mt-3 space-y-4">
+                  {pending.map((row) => (
+                    <ReviewCard key={row.sourceItemId} importId={id} row={row} />
+                  ))}
+                </div>
+              </details>
+            </>
           )}
 
           {decided.length > 0 && (

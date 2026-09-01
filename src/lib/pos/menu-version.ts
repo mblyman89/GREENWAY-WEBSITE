@@ -10,7 +10,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // SLICE 3: PostgREST caps every response at `db.max_rows` (1,000) and reports
 // no error when it truncates. These helpers page with `.range()` until a short
 // page proves the end of the data.
-import { pagedAll, chunkedIn } from "@/lib/supabase/chunked-in";
+import { pagedAll, pagedAllChecked, chunkedIn } from "@/lib/supabase/chunked-in";
+import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import type {
   MenuItemRow,
   MenuVariantRow,
@@ -206,6 +207,117 @@ export async function getImportDiagnostics(
   } catch (err) {
     console.error("[menu-version] getImportDiagnostics exception:", err);
     return [];
+  }
+}
+
+/**
+ * SLICE 6A: how many diagnostics does this import REALLY have?
+ *
+ * `count: "exact", head: true` is a server-side COUNT(*) -- it returns a
+ * number, not rows, so PostgREST's `db.max_rows` ceiling cannot touch it.
+ * Returns null for "witness unavailable", NEVER zero (an unusable count that
+ * is coerced to 0 is how a truncated read gets excused as complete).
+ */
+export async function countImportDiagnostics(importId: string): Promise<number | null> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count, error } = await admin
+      .from("pos_import_diagnostics")
+      .select("id", { count: "exact", head: true })
+      .eq("import_id", importId);
+    if (error) {
+      console.error("[menu-version] countImportDiagnostics error:", error.message);
+      return null;
+    }
+    return typeof count === "number" ? count : null;
+  } catch (err) {
+    console.error("[menu-version] countImportDiagnostics exception:", err);
+    return null;
+  }
+}
+
+/** Hard stop for the diagnostics scan -- a runaway read fails loudly, not forever. */
+export const DIAGNOSTICS_SCAN_MAX_ROWS = 200_000;
+
+/**
+ * SLICE 6A — THE READ THE FACT REVIEW SCREEN SHOULD ALWAYS HAVE USED.
+ *
+ * ═══ THE DEFECT THIS CLOSES (measured on the owner's Sep-1-2026 import) ═══
+ *
+ * Three display screens called `getImportDiagnostics(id, { limit: 5000 })`:
+ *   - src/app/admin/menu-imports/[id]/facts/page.tsx        (Fact Review)
+ *   - src/app/admin/menu-imports/[id]/facts/export/route.ts (CSV export)
+ *   - src/app/admin/menu-imports/[id]/page.tsx              (Import Review)
+ *
+ * `.limit(5000)` cannot raise PostgREST's `db.max_rows` ceiling of 1,000 -- a
+ * `.limit()` only ever LOWERS a result below it. So all three received exactly
+ * 1,000 rows out of 6,603 and reported no error, because a capped read is not
+ * an error.
+ *
+ * It compounded badly. `getImportDiagnostics` orders by `severity` ASC, and
+ * `diagnostic_severity` is an ENUM declared ('error','warning','info')
+ * (migration 0002_slice2_pos_import.sql:28). Enums sort in DECLARATION order,
+ * so `info` sorts LAST. That import had 4,160 warnings -- more than the whole
+ * ceiling by itself -- so the 1,000 rows the screens received were 100%
+ * warnings and contained ZERO info rows.
+ *
+ * Two of the four review-feeding codes are `info` severity
+ * (`fact_extraction_review` 488, `cannabinoid_missing` 257 = 745 of 764
+ * review diagnostics). Result: the publish gate, which reads UNLIMITED, saw
+ * 614 pending reviews and refused; the Fact Review screen, reading its capped
+ * 1,000, could only ever show 11 and displayed "Queue clear". The owner was
+ * told to go clear 604 rows that the clearing screen could not render, and no
+ * product could reach the public website.
+ *
+ * This function pages EVERY diagnostic and returns a verdict saying whether
+ * the read is provably whole, so a screen can say "this list is incomplete"
+ * out loud instead of quietly showing a subset as if it were everything.
+ */
+export async function getImportDiagnosticsChecked(
+  importId: string,
+  opts?: { severity?: string },
+): Promise<{ rows: PosImportDiagnostic[]; verdict: ReadCompletenessVerdict }> {
+  // Independent witness first (best-effort -- an unavailable count stays null).
+  let expectedTotal: number | null = null;
+  if (!opts?.severity) expectedTotal = await countImportDiagnostics(importId);
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { rows, verdict } = await pagedAllChecked<PosImportDiagnostic>(
+      async (from, to) => {
+        let query = admin
+          .from("pos_import_diagnostics")
+          .select("*")
+          .eq("import_id", importId)
+          // Stable, UNIQUE ordering. The old read ordered by `severity` first,
+          // which put every `info` row behind 4,160 warnings and past the cap.
+          // Paging needs a unique key to be a genuine partition anyway, and
+          // ordering by id alone means no severity can be starved.
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (opts?.severity) query = query.eq("severity", opts.severity);
+        const { data, error } = await query;
+        if (error) {
+          console.error("[menu-version] getImportDiagnosticsChecked error:", error.message);
+          return { rows: [], ok: false };
+        }
+        return { rows: (data as PosImportDiagnostic[] | null) ?? [], ok: true };
+      },
+      { maxRows: DIAGNOSTICS_SCAN_MAX_ROWS, expectedTotal },
+    );
+    return { rows, verdict };
+  } catch (err) {
+    console.error("[menu-version] getImportDiagnosticsChecked exception:", err);
+    return {
+      rows: [],
+      verdict: {
+        complete: false,
+        reason: "read_failed",
+        rowsRead: 0,
+        missing: null,
+        message: "The diagnostics read failed, so this list is not the whole set.",
+      },
+    };
   }
 }
 

@@ -5,10 +5,28 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData, backfillImportLots } from "@/lib/pos/import-service";
-import { getPublishedVersion, diffVersions, archiveStaleIntakeDrafts } from "@/lib/pos/menu-version";
-import { recordFactReview } from "@/lib/pos/fact-review-store";
+import {
+  getPublishedVersion,
+  diffVersions,
+  archiveStaleIntakeDrafts,
+  getImportDiagnosticsChecked,
+  listVersions,
+  getVersionItems,
+} from "@/lib/pos/menu-version";
+import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
-import type { FactReviewFacts } from "@/lib/pos/fact-review-core";
+import {
+  buildFactReviewBuckets,
+  menuItemRowToFactReviewItem,
+  posDiagnosticToFactReviewDiagnostic,
+  type FactReviewFacts,
+} from "@/lib/pos/fact-review-core";
+import {
+  groupPendingReviews,
+  planBulkDecision,
+  bulkDecisionNote,
+  type FactReviewGroup,
+} from "@/lib/pos/fact-review-bulk-core";
 
 const PRODUCTS_HINT = "PRODUCTS.xlsx";
 const INVENTORIES_HINT = "INVENTORIES.xlsx";
@@ -286,6 +304,142 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
     const message = err instanceof Error ? err.message : "Saving the review decision failed.";
     console.error("[menu-imports] resolveFactReview failed:", err);
     redirect(dest + "?error=" + encodeURIComponent(message));
+  }
+
+  revalidatePath(dest);
+  redirect(dest + "?saved=1");
+}
+
+/**
+ * SLICE 6A — decide EVERY pending product that shares one machine-stated
+ * reason, in a single named human decision.
+ *
+ * ═══ WHY THIS EXISTS ═══
+ *
+ * The owner's Sep-1-2026 import left 614 products in needs-review. The publish
+ * gate correctly refused ("604 fact-review row(s) still await a human
+ * decision"), but the only way to clear it was 614 separate form submissions.
+ * A refusal a human cannot physically clear is a broken product, and it kept
+ * every product off the customer-facing website.
+ *
+ * ═══ WHAT IS AND IS NOT DELEGATED ═══
+ *
+ * Rule 3.1 is fully intact. NOTHING is auto-decided. A human still chooses
+ * approve or reject, and that choice is written as ONE `pos_fact_reviews` row
+ * PER PRODUCT (exactly what the single-row path writes), each carrying a note
+ * that says it was a bulk decision and over which reason. An auditor reading
+ * any single row can reconstruct the whole action.
+ *
+ * Bulk FIX is refused by `planBulkDecision` -- corrected values are
+ * per-product facts and applying one typed number across hundreds of products
+ * would be inventing data (Rule 2).
+ *
+ * ═══ WHY THE GROUP IS REBUILT SERVER-SIDE ═══
+ *
+ * The form posts only a group KEY, never a list of row ids. This action
+ * re-reads the diagnostics, re-derives the buckets and re-groups the pending
+ * rows itself, so the set of products it writes is the set the SERVER believes
+ * is pending right now. A stale or tampered client can never widen the blast
+ * radius, and rows decided since the page rendered are simply not in the group.
+ *
+ * The diagnostics read is the COMPLETENESS-CHECKED one: acting on a truncated
+ * view is precisely the bug being fixed, so an incomplete read REFUSES rather
+ * than deciding a partial set.
+ */
+export async function resolveFactReviewGroup(formData: FormData): Promise<void> {
+  const session = await requirePermission("menu.import");
+
+  const importId = String(formData.get("importId") ?? "");
+  const groupKey = String(formData.get("groupKey") ?? "");
+  const action = String(formData.get("action") ?? "");
+  const typedNote = String(formData.get("note") ?? "").trim() || null;
+  const dest = `/admin/menu-imports/${importId}/facts`;
+
+  if (!importId || !groupKey) {
+    redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import or group."));
+  }
+  if (action !== "approve" && action !== "reject") {
+    redirect(dest + "?error=" + encodeURIComponent("A group decision must be approve or reject."));
+  }
+
+  let plan: ReturnType<typeof planBulkDecision>;
+  let group: FactReviewGroup | undefined;
+  try {
+    const [versions, diag, reviews] = await Promise.all([
+      listVersions(50),
+      getImportDiagnosticsChecked(importId),
+      listFactReviews(importId),
+    ]);
+    // Never decide from a partial view -- that is the defect, not the fix.
+    if (!diag.verdict.complete) {
+      redirect(
+        dest +
+          "?error=" +
+          encodeURIComponent(
+            `Refusing a group decision: ${diag.verdict.message} Reload and try again once the list reads complete.`,
+          ),
+      );
+    }
+    const version = versions.find((v) => v.import_id === importId) ?? null;
+    const items = version ? await getVersionItems(version.id) : [];
+    const buckets = buildFactReviewBuckets(
+      items.map(menuItemRowToFactReviewItem),
+      diag.rows.map(posDiagnosticToFactReviewDiagnostic),
+      factReviewsToResolutions(reviews),
+    );
+    const groups = groupPendingReviews(buckets.needsReview.filter((r) => r.resolution === null));
+    group = groups.find((g) => g.key === groupKey);
+    plan = planBulkDecision({ groups, groupKey, action, reviewedBy: session.userId });
+  } catch (err) {
+    // A redirect() inside the try throws NEXT_REDIRECT; never swallow it.
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    const message = err instanceof Error ? err.message : "Loading the review group failed.";
+    console.error("[menu-imports] resolveFactReviewGroup load failed:", err);
+    redirect(dest + "?error=" + encodeURIComponent(message));
+  }
+
+  if (!plan.ok || !group) {
+    redirect(dest + "?error=" + encodeURIComponent(plan.message));
+  }
+
+  const note = bulkDecisionNote(group, typedNote);
+  let written = 0;
+  try {
+    // One recorded decision per product -- identical to the single-row path.
+    for (const sourceItemId of plan.sourceItemIds) {
+      await recordFactReview({
+        importId,
+        sourceItemId,
+        action,
+        note,
+        correctedFacts: null,
+        reviewedBy: session.userId,
+      });
+      written++;
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: `fact_review.bulk_${action}`,
+      entityType: "pos_fact_review",
+      entityId: `${importId}:group:${groupKey}`,
+      after: { reason: group.reason, count: plan.sourceItemIds.length, note },
+    });
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    const message = err instanceof Error ? err.message : "Saving the group decision failed.";
+    console.error("[menu-imports] resolveFactReviewGroup failed:", err);
+    // Partial progress is REPORTED, never hidden: the rows already written are
+    // real decisions and the owner must know the count.
+    redirect(
+      dest +
+        "?error=" +
+        encodeURIComponent(
+          written > 0
+            ? `${message} ${written} of ${plan.sourceItemIds.length} decision(s) were saved before this failed.`
+            : message,
+        ),
+    );
   }
 
   revalidatePath(dest);

@@ -269,6 +269,7 @@ import { __runWeightDisplayCoreTests } from "../../src/lib/menu/weight-display-c
 import { __runVendorRelationsCoreTests } from "../../src/lib/vendors/vendor-relations-core";
 import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extraction-core";
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
+import { __runFactReviewBulkCoreTests } from "../../src/lib/pos/fact-review-bulk-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
 import { __runCommitIntegrityCoreTests } from "../../src/lib/pos/commit-integrity-core";
 import { __runIntakePotencyCoreTests } from "../../src/lib/pos/intake-potency-core";
@@ -589,6 +590,7 @@ async function main() {
   __runVendorRelationsCoreTests();
   __runFactExtractionCoreTests();
   __runFactReviewCoreTests();
+  __runFactReviewBulkCoreTests();
   __runImportCommitCoreTests();
   __runCommitIntegrityCoreTests();
   console.log("commit-integrity-core self-tests: all passed");

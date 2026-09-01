@@ -7,12 +7,13 @@ import { Button } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import {
   getImport,
-  getImportDiagnostics,
+  getImportDiagnosticsChecked,
   listVersions,
   getPublishedVersion,
   diffVersions,
   getVersionItems,
 } from "@/lib/pos/menu-version";
+import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import { formatDateTime, formatMoney, formatBytes } from "@/lib/pos/format";
 import type { DiagnosticSeverity } from "@/lib/pos/db-types";
 import { listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
@@ -59,21 +60,33 @@ export default async function ImportReviewPage({
   // still guard the orchestration so the review screen never white-screens.
   let versions: Awaited<ReturnType<typeof listVersions>> = [];
   let published: Awaited<ReturnType<typeof getPublishedVersion>> = null;
-  let diagnostics: Awaited<ReturnType<typeof getImportDiagnostics>> = [];
+  let diagnostics: Awaited<ReturnType<typeof getImportDiagnosticsChecked>>["rows"] = [];
+  // SLICE 6A: this screen previews the publish gate. If its diagnostics read is
+  // short, the preview disagrees with the real gate -- which is exactly what
+  // happened: the preview said 11 pending, the gate refused on 614.
+  let diagVerdict: ReadCompletenessVerdict | null = null;
   let diff: Awaited<ReturnType<typeof diffVersions>> | null = null;
   let items: Awaited<ReturnType<typeof getVersionItems>> = [];
   let factReviews: Awaited<ReturnType<typeof listFactReviews>> = [];
 
   try {
-    [versions, published, diagnostics, factReviews] = await Promise.all([
+    const [v, p, d, fr] = await Promise.all([
       listVersions(50),
       getPublishedVersion(),
-      // SLICE 58: 5000 matches the fact-review screen and the server-side
-      // commit gate, so the publish preview and the real gate see the SAME
-      // diagnostic feed (never a preview that lies).
-      getImportDiagnostics(id, { limit: 5000 }),
+      // SLICE 6A: `{ limit: 5000 }` did NOT match the server-side gate, despite
+      // the SLICE 58 comment that said it did. `.limit()` cannot raise
+      // PostgREST's `db.max_rows` (1,000), while the gate calls
+      // `getImportDiagnostics(importId)` with NO limit and pages everything.
+      // The preview and the gate were reading 1,000 vs 6,603 rows -- so the
+      // preview lied in exactly the way that comment promised it would not.
+      getImportDiagnosticsChecked(id),
       listFactReviews(id),
     ]);
+    versions = v;
+    published = p;
+    diagnostics = d.rows;
+    diagVerdict = d.verdict;
+    factReviews = fr;
   } catch (err) {
     console.error("[menu-imports/:id] load error:", err);
   }
@@ -328,6 +341,15 @@ export default async function ImportReviewPage({
               <span className="text-white/50">{info.length} info</span>
             </div>
           </div>
+
+          {/* SLICE 6A: this panel used to render a silently-truncated 1,000 of
+              6,603 diagnostics and show it as if it were the whole picture. */}
+          {diagVerdict && !diagVerdict.complete && (
+            <p className="mt-3 rounded-lg border border-orange-500/50 bg-orange-500/10 px-3 py-2 text-xs text-orange-200">
+              <strong>Incomplete diagnostics list.</strong> {diagVerdict.message} The counts above are
+              a lower bound, not the full total.
+            </p>
+          )}
 
           {codeSummary.length > 0 ? (
             <div className="mt-3 space-y-1.5">
