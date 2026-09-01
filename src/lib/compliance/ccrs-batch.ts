@@ -35,6 +35,8 @@ import {
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
 import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { ccrsInventoryCreatedDate } from "@/lib/inventory/received-date-core";
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/convention-core";
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
@@ -134,6 +136,12 @@ type LotRow = {
   unit_weight_uom: string | null;
   status: string;
   created_at: string;
+  /**
+   * SLICE 2 (migration 0214) — the evidenced day the lot was received.
+   * NULL means unknown; see ccrsInventoryCreatedDate() for how that is
+   * handled when filling Inventory.CreatedDate.
+   */
+  received_on: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -385,7 +393,19 @@ function buildInventoryFile(
       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
       ext,
       createdBy,
-      ccrsDate(l.created_at),
+      // SLICE 2 — report the day the lot was ACTUALLY received when we can
+      // evidence it. This used to be `ccrsDate(l.created_at)` unconditionally;
+      // for a lot whose POS export had a blank Received date, created_at is
+      // the instant the migration ran, so the LCB was being told the lot was
+      // created on import day. ccrsInventoryCreatedDate() prefers the
+      // evidenced received_on and falls back to created_at only when the date
+      // is genuinely unknown — and those lots are flagged for the owner rather
+      // than quietly given a manufactured date.
+      //
+      // This is a no-op for the ~3,977 lots that DID carry a received date:
+      // SLICE 1 already set their created_at to noon UTC on that same day, so
+      // the emitted MM/DD/YYYY is byte-identical.
+      ccrsDate(ccrsInventoryCreatedDate(l)),
       "",
       "",
       "Insert",
@@ -456,14 +476,22 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   }
   const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
 
-  const { data: lotData } = await admin
-    .from("inventory_lots")
-    .select(
-      "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at",
-    )
-    .neq("status", "destroyed")
-    .limit(5000);
-  const lots = (lotData as LotRow[] | null) ?? [];
+  // SLICE 2: paged. `.limit(5000)` did NOT raise the PostgREST 1,000-row cap,
+  // so with 4,179 lots the Inventory.csv filed with the WA LCB contained the
+  // first 1,000 lots and silently omitted the rest. That is an incomplete
+  // state traceability filing, which is why this is fixed in the same slice
+  // as the received date. (Selecting `received_on` for CreatedDate.)
+  const lots = await pagedAll<LotRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select(
+        "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on",
+      )
+      .neq("status", "destroyed")
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LotRow[] | null) ?? [];
+  });
   const hasQuarantine = lots.some((l) => l.status === "quarantine" || l.status === "recalled");
 
   // --- Build each master-data file ------------------------------------------

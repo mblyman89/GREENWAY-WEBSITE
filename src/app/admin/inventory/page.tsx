@@ -15,6 +15,7 @@ import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
+import { receivedDateFlagMessage } from "@/lib/inventory/received-date-core";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,12 @@ export default async function InventoryPage({
     expiring?: string;
     /** SLICE 77: only lots from this vendor (vendors ⇄ inventory cross-link). */
     vendor?: string;
+    /**
+     * SLICE 2: only lots with no evidenced received date (`received_on is
+     * null`), excluding destroyed lots. This is the compliance worklist the
+     * orange banner links to — the owner's queue for adding real dates.
+     */
+    needsReceivedDate?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -87,6 +94,11 @@ export default async function InventoryPage({
   // accepted — junk params silently mean "filter off", like every other knob.
   const vendorId =
     sp.vendor && /^[0-9a-f-]{36}$/i.test(sp.vendor) ? sp.vendor : undefined;
+  // SLICE 2: the received-date worklist filter. Only the literal "1" turns it
+  // on; anything else silently means "filter off", matching every other knob
+  // on this page. `undefined` (not `false`) so the store never emits a
+  // pointless `received_on is not null` predicate when the flag is absent.
+  const needsReceivedDate = sp.needsReceivedDate === "1" ? true : undefined;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -114,6 +126,7 @@ export default async function InventoryPage({
     isMedical,
     expiringWithinDays,
     vendorId,
+    needsReceivedDate,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, stats, intel] = await Promise.all([
@@ -130,6 +143,14 @@ export default async function InventoryPage({
       to: win.to,
     }));
   }
+  // SLICE 2 — banner text for lots with no evidenced received date. Returns
+  // null when there is nothing to flag, so a clean store shows no badge at all
+  // rather than a green "0 problems" row that trains the eye to skip it.
+  const receivedDateFlag = receivedDateFlagMessage({
+    missingTotal: stats.missingReceivedDate,
+    missingWithStock: stats.missingReceivedDateWithStock,
+  });
+
   /** Current filter state as URL params (page excluded — added per link). */
   const filterParams = () => {
     const params = new URLSearchParams();
@@ -141,6 +162,7 @@ export default async function InventoryPage({
     if (sp.medical === "yes" || sp.medical === "no") params.set("medical", sp.medical);
     if (expiringWithinDays != null) params.set("expiring", String(expiringWithinDays));
     if (vendorId) params.set("vendor", vendorId);
+    if (needsReceivedDate) params.set("needsReceivedDate", "1");
     return params;
   };
   const pageHref = (p: number) => {
@@ -245,6 +267,32 @@ export default async function InventoryPage({
           />
         </div>
 
+        {/*
+          SLICE 2 — THE RECEIVED-DATE FLAG (owner-mandated).
+
+          Lots whose POS export had a blank Received date have NO evidenced
+          receipt day. While that is unknown, CCRS Inventory.CreatedDate falls
+          back to the import instant, so the LCB would be told the lot was
+          created on migration day. NULL is never quietly filled in; it is
+          raised here for the owner to resolve (standing rule 3).
+        */}
+        {receivedDateFlag && (
+          <div className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-semibold text-orange-200">Received dates missing</div>
+                <p className="mt-1 text-neutral-300">{receivedDateFlag}</p>
+              </div>
+              <Link
+                href="/admin/inventory?needsReceivedDate=1"
+                className="shrink-0 rounded-md border border-orange-400/50 px-3 py-1.5 font-medium text-orange-100 hover:bg-orange-500/20"
+              >
+                Show these lots
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Needs-attention insight */}
         <MissingInsight
           title="Needs attention"
@@ -306,6 +354,11 @@ export default async function InventoryPage({
           {activeStatus !== "all" && <input type="hidden" name="status" value={activeStatus} />}
           {/* SLICE 77: keep the vendor cross-link filter when other knobs change. */}
           {vendorId && <input type="hidden" name="vendor" value={vendorId} />}
+          {/* SLICE 2: keep the received-date worklist filter when other knobs
+              change. Without this hidden field, searching inside the worklist
+              would silently drop it and the owner would think the compliance
+              queue had emptied itself. */}
+          {needsReceivedDate && <input type="hidden" name="needsReceivedDate" value="1" />}
           <div className="min-w-52 flex-1">
             <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
               Search

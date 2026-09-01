@@ -44,10 +44,28 @@ export type LotTableFields = {
   strain_name: string | null;
 };
 
-/** ISO date (YYYY-MM-DD) of the lot's received moment; em-dash if unparsable. */
-export function lotReceivedDate(lot: Pick<LotTableFields, "created_at">): string {
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(lot.created_at ?? ""));
-  return m ? m[1] : EM_DASH;
+/**
+ * The date shown in the table's "Received" column.
+ *
+ * SLICE 2 — this used to read `created_at` unconditionally and label it
+ * "Received". For a lot imported from Cultivera with a blank Received date,
+ * `created_at` is the instant the import ran, so the column confidently
+ * displayed the migration date as though it were the day the product arrived.
+ * That is precisely the "evidence, not decoration" failure migration 0191
+ * warns about, just rendered in the UI.
+ *
+ * Now: show the evidenced `received_on` when we have one; otherwise show the
+ * em-dash, which reads honestly as "we don't know" and matches the flag the
+ * owner is asked to clear. We deliberately do NOT fall back to `created_at`
+ * here — a screen that says "unknown" is worth more than one that quietly
+ * shows the wrong day.
+ */
+export function lotReceivedDate(
+  lot: Pick<LotTableFields, "created_at"> & { received_on?: string | null },
+): string {
+  const rec = /^(\d{4}-\d{2}-\d{2})/.exec(String(lot.received_on ?? ""));
+  if (rec) return rec[1];
+  return EM_DASH;
 }
 
 /**
@@ -151,9 +169,29 @@ export function __runLotTableCoreTests(): void {
   };
 
   // Received date: ISO timestamp → plain date; backdated import timestamps too.
-  ok(lotReceivedDate({ created_at: "2026-06-17T12:00:00.000Z" }) === "2026-06-17", "received: ISO timestamp yields date");
-  ok(lotReceivedDate({ created_at: "2026-07-01" }) === "2026-07-01", "received: bare date passes through");
-  ok(lotReceivedDate({ created_at: "" }) === EM_DASH, "received: blank yields em-dash");
+  // SLICE 2 — the Received column reports the EVIDENCED received date only.
+  ok(
+    lotReceivedDate({ created_at: "2026-09-01T18:00:00.000Z", received_on: "2026-06-17" }) ===
+      "2026-06-17",
+    "received: evidenced received_on is shown",
+  );
+  ok(
+    lotReceivedDate({ created_at: "2026-06-17T12:00:00.000Z", received_on: null }) === EM_DASH,
+    "received: unknown reads as em-dash, NOT the import timestamp",
+  );
+  ok(
+    lotReceivedDate({ created_at: "2026-06-17T12:00:00.000Z" }) === EM_DASH,
+    "received: absent received_on reads as em-dash",
+  );
+  ok(
+    lotReceivedDate({ created_at: "", received_on: "" }) === EM_DASH,
+    "received: blank yields em-dash",
+  );
+  ok(
+    lotReceivedDate({ created_at: "2026-01-01", received_on: "2025-12-25T00:00:00.000Z" }) ===
+      "2025-12-25",
+    "received: timestamp-shaped received_on is trimmed to the date",
+  );
 
   // Type: human category first, inventory_type fallback, never invented.
   ok(lotTypeLabel({ category: "Live Resin", inventory_type: "Concentrate for Inhalation" }) === "Live Resin", "type: category preferred");

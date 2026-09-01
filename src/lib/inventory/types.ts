@@ -130,6 +130,23 @@ export type InventoryLot = {
   unit: string;
   unit_cost_minor_units: number | null;
   expires_on: string | null;
+  /**
+   * SLICE 2 (migration 0214) — the day this lot was ACTUALLY received, as
+   * evidenced by the POS export, a manifest, or the owner.
+   *
+   * `null` means "no received date on file" and is a real, meaningful state:
+   * it is NEVER backfilled from `created_at` (the import instant), because
+   * that would tell the LCB the lot was created on migration day. Undated
+   * lots are surfaced as a worklist for the owner to resolve, exactly like
+   * migration 0191's `last_counted_at` — evidence, not decoration.
+   */
+  received_on: string | null;
+  /** Where `received_on` came from: pos_import | manifest | owner_entered. */
+  received_on_source: string | null;
+  /** Who set `received_on` (null for machine-evidenced values). */
+  received_on_set_by: string | null;
+  /** When `received_on` was set. */
+  received_on_set_at: string | null;
   status: string; // active | quarantine | recalled | sold_out | destroyed
   notes: string | null;
   created_by: string | null;

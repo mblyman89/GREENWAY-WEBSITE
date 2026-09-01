@@ -252,6 +252,7 @@ import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directo
 import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runLotTableCoreTests } from "../../src/lib/inventory/lot-table-core";
 import { __runLotEditCoreTests } from "../../src/lib/inventory/lot-edit-core";
+import { __runReceivedDateCoreTests } from "../../src/lib/inventory/received-date-core";
 import { __runLotWebsiteClassificationCoreTests } from "../../src/lib/inventory/lot-website-classification-core";
 import { __runCategoryRegistryCoreTests } from "../../src/lib/pos/category-registry-core";
 import { __runTypeRegistryCoreTests } from "../../src/lib/pos/type-registry-core";
@@ -568,6 +569,7 @@ async function main() {
   __runCardTypeCoreTests();
   __runLotTableCoreTests();
   __runLotEditCoreTests();
+  { const r = __runReceivedDateCoreTests(); if (r.passed < 1) throw new Error("received-date-core: no assertions ran"); console.log(`received-date-core: ${r.passed} assertions passed`); }
   { const r = __runLotWebsiteClassificationCoreTests(); if (r.passed < 1) throw new Error("lot-website-classification-core: no assertions ran"); console.log(`lot-website-classification-core: ${r.passed} assertions passed`); }
   __runCategoryRegistryCoreTests();
   __runTypeRegistryCoreTests();

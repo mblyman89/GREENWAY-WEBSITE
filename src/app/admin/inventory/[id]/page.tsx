@@ -35,7 +35,15 @@ import {
   updateLotDetailsAction,
   updateLotWebsiteClassificationAction,
   updateLotAfterTaxPriceAction,
+  updateLotReceivedDateAction,
 } from "../actions";
+// SLICE 2: received-date vocabulary (floor date + provenance labels) comes
+// from the pure core so the UI and the validator can never disagree.
+import {
+  RECEIVED_DATE_FLOOR,
+  receivedOnSourceLabel,
+} from "@/lib/inventory/received-date-core";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +147,8 @@ export default async function LotDetailPage({
   const detailsAction = updateLotDetailsAction.bind(null, id);
   const classificationAction = updateLotWebsiteClassificationAction.bind(null, id);
   const priceAction = updateLotAfterTaxPriceAction.bind(null, id);
+  // SLICE 2: the owner's received-date entry form.
+  const receivedDateAction = updateLotReceivedDateAction.bind(null, id);
 
   // T-324: everything the price row + edit field need. The category that drives
   // the tax divisor/floor is the SAME website category the menu/cart use.
@@ -148,7 +158,10 @@ export default async function LotDetailPage({
   const currentBaseMinor =
     currentAfterTaxMinor != null ? baseFromAfterTax(currentAfterTaxMinor, priceCategory) : null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Standing rule 8: the business clock is America/Los_Angeles. Using the UTC
+  // date here made "today" roll over at 4pm/5pm Pacific, which could mark a
+  // lot expired a day early and cap the received-date picker a day short.
+  const today = pacificToday();
   const expired = lot.expires_on != null && lot.expires_on < today;
 
   return (
@@ -203,6 +216,60 @@ export default async function LotDetailPage({
                   : "muted"
             }
           />
+        </div>
+
+        {/*
+          SLICE 2 — RECEIVED DATE (owner-mandated compliance capability).
+
+          `received_on` is the day the lot was ACTUALLY received. It is stored
+          separately from `created_at` (the immutable FIFO/import key) and is
+          what CCRS Inventory.CreatedDate reports. When it is null we say so
+          loudly and ask the owner to supply it — we never guess a date, and
+          we never silently fall back to the import day (standing rule 3).
+        */}
+        <div
+          className={`rounded-[var(--admin-radius-lg)] border p-5 ${
+            lot.received_on
+              ? "border-[var(--admin-border)] bg-[var(--admin-surface)]"
+              : "border-orange-500/40 bg-orange-500/10"
+          }`}
+        >
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Received date</h2>
+          {lot.received_on ? (
+            <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
+              This lot is on file as received on <strong>{lot.received_on}</strong> (source:{" "}
+              {receivedOnSourceLabel(lot.received_on_source)}). This is the date reported to
+              the LCB as the CCRS inventory date. Correcting
+              it is recorded in the audit trail.
+            </p>
+          ) : (
+            <p className="mb-4 text-xs text-orange-200">
+              <strong>No received date on file.</strong> The POS export for this lot had a
+              blank received date, so we did not invent one. Until you enter the real date,
+              CCRS reporting falls back to the day this lot was imported, which is not when
+              you actually received it. Please enter the date from the vendor manifest or
+              invoice.
+            </p>
+          )}
+          <form action={receivedDateAction} className="space-y-4">
+            <Field
+              label="Date received"
+              help={`Use the date on the vendor manifest or invoice. Must be on or after ${RECEIVED_DATE_FLOOR} (WA retail sales began) and cannot be in the future. Leave blank to clear it back to unknown.`}
+              htmlFor="received_on"
+            >
+              <Input
+                id="received_on"
+                name="received_on"
+                type="date"
+                defaultValue={lot.received_on ?? ""}
+                min={RECEIVED_DATE_FLOOR}
+                max={today}
+              />
+            </Field>
+            <Button type="submit">
+              {lot.received_on ? "Update received date" : "Save received date"}
+            </Button>
+          </form>
         </div>
 
         {/* T-324 — SELL PRICE (product-details section). The big number is the
