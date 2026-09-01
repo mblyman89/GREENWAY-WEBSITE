@@ -15,6 +15,8 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+// SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
+import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 export type ProductClassificationOverride = {
@@ -49,23 +51,36 @@ export async function getOverridesForKeys(
 
   try {
     const admin = createSupabaseAdminClient();
+    // SLICE 3: chunked AND paged. A 300-key chunk can match more rows than
+    // PostgREST's 1,000-row ceiling, which is enforced silently, so an
+    // override late in the list was dropped and the product rendered under its
+    // raw POS category instead of the one the owner chose.
     const CHUNK = 300;
-    for (let i = 0; i < unique.length; i += CHUNK) {
-      const slice = unique.slice(i, i + CHUNK);
-      const { data, error } = await admin
-        .from("product_classification_overrides")
-        .select("pos_product_key, website_category, house_type, note")
-        .in("pos_product_key", slice);
-      if (error) {
-        // Pre-migration or any read hiccup: behave as "no overrides".
-        if (!isMissingTable(error)) {
-          console.error("[product-classification-overrides] read error:", error.message);
+    let readFailed = false;
+    const rows = await chunkedIn<string, ProductClassificationOverride>(
+      unique,
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("product_classification_overrides")
+          .select("pos_product_key, website_category, house_type, note")
+          .in("pos_product_key", chunk)
+          .order("pos_product_key", { ascending: true })
+          .range(from, to);
+        if (error) {
+          // Pre-migration or any read hiccup: behave as "no overrides".
+          if (!isMissingTable(error)) {
+            console.error("[product-classification-overrides] read error:", error.message);
+          }
+          readFailed = true;
+          return [];
         }
-        return out;
-      }
-      for (const row of (data as ProductClassificationOverride[] | null) ?? []) {
-        if (row.pos_product_key) out.set(row.pos_product_key, row);
-      }
+        return (data as ProductClassificationOverride[] | null) ?? [];
+      },
+      { chunkSize: CHUNK },
+    );
+    if (readFailed) return out;
+    for (const row of rows) {
+      if (row.pos_product_key) out.set(row.pos_product_key, row);
     }
   } catch (err) {
     console.error("[product-classification-overrides] getOverridesForKeys failed:", err);

@@ -39,7 +39,11 @@ export async function buildMenuIndexes(): Promise<{
   const terpeneIndex: TerpeneIndex = buildStaticTerpeneIndex();
   const strainTypeIndex: StrainTypeIndex = buildStaticStrainTypeIndex();
   try {
-    const rows = await listKbStrains(1000);
+    // SLICE 3: this index must cover the WHOLE strain library, not the first
+    // page of it. A strain missing from the index silently loses its terpene
+    // profile and strain type on the customer's product card. listKbStrains()
+    // now pages, so this bound is a real maximum rather than a silent cap.
+    const rows = await listKbStrains(50_000);
     for (const r of rows) {
       if (!r.active) continue;
       const keys = [r.name, r.slug].map(normalizeStrainKey).filter((k) => k.length > 0);

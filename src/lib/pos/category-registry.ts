@@ -16,6 +16,8 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+// SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { listWebsiteCategoryTypes } from "@/lib/pos/types-store";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
@@ -196,10 +198,23 @@ export async function findMenuOrphans(): Promise<string[]> {
   const published = await getPublishedVersion();
   if (!published) return [];
   const admin = createSupabaseAdminClient();
-  const [{ data: items }, registry] = await Promise.all([
-    admin.from("menu_items").select("category").eq("menu_version_id", published.id).limit(5000),
+  // SLICE 3: `.limit(5000)` never raised PostgREST's 1,000-row ceiling, so
+  // this only inspected the first 1,000 live products. An orphaned category
+  // (a deleted registry row or an import typo) sitting past the cap went
+  // unreported, and products carrying it silently vanish from the menu's
+  // category filters.
+  const [items, registry] = await Promise.all([
+    pagedAll<{ category: string | null }>(async (from, to) => {
+      const { data } = await admin
+        .from("menu_items")
+        .select("category")
+        .eq("menu_version_id", published.id)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as { category: string | null }[] | null) ?? [];
+    }),
     listWebsiteCategoryTypes({ includeInactive: true }),
   ]);
-  const values = ((items as { category: string | null }[] | null) ?? []).map((i) => i.category);
+  const values = items.map((i) => i.category);
   return findOrphanCategoryValues(values, registry.map((r) => r.value));
 }

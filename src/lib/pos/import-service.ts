@@ -349,7 +349,11 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
     // the Rule 3.3 reconciliation arithmetic (rows in = going live +
     // documented rejects + resolved flags) instead of assuming it.
     const [diagnostics, reviews, items] = await Promise.all([
-      getImportDiagnostics(importId, { limit: 5000 }),
+      // SLICE 3: no `limit`. `.limit(5000)` never raised PostgREST's 1,000-row
+      // ceiling, so on a large import this gate was counting pending
+      // fact-reviews from a TRUNCATED list and could open with real reviews
+      // still unresolved. Omitting the limit pages every diagnostic in.
+      getImportDiagnostics(importId),
       listFactReviews(importId),
       getVersionItems(versionId),
     ]);

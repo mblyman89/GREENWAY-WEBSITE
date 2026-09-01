@@ -21,6 +21,8 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+// SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
+import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { publicUrlForKey } from "@/lib/media/store";
 import {
@@ -170,34 +172,57 @@ async function batchExactImages(posKeys: string[]): Promise<Map<string, string>>
   const admin = createSupabaseAdminClient();
 
   // Pull published enrichment rows that actually have an image.
+  // SLICE 3: chunked AND paged. A 300-key chunk can match more rows than
+  // PostgREST's 1,000-row ceiling, which it enforces silently. Before this,
+  // products late in a chunk lost their enrichment row and rendered with the
+  // placeholder image even though a real photo was published.
+  type EnrichRow = {
+    pos_product_key: string;
+    primary_media_id: string | null;
+    image_media_ids: string[] | null;
+  };
   const rowsByKey = new Map<string, string>(); // posKey -> mediaId
   const CHUNK = 300;
-  for (let i = 0; i < keys.length; i += CHUNK) {
-    const slice = keys.slice(i, i + CHUNK);
-    const { data } = await admin
-      .from("product_enrichments")
-      .select("pos_product_key, primary_media_id, image_media_ids, status")
-      .in("pos_product_key", slice)
-      .eq("status", "published");
-    for (const r of (data as
-      | { pos_product_key: string; primary_media_id: string | null; image_media_ids: string[] | null }[]
-      | null) ?? []) {
-      const mediaId = r.primary_media_id || (r.image_media_ids ?? [])[0] || null;
-      if (mediaId) rowsByKey.set(r.pos_product_key, mediaId);
-    }
+  const enrichRows = await chunkedIn<string, EnrichRow>(
+    keys,
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("product_enrichments")
+        .select("pos_product_key, primary_media_id, image_media_ids, status")
+        .in("pos_product_key", chunk)
+        .eq("status", "published")
+        .order("pos_product_key", { ascending: true })
+        .range(from, to);
+      return (data as EnrichRow[] | null) ?? [];
+    },
+    { chunkSize: CHUNK },
+  );
+  for (const r of enrichRows) {
+    const mediaId = r.primary_media_id || (r.image_media_ids ?? [])[0] || null;
+    if (mediaId) rowsByKey.set(r.pos_product_key, mediaId);
   }
   if (rowsByKey.size === 0) return map;
 
   // Batch-resolve those media ids to URLs.
+  type MediaRow = { id: string; storage_key: string; public_url: string | null };
   const mediaIds = Array.from(new Set(rowsByKey.values()));
   const urlById = new Map<string, string>();
-  for (let i = 0; i < mediaIds.length; i += CHUNK) {
-    const slice = mediaIds.slice(i, i + CHUNK);
-    const { data } = await admin.from("media_assets").select("id, storage_key, public_url").in("id", slice);
-    for (const m of (data as { id: string; storage_key: string; public_url: string | null }[] | null) ?? []) {
-      const url = publicUrlForKey(m.storage_key) ?? m.public_url ?? null;
-      if (url) urlById.set(m.id, url);
-    }
+  const mediaRows = await chunkedIn<string, MediaRow>(
+    mediaIds,
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("media_assets")
+        .select("id, storage_key, public_url")
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as MediaRow[] | null) ?? [];
+    },
+    { chunkSize: CHUNK },
+  );
+  for (const m of mediaRows) {
+    const url = publicUrlForKey(m.storage_key) ?? m.public_url ?? null;
+    if (url) urlById.set(m.id, url);
   }
   for (const [posKey, mediaId] of rowsByKey) {
     const url = urlById.get(mediaId);

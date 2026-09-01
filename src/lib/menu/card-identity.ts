@@ -20,6 +20,8 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+// SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
+import { pagedAll, chunkedIn } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { normalizeVendorKey } from "@/lib/inventory/vendor-resolve-core";
 import {
@@ -49,33 +51,54 @@ async function loadPublishedEnrichmentBrands(posKeys: string[]): Promise<Map<str
   if (keys.length === 0) return out;
   const admin = createSupabaseAdminClient();
 
-  // 1) Published enrichment rows that carry a brand link, chunked (.in URL limits).
+  // 1) Published enrichment rows that carry a brand link.
+  //
+  // SLICE 3: chunked AND paged. Chunking the id list keeps the request URL
+  // short, but a 300-key chunk can still match more than PostgREST's 1,000-row
+  // ceiling, and the server truncates silently. chunkedIn() pages inside each
+  // chunk, so a product late in the list can no longer lose its brand link and
+  // silently fall back to the raw POS brand text on the customer's card.
   const brandIdByKey = new Map<string, string>();
   const CHUNK = 300;
-  for (let i = 0; i < keys.length; i += CHUNK) {
-    const slice = keys.slice(i, i + CHUNK);
-    const { data } = await admin
-      .from("product_enrichments")
-      .select("pos_product_key, brand_id")
-      .in("pos_product_key", slice)
-      .eq("status", "published")
-      .not("brand_id", "is", null);
-    for (const r of (data as { pos_product_key: string; brand_id: string | null }[] | null) ?? []) {
-      if (r.brand_id) brandIdByKey.set(r.pos_product_key, r.brand_id);
-    }
+  const enrichmentRows = await chunkedIn<string, { pos_product_key: string; brand_id: string | null }>(
+    keys,
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("product_enrichments")
+        .select("pos_product_key, brand_id")
+        .in("pos_product_key", chunk)
+        .eq("status", "published")
+        .not("brand_id", "is", null)
+        .order("pos_product_key", { ascending: true })
+        .range(from, to);
+      return (data as { pos_product_key: string; brand_id: string | null }[] | null) ?? [];
+    },
+    { chunkSize: CHUNK },
+  );
+  for (const r of enrichmentRows) {
+    if (r.brand_id) brandIdByKey.set(r.pos_product_key, r.brand_id);
   }
   if (brandIdByKey.size === 0) return out;
 
-  // 2) Resolve the linked brand ids to display names in one query per chunk.
+  // 2) Resolve the linked brand ids to display names.
   const nameById = new Map<string, string>();
   const ids = Array.from(new Set(brandIdByKey.values()));
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { data } = await admin.from("brands").select("id, display_name").in("id", slice);
-    for (const b of (data as { id: string; display_name: string | null }[] | null) ?? []) {
-      const name = (b.display_name ?? "").trim();
-      if (name) nameById.set(b.id, name);
-    }
+  const brandRows = await chunkedIn<string, { id: string; display_name: string | null }>(
+    ids,
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("brands")
+        .select("id, display_name")
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as { id: string; display_name: string | null }[] | null) ?? [];
+    },
+    { chunkSize: CHUNK },
+  );
+  for (const b of brandRows) {
+    const name = (b.display_name ?? "").trim();
+    if (name) nameById.set(b.id, name);
   }
   for (const [posKey, brandId] of brandIdByKey) {
     const name = nameById.get(brandId);
@@ -88,7 +111,20 @@ async function loadPublishedEnrichmentBrands(posKeys: string[]): Promise<Map<str
 async function loadVendorShortLabels(): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("vendors").select("display_name, dba").limit(2000);
+  // SLICE 3: `.limit(2000)` did NOT raise PostgREST's 1,000-row ceiling — it
+  // can only lower it — so vendor 1,001 onward silently lost its short label
+  // and customers saw the raw "CERES - 435011" style text instead of "CERES".
+  const data = await pagedAll<{ display_name: string | null; dba: string | null }>(
+    async (from, to) => {
+      const { data: page } = await admin
+        .from("vendors")
+        .select("display_name, dba")
+        .order("display_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (page as { display_name: string | null; dba: string | null }[] | null) ?? [];
+    },
+  );
   for (const v of (data as { display_name: string | null; dba: string | null }[] | null) ?? []) {
     const key = normalizeVendorKey(v.display_name);
     if (!key) continue;

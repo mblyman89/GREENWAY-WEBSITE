@@ -488,17 +488,38 @@ export type KbStrainRow = {
   aroma_notes: string[] | null; flavor_notes: string[] | null; terpenes: string[] | null; active: boolean;
 };
 
+/**
+ * List strains, up to `limit`.
+ *
+ * SLICE 3: paged. PostgREST caps any single response at `db.max_rows` (1,000)
+ * and `.limit()` can only ever LOWER that, never raise it. The public menu
+ * builds its terpene + strain-type index from this list, so once the strain
+ * library passed 1,000 rows the strains sorted after that point quietly lost
+ * their terpene profile on the customer's product card. Paging with `.range()`
+ * honours `limit` as a real maximum instead of a silent ceiling.
+ */
 export async function listKbStrains(limit = 500): Promise<KbStrainRow[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("kb_strains")
-      .select("id,slug,name,strain_type,aroma_notes,flavor_notes,terpenes,active")
-      .order("name", { ascending: true })
-      .limit(limit);
-    if (error || !data) return [];
-    return data as KbStrainRow[];
+    const PAGE = 1000;
+    const rows: KbStrainRow[] = [];
+    for (let from = 0; from < limit; from += PAGE) {
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await admin
+        .from("kb_strains")
+        .select("id,slug,name,strain_type,aroma_notes,flavor_notes,terpenes,active")
+        .order("name", { ascending: true })
+        // `name` is not unique, so it alone is not a stable page boundary.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error || !data) break;
+      const page = data as KbStrainRow[];
+      rows.push(...page);
+      // A short page is the only reliable "no more rows" signal.
+      if (page.length < to - from + 1) break;
+    }
+    return rows;
   } catch {
     return [];
   }
