@@ -19,26 +19,73 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import type { PosFactReview } from "@/lib/pos/db-types";
 import type { FactResolutionAction, FactResolutionInput, FactReviewFacts } from "@/lib/pos/fact-review-core";
 
-export async function listFactReviews(importId: string): Promise<PosFactReview[]> {
+/**
+ * SLICE 4B: read every saved decision for an import, reporting whether the
+ * read actually succeeded.
+ *
+ * Two defects are fixed here:
+ *
+ *   1. NO PAGINATION. This read was unpaged, and PostgREST silently caps a
+ *      response at `db.max_rows` (1,000). These rows are what record that a
+ *      human APPROVED / FIXED / REJECTED a flagged product, so on a large
+ *      import the decisions past row 1,000 simply vanished -- and a review
+ *      with no recorded decision counts as PENDING, which blocks the publish
+ *      with a refusal the owner cannot clear (the decision IS there; the read
+ *      just never returned it).
+ *
+ *   2. UNSTABLE ORDER. `updated_at` is not unique -- a bulk "approve all"
+ *      writes many rows in the same instant. Paging an unstable order can
+ *      repeat or skip rows between requests, which would corrupt the
+ *      decisions in a far subtler way than losing them. Every page is now
+ *      ordered by `updated_at` with `id` as a unique tiebreaker, which makes
+ *      the pages a genuine partition.
+ *
+ * The `ok` flag exists because an empty array is ambiguous: it means both "no
+ * decisions recorded" and "the read failed". The commit gate MUST tell those
+ * apart -- treating a failed read as "nothing pending" is exactly the
+ * fail-open SLICE 4A closes. Display screens can keep ignoring it.
+ */
+export async function listFactReviewsResult(
+  importId: string,
+): Promise<{ reviews: PosFactReview[]; ok: boolean }> {
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("pos_fact_reviews")
-      .select("*")
-      .eq("import_id", importId)
-      .order("updated_at", { ascending: false });
-    if (error) {
-      console.error("[fact-review-store] listFactReviews error:", error.message);
-      return [];
-    }
-    return (data as PosFactReview[] | null) ?? [];
+    let failed = false;
+    const rows = await pagedAll<PosFactReview>(async (from, to) => {
+      const { data, error } = await admin
+        .from("pos_fact_reviews")
+        .select("*")
+        .eq("import_id", importId)
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        console.error("[fact-review-store] listFactReviews error:", error.message);
+        failed = true;
+        return [];
+      }
+      return (data as PosFactReview[] | null) ?? [];
+    });
+    if (failed) return { reviews: [], ok: false };
+    return { reviews: rows, ok: true };
   } catch (err) {
     console.error("[fact-review-store] listFactReviews exception:", err);
-    return [];
+    return { reviews: [], ok: false };
   }
+}
+
+/**
+ * Convenience wrapper for display screens, which render whatever loaded and
+ * do not need to distinguish "empty" from "failed". The publish gate must use
+ * `listFactReviewsResult` instead.
+ */
+export async function listFactReviews(importId: string): Promise<PosFactReview[]> {
+  const { reviews } = await listFactReviewsResult(importId);
+  return reviews;
 }
 
 /** Adapt saved DB decisions to the pure core's resolution inputs. */

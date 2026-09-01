@@ -24,7 +24,7 @@ import { storeNow } from "@/lib/reports/timezone";
 import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { getImportDiagnostics, getVersionItems, countVersionItems } from "@/lib/pos/menu-version";
-import { listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
+import { listFactReviewsResult, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import {
   buildFactReviewBuckets,
   menuItemRowToFactReviewItem,
@@ -352,13 +352,17 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
     // exception is still awaiting a human decision. The gate also verifies
     // the Rule 3.3 reconciliation arithmetic (rows in = going live +
     // documented rejects + resolved flags) instead of assuming it.
-    const [diagnostics, reviews, items, serverItemCount] = await Promise.all([
+    const [diagnostics, reviewsResult, items, serverItemCount] = await Promise.all([
       // SLICE 3: no `limit`. `.limit(5000)` never raised PostgREST's 1,000-row
       // ceiling, so on a large import this gate was counting pending
       // fact-reviews from a TRUNCATED list and could open with real reviews
       // still unresolved. Omitting the limit pages every diagnostic in.
       getImportDiagnostics(importId),
-      listFactReviews(importId),
+      // SLICE 4B: the gate needs to know whether this read SUCCEEDED, not just
+      // what it returned. These rows record the human approve/fix/reject
+      // decisions; an empty array means both "nothing decided" and "the read
+      // failed", and treating a failure as "nothing pending" is a fail-open.
+      listFactReviewsResult(importId),
       getVersionItems(versionId),
       // SLICE 4A: a THIRD witness. `count: "exact", head: true` is a
       // server-side COUNT(*) -- it returns a number, not rows, so the
@@ -369,7 +373,7 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
     const buckets = buildFactReviewBuckets(
       items.map(menuItemRowToFactReviewItem),
       diagnostics.map(posDiagnosticToFactReviewDiagnostic),
-      factReviewsToResolutions(reviews),
+      factReviewsToResolutions(reviewsResult.reviews),
     );
     // SLICE 4A: the reconciliation arithmetic is computed FROM these buckets,
     // so it cannot detect that its own inputs came back short. Corroborate the
@@ -381,6 +385,8 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
       observedItems: items.length,
       recordedItemCount: (version as MenuVersion).item_count,
       serverItemCount,
+      observedReviews: reviewsResult.reviews.length,
+      reviewsReadFailed: !reviewsResult.ok,
     });
     if (!gate.ready) throw new Error(gate.message);
     // Persist the balanced equation so the audit trail shows exactly what

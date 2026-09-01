@@ -136,3 +136,35 @@ A test I wrote FAILED first and that was correct: I had assumed an arbitrary
 `REVIEW_DIAGNOSTIC_CODES` (fact-review-core.ts:51) matched by
 displayName/productName do. Fixed the test against the verified behaviour
 rather than weakening the assertion.
+
+---
+
+# SLICE 4B — the fact-review read (SHIPPED)
+
+`listFactReviews()` had two defects, both fixed:
+
+1. **No pagination.** These rows record the human approve/fix/reject
+   decisions. Past PostgREST's 1,000-row cap they silently vanished — and a
+   review with no recorded decision counts as PENDING. So on a large import
+   the gate would refuse with "N rows await a human decision" for rows the
+   owner HAD already decided. Unclearable by design.
+
+2. **Unstable paging order.** `updated_at` is not unique — a bulk "approve
+   all" stamps many rows identically. Paging an unstable order repeats or
+   skips rows, corrupting decisions more subtly than losing them. Now ordered
+   `updated_at` + `id` (unique tiebreaker) = a genuine partition.
+
+Also added `listFactReviewsResult()` returning `{ reviews, ok }`. An empty
+array meant BOTH "nothing decided" AND "read failed"; the gate must tell them
+apart. The plain `listFactReviews()` wrapper is kept so the three display
+screens are unchanged.
+
+| Gate | Result |
+|---|---|
+| tsc | 0 errors |
+| eslint | 0 errors |
+| pure self-tests | ALL PASSED |
+| vitest | 513 files / 13,018 tests (4A 13,003 + 15) |
+
+Non-vacuous: removed the unique `id` tiebreaker -> 1 failure; stopped passing
+`reviewsReadFailed` -> 1 failure. Restored, re-confirmed green.
