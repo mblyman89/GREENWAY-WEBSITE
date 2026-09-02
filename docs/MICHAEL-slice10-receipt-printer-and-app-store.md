@@ -178,8 +178,40 @@ In Xcode:
 ### Step 4 — Check it took
 
 In the left sidebar of Xcode, scroll to the bottom. You should see **Package
-Dependencies** with **StarXpand-SDK-iOS** under it. If it is there, this part
-is done.
+Dependencies** with **StarIO10** under it, with a version number next to it
+(for example `2.13.0`). Alongside it you will also see `CapApp-SPM local` and
+`capacitor-swift-pm 8.5.0` — those two are ours and were already there.
+
+Seeing **StarIO10** in that list means Xcode successfully *downloaded* the SDK.
+
+### Step 4b — Check the SDK is actually attached to the app
+
+This is a **different thing** from Step 4, and it is the step people miss.
+
+Step 4 proves Xcode downloaded the SDK. It does **not** prove the SDK is
+attached to our app. A package can sit in that sidebar list, fully downloaded,
+and still not be wired into the app — in which case the build fails with:
+
+```
+No such module 'StarIO10'
+```
+
+To check:
+
+1. In the left sidebar, click the blue **App** icon at the very top.
+2. In the main panel, select the **App** target (left column, under TARGETS —
+   not the one under PROJECT).
+3. Click the **General** tab.
+4. Scroll down to **Frameworks, Libraries, and Embedded Content**.
+
+**StarIO10** must be listed there.
+
+- **If it is listed** — you are done, move to Step 5.
+- **If the list is empty, or StarIO10 is missing** — click the **+** button
+  underneath the list. A picker opens. Type `StarIO10` in the search box,
+  select **StarIO10**, and click **Add**. It now appears in the list.
+
+Then move to Step 5.
 
 ### Step 5 — Build it
 
