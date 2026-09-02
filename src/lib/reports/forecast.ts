@@ -15,6 +15,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { isRevenueOrder } from "@/lib/reports/revenue-basis";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import {
   forecastDaily,
   buildContiguousSeries,
@@ -42,6 +43,12 @@ export type ForecastBundle = {
 };
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * SLICE 5C — memory ceiling for the order-history scan. NOT a row cap:
+ * reaching it is REPORTED as an incomplete read, never silently accepted.
+ */
+const FORECAST_SCAN_MAX_ROWS = 200_000;
 export const DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /**
@@ -56,23 +63,40 @@ async function loadDailySeries(
   const sinceMs = Date.now() - lookbackDays * 86400000;
   const sinceISO = new Date(sinceMs).toISOString();
 
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, status, placed_at, total_minor_units, item_count")
-    .gte("placed_at", sinceISO)
-    .order("placed_at", { ascending: true })
-    .limit(50000);
-
-  const rows =
-    (ordersData as
-      | {
-          id: string;
-          status: string;
-          placed_at: string;
-          total_minor_units: number | null;
-          item_count: number | null;
-        }[]
-      | null) ?? [];
+  // SLICE 5C — `.limit(50000)` cannot exceed PostgREST's 1,000-row cap
+  // (chunked-in.ts:13-14). Worse than a plain truncation: this read is ordered
+  // by `placed_at` ASCENDING, so the 1,000 rows that survived were always the
+  // OLDEST in the window and every recent order was silently discarded. A
+  // 180-day revenue forecast was being computed from stale history with
+  // nothing on screen to say so. Paged completely.
+  type OrderRow = {
+    id: string;
+    status: string;
+    placed_at: string;
+    total_minor_units: number | null;
+    item_count: number | null;
+  };
+  const { rows, verdict } = await pagedAllChecked<OrderRow>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("orders")
+        .select("id, status, placed_at, total_minor_units, item_count")
+        .gte("placed_at", sinceISO)
+        .order("placed_at", { ascending: true })
+        // Unique tiebreak — `placed_at` is not unique, and without it paging
+        // can repeat or skip orders that share a timestamp.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as OrderRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: FORECAST_SCAN_MAX_ROWS },
+  );
+  if (!verdict.complete) {
+    // Advisory surface: the forecast still renders, but the incompleteness is
+    // recorded rather than hidden behind a confident-looking curve.
+    console.warn(`[forecast] order history may be incomplete — ${verdict.message}`);
+  }
 
   const valid = rows.filter((o) => isRevenueOrder(o.status));
 

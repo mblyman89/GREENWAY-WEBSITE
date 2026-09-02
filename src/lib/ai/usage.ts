@@ -14,6 +14,13 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+
+/**
+ * SLICE 5C — memory ceiling for AI usage/accept-rate report scans. NOT a row
+ * cap: reaching it is REPORTED as an incomplete read, never silently accepted.
+ */
+const AI_USAGE_REPORT_MAX_ROWS = 200_000;
 
 export type AiUsageInput = {
   feature: string;
@@ -108,14 +115,28 @@ export async function getAiUsageSummary(days = 30): Promise<AiUsageSummary> {
 
   const admin = createSupabaseAdminClient();
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await admin
-    .from("ai_usage")
-    .select("*")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(5000);
-
-  const rows = (data as AiUsageRow[] | null) ?? [];
+  // SLICE 5C — `.limit(5000)` cannot exceed PostgREST's 1,000-row cap
+  // (chunked-in.ts:13-14). Every total on the AI usage panel (calls, tokens,
+  // per-feature and per-day breakdowns) was computed from at most 1,000 rows
+  // and presented as the whole period. Paged completely.
+  const { rows, verdict } = await pagedAllChecked<AiUsageRow>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("ai_usage")
+        .select("*")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        // Unique tiebreak — `created_at` is not unique.
+        .order("id", { ascending: false })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as AiUsageRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: AI_USAGE_REPORT_MAX_ROWS },
+  );
+  if (!verdict.complete) {
+    console.warn(`[ai/usage] usage report may be incomplete — ${verdict.message}`);
+  }
   if (rows.length === 0) return empty;
 
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -264,16 +285,29 @@ export async function getAcceptRateReport(days = 90): Promise<AcceptRateReport> 
 
   const admin = createSupabaseAdminClient();
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await admin
-    .from("ai_suggestions")
-    .select("status, prompt_version, source, entity_type, confidence")
-    .gte("created_at", since)
-    .limit(10000);
+  // SLICE 5C — `.limit(10000)` cannot exceed PostgREST's 1,000-row cap
+  // (chunked-in.ts:13-14). The accept-rate is a RATIO, which makes truncation
+  // especially misleading: a partial sample produces a confident-looking
+  // percentage that is not the real one. Paged completely.
+  //
   // confidence/source may not be migrated on very old rows — Supabase returns
   // null for missing values, which our grouping handles ("unscored"/"model").
-  if (error || !data) return empty;
-
-  const rows = data as SuggRow[];
+  const { rows, verdict } = await pagedAllChecked<SuggRow>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("ai_suggestions")
+        .select("status, prompt_version, source, entity_type, confidence")
+        .gte("created_at", since)
+        // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as SuggRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: AI_USAGE_REPORT_MAX_ROWS },
+  );
+  // A ratio from an unprovable sample is worse than no ratio: it looks precise.
+  if (!verdict.complete) return empty;
   if (rows.length === 0) return empty;
 
   const totals = emptyBucket("all");

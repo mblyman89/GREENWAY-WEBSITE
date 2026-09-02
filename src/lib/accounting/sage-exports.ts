@@ -18,7 +18,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAll, pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
@@ -43,6 +43,13 @@ import {
   buildAdjustmentsGjCsv,
   buildVendorListCsv,
 } from "@/lib/accounting/sage-exports-core";
+
+/**
+ * SLICE 5C — memory ceiling for full-table scans in the Sage exports. NOT a row
+ * cap: reaching it is REPORTED as an incomplete read (the export then warns),
+ * never silently accepted — the mistake the old `.limit(20000)` made.
+ */
+const SAGE_SCAN_MAX_ROWS = 100_000;
 
 export type { SageCsvResult };
 
@@ -701,18 +708,34 @@ export async function buildSageVendorListExport(): Promise<SageCsvResult> {
   }
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("vendors")
-      .select(
-        "sage_vendor_id, display_name, legal_name, email, phone, website, billing_address1, billing_address2, billing_city, billing_state, billing_zip",
-      )
-      .not("sage_vendor_id", "is", null)
-      .order("sage_vendor_id", { ascending: true })
-      .limit(2000);
-    if (error) {
+    // SLICE 5C — `.limit(2000)` cannot exceed the 1,000-row server cap
+    // (chunked-in.ts:13-14), and the vendors table is documented at 1,775 rows
+    // (docs/ROADMAP_VENDORS_AND_KB_ENRICHMENT.md:30), so this export was
+    // already capable of silently omitting vendors from a file the owner hands
+    // to his bookkeeper. Paged completely; an unprovable read WARNS rather than
+    // shipping a quietly short CSV as if it were the whole list.
+    const { rows: vendorRows, verdict } = await pagedAllChecked<Record<string, unknown>>(
+      async (from, to) => {
+        const { data, error } = await admin
+          .from("vendors")
+          .select(
+            "sage_vendor_id, display_name, legal_name, email, phone, website, billing_address1, billing_address2, billing_city, billing_state, billing_zip",
+          )
+          .not("sage_vendor_id", "is", null)
+          .order("sage_vendor_id", { ascending: true })
+          // Unique tiebreak: sage_vendor_id is not guaranteed unique.
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) return { rows: [], ok: false };
+        return { rows: (data as Record<string, unknown>[] | null) ?? [], ok: true };
+      },
+      { maxRows: SAGE_SCAN_MAX_ROWS },
+    );
+    if (!verdict.complete && vendorRows.length === 0) {
       empty.warnings.push("Vendor Sage IDs are unavailable — apply migration 0091 first.");
       return empty;
     }
+    const data = vendorRows;
     const rows: SageVendorListRow[] = ((data as {
       sage_vendor_id: string | null;
       display_name: string;
@@ -744,6 +767,12 @@ export async function buildSageVendorListExport(): Promise<SageCsvResult> {
     if (rows.length === 0) {
       result.warnings.push("No vendors have a Sage Vendor ID yet — set them on each vendor's admin page.");
     }
+    // SLICE 5C — never hand over a bookkeeping file that is quietly short.
+    if (!verdict.complete) {
+      result.warnings.push(
+        `This vendor list may be INCOMPLETE — ${verdict.message} Re-run the export before sending it to your bookkeeper.`,
+      );
+    }
     return result;
   } catch {
     empty.warnings.push("Vendor lookup failed.");
@@ -760,11 +789,31 @@ export async function listUnmappedCategories(): Promise<string[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    const [categoryMap, accounts, { data }] = await Promise.all([
+    // SLICE 5C — `.limit(20000)` on `menu_items` cannot exceed PostgREST's
+    // 1,000-row cap (chunked-in.ts:13-14). The owner's own POS import stages
+    // 3,333 menu items (measured, SLICE6B_DIAGNOSIS.md), so this read was
+    // ALREADY truncated in production: any category that happened to appear
+    // only past row 1,000 was invisible here, and an unmapped category that
+    // never surfaces is revenue landing in the wrong Sage account with nothing
+    // on screen to reveal it. Paged completely.
+    const [categoryMap, accounts, { rows: categoryRows }] = await Promise.all([
       getSageCategoryMap(),
       getSageCategoryAccounts(),
-      admin.from("menu_items").select("category").limit(20000),
+      pagedAllChecked<{ category: string | null }>(
+        async (from, to) => {
+          const { data, error } = await admin
+            .from("menu_items")
+            .select("category")
+            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) return { rows: [], ok: false };
+          return { rows: (data as { category: string | null }[] | null) ?? [], ok: true };
+        },
+        { maxRows: SAGE_SCAN_MAX_ROWS },
+      ),
     ]);
+    const data = categoryRows;
     const knownBuckets = new Set(Object.keys(accounts));
     const seen = new Map<string, string>(); // normalized → original casing
     for (const r of (data as { category: string | null }[] | null) ?? []) {

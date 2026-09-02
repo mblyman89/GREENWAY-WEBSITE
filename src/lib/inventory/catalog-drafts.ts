@@ -9,6 +9,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { usableCount } from "@/lib/supabase/read-completeness-core";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import {
   classifyInsertError,
@@ -357,14 +358,38 @@ export async function countCatalogDrafts(): Promise<{ draft: number; approved: n
   const empty = { draft: 0, approved: 0, dismissed: 0 };
   if (!isSupabaseServiceConfigured) return empty;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("catalog_product_drafts").select("status").limit(5000);
-  const rows = (data as { status: string }[] | null) ?? [];
+  // SLICE 5C — this read existed ONLY to produce three numbers, yet it pulled
+  // up to 5,000 `status` strings across the wire and tallied them in JS. Two
+  // problems: `.limit(5000)` cannot exceed PostgREST's 1,000-row cap
+  // (chunked-in.ts:13-14), so every count silently stopped at 1,000; and
+  // transferring rows to count them is the wrong shape entirely.
+  //
+  // `count:"exact", head:true` is a SERVER-side COUNT with no row payload and
+  // is therefore immune to `db.max_rows` (SLICE4_WORKPLAN.md:40-43; the house
+  // pattern at vendors/store.ts:136). Three cheap counts replace a 5,000-row
+  // transfer AND are correct at any table size.
+  //
+  // NEVER GUESS: a null count means "we could not find out", which is NOT the
+  // same as zero. An unusable count leaves that bucket at its empty value
+  // rather than asserting a confident 0.
+  const [draftRes, approvedRes, dismissedRes] = await Promise.all([
+    admin
+      .from("catalog_product_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "draft"),
+    admin
+      .from("catalog_product_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "approved"),
+    admin
+      .from("catalog_product_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "dismissed"),
+  ]);
   const counts = { ...empty };
-  for (const r of rows) {
-    if (r.status === "draft") counts.draft += 1;
-    else if (r.status === "approved") counts.approved += 1;
-    else if (r.status === "dismissed") counts.dismissed += 1;
-  }
+  if (usableCount(draftRes.count)) counts.draft = draftRes.count;
+  if (usableCount(approvedRes.count)) counts.approved = approvedRes.count;
+  if (usableCount(dismissedRes.count)) counts.dismissed = dismissedRes.count;
   return counts;
 }
 

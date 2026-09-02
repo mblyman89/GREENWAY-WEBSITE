@@ -40,6 +40,13 @@ import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import { buildBarcodeIndex, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+
+/**
+ * SLICE 5C — memory ceiling for the barcode-index lot scan. NOT a row cap:
+ * reaching it is REPORTED as an incomplete read, never silently accepted.
+ */
+const BARCODE_SCAN_MAX_ROWS = 100_000;
 // Mastering Slice 1: intake variants encode their own lot key (`${key}-onboarded`).
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
@@ -187,12 +194,41 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   if (isSupabaseServiceConfigured) {
     try {
       const admin = createSupabaseAdminClient();
-      const { data: lotRows } = await admin
-        .from("inventory_lots")
-        .select("id, lot_code, pos_product_key, ccrs_inventory_external_id")
-        .eq("status", "active")
-        .gt("on_hand_qty", 0)
-        .limit(5000);
+      // SLICE 5C — `.limit(5000)` cannot exceed PostgREST's 1,000-row cap
+      // (chunked-in.ts:13-14). `inventory_lots` is the largest table in the
+      // system — SLICE 3 shipped behavioural proof that 4,179 lot rows survive
+      // the cap (SLICE3_WORKPLAN.md:58) — so filtered to active-with-stock this
+      // index was silently missing every lot past row 1,000. The barcode simply
+      // was not there, so scanning that product at the register did nothing,
+      // with no error anywhere to explain why.
+      //
+      // The best-effort contract above is PRESERVED: a failed read still ships
+      // an empty index rather than breaking the menu download. What changes is
+      // that a TRUNCATED read is no longer mistaken for a successful one.
+      type LotRow = {
+        id: string;
+        lot_code: string | null;
+        pos_product_key: string | null;
+        ccrs_inventory_external_id: string | null;
+      };
+      const { rows: lotRows, verdict: lotVerdict } = await pagedAllChecked<LotRow>(
+        async (from, to) => {
+          const { data, error } = await admin
+            .from("inventory_lots")
+            .select("id, lot_code, pos_product_key, ccrs_inventory_external_id")
+            .eq("status", "active")
+            .gt("on_hand_qty", 0)
+            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) return { rows: [], ok: false };
+          return { rows: (data as LotRow[] | null) ?? [], ok: true };
+        },
+        { maxRows: BARCODE_SCAN_MAX_ROWS },
+      );
+      if (!lotVerdict.complete) {
+        console.warn(`[pos/menu] barcode index may be incomplete — ${lotVerdict.message}`);
+      }
       // Sellable = every card key PLUS every variant's own encoded lot key
       // (mastered cards' lots carry the LOT's pos_product_key, not the card
       // key — without the union their barcodes would be dropped as
@@ -202,14 +238,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         const k = lotKeyFromVariantId(p.variantId);
         if (k) sellableKeys.add(k);
       }
-      const sources: LotBarcodeSource[] = (
-        (lotRows as {
-          id: string;
-          lot_code: string | null;
-          pos_product_key: string | null;
-          ccrs_inventory_external_id: string | null;
-        }[] | null) ?? []
-      ).map((l) => ({
+      const sources: LotBarcodeSource[] = lotRows.map((l) => ({
         lotCode: l.lot_code,
         posProductKey: l.pos_product_key,
         ccrsExternalId: deriveInventoryExternalId(l),

@@ -724,14 +724,35 @@ export async function listKbBackfillManifestIdsAction(): Promise<
   }
   const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("inbound_manifests")
-    .select("id")
-    .neq("status", "rejected")
-    .order("created_at", { ascending: true })
-    .limit(1000);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, ids: ((data as { id: string }[] | null) ?? []).map((r) => r.id) };
+  // SLICE 5C — `.limit(1000)` sits EXACTLY on PostgREST's cap
+  // (chunked-in.ts:13-14). This action feeds the client panel that chunks and
+  // promotes manifests, so a silently short id list meant the panel would
+  // report a tidy "done" having never seen the manifests past row 1,000.
+  // Paged completely; an unprovable read fails loudly rather than under-
+  // reporting the work.
+  const { pagedAllChecked } = await import("@/lib/supabase/chunked-in");
+  const { rows, verdict } = await pagedAllChecked<{ id: string }>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("inbound_manifests")
+        .select("id")
+        .neq("status", "rejected")
+        .order("created_at", { ascending: true })
+        // Unique tiebreak — `created_at` is not unique.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as { id: string }[] | null) ?? [], ok: true };
+    },
+    { maxRows: 100_000 },
+  );
+  if (!verdict.complete) {
+    return {
+      ok: false,
+      error: `Could not read the full manifest list — ${verdict.message} Please try again.`,
+    };
+  }
+  return { ok: true, ids: rows.map((r) => r.id) };
 }
 
 /**

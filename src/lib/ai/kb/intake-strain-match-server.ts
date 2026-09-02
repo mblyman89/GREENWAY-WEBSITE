@@ -15,6 +15,14 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { STRAINS_RICH } from "./strains-data";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+
+/**
+ * SLICE 5C — memory ceiling for the strain scan. NOT a row cap: reaching it is
+ * REPORTED as an incomplete read (which falls back to the seed), never
+ * silently accepted.
+ */
+const STRAIN_SCAN_MAX_ROWS = 100_000;
 import {
   matchStrainToKb,
   type MatchableStrain,
@@ -32,12 +40,36 @@ async function loadActiveStrains(): Promise<MatchableStrain[]> {
   if (!isSupabaseServiceConfigured) return seed;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("kb_strains")
-      .select("slug,name,aliases,strain_type,active")
-      .eq("active", true)
-      .limit(5000);
-    if (error || !data || data.length === 0) return seed;
+    // SLICE 5C — `.limit(5000)` cannot exceed PostgREST's 1,000-row cap
+    // (chunked-in.ts:13-14). This list is the matcher's whole universe: a
+    // strain absent from it simply never matches, so intake silently failed to
+    // recognise strains past row 1,000 and quietly fell back to weaker
+    // guesses. Paged completely.
+    //
+    // The existing fall-back-to-seed contract is PRESERVED: an incomplete read
+    // returns the seed rather than a half-populated matcher, because a
+    // partial universe produces confidently WRONG matches, not merely fewer.
+    type StrainRow = {
+      slug: string;
+      name: string;
+      aliases: string[] | null;
+      strain_type: string | null;
+    };
+    const { rows: data, verdict } = await pagedAllChecked<StrainRow>(
+      async (from, to) => {
+        const { data: page, error } = await admin
+          .from("kb_strains")
+          .select("slug,name,aliases,strain_type,active")
+          .eq("active", true)
+          // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+          .order("slug", { ascending: true })
+          .range(from, to);
+        if (error) return { rows: [], ok: false };
+        return { rows: (page as StrainRow[] | null) ?? [], ok: true };
+      },
+      { maxRows: STRAIN_SCAN_MAX_ROWS },
+    );
+    if (!verdict.complete || data.length === 0) return seed;
     return data.map((r) => ({
       slug: r.slug as string,
       name: r.name as string,

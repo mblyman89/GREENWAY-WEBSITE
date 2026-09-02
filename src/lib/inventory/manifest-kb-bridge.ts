@@ -34,6 +34,14 @@ import {
   type ManifestLotFacts,
 } from "@/lib/inventory/manifest-kb-bridge-core";
 import { enrichVendorFromRawText } from "@/lib/inventory/vendor-goldminer-store";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+
+/**
+ * SLICE 5C — memory ceiling for the manifest backfill scan. NOT a row cap:
+ * reaching it is REPORTED as an incomplete read (the backfill then refuses),
+ * never silently accepted.
+ */
+const MANIFEST_SCAN_MAX_ROWS = 100_000;
 
 type LotRow = ManifestLotFacts & { id: string };
 
@@ -203,14 +211,36 @@ export async function backfillKbFromManifests(
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("inbound_manifests")
-    .select("id, status")
-    .neq("status", "rejected")
-    .order("created_at", { ascending: true })
-    .limit(1000);
-  if (error) return { ok: false, error: error.message };
-  const rows = (data as { id: string; status: string }[] | null) ?? [];
+  // SLICE 5C — `.limit(1000)` sits EXACTLY on PostgREST's cap
+  // (chunked-in.ts:13-14): the one value where the number looks deliberate but
+  // IS the ceiling. This backfill is explicitly built for the owner's
+  // historical upload of "hundreds of transfer JSONs" (see the doc comment
+  // above), so at 1,001 manifests it silently processed 1,000 and reported
+  // success — the owner had no way to learn the rest were skipped. Paged
+  // completely, and an unprovable read is reported instead of being counted as
+  // a clean run.
+  type ManifestRow = { id: string; status: string };
+  const { rows, verdict } = await pagedAllChecked<ManifestRow>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("inbound_manifests")
+        .select("id, status")
+        .neq("status", "rejected")
+        .order("created_at", { ascending: true })
+        // Unique tiebreak — `created_at` is not unique.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as ManifestRow[] | null) ?? [], ok: true };
+    },
+    { maxRows: MANIFEST_SCAN_MAX_ROWS },
+  );
+  if (!verdict.complete) {
+    return {
+      ok: false,
+      error: `Could not read the full manifest list (${verdict.message}) — refusing to run a partial backfill that would look like a completed one. Please try again.`,
+    };
+  }
 
   const result: BackfillResult = {
     manifestsProcessed: 0,

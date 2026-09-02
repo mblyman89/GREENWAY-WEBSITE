@@ -31,6 +31,13 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+
+/**
+ * SLICE 5C — memory ceiling for month-to-date AI usage scans. NOT a row cap:
+ * reaching it is REPORTED as an incomplete read, never silently accepted.
+ */
+const AI_USAGE_SCAN_MAX_ROWS = 200_000;
 
 export type AiMode = "sprint" | "maintenance";
 
@@ -122,15 +129,34 @@ export async function getBudgetStatus(): Promise<BudgetStatus> {
 
   try {
     const admin = createSupabaseAdminClient();
-    const { data } = await admin
-      .from("ai_usage")
-      .select("prompt_tokens, completion_tokens, total_tokens")
-      .gte("created_at", monthStartIso())
-      .limit(100000);
+    // SLICE 5C — `.limit(100000)` cannot exceed PostgREST's 1,000-row cap
+    // (chunked-in.ts:13-14). These rows are SUMMED into the month-to-date token
+    // and dollar spend that the budget check reads, so once the month passed
+    // 1,000 AI calls the spend was silently UNDER-reported — the budget would
+    // never trip. Paged completely.
+    type UsageRow = {
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+    };
+    const { rows: data } = await pagedAllChecked<UsageRow>(
+      async (from, to) => {
+        const { data: page, error } = await admin
+          .from("ai_usage")
+          .select("prompt_tokens, completion_tokens, total_tokens")
+          .gte("created_at", monthStartIso())
+          // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) return { rows: [], ok: false };
+        return { rows: (page as UsageRow[] | null) ?? [], ok: true };
+      },
+      { maxRows: AI_USAGE_SCAN_MAX_ROWS },
+    );
 
     let monthTokens = 0;
     let monthUsd = 0;
-    for (const r of (data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }[] | null) ?? []) {
+    for (const r of data) {
       monthTokens += r.total_tokens ?? 0;
       monthUsd += estimateUsd(r.prompt_tokens ?? 0, r.completion_tokens ?? 0);
     }

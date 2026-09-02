@@ -271,6 +271,7 @@ import { __runFactExtractionCoreTests } from "../../src/lib/inventory/fact-extra
 import { __runFactReviewCoreTests } from "../../src/lib/pos/fact-review-core";
 import { __runFactReviewBulkCoreTests } from "../../src/lib/pos/fact-review-bulk-core";
 import { __runMissingProductMasterCoreTests } from "../../src/lib/pos/missing-product-master-core";
+import { __runCompleteReadPlanCoreTests } from "../../src/lib/supabase/complete-read-plan-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
 import { __runCommitIntegrityCoreTests } from "../../src/lib/pos/commit-integrity-core";
 import { __runIntakePotencyCoreTests } from "../../src/lib/pos/intake-potency-core";
@@ -593,6 +594,7 @@ async function main() {
   __runFactReviewCoreTests();
   __runFactReviewBulkCoreTests();
   console.log(__runMissingProductMasterCoreTests());
+  console.log(__runCompleteReadPlanCoreTests());
   __runImportCommitCoreTests();
   __runCommitIntegrityCoreTests();
   console.log("commit-integrity-core self-tests: all passed");

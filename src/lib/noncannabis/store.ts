@@ -11,6 +11,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { escapeLikeWildcards } from "@/lib/supabase/postgrest-escape";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import {
   buildNonCannabisName,
   buildSku,
@@ -20,6 +21,14 @@ import {
   type NonCannabisType,
   type Gender,
 } from "@/lib/naming/noncannabis-core";
+
+/**
+ * SLICE 5C — memory ceiling for full-table scans of `noncannabis_products`.
+ * This is NOT a row cap: reaching it is REPORTED as an incomplete read (which
+ * makes the SKU generator refuse), never silently accepted — the precise
+ * mistake the old `.limit(5000)` made.
+ */
+const NONCANNABIS_SCAN_MAX_ROWS = 50_000;
 
 export type NonCannabisProduct = {
   id: string;
@@ -86,18 +95,31 @@ export async function listNonCannabisProducts(opts?: {
 }): Promise<NonCannabisProduct[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
-  let query = admin
-    .from("noncannabis_products")
-    .select("*")
-    .order("type", { ascending: true })
-    .order("name", { ascending: true })
-    .limit(2000);
-  if (opts?.status) query = query.eq("status", opts.status);
-  if (opts?.type) query = query.eq("type", opts.type);
-  // GW-021: escape LIKE wildcards so the term matches literally.
-  if (opts?.q) query = query.ilike("name", `%${escapeLikeWildcards(opts.q)}%`);
-  const { data } = await query;
-  return (data as NonCannabisProduct[] | null) ?? [];
+  // SLICE 5C — `.limit(2000)` could not exceed PostgREST's 1,000-row cap
+  // (chunked-in.ts:13-14), so the non-cannabis catalog silently stopped listing
+  // at 1,000 products. Paged completely. The secondary `.order("id")` is what
+  // makes paging deterministic: "type, name" is NOT unique, and without a
+  // unique tiebreak two pages can repeat or skip rows.
+  const { rows } = await pagedAllChecked<NonCannabisProduct>(
+    async (from, to) => {
+      let query = admin
+        .from("noncannabis_products")
+        .select("*")
+        .order("type", { ascending: true })
+        .order("name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (opts?.status) query = query.eq("status", opts.status);
+      if (opts?.type) query = query.eq("type", opts.type);
+      // GW-021: escape LIKE wildcards so the term matches literally.
+      if (opts?.q) query = query.ilike("name", `%${escapeLikeWildcards(opts.q)}%`);
+      const { data, error } = await query;
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as NonCannabisProduct[] | null) ?? [], ok: true };
+    },
+    { maxRows: NONCANNABIS_SCAN_MAX_ROWS },
+  );
+  return rows;
 }
 
 /** Fetch one product by id (for the label page). */
@@ -114,12 +136,57 @@ export async function getNonCannabisProduct(
   return (data as NonCannabisProduct | null) ?? null;
 }
 
-/** All existing SKUs (for collision-free generation). */
-export async function listExistingSkus(): Promise<Set<string>> {
-  if (!isSupabaseServiceConfigured) return new Set();
+/**
+ * All existing SKUs (for collision-free generation).
+ *
+ * SLICE 5C — this was the one read in the cap census that CORRUPTS DATA rather
+ * than merely under-reporting a number. The old body was a single
+ * `.select("sku").limit(5000)`. `.limit()` cannot raise PostgREST's
+ * `db.max_rows` ceiling of 1,000 (chunked-in.ts:13-14), so past 1,000 products
+ * the SKUs from row 1,001 onward were ABSENT from this set. Since this set is
+ * the collision guard for `nextAvailableSku()` (called by `previewSkuAndName`
+ * and therefore by `createNonCannabisProduct`), the generator would conclude an
+ * already-issued SKU was free and MINT A DUPLICATE — two physical items sharing
+ * one identifier on labels and in inventory.
+ *
+ * Now paged completely, and the completeness verdict is RETURNED rather than
+ * discarded so a caller that is about to write can refuse. There is no safe
+ * partial answer to "is this SKU taken?", so this deliberately does not offer
+ * one.
+ */
+export async function listExistingSkusChecked(): Promise<{
+  skus: Set<string>;
+  complete: boolean;
+}> {
+  if (!isSupabaseServiceConfigured) return { skus: new Set(), complete: true };
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("noncannabis_products").select("sku").limit(5000);
-  return new Set(((data as { sku: string }[] | null) ?? []).map((r) => r.sku));
+  const { rows, verdict } = await pagedAllChecked<{ sku: string | null }>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("noncannabis_products")
+        .select("sku")
+        // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as { sku: string | null }[] | null) ?? [], ok: true };
+    },
+    { maxRows: NONCANNABIS_SCAN_MAX_ROWS },
+  );
+  const skus = new Set<string>();
+  for (const r of rows) {
+    if (typeof r.sku === "string" && r.sku.length > 0) skus.add(r.sku);
+  }
+  return { skus, complete: verdict.complete };
+}
+
+/**
+ * Back-compat wrapper for read-only callers. Anything that MINTS a SKU must use
+ * `listExistingSkusChecked()` and honour `complete`.
+ */
+export async function listExistingSkus(): Promise<Set<string>> {
+  const { skus } = await listExistingSkusChecked();
+  return skus;
 }
 
 /** Generate the next SKU + preview name for a set of parts (no write). */
@@ -128,8 +195,14 @@ export async function previewSkuAndName(input: NonCannabisDraftInput): Promise<{
   name: string;
   nameOk: boolean;
   nameIssues: string[];
+  /**
+   * SLICE 5C — false when the existing-SKU read could not be proven complete.
+   * The generated `sku` is then NOT safe to write: an unseen row may already
+   * own it. `createNonCannabisProduct` refuses on this.
+   */
+  skuBaseComplete: boolean;
 }> {
-  const existing = await listExistingSkus();
+  const { skus: existing, complete: skuBaseComplete } = await listExistingSkusChecked();
   const startSeq = nextSeqForType(input.type, existing);
   const sku = nextAvailableSku(
     { type: input.type, size: input.size, color: input.color, gender: input.gender },
@@ -146,7 +219,7 @@ export async function previewSkuAndName(input: NonCannabisDraftInput): Promise<{
       color: input.color,
     });
   const v = validateNonCannabisName(name);
-  return { sku, name, nameOk: v.ok, nameIssues: v.issues };
+  return { sku, name, nameOk: v.ok, nameIssues: v.issues, skuBaseComplete };
 }
 
 /**
@@ -162,8 +235,19 @@ export async function createNonCannabisProduct(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "supabase-not-configured" };
   const admin = createSupabaseAdminClient();
 
-  const { sku, name, nameOk, nameIssues } = await previewSkuAndName(input);
+  const { sku, name, nameOk, nameIssues, skuBaseComplete } = await previewSkuAndName(input);
   if (!nameOk) return { ok: false, error: `Name invalid: ${nameIssues.join(" ")}` };
+  // SLICE 5C — refuse rather than risk a duplicate SKU. If the existing-SKU
+  // read was truncated or errored, an unseen row may already own this SKU, and
+  // a duplicate identifier on a physical product is not recoverable by a
+  // refresh. Fail CLOSED: no write, plain-English reason.
+  if (!skuBaseComplete) {
+    return {
+      ok: false,
+      error:
+        "Could not confirm the full list of existing SKUs, so a new SKU cannot be issued safely right now (it might duplicate one already in use). Please try again in a moment.",
+    };
+  }
 
   const gender = input.gender === "male" || input.gender === "female" ? input.gender : null;
   const baseRow = {
