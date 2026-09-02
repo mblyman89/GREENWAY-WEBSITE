@@ -14,6 +14,11 @@ import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-
 import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
+import {
+  LOT_GAP_DEFINITIONS,
+  parseGapFlag,
+  describeCostIncompleteness,
+} from "@/lib/inventory/lot-gap-core";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
 import { receivedDateFlagMessage } from "@/lib/inventory/received-date-core";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
@@ -75,6 +80,14 @@ export default async function InventoryPage({
      * orange banner links to — the owner's queue for adding real dates.
      */
     needsReceivedDate?: string;
+    /**
+     * SLICE 7: the enrichment-gap worklist knobs reached from "What's missing".
+     * Each isolates exactly the lots its badge counts.
+     */
+    missingProductLink?: string;
+    emptyActive?: string;
+    missingExpiry?: string;
+    unknownCost?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -99,6 +112,12 @@ export default async function InventoryPage({
   // on this page. `undefined` (not `false`) so the store never emits a
   // pointless `received_on is not null` predicate when the flag is absent.
   const needsReceivedDate = sp.needsReceivedDate === "1" ? true : undefined;
+  // SLICE 7: gather whichever enrichment-gap knobs are switched on. Only the
+  // literal "1" enables one (parseGapFlag), so junk params silently mean
+  // "filter off" exactly like every other knob on this page.
+  const activeGaps = LOT_GAP_DEFINITIONS.filter(
+    (def) => parseGapFlag(sp[def.param as keyof typeof sp] as string | undefined) === true,
+  ).map((def) => def.key);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -127,6 +146,7 @@ export default async function InventoryPage({
     expiringWithinDays,
     vendorId,
     needsReceivedDate,
+    gaps: activeGaps,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, stats, intel] = await Promise.all([
@@ -243,12 +263,28 @@ export default async function InventoryPage({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total lots" value={stats.total} accent="muted" />
           <StatCard label="Active lots" value={stats.active} accent="green" />
+          {/*
+            SLICE 7 — an honest on-hand total. Lots with no unit cost on file
+            contribute 0 to this figure (store.ts skips them), so the number was
+            understated by an unknown amount with nothing on screen to say so.
+            That is the remaining half of the owner's original "wrong on-hand
+            cost" report; the other half was the 1,000-row truncation.
+          */}
           <StatCard
             label="On-hand cost"
             value={fmtMoney(stats.onHandCostMinor)}
-            hint="On-hand qty × unit cost"
-            accent="gold"
+            hint={
+              describeCostIncompleteness(stats.costSkippedUnknown) ?? "On-hand qty × unit cost"
+            }
+            accent={stats.costSkippedUnknown > 0 ? "orange" : "gold"}
           />
+          {/*
+            SLICE 7 — `missingExpiry` joins this tile. Before this slice a lot
+            with NO expiry date was counted by nothing: the stats loop read
+            `if (r.expires_on)`, so an unknown expiry fell through both the
+            expired and expiring-soon branches and never reached this number.
+            Unknown is raised, never treated as fine (the SLICE 2 doctrine).
+          */}
           <StatCard
             label="Needs attention"
             value={
@@ -256,11 +292,17 @@ export default async function InventoryPage({
               stats.quarantine +
               stats.expired +
               stats.expiringSoon +
-              stats.missingCoa
+              stats.missingCoa +
+              stats.missingExpiry
             }
             hint="Recalls, expiry, quarantine, missing COA"
             accent={
-              stats.recalled + stats.quarantine + stats.expired + stats.missingCoa > 0
+              stats.recalled +
+                stats.quarantine +
+                stats.expired +
+                stats.missingCoa +
+                stats.missingExpiry >
+              0
                 ? "orange"
                 : "muted"
             }

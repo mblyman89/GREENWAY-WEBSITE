@@ -12,6 +12,11 @@ import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import { pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificToday, addPacificDays } from "@/lib/reports/timezone";
 import type { ReceivedDateLot } from "@/lib/inventory/received-date-core";
+import {
+  countLotGaps,
+  computeOnHandCost,
+  type LotGapKey,
+} from "@/lib/inventory/lot-gap-core";
 import type { SortColumn } from "@/lib/admin/list-filter-core";
 import type {
   InboundManifest,
@@ -78,6 +83,12 @@ export async function listLotsPaged(
      * reached from the "Received dates missing" banner.
      */
     needsReceivedDate?: boolean;
+    /**
+     * SLICE 7 — the enrichment-gap worklist knobs. Each one isolates exactly
+     * the rows its counter counts (see lot-gap-core.ts), so the "Fix →" link
+     * and the number beside it can never disagree.
+     */
+    gaps?: readonly LotGapKey[];
   },
 ): Promise<{ rows: LotWithDetail[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
@@ -107,6 +118,28 @@ export async function listLotsPaged(
     // Mirrors the pure core's CLOSED_STATUSES and computeInventoryStats(), so
     // the banner's count and this list can never disagree.
     query = query.is("received_on", null).neq("status", "destroyed");
+  }
+  // SLICE 7 — enrichment gap filters. Each predicate MIRRORS the pure core's
+  // `matches()` for that gap, including its edge cases:
+  //   * pos_product_key: the counter uses `!key`, so the EMPTY STRING counts
+  //     too. A bare `.is(null)` would under-select and the list would show
+  //     fewer rows than the badge promised — the exact SLICE 6A defect.
+  //   * on_hand_qty: `not null default 0`, so `<= 0` is the real case and it
+  //     also catches negative corrections.
+  //   * expires_on / unit_cost_minor_units: NULL is the unknown.
+  // Every gap is additionally scoped to active, matching the counter's
+  // `if (r.status === "active")` guard.
+  for (const key of opts.gaps ?? []) {
+    query = query.eq("status", "active");
+    if (key === "missingProductLink") {
+      query = query.or("pos_product_key.is.null,pos_product_key.eq.");
+    } else if (key === "emptyActive") {
+      query = query.lte("on_hand_qty", 0);
+    } else if (key === "missingExpiry") {
+      query = query.is("expires_on", null);
+    } else if (key === "unknownCost") {
+      query = query.is("unit_cost_minor_units", null);
+    }
   }
   if (opts.isSample !== undefined) query = query.eq("is_sample", opts.isSample);
   if (opts.isMedical !== undefined) query = query.eq("is_medical", opts.isMedical);
@@ -227,8 +260,26 @@ export type InventoryStats = {
   expiringSoon: number;
   /** Active lots already past their expiry date. */
   expired: number;
+  /**
+   * SLICE 7 — active lots with NO expiry date on file. Previously counted by
+   * NOTHING: the stats loop read `if (r.expires_on)`, so a lot with an unknown
+   * expiry fell through both the `expired` and `expiringSoon` branches and was
+   * invisible to the "Needs attention" tile. NULL means UNKNOWN, never "fine".
+   */
+  missingExpiry: number;
+  /**
+   * SLICE 7 — active lots with NO unit cost on file. These silently contribute
+   * 0 to `onHandCostMinor`, which is the remaining half of the owner's original
+   * "wrong on-hand cost" report (the other half was the 1,000-row truncation).
+   */
+  unknownCost: number;
   /** Total inventory cost at hand in MINOR UNITS (sum of on_hand * unit_cost). */
   onHandCostMinor: number;
+  /**
+   * SLICE 7 — how many IN-STOCK lots were skipped from `onHandCostMinor`
+   * because their unit cost is unknown. `0` means the total is complete.
+   */
+  costSkippedUnknown: number;
   /**
    * SLICE 2 — lots with NO received date on file (excluding destroyed lots).
    * NULL received_on means UNKNOWN, never "today" (migration 0214, following
@@ -254,7 +305,10 @@ export async function computeInventoryStats(): Promise<InventoryStats> {
     missingProductLink: 0,
     expiringSoon: 0,
     expired: 0,
+    missingExpiry: 0,
+    unknownCost: 0,
     onHandCostMinor: 0,
+    costSkippedUnknown: 0,
     missingReceivedDate: 0,
     missingReceivedDateWithStock: 0,
   };
@@ -328,9 +382,8 @@ export async function computeInventoryStats(): Promise<InventoryStats> {
         break;
     }
 
-    if (r.on_hand_qty != null && r.unit_cost_minor_units != null) {
-      stats.onHandCostMinor += Math.round(r.on_hand_qty * r.unit_cost_minor_units);
-    }
+    // SLICE 7: on-hand cost is summed by computeOnHandCost() below, which also
+    // reports the lots it had to skip. Summing here as well would double-count.
 
     // SLICE 2: the received-date flag. Destroyed lots are excluded — they are
     // out of inventory and no longer reported, so chasing their paperwork
@@ -344,15 +397,29 @@ export async function computeInventoryStats(): Promise<InventoryStats> {
     }
 
     if (r.status === "active") {
-      if (!r.on_hand_qty || r.on_hand_qty <= 0) stats.emptyActive += 1;
       if (!r.lab_result_id) stats.missingCoa += 1;
-      if (!r.pos_product_key) stats.missingProductLink += 1;
       if (r.expires_on) {
         if (r.expires_on < today) stats.expired += 1;
         else if (r.expires_on <= soon) stats.expiringSoon += 1;
       }
     }
   }
+
+  // SLICE 7: the enrichment gaps are counted by the SHARED pure core, which is
+  // the same definition the list filters apply. Hand-writing the predicate here
+  // a second time is exactly how SLICE 6A's "Fix →" link came to disagree with
+  // the number printed beside it.
+  const gapCounts = countLotGaps(rows);
+  stats.emptyActive = gapCounts.emptyActive;
+  stats.missingProductLink = gapCounts.missingProductLink;
+  stats.missingExpiry = gapCounts.missingExpiry;
+  stats.unknownCost = gapCounts.unknownCost;
+
+  // SLICE 7: the on-hand total now reports what it could NOT include, instead
+  // of printing a confident figure understated by every uncosted lot.
+  const cost = computeOnHandCost(rows);
+  stats.onHandCostMinor = cost.totalMinor;
+  stats.costSkippedUnknown = cost.skippedUnknownCost;
 
   return stats;
 }

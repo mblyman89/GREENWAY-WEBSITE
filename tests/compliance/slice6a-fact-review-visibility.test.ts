@@ -299,8 +299,13 @@ function statsFixture(over: Partial<InventoryStats> = {}): InventoryStats {
     missingProductLink: 0,
     expiringSoon: 0,
     expired: 0,
+    // SLICE 7 added these counters; default them off so this fixture keeps
+    // testing exactly what it tested before.
+    missingExpiry: 0,
+    unknownCost: 0,
     // Money in MINOR UNITS: the owner's screenshot showed $175,024.00.
     onHandCostMinor: 17_502_400,
+    costSkippedUnknown: 0,
     missingReceivedDate: 0,
     missingReceivedDateWithStock: 0,
     ...over,
@@ -339,12 +344,37 @@ describe("SLICE 6A — every 'Fix →' must actually narrow the list", () => {
     }
   });
 
-  it("gaps with no available filter are reported WITHOUT a dead button", () => {
+  /**
+   * SUPERSEDED BY SLICE 7 — recorded, not deleted.
+   *
+   * SLICE 6A asserted these two gaps carried NO href, because the inventory
+   * list had no filter that could isolate them and a link to `?status=active`
+   * would have narrowed nothing. That was the honest stopgap, and SLICE 6A
+   * named the real filters as a follow-up.
+   *
+   * SLICE 7 built those filters (lot-gap-core.ts + the `missingProductLink` /
+   * `emptyActive` knobs on listLotsPaged), so the links are now REAL. The
+   * assertion is inverted deliberately; the ORIGINAL intent it protected — no
+   * gap may advertise a "Fix →" that fails to narrow — is preserved above in
+   * "no gap offers a link that filters nothing" and is enforced for every gap
+   * by the SLICE 7 equivalence tests.
+   */
+  it("SLICE 7: the two formerly-dead gaps now carry links that really narrow", () => {
     const gaps = inventoryGapInsights(statsFixture({ missingProductLink: 9, emptyActive: 3 }));
-    expect(gaps.find((g) => g.key === "missingProductLink")!.href).toBeUndefined();
-    expect(gaps.find((g) => g.key === "emptyActive")!.href).toBeUndefined();
-    // ...but the counts are still surfaced, never hidden.
-    expect(gaps.find((g) => g.key === "missingProductLink")!.count).toBe(9);
-    expect(gaps.find((g) => g.key === "emptyActive")!.count).toBe(3);
+    const link = gaps.find((g) => g.key === "missingProductLink")!;
+    const empty = gaps.find((g) => g.key === "emptyActive")!;
+
+    // The counts are still surfaced, never hidden.
+    expect(link.count).toBe(9);
+    expect(empty.count).toBe(3);
+
+    // ...and each now narrows by a knob BEYOND status, which is the whole
+    // point. A bare `?status=active` is the defect SLICE 6A found.
+    expect(link.href).toBeDefined();
+    expect(empty.href).toBeDefined();
+    expect(link.href).not.toBe("/admin/inventory?status=active");
+    expect(empty.href).not.toBe("/admin/inventory?status=active");
+    expect(link.href).toContain("missingProductLink=1");
+    expect(empty.href).toContain("emptyActive=1");
   });
 });

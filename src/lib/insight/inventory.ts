@@ -9,6 +9,29 @@
  * COA (no traceability), and lots not linked to the catalog.
  */
 import type { GapInsight } from "@/lib/insight/products";
+import {
+  LOT_GAP_DEFINITIONS,
+  lotGapHref,
+  type LotGapKey,
+} from "@/lib/inventory/lot-gap-core";
+
+/**
+ * Read a gap's count off InventoryStats. Written as an exhaustive switch so
+ * adding a gap to the pure core without wiring its counter is a COMPILE error,
+ * not a silently-zero row the owner never sees.
+ */
+function gapCountFor(stats: InventoryStats, key: LotGapKey): number {
+  switch (key) {
+    case "missingProductLink":
+      return stats.missingProductLink;
+    case "emptyActive":
+      return stats.emptyActive;
+    case "missingExpiry":
+      return stats.missingExpiry;
+    case "unknownCost":
+      return stats.unknownCost;
+  }
+}
 import type { InventoryStats } from "@/lib/inventory/store";
 import { EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
 
@@ -66,31 +89,31 @@ export function inventoryGapInsights(stats: InventoryStats): GapInsight[] {
       weight: 2,
     });
   }
-  // SLICE 6A: these two gaps have NO filter on the inventory list that can
-  // isolate them (`pos_product_key is null` and `on_hand_qty = 0` are not
-  // exposed as query knobs). They previously linked to `?status=active`, which
-  // on a store where every lot is active narrowed nothing at all -- a "Fix →"
-  // that reloaded the same page and looked broken.
+  // SLICE 7 resolves the follow-up SLICE 6A named.
   //
-  // Rather than ship a link that pretends to filter, they are reported WITHOUT
-  // an href. MissingInsight only renders the "Fix →" affordance when `href` is
-  // set, so the count still shows and no dead button is offered. Giving these
-  // real filters is a follow-up, not something to fake here.
-  if (stats.missingProductLink > 0) {
-    gaps.push({
-      key: "missingProductLink",
-      label: "active not linked to a catalog product",
-      count: stats.missingProductLink,
-      weight: 1,
-    });
-  }
-  if (stats.emptyActive > 0) {
-    gaps.push({
-      key: "emptyActive",
-      label: "active but out of stock (0 on hand)",
-      count: stats.emptyActive,
-      weight: 1,
-    });
+  // SLICE 6A left these gaps WITHOUT an href, because the inventory list had no
+  // filter that could isolate them: linking to `?status=active` on a store
+  // where every lot is active narrowed nothing, so the "Fix →" reloaded the
+  // same page and looked broken. Rather than fake it, the counts were shown
+  // with no button and the real filters were called a follow-up.
+  //
+  // Those filters now exist (lot-gap-core.ts + listLotsPaged), so the links are
+  // real. Both the count and the link are derived from the SAME pure
+  // definition, so they cannot drift apart again.
+  //
+  // `missingExpiry` and `unknownCost` are NEW in SLICE 7: before this slice
+  // nothing counted a lot whose expiry date or unit cost was simply unknown.
+  for (const def of LOT_GAP_DEFINITIONS) {
+    const count = gapCountFor(stats, def.key);
+    if (count > 0) {
+      gaps.push({
+        key: def.key,
+        label: def.label,
+        count,
+        href: lotGapHref(def.key),
+        weight: def.weight,
+      });
+    }
   }
 
   return gaps.sort((a, b) => b.weight - a.weight || b.count - a.count);
