@@ -447,6 +447,15 @@ selected.
 
 1. In the device menu at the top, choose **Any iOS Device (arm64)** — *not*
    your iPad, and *not* a simulator. Archive is greyed out otherwise.
+
+   > ⚠️ **This setting is ONLY for archiving, in this step.** If you leave it
+   > on **Any iOS Device (arm64)** and press ▶ Play, the build fails with
+   > *"A build only device cannot be used to run this target"* — and, because
+   > Xcode then has no real device registered, it also fails signing with
+   > *"Your team has no devices from which to generate a provisioning
+   > profile."* Both errors are the same cause. Switch the destination back to
+   > **your iPad by name** before you press Play again. See
+   > *Troubleshooting the build* at the end of this document.
 2. Menu bar → **Product** → **Archive**
 3. Wait. Five to ten minutes is normal.
 
@@ -555,3 +564,88 @@ And what was **not** verified, stated plainly:
   real compile is Step 5 on your Mac.
 - **Nothing has been printed on real paper.** No printer here either.
 - The printer settings screen does not exist yet (Part 4).
+
+---
+
+# Troubleshooting the build
+
+## "A build only device cannot be used to run this target"
+## + "Your team has no devices from which to generate a provisioning profile"
+
+**These two errors are one problem, and the fix takes five seconds.**
+
+They are **not** a code problem, **not** an Apple Developer account problem, and
+**not** a problem with your signing setup. Nothing is wrong with your account,
+your team, or the app. Your team shows correctly as *LYMAN'S MARIJUANA L.L.C.*
+and *Automatically manage signing* is ticked, which is exactly right.
+
+**The cause:** the destination at the top of the Xcode window is set to
+**Any iOS Device (arm64)**.
+
+That is not a real device. It is a placeholder that means *"build something
+generic for later distribution"* — it is what you select to make **Archive**
+work in Step 17. You cannot **run** on it, because there is no device there to
+run on. Hence *"a build only device cannot be used to run this target."*
+
+The signing error is a **knock-on effect of the same thing**, not a second
+fault. With no real device selected, Xcode has no device to write into a
+development provisioning profile, so it asks Apple for a profile covering zero
+devices and Apple declines. That is what *"your team has no devices from which
+to generate a provisioning profile"* means. It is describing the empty
+destination, not a broken account.
+
+### The fix
+
+1. At the **top centre** of Xcode, click where it says **Any iOS Device (arm64)**.
+2. In the dropdown, under a heading like **iOS Device**, choose **your iPad by
+   name**.
+3. Press **▶ Play**.
+
+Both errors clear together. You do not need to press *Try Again*, sign in
+again, register a device by hand at developer.apple.com, or change the bundle
+identifier.
+
+### If your iPad is not in that dropdown
+
+Work down this list in order — the first two are the usual answer:
+
+1. **Unlock the iPad** and leave it on the Home screen. A locked iPad often
+   does not appear.
+2. **Cable.** Use a real data cable. A charge-only cable is the single most
+   common cause, and it looks identical to a good one.
+3. **Trust.** Unplug, plug back in, and on the iPad tap **Trust This Computer**,
+   then enter the passcode.
+4. **Developer Mode** must be on: iPad **Settings ▸ Privacy & Security ▸
+   Developer Mode ▸ On**, then restart the iPad. This only appears after the
+   iPad has been plugged into a Mac running Xcode. (SLICE 9 doc, Step 9.)
+5. **Wait 30 seconds** after plugging in. Xcode has to prepare the device the
+   first time, and it is silent while it does.
+
+### Why my instructions sent you here — my fault, not yours
+
+Step 17 of this document tells you to select **Any iOS Device (arm64)**, and it
+is right to, because Archive genuinely requires it. What Step 17 did **not**
+say is that the setting must be changed **back** to your iPad before pressing
+Play. If you had been anywhere near Step 17, or had it selected for any other
+reason, this failure was the guaranteed next thing to happen — and the signing
+error on top of it makes it look far more serious than it is.
+
+I have added a warning to Step 17 so the next person through does not hit it.
+
+### What this error does NOT mean
+
+Worth saying plainly, because the wording is alarming:
+
+- It does **not** mean your Apple Developer account is wrong or unapproved.
+- It does **not** mean the £99/$99 membership has a problem.
+- It does **not** mean you need to add your iPad's UDID manually anywhere.
+- It does **not** mean the Swift printer plugin failed to compile.
+
+On that last point: **this failure happened before the compiler ran.** So it
+tells us nothing yet about whether my printer code builds. Once you select your
+iPad and press Play, watch for what comes next:
+
+- **"Build Succeeded"** then the app launches on the iPad → the Swift plugin
+  compiled. Carry on to Part 2 / Part 3.
+- **Red errors naming a `.swift` file** → that is the real first compile of my
+  plugin. Screenshot them and send them to me. Do not fix them yourself.
