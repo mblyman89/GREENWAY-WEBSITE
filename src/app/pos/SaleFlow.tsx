@@ -128,9 +128,9 @@ import { pacificDayKey } from "@/lib/reports/timezone";
 import { SAW_LOGIN_URL, sanitizeSawUsername } from "@/lib/pos/saw-prefill-core";
 import {
   buildPosReceiptHtml,
-  buildPassPrntUrl,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
+import { getPairedPrinterIdentifier, printReceipt } from "@/lib/pos/star-printer";
 import {
   normalizePosReceiptConfig,
   receiptAddressLines,
@@ -950,21 +950,48 @@ function EmailReceiptPanel({
 // ---------------------------------------------------------------------------
 
 /**
- * Print via the Star PassPRNT iOS app (App Store) on the paired TSP100IIIBi:
- * navigating to the `starpassprnt://` URL opens PassPRNT, which prints the
- * HTML at 576 dots, kicks the drawer, then returns to this page via `back=`.
- * The browser fallback opens the SAME HTML in a new window and calls
- * window.print() — receipts can never differ between the two paths.
- * Reprint is just tapping again: the snapshot is immutable.
+ * Print the receipt WITHOUT leaving the register (SLICE 10).
+ *
+ * This used to navigate to a `starpassprnt://` URL, which made iOS switch to
+ * Star's PassPRNT app and then try to bounce back. That is what threw the
+ * budtender out of the app mid-sale. It now calls the StarXpand plugin over
+ * Bluetooth from inside this process, and only falls back to the old
+ * app-switch when the native path genuinely is not available (a web build, or
+ * an iPad whose printer has not been paired yet) - in which case the note
+ * below tells the budtender exactly why the screen changed.
+ *
+ * Both paths render the SAME HTML, so a receipt cannot differ by transport.
+ * Reprint is just tapping again: the snapshot is immutable, and a reprint
+ * never opens the drawer.
  */
 function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
-  const printStar = () => {
-    const html = buildPosReceiptHtml(receipt);
-    // Return to the register page itself; PassPRNT appends its result codes.
-    const backUrl = window.location.origin + window.location.pathname;
-    window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: true });
+  const printStar = async () => {
+    if (printing) return;
+    setPrinting(true);
+    setFallbackNote(null);
+    try {
+      const html = buildPosReceiptHtml(receipt);
+      const outcome = await printReceipt(
+        { html, openDrawer: true, jobKind: "sale" },
+        getPairedPrinterIdentifier(),
+      );
+      // Success still gets a note when a fallback was used, so an app switch is
+      // never silent. The sale is already saved either way.
+      if (outcome.ok) {
+        setFallbackNote(outcome.usedFallback ? outcome.message : null);
+      } else {
+        setFallbackNote(
+          outcome.drawerMayBeShut
+            ? `${outcome.message} The drawer did not open — use No Sale if you need it.`
+            : outcome.message,
+        );
+      }
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const printBrowser = () => {
@@ -986,9 +1013,10 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
         <button
           type="button"
           onClick={printStar}
-          className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-8 py-4 text-lg font-bold text-[var(--pos-accent-ink)]"
+          disabled={printing}
+          className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-8 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-60"
         >
-          Print receipt
+          {printing ? "Printing…" : "Print receipt"}
         </button>
         <button
           type="button"
@@ -999,8 +1027,9 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
         </button>
       </div>
       <p className="max-w-md text-center text-xs text-[var(--pos-text-faint)]">
-        “Print receipt” opens the Star PassPRNT app (paired Bluetooth printer) and pops the drawer.
-        Tap again to reprint. Use “Browser print” if PassPRNT isn’t installed on this device.
+        “Print receipt” prints on the counter printer and pops the drawer without leaving this
+        screen. Tap again to reprint. Use “Browser print” on a laptop, or if the counter printer
+        is unavailable — the sale is already saved either way.
       </p>
       {fallbackNote ? <p className="text-xs text-[var(--pos-warn)]">{fallbackNote}</p> : null}
     </div>

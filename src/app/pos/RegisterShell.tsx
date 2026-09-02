@@ -35,11 +35,12 @@ import type { PosEventType } from "@/lib/pos/sale-event-core";
 import type { PosCartEntry, PosMenuBundle } from "@/lib/pos/sale-flow-core";
 import {
   buildNoSaleSlipHtml,
-  buildPassPrntUrl,
   buildPosReceiptHtml,
   receiptNumber,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
+import { getPairedPrinterIdentifier, printReceipt } from "@/lib/pos/star-printer";
+import type { StarPrintJob } from "@/lib/pos/star-printer-core";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
@@ -132,6 +133,36 @@ const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the la
 // serialize/parse validators so the key and the shape can never drift apart.
 
 const IDLE_LOCK_MS = 2 * 60 * 1000; // auto-lock after 2 minutes of inactivity
+
+/**
+ * SLICE 10 — print a slip without leaving the register.
+ *
+ * Every one of these paths used to set `window.location.href` to a
+ * `starpassprnt://` URL, which made iOS switch to Star's PassPRNT app and then
+ * try to navigate back. The owner's instruction was that the budtender must
+ * never be thrown out of the app, so they now go through the StarXpand bridge,
+ * which prints over Bluetooth in-process and only falls back to the app switch
+ * when there is genuinely no native path.
+ *
+ * `openDrawer` is passed through UNCHANGED at every call site — the drawer
+ * rules (reprints and reports never pop it; voids, refunds, pickups and
+ * no-sales do) are deliberate and audited, so this helper does not get an
+ * opinion about them.
+ *
+ * Returns a message to show, or null when everything worked silently. Printing
+ * never blocks: the sale, void or refund is already recorded before this runs.
+ */
+async function printSlip(
+  html: string,
+  openDrawer: boolean,
+  jobKind: StarPrintJob["jobKind"],
+): Promise<string | null> {
+  const outcome = await printReceipt({ html, openDrawer, jobKind }, getPairedPrinterIdentifier());
+  if (outcome.ok) return outcome.usedFallback ? outcome.message : null;
+  return outcome.drawerMayBeShut
+    ? `${outcome.message} The drawer did not open.`
+    : outcome.message;
+}
 
 type DeviceCreds = { deviceId: string; deviceKey: string; name: string; registerId: string | null };
 
@@ -1493,9 +1524,10 @@ export function RegisterShell({
           lastReceipt
             ? () => {
                 const html = buildPosReceiptHtml(lastReceipt);
-                const backUrl = window.location.origin + window.location.pathname;
                 // Reprint NEVER pops the drawer — no cash moves on a reprint.
-                window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: false });
+                void printSlip(html, false, "reprint").then((msg) => {
+                  if (msg) setBanner(msg);
+                });
               }
             : undefined
         }
@@ -1560,8 +1592,9 @@ export function RegisterShell({
               headerText: bundleReceipt?.headerText ?? null,
               addressLines: bundleReceipt ? receiptAddressLines(bundleReceipt) : [],
             });
-            const backUrl = window.location.origin + window.location.pathname;
-            window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: true });
+            void printSlip(html, true, "no_sale").then((msg) => {
+              if (msg) setBanner(msg);
+            });
           }}
         />
       ) : null}
@@ -1584,8 +1617,9 @@ export function RegisterShell({
             setVoidOpen(false);
             setBanner(message);
             // Print the void slip; the drawer POPS — the cash goes back out.
-            const backUrl = window.location.origin + window.location.pathname;
-            window.location.href = buildPassPrntUrl(slipHtml, { backUrl, openDrawer: true });
+            void printSlip(slipHtml, true, "refund").then((msg) => {
+              if (msg) setBanner(msg);
+            });
           }}
         />
       ) : null}
@@ -1598,8 +1632,9 @@ export function RegisterShell({
             setReturnsOpen(false);
             setBanner(message);
             // Print the refund receipt; the drawer POPS — the refund cash goes out.
-            const backUrl = window.location.origin + window.location.pathname;
-            window.location.href = buildPassPrntUrl(receiptHtml, { backUrl, openDrawer: true });
+            void printSlip(receiptHtml, true, "refund").then((msg) => {
+              if (msg) setBanner(msg);
+            });
           }}
         />
       ) : null}
@@ -1614,8 +1649,9 @@ export function RegisterShell({
             setBanner(message);
             setPickupCount((c) => (typeof c === "number" && c > 0 ? c - 1 : c));
             // Print the pickup receipt; the drawer POPS — cash just came in.
-            const backUrl = window.location.origin + window.location.pathname;
-            window.location.href = buildPassPrntUrl(receiptHtml, { backUrl, openDrawer: true });
+            void printSlip(receiptHtml, true, "sale").then((msg) => {
+              if (msg) setBanner(msg);
+            });
           }}
           onLoaded={(loaded) => {
             // AM-D2 — the order is NOT superseded on load; it stays active and
@@ -3765,10 +3801,15 @@ function DayReportModal({
         headerText: receiptConfig?.headerText ?? null,
         addressLines: receiptConfig ? receiptAddressLines(receiptConfig) : [],
       });
+      // A report NEVER pops the drawer. Awaited rather than fired and
+      // forgotten, so a printer problem is shown in this modal instead of
+      // being lost when it closes.
+      const printNote = await printSlip(html, false, "reprint");
+      if (printNote) {
+        setError(printNote);
+        return;
+      }
       onClose();
-      const backUrl = window.location.origin + window.location.pathname;
-      // A report NEVER pops the drawer.
-      window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: false });
     } catch {
       setError("Could not reach the server — try again.");
     } finally {

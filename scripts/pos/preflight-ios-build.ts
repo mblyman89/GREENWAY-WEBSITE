@@ -31,6 +31,7 @@ import {
   describeEncryptionDeclaration,
   type EncryptionDeclaration,
 } from "../../src/lib/pos/ios-build-config-core";
+import { auditStarPlist, STAR_EA_PROTOCOL } from "../../src/lib/pos/star-printer-core";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const INFO_PLIST = path.join(repoRoot, "ios", "App", "App", "Info.plist");
@@ -51,6 +52,28 @@ function readRequiredCapabilities(xml: string): string[] | null {
   );
   if (!block) return null;
   return [...block[1].matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1].trim());
+}
+
+/**
+ * Read `UISupportedExternalAccessoryProtocols`.
+ *
+ * Returns null when the key is absent, which is a DIFFERENT and worse state
+ * than an empty array, so the two are not collapsed.
+ */
+function readAccessoryProtocols(xml: string): string[] | null {
+  const block = xml.match(
+    /<key>UISupportedExternalAccessoryProtocols<\/key>\s*<array>([\s\S]*?)<\/array>/,
+  );
+  if (!block) return null;
+  return [...block[1].matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1].trim());
+}
+
+/** Read `NSBluetoothAlwaysUsageDescription`, or null when absent. */
+function readBluetoothUsage(xml: string): string | null {
+  const m = xml.match(
+    /<key>NSBluetoothAlwaysUsageDescription<\/key>\s*<string>([^<]*)<\/string>/,
+  );
+  return m ? m[1] : null;
 }
 
 /** Read the export-compliance answer, distinguishing "false" from "absent". */
@@ -112,6 +135,18 @@ function main(): void {
   } else {
     console.log("  FAIL export compliance");
     problems.push(encryptionText);
+  }
+
+  // ── 4. can the app reach the counter printer at all? ──────────────────────
+  const plistProblems = auditStarPlist({
+    externalAccessoryProtocols: readAccessoryProtocols(xml),
+    bluetoothUsageDescription: readBluetoothUsage(xml),
+  });
+  if (plistProblems.length === 0) {
+    console.log(`  OK   receipt printer: ${STAR_EA_PROTOCOL} declared, Bluetooth explained`);
+  } else {
+    console.log("  FAIL receipt printer");
+    for (const p of plistProblems) problems.push(p.detail);
   }
 
   // ── verdict ──────────────────────────────────────────────────────────────
