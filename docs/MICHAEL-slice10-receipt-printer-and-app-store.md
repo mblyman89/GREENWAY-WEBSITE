@@ -681,3 +681,142 @@ iPad and press Play, watch for what comes next:
   compiled. Carry on to Part 2 / Part 3.
 - **Red errors naming a `.swift` file** → that is the real first compile of my
   plugin. Screenshot them and send them to me. Do not fix them yourself.
+
+---
+
+# Troubleshooting: "No profiles for 'com.greenwaymarijuana.register' were found"
+
+If Cmd-B fails with **both** of these:
+
+```
+No profiles for 'com.greenwaymarijuana.register' were found
+Xcode couldn't find any iOS App Development provisioning profiles
+matching 'com.greenwaymarijuana.register'.
+```
+
+```
+Communication with Apple failed
+Your team has no devices from which to generate a provisioning profile.
+Connect a device to use or manually add device IDs in Certificates,
+Identifiers & Profiles.
+```
+
+...then this section is for you. **This is not a code problem.** Nothing is
+wrong with the app, the printer SDK, or the Swift plugin. This is Apple's
+code-signing paperwork, and it has to be done once per Apple ID.
+
+## What is actually going on
+
+Apple will not let *any* app run on *any* real iPad unless Apple has personally
+blessed that exact combination of:
+
+1. **A developer identity** — proof of who you are (your Apple ID / team)
+2. **An App ID** — the app's unique name, `com.greenwaymarijuana.register`
+3. **A registered device** — your specific iPad, by its hardware serial (UDID)
+
+Those three get bundled into a **provisioning profile**. Xcode's "Automatic
+signing" will create that profile *for* you — but it cannot, because right now
+Xcode does not know who your team is. The project file has **no
+`DEVELOPMENT_TEAM` set at all**. I checked; the setting does not appear
+anywhere in the project.
+
+The second error is a direct consequence of the first. Apple is saying "your
+team has no devices" because Xcode has not yet told Apple which team you are,
+so it is looking at an empty team.
+
+**Both errors are one missing setting.** Fix it once and both disappear.
+
+## Fix it — click by click
+
+### Step A — Make sure your Apple ID is in Xcode
+
+1. Xcode menu bar → **Xcode** → **Settings…** (older Xcode: *Preferences…*)
+2. Click the **Accounts** tab at the top.
+3. Look at the left-hand list. Is your Apple ID there?
+   - **Yes** → good, close this window, go to Step B.
+   - **No** → click the **+** at the bottom left → choose **Apple ID** →
+     **Continue** → sign in with the Apple ID that has the $99 Apple Developer
+     membership. Approve the two-factor prompt on your iPhone or iPad.
+4. Click your Apple ID in the list. On the right you should see a team —
+   likely **Michael Lyman (Individual)** or your business name. If you see a
+   team listed, you are good.
+
+Close Settings.
+
+### Step B — Tell the project which team to use
+
+**This is the actual fix.**
+
+1. In the left sidebar of Xcode, click the blue **App** icon at the very top.
+2. In the middle panel, under **TARGETS**, click **App**.
+   (Not the one under PROJECT — the one under **TARGETS**.)
+3. Click the **Signing & Capabilities** tab along the top.
+   (It is right next to *General*, which is the tab you were just on.)
+4. Make sure **Automatically manage signing** is **checked** ✅
+5. Find the **Team** dropdown. It almost certainly says **None**.
+6. Click it and select your team — **Michael Lyman (Individual)** or whatever
+   your developer account is named.
+
+Now watch that panel for about 10–30 seconds. Xcode talks to Apple, registers
+your iPad, creates the App ID, and generates the profile automatically. The red
+error text in that panel should replace itself with a line reading something
+like *"Provisioning Profile: Xcode Managed Profile."*
+
+### Step C — Your iPad must be plugged in and trusted
+
+The second error — *"your team has no devices"* — means Apple has never seen
+your iPad. Xcode registers it automatically, but **only if the iPad is
+connected and trusted at that moment.**
+
+1. Keep the iPad plugged into the MacBook with the cable.
+2. Unlock the iPad — actually enter the passcode so you are on the home screen.
+3. If the iPad shows **"Trust This Computer?"**, tap **Trust** and enter the
+   passcode.
+4. At the top of the Xcode window, click the destination name and select
+   **your iPad by name**.
+
+   ⚠️ Your screenshot showed this set to **"Any iOS Device (arm64)"** — that
+   is a placeholder, not a real device, and it is part of why Apple says you
+   have no devices. **Change it to your iPad by name.** See the previous
+   troubleshooting section for the full explanation of that trap.
+
+5. Go back to **Signing & Capabilities** and confirm the errors are gone. If
+   they are still showing, toggle **Automatically manage signing** off and
+   back on to force Xcode to retry.
+
+### Step D — Build
+
+Press **Cmd-B**.
+
+## If it still fails
+
+**"Failed to register bundle identifier"** — the ID
+`com.greenwaymarijuana.register` is already taken by another Apple account. Tell
+me and I will change it; it is a one-line change on my side.
+
+**"Unable to log in with account"** — your Apple Developer membership may not
+be fully active. Go to <https://developer.apple.com/account/> and sign in. If it
+asks you to accept a new legal agreement, accept it, then retry Step B. This is
+a very common cause and Apple gives no useful hint about it.
+
+**Team dropdown is empty / only shows "None"** — your Apple ID is signed in but
+has no developer membership attached. Check
+<https://developer.apple.com/account/> shows an active membership.
+
+**"Personal development teams do not support Push Notifications"** or similar
+capability complaints — we use no special capabilities, so this should not
+appear. Send me a screenshot if it does.
+
+## What this does NOT mean
+
+- It does **not** mean the printer SDK failed. Your screenshot confirms
+  **StarIO10** is correctly listed under *Frameworks, Libraries, and Embedded
+  Content* alongside *CapApp-SPM*. That part is done and correct.
+- It does **not** mean my Swift code is broken. **Signing happens before
+  compiling.** The compiler still has not run, so we still do not know whether
+  the printer plugin builds.
+
+Once signing is fixed, the next build is the first real compile of
+`StarPrinterPlugin.swift`. If red errors appear naming a `.swift` file and a
+line number — screenshot them and send them to me. Do not try to fix them
+yourself.
