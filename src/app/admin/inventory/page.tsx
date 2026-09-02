@@ -22,6 +22,8 @@ import {
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
 import { receivedDateFlagMessage } from "@/lib/inventory/received-date-core";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
+// SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
+import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +90,22 @@ export default async function InventoryPage({
     emptyActive?: string;
     missingExpiry?: string;
     unknownCost?: string;
+    /**
+     * SLICE 8: bulk fill. `bulk=1` enters bulk-fill MODE (an explicit mode, per
+     * the Basis Design System pattern, so the normal browsing view stays
+     * uncluttered). The remaining knobs are the preview/result state the server
+     * action round-trips through the URL — no client state, so the panel can
+     * never disagree with the server's decision.
+     */
+    bulk?: string;
+    bulkField?: string;
+    bulkValue?: string;
+    bulkPreview?: string;
+    bulkSkipped?: string;
+    bulkIds?: string;
+    bulkDone?: string;
+    bulkFailed?: string;
+    bulkError?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -191,6 +209,18 @@ export default async function InventoryPage({
     const qs = params.toString();
     return `/admin/inventory${qs ? `?${qs}` : ""}`;
   };
+  /**
+   * SLICE 8 — bulk-fill mode. Only the literal "1" enters it, matching the
+   * `parseGapFlag` discipline (junk params silently mean "off").
+   */
+  const bulkMode = sp.bulk === "1";
+  /** Entering bulk mode PRESERVES the current filters — that is the whole point:
+   *  filter to the gap you want, then fill exactly those lots. */
+  const bulkEnterHref = (() => {
+    const params = filterParams();
+    params.set("bulk", "1");
+    return `/admin/inventory?${params.toString()}`;
+  })();
   /** Status-tab links carry every OTHER filter and reset to page 1. */
   const statusHref = (key: string) => {
     const params = filterParams();
@@ -474,6 +504,40 @@ export default async function InventoryPage({
             </Link>
           )}
         </form>
+
+        {/*
+          SLICE 8 — BULK FILL MODE.
+
+          Entered explicitly from the button below (Basis Design System: a bulk
+          edit "mode" triggered from a button above the table), so the normal
+          browsing view stays uncluttered. Pairs with the SLICE 7 gap worklists:
+          filter to "Missing expiry", enter bulk fill, and complete them all in
+          one reviewed pass.
+        */}
+        {bulkMode ? (
+          <BulkFillPanel
+            visibleLotIds={lots.map((l) => l.id)}
+            field={sp.bulkField}
+            value={sp.bulkValue}
+            previewCount={sp.bulkPreview}
+            skippedCount={sp.bulkSkipped}
+            previewIds={sp.bulkIds}
+            doneCount={sp.bulkDone}
+            failedCount={sp.bulkFailed}
+            error={sp.bulkError}
+          />
+        ) : (
+          lots.length > 0 && (
+            <div className="mb-4 flex justify-end">
+              <Link
+                href={bulkEnterHref}
+                className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+              >
+                Bulk fill missing fields…
+              </Link>
+            </div>
+          )
+        )}
 
         {/* GW-033: exact result count + pager (server-side pagination). */}
         <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />

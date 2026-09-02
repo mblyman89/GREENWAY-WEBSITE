@@ -554,10 +554,34 @@ describe("the migration list is ordered the way the database will see it", () =>
     // `created_at`, and it is surfaced to the owner as a worklist instead —
     // the same discipline migration 0191 set for `last_counted_at`.
     //
-    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 214;
+    // ─── IT FIRED A SEVENTEENTH TIME, ON 0215 (SLICE 8) ───────────────────
+    //
+    // 0215_inventory_lot_bulk_fill_provenance.sql exists because Michael said,
+    // of the fields the Cultivera export never carried: "Cultivera's data is
+    // garbage, and we will need a way to add those fields if they don't exist
+    // in the Cultivera data... allow me to enter that data the one time and
+    // then it respects the locked fields rules that protect my license from
+    // compliance issues."
+    //
+    // It does NOT unlock anything. `lot-edit-core.ts:33-45` still locks
+    // expires_on, unit_cost_minor_units and pos_product_key against
+    // hand-editing, because those values come from COAs, invoices and
+    // manifests. What 0215 adds is the PROVENANCE trio per field
+    // (`*_source` / `*_set_by` / `*_set_at`, the exact shape 0214 established),
+    // so that a value the import never delivered can be supplied once, from the
+    // paperwork, and thereafter carry evidence of who supplied it and when.
+    //
+    // The authority for treating those blanks as fillable is the importer's own
+    // note (src/lib/pos/import-lot-core.ts:291-302), which stamped every
+    // migrated lot with "Expiration date not provided by POS export — set
+    // during enrichment." The import recorded the gap and deferred it; this is
+    // that deferred step. Same doctrine as 0214: a value the export failed to
+    // carry is a fact from the paperwork, not a derived number.
+    //
+    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 215;
     // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
-    // sort -c` exits clean. Only then was 0213 changed to 0214.
-    expect(listed[listed.length - 1]).toMatch(/^0214_/);
+    // sort -c` exits clean. Only then was 0214 changed to 0215.
+    expect(listed[listed.length - 1]).toMatch(/^0215_/);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

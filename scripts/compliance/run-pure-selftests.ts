@@ -85,6 +85,8 @@ import { __runReceiptJournalCoreTests } from "../../src/lib/accounting/receipt-j
 import { __runFactoryResetCoreTests } from "../../src/lib/accounting/factory-reset-core";
 import { __runReceiptCategoryCoreTests } from "../../src/lib/accounting/receipt-category-core";
 import { __runSaleCogsCoreTests } from "../../src/lib/accounting/sale-cogs-core";
+// SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
+import { __runBulkFillCoreTests } from "../../src/lib/inventory/bulk-fill-core";
 import { __runEsd5208WorksheetTests } from "../../src/lib/payroll/esd-5208-worksheet-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
@@ -968,6 +970,9 @@ async function main() {
 
   __runSaleCogsCoreTests();
   console.log("sale-cogs-core self-tests: all passed");
+
+  __runBulkFillCoreTests();
+  console.log("bulk-fill-core self-tests: all passed");
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

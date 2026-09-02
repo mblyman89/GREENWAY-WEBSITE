@@ -10,7 +10,17 @@ import {
   updateLotDetails,
   updateLotReceivedDate,
   getLotById,
+  listLotsForBulkFill,
+  applyBulkFill,
 } from "@/lib/inventory/store";
+// SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
+import {
+  planBulkFill,
+  formatFillValue,
+  BULK_FILLABLE_FIELDS,
+  type BulkFillField,
+} from "@/lib/inventory/bulk-fill-core";
+import { pacificToday } from "@/lib/reports/timezone";
 import { parseLotEditInput, brandMatchesVendor, buildLotEditSummary } from "@/lib/inventory/lot-edit-core";
 import { parseReceivedDateInput, buildReceivedDateSummary } from "@/lib/inventory/received-date-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
@@ -530,4 +540,129 @@ export async function updateLotAfterTaxPriceAction(lotId: string, formData: Form
   revalidatePath("/admin/inventory");
   revalidatePath("/menu");
   redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+/**
+ * SLICE 8 — BULK FILL: complete the fields the one-time Cultivera import never
+ * carried, across many lots at once.
+ *
+ * Owner request, verbatim: "Cultivera's data is garbage, and we will need a way
+ * to add those fields if they don't exist in the Cultivera data ... allow me to
+ * enter that data the one time and then it respects the locked fields rules
+ * that protect my license from compliance issues."
+ *
+ * THE SHAPE OF THE SAFETY (three independent layers, deliberately redundant):
+ *
+ *  1. The PURE planner (bulk-fill-core) decides eligibility from rows we read
+ *     HERE, server-side. The client's posted row data is never trusted — the
+ *     form supplies only ids and a value.
+ *  2. This action re-reads every selected lot from the database immediately
+ *     before planning, so a stale page cannot cause a wrong write.
+ *  3. The store writer re-asserts blankness IN THE WHERE CLAUSE, so a row
+ *     filled in another tab between preview and confirm matches zero rows and
+ *     is reported as skipped rather than overwritten.
+ *
+ * DRAFTS-ONLY (standing rule 3): `mode=preview` computes and returns the plan
+ * WITHOUT writing anything. Only an explicit `mode=apply` — which the UI reaches
+ * from the confirm button on the preview — performs writes. The research calls
+ * this the "changes preview"; the standing rules call it owner review. They are
+ * the same requirement, so the implementation serves both.
+ */
+export async function bulkFillLotsAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const field = String(formData.get("field") ?? "") as BulkFillField;
+  const rawValue = formData.get("value") as string | null;
+  const mode = String(formData.get("mode") ?? "preview");
+  const ids = formData
+    .getAll("lot_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+
+  const back = (params: Record<string, string>) => {
+    const q = new URLSearchParams({ bulk: "1", ...params });
+    redirect(`/admin/inventory?${q.toString()}`);
+  };
+
+  if (!(BULK_FILLABLE_FIELDS as readonly string[]).includes(field)) {
+    back({ bulkError: "Pick a field to fill." });
+  }
+  if (ids.length === 0) {
+    back({ bulkError: "Select at least one lot first." });
+  }
+
+  // Layer 2: read the CURRENT state of every selected lot. Cap-immune.
+  const lots = await listLotsForBulkFill(ids);
+
+  // Layer 1: the pure planner makes every decision.
+  const plan = planBulkFill({
+    field,
+    rawValue,
+    lots,
+    todayPacific: pacificToday(),
+  });
+  if (!plan.ok) {
+    back({ bulkError: plan.error });
+    return;
+  }
+
+  // DRAFTS-ONLY: preview writes NOTHING. The owner sees exactly what would
+  // change, then confirms.
+  if (mode !== "apply") {
+    back({
+      bulkField: field,
+      bulkValue: String(rawValue ?? ""),
+      bulkPreview: String(plan.apply.length),
+      bulkSkipped: String(plan.skip.length),
+      bulkIds: plan.apply.map((p) => p.lotId).join(","),
+    });
+    return;
+  }
+
+  // Layer 3: apply, one row at a time, each with its own blankness guard.
+  let filled = 0;
+  let raced = 0;
+  const failures: string[] = [];
+  for (const item of plan.apply) {
+    const res = await applyBulkFill(item.lotId, field, item.value, session.userId);
+    if (!res.ok) {
+      failures.push(item.lotId);
+    } else if (res.filled) {
+      filled += 1;
+    } else {
+      // Matched zero rows: something filled it first. Not an error — a skip.
+      raced += 1;
+    }
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.bulk_filled",
+    entityType: "inventory_lot",
+    entityId: plan.apply[0]?.lotId ?? "bulk",
+    before: { field, blank_on: plan.apply.length },
+    after: {
+      field,
+      value: plan.value,
+      value_display: formatFillValue(field, plan.value),
+      source: "owner_entered",
+      requested: ids.length,
+      filled,
+      skipped_ineligible: plan.skip.length,
+      skipped_raced: raced,
+      failed: failures.length,
+      lot_ids: plan.apply.map((p) => p.lotId),
+      basis:
+        "One-time Cultivera migration enrichment: the import recorded these fields as blank and to be set during enrichment (import-lot-core.ts:291-302). Blanks filled from paperwork; no evidenced value was overwritten.",
+    },
+  });
+
+  revalidatePath("/admin/inventory");
+  revalidatePath("/menu");
+  back({
+    bulkDone: String(filled),
+    bulkSkipped: String(plan.skip.length + raced),
+    ...(failures.length ? { bulkFailed: String(failures.length) } : {}),
+  });
 }

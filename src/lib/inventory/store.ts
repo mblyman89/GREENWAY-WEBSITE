@@ -9,9 +9,10 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
-import { pagedAll } from "@/lib/supabase/chunked-in";
+import { pagedAll, chunkedIn } from "@/lib/supabase/chunked-in";
 import { pacificToday, addPacificDays } from "@/lib/reports/timezone";
 import type { ReceivedDateLot } from "@/lib/inventory/received-date-core";
+import type { BulkFillLot, BulkFillField } from "@/lib/inventory/bulk-fill-core";
 import {
   countLotGaps,
   computeOnHandCost,
@@ -572,6 +573,89 @@ export async function updateLotReceivedDate(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * SLICE 8 — load the selected lots for a BULK FILL preview.
+ *
+ * Reads only the columns the pure planner needs. `chunkedIn` keeps this
+ * cap-immune: PostgREST's db.max_rows silently truncates at 1000, and a bulk
+ * selection can exceed that. Never trust the client's row data — the eligibility
+ * decision is made from THESE freshly-read rows, not from what the form posted.
+ */
+export async function listLotsForBulkFill(ids: readonly string[]): Promise<BulkFillLot[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  if (ids.length === 0) return [];
+  const admin = createSupabaseAdminClient();
+  return chunkedIn<string, BulkFillLot>(ids, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("id, notes, status, expires_on, unit_cost_minor_units, pos_product_key, product_name")
+      .in("id", chunk as string[])
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as BulkFillLot[] | null) ?? [];
+  });
+}
+
+/**
+ * SLICE 8 — apply ONE validated bulk fill to ONE lot.
+ *
+ * Deliberately per-row rather than a single `.in()` update, because the WHERE
+ * clause carries the safety property and must be re-asserted for every row:
+ *
+ *   .is(<field>, null)  — the write only lands if the column is STILL blank.
+ *
+ * That is the last line of defence against a race: if the owner filled this lot
+ * in another tab between the preview and the confirm, the update matches zero
+ * rows and we report it as skipped instead of overwriting an evidenced fact.
+ * `pos_product_key` additionally treats the empty string as blank (0023:96
+ * allows it), so its guard is an `.or()` rather than a plain `.is()`.
+ *
+ * Provenance is written alongside the value (migration 0215), so every filled
+ * field can name the person who supplied it and when.
+ */
+export async function applyBulkFill(
+  lotId: string,
+  field: BulkFillField,
+  value: string | number,
+  actorId: string | null,
+): Promise<{ ok: true; filled: boolean } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const patch: Record<string, unknown> = { updated_by: actorId };
+  if (field === "expires_on") {
+    patch.expires_on = value;
+    patch.expires_on_source = "owner_entered";
+    patch.expires_on_set_by = actorId;
+    patch.expires_on_set_at = nowIso;
+  } else if (field === "unit_cost_minor_units") {
+    patch.unit_cost_minor_units = value;
+    patch.unit_cost_source = "owner_entered";
+    patch.unit_cost_set_by = actorId;
+    patch.unit_cost_set_at = nowIso;
+  } else {
+    patch.pos_product_key = value;
+    patch.pos_product_key_source = "owner_entered";
+    patch.pos_product_key_set_by = actorId;
+    patch.pos_product_key_set_at = nowIso;
+  }
+
+  let q = admin.from("inventory_lots").update(patch).eq("id", lotId).neq("status", "destroyed");
+  // Re-assert blankness IN THE WHERE CLAUSE (see doc comment above).
+  if (field === "pos_product_key") {
+    q = q.or("pos_product_key.is.null,pos_product_key.eq.");
+  } else {
+    q = q.is(field, null);
+  }
+
+  const { data, error } = await q.select("id");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, filled: ((data as { id: string }[] | null) ?? []).length > 0 };
 }
 
 /**
