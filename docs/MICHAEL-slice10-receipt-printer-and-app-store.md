@@ -820,3 +820,127 @@ Once signing is fixed, the next build is the first real compile of
 `StarPrinterPlugin.swift`. If red errors appear naming a `.swift` file and a
 line number — screenshot them and send them to me. Do not try to fix them
 yourself.
+
+---
+
+# Troubleshooting: "0 Provisioned Devices" — the iPad was never registered
+
+If you have set the **Team** and the *"Your team has no devices"* error is
+**still** showing, this section is for you. You are close. Setting the team was
+the right move and it worked. There is one thing left.
+
+## How to confirm this is your problem
+
+Xcode → **Settings…** → **Accounts** → click your team. Look at **On Device
+Testing**.
+
+If it says **0 Provisioned Devices**, Apple has never been told your iPad
+exists. That is the entire remaining problem.
+
+## Why this happens
+
+Xcode registers your iPad with Apple **automatically** — but only at a very
+specific moment: when it needs to build **for that exact iPad**.
+
+If the destination at the top of the Xcode window says **"Any iOS Device
+(arm64)"**, that moment never arrives. That is a placeholder, not a real
+device. Xcode has no serial number to send to Apple, so it registers nothing,
+so your team stays at 0 devices, so no profile can be generated.
+
+**This is the same "Any iOS Device (arm64)" trap from the earlier
+troubleshooting section, showing up wearing a different mask.** The first time
+it blocked the Run button. This time it is blocking device registration.
+
+## Which team to pick
+
+If you have two teams in the dropdown, they are not equal:
+
+| What you see in Accounts | What it means |
+| --- | --- |
+| **Developer Team** + Role: Admin + green ✅ *Certificates, Identifiers, & Profiles* | This is the **paid** $99 team. **Use this one.** |
+| **Personal Team** | The free tier. Apps expire after 7 days and it cannot ship to the App Store. |
+
+Pick the **paid Developer Team**. The Personal Team will technically work for a
+quick test, but the app stops running after 7 days and you cannot submit with
+it, so there is no reason to use it.
+
+## Fix it — in this exact order
+
+**The order matters.** Selecting the iPad must happen *before* Xcode can
+register it.
+
+1. **Plug the iPad into the MacBook** with the cable.
+2. **Unlock the iPad.** Actually type the passcode and get to the home screen.
+   A locked iPad is invisible to Xcode.
+3. If **"Trust This Computer?"** appears on the iPad → tap **Trust** → enter
+   the passcode. If it does not appear, unplug and replug the cable.
+4. In Xcode, click the **destination** at the top of the window (the part that
+   currently reads *Any iOS Device (arm64)*).
+5. Look for your iPad **by name** near the top of that list, under a heading
+   that says something like *iOS Device*.
+   - **It is there** → click it. Go to step 6.
+   - **It is not there** → see *If the iPad does not appear* below.
+6. Go to **Signing & Capabilities** → set **Team** to your paid
+   **Developer Team**.
+7. Click **Try Again** next to the red error.
+
+Wait 10–30 seconds. Xcode sends the iPad's serial number to Apple, registers
+it, creates the App ID, and generates the profile. The red errors should
+disappear and be replaced by a normal *Provisioning Profile: Xcode Managed
+Profile* line with no error underneath.
+
+8. Press **Cmd-B**.
+
+To confirm it worked: Xcode → Settings → Accounts → your team → **On Device
+Testing** should now read **1 Provisioned Device**.
+
+## If the iPad does not appear in the destination list
+
+1. Xcode menu bar → **Window** → **Devices and Simulators**
+2. Your iPad should be listed on the left. Click it.
+3. If it says **"Preparing debugger support…"** or **"Waiting to reconnect"**,
+   wait. On a first connection this can take 10–20 minutes. Do not unplug it.
+4. If it shows a **"Trust"** prompt or *"Unlock the device"*, do that on the
+   iPad itself.
+5. Try a different cable, and use a port directly on the MacBook rather than
+   through a hub or dock. A charge-only cable will charge the iPad but carry no
+   data — this is a very common cause and looks identical to a broken iPad.
+
+## Fallback: register the iPad by hand
+
+If the automatic route keeps failing, you can register the iPad manually. You
+are an **Admin** on the LLC team, so you have permission to do this.
+
+**Get the iPad's identifier (UDID):**
+
+1. Xcode → **Window** → **Devices and Simulators**
+2. Click your iPad on the left
+3. Near the top you will see **Identifier** followed by a long string of
+   letters, numbers and dashes. Right-click it → **Copy**.
+
+**Register it with Apple:**
+
+1. Go to <https://developer.apple.com/account/resources/devices/list>
+2. Sign in with the account that owns the **paid** team
+3. Click the **+** (Register a New Device)
+4. **Platform:** iOS, iPadOS, tvOS, watchOS
+5. **Device Name:** `Greenway Counter iPad` (any name you like)
+6. **Device ID (UDID):** paste what you copied
+7. Click **Continue** → **Register**
+
+Then back in Xcode: **Signing & Capabilities** → toggle **Automatically manage
+signing** off and back on. It will now find the device.
+
+## Still nothing?
+
+Check <https://developer.apple.com/account/> for a banner asking you to accept
+an updated legal agreement. If one is waiting, **nothing** device-related will
+work until you accept it, and Apple gives no useful hint that this is the
+cause. Accept it, then retry.
+
+## Reminder
+
+Signing still happens **before** compiling. The compiler has not run yet. Once
+the build gets past signing, watch for red errors naming a `.swift` file and a
+line number — that is the first real compile of the printer plugin. Screenshot
+those and send them to me rather than trying to fix them.
