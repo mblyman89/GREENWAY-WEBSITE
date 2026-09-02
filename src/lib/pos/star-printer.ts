@@ -27,20 +27,23 @@
 import {
   buildPassPrntUrl,
 } from "./receipt-core";
-import { posStorageGet, posStorageSet } from "./pos-storage";
+import { posStorageGet, posStorageRemove, posStorageSet } from "./pos-storage";
 import {
   chooseTransport,
   describeTransport,
   isValidStarPairing,
   printFailure,
+  STAR_DISCOVERY_SECONDS,
   STAR_DRAWER_PULSE_MS,
   validatePrintJob,
   type PrintEnvironment,
   type PrintOutcome,
   type PrintTransport,
   type StarErrorCode,
+  type StarPairing,
   type StarPrintJob,
 } from "./star-printer-core";
+import { sanitizeDiscoveries, type DiscoveredPrinter } from "./printer-pairing-core";
 
 /** Shape of the Swift plugin, as declared in StarPrinterPlugin.swift. */
 type StarPluginResult = {
@@ -308,8 +311,25 @@ export async function openCashDrawer(
  * each other. If the identifier were shared, till 2 could print till 1's
  * receipt and - much worse - pop till 1's cash drawer. Binding the pairing to
  * the iPad it was performed on makes that impossible.
+ *
+ * SLICE 11 renamed this from SLICE 10's "pos.star.pairedPrinterIdentifier".
+ * That name was never registered in POS_STORAGE_KEYS, and plannedWrite()
+ * rejects unregistered keys, so every SLICE 10 write was refused and the
+ * pairing could never persist. Since nothing was ever stored under the old
+ * name, the rename needs no migration; the new name also satisfies the
+ * POS_STORAGE_PREFIX rule that lets a bulk cleanup find the register's keys.
  */
-const PAIRED_PRINTER_KEY = "pos.star.pairedPrinterIdentifier";
+const PAIRED_PRINTER_KEY = "gw-pos-star-printer";
+
+/**
+ * The model, stored alongside the identifier purely so the setup screen can say
+ * "TSP143IIIBi" instead of a bare port name.
+ *
+ * Kept in a SEPARATE key rather than folding both into one JSON value, so that
+ * a corrupt or missing model can never take the identifier down with it. The
+ * identifier is what prints; the model is optional decoration.
+ */
+const PAIRED_PRINTER_MODEL_KEY = "gw-pos-star-printer-model";
 
 /** The identifier of this iPad's printer, or null if it was never paired. */
 export function getPairedPrinterIdentifier(): string | null {
@@ -319,6 +339,14 @@ export function getPairedPrinterIdentifier(): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
+/** The full pairing for the setup screen, or null when unpaired. */
+export function getPairedPrinter(): StarPairing | null {
+  const identifier = getPairedPrinterIdentifier();
+  if (!identifier) return null;
+  const model = (posStorageGet(PAIRED_PRINTER_MODEL_KEY) ?? "").trim();
+  return { identifier, interfaceType: "bluetooth", model: model === "" ? null : model };
+}
+
 /**
  * Remember this iPad's printer after a successful pairing.
  *
@@ -326,23 +354,52 @@ export function getPairedPrinterIdentifier(): string | null {
  * written; a bad value here would fail on every future sale, long after the
  * setup screen that caused it is forgotten.
  */
-export function setPairedPrinterIdentifier(identifier: string): boolean {
-  const pairing = { identifier: identifier.trim(), interfaceType: "bluetooth" as const, model: null };
+export function setPairedPrinterIdentifier(identifier: string, model?: string | null): boolean {
+  const trimmedModel = (model ?? "").trim();
+  const pairing = {
+    identifier: identifier.trim(),
+    interfaceType: "bluetooth" as const,
+    model: trimmedModel === "" ? null : trimmedModel,
+  };
   if (!isValidStarPairing(pairing)) return false;
   posStorageSet(PAIRED_PRINTER_KEY, pairing.identifier);
+  posStorageSet(PAIRED_PRINTER_MODEL_KEY, pairing.model ?? "");
   return true;
 }
 
-/** Find Star printers nearby. Setup only - never on the sale path. */
+/**
+ * Forget this iPad's printer.
+ *
+ * Deliberately does NOT unpair at the iOS level — that is the owner's business
+ * in Settings › Bluetooth, and silently undoing it from a POS screen would be
+ * rude and surprising. This only clears our choice.
+ */
+export function forgetPairedPrinter(): void {
+  posStorageRemove(PAIRED_PRINTER_KEY);
+  posStorageRemove(PAIRED_PRINTER_MODEL_KEY);
+}
+
+/**
+ * Find Star printers nearby. Setup only - never on the sale path.
+ *
+ * The interfaceType is carried through from the plugin rather than assumed.
+ * It is half of a StarConnectionSettings, and it also decides what the
+ * identifier MEANS: on Bluetooth it is an iOS port name, on LAN a MAC or IP.
+ * Hard-coding it here would be a guess that happens to be right today and
+ * breaks silently the day a LAN printer is added.
+ */
 export async function discoverPrinters(
-  seconds = 6,
-): Promise<Array<{ identifier: string; model: string }>> {
+  seconds = STAR_DISCOVERY_SECONDS,
+): Promise<DiscoveredPrinter[]> {
   const plugin = getStarPlugin();
   if (!plugin) return [];
   try {
     const res = await plugin.discover({ seconds });
-    return (res.printers ?? []).map((p) => ({ identifier: p.identifier, model: p.model }));
+    // sanitizeDiscoveries drops anything malformed and collapses duplicates,
+    // which a Bluetooth scan can legitimately report for one printer.
+    return sanitizeDiscoveries(res.printers ?? []);
   } catch {
+    // A failed scan is "found nothing", not a crash. The setup screen says so.
     return [];
   }
 }

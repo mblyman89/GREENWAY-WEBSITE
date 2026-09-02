@@ -55,6 +55,7 @@
 //   gw-pos-favorites -> favorites-core.FAVORITES_KEY
 //   gw-pos-theme -> theme-core.THEME_KEY
 //   gw-pos-medical-testmode -> medical-testmode-core.MEDICAL_TESTMODE_KEY
+//   gw-pos-star-printer / gw-pos-star-printer-model -> star-printer
 
 /** Shared prefix for every register storage key. */
 export const POS_STORAGE_PREFIX = "gw-pos-";
@@ -193,6 +194,40 @@ export const POS_STORAGE_KEYS: readonly PosStorageKeySpec[] = [
     tier: "preference",
     degradesOnCorruption: true,
   },
+  {
+    // SLICE 11, and a correction to SLICE 10.
+    //
+    // SLICE 10 stored the pairing under "pos.star.pairedPrinterIdentifier"
+    // and never registered it here. Two things were therefore wrong:
+    //
+    //   1. plannedWrite() rejects any unregistered key, so EVERY write was
+    //      refused. Verified by running SLICE 10's own pos-storage-core
+    //      against that key: writeMemory false, writeDurable false, rejected
+    //      "...is not a registered register storage key". The setup screen
+    //      would have looked like it succeeded and the printer would have
+    //      been forgotten on the next launch, silently dropping the register
+    //      back to opening PassPRNT mid-sale.
+    //   2. The name broke the POS_STORAGE_PREFIX rule audited below, so a
+    //      bulk cleanup targeting the register's own keys would have missed it.
+    //
+    // Both are fixed by registering the value under a "gw-pos-" name. Because
+    // the SLICE 10 write was always rejected, no installed iPad can be holding
+    // a value under the old name, so this rename needs no migration.
+    key: "gw-pos-star-printer",
+    what: "Which Star receipt printer THIS iPad prints to, as an opaque StarXpand identifier.",
+    durability: "convenience",
+    sensitivity: "none",
+    tier: "preference",
+    degradesOnCorruption: true,
+  },
+  {
+    key: "gw-pos-star-printer-model",
+    what: "The model name of this iPad's paired receipt printer, shown on the setup screen.",
+    durability: "convenience",
+    sensitivity: "none",
+    tier: "preference",
+    degradesOnCorruption: true,
+  },
 ] as const;
 
 /** Look a key up in the registry. Null when it is not a known register key. */
@@ -240,7 +275,7 @@ export type TierProblem = { key: string; code: string; message: string };
  *
  * These are deliberately expressed as rules over the data rather than as a
  * hand-written expected list, so that a FUTURE key added with a careless tier
- * is caught by the same logic that guards today's ten.
+ * is caught by the same logic that guards today's twelve.
  */
 export function auditKeyRegistry(specs: readonly PosStorageKeySpec[] = POS_STORAGE_KEYS): TierProblem[] {
   const problems: TierProblem[] = [];
@@ -550,7 +585,11 @@ export function __runPosStorageCoreTests(): { passed: number; failed: number } {
 
   // ---- registry integrity -------------------------------------------------
   {
-    ok(POS_STORAGE_KEYS.length === 10, "the registry covers all ten keys the register uses today");
+    ok(POS_STORAGE_KEYS.length === 12, "the registry covers all twelve keys the register uses today");
+    ok(
+      POS_STORAGE_KEYS.some((s) => s.key === "gw-pos-star-printer"),
+      "the paired receipt printer is registered, so the pairing can actually persist",
+    );
     ok(auditKeyRegistry().length === 0, "the shipping registry has no policy problems");
     const keys = allStorageKeys();
     ok(new Set(keys).size === keys.length, "no key is registered twice");

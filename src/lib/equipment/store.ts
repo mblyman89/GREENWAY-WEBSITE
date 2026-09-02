@@ -377,6 +377,31 @@ export type IntegratedDevice = {
 
 export const INTEGRATED_DEVICES: readonly IntegratedDevice[] = [
   {
+    // SLICE 11 — this device was seeded into equipment_assets by migration
+    // 0120_pos_foundation.sql but was never added to this catalog, so the
+    // hardware hub never listed the printer the store actually sells on. The
+    // values below are copied from that migration (the system of record), not
+    // retyped from memory.
+    //
+    // No `href` to a settings screen, on purpose. Pairing is Bluetooth, and
+    // Bluetooth discovery only works from the radio doing the scanning: this
+    // page runs in a browser on the owner's laptop and physically cannot see
+    // or pair a printer on the shop counter. A "configure" button here would
+    // be a button that can never work, so the label sends the reader to the
+    // iPad instead.
+    assetTag: "PRN-COUNTER-01",
+    kind: "receipt_printer",
+    icon: "🧾",
+    roleLabel: "Receipt printer",
+    name: "Front-counter receipt printer (register sales)",
+    manufacturer: "Star Micronics",
+    model: "TSP143IIIBi (TSP100III series)",
+    summary:
+      "Prints register receipts over Bluetooth and kicks the cash drawer. Each iPad is paired to its own printer on the till itself: MORE ▸ Receipt printer.",
+    href: "/admin/registers/devices",
+    hrefLabel: "Paired on each iPad — see register devices",
+  },
+  {
     assetTag: "PRN-RECEIPT-01",
     kind: "receipt_printer",
     icon: "🧾",

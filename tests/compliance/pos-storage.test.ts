@@ -148,7 +148,11 @@ describe("the key registry matches the code that actually runs", () => {
     expect(unregisteredKeys([...used])).toEqual([]);
   });
 
-  it("registers exactly the ten keys in use — no stale entries", () => {
+  it("registers exactly the twelve keys in use — no stale entries", () => {
+    // SLICE 11 added the last two. They are this iPad's paired receipt
+    // printer: SLICE 10 stored that pairing under an UNREGISTERED key, and
+    // plannedWrite() rejects unregistered keys, so the pairing could never
+    // persist and receipts silently fell back to the PassPRNT app.
     expect(allStorageKeys().sort()).toEqual(
       [
         "gw-pos-active-sale",
@@ -160,6 +164,8 @@ describe("the key registry matches the code that actually runs", () => {
         "gw-pos-menu",
         "gw-pos-queue",
         "gw-pos-seq",
+        "gw-pos-star-printer",
+        "gw-pos-star-printer-model",
         "gw-pos-theme",
       ].sort(),
     );

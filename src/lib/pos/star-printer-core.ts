@@ -144,7 +144,13 @@ export type StarPrintJob = {
   /** Kick the drawer after the paper is cut. */
   openDrawer: boolean;
   /** For logs and error messages. */
-  jobKind: "sale" | "reprint" | "refund" | "no_sale";
+  /**
+   * SLICE 11 added "test": the slip printed by the printer-setup screen to
+   * prove a pairing works. It is its own kind rather than being dressed up as
+   * a "sale", so nothing downstream can mistake a setup test for money
+   * changing hands.
+   */
+  jobKind: "sale" | "reprint" | "refund" | "no_sale" | "test";
 };
 
 /**
@@ -197,8 +203,23 @@ export function validatePrintJob(job: StarPrintJob): string | null {
     // counter and must never pop the till.
     return "A reprint must never open the cash drawer.";
   }
+  if (job.jobKind === "test" && job.openDrawer) {
+    // Same reasoning, and stronger: a printer test is run during setup, often
+    // repeatedly. If it popped the drawer it would be an unattributed cash
+    // exposure with no sale and no manager PIN behind it.
+    return "A printer test must never open the cash drawer.";
+  }
   return null;
 }
+
+/**
+ * How long to scan for printers on the setup screen, in seconds.
+ *
+ * Six seconds is long enough for a TSP143IIIBi that is powered on and in range
+ * to answer, and short enough that a cashier does not assume the app has hung.
+ * Discovery is SETUP ONLY and never runs on the sale path.
+ */
+export const STAR_DISCOVERY_SECONDS = 6;
 
 // ---------------------------------------------------------------------------
 // 3. Failures, in English
@@ -402,14 +423,43 @@ export type StarPairing = {
   model: string | null;
 };
 
-/** Star Bluetooth identifiers are MAC-style: six colon-separated hex pairs. */
-const BD_ADDRESS_RE = /^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/i;
+/**
+ * The identifier is OPAQUE. Do not pattern-match it.
+ *
+ * SLICE 11 correction. SLICE 10 shipped a regex here that required a MAC-style
+ * BD address for Bluetooth. That was wrong, and it would have rejected every
+ * genuine pairing on Michael's TSP143IIIBi — the setup screen would have found
+ * the printer, refused to save it, and given no reason. It was caught by
+ * reading Star's manual rather than by any test, because the test encoded the
+ * same wrong assumption as the code.
+ *
+ * StarXpand's `StarConnectionSettings.identifier` reference states what each
+ * interface actually uses:
+ *
+ *     LAN                   MAC Address / IP Address
+ *     Bluetooth             iOS Port Name
+ *     USB                   iOS Port Name
+ *     Bluetooth Low Energy  Bluetooth Address
+ *
+ * So the MAC-style form is what LAN and *BLE* use. Bluetooth Classic — which is
+ * what the TSP143IIIBi speaks — uses the iOS Port Name, a free-form device name
+ * that Star's own Setting Utility lets the owner rename to anything.
+ *
+ * Star's shipped sample app (example/StarXpandSDK/DiscoveryView.swift) prints
+ * the identifier verbatim for all four interfaces and never parses it. We do
+ * the same: the only rules are non-empty, sane length, and a known interface.
+ * Anything stricter is us inventing a constraint the SDK does not have.
+ */
+const MAX_IDENTIFIER_LEN = 256;
 
 export function isValidStarPairing(v: unknown): v is StarPairing {
   if (!v || typeof v !== "object") return false;
   const p = v as Partial<StarPairing>;
-  if (typeof p.identifier !== "string" || p.identifier.trim() === "") return false;
-  if (p.interfaceType === "bluetooth" && !BD_ADDRESS_RE.test(p.identifier)) return false;
+  if (typeof p.identifier !== "string") return false;
+  if (p.identifier.trim() === "") return false;
+  if (p.identifier.length > MAX_IDENTIFIER_LEN) return false;
+  // A control character means the value was mangled in transit, not renamed.
+  if (/[\u0000-\u001f\u007f]/.test(p.identifier)) return false;
   return (
     p.interfaceType === "bluetooth" ||
     p.interfaceType === "lan" ||
@@ -612,6 +662,15 @@ export function __runStarPrinterCoreTests(): { passed: number; failed: number } 
     "a reprint without the drawer is fine",
   );
   ok(
+    validatePrintJob({ html: "<p>x</p>", openDrawer: true, jobKind: "test" }) !== null,
+    "a printer test may NOT pop the drawer",
+  );
+  ok(
+    validatePrintJob({ html: "<p>x</p>", openDrawer: false, jobKind: "test" }) === null,
+    "a printer test that leaves the drawer shut is fine",
+  );
+  ok(STAR_DISCOVERY_SECONDS > 0 && STAR_DISCOVERY_SECONDS <= 30, "discovery window is sane");
+  ok(
     validatePrintJob({ html: "<p>x</p>", openDrawer: true, jobKind: "no_sale" }) === null,
     "a no-sale opens the drawer on purpose",
   );
@@ -704,30 +763,54 @@ export function __runStarPrinterCoreTests(): { passed: number; failed: number } 
 
   // ── pairing ──────────────────────────────────────────────────────────────
   const good: StarPairing = {
-    identifier: "00:11:62:00:00:00",
+    identifier: "TSP100-31300119",
     interfaceType: "bluetooth",
     model: "TSP143IIIBi",
   };
-  ok(isValidStarPairing(good), "a real BD address is accepted");
+  ok(isValidStarPairing(good), "an iOS Port Name is accepted");
+  // SLICE 11 regression guards. SLICE 10 required a MAC-style BD address for
+  // Bluetooth, which Star's identifier reference shows is the format for LAN
+  // and BLE — Bluetooth Classic uses the iOS Port Name. That bug would have
+  // refused every real pairing on the TSP143IIIBi. These four cases fail if
+  // anyone reintroduces a format assumption.
   ok(
-    isValidStarPairing({ ...good, identifier: "00:11:62:aa:bb:cc" }),
-    "lowercase hex is accepted",
+    isValidStarPairing({ ...good, identifier: "Star Micronics" }),
+    "the factory default port name is accepted",
   );
-  ok(!isValidStarPairing({ ...good, identifier: "not-an-address" }), "garbage is refused");
+  ok(
+    isValidStarPairing({ ...good, identifier: "Front Counter Printer" }),
+    "an owner-renamed printer with spaces is accepted",
+  );
+  ok(
+    isValidStarPairing({ ...good, identifier: "Register 1 — till" }),
+    "a renamed printer with punctuation is accepted",
+  );
+  ok(
+    isValidStarPairing({ ...good, identifier: "00:11:62:00:00:00" }),
+    "a MAC-style identifier is still accepted (LAN/BLE form)",
+  );
   ok(!isValidStarPairing({ ...good, identifier: "" }), "an empty identifier is refused");
-  ok(!isValidStarPairing({ ...good, identifier: "00:11:62:00:00" }), "a short address is refused");
+  ok(!isValidStarPairing({ ...good, identifier: "   " }), "a whitespace identifier is refused");
+  ok(
+    !isValidStarPairing({ ...good, identifier: "bad\u0000name" }),
+    "a control character means a mangled value, not a rename",
+  );
+  ok(
+    !isValidStarPairing({ ...good, identifier: "x".repeat(257) }),
+    "an absurdly long identifier is refused",
+  );
   ok(!isValidStarPairing(null), "null is not a pairing");
-  ok(!isValidStarPairing("00:11:62:00:00:00"), "a bare string is not a pairing");
+  ok(!isValidStarPairing("TSP100-31300119"), "a bare string is not a pairing");
   ok(
     isValidStarPairing({ identifier: "printer.local", interfaceType: "lan", model: null }),
-    "a LAN identifier is not required to be a BD address",
+    "a LAN identifier is accepted",
   );
   ok(
     !isValidStarPairing({ identifier: "x", interfaceType: "carrier-pigeon", model: null }),
     "an unknown interface type is refused",
   );
   ok(describePairing(null).includes("No counter printer"), "unpaired state is explained");
-  ok(describePairing(good).includes("00:11:62:00:00:00"), "paired state names the device");
+  ok(describePairing(good).includes("TSP100-31300119"), "paired state names the device");
   ok(describePairing(good).includes("Bluetooth"), "paired state names the transport");
 
   return { passed, failed };

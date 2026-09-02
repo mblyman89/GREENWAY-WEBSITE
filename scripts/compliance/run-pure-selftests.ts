@@ -430,6 +430,7 @@ import { __runPosApiBaseCoreTests } from "../../src/lib/pos/api-base-core";
 import { __runCapacitorConfigCoreTests } from "../../src/lib/pos/capacitor-config-core";
 import { __runIosBuildConfigCoreTests } from "../../src/lib/pos/ios-build-config-core";
 import { __runStarPrinterCoreTests } from "../../src/lib/pos/star-printer-core";
+import { __runPrinterPairingCoreTests } from "../../src/lib/pos/printer-pairing-core";
 import { __runPosStorageCoreTests } from "../../src/lib/pos/pos-storage-core";
 import { __runPosSecureStoreCoreTests } from "../../src/lib/pos/pos-secure-store-core";
 import { __runRegisterHostCoreTests } from "../../src/lib/pos/register-host-core";
@@ -746,6 +747,7 @@ async function main() {
   assertNoFailures("pos/capacitor-config-core", __runCapacitorConfigCoreTests());
   assertNoFailures("pos/ios-build-config-core", __runIosBuildConfigCoreTests());
   assertNoFailures("pos/star-printer-core", __runStarPrinterCoreTests());
+  assertNoFailures("pos/printer-pairing-core", __runPrinterPairingCoreTests());
   assertNoFailures("pos/pos-storage-core", __runPosStorageCoreTests());
   assertNoFailures("pos/pos-secure-store-core", __runPosSecureStoreCoreTests());
   assertNoFailures("pos/register-host-core", __runRegisterHostCoreTests());

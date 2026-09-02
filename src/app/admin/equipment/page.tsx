@@ -231,7 +231,15 @@ export default async function EquipmentPage({
         >
           <div className="grid gap-3 sm:grid-cols-2">
             {integrated.map((d) => {
-              const online = d.kind === "receipt_printer" ? printerOnline : null;
+              // The online/offline badge comes from the CloudPRNT heartbeat
+              // (last_poll_at), which ONLY PRN-RECEIPT-01 sends. It is keyed by
+              // asset tag rather than by kind because SLICE 11 added a second
+              // receipt printer: the Bluetooth counter printer has no server
+              // heartbeat at all, so a kind-based test would have labelled a
+              // perfectly healthy printer "offline" and sent the owner looking
+              // for a fault that does not exist. It falls back to its registry
+              // status, like every other non-polling device.
+              const online = d.assetTag === "PRN-RECEIPT-01" ? printerOnline : null;
               return (
                 <Card key={d.assetTag} padding="sm">
                   <div className="flex items-start justify-between gap-2">

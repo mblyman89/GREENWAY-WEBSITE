@@ -39,8 +39,28 @@ import {
   receiptNumber,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
-import { getPairedPrinterIdentifier, printReceipt } from "@/lib/pos/star-printer";
-import type { StarPrintJob } from "@/lib/pos/star-printer-core";
+import {
+  detectPrintEnvironment,
+  discoverPrinters,
+  forgetPairedPrinter,
+  getPairedPrinter,
+  getPairedPrinterIdentifier,
+  printReceipt,
+  setPairedPrinterIdentifier,
+} from "@/lib/pos/star-printer";
+import {
+  describePairing,
+  STAR_DISCOVERY_SECONDS,
+  type StarPairing,
+  type StarPrintJob,
+} from "@/lib/pos/star-printer-core";
+import {
+  buildTestSlipHtml,
+  choosePrinter,
+  describeAmbiguity,
+  pairingScreenState,
+  type DiscoveredPrinter,
+} from "@/lib/pos/printer-pairing-core";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
@@ -271,6 +291,18 @@ export function RegisterShell({
   const [voidOpen, setVoidOpen] = useState(false); // B27
   const [returnsOpen, setReturnsOpen] = useState(false); // AM-C
   const [leaderboardOpen, setLeaderboardOpen] = useState(false); // B34
+  const [printerSetupOpen, setPrinterSetupOpen] = useState(false); // SLICE 11
+  /**
+   * SLICE 11 — the one-line printer status under the MORE menu item.
+   *
+   * Held in state, not read inline during render: reading device storage while
+   * rendering would differ between the server pass and the first client pass.
+   * It is seeded on mount and refreshed when the setup screen closes, which are
+   * the only moments the pairing can change.
+   */
+  const [printerNote, setPrinterNote] = useState<string>(
+    "Choose which printer this till prints to",
+  );
   const [pickupOpen, setPickupOpen] = useState(false); // B28
   // B28 — live count of website pickup orders (polled while unlocked+online).
   const [pickupCount, setPickupCount] = useState<number | null>(null);
@@ -416,6 +448,10 @@ export function RegisterShell({
     setHeldSale(parseHeldSale(posStorageGet(HELD_SALE_KEY)));
     // B44 — per-device display mode (parseTheme degrades corruption to dark).
     setTheme(parseTheme(posStorageGet(THEME_KEY)));
+    // SLICE 11 — the MORE-menu printer line. Read here, with every other
+    // storage read, because the pairing lives on this device and SSR cannot
+    // see it; reading it during render would be a hydration mismatch.
+    setPrinterNote(describePairing(getPairedPrinter()));
     // Slice 5 — per-device medical test mode (parseMedicalTestMode fails safe
     // to OFF on any corruption, so a bad blob can never silently drop real tax).
     setMedicalTestMode(parseMedicalTestMode(posStorageGet(MEDICAL_TESTMODE_KEY)));
@@ -1537,6 +1573,8 @@ export function RegisterShell({
         onVoidSale={online ? () => setVoidOpen(true) : undefined}
         onReturnSale={online ? () => setReturnsOpen(true) : undefined}
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
+        onPrinterSetup={() => setPrinterSetupOpen(true)}
+        printerMenuNote={printerNote}
         pickupCount={online ? pickupCount : null}
         onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
         themeLabel={themeToggleLabel(theme)}
@@ -1607,6 +1645,17 @@ export function RegisterShell({
       ) : null}
       {leaderboardOpen ? (
         <LeaderboardModal creds={creds} onClose={() => setLeaderboardOpen(false)} />
+      ) : null}
+      {printerSetupOpen ? (
+        <PrinterSetupModal
+          deviceLabel={creds.name}
+          onClose={() => {
+            setPrinterSetupOpen(false);
+            // Re-read the pairing: it may have just been set or forgotten.
+            setPrinterNote(describePairing(getPairedPrinter()));
+          }}
+          onBanner={(msg) => setBanner(msg)}
+        />
       ) : null}
       {voidOpen && employee ? (
         <VoidSaleModal
@@ -2024,6 +2073,8 @@ function HomeScreen({
   onVoidSale,
   onReturnSale,
   onLeaderboard,
+  onPrinterSetup,
+  printerMenuNote,
   pickupCount,
   onPickupQueue,
   themeLabel,
@@ -2075,6 +2126,15 @@ function HomeScreen({
   onReturnSale?: () => void;
   /** B34 — open the budtender leaderboard (undefined offline — it reads the server ledger). */
   onLeaderboard?: () => void;
+  /**
+   * SLICE 11 — open this iPad's receipt-printer setup.
+   *
+   * Always available, including OFFLINE: the pairing is Bluetooth and lives on
+   * this device, so requiring a connection to fix printing would be backwards.
+   */
+  onPrinterSetup: () => void;
+  /** SLICE 11 — one-line printer status shown under the MORE menu item. */
+  printerMenuNote: string;
   /** B28 — live website-pickup count (null offline / not yet fetched). */
   pickupCount: number | null;
   /** B28 — open the pickup queue (undefined offline or with no open drawer). */
@@ -2266,6 +2326,19 @@ function HomeScreen({
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
                 >
                   🔄 Refresh menu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onPrinterSetup();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                >
+                  🖨 Receipt printer
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">
+                    {printerMenuNote}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -3969,6 +4042,213 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
             ))}
           </ul>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 11 — Receipt printer setup: pick THIS iPad's counter printer
+// ---------------------------------------------------------------------------
+
+/**
+ * The screen SLICE 10 was missing.
+ *
+ * SLICE 10 built the whole native printing path but nothing ever chose a
+ * printer, so `getPairedPrinterIdentifier()` was always null and every receipt
+ * silently fell back to opening Star's PassPRNT app. This is the screen that
+ * sets the pairing.
+ *
+ * WHY IT LIVES ON THE IPAD AND NOT THE ADMIN EQUIPMENT PAGE
+ * Bluetooth discovery is physically local to the radio doing the scanning. The
+ * equipment page runs in a browser on the owner's laptop, which cannot see - let
+ * alone pair - a printer sitting on the shop counter. So the equipment page
+ * REPORTS the counter printer and points here; the pairing itself is done on the
+ * iPad that will print. The equipment hub stays the system of record.
+ *
+ * THE HAZARD THIS SCREEN GUARDS
+ * Greenway can run more than one till on one counter, and those printers are in
+ * Bluetooth range of each other. Pairing to the neighbouring printer means
+ * popping the WRONG cash drawer - a cash-control incident, not a nuisance. So
+ * the list ranks the registered printer first, says out loud when nothing
+ * matches the equipment record, and offers a test print that is clearly not a
+ * sale.
+ *
+ * All the wording and ranking logic is in printer-pairing-core.ts (PURE, fully
+ * self-tested). This component only does I/O: scan, save, print, forget.
+ */
+function PrinterSetupModal({
+  deviceLabel,
+  onClose,
+  onBanner,
+}: {
+  deviceLabel: string;
+  onClose: () => void;
+  onBanner: (msg: string) => void;
+}) {
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<DiscoveredPrinter[] | null>(null);
+  const [paired, setPaired] = useState<StarPairing | null>(() => getPairedPrinter());
+  const [warning, setWarning] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // The native plugin is the only thing that can scan. On a laptop browser this
+  // is false and the screen says so plainly instead of spinning forever.
+  const nativeAvailable = useMemo(() => detectPrintEnvironment().nativePluginAvailable, []);
+
+  const state = pairingScreenState({ nativeAvailable, searching, results, paired });
+
+  const runSearch = useCallback(async () => {
+    setSearching(true);
+    setWarning(null);
+    // Discovery takes seconds and is never on the sale path, so it is safe to
+    // block this screen - but NOT the register behind it.
+    const found = await discoverPrinters(STAR_DISCOVERY_SECONDS);
+    setResults(found);
+    setSearching(false);
+  }, []);
+
+  const pick = useCallback((p: DiscoveredPrinter) => {
+    const choice = choosePrinter(p);
+    if (!choice.ok) {
+      setWarning(choice.reason);
+      return;
+    }
+    // Persist BEFORE reporting success: if the write is refused there is no
+    // pairing, and saying "paired" would be a lie the cashier finds out about
+    // mid-sale.
+    const saved = setPairedPrinterIdentifier(choice.pairing.identifier, choice.pairing.model);
+    if (!saved) {
+      setWarning("That printer could not be saved on this iPad. Try again.");
+      return;
+    }
+    setPaired(getPairedPrinter());
+    setResults(null);
+    setWarning(choice.warning);
+  }, []);
+
+  const testPrint = useCallback(async () => {
+    if (!paired) return;
+    setBusy(true);
+    const html = buildTestSlipHtml({
+      printedAt: new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }),
+      deviceLabel,
+      printerLabel: paired.model ?? paired.identifier,
+    });
+    // openDrawer FALSE: a test must never move cash or pop a drawer.
+    const msg = await printSlip(html, false, "test");
+    setBusy(false);
+    onBanner(msg ?? "Test slip sent to the printer.");
+  }, [paired, deviceLabel, onBanner]);
+
+  const forget = useCallback(() => {
+    forgetPairedPrinter();
+    setPaired(null);
+    setResults(null);
+    setWarning(null);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Receipt printer 🖨</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm"
+          >
+            Close
+          </button>
+        </div>
+
+        <p className="mt-1 text-xs text-[var(--pos-text-faint)]">
+          This choice applies to <strong>{deviceLabel}</strong> only. Each till keeps its own
+          printer so no register can pop another register&apos;s cash drawer.
+        </p>
+
+        <h3 className="mt-4 text-base font-semibold">{state.headline}</h3>
+        <p className="mt-1 text-sm text-[var(--pos-text-muted)]">{state.body}</p>
+
+        {warning ? (
+          <p className="mt-3 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-sm text-[var(--pos-text)]">
+            {warning}
+          </p>
+        ) : null}
+
+        {state.kind === "results" ? (
+          <>
+            <p className="mt-3 text-xs text-[var(--pos-text-faint)]">{describeAmbiguity(state.printers)}</p>
+            <ul className="mt-3 space-y-2">
+              {state.printers.map((p) => (
+                <li key={`${p.interfaceType}:${p.identifier}`}>
+                  <button
+                    type="button"
+                    onClick={() => pick(p)}
+                    className={`block w-full rounded-xl px-4 py-3 text-left ${
+                      p.isRegistered
+                        ? "border border-[var(--pos-accent)] bg-[var(--pos-surface-2)]"
+                        : "border border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
+                    }`}
+                  >
+                    <span className="block text-base font-semibold">
+                      {p.model.trim() === "" ? p.identifier : p.model}
+                      {p.isRegistered ? " ✓" : ""}
+                    </span>
+                    <span className="block text-xs text-[var(--pos-text-faint)]">{p.detail}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+
+        {state.kind === "paired" && paired ? (
+          <div className="mt-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-3">
+            <div className="text-base font-semibold">{paired.model ?? paired.identifier}</div>
+            <div className="text-xs text-[var(--pos-text-faint)]">
+              {describePairing(paired)}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {nativeAvailable ? (
+            <button
+              type="button"
+              onClick={() => void runSearch()}
+              disabled={searching || busy}
+              className="pos-tile rounded-xl bg-[var(--pos-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
+            >
+              {searching ? "Searching…" : paired ? "Search again" : "Search for printers"}
+            </button>
+          ) : null}
+          {paired ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void testPrint()}
+                disabled={busy || searching}
+                className="pos-tile rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
+              >
+                {busy ? "Printing…" : "Test print"}
+              </button>
+              <button
+                type="button"
+                onClick={forget}
+                disabled={busy || searching}
+                className="pos-tile rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--pos-danger)] disabled:opacity-40"
+              >
+                Forget this printer
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        <p className="mt-4 text-xs text-[var(--pos-text-faint)]">
+          A sale is never blocked by the printer. If printing fails the sale still completes and
+          the receipt can be reprinted from MORE ▸ Reprint last receipt.
+        </p>
       </div>
     </div>
   );
