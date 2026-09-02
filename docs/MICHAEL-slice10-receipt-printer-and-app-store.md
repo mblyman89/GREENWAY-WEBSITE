@@ -286,6 +286,19 @@ problem ever stops a sale from completing, that is a bug — tell me immediately
 
 # Part 4 — What is not built yet
 
+> ## ✅ RESOLVED IN SLICE 11 — see `MICHAEL-slice11-printer-picker.md`
+>
+> The printer picker described below has been built and merged (PR #1057). It
+> is on the iPad at **MORE ▸ 🖨 Receipt printer**.
+>
+> Building it also uncovered **two bugs in this slice** that would have stopped
+> pairing from working at all, even once the screen existed: the app rejected
+> Bluetooth printer IDs because it expected a MAC address (Bluetooth uses the
+> printer's *name*), and the chosen printer was never actually saved. Both are
+> fixed and explained in Parts 4 and 5 of the SLICE 11 doc.
+>
+> The rest of this section is left as written, for the record.
+
 Being straight with you about a gap.
 
 There is no **printer settings screen** in the app yet — no screen listing
