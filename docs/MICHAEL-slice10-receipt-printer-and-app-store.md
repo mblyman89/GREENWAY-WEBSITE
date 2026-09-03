@@ -1330,3 +1330,147 @@ Swift printer plugin has *still* not been compiled even once.
 When the build finally clears signing, watch for red errors naming a `.swift`
 file and a line number. That is my code's first real test. Screenshot them and
 send them to me — do not fix them yourself.
+
+---
+
+# "Build Succeeded" — what to do next
+
+This is the milestone. **`StarPrinterPlugin.swift` compiled for the first
+time.** Every previous failure was Apple paperwork; this one was my actual code,
+and it passed. Six blockers cleared in a row.
+
+Two things happen now, and **they run in parallel** — do not do them in
+sequence:
+
+- **Track A — test the printer on the iPad.** About 30 minutes. Do it today.
+- **Track B — submit the MFi form to Star.** Ten minutes, then a **1–2 week
+  wait**. Start it today too, because the clock does not begin until you submit.
+
+Track B is the one people skip and regret. If you submit the app to Apple
+without the PPID, Apple **rejects it**, and you wait out the same two weeks
+anyway.
+
+## Track A — get it running and printing
+
+### A1. Install it on the iPad
+
+Building is not installing. **Cmd-B** only compiles. With the iPad connected and
+unlocked, pick it in the destination menu and press the **▶ Play** button.
+
+First launch will likely refuse to open with an untrusted-developer message.
+That is normal for a first install. On the iPad:
+
+**Settings ▸ General ▸ VPN & Device Management ▸** your developer certificate
+**▸ Trust**
+
+Then tap the app icon again.
+
+### A2. Pair the printer in iPadOS first
+
+The app does not do this part; iPadOS does. If you have not already:
+
+1. Print the self-test — printer **off**, hold **FEED**, switch it **on**, keep
+   holding until it prints. Find the **Dev Name** line, `TSP100-XXXXX`. Write it
+   down — you need it again for the MFi form.
+2. iPad **Settings ▸ Bluetooth** → tap that name → wait for **Connected**.
+
+### A3. Pick the printer in the app
+
+This is the SLICE 11 screen, which did not exist when Part 3 below was written.
+**Do this before running any test sale.**
+
+In the app: **MORE ▸ 🖨 Receipt printer**
+
+1. Tap **Search for printers** — it scans for six seconds
+2. Your registered printer is listed **first with a ✓**, matched against the
+   serial on its equipment record
+3. Tap it to select it
+4. Tap **Test print**
+
+The test slip says **PRINTER TEST** and **"It is NOT a sale"**, names the till
+and printer, and shows **no dollar amount** anywhere. It also **cannot** open
+the cash drawer — that is enforced in code, not merely left out.
+
+> If more than one printer answers and none match the equipment record, the
+> screen warns you and still lets you choose. That is deliberate: a
+> warranty-replacement printer has a new serial, and refusing to print would
+> leave the store dead. A warning is right; a locked door is not.
+
+**If the scan finds nothing:** printer powered on, has paper, and shows
+**Connected** in iPadOS Bluetooth. Then scan again.
+
+### A4. Run a real cash sale
+
+Ring up any item, complete a **cash** sale.
+
+**What should happen:** the receipt prints, the drawer pops, and **the screen
+never leaves the register.** No bounce to PassPRNT or any other app. That
+in-app behaviour is the entire point of this slice — if the screen jumps to
+another app, the printer was not selected in A3.
+
+### A5. Confirm the drawer rules
+
+| Do this | Drawer should |
+|---|---|
+| Cash sale | **Open** |
+| Refund | **Open** |
+| Void | **Open** |
+| No Sale | **Open** |
+| Reprint a receipt | **Stay shut** |
+| Print the day report | **Stay shut** |
+| Test print | **Stay shut** |
+
+Reprint not opening the drawer is intentional — otherwise anyone could pop the
+till by reprinting an old receipt.
+
+### A6. Test it failing — please actually do this one
+
+Open the printer's paper lid so it physically cannot print, then ring up a cash
+sale.
+
+**Expected:** the sale still completes and is recorded, and you get a clear
+message about the printer. **The sale must not be blocked.** If a printer fault
+ever stops a sale from completing, that is a bug — tell me the same day.
+
+Then close the lid and use **MORE ▸ Reprint last receipt** to recover the slip.
+
+## Track B — the MFi form (start today)
+
+Full field-by-field instructions are in **Part 5, Step 13** above. The short
+version:
+
+- Form: <https://star-m.jp/eng/support/s_print/app_regist.html>
+- Printer to tick: **TSP100IIIBI** — *not* TSP143IV, which is your Ethernet
+  online-order printer
+- App name: `Greenway Point of Transaction`
+- Bundle ID: `com.greenwaymarijuana.register`
+- Version: `1.0`
+
+Star files it with Apple and emails you an **MFi Product Plan ID (PPID)** that
+looks like `MFI PPID 123456-7890`. **Save it somewhere permanent** — you need it
+for App Store submission and for every future version of the app.
+
+## What NOT to do yet
+
+- **Do not submit to the App Store.** Wait for the PPID. Part 6 covers
+  submission and it is gated on that.
+- **Do not turn off New Pairing Permission yet** (Step 8). Once it is off you
+  cannot pair a second iPad without factory-resetting the printer. If a second
+  till is coming, **pair both iPads first**.
+
+## What to send me
+
+Whatever happens, a short report is enough:
+
+- Test print worked? Y/N
+- Cash sale printed and popped the drawer, without leaving the register? Y/N
+- Paper-lid test — did the sale still complete? Y/N
+- Any red errors, or anything the app said that you did not expect — screenshot
+
+## Reminder
+
+The line I have repeated every round is finally retired: **the Swift plugin has
+now been compiled.** What has *not* happened yet is it being run against real
+hardware. Compiling proves the code is valid; A3 and A4 prove it actually
+drives your printer. Those are different things, and only you can do the second
+one.
