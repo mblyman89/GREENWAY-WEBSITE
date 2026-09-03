@@ -177,7 +177,7 @@ export function resolveRegisterHostConfig(
         platform,
         error:
           "This copy of the register app was built without a server address, so it cannot reach Greenway. " +
-          "Rebuild the app with the server address set (REGISTER_API_BASE=https://greenwaymarijuana.com) " +
+          "Rebuild the app with the server address set (REGISTER_API_BASE=https://greenwaywebsite1.vercel.app) " +
           "and install it again. Nothing is wrong with this iPad.",
       };
     }

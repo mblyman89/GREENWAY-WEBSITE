@@ -147,11 +147,32 @@ npm ci
 
 ### Step 2 — Open the project in Xcode
 
+> ⚠️ **CORRECTED.** An earlier version of this step listed
+> `npm run register:build` with **no server address**. That builds a register
+> that installs, launches, and then refuses to start with *"This register
+> cannot start."* Use the command below instead. **My mistake, not yours.**
+
 ```
-npm run register:build
-npx cap sync ios
+REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios
 npx cap open ios
 ```
+
+Two things changed from the old version and both matter:
+
+- `register:build:ios` instead of `register:build` — the `:ios` one runs the
+  **preflight check** and `cap sync ios` for you. The plain one skips both.
+- The `REGISTER_API_BASE=` prefix — this is the server address, and it is baked
+  into the bundle at build time. Without it the app has no idea what to call.
+
+You should see this line go past:
+
+```
+  OK   server address: The app will call https://greenwaywebsite1.vercel.app/api/pos/… for every request.
+```
+
+If instead it stops with `FAIL server address`, the address was not passed —
+re-run the command with the whole `REGISTER_API_BASE="…"` prefix on the same
+line.
 
 Xcode opens. If it starts indexing, let it finish before clicking anything.
 
@@ -1474,3 +1495,165 @@ now been compiled.** What has *not* happened yet is it being run against real
 hardware. Compiling proves the code is valid; A3 and A4 prove it actually
 drives your printer. Those are different things, and only you can do the second
 one.
+
+---
+
+# Troubleshooting: "This register cannot start" / built without a server address
+
+If the app installs, the icon appears, you tap it, and you get:
+
+```
+This register cannot start
+This copy of the register app was built without a server address, so it
+cannot reach Greenway. Rebuild the app with the server address set
+(REGISTER_API_BASE=https://greenwaymarijuana.com) and install it again.
+Nothing is wrong with this iPad.
+```
+
+## First: this is very good news
+
+That screen is **our own code**, not iOS. For you to be reading it, all of this
+had to work:
+
+- The app was signed, installed and **trusted** by iPadOS
+- It launched
+- The web bundle loaded
+- **My Swift plugin compiled and shipped inside the app**
+
+Nothing crashed. The register **deliberately refused to start** because it
+checked itself at boot, found it had no back-office address, and stopped rather
+than let you discover the problem mid-sale in front of a customer. That guard
+lives in `src/lib/pos/register-host-core.ts` and it did exactly its job.
+
+**No sales lost, nothing to reset, nothing to undo.**
+
+## What went wrong — and it was my fault
+
+Inside the packaged app the page is served from `capacitor://localhost`. A
+relative path like `/api/pos/sync` therefore resolves to *a file inside the app
+bundle*, which does not exist. So the server address has to be **baked into the
+bundle at build time**, through `REGISTER_API_BASE`.
+
+**Step 2 of this guide told you to run:**
+
+```
+npm run register:build
+```
+
+**It should have told you to run:**
+
+```
+REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios
+```
+
+Two separate mistakes in that one line, both mine:
+
+1. **No address.** `REGISTER_API_BASE` was missing entirely, so the bundle was
+   built with an empty address.
+2. **The wrong script.** `register:build` skips the **preflight check**.
+   `register:build:ios` runs it — and that check exists *precisely* to catch a
+   missing server address and stop the build **on the Mac, in one second**,
+   before any of this. I wrote that guard, then wrote a Step 2 that walked
+   straight around it.
+
+I have corrected Step 2 above.
+
+## Which address — the Vercel one
+
+To be unambiguous, because the error message itself points at the wrong one:
+
+| Address | What it is | Use it? |
+|---|---|---|
+| `https://greenwaymarijuana.com` | Your **old public WordPress site**. No register API on it. | ❌ **No** |
+| `https://greenwaywebsite1.vercel.app` | The **new system we are building**. Has the register API. Verified responding today. | ✅ **Yes** |
+
+The apex domain has no `/api/pos/` endpoints at all, so a register pointed at it
+would install and then fail on every single call. We are still building and
+testing, so the registers point at Vercel.
+
+> **The error message text is wrong and that is also my bug.** It hard-codes
+> `greenwaymarijuana.com` as the example. It is only an example string inside a
+> message, but it points at the wrong site, so it is being corrected in the same
+> change as this section.
+
+Switching to the real domain later is one line and a rebuild — about ninety
+seconds plus reinstalling. Nothing is locked in.
+
+## Fix it — on the Mac
+
+```
+cd ~/greenway/GREENWAY-WEBSITE
+git pull
+REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios
+```
+
+Watch for this line in the output:
+
+```
+  OK   server address: The app will call https://greenwaywebsite1.vercel.app/api/pos/… for every request.
+```
+
+**If you see `FAIL server address`,** the prefix did not take. It must be on the
+**same line**, before `npm`, with the quotes. Do not run it as a separate
+command.
+
+Then:
+
+```
+npx cap open ios
+```
+
+In Xcode, press the **▶ Play** button again with the iPad connected. It
+reinstalls over the top — you do **not** need to delete the app first.
+
+> **Why `git pull` first:** the corrected Step 2 and this section are now in the
+> repo, and pulling keeps your copy of the guide in step with mine.
+
+## Why this could not have been caught before now
+
+`ios/App/App/public` — the folder holding the built web bundle — is
+**git-ignored** (`ios/.gitignore`, line `App/App/public`). It is build output,
+generated on your Mac by `cap sync`, and it never reaches me. So I cannot see or
+test what got baked into your bundle. The preflight script is the mechanism that
+was supposed to protect that blind spot, and my Step 2 bypassed it.
+
+## About "VPN & Device Management" being empty
+
+You went to **Settings ▸ General ▸ VPN & Device Management** and found only *Add
+VPN Configuration* and *Sign in to Work or School Account* — no developer
+certificate.
+
+**That is correct and nothing is wrong.** That entry appears only when iPadOS
+needs you to manually trust a developer profile. Apps installed **directly from
+Xcode over a cable** to a device in **Developer Mode** are trusted
+automatically, so no entry is created.
+
+The proof is simple: **the app opened.** An untrusted app cannot launch at all —
+it shows *"Untrusted Developer"* and refuses. You got our register's own screen
+instead, which means trust was never in question.
+
+So: ignore that step. It applies to ad-hoc and TestFlight-style installs, not to
+a cabled Xcode install. I listed it as "probably" and it turned out not to
+apply.
+
+## Star MFi form — submitted ✅
+
+Noted and logged. The 1–2 week PPID clock is now running. Nothing further to do
+there until Star emails the **MFi Product Plan ID**; save it when it arrives.
+
+## What to do after the rebuild
+
+Straight back to the printer testing from the previous section:
+
+1. **MORE ▸ 🖨 Receipt printer** → **Search for printers** → select yours →
+   **Test print**
+2. A real **cash sale** — receipt prints, drawer pops, screen never leaves the
+   register
+3. The **paper-lid test** — open the lid, ring a cash sale, confirm the sale
+   still completes
+
+## Reminder
+
+The plugin is compiled and now installed on the iPad. What still has not
+happened is it **driving the printer**. That is the next real test, and it needs
+this rebuild first.
