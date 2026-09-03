@@ -67,6 +67,7 @@ import {
 } from "@/lib/inventory/audit-hub-store";
 import { LABELS } from "@/lib/inventory/inventory-audit-post-core";
 import { listCycleCounts } from "@/lib/inventory/cycle-counts";
+import { loadOversoldReport } from "@/lib/inventory/oversold-report-store";
 
 export const dynamic = "force-dynamic";
 
@@ -85,14 +86,19 @@ export default async function CycleCountsPage({
   await requirePermission("inventory.count");
   const sp = await searchParams;
 
-  const [queue, legacy] = await Promise.all([
+  const [queue, legacy, oversold] = await Promise.all([
     listAuditSessions({ statuses: COUNT_QUEUE_STATUSES, limit: 50 }),
     // The old sessions, for history only. Read with the same helper as before;
     // nothing here can apply, cancel or edit them.
     listCycleCounts(25),
+    // SLICE 15 — products the register sold past their tracked count. Read
+    // only; this section reports, it never adjusts.
+    loadOversoldReport({ limit: 200 }),
   ]);
 
   const jobs = queue.ok ? queue.data : [];
+  const oversoldFlags = oversold.ok ? oversold.flags : [];
+  const oversoldRows = oversold.ok ? oversold.rows : [];
 
   return (
     <div className="space-y-5">
@@ -132,6 +138,91 @@ export default async function CycleCountsPage({
           "When every lot has a number, the count leaves this page and goes to the owner to review. You are done at that point — you are never asked to explain a difference or to approve anything.",
         ]}
       />
+
+      {/* ── STOCK NEEDING RECOUNT (slice 15) ──────────────────────────────────
+          Products the register sold past their tracked count. This is the
+          owner's requested working list, and its shape is not invented: the
+          columns mirror Lightspeed Retail's Negative Inventory report
+          (item / quantity removed / on hand / source sale / employee /
+          date), which is the closest thing to a standard for this. The
+          sourcing is recorded in
+          docs/slice-15-research-oversold-industry-standard.md.
+
+          Placed ABOVE the approved-count queue on purpose: an oversell is a
+          known, dated discrepancy with a name attached to it, so it is the
+          most actionable count in the building.
+
+          It reports and never adjusts. Correcting a count is still a count,
+          recorded on a blind sheet and approved by the owner — letting this
+          page write a quantity would reintroduce the exact defect this
+          file's header calls the most damaging one the old system had.
+
+          A refusal is shown rather than swallowed, matching the queue. */}
+      {!oversold.ok ? (
+        <div className="rounded-xl border border-[var(--admin-danger)]/30 bg-[var(--admin-danger)]/[0.06] px-4 py-3 text-sm text-[var(--admin-danger)]">
+          {oversold.message}
+        </div>
+      ) : oversoldFlags.length > 0 ? (
+        <section className={CARD}>
+          <h2 className={H2}>Stock needing recount</h2>
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+            These products were sold past what the system thought was on the shelf. Each one is a real difference
+            between the count and reality, so each one needs eyes on it. The register recorded who sold it and when,
+            and it stays listed here until the product is counted again.
+          </p>
+          <ul className="divide-y divide-[var(--admin-border)]">
+            {oversoldFlags.map((f) => {
+              // Every sale that oversold THIS product — the per-item history
+              // that makes a repeat offender obvious at a glance.
+              const occurrences = oversoldRows.filter((r) => r.productName === f.productName);
+              return (
+                <li key={f.productName} className="py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--admin-text)]">{f.productName}</p>
+                      <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
+                        Count is off by {f.totalShortfall} unit{f.totalShortfall === 1 ? "" : "s"} across{" "}
+                        {f.occurrences} sale{f.occurrences === 1 ? "" : "s"}
+                        {f.lastSeenAt ? ` · last on ${new Date(f.lastSeenAt).toLocaleString()}` : ""}
+                      </p>
+                    </div>
+                    <Badge tone="gold">Recount</Badge>
+                  </div>
+                  {/* The per-sale detail: SOURCE, employee and time. This is
+                      the audit trail WAC 314-55-087(2)(b) asks for, which
+                      requires the opportunity to trace any transaction back
+                      to its original source. */}
+                  <ul className="mt-2 space-y-1">
+                    {occurrences.map((r, i) => (
+                      <li key={`${r.orderId}-${i}`} className="text-xs text-[var(--admin-text-muted)]">
+                        Sold {r.sold ?? "?"} with {r.tracked ?? "?"} tracked
+                        {/* The decrement is written by the server, so its
+                            actor_label is literally "system" — printing that
+                            here would look like a staff name and imply an
+                            attribution the row does not carry. The employee is
+                            reached through the sale itself, which is what the
+                            "view sale" link is for. Any other label is shown. */}
+                        {r.actorLabel && r.actorLabel !== "system" ? ` · ${r.actorLabel}` : ""}
+                        {r.occurredAt ? ` · ${new Date(r.occurredAt).toLocaleString()}` : ""}{" "}
+                        <Link
+                          href={`/admin/orders/${r.orderId}`}
+                          className="font-semibold text-[var(--admin-accent)] hover:underline"
+                        >
+                          view sale
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
+            Nothing on this list can be corrected from here. Fixing a count is still a count: plan it on the Inventory
+            Auditing screen so it is recorded blind and approved like every other adjustment.
+          </p>
+        </section>
+      ) : null}
 
       {/* ── THE QUEUE ──────────────────────────────────────────────────────── */}
       <section className={CARD}>

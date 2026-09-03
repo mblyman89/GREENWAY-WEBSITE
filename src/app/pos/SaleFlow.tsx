@@ -116,6 +116,11 @@ import {
   stockBlockingLines,
   stockRefusalMessage,
 } from "@/lib/pos/stock-ceiling-core";
+// SLICE 15 — post-override behaviour, built from researched industry practice
+// (docs/slice-15-research-oversold-industry-standard.md): warn before, never
+// block completion, keep the receipt clean, record the variance with full
+// attribution, and issue a count command at the moment of discovery.
+import { countPromptMessage, oversoldVariances } from "@/lib/pos/oversold-variance-core";
 // Saved-cart smart release — notice when the SAVED sale is sitting on units
 // this live cart needs, and offer to release it right at the conflict moment.
 import { heldStockConflicts, describeHeldLines } from "@/lib/pos/held-stock-core";
@@ -518,6 +523,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // fresh engine prices, and the next customer never inherits a markdown).
   const [overrides, setOverrides] = useState<Record<string, PosLineOverride>>({});
   const [changeMinor, setChangeMinor] = useState<number | null>(null);
+  // SLICE 15 — NetSuite's "zero count" pattern: when a pick drives stock past
+  // what was tracked, a count command is issued at the moment of discovery,
+  // while the person who can resolve it is still in front of the product.
+  // Non-blocking by design (Shopify POS and Lightspeed both warn without
+  // gating completion) and never printed on the customer's receipt.
+  const [countPrompt, setCountPrompt] = useState<string | null>(null);
   // AO-4 — a rail quick-tender button ($130/$140/…/Exact) carries its amount
   // into the tender screen so the drawer opens one tap later. null = the
   // cashier used the plain tender button and starts from $0 as before.
@@ -788,6 +799,43 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           if (!built.ok) return built.errors.join(" ");
           const saleUuid = onEnqueue("sale", built.payload as unknown as Record<string, unknown>);
           setChangeMinor(built.changeMinor);
+
+          // ── SLICE 15 — the oversold variance, captured at the ONLY moment
+          // it is still knowable ────────────────────────────────────────────
+          //
+          // The stored inventory level is clamped at zero by
+          // sale-decrement-core.ts:217 (correct — state traceability cannot
+          // receive a negative on-hand figure). But the clamp DESTROYS the
+          // size of the shortfall: once pinned at 0 there is no way back to
+          // "sold 2 against 1 tracked" from the level alone. So the variance
+          // is computed here, from the cart as it actually stood, and frozen
+          // with the same discipline the receipt is frozen with.
+          //
+          // Note this is driven by the NUMBERS, not by whether the override
+          // toggle happened to be on: flipping the override and then selling
+          // nothing past the count is not a variance, while a menu refresh
+          // that lowered a count under an existing cart is one even though
+          // nobody touched the switch.
+          const variances = oversoldVariances(
+            cart.map((e) => ({
+              productName: e.product.name,
+              variantLabel: e.product.variantLabel,
+              quantity: e.quantity,
+              unitsLeft: e.product.unitsLeft,
+            })),
+          );
+          setCountPrompt(countPromptMessage(variances));
+          // The DURABLE record is deliberately NOT written from here. The
+          // server-side decrement already detects the same shortfall and
+          // stamps it onto the sale's own order_events row
+          // (sale-decrement-core.ts:213 → sale-decrement.ts:243), which is
+          // what makes it traceable back to its source sale as
+          // WAC 314-55-087(2)(b) requires. Enqueuing a second client-side
+          // copy would create two records of one event that could disagree,
+          // and the register's copy would be the less trustworthy of the two
+          // (it reads a cached count, the server reads the live level). So
+          // the register's job here is the COUNT COMMAND — NetSuite's zero-
+          // count pattern — and the back office reads the recorded variance.
           // B10 — freeze the receipt from EXACTLY what was enqueued.
           // B13 — apply the owner's customization from the bundle (normalize
           // defends against a pre-B13 cached bundle carrying no config).
@@ -859,6 +907,31 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         <p className="mt-2 text-5xl font-bold text-[var(--pos-accent)]">{money(changeMinor ?? 0)} change</p>
       </div>
       {changeMinor != null && changeMinor > 0 ? <ChangePlan changeMinor={changeMinor} /> : null}
+      {/* SLICE 15 — the count command. Placement and tone are taken from the
+          research, not chosen by feel: Shopify POS and Lightspeed both warn
+          about insufficient stock WITHOUT blocking the sale, and NetSuite's
+          zero-count practice issues the count instruction at the moment of
+          discovery. So this informs and instructs, and the lock button below
+          stays unconditional. It is deliberately absent from the receipt —
+          no source examined puts an inventory discrepancy in front of the
+          customer, because it is an internal control record. */}
+      {countPrompt ? (
+        <div className="mt-4 w-full max-w-md rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--pos-warn)]">Count check needed</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--pos-warn)]">{countPrompt}</p>
+          {/* Wording note: an earlier draft told staff the shortfall was
+              logged "with your name". That was checked against the code and
+              it is not true \u2014 the decrement runs server-side and stamps
+              actor_label "system" (sale-decrement.ts), with the employee
+              reachable through the sale itself. The promise was narrowed to
+              what the system actually guarantees, because a reassurance the
+              software does not honour is worse than no reassurance. */}
+          <p className="mt-1.5 text-[11px] text-[var(--pos-text-muted)]">
+            This sale is already recorded, and the shortfall is logged against it so the back office can trace it and
+            reconcile the count. Just verify the physical count on the shelf.
+          </p>
+        </div>
+      ) : null}
       <p className="mt-4 max-w-md text-center text-sm text-[var(--pos-text-muted)]">
         Count the change back to the customer. The sale is queued and will sync to the back office —
         the register locks when you tap below.
@@ -2136,6 +2209,12 @@ function CartScreen({
    * the next customer starts enforced again.
    */
   const [stockOverride, setStockOverride] = useState(false);
+  // SLICE 15 FIX A — the refusal that is ALSO the way out. Holds the reason
+  // string for the item that was just refused; rendering it draws the
+  // "Sell anyway" button right next to the explanation. Cleared when the
+  // override is taken, or dismissed. Any staff member may use it (owner
+  // decision Q2) — no PIN, unlike the scan-required and price overrides.
+  const [stockOverrideOffer, setStockOverrideOffer] = useState<string | null>(null);
   /** Units of a variant already in the cart (0 when absent). */
   const cartQtyOf = (variantId: string) =>
     cart.find((e) => e.product.variantId === variantId)?.quantity ?? 0;
@@ -2163,7 +2242,12 @@ function CartScreen({
     // price-override rules above, which stay manager-locked.
     if (!canAddOne(cartQtyOf(p.variantId), p.unitsLeft, stockOverride)) {
       const label = p.variantLabel ? `${p.name} (${p.variantLabel})` : p.name;
-      setScanBlockNotice(`${stockRefusalMessage(label, p.unitsLeft)} Use "Sell anyway" if the unit is on the shelf.`);
+      // SLICE 15 FIX A — Slice 14 told staff to "Use Sell anyway" while the
+      // ONLY such button lived in a panel gated on stockBlocks.length > 0,
+      // which the Phase-2 clamp makes unreachable. The owner could not find
+      // it, and he was right: it was not there. The refusal now CARRIES the
+      // override with it, so the way out is wherever the block happens.
+      setStockOverrideOffer(stockRefusalMessage(label, p.unitsLeft));
       return;
     }
     setCart(addToCart(cart, p, stockOverride));
@@ -2477,6 +2561,16 @@ function CartScreen({
               </button>
             </div>
           ) : null}
+          <StockOverrideOffer
+            offer={stockOverrideOffer}
+            menuAgeLabel={menuAgeLabel}
+            onOverride={() => {
+              setStockOverride(true);
+              setStockOverrideOffer(null);
+              setScanBlockNotice(null);
+            }}
+            onDismiss={() => setStockOverrideOffer(null)}
+          />
           {scanFlash ? (
             <p className="mt-2 rounded-lg border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-accent)]">
               {scanFlash} — added to sale
@@ -2641,9 +2735,9 @@ function CartScreen({
                                     const label = line.product.variantLabel
                                       ? `${line.product.name} (${line.product.variantLabel})`
                                       : line.product.name;
-                                    setScanBlockNotice(
-                                      `${stockRefusalMessage(label, line.product.unitsLeft)} Use "Sell anyway" if the unit is on the shelf.`,
-                                    );
+                                    // SLICE 15 FIX A — same escape hatch as the
+                                    // menu grid: the refusal carries the override.
+                                    setStockOverrideOffer(stockRefusalMessage(label, line.product.unitsLeft));
                                     return;
                                   }
                                   setCart(setCartQuantity(cart, variantId, l.quantity + 1, stockOverride));
@@ -3142,6 +3236,19 @@ function CartScreen({
               </button>
             </div>
           ) : null}
+          {/* SLICE 15 FIX A — the override travels with the refusal, so the
+              menu-grid path offers it here too (this is the second of the two
+              places the register can refuse an add). */}
+          <StockOverrideOffer
+            offer={stockOverrideOffer}
+            menuAgeLabel={menuAgeLabel}
+            onOverride={() => {
+              setStockOverride(true);
+              setStockOverrideOffer(null);
+              setScanBlockNotice(null);
+            }}
+            onDismiss={() => setStockOverrideOffer(null)}
+          />
           {browseTab === "keypad" ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <KeypadPanel onAdd={(p) => manualAdd(p)} />
@@ -5029,6 +5136,60 @@ function TenderChip({ label, onClick, active }: { label: string; onClick: () => 
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * SLICE 15 FIX A — the refusal that carries its own escape hatch.
+ *
+ * Slice 14 blocked the oversell correctly but put the only "Sell anyway"
+ * button inside a panel gated on `stockBlocks.length > 0`. Because the
+ * Phase-2 clamp prevents a cart line from ever exceeding its count, that
+ * panel is effectively unreachable — so the refusal message pointed at a
+ * button that was not on screen. The owner looked for it and could not find
+ * it. This puts the override exactly where the block happens.
+ *
+ * Deliberately NOT PIN-gated: the owner's decision was that ANY staff member
+ * may sell past a stale count, because the person holding the jar knows more
+ * than a cached integer. Scan-required and price overrides stay
+ * manager-locked; this one does not.
+ *
+ * The last-refreshed line is the owner's decision Q3 — it is what lets a
+ * budtender judge how much to trust the number they are overriding.
+ */
+function StockOverrideOffer({
+  offer,
+  menuAgeLabel,
+  onOverride,
+  onDismiss,
+}: {
+  offer: string | null;
+  menuAgeLabel: string;
+  onOverride: () => void;
+  onDismiss: () => void;
+}) {
+  if (!offer) return null;
+  return (
+    <div className="mt-2 rounded-xl border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-semibold text-[var(--pos-danger)]">{offer}</p>
+        <button type="button" onClick={onDismiss} aria-label="Dismiss" className="text-xs font-bold text-[var(--pos-text-muted)]">
+          ✕
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-[var(--pos-text-muted)]">
+        Stock counts come from the menu last refreshed {menuAgeLabel}. If the product is physically on the shelf, sell
+        it anyway and the count will be reconciled.
+      </p>
+      <button
+        type="button"
+        onClick={onOverride}
+        data-stock-override-offer
+        className="pos-tile mt-2 min-h-11 w-full rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-surface)] px-4 py-2 text-xs font-bold text-[var(--pos-danger)]"
+      >
+        Sell anyway — the unit is on the shelf
+      </button>
+    </div>
   );
 }
 
