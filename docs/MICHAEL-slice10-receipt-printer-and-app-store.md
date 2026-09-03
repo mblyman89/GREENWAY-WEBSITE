@@ -1022,3 +1022,155 @@ happens next:
 - **Red errors naming a `.swift` file and a line number** → that is the first
   real compile of `StarPrinterPlugin.swift`. Screenshot them and send them to
   me. Do not try to fix them yourself.
+
+---
+
+# Troubleshooting: "Failed Registering Bundle Identifier ... is not available"
+
+If Xcode says:
+
+```
+Failed Registering Bundle Identifier
+The app identifier "com.greenwaymarijuana.register" cannot be registered to
+your development team because it is not available. Change your bundle
+identifier to a unique string to try again.
+```
+
+**Read this before changing anything.** The instruction Apple gives you in
+that message — "change your bundle identifier" — is the **wrong move here**,
+and it is expensive. See *Do not change the bundle ID* below.
+
+## Good news first
+
+Getting this error means the previous two problems are **solved**:
+
+- Your team is set (the panel shows **LYMAN'S MARIJUANA L.L.C.**)
+- Your iPad is registered (Accounts now shows **1 Provisioned Device**)
+
+Xcode has stopped complaining about devices entirely. It has moved on to the
+next step — claiming the app's name with Apple — and only that step is
+failing.
+
+## What "not available" actually means
+
+App IDs are globally unique across all of Apple. "Not available" means
+`com.greenwaymarijuana.register` **is already registered to some Apple team,
+and it is not the team you are currently signing with.**
+
+The overwhelmingly likely explanation, given the order things happened: while
+troubleshooting the earlier "no devices" error, the **Personal Team** was
+selected in the Team dropdown at least once. If Xcode managed to reach Apple
+during that window, it claimed `com.greenwaymarijuana.register` for the
+**Personal Team**. Now that you have correctly switched to the paid LLC team,
+Apple sees the name as taken — by your *other* account.
+
+Both accounts are yours. Nothing has been stolen or lost. The name is simply
+filed in the wrong drawer.
+
+## Do not change the bundle ID
+
+Apple's error message suggests changing it. **Do not.** In this project the
+bundle identifier is deliberately write-once:
+
+- It is set in `src/lib/pos/capacitor-config-core.ts` as `REGISTER_APP_ID`
+- `capacitor.config.ts` imports it from there
+- `tests/compliance/pos-capacitor-config.test.ts` asserts its exact value
+- It is written into `ios/App/App.xcodeproj/project.pbxproj` in two places
+
+More importantly, once an app is uploaded to App Store Connect under an ID,
+that ID is permanent. Changing it later means a **new app record, a new App
+Store listing, and a reinstall on every till.** It is not worth it to dodge a
+five-minute fix.
+
+Changing it is a code change in the repo, not something to edit in Xcode. If
+we ever genuinely need to, that is my job, not a field fix.
+
+## Fix it — Step 1: find where the ID is registered
+
+1. Go to <https://developer.apple.com/account/resources/identifiers/list>
+2. **Sign in with the LLC account** (the paid one)
+3. Look for `com.greenwaymarijuana.register` in the list
+
+**If you see it there** → the LLC team already owns it. Skip to *Step 3:
+refresh Xcode*. This is then just a stale-cache problem on the Mac.
+
+**If you do not see it there** → the Personal Team almost certainly owns it.
+Continue to Step 2.
+
+## Fix it — Step 2: free the identifier from the Personal Team
+
+1. Sign out of the developer portal
+2. Sign back in using the **personal** Apple ID — `m_lyman@live.com`
+3. Go to <https://developer.apple.com/account/resources/identifiers/list>
+4. Find `com.greenwaymarijuana.register`
+5. Click it, then click **Remove** / **Delete**, and confirm
+
+> Free Personal Teams often do **not** show an Identifiers section at all. If
+> you cannot find or delete it there, that is normal and expected — skip
+> straight to *Step 4: register it by hand on the LLC team*, which sidesteps
+> the problem entirely.
+
+Then sign back in as the LLC account.
+
+## Fix it — Step 3: refresh Xcode
+
+Xcode caches signing assets aggressively, and a stale cache produces this
+exact error even after the underlying problem is fixed.
+
+1. Quit Xcode completely (**Cmd-Q**)
+2. Open **Terminal** and run, exactly:
+
+   ```
+   rm -rf ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
+   ```
+
+   This only deletes cached copies on your Mac. It deletes nothing at Apple
+   and nothing in our project. Xcode re-downloads what it needs.
+
+3. Reopen Xcode and the project
+4. **Signing & Capabilities** → confirm **Team** is
+   **LYMAN'S MARIJUANA L.L.C.**
+5. Uncheck **Automatically manage signing**, wait a few seconds, then check it
+   again. This forces a fresh request rather than a replay of the cached one.
+6. Press **Cmd-B**
+
+## Fix it — Step 4: register it by hand on the LLC team
+
+If it still fails, create the App ID manually. You are an **Admin** on the LLC
+team, so you have permission.
+
+1. Go to <https://developer.apple.com/account/resources/identifiers/list>
+   signed in as the **LLC** account
+2. Click the **+** button
+3. Select **App IDs** → **Continue**
+4. Select **App** → **Continue**
+5. **Description:** `Greenway Point of Transaction`
+6. **Bundle ID:** choose **Explicit** and type exactly:
+
+   ```
+   com.greenwaymarijuana.register
+   ```
+
+   Type it by hand and check it character by character. Capitalisation matters
+   — it is all lowercase.
+
+7. Leave every capability unchecked. We use none.
+8. **Continue** → **Register**
+
+Back in Xcode: **Signing & Capabilities** → toggle **Automatically manage
+signing** off and on → **Cmd-B**.
+
+## If Apple refuses to delete or register it
+
+If Apple says the identifier is in use and will not release it, stop and tell
+me. Do **not** change the bundle ID yourself. Contact Apple Developer Support
+at <https://developer.apple.com/contact/> — they can release an identifier
+held by an account you own. Explain that both accounts belong to you and you
+want the ID moved to the LLC team.
+
+## Reminder
+
+Still true, and still worth repeating: signing happens **before** compiling.
+My Swift printer plugin has not been compiled even once yet. Once the build
+clears signing, watch for red errors naming a `.swift` file and a line number
+— that is the real first test. Screenshot them and send them to me.
