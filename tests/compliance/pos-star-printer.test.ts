@@ -340,9 +340,20 @@ describe("SLICE 10 - native plugin detection (Capacitor 8 bridge)", () => {
  * which iterates `plugins` and reads each `plugin.rootPath`. An app-local
  * Swift file in ios/App/App/ is outside that scan forever.
  *
- * Capacitor's iOS bridge auto-registers any compiled class conforming to
+ * CORRECTION (round 28). The paragraph that used to sit here claimed that
+ * "Capacitor's iOS bridge auto-registers any compiled class conforming to
  * CAPPlugin & CAPBridgedPlugin, so target membership is the ONLY thing that
- * was missing. These tests pin it.
+ * was missing." That was WRONG, it was never verified, and it cost three
+ * rounds of failed builds on the shop iPad.
+ *
+ * The bridge does no such scan. CapacitorBridge.registerPlugins() registers
+ * five hard-coded core plugins plus the class NAMES in packageClassList, each
+ * resolved with NSClassFromString. There is no objc_getClassList or
+ * objc_copyClassList anywhere in @capacitor/ios.
+ *
+ * So target membership is NECESSARY BUT NOT SUFFICIENT. An app-local plugin
+ * must ALSO be handed to the bridge explicitly, which is what
+ * GreenwayBridgeViewController does. Both halves are pinned below.
  */
 describe("SLICE 10 - StarPrinterPlugin.swift must be in the Xcode target", () => {
   const pbxproj = readFileSync(
@@ -373,5 +384,87 @@ describe("SLICE 10 - StarPrinterPlugin.swift must be in the Xcode target", () =>
     expect(swiftPlugin).toContain("@objc(StarPrinterPlugin)");
     expect(swiftPlugin).toContain('public let jsName = "StarPrinter"');
     expect(swiftPlugin).toContain("CAPBridgedPlugin");
+  });
+});
+
+/**
+ * SLICE 10 - round 28. Compiling the plugin is not enough; it must be
+ * REGISTERED.
+ *
+ * Verified against @capacitor/ios 8.x source:
+ *
+ *   CapacitorBridge.swift:303 registerPlugins() - registers five hard-coded
+ *   core plugins, then only the class names found in capacitor.config.json's
+ *   packageClassList (resolved via NSClassFromString). No class scan exists.
+ *
+ *   @capacitor/cli dist/util/iosplugin.js getPluginFiles() - builds that list
+ *   from INSTALLED NPM PLUGIN PACKAGES only (it resolves plugin.rootPath), so
+ *   ios/App/App/StarPrinterPlugin.swift can never appear in it.
+ *
+ *   CapacitorBridge.swift:336 registerPluginType() begins
+ *   `if autoRegisterPlugins { return }`, and autoRegisterPlugins defaults to
+ *   true, so that call would be a silent no-op here. registerPluginInstance()
+ *   has no such guard and does call JSExport.exportJS, which is the only thing
+ *   that appends to window.Capacitor.PluginHeaders.
+ *
+ * If any of this is undone the app still builds, still installs, and still
+ * runs - it just quietly has no printer. Hence these tests.
+ */
+describe("SLICE 10 - the Star plugin must be REGISTERED with the bridge", () => {
+  const pbxproj = readFileSync(
+    path.join(process.cwd(), "ios", "App", "App.xcodeproj", "project.pbxproj"),
+    "utf8",
+  );
+  const iosApp = path.join(process.cwd(), "ios", "App", "App");
+  const bridgeVC = readFileSync(
+    path.join(iosApp, "GreenwayBridgeViewController.swift"),
+    "utf8",
+  );
+  const sceneDelegate = readFileSync(path.join(iosApp, "SceneDelegate.swift"), "utf8");
+  const storyboard = readFileSync(
+    path.join(iosApp, "Base.lproj", "Main.storyboard"),
+    "utf8",
+  );
+
+  it("registers the plugin instance on the bridge", () => {
+    expect(bridgeVC).toContain("registerPluginInstance(StarPrinterPlugin())");
+  });
+
+  it("subclasses CAPBridgeViewController and hooks capacitorDidLoad", () => {
+    // capacitorDidLoad runs from loadView(), before loadWebView() is called
+    // from viewDidLoad. That ordering matters: exportJS installs a
+    // WKUserScript at .atDocumentStart, which only affects later loads.
+    expect(bridgeVC).toContain(
+      "class GreenwayBridgeViewController: CAPBridgeViewController",
+    );
+    expect(bridgeVC).toContain("override public func capacitorDidLoad()");
+  });
+
+  it("does NOT call registerPluginType, which is a no-op when autoRegisterPlugins is true", () => {
+    // Comments are stripped first: the file DISCUSSES registerPluginType at
+    // length (explaining why it would silently do nothing), and a naive
+    // substring check would match that prose instead of real code.
+    const code = bridgeVC
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n");
+    expect(code).not.toContain("registerPluginType");
+    expect(code).toContain("registerPluginInstance");
+  });
+
+  it("is compiled into the App target", () => {
+    const sources = pbxproj.match(
+      /Begin PBXSourcesBuildPhase section \*\/([\s\S]*?)\/\* End PBXSourcesBuildPhase section/,
+    );
+    expect(sources).not.toBeNull();
+    expect(sources![1]).toContain("GreenwayBridgeViewController.swift in Sources");
+  });
+
+  it("is what the app actually launches, in BOTH the storyboard and SceneDelegate", () => {
+    // Either one left pointing at Capacitor's stock controller silently
+    // removes the printer from the register.
+    expect(storyboard).toContain('customClass="GreenwayBridgeViewController"');
+    expect(sceneDelegate).toContain("GreenwayBridgeViewController()");
+    expect(sceneDelegate).not.toContain("rootViewController = CAPBridgeViewController()");
   });
 });

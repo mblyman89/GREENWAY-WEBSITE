@@ -8,7 +8,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        // GreenwayBridgeViewController, NOT Capacitor's stock
+        // CAPBridgeViewController. It is a subclass that adds exactly one
+        // thing: it registers our app-local StarPrinterPlugin with the bridge.
+        // Capacitor cannot find that plugin on its own -- it only registers the
+        // class names listed in capacitor.config.json's packageClassList, and
+        // the CLI only ever puts INSTALLED NPM PLUGIN PACKAGES in that list.
+        // Swap this back to CAPBridgeViewController and the receipt printer
+        // silently disappears from the register. See the header comment in
+        // GreenwayBridgeViewController.swift for the source references.
+        window?.rootViewController = GreenwayBridgeViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)

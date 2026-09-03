@@ -2129,3 +2129,201 @@ rebuild.
 | Printer plugin compiled in | ⬅️ **this rebuild** |
 | Receipt prints / drawer opens | ⬅️ next |
 | Socket scanner SDK slice | Queued, approved |
+
+---
+
+# The printer, round 3: compiling the plugin was never going to be enough
+
+Michael — you did everything right this time, and the app still had no printer.
+Your terminal output is what let me find the real cause, and it turned out to
+be **my mistake, not yours**. I owe you a straight explanation.
+
+## First: I was wrong, and I want to be specific about how
+
+In the last round I wrote this in the code, as if it were established fact:
+
+> "Capacitor's iOS bridge auto-registers any compiled class conforming to
+> CAPPlugin & CAPBridgedPlugin, so target membership is the ONLY thing that
+> was missing."
+
+**That is false.** I never verified it. I assumed it, wrote it into a comment
+where it looked authoritative, built a fix on top of it, and told you the
+problem was solved. It was not, and you spent another evening rebuilding
+because of it. That is exactly the thing you told me never to do at the very
+beginning — *do not guess, do not assume, we build from fact, not memory* —
+and I did it anyway. I have now deleted that sentence from the code and
+replaced it with the actual mechanism and where to read it.
+
+## What is actually true
+
+I went and read Capacitor's own source in `node_modules` rather than trusting
+my memory. Here is the whole of how the bridge decides which plugins exist,
+from `CapacitorBridge.swift`, function `registerPlugins()`:
+
+```swift
+var pluginList: [AnyClass] = [CAPHttpPlugin.self, CAPConsolePlugin.self,
+                              CAPWebViewPlugin.self, CAPCookiesPlugin.self,
+                              CAPSystemBarsPlugin.self]
+if autoRegisterPlugins {
+    if let pluginJSON = Bundle.main.url(forResource: "capacitor.config",
+                                        withExtension: "json") {
+        ...
+        for plugin in registrationList.packageClassList {
+            if let pluginClass = NSClassFromString(plugin) { ... }
+        }
+    }
+}
+```
+
+That is the entire mechanism. **Five built-in plugins, plus a list of class
+names read out of a text file.** There is no scan of the app for printer-shaped
+classes. I searched the whole Capacitor iOS framework for the functions that
+would do such a scan (`objc_getClassList`, `objc_copyClassList`) — there are
+none. It does not look for your plugin. It reads a list.
+
+So the obvious question: why isn't our plugin on that list? Because the list is
+written by Capacitor's command-line tool, and that tool only looks inside
+**installed npm plugin packages** — the things you install with `npm install`.
+Our `StarPrinterPlugin.swift` lives in the app's own folder, which that tool
+never looks at. It is not a package. So it can never end up on the list, no
+matter how correctly it is written.
+
+**Put plainly:** the plugin was compiled into the app — your preflight proved
+that, and the preflight was telling the truth. It was sitting there, complete
+and correct, and *nothing had ever told the app it was there*. Like a new
+employee who passed every check, has a badge and a locker, and was never put on
+the schedule. Present, qualified, never called in.
+
+That is why the register kept saying "Printer setup is only available on the
+iPad" **while you were standing on the iPad.** The app genuinely could not see
+a printer plugin, and it was right.
+
+## About that `JS Eval error` line
+
+I had a strong hunch this was the culprit, and I want to tell you that I
+**checked it and it was not**. That line comes from `CapacitorBridge.swift`,
+where the app runs a piece of JavaScript and reports back if it failed. It is
+not part of loading the printer plugin at all. It is worth a look eventually,
+but it was a red herring and I am not going to let you chase it.
+
+I am telling you this because you should know when I have ruled something out,
+not just when I have found something.
+
+## The fix
+
+One new small file, `GreenwayBridgeViewController.swift`, whose entire job is
+one line: hand the printer plugin to the bridge on startup.
+
+Two details in it that matter, both verified rather than assumed:
+
+- There are two ways to register a plugin. The obvious-looking one,
+  `registerPluginType`, begins with `if autoRegisterPlugins { return }` — and
+  that setting is on by default in our app. It would have **done nothing at
+  all** while looking like a fix. That is the same category of mistake as last
+  round, and I checked specifically so we would not repeat it. We use
+  `registerPluginInstance`, which has no such escape hatch.
+- The registration happens at a moment called `capacitorDidLoad`, which runs
+  **before** the screen loads. That ordering is required: registering after the
+  page has loaded would be too late to matter.
+
+I also pointed both the storyboard and `SceneDelegate.swift` at this new
+controller, because either one left pointing at the old one silently removes
+the printer again.
+
+## What I did so this cannot happen a fourth time
+
+Your preflight now has a **sixth check**. It verifies not just that the plugin
+compiles, but that it is actually *registered* — and that both files that
+launch the app point at the right controller.
+
+I tested this check by deliberately breaking the project three separate ways
+(each of the three things that could come loose) and confirming it stops the
+build with a clear message every time, then confirming it passes when the
+project is correct. A check I have not watched fail is not a check I trust.
+
+The same goes for the new tests: I ran them against the *old* broken state
+first and confirmed **4 of the 5 fail**, then against the fix and confirmed all
+pass. Last round's tests did not have that property, which is part of why this
+took three attempts.
+
+## What to do now
+
+Same as before, nothing new to learn:
+
+```
+cd ~/Desktop/GREENWAY-WEBSITE
+git status
+```
+
+If it lists modified files, run `git stash` first (as you did last time — that
+was exactly right).
+
+```
+git pull
+grep -c "GreenwayBridgeViewController" ios/App/App.xcodeproj/project.pbxproj
+```
+
+**That must print `4`.** If it prints `0`, the pull did not land and nothing
+below will work — send me the output and stop there.
+
+Then:
+
+```
+REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios
+npx cap sync ios
+npx cap open ios
+```
+
+You should now see **six** OK lines in the preflight, including:
+
+```
+OK   plugin registration: GreenwayBridgeViewController registers StarPrinter
+```
+
+If you do not see that sixth line, stop and send me what you do see.
+
+Then press play in Xcode. When the app opens, go to the printer settings
+screen. **It should now let you search for the printer** instead of telling you
+it is iPad-only.
+
+## What I expect, honestly
+
+I expect the printer screen to work now. I am less certain the first print will
+be perfect — pairing a Bluetooth printer has its own steps, and the receipt is
+rendered as an image because the TSP143IIIBi cannot print text at all.
+
+So if the screen opens and finds the printer, that is the win for tonight, even
+if the first receipt looks wrong. Tell me what you see and we will take the
+next piece.
+
+**One thing I want to repeat:** if Xcode shows you a red error naming a
+`.swift` file and a line number, screenshot it and send it — don't fix it
+yourself. That is my code failing its first real test, and I need to see it
+exactly as it is.
+
+And your full untrimmed terminal output is what solved this. You called
+yourself "no help" last round; the opposite is true. I could not have found
+this without the exact text you pasted.
+
+## Verified before shipping
+
+- TypeScript: **0 errors**
+- Full test suite: **13,339 tests across 524 files, all passing**
+- New tests confirmed to **fail against the old broken state** (4 of 5), pass
+  against the fix
+- New preflight check verified against **all three** ways it can break, plus
+  the healthy case
+
+## Scoreboard
+
+| Working | Status |
+|---|---|
+| App builds, installs, launches | ✅ |
+| PIN unlock | ✅ |
+| Licence scan (slow, but works) | ✅ |
+| Sale completes and syncs to back office | ✅ |
+| Server address correct | ✅ |
+| Printer plugin compiled in | ✅ |
+| Printer plugin **registered with the bridge** | ⬅️ **this rebuild** |
+| Receipt prints / drawer opens | ⬅️ next |
+| Socket scanner SDK slice | Queued, approved |
