@@ -944,3 +944,81 @@ Signing still happens **before** compiling. The compiler has not run yet. Once
 the build gets past signing, watch for red errors naming a `.swift` file and a
 line number — that is the first real compile of the printer plugin. Screenshot
 those and send them to me rather than trying to fix them.
+
+---
+
+# Troubleshooting: "iPad (Developer Mode disabled)" / enable Developer Mode
+
+**This is real progress, not a new problem.** Getting this message means the
+iPad registration from the previous section **worked** — Xcode can now see
+your iPad by name in the destination list. This is a normal, expected,
+one-time step that every iPad goes through the first time it's used for
+development. It is not related to signing, teams, or the printer SDK at all.
+
+## Why this exists
+
+Apple deliberately makes "run code that isn't from the App Store" an opt-in,
+visible decision on the device itself — not something a computer can turn on
+by remote control. This protects you from someone plugging in a cable and
+silently installing something. You have to physically confirm it, on the
+iPad, on purpose.
+
+## Turn it on — do this ON THE IPAD
+
+1. On the iPad: **Settings** → **Privacy & Security**
+2. Scroll down. Near the bottom, find **Developer Mode**. Tap it.
+3. Turn the switch **on**.
+4. The iPad will warn you that Developer Mode reduces security and offer a
+   **Restart** button. Tap **Restart**. This is expected — let it restart.
+5. **After the iPad turns back on and you unlock it**, a second alert appears
+   confirming you want to enable Developer Mode. This step is easy to miss —
+   it does not happen automatically just because you restarted.
+6. Tap **Enable**.
+7. Enter your iPad's passcode to confirm.
+
+Developer Mode is now on.
+
+## Back in Xcode
+
+1. Keep the iPad plugged into the MacBook.
+2. Click the destination dropdown at the top of the Xcode window again.
+3. It should now read **iPad** without the "(Developer Mode disabled)" label.
+   If it still shows the disabled label, unplug and replug the cable.
+4. Confirm your iPad is selected (not "Any iOS Device (arm64)" — see the
+   earlier section if it reverted).
+5. Press **Cmd-B**.
+
+## If Developer Mode doesn't appear in Settings at all
+
+Per Apple's own documentation, Developer Mode only appears in
+**Privacy & Security** once the iPad has started the pairing process with
+your Mac at least once. If you don't see it:
+
+1. Make sure the iPad is plugged in, unlocked, and you tapped **Trust** on
+   the "Trust This Computer?" prompt earlier.
+2. In Xcode, open **Window** → **Devices and Simulators**, and confirm your
+   iPad is listed there. Just having it appear in that window is usually
+   enough to trigger the Developer Mode toggle to show up in Settings within
+   a minute or two.
+3. If it still doesn't appear, unplug the iPad, lock it, unlock it, and plug
+   it back in.
+
+## What this does NOT mean
+
+- It does not mean anything is wrong with your Apple Developer account.
+- It does not mean the provisioning profile or team setup from the earlier
+  sections was wrong — quite the opposite, it means that part is now working
+  well enough that Xcode is trying to talk to your specific iPad.
+- It does not mean the printer SDK or my Swift code has a problem.
+
+## Reminder
+
+Signing and device trust both still happen **before** compiling. Once
+Developer Mode is on and the build gets past this point, watch for what
+happens next:
+
+- **"Build Succeeded"** and the app launches on the iPad → the printer plugin
+  compiled. Move on to Part 2 / Part 3 of this guide.
+- **Red errors naming a `.swift` file and a line number** → that is the first
+  real compile of `StarPrinterPlugin.swift`. Screenshot them and send them to
+  me. Do not try to fix them yourself.
