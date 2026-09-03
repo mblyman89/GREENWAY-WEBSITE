@@ -138,12 +138,14 @@ Source: `gettingStarted.html` item 7, and `socketmobile.com/developers/integrate
 - Obtaining one requires a **one-time Developer Community Membership fee**
   (SKU `SW1250-1463`). Activation is **per company and for life**.
 
-> **PRICE NOT ESTABLISHED.** The product page renders its price only behind a
-> logged-in store session; the scraped page showed the SKU and the "Add To Cart"
-> control but **no price string**. Per the standing rule I am not going to invent
-> a number. Michael will see the price at checkout. Everything else on that page
-> (SKU, "per company and for life", "may not become active for up to one
-> business day") was read directly and is quoted accurately.
+> **PRICE: $19.95 plus tax — owner-confirmed at checkout, 2026-09-03.**
+> Originally logged here as NOT ESTABLISHED: the product page renders its price
+> only behind a logged-in store session, so the scraped page showed the SKU and
+> the "Add To Cart" control but **no price string**. Per the standing rule no
+> number was invented; Michael read the real figure at checkout and reported it
+> back. Everything else on that page (SKU, "per company and for life", "may not
+> become active for up to one business day") was read directly and is quoted
+> accurately.
 
 **Consequence for sequencing:** the SDK literally cannot open without this. It is
 a purchase + a portal registration that only Michael can do. It must be surfaced
@@ -416,3 +418,47 @@ the new build — not before, or the register loses its scanner in the meantime.
   `SktCaptureEventIds.h`, `SktCaptureHelper.h`
 - GitHub REST API: repo metadata, tags, recursive tree @ `2.1.22`
 - `https://starmicronics.com/help-center/knowledge-base/how-to-print-a-self-test-on-star-printers`
+
+---
+
+## 12. AppKey application form — the exact values submitted
+
+Every value below was re-read from the file cited on the day of submission. None
+was recalled. Membership purchased at **$19.95 + tax** (owner-confirmed).
+
+| Form field | Value to submit | Source of truth |
+| --- | --- | --- |
+| Application name | `Greenway Point of Transaction` | `ios/App/App/Info.plist:10` (`CFBundleDisplayName`); `src/lib/pos/capacitor-config-core.ts:96` |
+| iOS bundle ID | `com.greenwaymarijuana.register` | `project.pbxproj:320,341`; `capacitor-config-core.ts:93` |
+| Application version | `1.0` | `MARKETING_VERSION`, `project.pbxproj:318,340` |
+| CaptureSDK version | `2.1` (highest offered; installed will be 2.1.22) | `Package.swift` @ tag `2.1.22` |
+| MFi protocol strings | `jp.star-m.starpro` — the ONLY other one | `Info.plist:58-61`, verbatim array contents |
+
+### Why the bundle ID must be exact
+
+The AppKey is a cryptographic function of Developer ID + **case-sensitive**
+bundle ID. A single character of drift and `openWithAppInfo` returns
+`E_INVALIDAPPINFO = -93` (`SktCaptureErrors.h`). This is also why the app's
+`AppID` field at runtime is not the bare bundle ID but the platform-prefixed
+form `ios:com.greenwaymarijuana.register` (`CaptureSDK.h:31`).
+
+### Why `jp.star-m.starpro` is the answer to the MFi question
+
+`UISupportedExternalAccessoryProtocols` in `Info.plist:58-61` currently declares
+exactly one protocol string, and it is the Star TSP143IIIBi receipt printer's
+(`STAR_EA_PROTOCOL`, `src/lib/pos/star-printer-core.ts:72`). There is no third
+accessory in this app. So the complete answer to "MFi protocol strings other
+than `com.socketmobile.chs`" is that one string.
+
+Note the form's own caveat — *"MFi Protocol Strings are required for iOS MFi
+Submissions Only."* Per `gettingStarted.html` item 1, MFi allow-listing gates
+**App Store submission**, not installing directly from Xcode. It does not block
+this slice.
+
+### Standing hazard this records
+
+When the Socket protocol is added, it must be **appended** to that array. If
+`com.socketmobile.chs` ever *replaces* `jp.star-m.starpro`, the receipt printer
+fixed in PR #1070 dies silently — no build error, no runtime error, just a
+printer that stops being found. This gets its own test in the implementation
+phase.
