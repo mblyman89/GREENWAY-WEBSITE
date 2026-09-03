@@ -275,6 +275,17 @@ export function RegisterShell({
   // SESSION RESUME — the LIVE resumable state reported up by SaleFlow's
   // onSnapshot. A ref (not state) so reading it inside lock() never needs a
   // re-render and never goes stale between renders.
+  /**
+   * SLICE 14 — latched the instant a sale is rung up, cleared when a NEW sale
+   * begins. While true, parkActiveSale refuses to write a snapshot, so the
+   * post-sale idle auto-lock cannot resurrect the finished customer's cart and
+   * verdict on the next unlock.
+   *
+   * Deliberately a ref, not state: parkActiveSale runs from the pagehide and
+   * visibilitychange handlers where a re-render is not guaranteed, and a stale
+   * closure over a state value would reintroduce the exact bug.
+   */
+  const saleCompletedRef = useRef(false);
   const activeSaleRef = useRef<{
     verdict: ResumableVerdict | null;
     cart: PosCartEntry[];
@@ -841,6 +852,15 @@ export function RegisterShell({
     };
   }, [screen, creds, online]);
 
+  // SLICE 14 — release the "already completed" latch whenever a NEW sale
+  // begins. Done centrally here rather than at each of the four
+  // setSaleActive(true) call sites (fresh start, resume, hold resume, website
+  // order): a future fifth entry point would otherwise inherit a latched flag
+  // and silently lose session-resume, turning a bug fix into a different bug.
+  useEffect(() => {
+    if (saleActive) saleCompletedRef.current = false;
+  }, [saleActive]);
+
   // Mirror the employee name to a ref for the stable lock() callback.
   useEffect(() => {
     employeeNameRef.current = employee?.fullName ?? "";
@@ -863,6 +883,18 @@ export function RegisterShell({
   // parking (pre-gate sale) and any stale snapshot was cleared. Never throws.
   const parkActiveSale = useCallback((): boolean => {
     try {
+      // SLICE 14 defence 2 of 3 — a sale that has already been rung up is
+      // NEVER parkable, whatever the ref happens to hold. onComplete sets this
+      // flag before calling lock(); the idle timer, the pagehide handler and
+      // the visibilitychange handler all funnel through here, so this one
+      // check covers every path that could otherwise resurrect a finished
+      // customer. Belt and braces with defence 1 (SaleFlow reporting null):
+      // either alone fixes the reported bug, and both together mean a future
+      // refactor of one cannot silently reintroduce it.
+      if (saleCompletedRef.current) {
+        posStorageRemove(ACTIVE_SALE_KEY);
+        return false;
+      }
       const live = activeSaleRef.current;
       const snap = live
         ? snapshotFromSale({
@@ -897,6 +929,16 @@ export function RegisterShell({
     setSaleActive(false);
     setResumeCart(null);
     setResumeSnapshot(null);
+    // SLICE 14 defence 3 of 3 — clear the WEBSITE-ORDER cart too.
+    // lock() already cleared resumeCart/resumeSnapshot, but loadedCart and
+    // loadedMember were left behind, and the SaleFlow props fall back through
+    // `resumedCart ?? resumeCart ?? loadedCart`. That let a pickup order's
+    // cart (and its customer) survive a lock and reappear for the NEXT person
+    // in line. Found by code reading during slice 13 recon, not reported from
+    // the counter — but it is the same defect family as the bug the owner did
+    // hit, and leaving it would be knowingly shipping a landmine.
+    setLoadedCart(null);
+    setLoadedMember(null);
     // AM-D2 — the source order id was already captured into the parked
     // snapshot by parkActiveSale; clear the live pointer with the session so
     // it is restored ONLY when the parked sale is resumed.
@@ -1115,7 +1157,16 @@ export function RegisterShell({
           // SESSION RESUME — mirror the live resumable state so lock() can park
           // it. Kept in a ref (no re-render); prices are stripped to variant
           // ids + counts when parked.
+          // SLICE 14 — SaleFlow reports null once the sale reaches "done", so a
+          // completed sale can no longer be re-parked by the idle timer.
           activeSaleRef.current = state;
+          if (state === null) {
+            try {
+              posStorageRemove(ACTIVE_SALE_KEY);
+            } catch {
+              // Best-effort.
+            }
+          }
         }}
         onHold={
           // One parked sale at a time (unless THIS sale is the resumed one —
@@ -1440,6 +1491,8 @@ export function RegisterShell({
           setBanner(null);
           // SESSION RESUME — a COMPLETED sale must never be re-parked by lock();
           // clear the live ref + stored snapshot first.
+          // SLICE 14 — latch it, so nothing downstream can re-park this sale.
+          saleCompletedRef.current = true;
           activeSaleRef.current = null;
           try {
             posStorageRemove(ACTIVE_SALE_KEY);

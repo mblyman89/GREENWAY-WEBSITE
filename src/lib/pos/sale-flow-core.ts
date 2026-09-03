@@ -36,6 +36,7 @@ import {
   type LimitProfile,
 } from "@/lib/compliance/sales-limits-core";
 import type { SalesHoursWindow } from "@/lib/compliance/sales-hours-core";
+import { clampToStock } from "@/lib/pos/stock-ceiling-core";
 // Type-only (erased at compile time) — medical-pos-core imports PricedSaleLine
 // from this module, so a VALUE import here would create a runtime cycle.
 import type { PosMedicalConfig } from "./medical-pos-core";
@@ -197,23 +198,68 @@ export type PosCartEntry = { product: PosMenuProduct; quantity: number };
 
 export const MAX_LINE_QUANTITY = 99;
 
+/**
+ * SLICE 14 — on-hand enforcement.
+ *
+ * These two functions are the ONLY way a quantity changes in the cart. Recon
+ * (docs/slice-13-recon-stock-and-reset.md §1.3) traced all seven entry points
+ * — tile taps on both grids, manualAdd, the search-box barcode path, the
+ * global wedge scan, and the +/− steppers — and every one funnels through
+ * here. Enforcing at this choke point is what makes the guarantee complete
+ * rather than a game of whack-a-mole, and it means the Socket scanner landing
+ * in Slice 12 inherits the protection for free.
+ *
+ * The owner's report: a tile read "1 LEFT", he tapped it twice, and both
+ * units went in. Before this slice the only ceiling here was MAX_LINE_QUANTITY
+ * (99) — `product.unitsLeft` was in scope on the very next line and never
+ * consulted.
+ *
+ * `clampToStock` owns the judgement about WHICH counts are trustworthy
+ * (unknown/null/undefined/corrupt = unlimited, so custom sales and
+ * website-order carts keep working). See stock-ceiling-core.ts.
+ */
+
 /** Add one unit of a product (merging with an existing line for the same variant). */
-export function addToCart(cart: PosCartEntry[], product: PosMenuProduct): PosCartEntry[] {
+export function addToCart(
+  cart: PosCartEntry[],
+  product: PosMenuProduct,
+  /** Staff override lifts the stock ceiling for this action (never the 99 cap). */
+  override: boolean = false,
+): PosCartEntry[] {
   const existing = cart.find((e) => e.product.variantId === product.variantId);
   if (existing) {
-    return cart.map((e) =>
-      e.product.variantId === product.variantId
-        ? { ...e, quantity: Math.min(MAX_LINE_QUANTITY, e.quantity + 1) }
-        : e,
-    );
+    const next = clampToStock(existing.quantity + 1, product.unitsLeft, override).quantity;
+    // Refused (already at the ceiling): return the cart UNCHANGED, and
+    // crucially the same array reference, so React does not re-render and the
+    // UI can tell "nothing happened" from "something happened".
+    if (next === existing.quantity) return cart;
+    return cart.map((e) => (e.product.variantId === product.variantId ? { ...e, quantity: next } : e));
   }
-  return [...cart, { product, quantity: 1 }];
+  // A brand-new line still has to clear the ceiling: a known-zero variant must
+  // never create a line at all, or the cart would hold something unsellable
+  // that the tender gate then refuses.
+  const first = clampToStock(1, product.unitsLeft, override).quantity;
+  if (first <= 0) return cart;
+  return [...cart, { product, quantity: first }];
 }
 
 /** Set a line's quantity; 0 (or less) removes the line. */
-export function setCartQuantity(cart: PosCartEntry[], variantId: string, quantity: number): PosCartEntry[] {
-  const q = Math.min(MAX_LINE_QUANTITY, Math.floor(quantity));
+export function setCartQuantity(
+  cart: PosCartEntry[],
+  variantId: string,
+  quantity: number,
+  /** Staff override lifts the stock ceiling for this action (never the 99 cap). */
+  override: boolean = false,
+): PosCartEntry[] {
+  const entry = cart.find((e) => e.product.variantId === variantId);
+  // Math.floor is preserved from the original for negative inputs; clampToStock
+  // truncates and floors at 0, and q <= 0 still means "remove the line" so the
+  // trash button (setCartQuantity(cart, id, 0)) behaves exactly as before.
+  const requested = Math.min(MAX_LINE_QUANTITY, Math.floor(quantity));
+  if (requested <= 0) return cart.filter((e) => e.product.variantId !== variantId);
+  const q = entry ? clampToStock(requested, entry.product.unitsLeft, override).quantity : requested;
   if (q <= 0) return cart.filter((e) => e.product.variantId !== variantId);
+  if (entry && entry.quantity === q) return cart; // no-op: keep the reference stable
   return cart.map((e) => (e.product.variantId === variantId ? { ...e, quantity: q } : e));
 }
 

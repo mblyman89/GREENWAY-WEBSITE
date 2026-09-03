@@ -110,6 +110,12 @@ import {
 } from "@/lib/pos/change-calc-core";
 import { roundCashDue, normalizePosCashRoundingConfig } from "@/lib/pos/cash-rounding-core";
 import { stockSignal, cartStockWarnings } from "@/lib/pos/low-stock-core";
+import {
+  canAddOne,
+  isKnownOutOfStock,
+  stockBlockingLines,
+  stockRefusalMessage,
+} from "@/lib/pos/stock-ceiling-core";
 // Saved-cart smart release — notice when the SAVED sale is sitting on units
 // this live cart needs, and offer to release it right at the conflict moment.
 import { heldStockConflicts, describeHeldLines } from "@/lib/pos/held-stock-core";
@@ -255,12 +261,17 @@ export type SaleFlowProps = {
    * with null when the sale is not resumable (pre-gate or empty cart) so the
    * shell can clear any stale snapshot.
    */
-  onSnapshot?: (state: {
-    verdict: Extract<IdGateVerdict, { allowed: true }> | null;
-    cart: PosCartEntry[];
-    medicalCard: PosCardCapture | null;
-    member: PosMemberHit | null;
-  }) => void;
+  onSnapshot?: (
+    state: {
+      verdict: Extract<IdGateVerdict, { allowed: true }> | null;
+      cart: PosCartEntry[];
+      medicalCard: PosCardCapture | null;
+      member: PosMemberHit | null;
+      // SLICE 14 — null means "there is nothing resumable here; clear any
+      // stored snapshot". The doc comment above always promised this, but the
+      // type did not permit it, so a COMPLETED sale had no way to say so.
+    } | null,
+  ) => void;
   /**
    * B17 — the frozen receipt snapshot, fired the moment the sale is
    * enqueued. The shell persists it so "reprint last receipt" survives the
@@ -479,8 +490,25 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     onSnapshotRef.current = onSnapshot;
   });
   useEffect(() => {
+    // SLICE 14 defence 1 of 3 — a COMPLETED sale must stop advertising itself
+    // as resumable.
+    //
+    // The bug the owner hit: finish a sale, walk away without tapping "Done —
+    // lock register", and two minutes later the idle timer fires lock() (NOT
+    // onComplete). lock() parks whatever this effect last reported, so the
+    // finished customer's verdict + cart were written back to storage and the
+    // next PIN entry restored them PAST the age gate.
+    //
+    // Reporting null here makes parkActiveSale clear the snapshot instead of
+    // writing one (RegisterShell.parkActiveSale: `live ? snapshot : null`
+    // → posStorageRemove). Fixing it at the source means the shell cannot be
+    // tricked no matter which lock path runs.
+    if (step === "done") {
+      onSnapshotRef.current?.(null);
+      return;
+    }
     onSnapshotRef.current?.({ verdict, cart, medicalCard, member });
-  }, [verdict, cart, medicalCard, member]);
+  }, [verdict, cart, medicalCard, member, step]);
   // Task AM-B — the loyalty redemption applied to THIS sale (server-issued
   // code + per-variant spread). Dropped automatically the moment the priced
   // cart drifts from the fingerprint it was computed for.
@@ -1796,12 +1824,26 @@ function ProductTile({
   onInfo?: () => void;
 }) {
   const style = categoryStyle(product.category);
+  // SLICE 14 (owner decision Q1) — a variant the menu says is at zero is
+  // GREYED OUT but still tappable: tapping explains "none left" rather than
+  // doing nothing. A disabled button that silently eats taps is its own bug,
+  // and hiding the product entirely makes staff think the menu is broken.
+  // Only a TRUSTWORTHY zero greys a tile (isKnownOutOfStock ignores
+  // null/undefined/corrupt counts), so custom sales and untracked items look
+  // exactly as they did before.
+  const outOfStock = isKnownOutOfStock(product.unitsLeft);
   return (
     <div className="relative h-full">
       <button
         type="button"
         onClick={onAdd}
-        className="pos-tile flex h-full min-h-24 w-full flex-col rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3 text-left active:bg-[var(--pos-surface-hover)]"
+        aria-disabled={outOfStock}
+        data-out-of-stock={outOfStock ? "true" : undefined}
+        className={`pos-tile flex h-full min-h-24 w-full flex-col rounded-xl border p-3 text-left ${
+          outOfStock
+            ? "border-dashed border-[var(--pos-border)] bg-[var(--pos-surface)] opacity-45 grayscale"
+            : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] active:bg-[var(--pos-surface-hover)]"
+        }`}
       >
         <span className="flex items-center gap-1.5 pr-6 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
           <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
@@ -2084,6 +2126,19 @@ function CartScreen({
   const scanRequiredOn = bundle.scanRequired?.enabled === true;
   const [scanUnlocked, setScanUnlocked] = useState(false);
   const [scanBlockNotice, setScanBlockNotice] = useState<string | null>(null);
+  /**
+   * SLICE 14 — "Sell anyway": the budtender takes responsibility for selling
+   * past the CACHED count. The menu bundle is a snapshot, not a live query
+   * (see stock-ceiling-core header), so a unit really can be in hand while the
+   * count says zero. Owner decision Q2: ANY staff member may do this, so there
+   * is deliberately no PIN here — the manager-locked overrides (scan-required,
+   * price override) are untouched. Scoped to THIS sale and never persisted:
+   * the next customer starts enforced again.
+   */
+  const [stockOverride, setStockOverride] = useState(false);
+  /** Units of a variant already in the cart (0 when absent). */
+  const cartQtyOf = (variantId: string) =>
+    cart.find((e) => e.product.variantId === variantId)?.quantity ?? 0;
   const [scanUnlockOpen, setScanUnlockOpen] = useState(false);
   // B42 — the product whose info card is open (Cova: info on demand).
   const [infoProduct, setInfoProduct] = useState<PosMenuProduct | null>(null);
@@ -2101,7 +2156,17 @@ function CartScreen({
       );
       return;
     }
-    setCart(addToCart(cart, p));
+    // SLICE 14 — refuse politely and SAY WHY. The owner's report was a tile
+    // reading "1 LEFT" that accepted a second tap; now the second tap explains
+    // itself instead of silently doing nothing. Override is per-sale and open
+    // to ANY staff member (owner decision Q2) — unlike the scan-required and
+    // price-override rules above, which stay manager-locked.
+    if (!canAddOne(cartQtyOf(p.variantId), p.unitsLeft, stockOverride)) {
+      const label = p.variantLabel ? `${p.name} (${p.variantLabel})` : p.name;
+      setScanBlockNotice(`${stockRefusalMessage(label, p.unitsLeft)} Use "Sell anyway" if the unit is on the shelf.`);
+      return;
+    }
+    setCart(addToCart(cart, p, stockOverride));
   };
 
   // B36 — category chips from the cached menu (busiest categories first).
@@ -2269,8 +2334,43 @@ function CartScreen({
   // any cart line a NON-carded buyer cannot receive; no override exists.
   const highThcViolations = priced.med?.highThcViolations ?? [];
 
+  // SLICE 14 — the LAST line of defence on stock. The add paths are guarded,
+  // but a cart can go over WITHOUT any cart mutation: a menu refresh can lower
+  // unitsLeft underneath a cart that was legal when it was built, and the
+  // resume/hold rebuild paths re-hydrate lines against a newer bundle. So this
+  // is evaluated from live cart state at tender time. Empty array = safe.
+  const stockBlocks = useMemo(
+    () =>
+      stockOverride
+        ? []
+        : stockBlockingLines(
+            cart.map((e) => ({
+              productName: e.product.name,
+              variantLabel: e.product.variantLabel,
+              quantity: e.quantity,
+              unitsLeft: e.product.unitsLeft,
+            })),
+          ),
+    [cart, stockOverride],
+  );
+
   const canTender =
-    cart.length > 0 && priced.problems.length === 0 && !limits.blocked && highThcViolations.length === 0;
+    cart.length > 0 &&
+    priced.problems.length === 0 &&
+    !limits.blocked &&
+    highThcViolations.length === 0 &&
+    stockBlocks.length === 0;
+
+  // SLICE 14 (owner decision Q3) — show WHEN the stock numbers were last
+  // refreshed, using the SAME format already used for the menu timestamp at
+  // the header and the settings panel, so the register never speaks about
+  // time in two different dialects. Guarded: a corrupt/absent timestamp
+  // degrades to plain wording instead of rendering "Invalid Date".
+  const menuAgeLabel = useMemo(() => {
+    const ms = Date.parse(bundle.fetchedAt);
+    if (Number.isNaN(ms)) return "when the menu was last downloaded";
+    return `at ${new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+  }, [bundle.fetchedAt]);
 
   // AO-4 — quick-tender chips for the rail (mockup: "$130 / $140 / $150 /
   // Exact"). Built from the SAME B31 smart suggestions and B33 cash-rounded
@@ -2529,7 +2629,26 @@ function CartScreen({
                             <span className="flex items-center justify-center gap-1.5">
                               <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
                               <span className="w-7 text-center font-bold tabular-nums">{l.quantity}</span>
-                              <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity + 1))} />
+                              <QtyButton
+                                label="+"
+                                onClick={() => {
+                                  // SLICE 14 — the owner's second report: the
+                                  // + button added without limit. It now
+                                  // refuses and says why, rather than looking
+                                  // broken.
+                                  const line = cart.find((e) => e.product.variantId === variantId);
+                                  if (line && !canAddOne(l.quantity, line.product.unitsLeft, stockOverride)) {
+                                    const label = line.product.variantLabel
+                                      ? `${line.product.name} (${line.product.variantLabel})`
+                                      : line.product.name;
+                                    setScanBlockNotice(
+                                      `${stockRefusalMessage(label, line.product.unitsLeft)} Use "Sell anyway" if the unit is on the shelf.`,
+                                    );
+                                    return;
+                                  }
+                                  setCart(setCartQuantity(cart, variantId, l.quantity + 1, stockOverride));
+                                }}
+                              />
                             </span>
                           </td>
                           <td className="border-t border-[var(--pos-border)] px-2 py-2.5 text-right font-bold tabular-nums">
@@ -2642,6 +2761,40 @@ function CartScreen({
               ONLY be sold to a patient with a valid recognition card (chapter 246-70 WAC). Remove{" "}
               {highThcViolations.length === 1 ? "it" : "them"}, or restart the sale on the medical path. No override
               exists.
+            </p>
+          ) : null}
+
+          {/* SLICE 14 — stock block + the owner's requested escape hatch.
+              Shown in the same visual family as the limit and High-THC
+              notices so every blocking rule reads as one language. Unlike
+              High-THC (statutory, no override exists) this one CAN be lifted,
+              because the count is a cached snapshot and the shelf is the
+              truth. The last-refreshed line is what lets the budtender judge
+              how much to trust the number (owner decision Q3). */}
+          {stockBlocks.length > 0 ? (
+            <div className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--pos-danger)]">{stockBlocks.join(" ")}</p>
+              <p className="mt-1 text-[11px] text-[var(--pos-text-muted)]">
+                Stock counts come from the menu last refreshed {menuAgeLabel}. If the product is physically on the
+                shelf, sell it anyway and let the count catch up.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setStockOverride(true);
+                  setScanBlockNotice(null);
+                }}
+                className="pos-tile mt-2 min-h-11 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-surface)] px-4 py-2 text-xs font-bold text-[var(--pos-danger)]"
+              >
+                Sell anyway — the unit is on the shelf
+              </button>
+            </div>
+          ) : null}
+
+          {stockOverride ? (
+            <p className="mt-3 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-[11px] font-semibold text-[var(--pos-warn)]">
+              Stock limits are OFF for this sale — a staff member confirmed the product is on the shelf. The count
+              will be reconciled at the next cycle count. Enforcement returns automatically for the next customer.
             </p>
           ) : null}
 
