@@ -1932,3 +1932,200 @@ slice: research the DuraScan D760's SDK against Socket's official
 documentation, then replace HID keystroke-streaming with a single delivered
 scan payload — which also eliminates the stray-keystroke class of bugs
 entirely.
+
+---
+
+# The `git pull` that did not happen
+
+**You are not the problem, and you are not bad at this.** You did everything I
+asked. The fix never reached your Mac, and your terminal output proves it in
+four lines.
+
+## The proof, from your own output
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+	ios/App/App.xcodeproj/project.pbxproj
+Please commit your changes or stash them before you merge.
+Aborting
+```
+
+**`Aborting`** is the whole story. Git stopped. Nothing was downloaded, nothing
+was updated. Your `main` never moved to `83322ee4`.
+
+Then you ran the build and the install — which worked perfectly — but they built
+**the old, unfixed project**. That is why the result was byte-for-byte identical
+to the previous attempt.
+
+## Why git refused
+
+The file git needed to update is `ios/App/App.xcodeproj/project.pbxproj` — the
+Xcode project file.
+
+You already had **your own changes** in that same file. When you added the
+StarXpand SDK in Xcode back in Part 1, Xcode wrote that into the project file.
+That was correct and necessary, and it is still on your Mac.
+
+My fix touches the same file. Git will never overwrite your local work silently,
+so it stopped and waited for instructions. **That is git protecting you.**
+
+## Confirming the second proof
+
+Your Xcode log also confirms the plugin still was not there:
+
+```
+⚡️  JS Eval error A JavaScript exception occurred
+⚡️  [info] - [register] Packaged app — sending register traffic to https://greenwaywebsite1.vercel.app.
+```
+
+Notice what is **absent**: there is no line registering `StarPrinter`. The
+server address line proves the *previous* fix landed correctly — the app knows
+where the back office is. The missing plugin line proves *this* fix did not.
+
+## Fix it — copy these one at a time
+
+Run each line, wait for it to finish, then run the next.
+
+**1. See what git is worried about:**
+
+```
+cd ~/greenway/GREENWAY-WEBSITE
+git status
+```
+
+You should see `ios/App/App.xcodeproj/project.pbxproj` listed as modified.
+
+**2. Put your local change safely to one side:**
+
+```
+git stash
+```
+
+`stash` does not delete anything. It sets your changes aside in a safe place you
+can retrieve.
+
+**3. Now get the fix:**
+
+```
+git pull
+```
+
+This should now succeed and mention `83322ee4`.
+
+**4. Confirm the fix actually arrived — do not skip this:**
+
+```
+grep -c "StarPrinterPlugin" ios/App/App.xcodeproj/project.pbxproj
+```
+
+It must print **`4`**. If it prints `0`, stop and tell me — do not build.
+
+**5. Rebuild and reinstall:**
+
+```
+REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios
+npx cap open ios
+```
+
+The preflight now has a **new fifth check**. Watch for:
+
+```
+  OK   printer plugin: StarPrinterPlugin.swift is in Compile Sources
+```
+
+**If it says `FAIL printer plugin`, the build stops by itself** and tells you
+what went wrong. That check exists specifically so this evening cannot repeat.
+
+**6. In Xcode, press ▶ Play.**
+
+## What about your stashed SDK change?
+
+Almost certainly you do **not** need it back. When `cap sync` ran it rewrote
+`Package.swift` — your log shows `[info] Writing Package.swift` — and the
+StarXpand SDK is referenced from the workspace, which is not affected by the
+stash.
+
+So: **build first.** If Xcode complains `No such module 'StarIO10'`, then run
+`git stash pop` and re-add the package as in Step 3 of Part 1. **Do not run
+`git stash pop` pre-emptively** — it would recreate the same conflict.
+
+## ⚠️ This really is the first compile of my Swift code
+
+Every build so far compiled an app **without** `StarPrinterPlugin.swift` in it.
+When the file finally compiles, red errors naming that file and a line number
+are possible. They would be ordinary, mechanical mistakes.
+
+**Screenshot them and send them to me. Do not fix them yourself.**
+
+# Your questions, answered directly
+
+## "Do I need the PPID from Star before this works?"
+
+**No.** The PPID has nothing to do with getting the printer working on your own
+iPad today. It is required only to **publish on the App Store**, because Apple
+will not approve a Bluetooth-accessory app without it.
+
+Printing over Bluetooth from an app you installed yourself works right now.
+
+## "Does Apple need to approve my app?"
+
+**No — not for this.** Apple approval is required only to distribute through the
+App Store. You are installing directly from Xcode onto your own device, which is
+exactly what a developer account is for. No review, no waiting.
+
+**Both of those are launch-day concerns, not today concerns.** Your MFi
+application is in and its clock is running in the background, which is the right
+place for it.
+
+## "Is there somewhere I can get output to give you?"
+
+Yes — and **what you sent this time was exactly right.** The full terminal text
+plus the Xcode console output is precisely what I needed, and it is how I found
+this in minutes rather than guessing.
+
+Keep doing that. Specifically:
+
+1. **The terminal**, from the command you typed to the last line printed. Do not
+   trim it — the `Aborting` line was in the part that looked like noise.
+2. **The Xcode console** (the bottom pane, with the ⚡️ lines).
+3. **A screenshot** of any red error, or of the screen that looks wrong.
+
+## "I do not understand these things, I am no help"
+
+You found a real bug in my code two rounds ago by describing what you saw. You
+sent the exact output that located this one. **That is not being no help — that
+is the most useful thing you can do.**
+
+My job is to know what the output means. Your job is to tell me what happened
+and paste what you see. That division has worked every single round so far.
+
+## What is added so it cannot happen again
+
+The preflight script now checks that `StarPrinterPlugin.swift` is in the
+**Compile Sources** list before building, and **stops the build** with a
+plain-English explanation if it is not — including the instruction to check
+whether a `git pull` was aborted.
+
+If this had existed yesterday, it would have caught it and saved you the
+rebuild.
+
+## Verified before shipping
+
+- TypeScript: **0 errors**
+- Lint: **0 problems**
+- New preflight check verified **both ways**: it reports OK on the fixed
+  project, and stops the build with the correct message on a project missing
+  the plugin
+
+## Scoreboard
+
+| Working | Status |
+|---|---|
+| App builds, installs, launches | ✅ |
+| PIN unlock | ✅ |
+| Licence scan (slow, but works) | ✅ |
+| Sale completes and syncs to back office | ✅ |
+| Server address correct | ✅ |
+| Printer plugin compiled in | ⬅️ **this rebuild** |
+| Receipt prints / drawer opens | ⬅️ next |
+| Socket scanner SDK slice | Queued, approved |

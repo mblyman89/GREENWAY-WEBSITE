@@ -35,6 +35,7 @@ import { auditStarPlist, STAR_EA_PROTOCOL } from "../../src/lib/pos/star-printer
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const INFO_PLIST = path.join(repoRoot, "ios", "App", "App", "Info.plist");
+const PBXPROJ = path.join(repoRoot, "ios", "App", "App.xcodeproj", "project.pbxproj");
 
 /**
  * Read `UIRequiredDeviceCapabilities` out of Info.plist.
@@ -147,6 +148,44 @@ function main(): void {
   } else {
     console.log("  FAIL receipt printer");
     for (const p of plistProblems) problems.push(p.detail);
+  }
+
+  // ── 5. is the printer plugin actually going to be COMPILED? ──────────────
+  // Xcode compiles target MEMBERS, not folder contents. StarPrinterPlugin.swift
+  // sat in ios/App/App/ for two whole slices without ever being in the Sources
+  // build phase: never compiled, never registered with the Capacitor bridge, so
+  // the register kept reporting "no native printer" on a perfectly healthy
+  // build. `cap sync` CANNOT fix that - the CLI only scans installed npm plugin
+  // packages, never app-local Swift files. So it is verified here instead.
+  try {
+    const pbx = readFileSync(PBXPROJ, "utf8");
+    const sources = pbx.match(
+      /Begin PBXSourcesBuildPhase section \*\/([\s\S]*?)\/\* End PBXSourcesBuildPhase section/,
+    );
+    if (!sources) {
+      console.log("  FAIL printer plugin");
+      problems.push(
+        "Could not find the Sources build phase in project.pbxproj, so I cannot " +
+          "confirm StarPrinterPlugin.swift will be compiled.",
+      );
+    } else if (!sources[1].includes("StarPrinterPlugin.swift in Sources")) {
+      console.log("  FAIL printer plugin");
+      problems.push(
+        "StarPrinterPlugin.swift is NOT a member of the App target, so Xcode will " +
+          "not compile it. The app will install and run, but the register will " +
+          'report "Printer setup is only available on the iPad", print nothing, ' +
+          "and never open the cash drawer.\n" +
+          "This almost always means a `git pull` was ABORTED. Run `git status`: if " +
+          "ios/App/App.xcodeproj/project.pbxproj is listed as modified, your copy " +
+          "is missing the fix. See the troubleshooting section titled " +
+          '"the git pull that did not happen" in the SLICE 10 document.',
+      );
+    } else {
+      console.log("  OK   printer plugin: StarPrinterPlugin.swift is in Compile Sources");
+    }
+  } catch {
+    console.log("  FAIL printer plugin");
+    problems.push(`Cannot read ${PBXPROJ}.`);
   }
 
   // ── verdict ──────────────────────────────────────────────────────────────
