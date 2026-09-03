@@ -73,6 +73,13 @@ type StarPlugin = {
 type CapacitorGlobal = {
   isNativePlatform?: () => boolean;
   Plugins?: Record<string, unknown>;
+  /**
+   * Installed by the NATIVE bridge before our bundle runs, listing every
+   * plugin the Swift/Kotlin side registered. This is the authoritative
+   * "is the plugin really there" signal - see getStarPlugin() below.
+   */
+  PluginHeaders?: ReadonlyArray<{ name: string }>;
+  registerPlugin?: <T>(name: string, impls?: Record<string, unknown>) => T;
 };
 
 function capacitor(): CapacitorGlobal | null {
@@ -81,13 +88,81 @@ function capacitor(): CapacitorGlobal | null {
   return c ?? null;
 }
 
-/** The Star plugin, or null when this is not a native build with it compiled in. */
+/**
+ * Cache the proxy once resolved.
+ *
+ * registerPlugin() is idempotent in Capacitor, but the pairing screen calls
+ * detectPrintEnvironment() inside a useMemo on every mount, and there is no
+ * reason to build a new proxy each time.
+ */
+let starPluginCache: StarPlugin | null = null;
+
+/**
+ * The Star plugin, or null when this is not a native build with it compiled in.
+ *
+ * ── WHY THIS IS NOT JUST `Capacitor.Plugins["StarPrinter"]` ──────────────────
+ *
+ * That was the original implementation and it was WRONG, in a way that only
+ * showed up on the real iPad. In Capacitor 6+, `Capacitor.Plugins` is NOT
+ * populated by the native bridge. It is populated as a SIDE EFFECT of calling
+ * `registerPlugin()` from JavaScript - the proxy is inserted at the end of
+ * that function and nowhere else. Nothing in this repo called registerPlugin,
+ * so `Capacitor.Plugins.StarPrinter` was permanently undefined, the register
+ * concluded "no native plugin", and every print silently fell back to the
+ * browser path - which iOS then blocked as a pop-up.
+ *
+ * The Swift side was fine the whole time. `@objc(StarPrinterPlugin)` with
+ * `jsName = "StarPrinter"` and CAPBridgedPlugin correctly publishes the plugin
+ * to the bridge, which advertises it in `Capacitor.PluginHeaders` BEFORE our
+ * bundle runs. So PluginHeaders is the honest source of truth for "did the
+ * native side really register this", and registerPlugin() is the supported way
+ * to obtain the callable proxy.
+ *
+ * Order of checks matters:
+ *  1. no Capacitor global at all      -> browser. null.
+ *  2. isNativePlatform() === false    -> web build. null.
+ *  3. PluginHeaders lacks StarPrinter -> native build WITHOUT the plugin
+ *     compiled in (e.g. the Star package was not linked). null, and the
+ *     register degrades exactly as it did before rather than throwing.
+ *  4. otherwise                       -> registerPlugin() for the real proxy.
+ *
+ * Step 3 is what keeps the "app installed but SDK missing" case honest instead
+ * of handing back a proxy whose every call would reject.
+ */
 export function getStarPlugin(): StarPlugin | null {
+  if (starPluginCache) return starPluginCache;
+
   const cap = capacitor();
   if (!cap) return null;
   if (typeof cap.isNativePlatform === "function" && !cap.isNativePlatform()) return null;
-  const plugin = cap.Plugins?.["StarPrinter"];
-  return plugin ? (plugin as StarPlugin) : null;
+
+  // The native bridge advertises what it actually registered.
+  const headers = cap.PluginHeaders;
+  const declaredNatively =
+    Array.isArray(headers) && headers.some((h) => h?.name === "StarPrinter");
+
+  if (declaredNatively && typeof cap.registerPlugin === "function") {
+    const plugin = cap.registerPlugin<StarPlugin>("StarPrinter");
+    if (plugin) {
+      starPluginCache = plugin;
+      return plugin;
+    }
+  }
+
+  // Fallback for any host that still fills Plugins directly. Kept last so it
+  // can never mask the authoritative PluginHeaders answer above.
+  const legacy = cap.Plugins?.["StarPrinter"];
+  if (legacy) {
+    starPluginCache = legacy as StarPlugin;
+    return starPluginCache;
+  }
+
+  return null;
+}
+
+/** Test seam: drop the memoised proxy. Not used by the register at runtime. */
+export function __resetStarPluginCacheForTests(): void {
+  starPluginCache = null;
 }
 
 /**

@@ -209,3 +209,118 @@ describe("the Swift plugin honours the printer's real limits", () => {
     expect(swiftPlugin).toContain("setOnTime");
   });
 });
+
+/**
+ * REGRESSION (owner-reported, first real iPad install).
+ *
+ * The register was installed on the iPad with the Swift plugin compiled in,
+ * and STILL reported "Printer setup is only available on the iPad", printed
+ * nothing, and popped no drawer. Every print fell through to the browser path,
+ * which iOS then blocked as a pop-up.
+ *
+ * Cause: getStarPlugin() read `Capacitor.Plugins["StarPrinter"]`. In
+ * Capacitor 6+, `Capacitor.Plugins` is NOT populated by the native bridge --
+ * it is populated as a side effect of calling `registerPlugin()` from JS,
+ * which this repo never did. So the lookup was permanently undefined on a
+ * perfectly good native build.
+ *
+ * The native bridge advertises what it actually registered in
+ * `Capacitor.PluginHeaders`, before our bundle runs. These tests pin that
+ * behaviour so the bug cannot silently return.
+ */
+describe("SLICE 10 - native plugin detection (Capacitor 8 bridge)", () => {
+  const CAP = "Capacitor";
+
+  function withCapacitorGlobal(value: unknown, run: () => void): void {
+    const g = globalThis as Record<string, unknown>;
+    const had = Object.prototype.hasOwnProperty.call(g, CAP);
+    const prev = g[CAP];
+    g[CAP] = value;
+    try {
+      run();
+    } finally {
+      if (had) g[CAP] = prev;
+      else delete g[CAP];
+    }
+  }
+
+  it("resolves the plugin from PluginHeaders via registerPlugin", async () => {
+    const { getStarPlugin, __resetStarPluginCacheForTests } = await import(
+      "@/lib/pos/star-printer"
+    );
+    __resetStarPluginCacheForTests();
+
+    const proxy = { isAvailable: () => Promise.resolve({ ok: true }) };
+    let askedFor: string | null = null;
+
+    withCapacitorGlobal(
+      {
+        isNativePlatform: () => true,
+        // Deliberately EMPTY, exactly as the real iPad bridge leaves it.
+        Plugins: {},
+        PluginHeaders: [{ name: "StarPrinter" }],
+        registerPlugin: (name: string) => {
+          askedFor = name;
+          return proxy;
+        },
+      },
+      () => {
+        expect(getStarPlugin()).toBe(proxy);
+      },
+    );
+
+    // The jsName declared in StarPrinterPlugin.swift.
+    expect(askedFor).toBe("StarPrinter");
+    __resetStarPluginCacheForTests();
+  });
+
+  it("returns null on a native build where the plugin was NOT compiled in", async () => {
+    const { getStarPlugin, __resetStarPluginCacheForTests } = await import(
+      "@/lib/pos/star-printer"
+    );
+    __resetStarPluginCacheForTests();
+
+    withCapacitorGlobal(
+      {
+        isNativePlatform: () => true,
+        Plugins: {},
+        PluginHeaders: [{ name: "SomeOtherPlugin" }],
+        registerPlugin: () => ({ nope: true }),
+      },
+      () => {
+        // Must NOT hand back a proxy whose every call would reject.
+        expect(getStarPlugin()).toBeNull();
+      },
+    );
+    __resetStarPluginCacheForTests();
+  });
+
+  it("returns null in a plain browser with no Capacitor at all", async () => {
+    const { getStarPlugin, __resetStarPluginCacheForTests } = await import(
+      "@/lib/pos/star-printer"
+    );
+    __resetStarPluginCacheForTests();
+
+    const g = globalThis as Record<string, unknown>;
+    const had = Object.prototype.hasOwnProperty.call(g, CAP);
+    const prev = g[CAP];
+    delete g[CAP];
+    try {
+      expect(getStarPlugin()).toBeNull();
+    } finally {
+      if (had) g[CAP] = prev;
+    }
+    __resetStarPluginCacheForTests();
+  });
+
+  it("does not rely on Capacitor.Plugins being pre-populated", () => {
+    // The original bug in one assertion: the source must not reach for
+    // Plugins[...] as its PRIMARY lookup.
+    const src = readFileSync(
+      path.join(process.cwd(), "src", "lib", "pos", "star-printer.ts"),
+      "utf8",
+    );
+    expect(src).toContain("PluginHeaders");
+    expect(src).toContain("registerPlugin");
+  });
+});

@@ -1657,3 +1657,129 @@ Straight back to the printer testing from the previous section:
 The plugin is compiled and now installed on the iPad. What still has not
 happened is it **driving the printer**. That is the next real test, and it needs
 this rebuild first.
+
+---
+
+# The printer screen said "only available on the iPad" — while running ON the iPad
+
+You did not miss a step. **You found a real bug in my code**, and it is fixed.
+
+## What you saw
+
+On the iPad, in the installed app: **MORE ▸ 🖨 Receipt printer** opened a box
+saying *"Printer setup is only available on the iPad"*, with nothing to tap but
+**Close**. Sales rang up fine, but no receipt printed and the drawer never
+popped. Pressing **Print receipt** gave *"the receipt window was blocked by the
+browser."*
+
+Every one of those symptoms is the **same single cause**.
+
+## The cause
+
+The register asks one question at startup: *"is the native printer plugin
+here?"* If the answer is no, it falls back to browser printing — which on iOS
+means a pop-up, which iOS blocks. That is why you got a pop-up warning inside a
+native app, which should be impossible.
+
+The answer was **wrongly** coming back "no". My code asked like this:
+
+```
+Capacitor.Plugins["StarPrinter"]
+```
+
+That looks right and it is wrong. In Capacitor 6 and later, **`Capacitor.Plugins`
+is not filled in by the native side.** It only gets filled as a side effect of
+calling `registerPlugin()` from JavaScript — and nothing in our code ever called
+it. So that lookup was **permanently empty on a perfectly healthy build**.
+
+The native bridge does publish what it registered, in `Capacitor.PluginHeaders`,
+before our code runs. That is the honest source of truth, and it is what the
+code now reads.
+
+**Your Swift plugin was correct and working the entire time.** It compiled, it
+installed, it was registered with the bridge and waiting. The JavaScript simply
+never asked the right question, so it was never called once.
+
+## Why the tests did not catch it
+
+Because every test faked the plugin by filling in `Capacitor.Plugins` — the same
+wrong assumption as the code. The tests and the bug agreed with each other, so
+53 printing tests passed against a register that could not print.
+
+That is the honest answer, and it is why I added **four regression tests** that
+fail against the old lookup and pass against the new one. I verified that by
+reverting the fix and watching the new test go red.
+
+## What is fixed
+
+- `getStarPlugin()` now checks `Capacitor.PluginHeaders` for `StarPrinter` and
+  obtains it with `registerPlugin()`
+- If the app is native but the plugin genuinely is **not** compiled in, it still
+  returns nothing and degrades exactly as before — it does **not** hand back a
+  broken object that would fail on every call
+- The browser PWA is unchanged
+
+## What you need to do
+
+Rebuild and reinstall — same two commands as last time:
+
+```
+cd ~/greenway/GREENWAY-WEBSITE
+git pull
+REGISTER_API_BASE="https://greenwaywebsite1.vercel.app" npm run register:build:ios
+npx cap open ios
+```
+
+Then **▶ Play** in Xcode.
+
+Now **MORE ▸ 🖨 Receipt printer** will show the real screen with a **Search for
+printers** button. Pair the printer in **iPadOS Settings ▸ Bluetooth** first if
+you have not, then search, select yours, and **Test print**.
+
+## About the 10-second licence scan
+
+Different problem, not a bug in our code, and worth stating plainly: **we have
+not tuned the scanner yet.**
+
+Our timers are already near-instant — the register finalizes a scan **300 ms**
+after the last character arrives, with a 1200 ms safety net for stalled reads.
+Those are not where ten seconds comes from.
+
+The delay is the **Socket DuraScan D760 itself**, in its default **HID keyboard
+mode**. In that mode it types the licence barcode into the app one character at
+a time, like a very fast typist. A driver's licence PDF417 holds roughly
+300–1100 characters, and Socket's own documentation says Basic/HID mode is
+*"much slower … for barcode symbologies encoding a lot of data, such as many 2D
+barcodes."* Ten seconds for a licence is consistent with that.
+
+There are two ways to fix it and I want your call before I build anything:
+
+1. **Scanner-side (fast).** Change the D760's typing speed / inter-character
+   delay with Socket's configuration barcodes. Often a large win for zero code.
+2. **App-side (proper).** Use Socket's own SDK so the scan arrives as **one
+   complete message** instead of hundreds of keystrokes. That is effectively
+   instant, and it removes the whole class of "stray keystrokes landed in the
+   search box" problems. It is a slice of work, not a setting.
+
+I do not want to guess which you want, and I would rather confirm the exact
+D760 firmware behaviour against Socket's documentation before touching either.
+**Tell me to proceed and I will.**
+
+## Order of business
+
+Do the printer rebuild first and confirm printing works end to end. The scanner
+is a speed annoyance; the printer is a missing function. One at a time, so we
+always know which change caused which result.
+
+## Verified before shipping
+
+- TypeScript: **0 errors**
+- Lint: **0 problems**
+- **524 test files, 13,331 tests, all passing** (up from 13,327 — four new
+  regression tests, no regressions)
+- The new tests were confirmed to **fail** against the old lookup
+
+## Reminder
+
+The plugin compiled, installed, and is now actually reachable. What still has
+not happened is a receipt coming out of the printer. That is the next real test.
