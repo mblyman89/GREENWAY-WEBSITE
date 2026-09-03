@@ -324,3 +324,54 @@ describe("SLICE 10 - native plugin detection (Capacitor 8 bridge)", () => {
     expect(src).toContain("registerPlugin");
   });
 });
+
+/**
+ * REGRESSION (owner-reported, second failed iPad install).
+ *
+ * After the PluginHeaders fix shipped, the register STILL showed "Printer
+ * setup is only available on the iPad" on a freshly rebuilt app. The JS fix
+ * was correct but insufficient: StarPrinterPlugin.swift existed on disk and
+ * was NEVER A MEMBER OF THE XCODE TARGET, so it was never compiled, never
+ * registered with the bridge, and never appeared in Capacitor.PluginHeaders.
+ *
+ * Why `npx cap sync ios` cannot fix this: the CLI derives
+ * `packageClassList` (capacitor.config.json) by scanning INSTALLED NPM PLUGIN
+ * PACKAGES only -- see @capacitor/cli/dist/util/iosplugin.js, getPluginFiles(),
+ * which iterates `plugins` and reads each `plugin.rootPath`. An app-local
+ * Swift file in ios/App/App/ is outside that scan forever.
+ *
+ * Capacitor's iOS bridge auto-registers any compiled class conforming to
+ * CAPPlugin & CAPBridgedPlugin, so target membership is the ONLY thing that
+ * was missing. These tests pin it.
+ */
+describe("SLICE 10 - StarPrinterPlugin.swift must be in the Xcode target", () => {
+  const pbxproj = readFileSync(
+    path.join(process.cwd(), "ios", "App", "App.xcodeproj", "project.pbxproj"),
+    "utf8",
+  );
+
+  it("is declared as a file reference", () => {
+    expect(pbxproj).toContain("/* StarPrinterPlugin.swift */");
+  });
+
+  it("is a member of the Sources build phase (this is what compiles it)", () => {
+    // The build-phase entry is the operative one. A file can be referenced by
+    // the project and shown in the navigator while still never being built.
+    expect(pbxproj).toContain("/* StarPrinterPlugin.swift in Sources */");
+
+    const sources = pbxproj.match(
+      /Begin PBXSourcesBuildPhase section \*\/([\s\S]*?)\/\* End PBXSourcesBuildPhase section/,
+    );
+    expect(sources).not.toBeNull();
+    expect(sources![1]).toContain("StarPrinterPlugin.swift in Sources");
+  });
+
+  it("declares the @objc name the bridge registers, matching jsName", () => {
+    // findPluginClasses() in @capacitor/cli matches /@objc\(([A-Za-z0-9_-]+)\)/
+    // and the bridge resolves it with NSClassFromString, so the @objc
+    // annotation must be present and must name the class.
+    expect(swiftPlugin).toContain("@objc(StarPrinterPlugin)");
+    expect(swiftPlugin).toContain('public let jsName = "StarPrinter"');
+    expect(swiftPlugin).toContain("CAPBridgedPlugin");
+  });
+});
