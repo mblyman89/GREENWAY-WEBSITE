@@ -1099,18 +1099,16 @@ Continue to Step 2.
 
 ## Fix it — Step 2: free the identifier from the Personal Team
 
-1. Sign out of the developer portal
-2. Sign back in using the **personal** Apple ID — `m_lyman@live.com`
-3. Go to <https://developer.apple.com/account/resources/identifiers/list>
-4. Find `com.greenwaymarijuana.register`
-5. Click it, then click **Remove** / **Delete**, and confirm
+> **CORRECTION — read this instead.** An earlier version of this step told you
+> to "sign out and sign back in with your personal Apple ID." **That advice was
+> wrong and I have removed it.** There is no second account to sign into. You
+> have **one** Apple ID. It carries two *teams*, and you cannot log into a team
+> — you switch between them. See the section
+> *"How do I log into my old personal account?"* further down, which explains
+> this properly and tells you what to do instead.
 
-> Free Personal Teams often do **not** show an Identifiers section at all. If
-> you cannot find or delete it there, that is normal and expected — skip
-> straight to *Step 4: register it by hand on the LLC team*, which sidesteps
-> the problem entirely.
-
-Then sign back in as the LLC account.
+Skip straight to *Step 4: register it by hand on the LLC team*, and if that
+fails, read the section on Apple Developer Support below.
 
 ## Fix it — Step 3: refresh Xcode
 
@@ -1174,3 +1172,161 @@ Still true, and still worth repeating: signing happens **before** compiling.
 My Swift printer plugin has not been compiled even once yet. Once the build
 clears signing, watch for red errors naming a `.swift` file and a line number
 — that is the real first test. Screenshot them and send them to me.
+
+---
+
+# "How do I log into my old personal account?"
+
+Short answer: **you don't, because it doesn't exist.** You were right and I was
+wrong. You have exactly **one** Apple ID, and my last set of instructions was
+written as if you had two. That was my mistake, and it sent you looking for a
+login screen that was never there.
+
+## One Apple ID, two teams
+
+This is the single idea that makes the whole mess make sense:
+
+- An **Apple ID** is a *login*. You have one: your `m_lyman` address.
+- A **team** is a *container* that owns apps, certificates, devices and App
+  IDs. Your one Apple ID belongs to **two** of them.
+
+The two teams on your single Apple ID are:
+
+| Team | What it is | Cost |
+| --- | --- | --- |
+| **MICHAEL BRIAN LYMAN (Personal Team)** | Created automatically by Apple the moment any Apple ID is used in Xcode. You never signed up for it. | Free |
+| **LYMAN'S MARIJUANA L.L.C.** (`DUTQ8VAG28`) | The real one, created when you paid the $99 and filed the business paperwork. | Paid |
+
+So when you type your email and your old password and "it shows me the LLC
+side now" — **that is correct behaviour, not a bug.** There is one door. Both
+rooms are behind it. The website simply shows you the paid team because that is
+the one with a real membership.
+
+**You cannot log into the Personal Team.** It has no separate password, no
+separate login, and on the developer website it has **no Identifiers page at
+all**. That is exactly why you could not find `com.greenwaymarijuana.register`
+to delete — not because you were looking in the wrong place, but because the
+place I sent you to does not exist for free teams.
+
+You switch between teams; you do not log into them. In Xcode that switch is the
+**Team** dropdown in *Signing & Capabilities*. On the website it is the team
+name near the top of the page.
+
+## What I verified from your six screenshots
+
+I read all six before writing any of this. Everything below is what your LLC
+team account actually contains right now — team **`DUTQ8VAG28`**, header
+**Michael Lyman / LYMAN'S MARIJUANA L.L.C.**:
+
+- **Identifiers** — contains **only** one entry: `XC Wildcard`, identifier `*`.
+  That is a generic wildcard Xcode creates on its own; it is unrelated to us.
+  **`com.greenwaymarijuana.register` is not on the LLC team.**
+- **Devices** — one device: name **`iPad`**, UDID
+  `3a62e46eb6f2b13cedaa5fa8390de0580aebfaf8`, type iPad, registered
+  **2026/09/02**. Your iPad registration worked and is permanent.
+- **Certificates** — one certificate: **MICHAEL BRIAN LYMAN**, type
+  **Development**, platform All, expires **2027/09/02**. Valid.
+- **Profiles** — **empty**. Still showing "Getting Started with Provisioning
+  Profiles".
+- **Keys** — empty. Not needed for this.
+- **Services** — the standard tiles (Sign in with Apple, WeatherKit, Maps).
+  Nothing here concerns us.
+
+That confirms the diagnosis rather than guessing at it: the identifier is not
+on the paid team, the paid team is otherwise healthy, and the free team — which
+is holding the name — gives you no page from which to release it.
+
+Also worth noting: the certificate is issued to **MICHAEL BRIAN LYMAN**, the
+exact same human name Xcode shows on the Personal Team. That is further
+confirmation both teams hang off your one Apple ID.
+
+## Why "Profiles" being empty is fine
+
+A provisioning profile is generated **automatically** by Xcode once signing
+succeeds. It is an *output*, not something you create first. Empty Profiles is
+the expected state when signing has not yet completed. Do not try to build one
+by hand.
+
+## So what do I actually do now?
+
+Your manual registration attempt was the **right instinct** and you performed it
+correctly. The error you got back —
+
+```
+An attribute in the provided entity has invalid value
+An App ID with Identifier 'com.greenwaymarijuana.register' is not available.
+Please enter a different string.
+```
+
+— is Apple confirming the name is held by a team that is not the LLC. Since
+that team is your own free Personal Team, and free teams expose no page to
+release it from, **the self-service route is genuinely exhausted.** You did not
+miss a button.
+
+That leaves one correct path, and it is not a workaround:
+
+### Contact Apple Developer Support
+
+1. Go to <https://developer.apple.com/contact/>
+2. Choose **Membership and Account** → **Bundle Identifiers / App IDs**
+3. Ask for a phone call or email reply — phone is faster
+4. Tell them, in plain words:
+
+   > "The App ID `com.greenwaymarijuana.register` is registered to my free
+   > Personal Team. I need it released so I can register it on my paid team,
+   > LYMAN'S MARIJUANA L.L.C., team ID `DUTQ8VAG28`. Both teams are on my
+   > single Apple ID. The free team has no Identifiers page, so I cannot
+   > release it myself."
+
+5. Have ready: your Apple ID email, the team ID **`DUTQ8VAG28`**, and the exact
+   identifier `com.greenwaymarijuana.register`
+
+This is a routine request. Support does it constantly and it is usually handled
+on the first call. Apple can see both teams belong to you.
+
+**After they confirm it is released**, go back and redo *Step 4 — register it by
+hand on the LLC team* above, then toggle **Automatically manage signing** off
+and back on in Xcode and press **Cmd-B**.
+
+## Before you call — one thing worth trying first
+
+It costs two minutes and occasionally skips the phone call entirely. Xcode
+sometimes claims the ID successfully on its own once the local signing cache is
+cleared:
+
+1. Quit Xcode completely (**Cmd-Q**)
+2. In **Terminal**, run exactly:
+
+   ```
+   rm -rf ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
+   ```
+
+   This deletes only cached copies on your Mac. Nothing at Apple, nothing in
+   our project.
+
+3. Reopen Xcode and the project
+4. **Signing & Capabilities** → confirm **Team** is
+   **LYMAN'S MARIJUANA L.L.C.** — not the Personal Team
+5. Uncheck **Automatically manage signing**, wait five seconds, check it again
+6. Press **Cmd-B**
+
+If the same "not available" error comes back, stop and make the support call.
+Do not keep retrying — it will not change on its own.
+
+## Still do not change the bundle ID
+
+Unchanged from the previous section, and worth repeating because Apple's error
+message actively pushes you the wrong way. `com.greenwaymarijuana.register` is
+written into four places in our codebase, one of which is a compliance test that
+asserts its exact value. Changing it is a code change I make in the repo, never
+a field edit in Xcode. A support call is far cheaper than a permanent rename.
+
+## Reminder
+
+Nothing here is a code problem, and nothing here is lost work. Every earlier
+blocker is still cleared. And signing still happens **before** compiling, so my
+Swift printer plugin has *still* not been compiled even once.
+
+When the build finally clears signing, watch for red errors naming a `.swift`
+file and a line number. That is my code's first real test. Screenshot them and
+send them to me — do not fix them yourself.
