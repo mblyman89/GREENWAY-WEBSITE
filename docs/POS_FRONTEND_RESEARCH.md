@@ -245,6 +245,13 @@ Recreational (and non-MCAD patients), per single transaction:
 - **10 units** of infused product otherwise taken into the body;
 - **72 oz** liquid infused product (oral/topical), OR **200 mg** total active delta-9 THC in
   liquid form when packaged in ≤4 mg units.
+  - *Implemented in SLICE 16.* Bucket `low_thc_liquid`, denominated in **mg of THC** (see
+    `LIMIT_BUCKET_UNITS` in `src/lib/compliance/sales-limits-core.ts` — the first
+    non-gram bucket). Qualification requires an explicit intake flag
+    (`menu_items.low_thc_liquid` + `unit_thc_mg`, migration 0216); it is deliberately NOT
+    derived from the label's serving math, because a 16 mg bottle sold as "4 × 4 mg"
+    would derive to 4 mg and wrongly qualify. **An unflagged liquid is treated as a normal
+    72 oz liquid** — the stricter, fail-safe direction.
 MCAD-registered patients/providers (medical endorsement required): **3 oz / 48 oz / 21 g /
 216 oz** (+ the 200 mg ≤4 mg-unit liquid rule).
 Also verified: single serving ≤10 mg delta-9 THC; single package ≤100 mg; single concentrate

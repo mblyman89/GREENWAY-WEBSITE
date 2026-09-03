@@ -146,7 +146,7 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
 
   if (error || !order) return null;
 
-  const buildLineRows = (withCategory: boolean, withUnitGrams: boolean) =>
+  const buildLineRows = (withCategory: boolean, withUnitGrams: boolean, withLowThc: boolean) =>
     input.lines.map((l) => ({
       order_id: order!.id,
       product_id: l.productId ?? null,
@@ -163,17 +163,38 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
       ...(withUnitGrams && typeof l.unitGrams === "number" && l.unitGrams > 0
         ? { unit_grams: l.unitGrams }
         : {}),
+      // SLICE 16 — sale-time low-THC beverage snapshot (migration 0216).
+      // Only written when the product is actually classified as qualifying:
+      // an omitted column reads back as null, which the completion gate treats
+      // as a normal liquid. Without this snapshot the gate would re-evaluate a
+      // legal low-THC order at pickup as a normal liquid and wrongly block it.
+      ...(withLowThc && l.lowThcLiquid === true && typeof l.unitThcMg === "number" && l.unitThcMg > 0
+        ? { low_thc_liquid: true, unit_thc_mg: l.unitThcMg }
+        : {}),
     }));
 
-  // Missing-column ladder: full row → without unit_grams (0122 unapplied) →
-  // without category too (0096 unapplied). Same degrade-don't-fail posture
-  // the category snapshot shipped with.
-  let { error: linesError } = await admin.from("order_lines").insert(buildLineRows(true, true));
+  // Missing-column ladder: full row → without the 0216 low-THC snapshot →
+  // without unit_grams (0122 unapplied) → without category too (0096
+  // unapplied). Same degrade-don't-fail posture the category snapshot shipped
+  // with, so placement keeps working on a database that is behind on
+  // migrations.
+  let { error: linesError } = await admin
+    .from("order_lines")
+    .insert(buildLineRows(true, true, true));
   if (linesError && isMissingColumnError(linesError)) {
-    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(true, false)));
+    ({ error: linesError } = await admin
+      .from("order_lines")
+      .insert(buildLineRows(true, true, false)));
   }
   if (linesError && isMissingColumnError(linesError)) {
-    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(false, false)));
+    ({ error: linesError } = await admin
+      .from("order_lines")
+      .insert(buildLineRows(true, false, false)));
+  }
+  if (linesError && isMissingColumnError(linesError)) {
+    ({ error: linesError } = await admin
+      .from("order_lines")
+      .insert(buildLineRows(false, false, false)));
   }
   if (linesError) {
     // Roll back the orphaned order so we never strand a header with no lines.

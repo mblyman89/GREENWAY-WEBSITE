@@ -138,6 +138,27 @@ Single-transaction maxima (the POS MUST refuse or manager-gate beyond these):
 | Solid-form infused (edibles) | 16 oz (448 g) | 48 oz (1,344 g) |
 | Liquid-form infused | 72 oz (2,016 g) | 216 oz (6,048 g) |
 | Concentrates | 7 g | 21 g |
+| **Low-THC infused liquid** (packaged in individual units of ≤ 4 mg active Δ9-THC) | **200 mg active Δ9-THC** | **200 mg active Δ9-THC** — *NOT tripled* |
+
+**Low-THC beverage bucket (added 2024 c 9 s 1 / SHB 1249; WAC 314-55-095(1)(d)(i)(E)–(F)
+and (2)(d), eff. 1/7/2025).** Subsection (E) caps liquid infused product at 72 oz
+*"unless the cannabis-infused product in liquid form is packaged in individual units
+containing no more than four milligrams of active delta-9 THC per unit"*; subsection (F)
+then authorizes *"Two hundred mg of active delta-9 THC within a cannabis-infused product
+in liquid form ... if the product is packaged in individual units containing no more than
+four milligrams of active delta-9 THC per unit."* Three consequences the POS must honor:
+1. **Exclusive, not additive.** A qualifying line counts toward the 200 mg bucket and
+   contributes **nothing** to the 72 oz bucket. The word in (E) is *"unless."*
+2. **Per CONTAINER, not per serving.** One can = one unit; a 4-pack = 4 units. A single
+   16 mg bottle labelled *"4 servings × 4 mg"* is one 16 mg unit and does **not** qualify.
+3. **Medical does not triple.** WAC 314-55-095(2)(d) reads *"and up to 200 mg"* — the
+   identical figure. 600 mg would be an over-sale on every medical transaction.
+
+Possession follows automatically: **RCW 69.50.4013(3)(a)** legalizes possession of amounts
+*"that do not exceed those set forth in RCW 69.50.360(3)"*, and 69.50.360(3)(d) is this
+same provision. (Do not confuse it with **RCW 69.50.4013(4)(a)(iv)**, which states *100 mg*
+— that is the non-commercial adult **gifting** allowance, not a retail limit.)
+
 Combination purchases must respect each bucket. Non-database authorization holders get
 **only recreational amounts**. Violations = Category III (WAC 314-55-522): $1,250 →
 escalating suspensions — "exceeding transaction limits" is an enforcement category of its own.

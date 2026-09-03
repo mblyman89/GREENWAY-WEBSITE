@@ -578,10 +578,39 @@ describe("the migration list is ordered the way the database will see it", () =>
     // that deferred step. Same doctrine as 0214: a value the export failed to
     // carry is a fact from the paperwork, not a derived number.
     //
-    // RE-VERIFIED, not inherited: `ls [0-9]*.sql | wc -l` returns 215;
-    // `ls [0-9]*.sql | grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql |
-    // sort -c` exits clean. Only then was 0214 changed to 0215.
-    expect(listed[listed.length - 1]).toMatch(/^0215_/);
+    // ─── IT FIRED AN EIGHTEENTH TIME, ON 0216 (SLICE 16) ─────────────────
+    //
+    // 0216_low_thc_liquid_limit.sql exists because Washington gives low-THC
+    // beverages their own transaction limit, and the system had no way to
+    // express it. WAC 314-55-095(1)(d)(i)(E) caps liquid infused product at 72
+    // ounces "unless the product is packaged in individual units containing no
+    // more than four milligrams of active delta-9 THC per unit", in which case
+    // (F) applies instead: "Two hundred mg of active delta-9 THC".
+    //
+    // The migration adds the two owner-tunable maxima beside the four that
+    // already existed, and the per-product classification the engine routes on.
+    // It does NOT derive that classification from the 0138 serving facts,
+    // because it cannot: the owner's own rule is that "one can is one unit, and
+    // a 4 pack of cans is 4 units", while "a single product that has 16 mg in
+    // total, even if it says the dose is 4, 4 mg servings does not qualify."
+    // Identical serving arithmetic, opposite legal answers — so the trigger is
+    // an explicit fact captured at intake from the label and invoice, and an
+    // unclassified liquid stays in the stricter 72 oz bucket.
+    //
+    // RE-VERIFIED, not inherited. Re-ran from scratch rather than trusting the
+    // previous line: `ls [0-9]*.sql | wc -l` returns 216; `ls [0-9]*.sql |
+    // grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql | sort -c` exits clean.
+    // Added to the ritual this time: `ls [0-9]*.sql | cut -c1-4 | sort |
+    // uniq -d | wc -l` returns 0, proving no two migrations claim the same
+    // number — the failure a parallel branch actually produces, which none of
+    // the three older checks would have caught.
+    expect(listed[listed.length - 1]).toMatch(/^0216_/);
+
+    // The duplicate-number check above, enforced rather than merely recorded:
+    // two files numbered 0216 would still sort cleanly and still be padded, so
+    // only this assertion can see it.
+    const numbers = listed.map((f) => f.slice(0, 4));
+    expect(new Set(numbers).size).toBe(numbers.length);
   });
 
   it("every filename is zero-padded, which is WHY a string sort is safe", () => {

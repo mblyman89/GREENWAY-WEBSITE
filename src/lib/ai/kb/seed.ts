@@ -25,7 +25,12 @@
 // limit constants so the KB compliance-rule reference (Slice 3) derives its
 // purchase-limit numbers from the same single source of truth checkout uses —
 // the KB reference can never drift from what is actually enforced.
-import { RECREATIONAL_LIMITS, gramsToOunces } from "@/lib/compliance/sales-limits-core";
+import {
+  RECREATIONAL_LIMITS,
+  MEDICAL_LIMITS,
+  LOW_THC_UNIT_MAX_MG,
+  gramsToOunces,
+} from "@/lib/compliance/sales-limits-core";
 
 export type SeedStrain = {
   slug: string;
@@ -877,6 +882,13 @@ const REC_USABLE_OZ = gramsToOunces(RECREATIONAL_LIMITS.usable); // 1
 const REC_SOLID_OZ = gramsToOunces(RECREATIONAL_LIMITS.solid_edible); // 16
 const REC_LIQUID_OZ = gramsToOunces(RECREATIONAL_LIMITS.liquid_edible); // 72
 const REC_CONC_G = RECREATIONAL_LIMITS.concentrate; // 7
+// SLICE 16 — the low-THC beverage allowance. NOT a weight: milligrams of
+// active delta-9 THC. Same figure for medical (MEDICAL_LIMITS.low_thc_liquid
+// is also 200 — WAC 314-55-095(2)(d) does not triple it), which is why the
+// house_note below says so out loud instead of letting a patient assume 3×.
+const REC_LOW_THC_MG = RECREATIONAL_LIMITS.low_thc_liquid; // 200
+const MED_LOW_THC_MG = MEDICAL_LIMITS.low_thc_liquid; // 200 — identical
+const LOW_THC_UNIT_MG = LOW_THC_UNIT_MAX_MG; // 4
 
 export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
   {
@@ -903,17 +915,47 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
     rule:
       `Washington caps one recreational transaction at ${REC_USABLE_OZ} ounce of useable cannabis, ` +
       `${REC_CONC_G} grams of concentrate/extract for inhalation, ${REC_SOLID_OZ} ounces of solid ` +
-      `infused edibles, and ${REC_LIQUID_OZ} ounces of infused liquids.`,
+      `infused edibles, and ${REC_LIQUID_OZ} ounces of infused liquids. Infused liquids packaged in ` +
+      `individual units of ${LOW_THC_UNIT_MG} mg of active delta-9 THC or less follow a separate ` +
+      `allowance instead: up to ${REC_LOW_THC_MG} mg of active delta-9 THC in one transaction.`,
     house_note:
       "Think of it as a per-visit basket limit set by the state. Our register keeps the math honest so " +
       "you never have to — if a cart runs over, we'll help you adjust. Registered medical patients get " +
       "higher limits. Heads up: infused pre-rolls, infused blunts, and infused flower count toward the " +
-      "concentrate limit, not the flower limit.",
+      "concentrate limit, not the flower limit. For low-THC drinks, one can is one unit and a four-pack " +
+      "counts as four units, so we total the THC across the cans we actually scan — and a single " +
+      "bottle that holds sixteen milligrams does not qualify even if the label splits it into four " +
+      "servings, because the state measures the container, not the serving.",
     severity: "important",
     citation: "WAC 314-55-095",
     sources: [WSLCB_USING],
     confidence: 0.99,
     sort_order: 20,
+  },
+  {
+    slug: "low-thc-beverage-limit",
+    title: "Low-THC drinks have their own limit",
+    category: "purchase-limit",
+    rule:
+      `A cannabis-infused liquid packaged in individual units of ${LOW_THC_UNIT_MG} mg of active ` +
+      `delta-9 THC or less is capped by TOTAL THC rather than by volume: up to ${REC_LOW_THC_MG} mg ` +
+      `of active delta-9 THC in a single transaction, in place of the ${REC_LIQUID_OZ}-ounce liquid ` +
+      `allowance. The ${LOW_THC_UNIT_MG} mg test applies to the sealed container, not to a serving ` +
+      `printed on the label. This allowance is ${MED_LOW_THC_MG} mg for registered medical patients ` +
+      `too — it is the one limit that does not increase with a card.`,
+    house_note:
+      "Practical version: one can is one unit, and a four-pack is four units, so a budtender scans " +
+      "each can and the register adds up the THC. If a drink is packaged as a single container that " +
+      "holds more than four milligrams, it isn't in this category at all — it goes back under the " +
+      "regular infused-liquid allowance measured by ounces, no matter what the serving breakdown on " +
+      "the label says. And if we haven't classified a drink yet, it stays under the regular liquid " +
+      "allowance measured in ounces \u2014 the stricter of the two, which is the call we always make " +
+      "when a fact is missing.",
+    severity: "important",
+    citation: "WAC 314-55-095(1)(d)(i)(F)",
+    sources: [WSLCB_USING],
+    confidence: 0.99,
+    sort_order: 25,
   },
   {
     slug: "possession-limits",
@@ -922,7 +964,9 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
     rule:
       `An adult 21+ may lawfully possess up to ${REC_USABLE_OZ} ounce of useable cannabis, ` +
       `${REC_CONC_G} grams of concentrate, ${REC_SOLID_OZ} ounces of solid edibles, and ` +
-      `${REC_LIQUID_OZ} ounces of infused liquids — the same amounts as the transaction limit.`,
+      `${REC_LIQUID_OZ} ounces of infused liquids — or ${REC_LOW_THC_MG} mg of active delta-9 THC ` +
+      `in low-THC liquids packaged in units of ${LOW_THC_UNIT_MG} mg or less — the same amounts as ` +
+      `the transaction limit.`,
     house_note:
       "Basically: what you can buy in a trip is about what you can carry. Easy to remember, easy to stay " +
       "on the right side of.",

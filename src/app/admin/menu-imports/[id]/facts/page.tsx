@@ -433,9 +433,48 @@ function ReviewCard({ importId, row }: { importId: string; row: FactReviewRow })
             <FixField label="Net weight (g)" name="netWeightGrams" placeholder={str(row.facts.netWeightGrams)} />
             <FixField label="Net volume (ml)" name="netVolumeMl" placeholder={str(row.facts.netVolumeMl)} />
           </div>
+
+          {/* SLICE 16 — the low-THC beverage classification (WAC 314-55-095(1)(d)(i)(E)-(F)). */}
+          <div className="rounded-lg border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.04] p-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--admin-gold)]">
+              Low-THC beverage (200 mg allowance)
+            </p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-white/45">
+                  Qualifies as a low-THC beverage?
+                </label>
+                <select
+                  name="lowThcLiquid"
+                  defaultValue=""
+                  className="admin-focus mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-xs text-white"
+                >
+                  <option value="">
+                    {row.facts.lowThcLiquid === null
+                      ? "Leave unclassified (treated as regular liquid)"
+                      : `Leave as-is (currently ${row.facts.lowThcLiquid ? "yes" : "no"})`}
+                  </option>
+                  <option value="yes">Yes — packaged in units of 4 mg THC or less</option>
+                  <option value="no">No — regular infused liquid (72 oz limit)</option>
+                </select>
+              </div>
+              <FixField
+                label="THC mg per SEALED CONTAINER"
+                name="unitThcMg"
+                placeholder={str(row.facts.unitThcMg)}
+              />
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/45">
+              One can is one unit; a 4-pack is four units and the budtender scans each can. Enter the
+              milligrams in the whole sealed container, <strong>not</strong> one serving — a 16 mg bottle
+              labelled &ldquo;4 servings &times; 4 mg&rdquo; is <strong>16 mg</strong> and does <strong>not</strong>{" "}
+              qualify. Take the figure from the invoice or the physical package and note the lot number
+              below. Anything left unclassified is counted against the regular 72 oz liquid limit.
+            </p>
+          </div>
           <div>
             <label className="block text-[11px] uppercase tracking-wide text-white/45">
-              Note (how you verified — e.g. “checked the physical package”)
+              Note (how you verified — e.g. “checked the physical package”, or the lot number)
             </label>
             <input
               type="text"

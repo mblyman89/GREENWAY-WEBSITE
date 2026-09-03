@@ -109,6 +109,23 @@ export type OrderLineRow = {
    * variant-grams-core.normalizeUnitGrams.
    */
   unit_grams?: number | string | null;
+  /**
+   * SLICE 16 — sale-time snapshot of the low-THC beverage classification
+   * (migration 0216). Null/absent on legacy rows and on anything that is not a
+   * classified low-THC drink, which the gate then counts as a normal liquid.
+   *
+   * WHY SNAPSHOT RATHER THAN RE-LOOK-UP: the completion gate re-evaluates
+   * stored lines at pickup, and the published menu can change between
+   * placement and pickup. The order must be judged on the facts that were true
+   * when it was placed — the same reasoning behind the category snapshot
+   * (0096) and the grams snapshot (0122).
+   */
+  low_thc_liquid?: boolean | null;
+  /**
+   * SLICE 16 — sale-time snapshot of mg active delta-9 THC per sellable unit.
+   * Postgres numeric may deserialize as string; consumers normalize.
+   */
+  unit_thc_mg?: number | string | null;
   created_at: string;
 };
 
@@ -157,6 +174,10 @@ export type PricedNewOrderLine = {
   regularPriceMinorUnits: number;
   /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
   unitGrams?: number | null;
+  /** SLICE 16 — low-THC beverage classification snapshot (migration 0216). */
+  lowThcLiquid?: boolean | null;
+  /** SLICE 16 — mg active delta-9 THC per sellable unit, snapshot. */
+  unitThcMg?: number | null;
 };
 
 export type NewOrderInput = {

@@ -16,6 +16,7 @@ import {
   type LimitCartLine,
   type LimitEvaluation,
   type LimitOverrides,
+  type LimitProfile,
 } from "@/lib/compliance/sales-limits-core";
 import {
   decideSalesLimitGate,
@@ -28,8 +29,8 @@ export * from "@/lib/compliance/sales-limit-gate-core";
 export type SalesLimitSettings = {
   enforce: boolean;
   hardBlock: boolean;
-  rec: { usable: number; solid_edible: number; concentrate: number; liquid_edible: number };
-  med: { usable: number; solid_edible: number; concentrate: number; liquid_edible: number };
+  rec: LimitProfile;
+  med: LimitProfile;
   unitGrams: Record<string, number>;
   notes: string | null;
   updatedAt: string | null;
@@ -38,8 +39,10 @@ export type SalesLimitSettings = {
 export const DEFAULT_SALES_LIMIT_SETTINGS: SalesLimitSettings = {
   enforce: true,
   hardBlock: true,
-  rec: { usable: 28, solid_edible: 448, concentrate: 7, liquid_edible: 2016 },
-  med: { usable: 84, solid_edible: 1344, concentrate: 21, liquid_edible: 6048 },
+  // SLICE 16: low_thc_liquid is 200 mg THC for BOTH profiles — the medical
+  // figure is NOT tripled (WAC 314-55-095(2)(d) says "up to 200 mg").
+  rec: { usable: 28, solid_edible: 448, concentrate: 7, liquid_edible: 2016, low_thc_liquid: 200 },
+  med: { usable: 84, solid_edible: 1344, concentrate: 21, liquid_edible: 6048, low_thc_liquid: 200 },
   unitGrams: {},
   notes: null,
   updatedAt: null,
@@ -56,6 +59,11 @@ type SettingsRow = {
   med_solid_grams: number;
   med_concentrate_grams: number;
   med_liquid_grams: number;
+  /** SLICE 16 — mg of active delta-9 THC, NOT grams. Nullable: the column is
+   *  added by migration 0216, so a database that has not run it yet returns
+   *  undefined and we fall back to the statutory 200. */
+  rec_low_thc_liquid_thc_mg: number | null;
+  med_low_thc_liquid_thc_mg: number | null;
   unit_grams_json: unknown;
   notes: string | null;
   updated_at: string | null;
@@ -77,7 +85,7 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
   const { data } = await admin
     .from("sales_limit_settings")
     .select(
-      "enforce, hard_block, rec_usable_grams, rec_solid_grams, rec_concentrate_grams, rec_liquid_grams, med_usable_grams, med_solid_grams, med_concentrate_grams, med_liquid_grams, unit_grams_json, notes, updated_at",
+      "enforce, hard_block, rec_usable_grams, rec_solid_grams, rec_concentrate_grams, rec_liquid_grams, rec_low_thc_liquid_thc_mg, med_usable_grams, med_solid_grams, med_concentrate_grams, med_liquid_grams, med_low_thc_liquid_thc_mg, unit_grams_json, notes, updated_at",
     )
     .eq("id", true)
     .maybeSingle();
@@ -95,6 +103,8 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
         solid_edible: Number(row.rec_solid_grams),
         concentrate: Number(row.rec_concentrate_grams),
         liquid_edible: Number(row.rec_liquid_grams),
+        // SLICE 16 — nullish (column absent pre-0216) falls back to statute.
+        low_thc_liquid: row.rec_low_thc_liquid_thc_mg ?? RECREATIONAL_LIMITS.low_thc_liquid,
       },
       RECREATIONAL_LIMITS,
     ),
@@ -104,6 +114,7 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
         solid_edible: Number(row.med_solid_grams),
         concentrate: Number(row.med_concentrate_grams),
         liquid_edible: Number(row.med_liquid_grams),
+        low_thc_liquid: row.med_low_thc_liquid_thc_mg ?? MEDICAL_LIMITS.low_thc_liquid,
       },
       MEDICAL_LIMITS,
     ),
@@ -116,8 +127,8 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
 export type SalesLimitSettingsInput = {
   enforce: boolean;
   hardBlock: boolean;
-  rec: { usable: number; solid_edible: number; concentrate: number; liquid_edible: number };
-  med: { usable: number; solid_edible: number; concentrate: number; liquid_edible: number };
+  rec: LimitProfile;
+  med: LimitProfile;
   unitGrams: Record<string, number>;
   notes: string | null;
 };
@@ -149,6 +160,9 @@ export async function updateSalesLimitSettings(
       med_solid_grams: med.solid_edible,
       med_concentrate_grams: med.concentrate,
       med_liquid_grams: med.liquid_edible,
+      // SLICE 16 — mg THC columns (migration 0216).
+      rec_low_thc_liquid_thc_mg: rec.low_thc_liquid,
+      med_low_thc_liquid_thc_mg: med.low_thc_liquid,
       unit_grams_json: input.unitGrams,
       notes: input.notes,
       updated_by: actorId,
@@ -169,6 +183,7 @@ export function overridesFor(
     solid_edible: p.solid_edible,
     concentrate: p.concentrate,
     liquid_edible: p.liquid_edible,
+    low_thc_liquid: p.low_thc_liquid,
     unitGrams: settings.unitGrams,
   };
 }

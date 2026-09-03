@@ -243,6 +243,10 @@ function mkRow(over: Partial<FactReviewRow> & { sourceItemId: string }): FactRev
       ratioLabel: null,
       netWeightGrams: null,
       netVolumeMl: null,
+      // SLICE 16. Defaulting to null (UNCLASSIFIED), not false: the bulk tool
+      // must never invent a classification the reviewer did not make.
+      lowThcLiquid: null,
+      unitThcMg: null,
     },
     sources: over.sources ?? "",
     confidence: over.confidence ?? "needs-review",

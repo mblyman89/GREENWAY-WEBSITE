@@ -52,6 +52,15 @@ export async function updateSalesLimitSettingsAction(formData: FormData) {
         solid_edible: num(formData, "rec_solid", 448),
         concentrate: num(formData, "rec_concentrate", 7),
         liquid_edible: num(formData, "rec_liquid", 2016),
+        // SLICE 16 \u2014 MILLIGRAMS of active delta-9 THC, not grams.
+        // WAC 314-55-095(1)(d)(i)(F). Fallback is the statutory figure, taken
+        // from the engine constant rather than retyped, so the two can never
+        // drift apart.
+        low_thc_liquid: num(
+          formData,
+          "rec_low_thc_liquid",
+          RECREATIONAL_LIMITS.low_thc_liquid,
+        ),
       },
       RECREATIONAL_LIMITS,
     ),
@@ -61,6 +70,14 @@ export async function updateSalesLimitSettingsAction(formData: FormData) {
         solid_edible: num(formData, "med_solid", 1344),
         concentrate: num(formData, "med_concentrate", 21),
         liquid_edible: num(formData, "med_liquid", 6048),
+        // SLICE 16 \u2014 mg THC. MEDICAL_LIMITS.low_thc_liquid is 200, the SAME
+        // as recreational. WAC 314-55-095(2)(d) says "and up to 200 mg"; this
+        // bucket is the one that does not triple for a DOH-database patient.
+        low_thc_liquid: num(
+          formData,
+          "med_low_thc_liquid",
+          MEDICAL_LIMITS.low_thc_liquid,
+        ),
       },
       MEDICAL_LIMITS,
     ),

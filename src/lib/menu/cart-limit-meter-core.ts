@@ -39,11 +39,24 @@ import {
 } from "@/lib/compliance/sales-limits-core";
 import { gramsFromVariantLabel, lineGramsFromUnit } from "@/lib/pos/variant-grams-core";
 
-/** The three cart fields the limit engine needs (a subset of CartItem). */
+/** The cart fields the limit engine needs (a subset of CartItem). */
 export type CartLimitLineInput = {
   category: string | null;
   quantity: number;
   variantLabel: string | null;
+  /**
+   * SLICE 16 — the low-THC beverage classification
+   * (WAC 314-55-095(1)(d)(i)(E)+(F)). true = packaged in individual units of
+   * ≤ 4 mg active delta-9 THC, so the line counts against the 200 mg THC
+   * bucket instead of the 72 oz liquid bucket.
+   *
+   * Optional: absent/null = not classified = counted as a NORMAL liquid. That
+   * is the fail-safe direction and matches the owner's instruction that "a
+   * product with no flag should be treated as a normal liquid."
+   */
+  lowThcLiquid?: boolean | null;
+  /** SLICE 16 — mg of active delta-9 THC in ONE sellable unit (one can). */
+  unitThcMg?: number | null;
 };
 
 /** At-a-glance meter state — mirrors the POS register badge (OK / NEAR / OVER). */
@@ -70,6 +83,12 @@ export function cartLimitLines(items: readonly CartLimitLineInput[]): LimitCartL
       category: item.category,
       quantity: item.quantity,
       ...(grams !== null ? { grams } : {}),
+      // SLICE 16 — mirrors the register's limitLinesFor() exactly, so the
+      // website meter and the register meter can never disagree about the same
+      // cart. The engine demands `lowThcLiquid === true` AND a valid per-unit
+      // mg at or under 4, so anything missing falls back to the 72 oz bucket.
+      lowThcLiquid: item.lowThcLiquid ?? null,
+      unitThcMg: item.unitThcMg ?? null,
     };
   });
 }

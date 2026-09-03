@@ -16,6 +16,7 @@ import {
 import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import {
+  parseLowThcClassification,
   buildFactReviewBuckets,
   menuItemRowToFactReviewItem,
   posDiagnosticToFactReviewDiagnostic,
@@ -277,6 +278,23 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
       const raw = String(formData.get(key) ?? "").trim();
       if (raw !== "") (facts as Record<string, string>)[key] = raw;
     }
+
+    // ── SLICE 16: the low-THC beverage classification ──────────────────
+    // The rules live in the PURE core so they can be unit-tested; this action
+    // only translates a failure into a redirect. See
+    // parseLowThcClassification() for why each rule exists — the short version
+    // is that a mis-typed per-serving figure would let the register sell 4x
+    // the statutory cap.
+    const lowThc = parseLowThcClassification(
+      String(formData.get("lowThcLiquid") ?? ""),
+      String(formData.get("unitThcMg") ?? ""),
+    );
+    if (!lowThc.ok) {
+      redirect(dest + "?error=" + encodeURIComponent(lowThc.error));
+    } else {
+      Object.assign(facts, lowThc.facts);
+    }
+
     if (Object.keys(facts).length === 0) {
       redirect(dest + "?error=" + encodeURIComponent("Fix chosen but no corrected values were entered."));
     }

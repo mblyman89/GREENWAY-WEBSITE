@@ -78,8 +78,13 @@ export function CartLimitMeter({ items }: CartLimitMeterProps) {
               <div key={b.bucket} className="text-xs">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-bold text-zinc-300">{b.label}</span>
+                  {/* SLICE 16 — unit-aware. Four buckets are grams; the
+                      low-THC beverage bucket is mg of active delta-9 THC, and
+                      printing "120.0g / 200.0g" there would be a lie. */}
                   <span className={`font-black ${b.exceeded ? "text-red-300" : "text-zinc-200"}`}>
-                    {round1(b.usedGrams)}g / {round1(b.maxGrams)}g
+                    {b.unit === "mg_thc"
+                      ? `${round1(b.used)}mg / ${round1(b.max)}mg THC`
+                      : `${round1(b.usedGrams)}g / ${round1(b.maxGrams)}g`}
                   </span>
                 </div>
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/50">

@@ -17,6 +17,11 @@ import { pointsValueMinor } from "@/lib/loyalty/engine";
 import { loyaltyTermsSummary, tierDisplayRows } from "@/lib/loyalty/program-terms-core";
 import { purchaseLimitRows } from "@/lib/medical/purchase-limit-display-core";
 import { MEDICAL_PURCHASE_LIMITS, RECREATIONAL_PURCHASE_LIMITS } from "@/lib/medical/tax";
+import {
+  RECREATIONAL_LIMITS,
+  MEDICAL_LIMITS,
+  LOW_THC_UNIT_MAX_MG,
+} from "@/lib/compliance/sales-limits-core";
 
 const DEFAULT_CONFIG: LoyaltyConfig = {
   pointsPerDollar: 1,
@@ -102,13 +107,20 @@ describe("tierDisplayRows — live tier ladder", () => {
 });
 
 describe("purchaseLimitRows — table derives from register constants (WAC 314-55-095)", () => {
-  it("renders the four statutory product forms with correct ounce/gram figures", () => {
+  it("renders the five statutory product forms with correct ounce/gram/mg figures", () => {
     const rows = purchaseLimitRows();
     expect(rows).toEqual([
       { category: "Usable cannabis (flower)", recreational: "1 oz", medical: "3 oz" },
       { category: "Solid edibles", recreational: "16 oz", medical: "48 oz" },
       { category: "Cannabis-infused liquid", recreational: "72 oz", medical: "216 oz" },
       { category: "Concentrates", recreational: "7 g", medical: "21 g" },
+      // SLICE 16. Note the unit suffix is "mg THC", not "oz" and not "g" — a
+      // weight suffix here would be a factual misstatement to the public.
+      {
+        category: "Low-THC beverages (units of 4 mg THC or less)",
+        recreational: "200 mg THC",
+        medical: "200 mg THC",
+      },
     ]);
   });
 
@@ -118,10 +130,44 @@ describe("purchaseLimitRows — table derives from register constants (WAC 314-5
     expect(RECREATIONAL_PURCHASE_LIMITS.usableGrams).toBeCloseTo(28.35);
     expect(MEDICAL_PURCHASE_LIMITS.concentrateGrams).toBe(21);
     expect(RECREATIONAL_PURCHASE_LIMITS.concentrateGrams).toBe(7);
-    // Every medical row is exactly 3× the recreational row.
+    // Every medical GRAM row is exactly 3× the recreational row. (Renamed from
+    // "every medical row" in SLICE 16: that claim is no longer universally
+    // true, and the exception is pinned by the very next test.)
     expect(MEDICAL_PURCHASE_LIMITS.usableGrams / RECREATIONAL_PURCHASE_LIMITS.usableGrams).toBeCloseTo(3);
     expect(MEDICAL_PURCHASE_LIMITS.solidGrams / RECREATIONAL_PURCHASE_LIMITS.solidGrams).toBeCloseTo(3);
     expect(MEDICAL_PURCHASE_LIMITS.liquidGrams / RECREATIONAL_PURCHASE_LIMITS.liquidGrams).toBeCloseTo(3);
     expect(MEDICAL_PURCHASE_LIMITS.concentrateGrams / RECREATIONAL_PURCHASE_LIMITS.concentrateGrams).toBeCloseTo(3);
+  });
+
+  it("the low-THC beverage row is the ONE row that does NOT triple for a patient", () => {
+    // WAC 314-55-095(2)(d) reads "…and up to 200 mg…" — the SAME figure as
+    // (1)(d)(i)(F). The 3× pattern above is seductive and wrong here; publishing
+    // 600 mg on the public /medical page would advertise an over-sale to every
+    // patient who reads it. Ratio is 1, not 3.
+    expect(MEDICAL_LIMITS.low_thc_liquid / RECREATIONAL_LIMITS.low_thc_liquid).toBe(1);
+
+    const row = purchaseLimitRows().find((r) => r.category.startsWith("Low-THC beverages"));
+    expect(row).toBeDefined();
+    expect(row!.recreational).toBe(row!.medical);
+    expect(row!.medical).not.toContain("600");
+  });
+
+  it("the public table quotes the REGISTER's constants, so it cannot advertise a limit we do not enforce", () => {
+    const row = purchaseLimitRows().find((r) => r.category.startsWith("Low-THC beverages"))!;
+    // Derived, not retyped: change the enforcement constant and this follows.
+    expect(row.recreational).toBe(`${RECREATIONAL_LIMITS.low_thc_liquid} mg THC`);
+    expect(row.medical).toBe(`${MEDICAL_LIMITS.low_thc_liquid} mg THC`);
+    expect(row.category).toContain(`${LOW_THC_UNIT_MAX_MG} mg`);
+  });
+
+  it("no row states a THC-milligram cap in ounces or grams (the 7.143 oz trap)", () => {
+    // 200 mg of THC is not 200 mg of product and is certainly not 7.143 oz.
+    // Any row whose figure is milligrams must SAY milligrams.
+    for (const r of purchaseLimitRows()) {
+      for (const v of [r.recreational, r.medical]) {
+        if (v.includes("mg")) expect(v).toContain("mg THC");
+        if (v.includes("mg")) expect(v).not.toMatch(/\boz\b/);
+      }
+    }
   });
 });

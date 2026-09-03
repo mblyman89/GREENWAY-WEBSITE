@@ -102,6 +102,22 @@ export type MenuItemRow = {
   servings_per_pack: number | null;
   mg_per_serving: number | null;
   package_thc_mg: number | null;
+  /**
+   * SLICE 16 (migration 0216) — the low-THC beverage classification.
+   *
+   * true  = packaged in individual units of ≤ 4 mg active delta-9 THC, so this
+   *         product is carved out of the 72 oz liquid limit and counts against
+   *         the separate 200 mg THC limit (WAC 314-55-095(1)(d)(i)(E)+(F)).
+   * false = reviewed and does NOT qualify.
+   * null  = not yet classified. Treated as a NORMAL liquid (fail-safe).
+   *
+   * DISTINCT from mg_per_serving above: a single bottle labelled "4 servings ×
+   * 4 mg" is ONE 16 mg unit and does not qualify, so this can never be derived
+   * from the serving facts.
+   */
+  low_thc_liquid: boolean | null;
+  /** SLICE 16 — mg of active delta-9 THC in ONE sellable unit (one can). */
+  unit_thc_mg: number | null;
   package_cbd_mg: number | null;
   ratio_label: string | null;
   net_weight_grams: number | null;

@@ -71,6 +71,15 @@ export type GreenwayMenuItem = {
   terpenes?: string[];
   thc: string | null;
   cbd: string | null;
+  /**
+   * SLICE 16 — low-THC beverage classification (WAC 314-55-095(1)(d)(i)(E)+(F)).
+   * true = packaged in individual units of ≤ 4 mg active delta-9 THC, so it
+   * counts against the 200 mg THC limit instead of the 72 oz liquid limit.
+   * Absent/null = not classified = treated as a normal liquid (fail-safe).
+   */
+  lowThcLiquid?: boolean | null;
+  /** SLICE 16 — mg of active delta-9 THC in ONE sellable unit (one can). */
+  unitThcMg?: number | null;
   totalThc: GreenwayCannabinoid | null;
   totalCbd: GreenwayCannabinoid | null;
   compounds: GreenwayCannabinoid[];

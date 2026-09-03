@@ -77,6 +77,15 @@ type CartItemInput = {
   regularPriceMinorUnits?: number;
   quantity: number;
   inventoryLevel?: number;
+  /**
+   * SLICE 16 — the low-THC beverage classification, carried so the cart meter
+   * and BOTH storefront hard blocks (cart drawer + checkout) route a
+   * qualifying drink to the 200 mg THC limit rather than the 72 oz liquid
+   * limit. Optional: absent = not classified = normal liquid (fail-safe).
+   */
+  lowThcLiquid?: boolean | null;
+  /** SLICE 16 — mg of active delta-9 THC in one sellable unit (one can). */
+  unitThcMg?: number | null;
 };
 
 type CartItem = CartItemInput & {

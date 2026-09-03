@@ -7,8 +7,11 @@ import { Button, Card, Field, Input, Textarea, Badge } from "@/components/admin/
 import { getSalesLimitSettings, listRecentSalesLimitOverrides } from "@/lib/compliance/sales-limits";
 import {
   gramsToOunces,
+  isThcBucket,
+  formatLimitAmount,
   LIMIT_BUCKET_LABELS,
   LIMIT_BUCKETS,
+  LOW_THC_UNIT_MAX_MG,
   bucketCategories,
   type LimitBucket,
 } from "@/lib/compliance/sales-limits-core";
@@ -19,6 +22,45 @@ export const dynamic = "force-dynamic";
 
 function ozLabel(g: number): string {
   return `${gramsToOunces(g)} oz (${g} g)`;
+}
+
+/**
+ * SLICE 16 -- PRESENTATION A: the statutory figure, in the bucket's OWN unit.
+ *
+ * Four buckets are grams (shown as ounces, or grams for concentrate); the
+ * low-THC beverage bucket is MILLIGRAMS OF ACTIVE DELTA-9 THC and must never be
+ * pushed through gramsToOunces(), which would render the 200 mg cap as the
+ * meaningless and dangerous "7.143 oz".
+ */
+function statutoryLabel(bucket: LimitBucket, amount: number): string {
+  if (isThcBucket(bucket)) return formatLimitAmount(bucket, amount);
+  if (bucket === "concentrate") return `${amount} g`;
+  return `${gramsToOunces(amount)} oz (${amount} g)`;
+}
+
+/**
+ * SLICE 16 -- PRESENTATION B: the same figure in the units a human counts.
+ *
+ * Michael asked for both presentations because he was not sure which he would
+ * prefer. The statutory number is the authority; this is the plain-English
+ * translation that sits beside it.
+ *
+ * For the mg bucket the honest translation is "how many cans is that?", and the
+ * answer depends on the strength of the can, so we state the assumption
+ * explicitly rather than implying a single fixed number. At the 4 mg per-unit
+ * statutory ceiling, 200 mg is 50 units; a 2 mg can gets you 100.
+ *
+ * DERIVED FOR DISPLAY ONLY -- never stored, never used for enforcement.
+ * Returns null when there is no more useful way to say it than the statute.
+ */
+function practicalLabel(bucket: LimitBucket, amount: number): string | null {
+  if (isThcBucket(bucket)) {
+    const atCeiling = Math.floor(amount / LOW_THC_UNIT_MAX_MG);
+    const atHalf = Math.floor(amount / (LOW_THC_UNIT_MAX_MG / 2));
+    return `${atCeiling} cans at ${LOW_THC_UNIT_MAX_MG} mg, or ${atHalf} at ${LOW_THC_UNIT_MAX_MG / 2} mg`;
+  }
+  if (bucket === "concentrate") return `${amount} g of extract`;
+  return `${amount} g`;
 }
 
 /** Friendly label for a website category slug (falls back to the slug). */
@@ -74,18 +116,21 @@ export default async function SalesLimitsPage({
           title="How sales limits work"
           steps={[
             "WA caps a single transaction: 1 oz flower, 7 g concentrate, 16 oz solid edible, 72 oz liquid (WAC 314-55-095).",
-            "Infused flower/prerolls/blunts contain concentrate, so they count toward the 7 g concentrate limit — not the flower limit.",
-            "Each cart line is mapped to one of four buckets and converted to grams using a per-unit weight.",
+            "Infused flower/prerolls/blunts contain concentrate, so they count toward the 7 g concentrate limit \u2014 not the flower limit.",
+            "Low-THC beverages are the exception: if a drink is packaged in individual units of 4 mg THC or less, it leaves the 72 oz liquid limit and gets its own 200 mg of THC limit instead (WAC 314-55-095(1)(d)(i)(E) and (F)).",
+            "Each cart line is mapped to one of five buckets. Four are measured in grams; the low-THC beverage bucket is measured in milligrams of active delta-9 THC.",
             "At checkout the cart is summed per bucket and compared to these maximums.",
             "Turn enforcement on/off, choose warn-only vs hard block, and tune per-category grams per unit below.",
           ]}
         >
           Medical patients entered in the DOH database get the higher limits (3 oz / 21 g /
-          48 oz / 216 oz). These defaults match the statute; only change them if the law does.
+          48 oz / 216 oz) \u2014 but NOT for low-THC beverages, which stay at 200 mg for
+          everyone (WAC 314-55-095(2)(d) says &ldquo;up to 200 mg&rdquo;). These defaults
+          match the statute; only change them if the law does.
         </HelpPanel>
 
         {/* Current effective limits */}
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
             label="Flower / useable"
             value={ozLabel(s.rec.usable)}
@@ -109,6 +154,14 @@ export default async function SalesLimitsPage({
             value={ozLabel(s.rec.liquid_edible)}
             hint={`medical ${gramsToOunces(s.med.liquid_edible)} oz`}
             accent="muted"
+          />
+          {/* SLICE 16. Value is the STATUTORY unit (mg THC); hint is the
+              PRACTICAL unit (cans). Medical is the same 200 mg, deliberately. */}
+          <StatCard
+            label="Low-THC beverages"
+            value={formatLimitAmount("low_thc_liquid", s.rec.low_thc_liquid)}
+            hint={`${Math.floor(s.rec.low_thc_liquid / LOW_THC_UNIT_MAX_MG)} cans at ${LOW_THC_UNIT_MAX_MG} mg \u00b7 medical the same`}
+            accent="gold"
           />
         </div>
 
@@ -152,20 +205,42 @@ export default async function SalesLimitsPage({
                 </thead>
                 <tbody>
                   {LIMIT_BUCKETS.map((bucket: LimitBucket) => {
-                    const isConc = bucket === "concentrate";
                     const rec = s.rec[bucket];
                     const med = s.med[bucket];
-                    const fmt = (g: number) => (isConc ? `${g} g` : `${gramsToOunces(g)} oz (${g} g)`);
+                    // SLICE 16: unit-aware. Was `gramsToOunces(g)` for every
+                    // non-concentrate bucket, which would print the 200 mg
+                    // low-THC cap as "7.143 oz".
                     const cats = bucketCats[bucket];
+                    const recPractical = practicalLabel(bucket, rec);
+                    const medPractical = practicalLabel(bucket, med);
                     return (
                       <tr key={bucket} className="border-b border-[var(--admin-border)]/60 align-top">
                         <td className="py-2.5 pr-4 font-medium text-[var(--admin-text)]">
                           {LIMIT_BUCKET_LABELS[bucket]}
+                          {isThcBucket(bucket) && (
+                            <span className="mt-0.5 block text-xs font-normal text-[var(--admin-muted)]">
+                              measured in THC, not volume
+                            </span>
+                          )}
                         </td>
-                        <td className="py-2.5 pr-4 font-semibold text-[var(--admin-accent)]">{fmt(rec)}</td>
-                        <td className="py-2.5 pr-4 text-[var(--admin-text)]">{fmt(med)}</td>
+                        <td className="py-2.5 pr-4 font-semibold text-[var(--admin-accent)]">
+                          {statutoryLabel(bucket, rec)}
+                          {recPractical && (
+                            <span className="mt-0.5 block text-xs font-normal text-[var(--admin-muted)]">
+                              {recPractical}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 pr-4 text-[var(--admin-text)]">
+                          {statutoryLabel(bucket, med)}
+                          {medPractical && (
+                            <span className="mt-0.5 block text-xs font-normal text-[var(--admin-muted)]">
+                              {medPractical}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2.5 text-xs text-[var(--admin-muted)]">
-                          {cats.length ? cats.map(catLabel).join(", ") : "—"}
+                          {cats.length ? cats.map(catLabel).join(", ") : "\u2014"}
                         </td>
                       </tr>
                     );
@@ -179,6 +254,19 @@ export default async function SalesLimitsPage({
               packs contain concentrate, so the state counts them against the 7 g
               concentrate limit (21 g medical) — not the 1 oz flower limit
               (WAC 314-55-095, WAC 314-55-010(8)).
+            </p>
+            <p className="mt-4 text-xs text-[var(--admin-muted)]">
+              <strong className="text-[var(--admin-text)]">Low-THC beverages have their own limit:</strong>{" "}
+              a drink packaged in individual units of {LOW_THC_UNIT_MAX_MG} mg active
+              delta-9 THC or less does not count against the 72 oz liquid limit at all.
+              It counts against a separate {formatLimitAmount("low_thc_liquid", s.rec.low_thc_liquid)}{" "}
+              limit instead (WAC 314-55-095(1)(d)(i)(E) and (F)). The two are alternatives,
+              never both. <strong className="text-[var(--admin-text)]">One can is one unit</strong>{" "}
+              &mdash; a 4-pack is four units, and a single bottle holding 16 mg is one
+              16 mg unit that does <em>not</em> qualify, no matter how many servings the
+              label divides it into. A drink is only treated this way when it has been
+              classified as such at intake; anything unclassified is counted as a normal
+              liquid.
             </p>
             <p className="mt-2 text-xs text-[var(--admin-muted)]">
               Accessories, Greenway merch, and paraphernalia are not cannabis and
@@ -233,9 +321,12 @@ export default async function SalesLimitsPage({
 
             <div>
               <h3 className="mb-3 text-sm font-bold text-[var(--admin-text)]">
-                Recreational limits (grams)
+                Recreational limits{" "}
+                <span className="font-normal text-[var(--admin-muted)]">
+                  (grams, except low-THC beverages which are mg of THC)
+                </span>
               </h3>
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <Field label={LIMIT_BUCKET_LABELS.usable}>
                   <Input
                     type="number"
@@ -272,14 +363,32 @@ export default async function SalesLimitsPage({
                     disabled={!isOwner}
                   />
                 </Field>
+                {/* SLICE 16 \u2014 MILLIGRAMS OF THC, not grams. */}
+                <Field
+                  label={LIMIT_BUCKET_LABELS.low_thc_liquid}
+                  help={`mg of active delta-9 THC (NOT grams). Statutory max 200 = ${Math.floor(
+                    s.rec.low_thc_liquid / LOW_THC_UNIT_MAX_MG,
+                  )} cans at ${LOW_THC_UNIT_MAX_MG} mg.`}
+                >
+                  <Input
+                    type="number"
+                    step="0.001"
+                    name="rec_low_thc_liquid"
+                    defaultValue={s.rec.low_thc_liquid}
+                    disabled={!isOwner}
+                  />
+                </Field>
               </div>
             </div>
 
             <div>
               <h3 className="mb-3 text-sm font-bold text-[var(--admin-text)]">
-                Medical (DOH database) limits (grams)
+                Medical (DOH database) limits{" "}
+                <span className="font-normal text-[var(--admin-muted)]">
+                  (grams, except low-THC beverages which are mg of THC)
+                </span>
               </h3>
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <Field label={LIMIT_BUCKET_LABELS.usable}>
                   <Input
                     type="number"
@@ -313,6 +422,20 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="med_liquid"
                     defaultValue={s.med.liquid_edible}
+                    disabled={!isOwner}
+                  />
+                </Field>
+                {/* SLICE 16 \u2014 mg of THC. NOT tripled: WAC 314-55-095(2)(d)
+                    says "up to 200 mg" for medical too. */}
+                <Field
+                  label={LIMIT_BUCKET_LABELS.low_thc_liquid}
+                  help="mg of active delta-9 THC. Statutory max is ALSO 200 for medical \u2014 unlike every other bucket this one does not triple (WAC 314-55-095(2)(d))."
+                >
+                  <Input
+                    type="number"
+                    step="0.001"
+                    name="med_low_thc_liquid"
+                    defaultValue={s.med.low_thc_liquid}
                     disabled={!isOwner}
                   />
                 </Field>

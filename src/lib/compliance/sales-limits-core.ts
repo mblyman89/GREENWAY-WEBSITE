@@ -6,14 +6,53 @@
  * (effective 1/7/2025) and RCW 69.50.360, and evaluates a cart against them so
  * the POS can warn / block before an over-limit sale.
  *
- * Four legal "buckets" with their recreational single-transaction maximums:
- *   - usable        : 1 ounce useable cannabis            = 28 g   (flower-equivalent)
- *   - solid_edible  : 16 ounces solid infused             = 453.592 g
- *   - concentrate   : 7 grams extract/concentrate inhale  = 7 g
- *   - liquid_edible : 72 ounces liquid infused            = 2041.166 g (≈ ml)
+ * FIVE legal "buckets" with their recreational single-transaction maximums.
+ * NOTE the unit column — four are GRAMS, one is MILLIGRAMS OF THC:
+ *   - usable          : 1 ounce useable cannabis           = 28 g   (flower-equivalent)
+ *   - solid_edible    : 16 ounces solid infused            = 448 g   (16 × 28)
+ *   - concentrate     : 7 grams extract/concentrate inhale = 7 g
+ *   - liquid_edible   : 72 ounces liquid infused           = 2016 g  (72 × 28, ≈ ml)
+ *   - low_thc_liquid  : 200 MILLIGRAMS of active delta-9 THC  — SLICE 16
+ *
+ * (The gram figures above are computed as ounces × STATUTORY_GRAMS_PER_OUNCE
+ * (28), which is the license-critical equivalence GW-016 pinned for limit
+ * ENFORCEMENT. An older revision of this header quoted 453.592 / 2041.166 —
+ * the 28.3495 avoirdupois conversion — which never matched the code. Corrected
+ * in SLICE 16; the CODE was always right, only the comment was stale.)
  *
  * Medical patients in the DOH database get the higher maximums:
- *   3 oz usable, 48 oz solid, 21 g concentrate, 216 oz liquid.
+ *   3 oz usable, 48 oz solid, 21 g concentrate, 216 oz liquid — but the
+ *   low_thc_liquid cap stays 200 mg (it does NOT scale; see MEDICAL_LIMITS).
+ *
+ * ── SLICE 16: THE LOW-THC BEVERAGE BUCKET ───────────────────────────────
+ * WAC 314-55-095(1)(d)(i), verbatim:
+ *   (E) Seventy-two ounces of cannabis-infused product in liquid form for oral
+ *       ingestion or applied topically to the skin, UNLESS the product is
+ *       packaged in individual units containing no more than four milligrams
+ *       of active delta-9 THC per unit; and
+ *   (F) Two hundred mg of active delta-9 THC within a cannabis-infused product
+ *       in liquid form if the product is packaged in individual units
+ *       containing no more than four milligrams of active delta-9 THC per unit.
+ *
+ * Three consequences, each of which is pinned by a test:
+ *   1. The cap is 200 MILLIGRAMS OF THC, not 200 ounces of volume. At the 4 mg
+ *      per-unit ceiling that is 50 units; at 2 mg/unit it is 100 units.
+ *   2. (E) and (F) are MUTUALLY EXCLUSIVE, not additive — (E) says "unless".
+ *      A qualifying product is carved OUT of the 72 oz bucket and governed by
+ *      (F) instead. It never consumes both.
+ *   3. The trigger is how the product is PACKAGED (a shelf attribute), not
+ *      anything computed from the cart. "Unit" is the individual sellable
+ *      container: one can is one unit; a 4-pack of 4 mg cans is four qualifying
+ *      units; a single bottle holding 16 mg is ONE 16 mg unit and does NOT
+ *      qualify, no matter how its label divides that into servings.
+ *
+ * Because servings ≠ units, this bucket is driven by an EXPLICIT per-product
+ * flag set at intake from the label/invoice — never derived from
+ * servings × mg-per-serving, which would be a guess and is wrong for
+ * multi-serving single containers.
+ *
+ * SAFE DEFAULT: a liquid with no flag is treated as a NORMAL liquid (72 oz
+ * bucket). "Unknown" must never unlock the more permissive path.
  *
  * Each cart line carries a website category + quantity. We map the category to
  * a bucket and a per-unit weight contribution (grams), then sum per bucket and
@@ -39,14 +78,20 @@ import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 // keep working. WA statute treats 1 oz useable = 28 g for limit ENFORCEMENT.
 export const GRAMS_PER_OUNCE = STATUTORY_GRAMS_PER_OUNCE;
 
-/** The four statutory limit buckets. */
-export type LimitBucket = "usable" | "solid_edible" | "concentrate" | "liquid_edible";
+/** The five statutory limit buckets (SLICE 16 added low_thc_liquid). */
+export type LimitBucket =
+  | "usable"
+  | "solid_edible"
+  | "concentrate"
+  | "liquid_edible"
+  | "low_thc_liquid";
 
 export const LIMIT_BUCKETS: readonly LimitBucket[] = [
   "usable",
   "solid_edible",
   "concentrate",
   "liquid_edible",
+  "low_thc_liquid",
 ] as const;
 
 export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
@@ -54,30 +99,106 @@ export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
   solid_edible: "Solid infused edibles",
   concentrate: "Concentrate / extract (incl. infused prerolls & flower)",
   liquid_edible: "Liquid infused products",
+  low_thc_liquid: "Low-THC beverages (\u2264 4 mg THC per unit)",
 };
 
-/** Statutory single-transaction maximums, expressed in GRAMS. */
+/**
+ * The measurement unit each bucket is denominated in.
+ *
+ * This exists because SLICE 16 introduced the first bucket that is NOT a
+ * weight. Every other bucket counts grams; low_thc_liquid counts MILLIGRAMS OF
+ * ACTIVE DELTA-9 THC. Without an explicit unit the 200 mg cap would flow into
+ * gramsToOunces() somewhere downstream and render to the owner as "7.143 oz",
+ * which is meaningless and dangerous. Any code formatting a bucket figure MUST
+ * consult this map rather than assuming grams.
+ */
+export type LimitUnit = "g" | "mg_thc";
+
+export const LIMIT_BUCKET_UNITS: Record<LimitBucket, LimitUnit> = {
+  usable: "g",
+  solid_edible: "g",
+  concentrate: "g",
+  liquid_edible: "g",
+  low_thc_liquid: "mg_thc",
+};
+
+/** True when the bucket is measured in mg of THC rather than grams of product. */
+export function isThcBucket(bucket: LimitBucket): boolean {
+  return LIMIT_BUCKET_UNITS[bucket] === "mg_thc";
+}
+
+/**
+ * Format a bucket amount for humans, in the bucket's OWN unit.
+ *
+ * - mg-THC buckets  -> "200 mg THC"
+ * - concentrate     -> "7 g"        (statute states it in grams, not ounces)
+ * - other gram buckets -> "72 oz"   (statute states these in ounces)
+ */
+export function formatLimitAmount(bucket: LimitBucket, amount: number): string {
+  if (isThcBucket(bucket)) return `${round3(amount)} mg THC`;
+  if (bucket === "concentrate") return `${round3(amount)} g`;
+  return `${gramsToOunces(amount)} oz`;
+}
+
+/**
+ * Statutory single-transaction maximums.
+ *
+ * UNITS ARE NOT UNIFORM — consult LIMIT_BUCKET_UNITS. The first four fields are
+ * GRAMS; `low_thc_liquid` is MILLIGRAMS OF ACTIVE DELTA-9 THC.
+ */
 export type LimitProfile = {
   usable: number;
   solid_edible: number;
   concentrate: number;
   liquid_edible: number;
+  /** MILLIGRAMS of active delta-9 THC — NOT grams. WAC 314-55-095(1)(d)(i)(F). */
+  low_thc_liquid: number;
 };
+
+/**
+ * The statutory ceiling on THC per INDIVIDUAL UNIT for a product to qualify for
+ * the low-THC beverage allowance: "no more than four milligrams of active
+ * delta-9 THC per unit" (WAC 314-55-095(1)(d)(i)(E) and (F), and identically in
+ * (2)(d) for medical).
+ *
+ * "Unit" = the individual sellable container. One can is one unit. A 4-pack of
+ * 4 mg cans is four qualifying units. A single bottle containing 16 mg is one
+ * 16 mg unit and does NOT qualify even if labelled "4 servings × 4 mg".
+ */
+export const LOW_THC_UNIT_MAX_MG = 4;
 
 /** Recreational (21+) single-transaction limits — WAC 314-55-095(1)(d). */
 export const RECREATIONAL_LIMITS: LimitProfile = {
   usable: 1 * GRAMS_PER_OUNCE, // 28 g (1 oz)
-  solid_edible: 16 * GRAMS_PER_OUNCE, // 453.6 g (16 oz)
+  solid_edible: 16 * GRAMS_PER_OUNCE, // 448 g (16 oz)
   concentrate: 7, // 7 g
   liquid_edible: 72 * GRAMS_PER_OUNCE, // 2016 g (72 oz)
+  low_thc_liquid: 200, // 200 mg THC — WAC 314-55-095(1)(d)(i)(F)
 };
 
-/** Medical (in DOH database) single-transaction limits — WAC 314-55-095(2)(d). */
+/**
+ * Medical (in DOH database) single-transaction limits — WAC 314-55-095(2)(d).
+ *
+ * ⚠ DO NOT "FIX" low_thc_liquid TO 600. Every other bucket triples for a
+ * DOH-database patient (1→3 oz, 16→48 oz, 7→21 g, 72→216 oz), so the
+ * pattern-matching instinct is to write 200 × 3. The statute does not do that.
+ * WAC 314-55-095(2)(d), verbatim, ends:
+ *
+ *   "…and 216 ounces of cannabis-infused product in liquid form meant to be
+ *    eaten or swallowed, AND UP TO 200 MG of active delta-9 THC within a
+ *    cannabis-infused product in liquid form meant to be eaten or swallowed if
+ *    product is packaged in individual units containing no more than four
+ *    milligrams of active delta-9 THC per unit."
+ *
+ * 200 mg for recreational, 200 mg for medical. Identical. Raising it would be
+ * an over-sale on every medical transaction. Pinned by a dedicated test.
+ */
 export const MEDICAL_LIMITS: LimitProfile = {
   usable: 3 * GRAMS_PER_OUNCE, // 84 g (3 oz)
-  solid_edible: 48 * GRAMS_PER_OUNCE, // 1360.8 g (48 oz)
+  solid_edible: 48 * GRAMS_PER_OUNCE, // 1344 g (48 oz)
   concentrate: 21, // 21 g
   liquid_edible: 216 * GRAMS_PER_OUNCE, // 6048 g (216 oz)
+  low_thc_liquid: 200, // 200 mg THC — NOT tripled. See the note above.
 };
 
 /**
@@ -165,6 +286,10 @@ export function bucketCategories(): Record<LimitBucket, string[]> {
     solid_edible: [],
     concentrate: [],
     liquid_edible: [],
+    // SLICE 16: low-THC beverages are NOT a category of their own — they are
+    // `edible-liquid` products carrying a per-product flag. This list stays
+    // empty by design; the staff reference explains the flag instead.
+    low_thc_liquid: [],
   };
   for (const slug of ALL_LIMIT_CATEGORY_SLUGS) {
     const bucket = categoryToBucket(slug);
@@ -218,19 +343,57 @@ export type LimitCartLine = {
   quantity: number;
   /** Optional explicit grams for this whole line (overrides per-unit math). */
   grams?: number | null;
+  /**
+   * SLICE 16 — WAC 314-55-095(1)(d)(i)(F). True when this product is packaged
+   * in individual units of ≤ 4 mg active delta-9 THC, which moves it OUT of the
+   * 72 oz liquid bucket and INTO the 200 mg THC bucket.
+   *
+   * This is an explicit, owner-confirmed product attribute set at intake from
+   * the label/invoice — NEVER derived from servings × mg-per-serving, because a
+   * serving is not a unit (a single bottle labelled "4 servings × 4 mg" is one
+   * 16 mg unit and does not qualify).
+   *
+   * Absent/null/false → treated as a normal liquid. Unknown never unlocks the
+   * more permissive path.
+   */
+  lowThcLiquid?: boolean | null;
+  /**
+   * SLICE 16 — milligrams of active delta-9 THC in ONE individual unit of this
+   * product. Only consulted when `lowThcLiquid` is true. Must be > 0 and
+   * ≤ LOW_THC_UNIT_MAX_MG for the line to qualify; anything else fails safe
+   * back to the normal liquid bucket.
+   */
+  unitThcMg?: number | null;
 };
 
 export type BucketUsage = {
   bucket: LimitBucket;
   label: string;
-  /** Grams consumed by the cart in this bucket. */
+  /**
+   * Amount consumed by the cart in this bucket, in the bucket's OWN unit.
+   *
+   * HISTORICAL NAME: for the four original buckets this is grams, which is what
+   * the name says. For `low_thc_liquid` it is MILLIGRAMS OF THC. The name is
+   * kept so every pre-SLICE-16 consumer keeps compiling; new code should read
+   * `used`/`max`/`unit` below, which are explicit about the unit.
+   */
   usedGrams: number;
-  /** Statutory/owner maximum grams for this bucket. */
+  /** Statutory/owner maximum for this bucket, in the bucket's own unit. */
   maxGrams: number;
   /** usedGrams / maxGrams, clamped 0..(can exceed 1 when over). */
   ratio: number;
-  overBy: number; // grams over the max (0 when within limit)
+  overBy: number; // amount over the max, own unit (0 when within limit)
   exceeded: boolean;
+  /** SLICE 16 — the unit `used`/`max`/`overBy` are denominated in. */
+  unit: LimitUnit;
+  /** SLICE 16 — unit-explicit alias of usedGrams. Prefer this in new code. */
+  used: number;
+  /** SLICE 16 — unit-explicit alias of maxGrams. Prefer this in new code. */
+  max: number;
+  /** SLICE 16 — pre-formatted "72 oz" / "7 g" / "200 mg THC" for display. */
+  usedLabel: string;
+  /** SLICE 16 — pre-formatted maximum for display. */
+  maxLabel: string;
 };
 
 export type LimitEvaluation = {
@@ -274,6 +437,9 @@ export function clampLimitProfile(raw: unknown, base: LimitProfile): LimitProfil
     solid_edible: clamp(r.solid_edible, base.solid_edible),
     concentrate: clamp(r.concentrate, base.concentrate),
     liquid_edible: clamp(r.liquid_edible, base.liquid_edible),
+    // SLICE 16 — mg THC, same clamp semantics: the owner may tighten below
+    // 200 mg, never widen above it.
+    low_thc_liquid: clamp(r.low_thc_liquid, base.low_thc_liquid),
   };
 }
 
@@ -293,9 +459,64 @@ export function resolveLimits(
       solid_edible: overrides?.solid_edible ?? base.solid_edible,
       concentrate: overrides?.concentrate ?? base.concentrate,
       liquid_edible: overrides?.liquid_edible ?? base.liquid_edible,
+      low_thc_liquid: overrides?.low_thc_liquid ?? base.low_thc_liquid,
     },
     base,
   );
+}
+
+/**
+ * SLICE 16 — does this line qualify for the low-THC beverage allowance?
+ *
+ * ALL of the following must hold (WAC 314-55-095(1)(d)(i)(E)+(F)):
+ *   1. the product's category is a LIQUID one (the statute says "in liquid
+ *      form"), i.e. it would otherwise land in the liquid_edible bucket;
+ *   2. the owner has explicitly flagged it as packaged in individual units of
+ *      ≤ 4 mg active delta-9 THC;
+ *   3. a positive per-unit THC mg figure is present and is ≤ 4 mg.
+ *
+ * Anything missing or nonsensical (no flag, no mg, zero, negative, NaN, over
+ * 4 mg) returns false and the line stays in the ordinary 72 oz liquid bucket.
+ * That is the fail-safe direction: the 72 oz rule is the stricter one for a
+ * bulky low-dose beverage, so an unclassified product can only ever be
+ * OVER-restricted, never under-restricted.
+ */
+export function qualifiesAsLowThcLiquid(line: LimitCartLine): boolean {
+  if (categoryToBucket(line.category) !== "liquid_edible") return false;
+  if (line.lowThcLiquid !== true) return false;
+  const mg = typeof line.unitThcMg === "number" ? line.unitThcMg : NaN;
+  if (!Number.isFinite(mg) || mg <= 0) return false;
+  return mg <= LOW_THC_UNIT_MAX_MG;
+}
+
+/**
+ * SLICE 16 — which bucket does this LINE actually count against?
+ *
+ * Identical to categoryToBucket() for every product except a qualifying
+ * low-THC beverage, which is carved out of liquid_edible per the word
+ * "unless" in WAC 314-55-095(1)(d)(i)(E). The two are mutually exclusive: a
+ * qualifying line contributes to low_thc_liquid and contributes NOTHING to
+ * liquid_edible.
+ */
+export function lineBucket(line: LimitCartLine): LimitBucket | null {
+  if (qualifiesAsLowThcLiquid(line)) return "low_thc_liquid";
+  return categoryToBucket(line.category);
+}
+
+/**
+ * SLICE 16 — milligrams of active delta-9 THC this line contributes to the
+ * low_thc_liquid bucket: per-unit mg × quantity.
+ *
+ * QUANTITY IS COUNTED IN UNITS, and one unit is one individual sellable
+ * container. A budtender scanning four cans out of a 4-pack rings four lines
+ * of quantity 1 (or one line of quantity 4) — either way it is 4 units × the
+ * per-unit mg. Returns 0 for a line that does not qualify.
+ */
+export function lineThcMg(line: LimitCartLine): number {
+  if (!qualifiesAsLowThcLiquid(line)) return 0;
+  const mg = line.unitThcMg as number;
+  const qty = Number.isFinite(line.quantity) ? Math.max(0, line.quantity) : 0;
+  return round3(mg * qty);
 }
 
 /** Grams a single cart line contributes to its bucket. */
@@ -323,16 +544,23 @@ export function evaluateCart(
     solid_edible: 0,
     concentrate: 0,
     liquid_edible: 0,
+    low_thc_liquid: 0,
   };
   let untrackedLines = 0;
 
   for (const line of lines) {
-    const bucket = categoryToBucket(line.category);
+    // SLICE 16: lineBucket (not categoryToBucket) so a qualifying low-THC
+    // beverage is routed to its own mg-denominated bucket and contributes
+    // NOTHING to the 72 oz liquid bucket — (E) and (F) are alternatives.
+    const bucket = lineBucket(line);
     if (!bucket) {
       untrackedLines += 1;
       continue;
     }
-    totals[bucket] = round3(totals[bucket] + lineGrams(line, overrides));
+    // Each bucket accumulates in ITS OWN unit: mg of THC for low_thc_liquid,
+    // grams for everything else. Never mix the two.
+    const contribution = bucket === "low_thc_liquid" ? lineThcMg(line) : lineGrams(line, overrides);
+    totals[bucket] = round3(totals[bucket] + contribution);
   }
 
   const buckets: BucketUsage[] = LIMIT_BUCKETS.map((bucket) => {
@@ -348,15 +576,25 @@ export function evaluateCart(
       ratio,
       overBy,
       exceeded: overBy > 0,
+      // SLICE 16 — unit-explicit fields so no consumer has to assume grams.
+      unit: LIMIT_BUCKET_UNITS[bucket],
+      used: usedGrams,
+      max: maxGrams,
+      usedLabel: formatLimitAmount(bucket, usedGrams),
+      maxLabel: formatLimitAmount(bucket, maxGrams),
     };
   });
 
   const exceeded = buckets.filter((b) => b.exceeded);
+  // SLICE 16 — the reason string is written in the BUCKET'S OWN UNIT. Before
+  // this slice every reason hard-coded " oz", which would have described a
+  // 204 mg THC overage as "7.286 oz" — meaningless to a budtender and wrong.
   const reasons = exceeded.map(
     (b) =>
-      `${b.label}: ${gramsToOunces(b.usedGrams)} oz exceeds the ${gramsToOunces(
+      `${b.label}: ${formatLimitAmount(b.bucket, b.usedGrams)} exceeds the ${formatLimitAmount(
+        b.bucket,
         b.maxGrams,
-      )} oz ${customerType} limit (over by ${gramsToOunces(b.overBy)} oz).`,
+      )} ${customerType} limit (over by ${formatLimitAmount(b.bucket, b.overBy)}).`,
   );
 
   return {

@@ -263,6 +263,11 @@ export function __runImportCommitCoreTests(): void {
     ratioLabel: null,
     netWeightGrams: null,
     netVolumeMl: null,
+    // SLICE 16: must be listed BEFORE the spread, otherwise `...over` (a
+    // Partial) widens the field to `boolean | null | undefined` and the
+    // fixture no longer satisfies FactReviewItemInput.
+    lowThcLiquid: null,
+    unitThcMg: null,
     factProvenance: {},
     ...over,
   });

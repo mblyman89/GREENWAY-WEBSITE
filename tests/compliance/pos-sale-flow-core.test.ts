@@ -52,8 +52,8 @@ const CONC: PosMenuProduct = {
 const SETTINGS: PosLimitSettings = {
   enforce: true,
   hardBlock: true,
-  rec: { usable: 28, solid_edible: 453.6, concentrate: 7, liquid_edible: 2016 },
-  med: { usable: 84, solid_edible: 1360.8, concentrate: 21, liquid_edible: 6048 },
+  rec: { usable: 28, solid_edible: 453.6, concentrate: 7, liquid_edible: 2016, low_thc_liquid: 200 },
+  med: { usable: 84, solid_edible: 1360.8, concentrate: 21, liquid_edible: 6048, low_thc_liquid: 200 },
   unitGrams: {},
 };
 
@@ -180,14 +180,20 @@ describe("limit meter — WAC 314-55-095 semantics", () => {
 
   it("limitLinesFor snapshots category + quantity from priced lines", () => {
     const priced = priceCart([{ product: FLOWER, quantity: 2 }], []);
-    expect(limitLinesFor(priced.lines)).toEqual([{ category: "flower", quantity: 2 }]);
+    // SLICE 16: limitLinesFor now also emits the low-THC beverage
+    // classification on every line. Asserted EXPLICITLY rather than relaxed to
+    // objectContaining, so this test still pins the exact shape — and now also
+    // pins that a flower line is never classified as a low-THC beverage.
+    expect(limitLinesFor(priced.lines)).toEqual([
+      { category: "flower", quantity: 2, lowThcLiquid: null, unitThcMg: null },
+    ]);
   });
 
   it("AN-1: limitLinesFor carries whole-LINE grams when the variant weight is known", () => {
     // A 7 g jar must meter as 7 g per unit — not the 3.5 g category default.
     const priced = priceCart([{ product: { ...FLOWER, unitGrams: 7 }, quantity: 2 }], []);
     expect(limitLinesFor(priced.lines)).toEqual([
-      { category: "flower", quantity: 2, grams: 14 },
+      { category: "flower", quantity: 2, grams: 14, lowThcLiquid: null, unitThcMg: null },
     ]);
   });
 });

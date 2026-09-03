@@ -148,6 +148,12 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             regularPriceMinorUnits: basePrice,
             inventoryLevel: selectedVariant.inventoryLevel,
             quantity,
+            // SLICE 16 — the low-THC beverage classification travels into the
+            // cart so the meter and the checkout hard block apply the 200 mg
+            // THC limit instead of the 72 oz liquid limit. Unclassified
+            // products pass null and are counted as normal liquids.
+            lowThcLiquid: item.lowThcLiquid ?? null,
+            unitThcMg: item.unitThcMg ?? null,
           });
         }}
         className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"

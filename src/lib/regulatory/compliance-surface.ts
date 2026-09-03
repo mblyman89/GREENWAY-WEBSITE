@@ -36,11 +36,12 @@ export const COMPLIANCE_SURFACE: ComplianceArea[] = [
     label: "Sales limits (per-customer possession amounts)",
     citations: ["WAC 314-55-095", "RCW 69.50.360"],
     whatWeRun:
-      "The register hard-blocks any sale over the per-category limits (1 oz flower, 16 oz solid edible, 72 oz liquid, 7 g concentrate) with an owner-only override ledger.",
+      "The register hard-blocks any sale over the per-category limits (1 oz flower, 16 oz solid edible, 72 oz liquid, 7 g concentrate, and 200 mg active delta-9 THC for low-THC infused beverages packaged in units of 4 mg or less) with an owner-only override ledger. The low-THC beverage bucket is counted in MILLIGRAMS OF THC, not grams, and is the only bucket that does NOT triple for a DOH-database medical patient.",
     modules: [
       "src/lib/compliance/sales-limit-gate-core.ts",
       "src/lib/compliance/sales-limits-core.ts",
       "/admin/compliance/sales-limits",
+      "/admin/menu-imports/[id]/facts",
     ],
   },
   {

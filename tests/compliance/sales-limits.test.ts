@@ -12,6 +12,7 @@ import {
   RECREATIONAL_LIMITS,
   MEDICAL_LIMITS,
   LIMIT_BUCKETS,
+  LIMIT_BUCKET_LABELS,
   DEFAULT_UNIT_GRAMS,
   categoryToBucket,
   clampLimitProfile,
@@ -212,7 +213,19 @@ describe("non-cannabis lines are counted as untracked, never blocked", () => {
 
 describe("defaults sanity", () => {
   it("every bucket has a label and every DEFAULT_UNIT_GRAMS category maps to a bucket", () => {
-    expect(LIMIT_BUCKETS.length).toBe(4);
+    // SLICE 16: five buckets now — the fifth is low_thc_liquid. Rather than
+    // just bumping 4→5, assert the ACTUAL membership so this test fails if a
+    // bucket is ever added, removed, or renamed without a deliberate decision.
+    expect([...LIMIT_BUCKETS]).toEqual([
+      "usable",
+      "solid_edible",
+      "concentrate",
+      "liquid_edible",
+      "low_thc_liquid",
+    ]);
+    for (const bucket of LIMIT_BUCKETS) {
+      expect(LIMIT_BUCKET_LABELS[bucket]).toBeTruthy();
+    }
     for (const slug of Object.keys(DEFAULT_UNIT_GRAMS)) {
       expect(categoryToBucket(slug)).not.toBe(null);
     }

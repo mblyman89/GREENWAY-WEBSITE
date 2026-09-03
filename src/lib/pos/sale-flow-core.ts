@@ -85,6 +85,23 @@ export type PosMenuProduct = {
    */
   unitGrams?: number | null;
   /**
+   * SLICE 16 — the low-THC beverage classification, carried from the published
+   * menu so the register's limit meter can route a qualifying drink out of the
+   * 72 oz liquid bucket and into the 200 mg THC bucket
+   * (WAC 314-55-095(1)(d)(i)(E)+(F)).
+   *
+   * Optional so bundles cached before SLICE 16 still parse: absent = not
+   * classified = counted as a NORMAL liquid, which is the fail-safe direction.
+   * An old device bundle can therefore only ever be over-restrictive.
+   */
+  lowThcLiquid?: boolean | null;
+  /**
+   * SLICE 16 — mg of active delta-9 THC in ONE INDIVIDUAL SELLABLE UNIT (one
+   * can). Not per serving, not per package. A 4-pack of 4 mg cans has
+   * unitThcMg = 4 and rings as four units.
+   */
+  unitThcMg?: number | null;
+  /**
    * B32 — variant-level units remaining from the published menu, when known.
    * null = unknown (items sold at the item price without explicit variants);
    * optional so bundles cached before B32 still parse (undefined = unknown).
@@ -287,6 +304,14 @@ export type PricedSaleLine = PosSaleLine & {
    * synced order snapshots the true weight for the server's hard gate.
    */
   unitGrams?: number | null;
+  /**
+   * SLICE 16 — the low-THC beverage classification, carried from the menu card
+   * so limitLinesFor() can route this line to the 200 mg THC bucket. Absent =
+   * not classified = normal liquid.
+   */
+  lowThcLiquid?: boolean | null;
+  /** SLICE 16 — mg of active delta-9 THC in one sellable unit. */
+  unitThcMg?: number | null;
 };
 
 export type PriceCartResult = {
@@ -355,6 +380,9 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       appliedLabel: d?.appliedLabel,
       // AN-1: true per-unit weight from the bundle (null/absent = unknown).
       unitGrams: entry.product.unitGrams ?? null,
+      // SLICE 16: the low-THC beverage classification travels with the line.
+      lowThcLiquid: entry.product.lowThcLiquid ?? null,
+      unitThcMg: entry.product.unitThcMg ?? null,
     });
   }
 
@@ -406,7 +434,19 @@ export function judgeLimits(
 export function limitLinesFor(lines: PricedSaleLine[]): LimitCartLine[] {
   return lines.map((l) => {
     const grams = lineGramsFromUnit(l.unitGrams, l.quantity);
-    return { category: l.category, quantity: l.quantity, ...(grams !== null ? { grams } : {}) };
+    return {
+      category: l.category,
+      quantity: l.quantity,
+      ...(grams !== null ? { grams } : {}),
+      // SLICE 16 — the low-THC beverage classification. The engine's
+      // qualifiesAsLowThcLiquid() demands `lowThcLiquid === true` AND a valid
+      // per-unit mg at or under 4, so passing these through unconditionally is
+      // safe: anything missing or malformed falls back to the 72 oz liquid
+      // bucket. Note the grams above STILL ride along — a qualifying line
+      // simply never consumes them, because (E) and (F) are alternatives.
+      lowThcLiquid: l.lowThcLiquid ?? null,
+      unitThcMg: l.unitThcMg ?? null,
+    };
   });
 }
 
@@ -655,8 +695,8 @@ export function __runSaleFlowCoreTests(): void {
   const settings: PosLimitSettings = {
     enforce: true,
     hardBlock: true,
-    rec: { usable: 28, solid_edible: 453.6, concentrate: 7, liquid_edible: 2016 },
-    med: { usable: 84, solid_edible: 1360.8, concentrate: 21, liquid_edible: 6048 },
+    rec: { usable: 28, solid_edible: 453.6, concentrate: 7, liquid_edible: 2016, low_thc_liquid: 200 },
+    med: { usable: 84, solid_edible: 1360.8, concentrate: 21, liquid_edible: 6048, low_thc_liquid: 200 },
     unitGrams: {},
   };
   const overConc = judgeLimits([{ category: "concentrate", quantity: 8 }], "recreational", settings);

@@ -87,6 +87,12 @@ export function menuRowToGreenwayItem(row: MenuItemWithVariants): GreenwayMenuIt
     strainName: row.strain_name ?? undefined,
     thc: row.thc,
     cbd: row.cbd,
+    // SLICE 16 — the low-THC beverage classification rides to the website and
+    // the register. menu-version.ts selects "*", so no query change is needed.
+    // `?? null` keeps a pre-0216 database (column absent → undefined) reading
+    // as "not classified", which the engine treats as a normal liquid.
+    lowThcLiquid: row.low_thc_liquid ?? null,
+    unitThcMg: row.unit_thc_mg ?? null,
     totalThc: toCannabinoid(row.total_thc_json),
     totalCbd: toCannabinoid(row.total_cbd_json),
     compounds: toCompounds(row.compounds_json),

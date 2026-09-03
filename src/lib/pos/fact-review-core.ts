@@ -31,6 +31,11 @@
  */
 
 import type { MenuItemRow, PosImportDiagnostic } from "@/lib/pos/db-types";
+// SLICE 16: the 4 mg per-container statutory bound. sales-limits-core is PURE
+// (no server-only, no DB), so importing it keeps this core pure too. Importing
+// rather than retyping means this screen's guard and the register's
+// qualifiesAsLowThcLiquid() can never disagree about what "low-THC" means.
+import { LOW_THC_UNIT_MAX_MG } from "@/lib/compliance/sales-limits-core";
 
 // ---------------------------------------------------------------------------
 // Vocabulary
@@ -86,6 +91,24 @@ export type FactReviewFacts = {
   ratioLabel: string | null;
   netWeightGrams: number | null;
   netVolumeMl: number | null;
+  /**
+   * SLICE 16 — does this liquid qualify for the 200 mg low-THC beverage
+   * allowance (WAC 314-55-095(1)(d)(i)(E)-(F))?
+   *
+   * NULL is NOT "no" in the sense of "we checked and it doesn't" — it means
+   * NOBODY HAS CLASSIFIED IT YET, and the register treats it as an ordinary
+   * 72 oz liquid. That is the safe direction and it is Michael's explicit
+   * instruction: "A product with no flag should be treated as a normal liquid."
+   */
+  lowThcLiquid: boolean | null;
+  /**
+   * SLICE 16 — milligrams of active delta-9 THC in ONE SEALED CONTAINER.
+   *
+   * Per the container, NOT per the serving printed on the label. A 16 mg
+   * bottle sold as "4 servings x 4 mg" has unitThcMg = 16 and does not
+   * qualify. One can is one unit; a 4-pack is four units.
+   */
+  unitThcMg: number | null;
 };
 
 export type FactReviewRow = {
@@ -142,6 +165,9 @@ export type FactReviewItemInput = {
   ratioLabel: string | null;
   netWeightGrams: number | null;
   netVolumeMl: number | null;
+  /** SLICE 16 — see FactReviewFacts for the container-not-serving rule. */
+  lowThcLiquid: boolean | null;
+  unitThcMg: number | null;
   factProvenance: Record<string, string>;
 };
 
@@ -198,8 +224,93 @@ export function menuItemRowToFactReviewItem(row: MenuItemRow): FactReviewItemInp
     ratioLabel: row.ratio_label,
     netWeightGrams: num(row.net_weight_grams),
     netVolumeMl: num(row.net_volume_ml),
+    // SLICE 16. `low_thc_liquid` is a real boolean column so it needs no
+    // coercion, but it IS nullable and null must survive as null (unclassified),
+    // never collapse to false — the two are different states to the reviewer
+    // even though the register treats them identically.
+    lowThcLiquid: row.low_thc_liquid,
+    unitThcMg: num(row.unit_thc_mg),
     factProvenance: provenance,
   };
+}
+
+/**
+ * SLICE 16 — parse a reviewer's low-THC beverage decision from raw form input.
+ *
+ * PURE so it can be tested without a server, a session, or a redirect. The
+ * server action is a thin translator: `error` becomes a redirect, `facts`
+ * becomes part of the corrected-facts patch.
+ *
+ * The rules, and why each exists:
+ *
+ *  - `lowThc` is TRI-STATE ("" | "yes" | "no"). Blank means LEAVE ALONE, which
+ *    is different from "no". A checkbox cannot express that, and cannot take a
+ *    flag back off either.
+ *
+ *  - Flagging "yes" REQUIRES a per-container figure. Without one the register
+ *    would qualify the line (flag present) but count 0 mg toward the cap,
+ *    letting an unbounded number of cans through.
+ *
+ *  - The figure must be > 0 and <= LOW_THC_UNIT_MAX_MG. This is the statutory
+ *    test from WAC 314-55-095(1)(d)(i)(E)-(F), applied to the SEALED CONTAINER
+ *    and not to a serving printed on the label.
+ *
+ *  - The bound is IMPORTED, never retyped, so this guard, the DB CHECK
+ *    constraint in migration 0216, and the register's `qualifiesAsLowThcLiquid`
+ *    can never disagree.
+ */
+export type LowThcClassificationResult =
+  | { ok: true; facts: Partial<FactReviewFacts> }
+  | { ok: false; error: string };
+
+export function parseLowThcClassification(
+  lowThcRaw: string,
+  unitThcRaw: string,
+): LowThcClassificationResult {
+  const lowThc = lowThcRaw.trim();
+  const unitRaw = unitThcRaw.trim();
+
+  if (lowThc !== "" && lowThc !== "yes" && lowThc !== "no") {
+    return { ok: false, error: "Low-THC beverage must be yes, no, or left blank." };
+  }
+
+  const facts: Partial<FactReviewFacts> = {};
+
+  if (unitRaw !== "") {
+    const mg = Number(unitRaw);
+    // Refuse rather than coerce. "4mg", "four" and "" are all reviewer errors
+    // worth surfacing, not values worth guessing at.
+    if (!Number.isFinite(mg) || mg <= 0) {
+      return { ok: false, error: `"${unitRaw}" is not a valid THC-per-container figure.` };
+    }
+    facts.unitThcMg = mg;
+  }
+
+  if (lowThc === "yes") {
+    const mg = facts.unitThcMg;
+    if (typeof mg !== "number") {
+      return {
+        ok: false,
+        error:
+          "To flag a low-THC beverage you must also enter the THC milligrams in ONE SEALED CONTAINER.",
+      };
+    }
+    if (mg > LOW_THC_UNIT_MAX_MG) {
+      return {
+        ok: false,
+        error:
+          `${mg} mg per container is above the ${LOW_THC_UNIT_MAX_MG} mg limit, so this product does NOT ` +
+          `qualify for the low-THC beverage allowance. Enter the milligrams in the whole sealed ` +
+          `container, not one serving — a 16 mg bottle labelled "4 servings x 4 mg" is 16 mg and ` +
+          `stays under the regular 72 oz liquid limit.`,
+      };
+    }
+    facts.lowThcLiquid = true;
+  } else if (lowThc === "no") {
+    facts.lowThcLiquid = false;
+  }
+
+  return { ok: true, facts };
 }
 
 export function posDiagnosticToFactReviewDiagnostic(d: PosImportDiagnostic): FactReviewDiagnosticInput {
@@ -293,6 +404,8 @@ function factsOf(item: FactReviewItemInput): FactReviewFacts {
     ratioLabel: item.ratioLabel,
     netWeightGrams: item.netWeightGrams,
     netVolumeMl: item.netVolumeMl,
+    lowThcLiquid: item.lowThcLiquid,
+    unitThcMg: item.unitThcMg,
   };
 }
 
@@ -306,6 +419,8 @@ const EMPTY_FACTS: FactReviewFacts = {
   ratioLabel: null,
   netWeightGrams: null,
   netVolumeMl: null,
+  lowThcLiquid: null,
+  unitThcMg: null,
 };
 
 export function buildFactReviewBuckets(
@@ -488,6 +603,8 @@ export const FACT_REVIEW_CSV_HEADER = [
   "Ratio",
   "Net Weight (g)",
   "Net Volume (ml)",
+  "Low-THC Beverage",
+  "THC mg per container",
   "Confidence",
   "Sources",
   "Notes",
@@ -525,6 +642,10 @@ export function buildFactReviewCsv(buckets: FactReviewBuckets): string {
         cell(row.facts.ratioLabel),
         cell(row.facts.netWeightGrams),
         cell(row.facts.netVolumeMl),
+        // Spell the tri-state out. A blank here means UNCLASSIFIED, which is a
+        // different (and actionable) fact from a reviewed "no".
+        cell(row.facts.lowThcLiquid === null ? "unclassified" : row.facts.lowThcLiquid ? "yes" : "no"),
+        cell(row.facts.unitThcMg),
         cell(row.confidence),
         cell(row.sources),
         cell(row.notes.join(" | ")),
@@ -566,6 +687,8 @@ export function __runFactReviewCoreTests(): void {
     ratioLabel: null,
     netWeightGrams: null,
     netVolumeMl: null,
+    lowThcLiquid: null,
+    unitThcMg: null,
     factProvenance: {},
     ...over,
   });
@@ -782,6 +905,11 @@ export function __runFactReviewCoreTests(): void {
     mg_per_serving: "10" as unknown as number,
     package_thc_mg: "100" as unknown as number,
     package_cbd_mg: null,
+    // SLICE 16 (migration 0216): a solid edible is never a low-THC beverage.
+    // Present here because MenuItemRow now requires the fields; the adapter
+    // does not read them.
+    low_thc_liquid: null,
+    unit_thc_mg: null,
     ratio_label: "1:1:1",
     net_weight_grams: null,
     net_volume_ml: null,

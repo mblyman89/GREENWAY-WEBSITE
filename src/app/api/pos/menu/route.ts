@@ -167,6 +167,13 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         // transform generated ("3.5g" → 3.5, "1oz" → 28; mg/ml/pack/each →
         // null = unknown → the limit engine keeps its category default).
         unitGrams: gramsFromVariantLabel(variant.label),
+        // SLICE 16 — the low-THC beverage classification and the per-UNIT mg
+        // figure. Set at intake from the label/invoice; never derived from
+        // servings × mg-per-serving (a 16 mg bottle labelled "4 × 4 mg" is one
+        // 16 mg unit and does NOT qualify). null = not classified = the engine
+        // counts it as a normal liquid.
+        lowThcLiquid: item.lowThcLiquid ?? null,
+        unitThcMg: item.unitThcMg ?? null,
         inventoryStatus: item.inventoryStatus,
         // B32 — variant-level count for low-stock badges. Synthetic default
         // variants carry no real count (null = unknown, falls back to the

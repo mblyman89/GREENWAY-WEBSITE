@@ -57,6 +57,14 @@ export type PricedOrderLine = {
   variantLabel: string | null;
   category: string;
   quantity: number;
+  /**
+   * SLICE 16 — the low-THC beverage classification resolved from the live menu
+   * at placement, so it can be both evaluated now and snapshotted onto the
+   * stored line for the pickup gate.
+   */
+  lowThcLiquid?: boolean | null;
+  /** SLICE 16 — mg active delta-9 THC per sellable unit. */
+  unitThcMg?: number | null;
   /** SERVER-computed final unit price (tax-inclusive, minor units). */
   priceMinorUnits: number;
   /** SERVER regular (pre-discount) unit price from the published menu. */
@@ -233,6 +241,11 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       appliedLabel: d?.appliedLabel,
       // AN-1: true per-unit weight from the resolved variant's label.
       unitGrams: gramsFromVariantLabel(w.resolved.variant.label),
+      // SLICE 16: the low-THC beverage classification from the resolved menu
+      // item. Unclassified products resolve to null and are counted as normal
+      // liquids by the engine.
+      lowThcLiquid: w.resolved.item.lowThcLiquid ?? null,
+      unitThcMg: w.resolved.item.unitThcMg ?? null,
     });
   }
 
@@ -258,7 +271,15 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     // AN-1: hand the engine the true whole-line grams when known; null keeps
     // the conservative category-default math.
     const grams = lineGramsFromUnit(l.unitGrams, l.quantity);
-    return { category: l.category, quantity: l.quantity, ...(grams !== null ? { grams } : {}) };
+    return {
+      category: l.category,
+      quantity: l.quantity,
+      ...(grams !== null ? { grams } : {}),
+      // SLICE 16 — same routing the register and the website cart use, so all
+      // three agree on an identical basket.
+      lowThcLiquid: l.lowThcLiquid ?? null,
+      unitThcMg: l.unitThcMg ?? null,
+    };
   });
 
   return { ok: true, lines: priced, totals, limitLines };
@@ -340,7 +361,27 @@ export async function verifyStoredOrderForCompletion(order: {
     // numeric may arrive as string — normalized either way). Legacy rows and
     // unknown-weight items stay null → category-default math, as before.
     const grams = lineGramsFromUnit(normalizeUnitGrams(line.unit_grams), line.quantity);
-    limitLines.push({ category, quantity: line.quantity, ...(grams !== null ? { grams } : {}) });
+    // SLICE 16: read back the placement-time classification snapshot
+    // (migration 0216). WITHOUT THIS the gate would re-evaluate a legal
+    // low-THC order as a normal liquid and wrongly block the customer at
+    // pickup. Legacy rows and unclassified products are null → normal liquid,
+    // which is the fail-safe direction.
+    //
+    // `=== true` on purpose: pg/PostgREST can hand back a string, and only a
+    // real boolean true may unlock the more permissive bucket.
+    const lowThc = line.low_thc_liquid === true;
+    // normalizeUnitGrams is a generic "positive numeric or null" coercion that
+    // also handles PostgREST returning numeric columns as strings. Reused here
+    // deliberately for the mg field — it applies NO gram semantics. Named for
+    // its first caller, not for a unit.
+    const unitThcMg = normalizeUnitGrams(line.unit_thc_mg);
+    limitLines.push({
+      category,
+      quantity: line.quantity,
+      ...(grams !== null ? { grams } : {}),
+      lowThcLiquid: lowThc,
+      unitThcMg,
+    });
     totalsLines.push({
       category,
       quantity: line.quantity,

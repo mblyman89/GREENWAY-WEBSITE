@@ -9,6 +9,17 @@
  * never advertise limits that differ from what the store enforces.
  */
 import { MEDICAL_PURCHASE_LIMITS, RECREATIONAL_PURCHASE_LIMITS } from "@/lib/medical/tax";
+// SLICE 16: the low-THC beverage cap is quoted straight from the ENFORCEMENT
+// constants rather than from MEDICAL_PURCHASE_LIMITS. Two reasons, both
+// deliberate. (1) That object is gram-denominated by name (`*Grams`) and uses
+// the DOH 28.35 g/oz convention; this figure is MILLIGRAMS OF ACTIVE DELTA-9
+// THC and belongs to neither. (2) Quoting the register's own constant means
+// the public page advertises the exact number the register blocks on.
+import {
+  RECREATIONAL_LIMITS,
+  MEDICAL_LIMITS,
+  LOW_THC_UNIT_MAX_MG,
+} from "@/lib/compliance/sales-limits-core";
 // GW-016: divide by the SAME DOH convention (28.35) the limit table multiplies
 // by, so the displayed ounce figures round-trip exactly.
 import { METRIC_GRAMS_PER_OUNCE as GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
@@ -49,6 +60,15 @@ export function purchaseLimitRows(): PurchaseLimitRow[] {
       category: "Concentrates",
       recreational: `${RECREATIONAL_PURCHASE_LIMITS.concentrateGrams} g`,
       medical: `${MEDICAL_PURCHASE_LIMITS.concentrateGrams} g`,
+    },
+    // The ONLY row where the medical figure does not triple the recreational
+    // one. WAC 314-55-095(2)(d) says "and up to 200 mg" — the same 200 as
+    // (1)(d)(i)(F). Presenting a tripled figure here would advertise an
+    // over-sale to every patient who reads this page.
+    {
+      category: `Low-THC beverages (units of ${LOW_THC_UNIT_MAX_MG} mg THC or less)`,
+      recreational: `${RECREATIONAL_LIMITS.low_thc_liquid} mg THC`,
+      medical: `${MEDICAL_LIMITS.low_thc_liquid} mg THC`,
     },
   ];
 }

@@ -111,7 +111,14 @@ export type RecordFactReviewInput = {
   reviewedBy: string | null;
 };
 
-/** camelCase fact key -> menu_items column name (0138 columns + display strings). */
+/**
+ * camelCase fact key -> menu_items column name (0138 columns + display strings,
+ * plus the two SLICE 16 / migration 0216 columns).
+ *
+ * Record<keyof FactReviewFacts, string> is load-bearing: adding a field to
+ * FactReviewFacts without adding it here is a COMPILE error, not a silent
+ * drop. That is why a reviewer's low-THC decision cannot fail to persist.
+ */
 const FACT_COLUMN: Record<keyof FactReviewFacts, string> = {
   thc: "thc",
   cbd: "cbd",
@@ -122,6 +129,8 @@ const FACT_COLUMN: Record<keyof FactReviewFacts, string> = {
   ratioLabel: "ratio_label",
   netWeightGrams: "net_weight_grams",
   netVolumeMl: "net_volume_ml",
+  lowThcLiquid: "low_thc_liquid",
+  unitThcMg: "unit_thc_mg",
 };
 
 export async function recordFactReview(input: RecordFactReviewInput): Promise<void> {
