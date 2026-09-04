@@ -657,7 +657,31 @@ describe("the migration list is ordered the way the database will see it", () =>
     // five choice/provenance columns to catalog_product_drafts so the receiving
     // door can ask the question at Product Onboarding, and so the answer
     // records WHO decided: a person, or a machine default.
-    expect(listed[listed.length - 1]).toMatch(/^0219_/);
+    // SLICE 12 re-ran the ritual rather than bumping the number. Fresh results,
+    // from supabase/migrations: `ls [0-9]*.sql | wc -l` returns 220 (was 219,
+    // +1 for 0220_classification_memory_provenance.sql); `ls [0-9]*.sql |
+    // grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql | sort -c` exits clean;
+    // and `ls [0-9]*.sql | cut -c1-4 | sort | uniq -d | wc -l` returns 0. The
+    // raw directory listing is 221, one more than the migration count, and the
+    // extra entry is still the pre-existing `editor-safe` DIRECTORY - which is
+    // exactly why every command here globs `[0-9]*.sql`.
+    //
+    // 0220 exists because 0218 documented a THREE-value vocabulary on
+    // catalog_product_drafts.chosen_classification_provenance, and SLICE 18F
+    // added a fourth: 'remembered', for an operator confirming a value
+    // pre-filled from their own earlier decision about the same product. The
+    // column is jsonb with no check constraint, so the new value was accepted
+    // immediately and nothing broke - which is precisely the danger. The
+    // comment silently became a list a reader would trust as exhaustive, and
+    // 'remembered' would look like corruption to anyone auditing the table
+    // against it. Nothing executable depended on the stale comment, and that is
+    // why it needed fixing on purpose rather than "next time we touch this
+    // file": a wrong comment fails silently and only ever misleads a human.
+    // 0220 changes no data and no structure - one column comment, asserted in
+    // tests/compliance/classification-memory.test.ts, and PROVEN to execute by
+    // applying all 220 migrations in order to a real PostgreSQL 15 and
+    // re-applying 0220 a second time for idempotency.
+    expect(listed[listed.length - 1]).toMatch(/^0220_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

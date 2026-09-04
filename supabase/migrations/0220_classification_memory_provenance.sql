@@ -1,0 +1,72 @@
+-- =============================================================================
+-- 0220_classification_memory_provenance.sql
+--
+-- SLICE 18F follow-up -- teach the schema about the FOURTH provenance value.
+--
+-- Owner instruction, verbatim:
+--   "Yes please fold in the migration for me to run, I like to be thorough and
+--    all inclusive."
+--
+-- THIS MIGRATION CHANGES NO DATA, NO STRUCTURE AND NO CONSTRAINT.
+-- It rewrites exactly ONE column COMMENT. That is deliberate, and it follows
+-- the precedent set by 0219, which states the reasoning better than a repeat
+-- would: a column comment is the one piece of documentation that travels WITH
+-- the database. It shows up in psql (\d+), in Supabase's table editor, and in
+-- whatever schema browser the next engineer opens at 2am. Documentation that
+-- lives only in a markdown file is documentation the person holding the
+-- incident does not have.
+--
+-- -----------------------------------------------------------------------------
+-- WHAT WAS INCOMPLETE
+-- -----------------------------------------------------------------------------
+-- 0218 created catalog_product_drafts.chosen_classification_provenance and
+-- commented it with a three-value vocabulary:
+--
+--   {"otherwiseTaken":"human"|"machine_default","lowThcLiquid":"human"|"unanswered"}
+--
+-- SLICE 18F (PR #1086) added a FOURTH value, 'remembered', for the case where
+-- an operator confirmed an answer that was pre-filled from their own earlier
+-- decision about the same product. The column is jsonb with NO check
+-- constraint, so the new value was accepted immediately and nothing broke --
+-- which is exactly the danger. The comment silently became a list that a
+-- reader would reasonably trust as exhaustive, and 'remembered' would look
+-- like corruption to anyone auditing the table against it.
+--
+-- Nothing executable depended on the stale comment. That is precisely why it
+-- needed fixing on purpose rather than "next time we touch this file": a wrong
+-- comment fails silently and only ever misleads a human.
+--
+-- -----------------------------------------------------------------------------
+-- WHY 'remembered' IS A DISTINCT VALUE AND NOT JUST 'human'
+-- -----------------------------------------------------------------------------
+-- Both mean a person clicked. The difference is what the click COST, and an
+-- auditor asking "did somebody actually consider this?" deserves the honest
+-- answer:
+--
+--   human      -- a person was asked cold and answered.
+--   remembered -- a person was shown their OWN prior answer, pre-filled, and
+--                 confirmed it. Still a human decision (the gate is still
+--                 `required`; nothing is auto-applied), but a confirmation
+--                 rather than a fresh judgement.
+--
+-- The distinction is recorded SERVER-SIDE and only when earned: the approval
+-- path re-runs the recall and stamps 'remembered' only if a prior human answer
+-- existed AND the submitted answer matches it. A changed answer is recorded as
+-- 'human', because crediting it to a prior decision that DISAGREED would be a
+-- false audit trail. See src/lib/inventory/catalog-drafts.ts and
+-- src/lib/inventory/classification-memory-core.ts.
+--
+-- Only 'human' and 'remembered' are eligible to be replayed as a pre-fill.
+-- 'machine_default' and 'unanswered' are deliberately NOT recallable: neither
+-- represents a person having considered the question, and replaying one would
+-- launder a machine's silence into something that looks like a decision.
+--
+-- Statutory anchors (unchanged by this migration):
+--   WAC 314-55-095(1)(d)(i)(D)  ten units "otherwise taken into the body"
+--   WAC 314-55-095(1)(d)(i)(E)  72 oz of marijuana-infused liquid
+--   WAC 314-55-095(1)(d)(i)(F)  200 mg low-THC liquid carve-out
+--   RCW 69.50.101               "unit" / "package" definitions
+-- =============================================================================
+
+comment on column public.catalog_product_drafts.chosen_classification_provenance is
+  '0218 / SLICE 18-0, vocabulary extended in SLICE 18F (0220): how each classification value came to exist -- {"otherwiseTaken":"human"|"remembered"|"machine_default","lowThcLiquid":"human"|"unanswered"}. Extends the fact_provenance vocabulary (0138) with one value of its own. The gate is targeted, so on most products the machine defaults otherwise_taken to false WITHOUT asking; this column is what keeps that apart from a human who considered the question and answered no. The unclassified worklist depends on the distinction. VALUES: human = a person was asked cold and answered. remembered = a person was shown their OWN prior answer for this product, pre-filled, and confirmed it -- still a human decision (the pick stays required; nothing is auto-applied), but a confirmation rather than a fresh judgement; stamped server-side ONLY when a prior human answer existed AND the submitted answer matches it, so a CHANGED answer records as human. machine_default = the gate did not apply and the machine defaulted the value without asking. unanswered = prompted but not answered (low-THC only, where silence can only under-sell). Only human and remembered are ever replayed as a pre-fill; machine_default and unanswered are deliberately not recallable, because neither represents a person having considered the question.';

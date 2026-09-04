@@ -26,8 +26,16 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleAllowMixedLocalizations</key>
+	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>sktcompanion</string>
+	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Greenway uses Bluetooth to print receipts and open the cash drawer on the counter receipt printer.</string>
+	<string>Greenway uses Bluetooth to print receipts, open the cash drawer, and receive barcode scans from the counter barcode scanner.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Greenway can use the camera as a backup barcode scanner when the handheld scanner is unavailable.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -58,6 +66,7 @@
 	<key>UISupportedExternalAccessoryProtocols</key>
 	<array>
 		<string>jp.star-m.starpro</string>
+		<string>com.socketmobile.chs</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

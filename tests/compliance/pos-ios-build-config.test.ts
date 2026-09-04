@@ -107,6 +107,106 @@ describe("the real ios/App/App/Info.plist", () => {
   });
 });
 
+// ===========================================================================
+// SLICE 12 -- the four Info.plist keys the Socket scanner cannot work without.
+//
+// WHY THESE NEED A TEST AT ALL.
+//
+// Every other failure in this repo announces itself: a type error stops the
+// build, a bad migration stops the verifier, a wrong price fails a unit test.
+// A missing Info.plist key does NONE of that. The app compiles, installs,
+// launches, and then simply never sees the scanner -- on the iPad, in the
+// store, during a sale. There is no error to read, because from iOS's point
+// of view nothing went wrong: an app that has not declared the accessory
+// protocol is not permitted to talk to the accessory, so it is not told the
+// accessory exists.
+//
+// `npx cap sync` and `npx cap add ios` both regenerate this file from
+// Capacitor's template, which knows nothing about Star or Socket. That is the
+// realistic way these keys get lost, and it is silent.
+//
+// Each assertion below names the specific symptom its key prevents, so
+// whoever sees this go red knows what they are about to break.
+// ===========================================================================
+
+/** Read a <string> array out of the plist by key, the way the OS does. */
+function readStringArray(xml: string, key: string): string[] {
+  const block = xml.match(
+    new RegExp(`<key>${key}</key>\\s*<array>([\\s\\S]*?)</array>`),
+  );
+  if (!block) return [];
+  return [...block[1].matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1].trim());
+}
+
+describe("SLICE 12: the Socket scanner's Info.plist declarations", () => {
+  it("declares the Socket accessory protocol WITHOUT dropping Star's", () => {
+    // The single most likely way to break receipt printing while adding
+    // scanning: replacing this array instead of appending to it. Both devices
+    // are External Accessory devices and both must be listed, or one of them
+    // silently stops existing.
+    const protocols = readStringArray(infoPlist, "UISupportedExternalAccessoryProtocols");
+    expect(
+      protocols,
+      "com.socketmobile.chs missing -> the SDK never sees the scanner, with no error",
+    ).toContain("com.socketmobile.chs");
+    expect(
+      protocols,
+      "jp.star-m.starpro missing -> receipts stop printing and the drawer stops opening",
+    ).toContain("jp.star-m.starpro");
+  });
+
+  it("can reach the Socket Companion app to pair the scanner", () => {
+    // Without sktcompanion in LSApplicationQueriesSchemes, canOpenURL returns
+    // false and the SDK cannot hand the user to the Companion app to put the
+    // scanner into Application Mode -- which is the one setup step that makes
+    // the whole slice work.
+    expect(readStringArray(infoPlist, "LSApplicationQueriesSchemes")).toContain("sktcompanion");
+  });
+
+  it("explains, in the Bluetooth prompt, that Bluetooth is used for SCANNING too", () => {
+    // The prompt is shown ONCE. If it only mentions receipts, a manager who
+    // declines it because "we do not need Bluetooth receipts today" has also
+    // silently declined scanning, and the only way back is through Settings.
+    const match = infoPlist.match(
+      /<key>NSBluetoothAlwaysUsageDescription<\/key>\s*<string>([^<]*)<\/string>/,
+    );
+    expect(match, "NSBluetoothAlwaysUsageDescription must exist").not.toBeNull();
+    const reason = (match?.[1] ?? "").toLowerCase();
+    expect(reason).toContain("scan");
+    // And it must still justify the printer, or Star's use of Bluetooth is
+    // undeclared to the person being asked.
+    expect(reason).toContain("receipt");
+  });
+
+  it("declares a camera purpose string", () => {
+    // Socket's CaptureSDK links the camera-based decoder, so the symbol is in
+    // the binary whether or not the register calls it. iOS terminates an app
+    // that reaches a camera API with no purpose string -- a crash, not a
+    // refusal -- and App Store review rejects the build besides.
+    const match = infoPlist.match(
+      /<key>NSCameraUsageDescription<\/key>\s*<string>([^<]*)<\/string>/,
+    );
+    expect(match, "NSCameraUsageDescription must exist").not.toBeNull();
+    expect((match?.[1] ?? "").length, "the purpose string must actually say something").toBeGreaterThan(
+      20,
+    );
+  });
+
+  it("allows mixed localizations, which the CaptureSDK bundle requires", () => {
+    expect(infoPlist).toMatch(/<key>CFBundleAllowMixedLocalizations<\/key>\s*<true\s*\/>/);
+  });
+
+  it("remains a single well-formed dict after these additions", () => {
+    // The additions were made by script. Prove the file was not doubled or
+    // truncated in the process, and that every key has a value: an odd tag
+    // count would mean a dangling <key> with nothing after it.
+    expect(infoPlist.match(/<plist/g)?.length).toBe(1);
+    expect(infoPlist.match(/<\/plist>/g)?.length).toBe(1);
+    expect(infoPlist.match(/<dict>/g)?.length).toBe(infoPlist.match(/<\/dict>/g)?.length);
+    expect(infoPlist.match(/<array>/g)?.length).toBe(infoPlist.match(/<\/array>/g)?.length);
+  });
+});
+
 describe("the iPad build cannot be produced without a server address", () => {
   const pkg = JSON.parse(
     readFileSync(path.join(repoRoot, "package.json"), "utf8"),

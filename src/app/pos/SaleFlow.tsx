@@ -44,6 +44,7 @@ import {
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
+import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import {
   emptyIdCaptureState,
   feedIdCaptureKey,
@@ -1309,6 +1310,30 @@ function IdGateScreen({
     submitScanRef.current = submitScan;
     onScanFinalizedRef.current = onScanFinalized;
   });
+  // SLICE 12 - Socket Mobile Application Mode.
+  //
+  // In keyboard-wedge mode the D760 TYPES the licence's 300-1100 characters
+  // one at a time, which is why an ID scan takes about ten seconds. The SDK
+  // hands us the whole payload at once, so this path SKIPS the keystroke
+  // accumulator entirely - there is nothing to accumulate. It goes straight to
+  // submitScan, exactly where finalizeNow() would have delivered it.
+  //
+  // While a Socket scanner is connected, `sdkOwnsScanning()` is true and the
+  // keydown listener below stands down. That is what prevents the same licence
+  // being processed twice on a host that keeps HID alive alongside the SDK -
+  // and it is read at EVENT time, not bind time, so a scanner that connects
+  // after this effect ran still silences the wedge.
+  const socket = useSocketScanner({
+    enabled: mode === "scan",
+    onScan: (payload) => {
+      // Arm the burst drain first, exactly as finalizeNow() does, so nothing
+      // trailing the payload lands in a field behind the gate.
+      onScanFinalizedRef.current();
+      submitScanRef.current(payload);
+    },
+  });
+  const sdkOwnsScanning = socket.sdkOwnsScanning;
+
   useEffect(() => {
     if (mode !== "scan") return;
     const finalizeNow = () => {
@@ -1329,6 +1354,12 @@ function IdGateScreen({
     };
     const sink = scanSinkRef.current;
     const onKeyDown = (e: KeyboardEvent) => {
+      // SLICE 12 - the SDK owns scanning while a Socket scanner is connected,
+      // so wedge keystrokes are not a scan. Checked HERE, inside the handler,
+      // so the answer is current: this listener is bound once per `mode` and a
+      // scanner may connect long afterwards. Note we return WITHOUT
+      // preventDefault - manual typing must keep working normally.
+      if (sdkOwnsScanning()) return;
       const t = e.target as HTMLElement | null;
       // Keystrokes into a REAL form field (the manual DOB inputs, etc.) pass
       // through untouched. The scan SINK is our own field — treat its keydowns
@@ -1379,7 +1410,11 @@ function IdGateScreen({
       }
       captureRef.current = emptyIdCaptureState();
     };
-  }, [mode]);
+    // `sdkOwnsScanning` is a useCallback with no dependencies, so it is
+    // referentially stable and listing it cannot cause this listener to
+    // re-bind mid-scan. It is listed because it IS a dependency: omitting it
+    // is how a stale ownership check gets baked into the closure.
+  }, [mode, sdkOwnsScanning]);
 
   const submitManual = () => {
     setError(null);
@@ -2372,8 +2407,28 @@ function CartScreen({
   // are ignored — the search box (Enter-to-scan) and modal fields keep
   // their own behavior; this listener only owns the dead space.
   const wedgeRef = useRef<WedgeState>(emptyWedgeState());
+
+  // SLICE 12 - the same scanner, delivering whole payloads instead of typing
+  // them. An ID that reaches the CART (a customer handing over a licence
+  // instead of a package) is routed back through handleGlobalScan's caller
+  // only if it is a product; a licence at this stage is ignored rather than
+  // looked up as a barcode, which would tell the cashier the customer's ID
+  // "matched nothing on the menu" and send them hunting in the wrong place.
+  const socket = useSocketScanner({
+    enabled: true,
+    onScan: (payload, route) => {
+      if (route !== "product") return;
+      handleGlobalScan(payload);
+    },
+  });
+  const sdkOwnsScanning = socket.sdkOwnsScanning;
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // SLICE 12 - stand down while the SDK owns scanning, so one physical
+      // scan cannot be added to the cart twice. Read at EVENT time: this
+      // listener is bound once and the scanner may connect later.
+      if (sdkOwnsScanning()) return;
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
@@ -2386,7 +2441,7 @@ function CartScreen({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [handleGlobalScan]);
+  }, [handleGlobalScan, sdkOwnsScanning]);
   const priced = useMemo(() => priceForBuyer(cart, bundle, carded, overrides), [cart, bundle, carded, overrides]);
   // AM-B — the loyalty-reduced view of the money (the check keeps showing
   // per-line engine prices; the rail's totals show what the customer owes).

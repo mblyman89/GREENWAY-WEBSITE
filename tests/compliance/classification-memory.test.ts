@@ -533,3 +533,193 @@ describe("SLICE 18F: guards against a future edit re-breaking this", () => {
     }
   });
 });
+
+// ===========================================================================
+// MIGRATION 0220 -- the column comment must not outlive the vocabulary.
+//
+// WHY THIS SECTION EXISTS.
+//
+// 0218 created `catalog_product_drafts.chosen_classification_provenance` and
+// documented a THREE-value vocabulary in the column comment. 18F added a
+// fourth, `remembered`. The column is jsonb with no check constraint, so the
+// new value was accepted instantly and nothing broke -- which is precisely the
+// hazard. Nothing executable depended on the comment, so nothing could go red;
+// the comment simply became a list a reader would reasonably trust as
+// exhaustive, and `remembered` would read as corruption to anyone auditing the
+// table against it.
+//
+// A wrong comment fails silently and only ever misleads a human. 0220 fixes
+// the text; these tests stop it drifting again, by deriving the expected
+// vocabulary FROM THE CONSTANT and the expected recallability FROM THE
+// FUNCTION rather than from a hand-written list that would rot the same way.
+//
+// So: add a fifth provenance value, or change which values may be replayed,
+// and this section goes red until the migration is updated to match.
+// ===========================================================================
+
+describe("SLICE 18F: migration 0220 keeps the schema comment in sync", () => {
+  const MIGRATION_0220 = "supabase/migrations/0220_classification_memory_provenance.sql";
+
+  /** The migration with SQL line comments removed, i.e. what the server runs. */
+  function executableSql(): string {
+    return readFileSync(MIGRATION_0220, "utf8")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("--"))
+      .join("\n");
+  }
+
+  /**
+   * The quoted comment BODY -- the prose that actually lands on the column.
+   *
+   * Asserting against the whole file would let a word in the explanatory
+   * header satisfy a test about the comment, which is the same vacuity trap
+   * 18F's harness fix was about. Only the literal counts.
+   */
+  function commentBody(): string {
+    const literals = executableSql().match(/'(?:''|[^'])*'/g) ?? [];
+    expect(literals.length, "0220 must contain exactly one quoted comment body").toBe(1);
+    const body = literals[0];
+    // Not merely a type-checker appeasement: if the match ever came back empty
+    // the slice below would yield "" and every containment assertion in this
+    // section would pass vacuously against an empty string.
+    expect(typeof body, "the quoted comment body must be a string").toBe("string");
+    return (body ?? "").slice(1, -1);
+  }
+
+  it("changes no data and no structure -- it is documentation, and only that", () => {
+    // Splitting on ";" naively would be WRONG: the comment body is prose full
+    // of semicolons, so a naive split tears one statement into fragments and
+    // reports them as offenders. Remove the string literals first.
+    const withoutLiterals = executableSql().replace(/'(?:''|[^'])*'/g, "''");
+    const statements = withoutLiterals
+      .split(";")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    // Sanity: stripping must leave the statement intact, not erase it. Without
+    // this the loop below would pass vacuously over an empty array.
+    expect(statements.length, "0220 is exactly one statement").toBe(1);
+    expect(statements[0].toLowerCase().startsWith("comment on column")).toBe(true);
+
+    // Belt and braces: no structural or data verb survives outside the prose.
+    const keywords = withoutLiterals.toLowerCase();
+    for (const verb of ["alter table", "drop ", "update ", "delete ", "insert ", "create "]) {
+      expect(keywords, `0220 must not contain "${verb}"`).not.toContain(verb);
+    }
+  });
+
+  it("comments the RIGHT column on the RIGHT table", () => {
+    // A comment applied to the wrong column documents nothing and hides the
+    // fact that the real column is still stale.
+    expect(executableSql()).toContain(
+      "comment on column public.catalog_product_drafts.chosen_classification_provenance is",
+    );
+  });
+
+  it("documents EVERY value in the live vocabulary -- no value left undocumented", () => {
+    const body = commentBody();
+    const vocabulary = Object.values(CLASSIFICATION_MEMORY_PROVENANCE);
+
+    // Guard the guard: if the constant were ever emptied, the loop below would
+    // pass by iterating over nothing.
+    expect(vocabulary.length, "the provenance vocabulary must not be empty").toBeGreaterThan(3);
+
+    for (const value of vocabulary) {
+      expect(
+        body.includes(value),
+        `migration 0220's column comment never mentions "${value}". The comment ` +
+          `reads as an exhaustive list, so an undocumented value looks like ` +
+          `corruption to whoever audits this table. Update 0220.`,
+      ).toBe(true);
+    }
+  });
+
+  it("names as recallable EXACTLY the values the code actually replays", () => {
+    // Derived behaviourally: ask the real function which provenance values
+    // survive a recall, rather than trusting a list written by hand.
+    const recallable = Object.values(CLASSIFICATION_MEMORY_PROVENANCE).filter((provenance) => {
+      const row = prior({ provenance });
+      return (
+        recallClassification({
+          candidate: {
+            vendorName: row.vendorName,
+            brandName: row.brandName,
+            productName: row.productName,
+            category: row.category,
+          },
+          history: [row],
+        }) !== null
+      );
+    });
+
+    // The measured truth, asserted so a silent change to isRecallable() is
+    // caught here too and not merely reflected into the expectation.
+    expect([...recallable].sort()).toEqual(["human", "remembered"]);
+
+    const body = commentBody();
+    const start = body.indexOf("Only ");
+    const end = body.indexOf("are ever replayed as a pre-fill");
+    expect(start, "0220 must state which values are replayed").toBeGreaterThanOrEqual(0);
+    expect(end, "0220 must state which values are replayed").toBeGreaterThan(start);
+
+    // Scope the assertion to the CLAUSE, not the whole comment: every value is
+    // mentioned somewhere in the body, so a whole-body search would pass no
+    // matter which values the clause actually named.
+    const clause = body.slice(start, end);
+    for (const value of recallable) {
+      expect(
+        clause.includes(value),
+        `"${value}" is replayed as a pre-fill by the code, but 0220's ` +
+          `recallable clause does not name it: "${clause}"`,
+      ).toBe(true);
+    }
+    for (const value of Object.values(CLASSIFICATION_MEMORY_PROVENANCE)) {
+      if (recallable.includes(value)) continue;
+      expect(
+        clause.includes(value),
+        `"${value}" is NOT replayed by the code, yet 0220's recallable clause ` +
+          `names it: "${clause}". That would tell an auditor a machine default ` +
+          `can be laundered into a human decision.`,
+      ).toBe(false);
+    }
+  });
+
+  it("says the non-recallable values are non-recallable, and says why", () => {
+    const body = commentBody();
+    const nonRecallable = Object.values(CLASSIFICATION_MEMORY_PROVENANCE).filter(
+      (v) => v !== "human" && v !== "remembered",
+    );
+    expect(nonRecallable.length, "there must be values that are NOT recallable").toBeGreaterThan(0);
+
+    const start = body.indexOf("are ever replayed as a pre-fill");
+    const end = body.indexOf("are deliberately not recallable");
+    expect(end, "0220 must state that some values are deliberately not recallable").toBeGreaterThan(
+      start,
+    );
+
+    const clause = body.slice(start, end);
+    for (const value of nonRecallable) {
+      expect(
+        clause.includes(value),
+        `"${value}" is not recallable in code, but 0220 does not list it among ` +
+          `the deliberately-not-recallable values: "${clause}"`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps `remembered` distinct from `human` in the comment, not a synonym", () => {
+    // The whole point of the fourth value: both mean a person clicked, but one
+    // was a fresh judgement and one was a confirmation of their own prior
+    // answer. A comment that blurred them would erase the distinction the
+    // column exists to record.
+    const body = commentBody();
+    expect(body).toContain("remembered = ");
+    expect(body).toContain("human = ");
+    // And it must record the safety property: a CHANGED answer is not credited
+    // to the prior decision that disagreed with it.
+    expect(
+      /changed answer records as human/i.test(body),
+      "0220 must state that a changed answer records as human, not remembered",
+    ).toBe(true);
+  });
+});
