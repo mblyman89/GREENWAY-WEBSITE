@@ -72,6 +72,17 @@ import {
 } from "@/lib/pos/special-discount-sale-core";
 import { formatBps, type SpecialDiscountKind } from "@/lib/discounts/special-discount-core";
 import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
+// SLICE 18D — register visibility for the two specially-limited buckets. The
+// labels live in the POS core (not the storefront) because this screen must not
+// depend on the storefront menu modules; both sides stay in step by deriving
+// from sales-limits-core, never by importing each other.
+import {
+  posClassificationChips,
+  productClassifications,
+  POS_CLASSIFICATION_LABELS,
+  POS_CLASSIFICATION_TITLES,
+  type PosClassificationKind,
+} from "@/lib/pos/classification-search-core";
 import {
   FAVORITES_KEY,
   MAX_FAVORITES,
@@ -1926,6 +1937,7 @@ function ProductTile({
           {product.name}
           {product.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {product.variantLabel}</span> : null}
           <StockBadge product={product} />
+          <ClassificationBadge product={product} />
         </span>
         {product.brand ? (
           <span className="mt-0.5 block truncate text-xs text-[var(--pos-text-faint)]">{product.brand}</span>
@@ -2149,6 +2161,11 @@ function CartScreen({
   const [query, setQuery] = useState("");
   // B36 — the active category filter chip (null = All).
   const [category, setCategory] = useState<string | null>(null);
+  // SLICE 18D — the classification lane the budtender has narrowed to, or null
+  // for "no classification filter". Independent of the category chip: "flower"
+  // and "suppository" answer different questions, so they compose rather than
+  // replace each other.
+  const [classification, setClassification] = useState<PosClassificationKind | null>(null);
   // B39/B40 — which browse surface is showing: item grid, favorites, keypad.
   const [browseTab, setBrowseTab] = useState<"menu" | "favorites" | "keypad">("menu");
   // B40 — pinned variantIds for THIS register, hydrated from localStorage
@@ -2257,9 +2274,38 @@ function CartScreen({
   const chips = useMemo(() => menuCategoryChips(bundle.products), [bundle.products]);
   // B36 — search + chip combine; tile grids breathe better than lists, so the
   // cap rises 30 → 60 (still bounded: an iPad renders 60 tiles instantly).
+  // SLICE 18D — classification chips derived from the products actually in the
+  // bundle. A lane with no qualifying stock is omitted entirely, so a chip
+  // never promises inventory the store does not have.
+  const classificationChips = useMemo(
+    () => posClassificationChips(bundle.products),
+    [bundle.products],
+  );
+  /**
+   * SLICE 18D — the classification filter ACTUALLY in force.
+   *
+   * Derived rather than read straight from state, because the chip row only
+   * renders lanes that currently have stock. If the last low-THC beverage
+   * sells out and the bundle re-syncs, that chip disappears — and a raw state
+   * read would leave an INVISIBLE filter pinned on, showing an empty grid with
+   * no control on screen to clear it. The budtender would reasonably conclude
+   * the register had lost the menu.
+   *
+   * This is the same hazard the AM-A comment below describes for the category
+   * chip, so it gets the same answer: a filter you cannot see is not applied.
+   * Deriving (instead of an effect) means there is no frame where the stale
+   * lane is still filtering.
+   */
+  const activeClassification = useMemo(
+    () =>
+      classification && classificationChips.some((c) => c.kind === classification)
+        ? classification
+        : null,
+    [classification, classificationChips],
+  );
   const results = useMemo(
-    () => filterMenuProducts(bundle.products, query, category).slice(0, 60),
-    [bundle.products, query, category],
+    () => filterMenuProducts(bundle.products, query, category, activeClassification).slice(0, 60),
+    [bundle.products, query, category, activeClassification],
   );
   // AM-A — main-screen quick-search rows ignore the overlay's category chip:
   // an invisible filter on the main screen would look like missing products.
@@ -3336,6 +3382,34 @@ function CartScreen({
                     <span className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${style.dot}`} aria-hidden />
                     {c.category}
                     <span className="ml-1 font-normal opacity-60">{c.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {/* SLICE 18D — the two specially-limited buckets, in their own row so
+              a classification chip is never stranded inside the category row's
+              `chips.length > 0` gate. Rendered only when the bundle actually
+              holds qualifying stock. */}
+          {classificationChips.length > 0 ? (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+              {classificationChips.map((chip) => {
+                const active = activeClassification === chip.kind;
+                return (
+                  <button
+                    key={chip.kind}
+                    type="button"
+                    title={chip.title}
+                    aria-pressed={active}
+                    onClick={() => setClassification(active ? null : chip.kind)}
+                    className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${
+                      active
+                        ? "border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] text-[var(--pos-info)]"
+                        : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                    }`}
+                  >
+                    {chip.label}
+                    <span className="ml-1 font-normal opacity-60">{chip.count}</span>
                   </button>
                 );
               })}
@@ -5109,6 +5183,40 @@ function ToggleChip({ active, onClick, label }: { active: boolean; onClick: () =
  * "LAST ONE") beat the item-level "LOW STOCK"; healthy counts render
  * nothing. Amber = low, red = last units. Informational only.
  */
+/**
+ * SLICE 18D — the tile marker.
+ *
+ * Tells a budtender, at a glance, that this product counts against one of the
+ * two special allowances — WITHOUT them having to know in advance to search
+ * for it. Before 18D the register carried the flags and showed nothing: a
+ * budtender only found these products by typing a word they had no reason to
+ * type.
+ *
+ * Returns null when the product is in no lane, exactly like StockBadge above.
+ * That silence is deliberate and is NOT a claim that the product is ordinary:
+ * the flags are optional on PosMenuProduct, so a register running a bundle
+ * cached before intake classification looks identical to a genuinely
+ * unclassified product. Saying "ordinary" would be a statement we cannot
+ * support; saying nothing is honest.
+ */
+function ClassificationBadge({ product }: { product: PosMenuProduct }) {
+  const kinds = productClassifications(product);
+  if (kinds.length === 0) return null;
+  return (
+    <>
+      {kinds.map((kind) => (
+        <span
+          key={kind}
+          title={POS_CLASSIFICATION_TITLES[kind]}
+          className="ml-2 inline-block rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 align-middle text-[10px] font-bold tracking-wide text-[var(--pos-info)]"
+        >
+          {POS_CLASSIFICATION_LABELS[kind]}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function StockBadge({ product }: { product: PosMenuProduct }) {
   const signal = stockSignal(product.inventoryStatus, product.unitsLeft);
   if (!signal) return null;
