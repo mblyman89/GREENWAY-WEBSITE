@@ -11,6 +11,10 @@ import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
 import { collapseVariantsForDisplay } from "@/lib/menu/variant-collapse-core";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
+// SLICE 18C: the shopper-facing allowance explainer. Pure derivation over the
+// four classification fields the item ALREADY carries (they are passed into
+// the cart below), so this adds no prop, no fetch and no migration.
+import { classificationDisclosuresForItem } from "@/lib/menu/menu-classification-badge-core";
 
 type ProductDetailPurchasePanelProps = {
   item: GreenwayMenuItem;
@@ -70,6 +74,17 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
     setQuantity(Math.min(Math.max(next, 1), maxQuantity));
   }
 
+  // SLICE 18C (roadmap: "add an allowance explainer to the PDP"). A product
+  // that does not affirmatively qualify yields an EMPTY array, so nothing
+  // renders -- we never make a negative claim about a product nobody has
+  // reviewed, because a null `otherwiseTaken` is the PERMISSIVE direction.
+  //
+  // The figures are read from the statutory constants through the bucket-aware
+  // formatter, so they cannot drift from the law or from the register. Note
+  // these two allowances are the ONLY ones that do NOT triple for a
+  // DOH-database patient, which is why the copy never mentions a multiple.
+  const allowanceDisclosures = classificationDisclosuresForItem(item);
+
   return (
     <div className="mt-4">
       {variants.length > 1 ? (
@@ -108,6 +123,35 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
       {dealBadge ? (
         <div className="mt-4 inline-flex rounded-full border border-[var(--greenway)]/55 bg-black/60 px-3 py-1.5 text-[0.66rem] font-black uppercase leading-tight tracking-[0.08em] text-[var(--greenway)] shadow-[0_0_18px_rgba(126,217,87,0.18)]">
           {dealBadge}
+        </div>
+      ) : null}
+
+      {/* SLICE 18C: the allowance explainer. Sits above the price and the
+          Add-to-Cart button so a shopper reads WHY this product is counted
+          differently before they commit, rather than discovering it in the
+          cart meter. Deliberately quiet styling (no colour alarm) because this
+          is good news -- a separate allowance -- not a warning. */}
+      {allowanceDisclosures.length > 0 ? (
+        <div className="mt-4 grid gap-2">
+          {allowanceDisclosures.map((disclosure) => (
+            <div
+              key={disclosure.kind}
+              className="rounded-xl border border-white/18 bg-white/[0.04] px-3.5 py-3"
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-white">
+                  {disclosure.headline}
+                </span>
+                <span className="rounded-full border border-white/25 bg-black/45 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] text-zinc-200">
+                  {disclosure.limit} per visit
+                </span>
+              </div>
+              <p className="mt-1.5 text-[0.78rem] leading-5 text-zinc-400">{disclosure.body}</p>
+              <p className="mt-1 text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                {disclosure.citation}
+              </p>
+            </div>
+          ))}
         </div>
       ) : null}
 

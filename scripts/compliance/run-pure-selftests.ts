@@ -414,6 +414,8 @@ import { __runMenuDohFilterCoreTests } from "../../src/lib/menu/menu-doh-filter-
 // classification search keywords.
 import { __runMenuClassificationFilterTests } from "../../src/lib/menu/menu-classification-filter-core";
 import { __runPosClassificationSearchTests } from "../../src/lib/pos/classification-search-core";
+// SLICE 18C — the on-card classification pills + the PDP allowance disclosure.
+import { __runMenuClassificationBadgeTests } from "../../src/lib/menu/menu-classification-badge-core";
 import { __runMenuDohBadgeCoreTests } from "../../src/lib/menu/menu-doh-badge-core";
 import { __runCcrsIdentifierTests } from "../../src/lib/compliance/ccrs-identifiers";
 import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventory-adjustment-core";
@@ -740,6 +742,7 @@ async function main() {
   { const r = __runMenuClassificationFilterTests(); if (r.passed < 1) throw new Error("menu-classification-filter-core: no assertions ran"); console.log(`menu-classification-filter-core: ${r.passed} assertions passed`); }
   { const r = __runPosClassificationSearchTests(); if (r.passed < 1) throw new Error("classification-search-core: no assertions ran"); console.log(`classification-search-core: ${r.passed} assertions passed`); }
   { const r = __runMenuDohBadgeCoreTests(); if (r.passed < 1) throw new Error("menu-doh-badge-core: no assertions ran"); console.log(`menu-doh-badge-core: ${r.passed} assertions passed`); }
+  { const r = __runMenuClassificationBadgeTests(); if (r.passed < 1) throw new Error("menu-classification-badge-core: no assertions ran"); console.log(`menu-classification-badge-core: ${r.passed} assertions passed`); }
   assertNoFailures("ccrs-identifiers", __runCcrsIdentifierTests());
   __runCcrsAdjustmentTests();
   assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());

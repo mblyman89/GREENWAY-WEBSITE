@@ -21,6 +21,10 @@ import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
+// SLICE 18C: the badge cores. dohPillForItem was previously only consumed by
+// ProductCardVisual, which is why the detail page silently dropped the pill.
+import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
+import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge-core";
 import { resolveDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
@@ -309,6 +313,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const knowledge = isMerchItem(item) ? null : await resolveDisplayKnowledge(item);
 
   const tone = toneForItem(item);
+  // SLICE 18C: the compliance pills for the detail page's chip row. Both
+  // helpers return null / an empty array when the item has earned nothing, so
+  // an ordinary product's page is unchanged. Merch is non-cannabis and never
+  // passes through withDohCompliance, so it naturally yields no pills.
+  const dohDetailPill = dohPillForItem(item);
+  const classificationDetailPills = classificationPillsForItem(item);
   const { items: relatedItems, scope: relatedScope } = await relatedItemsFor(item);
   // SLICE 47 (owner Q4): label = brand, else vendor, else nothing; the shown
   // label is clipped from the FRONT of the displayed name (display only —
@@ -412,6 +422,37 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   {displayStrain(item)}
                 </span>
               ) : null}
+              {/* SLICE 18C: the DOH pill on the DETAIL page.
+                  This closes a genuine pre-existing gap. The page has always
+                  run withDohCompliance() on every non-cannabis-excluded item
+                  (see the comment above at the item resolution), whose stated
+                  intent was "so the product page agrees with the menu card" --
+                  but no PDP surface ever rendered the result, so the registry
+                  read was paid for and thrown away. A DOH product showed the
+                  blue pill on its card and silently lost it on click.
+                  Rendered here, in the same chip row, with the same markup the
+                  card uses, so the two surfaces finally agree. */}
+              {dohDetailPill ? (
+                <span
+                  className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border ${dohDetailPill.tone.border} bg-black/45 px-2.5 py-1 text-[0.66rem] font-black uppercase tracking-[0.1em] ${dohDetailPill.tone.text}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${dohDetailPill.tone.dot}`} aria-hidden="true" />
+                  {dohDetailPill.label}
+                </span>
+              ) : null}
+              {/* SLICE 18C: the sales-limit classification pills, so the detail
+                  page carries the same badges as the card it was clicked from.
+                  Empty for an ordinary product -> nothing renders. */}
+              {classificationDetailPills.map((pill) => (
+                <span
+                  key={pill.kind}
+                  title={pill.title}
+                  className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border ${pill.tone.border} bg-black/45 px-2.5 py-1 text-[0.66rem] font-black uppercase tracking-[0.1em] ${pill.tone.text}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${pill.tone.dot}`} aria-hidden="true" />
+                  {pill.label}
+                </span>
+              ))}
               {/* SLICE 66 (owner C3): pill only when informative — a lone
                   "THC" tag is suppressed by showProfilePill. */}
               {showCannabinoids && detailCannabinoids?.profile && showProfilePill(detailCannabinoids.profile) ? (

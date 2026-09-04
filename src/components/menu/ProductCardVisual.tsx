@@ -6,6 +6,7 @@ import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-co
 import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
+import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 import { glowCardStyle } from "@/lib/ui/glow-card-core";
 
@@ -289,6 +290,17 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   // INDEPENDENTLY of the cannabinoid block so a DOH item ALWAYS shows its pill,
   // even a non-cannabis DOH item or one whose profile pill is suppressed.
   const dohPill = dohPillForItem(item);
+  // SLICE 18C: the sales-limit classification pills, living in the SAME lane
+  // as the DOH pill because they answer the same kind of question ("what rules
+  // does this product fall under?"). Returns an EMPTY array for an ordinary or
+  // unreviewed product, so nothing renders and the card is byte-identical to
+  // today -- the same graceful default the DOH pill ships with.
+  //
+  // The specs come from the shared badge core, which delegates to SLICE 18B's
+  // itemHasClassification -> the register's own predicates. So a pill appears
+  // here ONLY when the till would genuinely route the product to that bucket;
+  // the card can never advertise an allowance the register refuses to honour.
+  const classificationPills = classificationPillsForItem(item);
 
   // SLICE 95 (owner: uniform card heights): NO h-full on the card. In the
   // PDP's horizontal flex rail, `height: 100%` resolves against an auto-height
@@ -379,6 +391,24 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
               {dohPill.label}
             </span>
           ) : null}
+          {/* SLICE 18C: the sales-limit classification pills. Identical shape to
+              the DOH pill above so they share the lane naturally, but in their
+              own tones (amber / violet) because blue is DOH and green is the
+              deal badge -- a compliance classification must never read as a
+              sale. `title` carries the FULL shopper label ("Low-THC Beverages")
+              while the pill shows the short form, since the lane is a narrow
+              0.62rem column. Tones live in menu-classification-badge-core, so a
+              recolour is one assignment. */}
+          {classificationPills.map((pill) => (
+            <span
+              key={pill.kind}
+              title={pill.title}
+              className={`mx-auto inline-flex items-center gap-1.5 rounded-full border ${pill.tone.border} bg-black/45 px-3 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] ${pill.tone.text} backdrop-blur-sm`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${pill.tone.dot}`} aria-hidden="true" />
+              {pill.label}
+            </span>
+          ))}
           {showCannabinoids && cannabinoids ? (
             <div className="grid gap-2">
               {/* Profile badge — mirrors the compliance naming tag (1:1 /
