@@ -130,7 +130,7 @@ export default async function SalesLimitsPage({
         </HelpPanel>
 
         {/* Current effective limits */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           <StatCard
             label="Flower / useable"
             value={ozLabel(s.rec.usable)}
@@ -162,6 +162,15 @@ export default async function SalesLimitsPage({
             value={formatLimitAmount("low_thc_liquid", s.rec.low_thc_liquid)}
             hint={`${Math.floor(s.rec.low_thc_liquid / LOW_THC_UNIT_MAX_MG)} cans at ${LOW_THC_UNIT_MAX_MG} mg \u00b7 medical the same`}
             accent="gold"
+          />
+          {/* SLICE 17. Counted in WHOLE UNITS (items), not weight. Medical is
+              the same ten: WAC 314-55-095(2)(d) does not list this category at
+              all, so there is no authority to triple it. */}
+          <StatCard
+            label="Otherwise taken into the body"
+            value={formatLimitAmount("otherwise_taken", s.rec.otherwise_taken)}
+            hint="suppositories &middot; medical the same"
+            accent="orange"
           />
         </div>
 
@@ -268,6 +277,22 @@ export default async function SalesLimitsPage({
               classified as such at intake; anything unclassified is counted as a normal
               liquid.
             </p>
+            <p className="mt-4 text-xs text-[var(--admin-muted)]">
+              <strong className="text-[var(--admin-text)]">
+                Products otherwise taken into the body are counted, not weighed:
+              </strong>{" "}
+              a cannabis product taken by a route other than inhaling, swallowing,
+              or applying to the skin &mdash; in practice a suppository &mdash; is
+              limited to{" "}
+              {formatLimitAmount("otherwise_taken", s.rec.otherwise_taken)} per
+              transaction (WAC 314-55-095(1)(d)(i)(D), defined at
+              WAC 314-55-010(40)). This limit counts ITEMS rather than weight, so a
+              box of six counts as six units (RCW 69.50.101). The medical figure is
+              the same ten: WAC 314-55-095(2)(d) does not list this category at all,
+              so unlike flower, edibles, or concentrate it does{" "}
+              <em>not</em> triple for a DOH-database patient. A product is only
+              counted this way once it has been classified as such at intake.
+            </p>
             <p className="mt-2 text-xs text-[var(--admin-muted)]">
               Accessories, Greenway merch, and paraphernalia are not cannabis and
               do not count toward any limit. At checkout, enforcement is currently{" "}
@@ -323,10 +348,11 @@ export default async function SalesLimitsPage({
               <h3 className="mb-3 text-sm font-bold text-[var(--admin-text)]">
                 Recreational limits{" "}
                 <span className="font-normal text-[var(--admin-muted)]">
-                  (grams, except low-THC beverages which are mg of THC)
+                  (grams, except low-THC beverages which are mg of THC and
+                  suppositories which are whole units)
                 </span>
               </h3>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
                 <Field label={LIMIT_BUCKET_LABELS.usable}>
                   <Input
                     type="number"
@@ -378,6 +404,21 @@ export default async function SalesLimitsPage({
                     disabled={!isOwner}
                   />
                 </Field>
+                {/* SLICE 17 - a COUNT OF WHOLE ITEMS, not grams and not mg.
+                    step=1 because half a suppository is not sellable. */}
+                <Field
+                  label={LIMIT_BUCKET_LABELS.otherwise_taken}
+                  help="Whole units (items), NOT grams. Statutory max 10 units - WAC 314-55-095(1)(d)(i)(D). A box of six suppositories counts as six units."
+                >
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    name="rec_otherwise_taken"
+                    defaultValue={s.rec.otherwise_taken}
+                    disabled={!isOwner}
+                  />
+                </Field>
               </div>
             </div>
 
@@ -385,10 +426,11 @@ export default async function SalesLimitsPage({
               <h3 className="mb-3 text-sm font-bold text-[var(--admin-text)]">
                 Medical (DOH database) limits{" "}
                 <span className="font-normal text-[var(--admin-muted)]">
-                  (grams, except low-THC beverages which are mg of THC)
+                  (grams, except low-THC beverages which are mg of THC and
+                  suppositories which are whole units)
                 </span>
               </h3>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
                 <Field label={LIMIT_BUCKET_LABELS.usable}>
                   <Input
                     type="number"
@@ -436,6 +478,23 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="med_low_thc_liquid"
                     defaultValue={s.med.low_thc_liquid}
+                    disabled={!isOwner}
+                  />
+                </Field>
+                {/* SLICE 17 - NOT tripled, and for a different reason than the
+                    low-THC bucket above. That one names the same 200 mg figure
+                    for medical. This one is ABSENT from WAC 314-55-095(2)(d)
+                    entirely, so nothing authorises raising it. */}
+                <Field
+                  label={LIMIT_BUCKET_LABELS.otherwise_taken}
+                  help="Whole units (items). Statutory max is ALSO 10 for medical. WAC 314-55-095(2)(d) does not list this category, so there is no authority to triple it. Do not set 30."
+                >
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    name="med_otherwise_taken"
+                    defaultValue={s.med.otherwise_taken}
                     disabled={!isOwner}
                   />
                 </Field>

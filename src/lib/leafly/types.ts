@@ -80,6 +80,20 @@ export type GreenwayMenuItem = {
   lowThcLiquid?: boolean | null;
   /** SLICE 16 — mg of active delta-9 THC in ONE sellable unit (one can). */
   unitThcMg?: number | null;
+  /**
+   * SLICE 17 — "otherwise taken into the body" (WAC 314-55-010(40)): consumed
+   * by a route other than inhalation, oral ingestion, or application to the
+   * skin. In practice a suppository. true routes the line to the TEN UNIT
+   * bucket of WAC 314-55-095(1)(d)(i)(D).
+   *
+   * CAUTION — unlike lowThcLiquid, absent/null here is the PERMISSIVE
+   * direction: an unflagged suppository is a `topical`, which buckets as a
+   * 2016 g liquid and is effectively unlimited. That is why intake review and
+   * suspectsOtherwiseTaken() exist.
+   */
+  otherwiseTaken?: boolean | null;
+  /** SLICE 17 — individual consumable items per package (RCW 69.50.101). */
+  unitsPerPackage?: number | null;
   totalThc: GreenwayCannabinoid | null;
   totalCbd: GreenwayCannabinoid | null;
   compounds: GreenwayCannabinoid[];

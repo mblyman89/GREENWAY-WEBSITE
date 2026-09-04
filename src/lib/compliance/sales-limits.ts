@@ -41,8 +41,24 @@ export const DEFAULT_SALES_LIMIT_SETTINGS: SalesLimitSettings = {
   hardBlock: true,
   // SLICE 16: low_thc_liquid is 200 mg THC for BOTH profiles — the medical
   // figure is NOT tripled (WAC 314-55-095(2)(d) says "up to 200 mg").
-  rec: { usable: 28, solid_edible: 448, concentrate: 7, liquid_edible: 2016, low_thc_liquid: 200 },
-  med: { usable: 84, solid_edible: 1344, concentrate: 21, liquid_edible: 6048, low_thc_liquid: 200 },
+  // SLICE 17: otherwise_taken is 10 UNITS for both profiles — WAC
+  // 314-55-095(2)(d) does not list the category at all, so no enhancement.
+  rec: {
+    usable: 28,
+    solid_edible: 448,
+    concentrate: 7,
+    liquid_edible: 2016,
+    low_thc_liquid: 200,
+    otherwise_taken: 10,
+  },
+  med: {
+    usable: 84,
+    solid_edible: 1344,
+    concentrate: 21,
+    liquid_edible: 6048,
+    low_thc_liquid: 200,
+    otherwise_taken: 10,
+  },
   unitGrams: {},
   notes: null,
   updatedAt: null,
@@ -64,6 +80,12 @@ type SettingsRow = {
    *  undefined and we fall back to the statutory 200. */
   rec_low_thc_liquid_thc_mg: number | null;
   med_low_thc_liquid_thc_mg: number | null;
+  /** SLICE 17 — a COUNT OF WHOLE UNITS (items), NOT grams and NOT mg.
+   *  Nullable: the column is added by migration 0217, so a database that has
+   *  not run it yet returns undefined and we fall back to the statutory 10
+   *  from WAC 314-55-095(1)(d)(i)(D). */
+  rec_otherwise_taken_units: number | null;
+  med_otherwise_taken_units: number | null;
   unit_grams_json: unknown;
   notes: string | null;
   updated_at: string | null;
@@ -85,7 +107,7 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
   const { data } = await admin
     .from("sales_limit_settings")
     .select(
-      "enforce, hard_block, rec_usable_grams, rec_solid_grams, rec_concentrate_grams, rec_liquid_grams, rec_low_thc_liquid_thc_mg, med_usable_grams, med_solid_grams, med_concentrate_grams, med_liquid_grams, med_low_thc_liquid_thc_mg, unit_grams_json, notes, updated_at",
+      "enforce, hard_block, rec_usable_grams, rec_solid_grams, rec_concentrate_grams, rec_liquid_grams, rec_low_thc_liquid_thc_mg, rec_otherwise_taken_units, med_usable_grams, med_solid_grams, med_concentrate_grams, med_liquid_grams, med_low_thc_liquid_thc_mg, med_otherwise_taken_units, unit_grams_json, notes, updated_at",
     )
     .eq("id", true)
     .maybeSingle();
@@ -105,6 +127,11 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
         liquid_edible: Number(row.rec_liquid_grams),
         // SLICE 16 — nullish (column absent pre-0216) falls back to statute.
         low_thc_liquid: row.rec_low_thc_liquid_thc_mg ?? RECREATIONAL_LIMITS.low_thc_liquid,
+        // SLICE 17 — nullish (column absent pre-0217) falls back to the ten
+        // units of WAC 314-55-095(1)(d)(i)(D). Note clampLimitProfile takes
+        // `unknown`, so OMITTING this key would not be a type error — it would
+        // silently ignore the owner's setting. It must be passed explicitly.
+        otherwise_taken: row.rec_otherwise_taken_units ?? RECREATIONAL_LIMITS.otherwise_taken,
       },
       RECREATIONAL_LIMITS,
     ),
@@ -115,6 +142,10 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
         concentrate: Number(row.med_concentrate_grams),
         liquid_edible: Number(row.med_liquid_grams),
         low_thc_liquid: row.med_low_thc_liquid_thc_mg ?? MEDICAL_LIMITS.low_thc_liquid,
+        // SLICE 17 — MEDICAL_LIMITS.otherwise_taken is 10, the SAME as
+        // recreational. WAC 314-55-095(2)(d) does not list this category, so
+        // there is no authority to raise it for a DOH patient.
+        otherwise_taken: row.med_otherwise_taken_units ?? MEDICAL_LIMITS.otherwise_taken,
       },
       MEDICAL_LIMITS,
     ),
@@ -163,6 +194,11 @@ export async function updateSalesLimitSettings(
       // SLICE 16 — mg THC columns (migration 0216).
       rec_low_thc_liquid_thc_mg: rec.low_thc_liquid,
       med_low_thc_liquid_thc_mg: med.low_thc_liquid,
+      // SLICE 17 — whole-unit COUNT columns (migration 0217). clampLimitProfile
+      // has already floored these to integers, which the DB CHECK constraint
+      // sales_limit_settings_otherwise_taken_whole also enforces.
+      rec_otherwise_taken_units: rec.otherwise_taken,
+      med_otherwise_taken_units: med.otherwise_taken,
       unit_grams_json: input.unitGrams,
       notes: input.notes,
       updated_by: actorId,

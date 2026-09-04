@@ -131,6 +131,8 @@ const FACT_COLUMN: Record<keyof FactReviewFacts, string> = {
   netVolumeMl: "net_volume_ml",
   lowThcLiquid: "low_thc_liquid",
   unitThcMg: "unit_thc_mg",
+  otherwiseTaken: "otherwise_taken",
+  unitsPerPackage: "units_per_package",
 };
 
 export async function recordFactReview(input: RecordFactReviewInput): Promise<void> {

@@ -247,6 +247,9 @@ function mkRow(over: Partial<FactReviewRow> & { sourceItemId: string }): FactRev
       // must never invent a classification the reviewer did not make.
       lowThcLiquid: null,
       unitThcMg: null,
+      // SLICE 17. Same discipline: null = UNCLASSIFIED, never a guessed false.
+      otherwiseTaken: null,
+      unitsPerPackage: null,
     },
     sources: over.sources ?? "",
     confidence: over.confidence ?? "needs-review",

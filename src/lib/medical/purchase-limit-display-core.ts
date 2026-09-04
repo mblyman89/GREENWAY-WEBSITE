@@ -19,6 +19,9 @@ import {
   RECREATIONAL_LIMITS,
   MEDICAL_LIMITS,
   LOW_THC_UNIT_MAX_MG,
+  // SLICE 17: render the unit COUNT through the engine's own formatter so the
+  // public page and the register can never disagree about the wording.
+  formatLimitAmount,
 } from "@/lib/compliance/sales-limits-core";
 // GW-016: divide by the SAME DOH convention (28.35) the limit table multiplies
 // by, so the displayed ounce figures round-trip exactly.
@@ -69,6 +72,21 @@ export function purchaseLimitRows(): PurchaseLimitRow[] {
       category: `Low-THC beverages (units of ${LOW_THC_UNIT_MAX_MG} mg THC or less)`,
       recreational: `${RECREATIONAL_LIMITS.low_thc_liquid} mg THC`,
       medical: `${MEDICAL_LIMITS.low_thc_liquid} mg THC`,
+    },
+    // SLICE 17 — the SECOND row that does not triple, and for a different
+    // reason than the one above. The low-THC row matches because
+    // WAC 314-55-095(2)(d) names the same 200 mg figure. THIS row matches
+    // because that subsection does not list the category AT ALL, so nothing
+    // authorises a higher medical figure. Publishing 30 units would advertise
+    // an over-sale that no rule permits.
+    //
+    // formatLimitAmount renders the count with a "unit"/"units" suffix; it must
+    // never be given an oz or g suffix, which would misstate a COUNT as a
+    // WEIGHT — the same class of error the milligram rows guard against.
+    {
+      category: "Suppositories (otherwise taken into the body)",
+      recreational: formatLimitAmount("otherwise_taken", RECREATIONAL_LIMITS.otherwise_taken),
+      medical: formatLimitAmount("otherwise_taken", MEDICAL_LIMITS.otherwise_taken),
     },
   ];
 }

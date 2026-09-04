@@ -21,6 +21,7 @@ import {
   RECREATIONAL_LIMITS,
   MEDICAL_LIMITS,
   LOW_THC_UNIT_MAX_MG,
+  formatLimitAmount,
 } from "@/lib/compliance/sales-limits-core";
 
 const DEFAULT_CONFIG: LoyaltyConfig = {
@@ -107,7 +108,7 @@ describe("tierDisplayRows — live tier ladder", () => {
 });
 
 describe("purchaseLimitRows — table derives from register constants (WAC 314-55-095)", () => {
-  it("renders the five statutory product forms with correct ounce/gram/mg figures", () => {
+  it("renders the six statutory product forms with correct ounce/gram/mg/unit figures", () => {
     const rows = purchaseLimitRows();
     expect(rows).toEqual([
       { category: "Usable cannabis (flower)", recreational: "1 oz", medical: "3 oz" },
@@ -120,6 +121,12 @@ describe("purchaseLimitRows — table derives from register constants (WAC 314-5
         category: "Low-THC beverages (units of 4 mg THC or less)",
         recreational: "200 mg THC",
         medical: "200 mg THC",
+      },
+      // SLICE 17. A COUNT, so the suffix is "units" — never oz and never g.
+      {
+        category: "Suppositories (otherwise taken into the body)",
+        recreational: "10 units",
+        medical: "10 units",
       },
     ]);
   });
@@ -139,7 +146,49 @@ describe("purchaseLimitRows — table derives from register constants (WAC 314-5
     expect(MEDICAL_PURCHASE_LIMITS.concentrateGrams / RECREATIONAL_PURCHASE_LIMITS.concentrateGrams).toBeCloseTo(3);
   });
 
-  it("the low-THC beverage row is the ONE row that does NOT triple for a patient", () => {
+  it("the suppository row does NOT triple, because the rule omits the category", () => {
+    // SLICE 17. Distinct from the low-THC exception below: that one matches
+    // because WAC 314-55-095(2)(d) states the same 200 mg. This one matches
+    // because 095(2)(d) never mentions "otherwise taken into the body" at all,
+    // and neither does RCW 69.50.360(3). Tripling by analogy would authorise a
+    // sale no rule permits.
+    expect(MEDICAL_LIMITS.otherwise_taken / RECREATIONAL_LIMITS.otherwise_taken).toBe(1);
+
+    const row = purchaseLimitRows().find((r) => r.category.startsWith("Suppositories"));
+    expect(row).toBeDefined();
+    expect(row!.recreational).toBe(row!.medical);
+    expect(row!.medical).not.toContain("30");
+    // Derived from the enforcement constant, not retyped.
+    expect(row!.recreational).toBe(
+      formatLimitAmount("otherwise_taken", RECREATIONAL_LIMITS.otherwise_taken),
+    );
+  });
+
+  it("no row states a unit COUNT as a weight", () => {
+    // SLICE 17, mirroring the milligram trap below. Ten units is ten ITEMS; it
+    // is not 10 g and not 10 oz. Any row measured in units must say "unit".
+    for (const r of purchaseLimitRows()) {
+      for (const v of [r.recreational, r.medical]) {
+        if (/\bunits?\b/.test(v)) {
+          expect(v).not.toMatch(/\boz\b/);
+          expect(v).not.toMatch(/\bg\b/);
+          expect(v).not.toMatch(/\bmg\b/);
+        }
+      }
+    }
+  });
+
+  it("EXACTLY TWO rows fail to triple, and we know which", () => {
+    // A future editor adding a seventh row must consciously decide which side
+    // it belongs on rather than silently joining the exceptions.
+    const flat = purchaseLimitRows().filter((r) => r.recreational === r.medical);
+    expect(flat.map((r) => r.category).sort()).toEqual([
+      "Low-THC beverages (units of 4 mg THC or less)",
+      "Suppositories (otherwise taken into the body)",
+    ]);
+  });
+
+  it("the low-THC beverage row does NOT triple for a patient either", () => {
     // WAC 314-55-095(2)(d) reads "…and up to 200 mg…" — the SAME figure as
     // (1)(d)(i)(F). The 3× pattern above is seductive and wrong here; publishing
     // 600 mg on the public /medical page would advertise an over-sale to every

@@ -174,6 +174,10 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         // counts it as a normal liquid.
         lowThcLiquid: item.lowThcLiquid ?? null,
         unitThcMg: item.unitThcMg ?? null,
+        // SLICE 17 — the register bundle carries the otherwise-taken facts so
+        // the device can enforce the ten-unit limit offline.
+        otherwiseTaken: item.otherwiseTaken ?? null,
+        unitsPerPackage: item.unitsPerPackage ?? null,
         inventoryStatus: item.inventoryStatus,
         // B32 — variant-level count for low-stock badges. Synthetic default
         // variants carry no real count (null = unknown, falls back to the

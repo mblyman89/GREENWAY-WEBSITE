@@ -154,6 +154,9 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             // products pass null and are counted as normal liquids.
             lowThcLiquid: item.lowThcLiquid ?? null,
             unitThcMg: item.unitThcMg ?? null,
+            // SLICE 17 — so the website cart meter counts suppository UNITS.
+            otherwiseTaken: item.otherwiseTaken ?? null,
+            unitsPerPackage: item.unitsPerPackage ?? null,
           });
         }}
         className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"

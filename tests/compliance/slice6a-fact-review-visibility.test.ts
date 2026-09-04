@@ -185,6 +185,8 @@ function mkPending(id: string, name: string, reason: string): FactReviewRow {
       netWeightGrams: null,
       lowThcLiquid: null,
       unitThcMg: null,
+      otherwiseTaken: null,
+      unitsPerPackage: null,
       netVolumeMl: null,
     },
     sources: "",

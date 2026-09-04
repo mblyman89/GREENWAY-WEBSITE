@@ -139,6 +139,7 @@ Single-transaction maxima (the POS MUST refuse or manager-gate beyond these):
 | Liquid-form infused | 72 oz (2,016 g) | 216 oz (6,048 g) |
 | Concentrates | 7 g | 21 g |
 | **Low-THC infused liquid** (packaged in individual units of ≤ 4 mg active Δ9-THC) | **200 mg active Δ9-THC** | **200 mg active Δ9-THC** — *NOT tripled* |
+| **Otherwise taken into the body** (suppositories — WAC 314-55-010(40)) | **10 units** | **10 units** — *NOT tripled* |
 
 **Low-THC beverage bucket (added 2024 c 9 s 1 / SHB 1249; WAC 314-55-095(1)(d)(i)(E)–(F)
 and (2)(d), eff. 1/7/2025).** Subsection (E) caps liquid infused product at 72 oz
@@ -153,6 +154,46 @@ four milligrams of active delta-9 THC per unit."* Three consequences the POS mus
    16 mg bottle labelled *"4 servings × 4 mg"* is one 16 mg unit and does **not** qualify.
 3. **Medical does not triple.** WAC 314-55-095(2)(d) reads *"and up to 200 mg"* — the
    identical figure. 600 mg would be an over-sale on every medical transaction.
+
+**Otherwise-taken-into-the-body bucket (WAC 314-55-095(1)(d)(i)(D), eff. 1/7/2025).**
+Subsection (D) reads, in full: *"Ten units of a cannabis-infused product otherwise taken
+into the body."* **WAC 314-55-010(40)** supplies the definition: *"'Product(s) otherwise
+taken into the body' means a cannabis-infused product for human consumption or ingestion
+intended for uses other than inhalation, oral ingestion, or external application to the
+skin."* The definition is by ROUTE OF ADMINISTRATION, by exclusion — in a retail shop the
+category means suppositories. Five consequences the POS must honor:
+1. **It is a COUNT, not a weight and not a THC figure.** The other five buckets are grams
+   or milligrams; this one is a number of items. `LIMIT_BUCKET_UNITS.otherwise_taken` is
+   `"units"`. Any formatter that assumes grams renders ten units as *0.353 oz*, which is
+   meaningless and would misstate the law on a customer-facing page.
+2. **A unit is an item; a package may hold several.** **RCW 69.50.101** defines *"unit"* as
+   *"an individual consumable item within a package of one or more consumable items"* and
+   *"package"* as *"a container that has a single unit or group of units."* So a sealed
+   **box of six suppositories is ONE package of SIX units** and consumes six of the ten.
+   The engine computes `quantity × units_per_package`, both floored to integers.
+3. **Medical does NOT triple — because the rule OMITS the category.** WAC 314-55-095(2)(d)
+   enumerates useable cannabis, solid edibles, concentrate, liquid, and the low-THC liquid
+   allowance. It **omits** "otherwise taken into the body" entirely — the phrase does not
+   appear in the subsection at all, and the category is simply **absent** from it. The rule
+   grants no enhanced medical amount, so none is granted: the cap stays **10 units**, and
+   **30 units** would be an over-sale on every medical transaction. Note this is a
+   DIFFERENT reason from the beverage bucket, where (2)(d) states the identical 200 mg
+   figure explicitly. The practical difference: raising the beverage figure would take an
+   amendment to a number already present, whereas this category would first have to be
+   ADDED to (2)(d).
+4. **The statute sets NO per-unit potency ceiling here.** (1)(d)(i)(D) states a count and
+   nothing else. Migration 0217 therefore adds **no** milligram column for this bucket —
+   inventing one would be adding law. (The ≤10 mg per-serving and ≤100 mg per-package
+   figures are real, but they are PACKAGING rules from a different subsection and do not
+   cap this transaction bucket.)
+5. **THE FAIL-SAFE INVERTS — read this before copying the SLICE 16 pattern.** For low-THC
+   beverages an unflagged product falls back to the 72 oz volume rule, which is STRICTER;
+   failing to classify one costs the customer nothing. Here the arithmetic runs the
+   opposite way: an unflagged suppository lands in `liquid_edible`, whose 2,016 g cap is
+   effectively unlimited for an item that weighs a few grams. **Falling back is PERMISSIVE,
+   not safe.** The countermeasures are therefore active, not passive: `suspectsOtherwiseTaken()`
+   flags candidates by name at intake, the fact-review queue holds them for a human, and
+   partial indexes in migration 0217 keep the unreviewed set cheap to find.
 
 Possession follows automatically: **RCW 69.50.4013(3)(a)** legalizes possession of amounts
 *"that do not exceed those set forth in RCW 69.50.360(3)"*, and 69.50.360(3)(d) is this

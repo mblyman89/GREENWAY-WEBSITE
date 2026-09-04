@@ -243,6 +243,19 @@ Recreational (and non-MCAD patients), per single transaction:
 - **16 oz** solid-form infused edibles;
 - **7 g** concentrate/extract for inhalation (infused pre-rolls count as concentrate);
 - **10 units** of infused product otherwise taken into the body;
+  - *Implemented in SLICE 17.* Bucket `otherwise_taken`, denominated in **units** — a
+    COUNT OF ITEMS, the first bucket that is neither a mass nor a THC figure (see
+    `LIMIT_BUCKET_UNITS`). Per **RCW 69.50.101** a sealed box of six suppositories is one
+    package of six units, so the engine counts `quantity × units_per_package`. Medical is
+    **also 10** — WAC 314-55-095(2)(d) omits the category, so no enhancement exists to
+    grant. Qualification requires an explicit intake flag (`menu_items.otherwise_taken` +
+    `units_per_package`, migration 0217) and is deliberately NOT derived from the category
+    slug, because one `topical` shelf legitimately holds both balms and suppositories.
+    **WARNING — the fail-safe here is PERMISSIVE, the opposite of SLICE 16.** An unflagged
+    suppository falls back to `liquid_edible`, whose 72 oz cap is effectively unlimited for
+    an item weighing a few grams, so a missing flag does NOT quietly protect the customer
+    the way a missing low-THC flag does. That is why `suspectsOtherwiseTaken()` raises the
+    product to the fact-review queue by name instead of relying on the fallback.
 - **72 oz** liquid infused product (oral/topical), OR **200 mg** total active delta-9 THC in
   liquid form when packaged in ≤4 mg units.
   - *Implemented in SLICE 16.* Bucket `low_thc_liquid`, denominated in **mg of THC** (see

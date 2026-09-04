@@ -36,10 +36,12 @@ export const COMPLIANCE_SURFACE: ComplianceArea[] = [
     label: "Sales limits (per-customer possession amounts)",
     citations: ["WAC 314-55-095", "RCW 69.50.360"],
     whatWeRun:
-      "The register hard-blocks any sale over the per-category limits (1 oz flower, 16 oz solid edible, 72 oz liquid, 7 g concentrate, and 200 mg active delta-9 THC for low-THC infused beverages packaged in units of 4 mg or less) with an owner-only override ledger. The low-THC beverage bucket is counted in MILLIGRAMS OF THC, not grams, and is the only bucket that does NOT triple for a DOH-database medical patient.",
+      "The register hard-blocks any sale over the per-category limits (1 oz flower, 16 oz solid edible, 72 oz liquid, 7 g concentrate, 200 mg active delta-9 THC for low-THC infused beverages packaged in units of 4 mg or less, and 10 units of a product otherwise taken into the body) with an owner-only override ledger. TWO of the six buckets are not denominated in grams: the low-THC beverage bucket is counted in MILLIGRAMS OF THC, and the otherwise-taken-into-the-body bucket is a COUNT of individual items (a sealed box of six suppositories is six of the ten, per RCW 69.50.101) — rendering either one as a weight produces a meaningless figure. Those same two buckets are also the only ones that do NOT triple for a DOH-database medical patient, and they resist tripling for DIFFERENT reasons: WAC 314-55-095(2)(d) NAMES the identical 200 mg figure for patients, whereas it OMITS the otherwise-taken category from its enumeration altogether, so no enhanced medical amount exists to grant. That distinction matters when reading any future amendment — the beverage figure could be raised by amending a number that is already there, but the otherwise-taken bucket would require the category to be ADDED to (2)(d) first. WAC 314-55-010(40) defines the category by route of administration (not inhaled, not orally ingested, not applied to the skin), so it CANNOT be inferred from the product category slug: one topical shelf holds both balms (72 oz) and suppositories (10 units).",
     modules: [
       "src/lib/compliance/sales-limit-gate-core.ts",
       "src/lib/compliance/sales-limits-core.ts",
+      "src/lib/menu/cart-limit-meter-core.ts",
+      "src/lib/pos/sale-flow-core.ts",
       "/admin/compliance/sales-limits",
       "/admin/menu-imports/[id]/facts",
     ],

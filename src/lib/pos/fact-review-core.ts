@@ -102,6 +102,25 @@ export type FactReviewFacts = {
    */
   lowThcLiquid: boolean | null;
   /**
+   * SLICE 17 — "otherwise taken into the body" (WAC 314-55-010(40)): a route
+   * of administration that is neither inhaled, swallowed, nor applied to the
+   * skin. In practice a suppository. true routes the line to the ten-unit
+   * limit of WAC 314-55-095(1)(d)(i)(D).
+   *
+   * null means NOT YET REVIEWED, and is deliberately distinct from false.
+   * Because an unflagged suppository buckets as a 2016 g liquid (effectively
+   * unlimited), null is the PERMISSIVE state — the opposite of lowThcLiquid.
+   * That is precisely why this is an explicit review field.
+   */
+  otherwiseTaken: boolean | null;
+  /**
+   * SLICE 17 — individual consumable items in one package (RCW 69.50.101):
+   * "an individual consumable item within a package of one or more consumable
+   * items". A box of six suppositories is 6, and rings as six units. NOT the
+   * same as servings_per_pack, which divides ONE container by dose.
+   */
+  unitsPerPackage: number | null;
+  /**
    * SLICE 16 — milligrams of active delta-9 THC in ONE SEALED CONTAINER.
    *
    * Per the container, NOT per the serving printed on the label. A 16 mg
@@ -168,6 +187,8 @@ export type FactReviewItemInput = {
   /** SLICE 16 — see FactReviewFacts for the container-not-serving rule. */
   lowThcLiquid: boolean | null;
   unitThcMg: number | null;
+  otherwiseTaken: boolean | null;
+  unitsPerPackage: number | null;
   factProvenance: Record<string, string>;
 };
 
@@ -230,6 +251,8 @@ export function menuItemRowToFactReviewItem(row: MenuItemRow): FactReviewItemInp
     // even though the register treats them identically.
     lowThcLiquid: row.low_thc_liquid,
     unitThcMg: num(row.unit_thc_mg),
+    otherwiseTaken: row.otherwise_taken,
+    unitsPerPackage: num(row.units_per_package),
     factProvenance: provenance,
   };
 }
@@ -308,6 +331,93 @@ export function parseLowThcClassification(
     facts.lowThcLiquid = true;
   } else if (lowThc === "no") {
     facts.lowThcLiquid = false;
+  }
+
+  return { ok: true, facts };
+}
+
+/**
+ * SLICE 17 — parse the "otherwise taken into the body" classification from the
+ * fact-review form. Pure, so the rules are unit-testable away from Next.js.
+ *
+ * WHY EACH RULE EXISTS
+ * --------------------
+ *  - The value must be exactly "yes", "no", or blank. Blank means the reviewer
+ *    did not touch the row, and must leave the stored value ALONE — which is
+ *    why blank returns no facts at all rather than null or false.
+ *
+ *  - Flagging "yes" REQUIRES a units-per-package count. Without one the engine
+ *    would qualify the line but multiply by a default of 1, counting a box of
+ *    six suppositories as ONE unit and under-counting the statutory limit by a
+ *    factor of six.
+ *
+ *  - The count must be a WHOLE number greater than zero. RCW 69.50.101 defines
+ *    a unit as "an individual consumable item"; half an item is not one.
+ *
+ *  - A count ABOVE ten is accepted, not refused. A 12-count box is a lawful
+ *    PRODUCT that simply cannot be sold in a single transaction. Refusing to
+ *    classify it would leave it unflagged, and because an unflagged suppository
+ *    falls into the 2016 g liquid bucket, "unflagged" is the PERMISSIVE state.
+ *    Refusing here would therefore make us less compliant, not more.
+ *
+ *  - A malformed count is refused even when the flag is blank, so a reviewer
+ *    never sees a typo silently discarded.
+ *
+ * NOTE the asymmetry with parseLowThcClassification above: that parser enforces
+ * a statutory CEILING on the per-container figure, because (E)/(F) turn on a
+ * 4 mg test. WAC 314-55-095(1)(d)(i)(D) states no potency condition whatsoever
+ * — it counts items. Inventing a potency rule here would be adding law that
+ * does not exist, so this parser deliberately has no equivalent bound.
+ */
+export type OtherwiseTakenClassificationResult =
+  | { ok: true; facts: Partial<FactReviewFacts> }
+  | { ok: false; error: string };
+
+export function parseOtherwiseTakenClassification(
+  otherwiseTakenRaw: string,
+  unitsPerPackageRaw: string,
+): OtherwiseTakenClassificationResult {
+  const flag = otherwiseTakenRaw.trim();
+  const countRaw = unitsPerPackageRaw.trim();
+
+  if (flag !== "" && flag !== "yes" && flag !== "no") {
+    return {
+      ok: false,
+      error: "Otherwise taken into the body must be yes, no, or left blank.",
+    };
+  }
+
+  const facts: Partial<FactReviewFacts> = {};
+
+  if (countRaw !== "") {
+    const n = Number(countRaw);
+    // Refuse rather than coerce, exactly as the low-THC parser does.
+    if (!Number.isFinite(n) || n <= 0) {
+      return { ok: false, error: `"${countRaw}" is not a valid units-per-package count.` };
+    }
+    if (!Number.isInteger(n)) {
+      return {
+        ok: false,
+        error:
+          `Units per package must be a whole number — "${countRaw}" is not. A unit is ` +
+          `"an individual consumable item" (RCW 69.50.101); half an item is not a unit.`,
+      };
+    }
+    facts.unitsPerPackage = n;
+  }
+
+  if (flag === "yes") {
+    if (typeof facts.unitsPerPackage !== "number") {
+      return {
+        ok: false,
+        error:
+          "To flag a product as otherwise taken into the body you must also enter how many " +
+          "individual units are in one package (a box of six suppositories is 6).",
+      };
+    }
+    facts.otherwiseTaken = true;
+  } else if (flag === "no") {
+    facts.otherwiseTaken = false;
   }
 
   return { ok: true, facts };
@@ -406,6 +516,8 @@ function factsOf(item: FactReviewItemInput): FactReviewFacts {
     netVolumeMl: item.netVolumeMl,
     lowThcLiquid: item.lowThcLiquid,
     unitThcMg: item.unitThcMg,
+    otherwiseTaken: item.otherwiseTaken,
+    unitsPerPackage: item.unitsPerPackage,
   };
 }
 
@@ -421,6 +533,8 @@ const EMPTY_FACTS: FactReviewFacts = {
   netVolumeMl: null,
   lowThcLiquid: null,
   unitThcMg: null,
+  otherwiseTaken: null,
+  unitsPerPackage: null,
 };
 
 export function buildFactReviewBuckets(
@@ -646,6 +760,14 @@ export function buildFactReviewCsv(buckets: FactReviewBuckets): string {
         // different (and actionable) fact from a reviewed "no".
         cell(row.facts.lowThcLiquid === null ? "unclassified" : row.facts.lowThcLiquid ? "yes" : "no"),
         cell(row.facts.unitThcMg),
+        cell(
+          row.facts.otherwiseTaken === null
+            ? "unclassified"
+            : row.facts.otherwiseTaken
+              ? "yes"
+              : "no",
+        ),
+        cell(row.facts.unitsPerPackage),
         cell(row.confidence),
         cell(row.sources),
         cell(row.notes.join(" | ")),
@@ -689,6 +811,8 @@ export function __runFactReviewCoreTests(): void {
     netVolumeMl: null,
     lowThcLiquid: null,
     unitThcMg: null,
+    otherwiseTaken: null,
+    unitsPerPackage: null,
     factProvenance: {},
     ...over,
   });
@@ -910,6 +1034,8 @@ export function __runFactReviewCoreTests(): void {
     // does not read them.
     low_thc_liquid: null,
     unit_thc_mg: null,
+    otherwise_taken: null,
+    units_per_package: null,
     ratio_label: "1:1:1",
     net_weight_grams: null,
     net_volume_ml: null,

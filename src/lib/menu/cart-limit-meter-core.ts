@@ -57,6 +57,17 @@ export type CartLimitLineInput = {
   lowThcLiquid?: boolean | null;
   /** SLICE 16 — mg of active delta-9 THC in ONE sellable unit (one can). */
   unitThcMg?: number | null;
+  /**
+   * SLICE 17 — "otherwise taken into the body" (suppositories), routing this
+   * line to the ten-unit bucket. Absent/null = not classified.
+   *
+   * Note the fail-safe INVERTS here versus lowThcLiquid above: an unclassified
+   * suppository counts as a normal liquid and is effectively unlimited, so a
+   * missing flag under-restricts rather than over-restricts.
+   */
+  otherwiseTaken?: boolean | null;
+  /** SLICE 17 — individual items per package; a box of six is 6. */
+  unitsPerPackage?: number | null;
 };
 
 /** At-a-glance meter state — mirrors the POS register badge (OK / NEAR / OVER). */
@@ -89,6 +100,12 @@ export function cartLimitLines(items: readonly CartLimitLineInput[]): LimitCartL
       // mg at or under 4, so anything missing falls back to the 72 oz bucket.
       lowThcLiquid: item.lowThcLiquid ?? null,
       unitThcMg: item.unitThcMg ?? null,
+      // SLICE 17 — mirrors the register's limitLinesFor() exactly, so the
+      // website meter and the register can never disagree about the same cart.
+      // This is what makes the ten-unit limit BLOCK ON THE WEBSITE, per the
+      // owner's instruction, rather than only at the register.
+      otherwiseTaken: item.otherwiseTaken ?? null,
+      unitsPerPackage: item.unitsPerPackage ?? null,
     };
   });
 }

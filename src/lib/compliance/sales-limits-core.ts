@@ -13,6 +13,7 @@
  *   - concentrate     : 7 grams extract/concentrate inhale = 7 g
  *   - liquid_edible   : 72 ounces liquid infused           = 2016 g  (72 × 28, ≈ ml)
  *   - low_thc_liquid  : 200 MILLIGRAMS of active delta-9 THC  — SLICE 16
+ *   - otherwise_taken : 10 UNITS (a COUNT OF ITEMS)           — SLICE 17
  *
  * (The gram figures above are computed as ounces × STATUTORY_GRAMS_PER_OUNCE
  * (28), which is the license-critical equivalence GW-016 pinned for limit
@@ -22,7 +23,46 @@
  *
  * Medical patients in the DOH database get the higher maximums:
  *   3 oz usable, 48 oz solid, 21 g concentrate, 216 oz liquid — but the
- *   low_thc_liquid cap stays 200 mg (it does NOT scale; see MEDICAL_LIMITS).
+ *   low_thc_liquid cap stays 200 mg (it does NOT scale; see MEDICAL_LIMITS),
+ *   and the otherwise_taken cap stays 10 units for the same kind of reason:
+ *   WAC 314-55-095(2)(d) simply does not list the category. See SLICE 17.
+ *
+ * ── SLICE 17: THE "OTHERWISE TAKEN INTO THE BODY" BUCKET ────────────────────
+ * WAC 314-55-095(1)(d)(i)(D), verbatim:
+ *   (D) Ten units of a cannabis-infused product otherwise taken into the body;
+ *
+ * WAC 314-55-010(40) defines the category, verbatim:
+ *   "Product(s) otherwise taken into the body" means a cannabis-infused product
+ *   for human consumption or ingestion intended for uses other than inhalation,
+ *   oral ingestion, or external application to the skin.
+ *
+ * Three exclusions — inhaled, swallowed, rubbed on skin. What remains, among
+ * products a Washington retailer can actually stock, is the SUPPOSITORY.
+ * Transdermal patches are EXCLUDED (skin). Sublingual tinctures are EXCLUDED
+ * (oral ingestion). Both are routinely mis-filed here; they must not be.
+ *
+ * THIS IS THE ONLY BUCKET THAT COUNTS ITEMS. Not grams, not milligrams of THC
+ * — a count of individual consumable items. RCW 69.50.101: "'Unit' means an
+ * individual consumable item within a package of one or more consumable items";
+ * "'Package' means a container that has a single unit or group of units." So a
+ * box of six suppositories is ONE package of SIX units and consumes six of the
+ * ten. It is not one unit merely because it is one box.
+ *
+ * MEDICAL DOES NOT INCREASE. WAC 314-55-095(2)(d) enumerates five categories
+ * (usable, solid, concentrate, liquid, low-THC liquid) and this is not among
+ * them. The rule grants no enhancement, so we do not invent one. Tripling by
+ * analogy would authorize a sale the rule nowhere permits — the one direction
+ * that creates real exposure. Declining can only under-sell, which is
+ * recoverable and explainable. Do NOT "fix" this to 30.
+ *
+ * FAIL-SAFE RUNS THE OPPOSITE WAY HERE — READ THIS BEFORE CHANGING ANYTHING.
+ * For low_thc_liquid, an unflagged product falls back to the 72 oz bucket,
+ * which is STRICTER for a bulky low-dose drink. Falling back is safe.
+ * For otherwise_taken the arithmetic inverts: an unflagged suppository falls
+ * into liquid_edible, where a few grams against a 2016 g cap is effectively
+ * unlimited. Falling back is the PERMISSIVE direction. That is why this slice
+ * ships suspectsOtherwiseTaken() and emits a WARNING on an unclassified
+ * suspicious line, instead of trusting a silent default the way SLICE 16 could.
  *
  * ── SLICE 16: THE LOW-THC BEVERAGE BUCKET ───────────────────────────────
  * WAC 314-55-095(1)(d)(i), verbatim:
@@ -78,13 +118,14 @@ import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 // keep working. WA statute treats 1 oz useable = 28 g for limit ENFORCEMENT.
 export const GRAMS_PER_OUNCE = STATUTORY_GRAMS_PER_OUNCE;
 
-/** The five statutory limit buckets (SLICE 16 added low_thc_liquid). */
+/** The six statutory limit buckets (16 added low_thc_liquid, 17 otherwise_taken). */
 export type LimitBucket =
   | "usable"
   | "solid_edible"
   | "concentrate"
   | "liquid_edible"
-  | "low_thc_liquid";
+  | "low_thc_liquid"
+  | "otherwise_taken";
 
 export const LIMIT_BUCKETS: readonly LimitBucket[] = [
   "usable",
@@ -92,6 +133,7 @@ export const LIMIT_BUCKETS: readonly LimitBucket[] = [
   "concentrate",
   "liquid_edible",
   "low_thc_liquid",
+  "otherwise_taken",
 ] as const;
 
 export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
@@ -100,6 +142,7 @@ export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
   concentrate: "Concentrate / extract (incl. infused prerolls & flower)",
   liquid_edible: "Liquid infused products",
   low_thc_liquid: "Low-THC beverages (\u2264 4 mg THC per unit)",
+  otherwise_taken: "Products otherwise taken into the body (suppositories)",
 };
 
 /**
@@ -112,7 +155,7 @@ export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
  * which is meaningless and dangerous. Any code formatting a bucket figure MUST
  * consult this map rather than assuming grams.
  */
-export type LimitUnit = "g" | "mg_thc";
+export type LimitUnit = "g" | "mg_thc" | "units";
 
 export const LIMIT_BUCKET_UNITS: Record<LimitBucket, LimitUnit> = {
   usable: "g",
@@ -120,11 +163,20 @@ export const LIMIT_BUCKET_UNITS: Record<LimitBucket, LimitUnit> = {
   concentrate: "g",
   liquid_edible: "g",
   low_thc_liquid: "mg_thc",
+  // SLICE 17 — a COUNT OF ITEMS. Not convertible to grams or mg. Any formatter
+  // that assumes a weight will render "10 units" as "0.357 oz", which is both
+  // meaningless and dangerously wrong.
+  otherwise_taken: "units",
 };
 
 /** True when the bucket is measured in mg of THC rather than grams of product. */
 export function isThcBucket(bucket: LimitBucket): boolean {
   return LIMIT_BUCKET_UNITS[bucket] === "mg_thc";
+}
+
+/** SLICE 17 — true when the bucket counts ITEMS rather than any measure of mass. */
+export function isUnitCountBucket(bucket: LimitBucket): boolean {
+  return LIMIT_BUCKET_UNITS[bucket] === "units";
 }
 
 /**
@@ -136,6 +188,12 @@ export function isThcBucket(bucket: LimitBucket): boolean {
  */
 export function formatLimitAmount(bucket: LimitBucket, amount: number): string {
   if (isThcBucket(bucket)) return `${round3(amount)} mg THC`;
+  // SLICE 17 — a count of items. Singular reads "1 unit", everything else
+  // "N units". MUST come before the gramsToOunces fallthrough.
+  if (isUnitCountBucket(bucket)) {
+    const n = round3(amount);
+    return `${n} ${n === 1 ? "unit" : "units"}`;
+  }
   if (bucket === "concentrate") return `${round3(amount)} g`;
   return `${gramsToOunces(amount)} oz`;
 }
@@ -153,6 +211,8 @@ export type LimitProfile = {
   liquid_edible: number;
   /** MILLIGRAMS of active delta-9 THC — NOT grams. WAC 314-55-095(1)(d)(i)(F). */
   low_thc_liquid: number;
+  /** A COUNT OF ITEMS — not grams, not mg. WAC 314-55-095(1)(d)(i)(D). */
+  otherwise_taken: number;
 };
 
 /**
@@ -174,6 +234,7 @@ export const RECREATIONAL_LIMITS: LimitProfile = {
   concentrate: 7, // 7 g
   liquid_edible: 72 * GRAMS_PER_OUNCE, // 2016 g (72 oz)
   low_thc_liquid: 200, // 200 mg THC — WAC 314-55-095(1)(d)(i)(F)
+  otherwise_taken: 10, // 10 UNITS — WAC 314-55-095(1)(d)(i)(D)
 };
 
 /**
@@ -199,6 +260,11 @@ export const MEDICAL_LIMITS: LimitProfile = {
   concentrate: 21, // 21 g
   liquid_edible: 216 * GRAMS_PER_OUNCE, // 6048 g (216 oz)
   low_thc_liquid: 200, // 200 mg THC — NOT tripled. See the note above.
+  // SLICE 17 — 10 UNITS, NOT tripled, and for a different reason than
+  // low_thc_liquid: WAC 314-55-095(2)(d) does not list this category AT ALL.
+  // It enumerates usable / solid / concentrate / liquid / low-THC liquid. The
+  // rule grants no medical enhancement here, so we grant none. Do NOT set 30.
+  otherwise_taken: 10,
 };
 
 /**
@@ -290,6 +356,12 @@ export function bucketCategories(): Record<LimitBucket, string[]> {
     // `edible-liquid` products carrying a per-product flag. This list stays
     // empty by design; the staff reference explains the flag instead.
     low_thc_liquid: [],
+    // SLICE 17: same shape. A suppository arrives as `topical` and is moved
+    // into this bucket by an explicit per-product flag, not by its slug — a
+    // "topical" shelf legitimately holds both balms (skin → 72 oz) and
+    // suppositories (otherwise taken → 10 units), and no single slug can
+    // express that split.
+    otherwise_taken: [],
   };
   for (const slug of ALL_LIMIT_CATEGORY_SLUGS) {
     const bucket = categoryToBucket(slug);
@@ -364,6 +436,29 @@ export type LimitCartLine = {
    * back to the normal liquid bucket.
    */
   unitThcMg?: number | null;
+  /**
+   * SLICE 17 — WAC 314-55-095(1)(d)(i)(D). True when this product is
+   * administered by a route that is not inhalation, not oral ingestion, and not
+   * external application to the skin — in practice, a suppository.
+   *
+   * Explicit, set at intake. Absent/null/false → the product stays in whatever
+   * bucket its category assigns. NOTE that unlike the low-THC flag, falling
+   * back here is the PERMISSIVE direction, which is why `name` below exists.
+   */
+  otherwiseTaken?: boolean | null;
+  /**
+   * SLICE 17 — how many individual consumable items are inside ONE sellable
+   * package (RCW 69.50.101). A box of six suppositories is 6. Absent → 1.
+   */
+  unitsPerPackage?: number | null;
+  /**
+   * SLICE 17 — product name, read ONLY by suspectsOtherwiseTaken() to warn
+   * about an unclassified suppository. Never used to block and never used to
+   * decide a bucket. Optional; absence simply means no warning is possible.
+   */
+  name?: string | null;
+  /** SLICE 17 — CCRS inventory type, same warning-only purpose as `name`. */
+  inventoryType?: string | null;
 };
 
 export type BucketUsage = {
@@ -403,6 +498,12 @@ export type LimitEvaluation = {
   blocked: boolean;
   /** Human-readable reasons for each exceeded bucket. */
   reasons: string[];
+  /**
+   * SLICE 17 — non-blocking advisories. Today this carries the "this looks
+   * like a suppository and nobody has classified it" notice. A warning NEVER
+   * affects `blocked`; it exists so an invisible gap becomes visible.
+   */
+  warnings: string[];
   /** Untracked (non-cannabis) line count, for transparency. */
   untrackedLines: number;
 };
@@ -432,6 +533,29 @@ export function clampLimitProfile(raw: unknown, base: LimitProfile): LimitProfil
     if (!Number.isFinite(n) || n <= 0) return max;
     return round3(Math.min(n, max));
   };
+  /**
+   * SLICE 17 — the clamp for a bucket counted in ITEMS rather than mass.
+   *
+   * Identical tighten-only semantics, plus a floor. Migration 0217 puts a
+   * `= floor(...)` CHECK on both settings columns so the back office cannot
+   * write a fraction, but this function's parameter is `raw: unknown` and it is
+   * the choke point for values arriving from ANY source — a legacy row written
+   * before that constraint existed, a hand-edited override, a future import.
+   * The constraint guards the write; this guards the read.
+   *
+   * FLOOR, never round: 9.99 must become 9. Rounding up would hand back a unit
+   * the owner deliberately took away, which is the one direction a clamp is
+   * never allowed to move.
+   *
+   * If flooring would produce zero (any cap between 0 and 1), fall back to the
+   * statutory figure. A cap of zero is not a strict limit, it is an outage —
+   * it would block every suppository sale in the shop, and a limit that
+   * silently turns into a total ban is a worse failure than the fraction.
+   */
+  const clampUnits = (v: unknown, max: number): number => {
+    const floored = Math.floor(clamp(v, max));
+    return floored >= 1 ? floored : max;
+  };
   return {
     usable: clamp(r.usable, base.usable),
     solid_edible: clamp(r.solid_edible, base.solid_edible),
@@ -440,6 +564,10 @@ export function clampLimitProfile(raw: unknown, base: LimitProfile): LimitProfil
     // SLICE 16 — mg THC, same clamp semantics: the owner may tighten below
     // 200 mg, never widen above it.
     low_thc_liquid: clamp(r.low_thc_liquid, base.low_thc_liquid),
+    // SLICE 17 — a COUNT. Same "tighten only" semantics, and additionally
+    // floored to an integer: a limit of 10.5 units is not a thing, and a
+    // fractional ceiling would make the boundary test ambiguous.
+    otherwise_taken: clampUnits(r.otherwise_taken, base.otherwise_taken),
   };
 }
 
@@ -460,6 +588,7 @@ export function resolveLimits(
       concentrate: overrides?.concentrate ?? base.concentrate,
       liquid_edible: overrides?.liquid_edible ?? base.liquid_edible,
       low_thc_liquid: overrides?.low_thc_liquid ?? base.low_thc_liquid,
+      otherwise_taken: overrides?.otherwise_taken ?? base.otherwise_taken,
     },
     base,
   );
@@ -490,6 +619,79 @@ export function qualifiesAsLowThcLiquid(line: LimitCartLine): boolean {
 }
 
 /**
+ * SLICE 17 — does this line count against the ten-unit "otherwise taken into
+ * the body" allowance? WAC 314-55-095(1)(d)(i)(D) + WAC 314-55-010(40).
+ *
+ * BOTH must hold:
+ *   1. the owner has EXPLICITLY flagged the product at intake, and
+ *   2. the product's category is one that could plausibly be administered this
+ *      way — in Greenway's taxonomy that is `topical`, which is where the CCRS
+ *      "Suppository" end-product type already resolves.
+ *
+ * Requirement 2 is a guard rail, not the classification. It exists so that a
+ * mis-set flag on a flower or gummy line cannot silently move that line out of
+ * the bucket the statute actually assigns it to. The flag alone never decides.
+ *
+ * The flag must be LITERALLY `true`. A string "true", a 1, or any other truthy
+ * value returns false — an intake bug must never widen an allowance.
+ */
+export function qualifiesAsOtherwiseTaken(line: LimitCartLine): boolean {
+  if (line.otherwiseTaken !== true) return false;
+  return categoryToBucket(line.category) === "liquid_edible";
+}
+
+/**
+ * SLICE 17 — how many UNITS this line contributes to the ten-unit bucket.
+ *
+ * units = quantity × unitsPerPackage
+ *
+ * RCW 69.50.101 defines a "unit" as an individual consumable item and a
+ * "package" as a container holding one or more units. So the sellable thing on
+ * the shelf may be a package of six, and it consumes six of the ten. When
+ * `unitsPerPackage` is absent the package IS the unit and the multiplier is 1.
+ *
+ * Both factors are floored to integers: you cannot sell a fraction of a
+ * suppository, and a fractional count would make the ten-unit boundary
+ * ambiguous. A zero/negative/NaN multiplier falls back to 1 rather than 0 —
+ * falling back to zero would silently erase the line from the limit entirely,
+ * which is the one outcome we can never allow.
+ */
+export function lineUnits(line: LimitCartLine): number {
+  if (!qualifiesAsOtherwiseTaken(line)) return 0;
+  const qtyRaw = Number.isFinite(line.quantity) ? line.quantity : 0;
+  const qty = Math.max(0, Math.floor(qtyRaw));
+  const perRaw = typeof line.unitsPerPackage === "number" ? line.unitsPerPackage : NaN;
+  const per = Number.isFinite(perRaw) && perRaw >= 1 ? Math.floor(perRaw) : 1;
+  return qty * per;
+}
+
+/**
+ * SLICE 17 — does this product LOOK like something otherwise taken into the
+ * body, judged only by its name and CCRS inventory type?
+ *
+ * This is a DETECTOR, never a classifier. It exists because of the inverted
+ * fail-safe documented in the header: an unflagged suppository lands in the
+ * 72 oz liquid bucket where it is effectively unlimited, so "nobody classified
+ * it" must be made VISIBLE rather than silently permissive. evaluateCart turns
+ * a hit on an unclassified line into a warning; it never blocks on this.
+ *
+ * Deliberately narrow. It matches suppository/suppositories and the two CCRS
+ * spellings, and NOTHING else. It specifically must NOT match:
+ *   - transdermal patches — WAC 314-55-010(40) excludes external application
+ *     to the skin, so a patch belongs in the 72 oz bucket;
+ *   - sublingual tinctures — 010(40) excludes oral ingestion.
+ * Both are commonly assumed to belong here. They do not.
+ */
+export function suspectsOtherwiseTaken(input: {
+  name?: string | null;
+  inventoryType?: string | null;
+}): boolean {
+  const hay = `${input.name ?? ""} ${input.inventoryType ?? ""}`.toLowerCase();
+  if (!hay.trim()) return false;
+  return /suppositor(?:y|ies)|\bsupp\b/.test(hay);
+}
+
+/**
  * SLICE 16 — which bucket does this LINE actually count against?
  *
  * Identical to categoryToBucket() for every product except a qualifying
@@ -499,6 +701,12 @@ export function qualifiesAsLowThcLiquid(line: LimitCartLine): boolean {
  * liquid_edible.
  */
 export function lineBucket(line: LimitCartLine): LimitBucket | null {
+  // SLICE 17 first: a flagged suppository leaves liquid_edible entirely.
+  // Checked BEFORE the low-THC carve-out because the two flags are about
+  // different products and a line carrying both is a data error; routing it to
+  // the ITEM-COUNTED bucket is the conservative resolution (ten units is a far
+  // tighter cap than 200 mg of THC).
+  if (qualifiesAsOtherwiseTaken(line)) return "otherwise_taken";
   if (qualifiesAsLowThcLiquid(line)) return "low_thc_liquid";
   return categoryToBucket(line.category);
 }
@@ -545,8 +753,11 @@ export function evaluateCart(
     concentrate: 0,
     liquid_edible: 0,
     low_thc_liquid: 0,
+    otherwise_taken: 0,
   };
   let untrackedLines = 0;
+  // SLICE 17 — lines that look like a suppository but were never classified.
+  const unclassifiedSuspects: string[] = [];
 
   for (const line of lines) {
     // SLICE 16: lineBucket (not categoryToBucket) so a qualifying low-THC
@@ -559,8 +770,26 @@ export function evaluateCart(
     }
     // Each bucket accumulates in ITS OWN unit: mg of THC for low_thc_liquid,
     // grams for everything else. Never mix the two.
-    const contribution = bucket === "low_thc_liquid" ? lineThcMg(line) : lineGrams(line, overrides);
+    const contribution =
+      bucket === "low_thc_liquid"
+        ? lineThcMg(line)
+        : bucket === "otherwise_taken"
+          ? lineUnits(line)
+          : lineGrams(line, overrides);
     totals[bucket] = round3(totals[bucket] + contribution);
+
+    // SLICE 17 — the inverted fail-safe. A line that LOOKS like a suppository
+    // but carries no classification at all (null/undefined — NOT an explicit
+    // false, which means a human already answered the question) is surfaced as
+    // a warning. It is not blocked: a name regex is evidence, not a fact.
+    if (
+      line.otherwiseTaken === undefined ||
+      line.otherwiseTaken === null
+    ) {
+      if (suspectsOtherwiseTaken({ name: line.name, inventoryType: line.inventoryType })) {
+        unclassifiedSuspects.push((line.name ?? "unnamed product").trim());
+      }
+    }
   }
 
   const buckets: BucketUsage[] = LIMIT_BUCKETS.map((bucket) => {
@@ -585,6 +814,15 @@ export function evaluateCart(
     };
   });
 
+  // SLICE 17 — warn (never block) about unclassified suppository suspects.
+  const warnings: string[] = unclassifiedSuspects.map(
+    (n) =>
+      `"${n}" looks like a suppository but has not been classified. Products otherwise taken ` +
+      `into the body are limited to ${formatLimitAmount("otherwise_taken", RECREATIONAL_LIMITS.otherwise_taken)} ` +
+      `per transaction (WAC 314-55-095(1)(d)(i)(D)). Until it is classified it counts toward the ` +
+      `liquid allowance instead. Classify it on the menu-import facts screen.`,
+  );
+
   const exceeded = buckets.filter((b) => b.exceeded);
   // SLICE 16 — the reason string is written in the BUCKET'S OWN UNIT. Before
   // this slice every reason hard-coded " oz", which would have described a
@@ -602,6 +840,7 @@ export function evaluateCart(
     buckets,
     blocked: exceeded.length > 0,
     reasons,
+    warnings,
     untrackedLines,
   };
 }

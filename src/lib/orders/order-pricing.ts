@@ -65,6 +65,14 @@ export type PricedOrderLine = {
   lowThcLiquid?: boolean | null;
   /** SLICE 16 — mg active delta-9 THC per sellable unit. */
   unitThcMg?: number | null;
+  /**
+   * SLICE 17 — the otherwise-taken classification resolved from the live menu
+   * at placement, so it can be both evaluated now and snapshotted onto the
+   * stored line for the pickup gate.
+   */
+  otherwiseTaken?: boolean | null;
+  /** SLICE 17 — individual consumable items per package. */
+  unitsPerPackage?: number | null;
   /** SERVER-computed final unit price (tax-inclusive, minor units). */
   priceMinorUnits: number;
   /** SERVER regular (pre-discount) unit price from the published menu. */
@@ -246,6 +254,12 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       // liquids by the engine.
       lowThcLiquid: w.resolved.item.lowThcLiquid ?? null,
       unitThcMg: w.resolved.item.unitThcMg ?? null,
+      // SLICE 17: the otherwise-taken classification from the resolved menu
+      // item. Unclassified products resolve to null and are counted as normal
+      // liquids — which for a suppository is the PERMISSIVE direction, hence
+      // the intake review queue backing this up.
+      otherwiseTaken: w.resolved.item.otherwiseTaken ?? null,
+      unitsPerPackage: w.resolved.item.unitsPerPackage ?? null,
     });
   }
 
@@ -279,6 +293,10 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       // three agree on an identical basket.
       lowThcLiquid: l.lowThcLiquid ?? null,
       unitThcMg: l.unitThcMg ?? null,
+      // SLICE 17 — same routing the register and the website cart use, so all
+      // three agree on an identical basket.
+      otherwiseTaken: l.otherwiseTaken ?? null,
+      unitsPerPackage: l.unitsPerPackage ?? null,
     };
   });
 
@@ -381,6 +399,12 @@ export async function verifyStoredOrderForCompletion(order: {
       ...(grams !== null ? { grams } : {}),
       lowThcLiquid: lowThc,
       unitThcMg,
+      // SLICE 17 — read back the placement-time classification snapshot
+      // (migration 0217). `=== true` on purpose: PostgREST can hand back a
+      // string, and only a real boolean true may move this line into the
+      // ten-unit bucket. Legacy rows are null → normal liquid.
+      otherwiseTaken: line.otherwise_taken === true,
+      unitsPerPackage: normalizeUnitGrams(line.units_per_package),
     });
     totalsLines.push({
       category,

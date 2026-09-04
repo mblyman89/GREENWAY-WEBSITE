@@ -86,12 +86,31 @@ describe("SLICE 16 — owner settings cover the new limit like the other four", 
     expect(DEFAULT_SALES_LIMIT_SETTINGS.med[BUCKET]).toBe(MEDICAL_LIMITS[BUCKET]);
   });
 
-  it("the medical default is NOT tripled, unlike every other bucket", () => {
+  it("the medical default is NOT tripled, unlike the GRAM buckets", () => {
     // Guard rail against a well-meaning "consistency" fix.
     expect(DEFAULT_SALES_LIMIT_SETTINGS.med[BUCKET]).toBe(DEFAULT_SALES_LIMIT_SETTINGS.rec[BUCKET]);
-    for (const b of LIMIT_BUCKETS) {
-      if (b === BUCKET) continue;
-      expect(DEFAULT_SALES_LIMIT_SETTINGS.med[b], b).toBeGreaterThan(DEFAULT_SALES_LIMIT_SETTINGS.rec[b]);
+    // SLICE 17 STRENGTHENED: rather than "every OTHER bucket triples" (which
+    // silently became false when otherwise_taken arrived), pin the exact SET
+    // on each side. Adding a seventh bucket now forces a deliberate decision
+    // about which side it belongs on instead of quietly breaking a loop.
+    const triples = LIMIT_BUCKETS.filter(
+      (b) => DEFAULT_SALES_LIMIT_SETTINGS.med[b] > DEFAULT_SALES_LIMIT_SETTINGS.rec[b],
+    );
+    const flat = LIMIT_BUCKETS.filter(
+      (b) => DEFAULT_SALES_LIMIT_SETTINGS.med[b] === DEFAULT_SALES_LIMIT_SETTINGS.rec[b],
+    );
+    expect([...triples].sort()).toEqual([
+      "concentrate",
+      "liquid_edible",
+      "solid_edible",
+      "usable",
+    ]);
+    // low_thc_liquid: WAC 314-55-095(2)(d) says "up to 200 mg" — same figure.
+    // otherwise_taken: WAC 314-55-095(2)(d) does not list the category at all.
+    expect([...flat].sort()).toEqual(["low_thc_liquid", "otherwise_taken"]);
+    // And every tripling bucket triples EXACTLY, not merely "more".
+    for (const b of triples) {
+      expect(DEFAULT_SALES_LIMIT_SETTINGS.med[b] / DEFAULT_SALES_LIMIT_SETTINGS.rec[b], b).toBe(3);
     }
   });
 });

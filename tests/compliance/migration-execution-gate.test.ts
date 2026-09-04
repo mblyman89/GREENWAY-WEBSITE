@@ -604,7 +604,21 @@ describe("the migration list is ordered the way the database will see it", () =>
     // uniq -d | wc -l` returns 0, proving no two migrations claim the same
     // number — the failure a parallel branch actually produces, which none of
     // the three older checks would have caught.
-    expect(listed[listed.length - 1]).toMatch(/^0216_/);
+    //
+    // SLICE 17 re-ran the ENTIRE ritual above from scratch rather than
+    // inheriting the previous line's numbers, exactly as that paragraph
+    // demands. Fresh results: `ls [0-9]*.sql | wc -l` returns 217 (was 216,
+    // +1 for 0217_otherwise_taken_limit.sql); the malformed-name count is 0;
+    // `sort -c` exits clean; and the duplicate-number check returns 0.
+    //
+    // 0217 adds the ten-unit "otherwise taken into the body" limit
+    // (WAC 314-55-095(1)(d)(i)(D)) and ALSO repairs a defect from 0216: that
+    // migration added low_thc_liquid/unit_thc_mg to menu_items and
+    // inventory_lots but never to order_lines, even though orders-store.ts
+    // writes them there and order-pricing.ts reads them back at the pickup
+    // gate. The missing-column ladder swallowed the error, so the snapshot was
+    // silently dropped on every order.
+    expect(listed[listed.length - 1]).toMatch(/^0217_/);
 
     // The duplicate-number check above, enforced rather than merely recorded:
     // two files numbered 0216 would still sort cleanly and still be padded, so

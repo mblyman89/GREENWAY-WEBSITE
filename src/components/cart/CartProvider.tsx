@@ -84,6 +84,10 @@ type CartItemInput = {
    * limit. Optional: absent = not classified = normal liquid (fail-safe).
    */
   lowThcLiquid?: boolean | null;
+  /** SLICE 17 — otherwise-taken (suppository) classification for the meter. */
+  otherwiseTaken?: boolean | null;
+  /** SLICE 17 — individual items per package; a box of six is 6. */
+  unitsPerPackage?: number | null;
   /** SLICE 16 — mg of active delta-9 THC in one sellable unit (one can). */
   unitThcMg?: number | null;
 };

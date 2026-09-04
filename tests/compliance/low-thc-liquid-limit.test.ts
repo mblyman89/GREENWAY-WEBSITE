@@ -398,11 +398,24 @@ describe("regression: nothing else moved", () => {
     expect(MEDICAL_LIMITS.liquid_edible).toBe(6048);
   });
 
-  it("an empty cart is clean across all five buckets", () => {
+  it("an empty cart is clean across EVERY bucket, named explicitly", () => {
     const v = evaluateCart([]);
     expect(v.blocked).toBe(false);
-    expect(v.buckets).toHaveLength(5);
-    for (const b of v.buckets) expect(b.usedGrams).toBe(0);
+    // SLICE 17 STRENGTHENED: assert the bucket NAMES, not a bare count. A
+    // count silently tolerates a rename or a swap; the names do not.
+    expect(v.buckets.map((b) => b.bucket)).toEqual([
+      "usable",
+      "solid_edible",
+      "concentrate",
+      "liquid_edible",
+      "low_thc_liquid",
+      "otherwise_taken",
+    ]);
+    for (const b of v.buckets) {
+      expect(b.usedGrams).toBe(0);
+      expect(b.used).toBe(0);
+      expect(b.exceeded).toBe(false);
+    }
   });
 
   it("non-cannabis lines are still untracked", () => {

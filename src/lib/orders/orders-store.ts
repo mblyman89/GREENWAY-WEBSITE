@@ -146,7 +146,12 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
 
   if (error || !order) return null;
 
-  const buildLineRows = (withCategory: boolean, withUnitGrams: boolean, withLowThc: boolean) =>
+  const buildLineRows = (
+    withCategory: boolean,
+    withUnitGrams: boolean,
+    withLowThc: boolean,
+    withOtherwiseTaken: boolean,
+  ) =>
     input.lines.map((l) => ({
       order_id: order!.id,
       product_id: l.productId ?? null,
@@ -171,6 +176,21 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
       ...(withLowThc && l.lowThcLiquid === true && typeof l.unitThcMg === "number" && l.unitThcMg > 0
         ? { low_thc_liquid: true, unit_thc_mg: l.unitThcMg }
         : {}),
+      // SLICE 17 — sale-time otherwise-taken snapshot (migration 0217).
+      // Same conditional shape as the low-THC snapshot above: only written
+      // when the product is actually classified, so an omitted column reads
+      // back as null and the completion gate treats it as a normal product.
+      //
+      // This snapshot matters MORE than the low-THC one, not less. Because the
+      // fail-safe is inverted, a dropped snapshot means the pickup gate
+      // re-evaluates a suppository as a 72 oz liquid and fails to block, so
+      // the gate would disagree with the sale that was actually made.
+      ...(withOtherwiseTaken &&
+      l.otherwiseTaken === true &&
+      typeof l.unitsPerPackage === "number" &&
+      l.unitsPerPackage > 0
+        ? { otherwise_taken: true, units_per_package: l.unitsPerPackage }
+        : {}),
     }));
 
   // Missing-column ladder: full row → without the 0216 low-THC snapshot →
@@ -180,21 +200,27 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
   // migrations.
   let { error: linesError } = await admin
     .from("order_lines")
-    .insert(buildLineRows(true, true, true));
+    .insert(buildLineRows(true, true, true, true));
   if (linesError && isMissingColumnError(linesError)) {
+    // SLICE 17 rung: drop the otherwise_taken snapshot (0217 unapplied).
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(true, true, false)));
+      .insert(buildLineRows(true, true, true, false)));
   }
   if (linesError && isMissingColumnError(linesError)) {
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(true, false, false)));
+      .insert(buildLineRows(true, true, false, false)));
   }
   if (linesError && isMissingColumnError(linesError)) {
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(false, false, false)));
+      .insert(buildLineRows(true, false, false, false)));
+  }
+  if (linesError && isMissingColumnError(linesError)) {
+    ({ error: linesError } = await admin
+      .from("order_lines")
+      .insert(buildLineRows(false, false, false, false)));
   }
   if (linesError) {
     // Roll back the orphaned order so we never strand a header with no lines.

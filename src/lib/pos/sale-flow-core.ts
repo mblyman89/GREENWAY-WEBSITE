@@ -102,6 +102,21 @@ export type PosMenuProduct = {
    */
   unitThcMg?: number | null;
   /**
+   * SLICE 17 — "otherwise taken into the body" (WAC 314-55-010(40)), i.e. a
+   * suppository. Routes this line to the TEN UNIT bucket.
+   *
+   * Optional so bundles cached before SLICE 17 still parse. But note the
+   * fail-safe INVERTS versus lowThcLiquid: an old bundle missing this flag
+   * counts a suppository as a normal liquid, which is PERMISSIVE, not
+   * restrictive. Re-sync the device bundle after intake classification.
+   */
+  otherwiseTaken?: boolean | null;
+  /**
+   * SLICE 17 — individual consumable items in one package (RCW 69.50.101).
+   * A box of six suppositories is 6 and rings as six units.
+   */
+  unitsPerPackage?: number | null;
+  /**
    * B32 — variant-level units remaining from the published menu, when known.
    * null = unknown (items sold at the item price without explicit variants);
    * optional so bundles cached before B32 still parse (undefined = unknown).
@@ -312,6 +327,11 @@ export type PricedSaleLine = PosSaleLine & {
   lowThcLiquid?: boolean | null;
   /** SLICE 16 — mg of active delta-9 THC in one sellable unit. */
   unitThcMg?: number | null;
+  /** SLICE 17 — the otherwise-taken classification, carried from the menu
+   *  card so limitLinesFor() can route this line to the ten-unit bucket. */
+  otherwiseTaken?: boolean | null;
+  /** SLICE 17 — individual items per package (a box of six is 6). */
+  unitsPerPackage?: number | null;
 };
 
 export type PriceCartResult = {
@@ -383,6 +403,9 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       // SLICE 16: the low-THC beverage classification travels with the line.
       lowThcLiquid: entry.product.lowThcLiquid ?? null,
       unitThcMg: entry.product.unitThcMg ?? null,
+      // SLICE 17: the otherwise-taken classification travels with the line.
+      otherwiseTaken: entry.product.otherwiseTaken ?? null,
+      unitsPerPackage: entry.product.unitsPerPackage ?? null,
     });
   }
 
@@ -446,6 +469,13 @@ export function limitLinesFor(lines: PricedSaleLine[]): LimitCartLine[] {
       // simply never consumes them, because (E) and (F) are alternatives.
       lowThcLiquid: l.lowThcLiquid ?? null,
       unitThcMg: l.unitThcMg ?? null,
+      // SLICE 17 — the otherwise-taken classification. qualifiesAsOtherwise
+      // Taken() demands `otherwiseTaken === true` AND a topical/liquid-bucket
+      // category, so passing these through unconditionally is safe. As with
+      // the low-THC carve-out the grams STILL ride along; a qualifying line
+      // simply never consumes them, because the item count is the limit.
+      otherwiseTaken: l.otherwiseTaken ?? null,
+      unitsPerPackage: l.unitsPerPackage ?? null,
     };
   });
 }
@@ -695,8 +725,22 @@ export function __runSaleFlowCoreTests(): void {
   const settings: PosLimitSettings = {
     enforce: true,
     hardBlock: true,
-    rec: { usable: 28, solid_edible: 453.6, concentrate: 7, liquid_edible: 2016, low_thc_liquid: 200 },
-    med: { usable: 84, solid_edible: 1360.8, concentrate: 21, liquid_edible: 6048, low_thc_liquid: 200 },
+    rec: {
+      usable: 28,
+      solid_edible: 453.6,
+      concentrate: 7,
+      liquid_edible: 2016,
+      low_thc_liquid: 200,
+      otherwise_taken: 10,
+    },
+    med: {
+      usable: 84,
+      solid_edible: 1360.8,
+      concentrate: 21,
+      liquid_edible: 6048,
+      low_thc_liquid: 200,
+      otherwise_taken: 10,
+    },
     unitGrams: {},
   };
   const overConc = judgeLimits([{ category: "concentrate", quantity: 8 }], "recreational", settings);

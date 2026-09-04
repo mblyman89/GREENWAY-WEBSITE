@@ -118,6 +118,31 @@ export type MenuItemRow = {
   low_thc_liquid: boolean | null;
   /** SLICE 16 — mg of active delta-9 THC in ONE sellable unit (one can). */
   unit_thc_mg: number | null;
+  /**
+   * SLICE 17 — "product otherwise taken into the body", WAC 314-55-010(40):
+   * "intended for uses other than inhalation, oral ingestion, or external
+   * application to the skin". In practice a suppository.
+   *
+   * true  = counts against the TEN UNIT limit, WAC 314-55-095(1)(d)(i)(D).
+   * false = reviewed and does NOT qualify.
+   * null  = not yet reviewed.
+   *
+   * READ THE FAIL-SAFE CAREFULLY — IT IS THE REVERSE OF low_thc_liquid ABOVE.
+   * An unflagged suppository is categorised `topical`, which buckets as a
+   * 2016 g liquid, i.e. effectively unlimited. So null here is PERMISSIVE, not
+   * conservative. It cannot be derived from category, because one `topical`
+   * shelf holds both skin balms (72 oz) and suppositories (10 units).
+   */
+  otherwise_taken: boolean | null;
+  /**
+   * SLICE 17 — individual consumable items in one package, per RCW 69.50.101
+   * ("an individual consumable item within a package of one or more
+   * consumable items"). A box of six suppositories is 6.
+   *
+   * DISTINCT from servings_per_pack: servings divide ONE container by dose,
+   * units are physically separate items.
+   */
+  units_per_package: number | null;
   package_cbd_mg: number | null;
   ratio_label: string | null;
   net_weight_grams: number | null;

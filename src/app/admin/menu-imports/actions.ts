@@ -17,6 +17,7 @@ import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/l
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import {
   parseLowThcClassification,
+  parseOtherwiseTakenClassification,
   buildFactReviewBuckets,
   menuItemRowToFactReviewItem,
   posDiagnosticToFactReviewDiagnostic,
@@ -293,6 +294,23 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
       redirect(dest + "?error=" + encodeURIComponent(lowThc.error));
     } else {
       Object.assign(facts, lowThc.facts);
+    }
+
+    // ── SLICE 17: the "otherwise taken into the body" classification ─────
+    // Same shape as the low-THC parse above and for the same reason: the rules
+    // live in the pure core so they can be unit-tested, and this action only
+    // translates a failure into a redirect. See
+    // parseOtherwiseTakenClassification() for why each rule exists — the short
+    // version is that a missing units-per-package count would make the register
+    // read a box of six as one unit and undercount the statutory limit 6x.
+    const otherwiseTaken = parseOtherwiseTakenClassification(
+      String(formData.get("otherwiseTaken") ?? ""),
+      String(formData.get("unitsPerPackage") ?? ""),
+    );
+    if (!otherwiseTaken.ok) {
+      redirect(dest + "?error=" + encodeURIComponent(otherwiseTaken.error));
+    } else {
+      Object.assign(facts, otherwiseTaken.facts);
     }
 
     if (Object.keys(facts).length === 0) {

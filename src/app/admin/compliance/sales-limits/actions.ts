@@ -61,6 +61,14 @@ export async function updateSalesLimitSettingsAction(formData: FormData) {
           "rec_low_thc_liquid",
           RECREATIONAL_LIMITS.low_thc_liquid,
         ),
+        // SLICE 17 - a COUNT of whole items, not grams. clampLimitProfile
+        // floors this to an integer, so a pasted "10.6" becomes 10 rather
+        // than being rejected or silently rounded up.
+        otherwise_taken: num(
+          formData,
+          "rec_otherwise_taken",
+          RECREATIONAL_LIMITS.otherwise_taken,
+        ),
       },
       RECREATIONAL_LIMITS,
     ),
@@ -77,6 +85,14 @@ export async function updateSalesLimitSettingsAction(formData: FormData) {
           formData,
           "med_low_thc_liquid",
           MEDICAL_LIMITS.low_thc_liquid,
+        ),
+        // SLICE 17 - MEDICAL_LIMITS.otherwise_taken is 10, the SAME as
+        // recreational, because WAC 314-55-095(2)(d) omits the category. The
+        // clamp enforces that ceiling even if someone types 30 into the form.
+        otherwise_taken: num(
+          formData,
+          "med_otherwise_taken",
+          MEDICAL_LIMITS.otherwise_taken,
         ),
       },
       MEDICAL_LIMITS,

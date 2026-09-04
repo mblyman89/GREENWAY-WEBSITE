@@ -13,6 +13,7 @@ import {
   MEDICAL_LIMITS,
   LIMIT_BUCKETS,
   LIMIT_BUCKET_LABELS,
+  LIMIT_BUCKET_UNITS,
   DEFAULT_UNIT_GRAMS,
   categoryToBucket,
   clampLimitProfile,
@@ -213,18 +214,24 @@ describe("non-cannabis lines are counted as untracked, never blocked", () => {
 
 describe("defaults sanity", () => {
   it("every bucket has a label and every DEFAULT_UNIT_GRAMS category maps to a bucket", () => {
-    // SLICE 16: five buckets now — the fifth is low_thc_liquid. Rather than
-    // just bumping 4→5, assert the ACTUAL membership so this test fails if a
-    // bucket is ever added, removed, or renamed without a deliberate decision.
+    // SLICE 16: five buckets. SLICE 17: six — the sixth is otherwise_taken.
+    // Rather than just bumping the count, assert the ACTUAL membership so this
+    // test fails if a bucket is ever added, removed, or renamed without a
+    // deliberate decision.
     expect([...LIMIT_BUCKETS]).toEqual([
       "usable",
       "solid_edible",
       "concentrate",
       "liquid_edible",
       "low_thc_liquid",
+      "otherwise_taken",
     ]);
     for (const bucket of LIMIT_BUCKETS) {
       expect(LIMIT_BUCKET_LABELS[bucket]).toBeTruthy();
+      // SLICE 17: every bucket must declare its unit. A bucket with no entry
+      // here would fall through formatLimitAmount to the ounces branch and
+      // render a count or an mg figure as a weight.
+      expect(LIMIT_BUCKET_UNITS[bucket], bucket).toBeTruthy();
     }
     for (const slug of Object.keys(DEFAULT_UNIT_GRAMS)) {
       expect(categoryToBucket(slug)).not.toBe(null);

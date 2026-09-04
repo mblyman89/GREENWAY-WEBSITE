@@ -93,6 +93,11 @@ export function menuRowToGreenwayItem(row: MenuItemWithVariants): GreenwayMenuIt
     // as "not classified", which the engine treats as a normal liquid.
     lowThcLiquid: row.low_thc_liquid ?? null,
     unitThcMg: row.unit_thc_mg ?? null,
+    // SLICE 17 — the otherwise-taken classification rides to the website and
+    // the register on the same select("*"), so no query change is needed.
+    // `?? null` keeps a pre-0217 database reading as "not classified".
+    otherwiseTaken: row.otherwise_taken ?? null,
+    unitsPerPackage: row.units_per_package ?? null,
     totalThc: toCannabinoid(row.total_thc_json),
     totalCbd: toCannabinoid(row.total_cbd_json),
     compounds: toCompounds(row.compounds_json),

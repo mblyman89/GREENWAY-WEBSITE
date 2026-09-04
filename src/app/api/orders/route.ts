@@ -161,6 +161,10 @@ export async function POST(request: Request) {
       // order is re-read as a normal liquid and blocked at the counter.
       lowThcLiquid: l.lowThcLiquid ?? null,
       unitThcMg: l.unitThcMg ?? null,
+      // SLICE 17 — carried onto the stored line so the pickup completion gate
+      // re-reads the sale-time classification instead of re-deriving it.
+      otherwiseTaken: l.otherwiseTaken ?? null,
+      unitsPerPackage: l.unitsPerPackage ?? null,
     })),
   };
 

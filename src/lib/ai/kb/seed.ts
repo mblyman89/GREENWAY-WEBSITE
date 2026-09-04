@@ -889,6 +889,15 @@ const REC_CONC_G = RECREATIONAL_LIMITS.concentrate; // 7
 const REC_LOW_THC_MG = RECREATIONAL_LIMITS.low_thc_liquid; // 200
 const MED_LOW_THC_MG = MEDICAL_LIMITS.low_thc_liquid; // 200 — identical
 const LOW_THC_UNIT_MG = LOW_THC_UNIT_MAX_MG; // 4
+// SLICE 17 — the "otherwise taken into the body" allowance. Not a weight and
+// not a THC figure: a COUNT OF ITEMS. WAC 314-55-010(40) defines the category
+// by route of administration — anything for human consumption that is NOT
+// inhaled, NOT orally ingested and NOT applied to the skin — which in a retail
+// shop means suppositories. Medical is the SAME ten, for a different reason
+// than the beverage bucket: WAC 314-55-095(2)(d) does not list this category
+// at all, so there is no enhanced medical figure to grant.
+const REC_OTHERWISE_UNITS = RECREATIONAL_LIMITS.otherwise_taken; // 10
+const MED_OTHERWISE_UNITS = MEDICAL_LIMITS.otherwise_taken; // 10 — identical
 
 export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
   {
@@ -917,7 +926,9 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
       `${REC_CONC_G} grams of concentrate/extract for inhalation, ${REC_SOLID_OZ} ounces of solid ` +
       `infused edibles, and ${REC_LIQUID_OZ} ounces of infused liquids. Infused liquids packaged in ` +
       `individual units of ${LOW_THC_UNIT_MG} mg of active delta-9 THC or less follow a separate ` +
-      `allowance instead: up to ${REC_LOW_THC_MG} mg of active delta-9 THC in one transaction.`,
+      `allowance instead: up to ${REC_LOW_THC_MG} mg of active delta-9 THC in one transaction. ` +
+      `Products otherwise taken into the body, such as suppositories, follow a count instead: ` +
+      `up to ${REC_OTHERWISE_UNITS} units in one transaction.`,
     house_note:
       "Think of it as a per-visit basket limit set by the state. Our register keeps the math honest so " +
       "you never have to — if a cart runs over, we'll help you adjust. Registered medical patients get " +
@@ -958,6 +969,32 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
     sort_order: 25,
   },
   {
+    slug: "otherwise-taken-limit",
+    title: "Suppositories are counted, not weighed",
+    category: "purchase-limit",
+    rule:
+      `A cannabis-infused product otherwise taken into the body — one that is not inhaled, ` +
+      `not swallowed, and not applied to the skin, which in practice means a suppository — is ` +
+      `limited to ${REC_OTHERWISE_UNITS} units in a single transaction. This category is ` +
+      `counted as a NUMBER OF ITEMS, not by weight and not by THC: a sealed box of six counts ` +
+      `as six of the ${REC_OTHERWISE_UNITS}. The allowance is ${MED_OTHERWISE_UNITS} units for ` +
+      `registered medical patients too — the state's higher medical amounts do not list this ` +
+      `category at all, so it does not increase with a card.`,
+    house_note:
+      "Practical version: we count items here, not ounces and not milligrams. One suppository " +
+      "is one unit and a sealed box of six is six units, so ten units is the ceiling however " +
+      "they are packaged. The state sets no milligram limit on this category — the count is " +
+      "the only number that matters. And a product nobody has classified yet does NOT land in " +
+      "this category; it falls back to the regular infused allowance measured in ounces, which " +
+      "is why our intake screen flags anything that looks like one for a person to confirm " +
+      "before it reaches the shelf.",
+    severity: "important",
+    citation: "WAC 314-55-095(1)(d)(i)(D)",
+    sources: [WSLCB_USING],
+    confidence: 0.99,
+    sort_order: 27,
+  },
+  {
     slug: "possession-limits",
     title: "How much you can carry",
     category: "possession",
@@ -965,8 +1002,9 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
       `An adult 21+ may lawfully possess up to ${REC_USABLE_OZ} ounce of useable cannabis, ` +
       `${REC_CONC_G} grams of concentrate, ${REC_SOLID_OZ} ounces of solid edibles, and ` +
       `${REC_LIQUID_OZ} ounces of infused liquids — or ${REC_LOW_THC_MG} mg of active delta-9 THC ` +
-      `in low-THC liquids packaged in units of ${LOW_THC_UNIT_MG} mg or less — the same amounts as ` +
-      `the transaction limit.`,
+      `in low-THC liquids packaged in units of ${LOW_THC_UNIT_MG} mg or less — plus ` +
+      `${REC_OTHERWISE_UNITS} units of a product otherwise taken into the body — the same ` +
+      `amounts as the transaction limit.`,
     house_note:
       "Basically: what you can buy in a trip is about what you can carry. Easy to remember, easy to stay " +
       "on the right side of.",

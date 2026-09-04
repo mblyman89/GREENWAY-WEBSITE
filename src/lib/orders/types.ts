@@ -121,6 +121,9 @@ export type OrderLineRow = {
    * (0096) and the grams snapshot (0122).
    */
   low_thc_liquid?: boolean | null;
+  /** SLICE 17 — order_lines snapshot columns (migration 0217). */
+  otherwise_taken?: boolean | null;
+  units_per_package?: number | string | null;
   /**
    * SLICE 16 — sale-time snapshot of mg active delta-9 THC per sellable unit.
    * Postgres numeric may deserialize as string; consumers normalize.
@@ -174,10 +177,15 @@ export type PricedNewOrderLine = {
   regularPriceMinorUnits: number;
   /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
   unitGrams?: number | null;
-  /** SLICE 16 — low-THC beverage classification snapshot (migration 0216). */
+  /** SLICE 16 — low-THC beverage classification snapshot (migration 0216;
+   *  the order_lines COLUMN was actually added by 0217 — see that file). */
   lowThcLiquid?: boolean | null;
   /** SLICE 16 — mg active delta-9 THC per sellable unit, snapshot. */
   unitThcMg?: number | null;
+  /** SLICE 17 — otherwise-taken classification snapshot (migration 0217). */
+  otherwiseTaken?: boolean | null;
+  /** SLICE 17 — individual items per package at sale time, snapshot. */
+  unitsPerPackage?: number | null;
 };
 
 export type NewOrderInput = {

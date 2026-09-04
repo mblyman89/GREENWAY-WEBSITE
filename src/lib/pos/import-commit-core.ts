@@ -268,6 +268,8 @@ export function __runImportCommitCoreTests(): void {
     // fixture no longer satisfies FactReviewItemInput.
     lowThcLiquid: null,
     unitThcMg: null,
+    otherwiseTaken: null,
+    unitsPerPackage: null,
     factProvenance: {},
     ...over,
   });
