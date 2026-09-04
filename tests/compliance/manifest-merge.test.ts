@@ -40,6 +40,11 @@ const baseLine = (lot: string): ParsedLine => ({
   is_medical: false,
   inventory_type: null,
   expires_on: null,
+  // SLICE 18-0: classification is never read from a manifest.
+  low_thc_liquid: null,
+  unit_thc_mg: null,
+  otherwise_taken: null,
+  units_per_package: null,
   lab: null,
   warnings: [],
   raw: {},

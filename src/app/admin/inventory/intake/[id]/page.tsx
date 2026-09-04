@@ -180,6 +180,12 @@ export default async function ManifestReviewPage({
       category: l.category,
       inventory_type: l.inventory_type,
       expires_on: l.expires_on,
+      // SLICE 18-0: pass the stored answer straight through. NOT `?? false` —
+      // null ("nobody has been asked") and false ("a person said no") are
+      // different facts, and the unclassified-suspect warning keys on exactly
+      // that difference. Defaulting here would make the dock nag forever about
+      // lots that were already settled, which trains staff to ignore it.
+      otherwise_taken: l.otherwise_taken,
     })),
     labFacts,
   );

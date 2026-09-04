@@ -66,10 +66,27 @@ export async function injectApprovedDraftsIntoVersion(
           (e.code === "42703" ||
             /column .* does not exist|could not find .* column/i.test(e.message ?? "")),
       );
-    const firstTry = await admin
+    // SLICE 18-0: also read the approver's COMPLIANCE picks (migration 0218).
+    // Added as the widest tier of the same graduated fallback, so a database
+    // missing 0218 loses ONLY the compliance columns and keeps injecting
+    // exactly as before. Read into its own const first so the existing chain
+    // below is untouched.
+    const COMPLIANCE_COLS =
+      ", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg";
+    const withCompliance = await admin
       .from("catalog_product_drafts")
-      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type")
+      .select(
+        DRAFT_COLS +
+          ", chosen_website_category, chosen_house_type, chosen_strain_type" +
+          COMPLIANCE_COLS,
+      )
       .eq("status", "approved");
+    const firstTry = missingCol(withCompliance.error)
+      ? await admin
+          .from("catalog_product_drafts")
+          .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type")
+          .eq("status", "approved")
+      : withCompliance;
     let draftRows: unknown = firstTry.data;
     let dErr = firstTry.error;
     if (missingCol(dErr)) {
@@ -99,6 +116,11 @@ export async function injectApprovedDraftsIntoVersion(
       chosen_website_category?: string | null;
       chosen_house_type?: string | null;
       chosen_strain_type?: string | null;
+      // SLICE 18-0 (0218). Absent when the migration hasn't run.
+      chosen_otherwise_taken?: boolean | null;
+      chosen_units_per_package?: number | string | null;
+      chosen_low_thc_liquid?: boolean | null;
+      chosen_unit_thc_mg?: number | string | null;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
@@ -106,6 +128,13 @@ export async function injectApprovedDraftsIntoVersion(
       cbd_pct: r.cbd_pct != null ? Number(r.cbd_pct) : null,
       total_thc_pct: r.total_thc_pct != null ? Number(r.total_thc_pct) : null,
       price_minor_units: r.price_minor_units != null ? Number(r.price_minor_units) : null,
+      // SLICE 18-0: numerics arrive from PostgREST as strings. Number("") is 0
+      // and Number(null) is 0 — either would invent a unit count of zero,
+      // which lineUnits() treats as "fall back to 1" and would silently
+      // under-count a statutory limit. So null stays null, explicitly.
+      chosen_units_per_package:
+        r.chosen_units_per_package != null ? Number(r.chosen_units_per_package) : null,
+      chosen_unit_thc_mg: r.chosen_unit_thc_mg != null ? Number(r.chosen_unit_thc_mg) : null,
     }));
     if (drafts.length === 0) return none;
 
@@ -240,6 +269,14 @@ export async function injectApprovedDraftsIntoVersion(
         package_cbd_mg: it.package_cbd_mg,
         ratio_label: it.ratio_label,
         fact_provenance: it.fact_provenance,
+        // SLICE 18-0: the compliance-limit flags (0216 / 0217 columns). Before
+        // this slice nothing on the receiving path ever wrote them, so an
+        // onboarded suppository reached the menu with otherwise_taken NULL and
+        // the ten-unit limit silently never engaged.
+        low_thc_liquid: it.low_thc_liquid,
+        unit_thc_mg: it.unit_thc_mg,
+        otherwise_taken: it.otherwise_taken,
+        units_per_package: it.units_per_package,
         description: it.description,
         price_label: it.price_label,
         price_minor_units: it.price_minor_units,

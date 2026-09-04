@@ -820,7 +820,8 @@ export function evaluateCart(
       `"${n}" looks like a suppository but has not been classified. Products otherwise taken ` +
       `into the body are limited to ${formatLimitAmount("otherwise_taken", RECREATIONAL_LIMITS.otherwise_taken)} ` +
       `per transaction (WAC 314-55-095(1)(d)(i)(D)). Until it is classified it counts toward the ` +
-      `liquid allowance instead. Classify it on the menu-import facts screen.`,
+      `liquid allowance instead. Classify it on the menu-import facts screen (for imported ` +
+      `products) or in Product Onboarding (for anything received on a manifest).`,
   );
 
   const exceeded = buckets.filter((b) => b.exceeded);

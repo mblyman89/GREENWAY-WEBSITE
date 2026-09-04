@@ -262,6 +262,7 @@ import { __runCategoryRegistryCoreTests } from "../../src/lib/pos/category-regis
 import { __runTypeRegistryCoreTests } from "../../src/lib/pos/type-registry-core";
 import { __runHouseTypeCoreTests } from "../../src/lib/inventory/house-type-core";
 import { __runDraftApprovalGateTests } from "../../src/lib/inventory/draft-approval-gate-core";
+import { __runReceivingClassificationTests } from "../../src/lib/inventory/receiving-classification-core";
 import { __runStrainFieldsCoreTests } from "../../src/lib/inventory/strain-fields-core";
 import { __runStrainTypeIntelTests } from "../../src/lib/inventory/strain-type-intel-core";
 import { __runBankingVaultUiTests } from "../../src/lib/payments/banking-vault-ui-core";
@@ -589,6 +590,7 @@ async function main() {
   __runTypeRegistryCoreTests();
   __runHouseTypeCoreTests();
   __runDraftApprovalGateTests();
+  { const r = __runReceivingClassificationTests(); if (r.passed < 1) throw new Error("receiving-classification-core: no assertions ran"); console.log(`receiving-classification-core: ${r.passed} assertions passed`); }
   __runStrainFieldsCoreTests();
   __runStrainTypeIntelTests();
   __runBankingVaultUiTests();

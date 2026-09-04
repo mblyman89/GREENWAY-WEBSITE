@@ -56,6 +56,12 @@ function blankPdfLine(raw: unknown, warnings: string[]): ParsedLine {
     is_medical: false,
     inventory_type: null,
     expires_on: null,
+    // SLICE 18-0: compliance classification is never read from a manifest
+    // (WA manifests carry no such field). Collected at Product Onboarding.
+    low_thc_liquid: null,
+    unit_thc_mg: null,
+    otherwise_taken: null,
+    units_per_package: null,
     lab: null,
     warnings,
     raw,

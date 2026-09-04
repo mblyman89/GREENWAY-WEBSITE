@@ -26,6 +26,15 @@ import {
   typePickerPlaceholder,
   type DraftClassificationAssessment,
 } from "@/lib/inventory/draft-approval-gate-core";
+// SLICE 18-0: the compliance classification gate. Product Onboarding is the
+// only classification step a RECEIVED lot can reach - fact review is scoped to
+// an import_id, which a manifest-sourced lot never has.
+import {
+  assessReceivingClassification,
+  otherwiseTakenPickerPlaceholder,
+  lowThcPickerPlaceholder,
+  type ReceivingClassificationAssessment,
+} from "@/lib/inventory/receiving-classification-core";
 // SLICE 78: the category picker lists the DB-backed registry (owner's
 // categories from /admin/settings/types), not the hardcoded taxonomy — the
 // registry falls back to the hardcoded list on an empty/unconfigured DB.
@@ -101,10 +110,25 @@ export default async function CatalogDraftsPage({
     })),
   );
   const assessments = new Map<string, DraftClassificationAssessment>();
+  // SLICE 18-0: the COMPLIANCE assessment - does this product need somebody to
+  // answer the suppository question before it can go on the shelf? Computed
+  // here for the UI only; approveDraftWithPrice re-derives it server-side and
+  // is the actual gate. This is deliberately TARGETED: it fires on the three
+  // liquid_edible shelves and on a detector hit, and nowhere else, because a
+  // gate that interrupts every flower delivery is a gate staff click through.
+  const complianceAssessments = new Map<string, ReceivingClassificationAssessment>();
   drafts.forEach((d, i) => {
     assessments.set(
       d.id,
       assessDraftClassification({
+        productName: d.name,
+        inventoryType: d.inventory_type,
+        resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+      }),
+    );
+    complianceAssessments.set(
+      d.id,
+      assessReceivingClassification({
         productName: d.name,
         inventoryType: d.inventory_type,
         resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
@@ -260,6 +284,8 @@ export default async function CatalogDraftsPage({
                   // SLICE 64: OUR classification verdict for this row. The
                   // approver's own picks (approved rows) outrank the machine.
                   const a = assessments.get(d.id);
+                  // SLICE 18-0: the compliance assessment for this row.
+                  const ca = complianceAssessments.get(d.id);
                   const displayCategory =
                     d.chosen_website_category ?? a?.resolvedWebsiteCategory ?? null;
                   const autoType =
@@ -449,6 +475,99 @@ export default async function CatalogDraftsPage({
                                       </option>
                                     ))}
                                 </Select>
+                                {/* SLICE 18-0: the COMPLIANCE classification.
+                                    Only rendered where the answer could change
+                                    a limit — the three liquid_edible shelves,
+                                    or a name/CCRS type that looks like a
+                                    suppository. On a flower or cartridge lot
+                                    nothing appears at all, because
+                                    qualifiesAsOtherwiseTaken() would refuse to
+                                    move that line out of its statutory bucket
+                                    however it were answered.
+
+                                    Why this one BLOCKS while strain type does
+                                    not: an unflagged suppository is filed as an
+                                    ordinary topical, lands in the 2016 g liquid
+                                    bucket, and the ten-unit maximum silently
+                                    never engages (migration 0217). Silence here
+                                    does not fail closed — it disables a
+                                    statutory limit. */}
+                                {view === "draft" && ca?.needsOtherwiseTakenPick ? (
+                                  <div className="flex w-48 flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                                      Compliance
+                                    </span>
+                                    <label
+                                      className="text-[10px] text-[var(--admin-text-faint)]"
+                                      htmlFor={`otherwise-taken-${d.id}`}
+                                    >
+                                      Taken into the body another way? (suppository)
+                                    </label>
+                                    <Select
+                                      id={`otherwise-taken-${d.id}`}
+                                      name="otherwise_taken"
+                                      required
+                                      defaultValue=""
+                                      className="text-xs"
+                                      aria-label="Otherwise taken into the body"
+                                    >
+                                      <option value="" disabled>
+                                        {otherwiseTakenPickerPlaceholder({
+                                          needsOtherwiseTakenPick: true,
+                                        })}
+                                      </option>
+                                      <option value="no">No — ordinary product</option>
+                                      <option value="yes">Yes — suppository (10-unit limit)</option>
+                                    </Select>
+                                    <Input
+                                      name="units_per_package"
+                                      inputMode="numeric"
+                                      placeholder="Units per package (a box of 6 = 6)"
+                                      className="text-xs"
+                                      aria-label="Units per package"
+                                    />
+                                    {ca.suspected ? (
+                                      <span className="text-[10px] text-[var(--admin-warning,#b45309)]">
+                                        This name looks like a suppository — please confirm.
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                                {/* SLICE 18-0: the low-THC beverage question is
+                                    PROMPTED, never required. The asymmetry is
+                                    deliberate: an unanswered beverage stays in
+                                    the TIGHTER 2016 g liquid bucket, so silence
+                                    can only ever under-sell — a lawful sale we
+                                    declined, not an unlawful one we made. That
+                                    does not justify blocking a delivery. */}
+                                {view === "draft" && ca?.promptsLowThcLiquid ? (
+                                  <div className="flex w-48 flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2">
+                                    <label
+                                      className="text-[10px] text-[var(--admin-text-faint)]"
+                                      htmlFor={`low-thc-${d.id}`}
+                                    >
+                                      Low-THC beverage? (≤ 4 mg per sealed container)
+                                    </label>
+                                    <Select
+                                      id={`low-thc-${d.id}`}
+                                      name="low_thc_liquid"
+                                      defaultValue=""
+                                      className="text-xs"
+                                      aria-label="Low-THC beverage"
+                                    >
+                                      <option value="">{lowThcPickerPlaceholder()}</option>
+                                      <option value="no">No</option>
+                                      <option value="yes">Yes — 200 mg THC allowance</option>
+                                    </Select>
+                                    <Input
+                                      name="unit_thc_mg"
+                                      inputMode="decimal"
+                                      placeholder="mg THC in ONE sealed container"
+                                      className="text-xs"
+                                      aria-label="THC milligrams per container"
+                                    />
+                                  </div>
+                                ) : null}
                                 {/* T-314: manual GPT-4o + live web search lookup.
                                     Prefilled with this row's name + brand; the
                                     operator presses Search (never auto-run). A

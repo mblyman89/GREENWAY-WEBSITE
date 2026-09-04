@@ -377,6 +377,17 @@ export type CcrsParsedLine = {
   is_medical: boolean;
   inventory_type: string | null;
   expires_on: string | null;
+  /**
+   * SLICE 18-0 — mirrors ParsedLine's compliance-classification fields. A CCRS
+   * manifest CSV carries even less than a WCIA one (no product name, strain,
+   * brand, category, price or COA), so these are always null here. Present so
+   * this shape stays assignable to ParsedLine, which is what makes the
+   * receiving pipeline uniform across every source format.
+   */
+  low_thc_liquid: boolean | null;
+  unit_thc_mg: number | null;
+  otherwise_taken: boolean | null;
+  units_per_package: number | null;
   lab: {
     labtest_external_identifier: string | null;
     lab_name: null;
@@ -498,6 +509,11 @@ export function ccrsToParsedManifest(parse: {
       is_sample: false,
       is_medical: false,
       inventory_type: it.plantExternalIdentifier ? "plant" : null,
+      // SLICE 18-0: never inferred from a manifest — collected at onboarding.
+      low_thc_liquid: null,
+      unit_thc_mg: null,
+      otherwise_taken: null,
+      units_per_package: null,
       expires_on: null,
       lab: it.labTestExternalIdentifier
         ? {

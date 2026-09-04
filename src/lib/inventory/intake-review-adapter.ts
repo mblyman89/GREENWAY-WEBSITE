@@ -46,6 +46,15 @@ export type StagedLotFacts = {
   category: string | null;
   inventory_type: string | null;
   expires_on: string | null;
+  /**
+   * SLICE 18-0 — the stored compliance classification (migration 0217).
+   * OPTIONAL on this shape on purpose: the staged review must keep working on
+   * a database where the column was never selected, and on rows staged before
+   * this slice. What matters downstream is the three-way distinction the
+   * review core relies on — `true`/`false` (a human answered) versus
+   * null/undefined (nobody has) — so undefined and null behave identically.
+   */
+  otherwise_taken?: boolean | null;
 };
 
 /** The subset of a lab_results row lineHasCoa()/failed-lab detection needs. */
@@ -128,6 +137,16 @@ export function summarizeStagedIntake(
       is_medical: false,
       inventory_type: lot.inventory_type,
       expires_on: lot.expires_on,
+      // SLICE 18-0 — carry the STORED classification through so the review
+      // does not nag about a lot somebody has already answered for. `?? null`
+      // collapses "column not selected" and "never answered" into the same
+      // honest null; only a real true/false counts as an answer.
+      otherwise_taken: lot.otherwise_taken ?? null,
+      // The other three play no part in the review checklist, and staged rows
+      // are not guaranteed to carry them. Never invent a value here.
+      low_thc_liquid: null,
+      unit_thc_mg: null,
+      units_per_package: null,
       lab: lab ? labFactsToParsedLab(lab) : null,
       // Parser warnings are not persisted after staging; the summary's own
       // per-line checks (lot code, COA, qty, cost) regenerate what matters.

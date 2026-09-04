@@ -618,7 +618,46 @@ describe("the migration list is ordered the way the database will see it", () =>
     // writes them there and order-pricing.ts reads them back at the pickup
     // gate. The missing-column ladder swallowed the error, so the snapshot was
     // silently dropped on every order.
-    expect(listed[listed.length - 1]).toMatch(/^0217_/);
+    //
+    // ─── IT FIRED A TWENTIETH TIME, ON 0218 (SLICE 18-0) ────────────────
+    //
+    // SLICE 18-0 re-ran the ENTIRE ritual from scratch rather than inheriting
+    // the line above, exactly as that paragraph demands. Fresh results, from
+    // supabase/migrations: `ls [0-9]*.sql | wc -l` returns 218 (was 217, +1 for
+    // 0218_receiving_classification.sql); `ls [0-9]*.sql | grep -cvE
+    // '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql | sort -c` exits clean; and
+    // `ls [0-9]*.sql | cut -c1-4 | sort | uniq -d | wc -l` returns 0.
+    //
+    // One NEW fact this time, worth recording because it briefly looked like a
+    // discrepancy: `ls supabase/migrations | wc -l` returns 219, not 218. The
+    // extra entry is a pre-existing `editor-safe` DIRECTORY, not a migration.
+    // That is why every command in this ritual globs `[0-9]*.sql` rather than
+    // listing the directory — a raw count would drift the moment anyone adds a
+    // subfolder, and a drifting number in a compliance ritual is worse than no
+    // number, because it gets explained away instead of investigated.
+    //
+    // 0218 exists because SLICES 16 and 17 were both unreachable for anything
+    // received after the Cultivera cutover. Their rules were correct and their
+    // unit tests were green, but the only place a human could set
+    // low_thc_liquid or otherwise_taken was the menu-import facts screen — a
+    // screen received goods never pass through. Every product arriving on a
+    // manifest therefore entered the system unclassified forever. 0218 adds the
+    // five choice/provenance columns to catalog_product_drafts so the receiving
+    // door can ask the question at Product Onboarding, and so the answer
+    // records WHO decided: a person, or a machine default.
+    expect(listed[listed.length - 1]).toMatch(/^0218_/);
+
+    // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
+    // this line while leaving a hole earlier in the sequence. The numbers must
+    // also be GAPLESS and start at 0001 — a skipped number means a migration
+    // was written, referenced in code, and never committed, which presents at
+    // runtime as the missing-column ladder swallowing an error exactly the way
+    // 0216 did on order_lines.
+    const asInts = listed.map((f) => Number(f.slice(0, 4)));
+    expect(asInts[0]).toBe(1);
+    for (let i = 1; i < asInts.length; i += 1) {
+      expect(asInts[i]).toBe(asInts[i - 1] + 1);
+    }
 
     // The duplicate-number check above, enforced rather than merely recorded:
     // two files numbered 0216 would still sort cleanly and still be padded, so

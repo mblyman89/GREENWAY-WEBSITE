@@ -63,6 +63,22 @@ export type ApprovedDraftForInjection = {
    * Optional so historical callers/tests keep compiling.
    */
   chosen_strain_type?: string | null;
+  /**
+   * SLICE 18-0: the approver's COMPLIANCE picks (migration 0218 columns).
+   * These decide which statutory bucket a sale counts against, so they must
+   * reach menu_items — the website and the register both read the limit flags
+   * from there. Optional so historical callers/tests keep compiling.
+   *
+   * NOTE the fail-safe direction differs between the two, and it matters:
+   * an unanswered otherwise_taken is PERMISSIVE (the ten-unit limit never
+   * engages), while an unanswered low_thc_liquid is CONSERVATIVE (the product
+   * keeps the tighter liquid limit). Never "helpfully" default either one here
+   * — the value is decided at the gate, and null means null.
+   */
+  chosen_otherwise_taken?: boolean | null;
+  chosen_units_per_package?: number | null;
+  chosen_low_thc_liquid?: boolean | null;
+  chosen_unit_thc_mg?: number | null;
 };
 
 /** Per-draft enrichment the SERVER gathers (resolver / kb / lot lookups). */
@@ -115,6 +131,18 @@ export type PlannedInjectedItem = {
   package_cbd_mg: number | null;
   ratio_label: string | null;
   fact_provenance: Record<string, string>;
+  /**
+   * SLICE 18-0: the compliance-limit flags (migrations 0216 / 0217 columns on
+   * menu_items). Carried straight through from the approver's answer — never
+   * derived here. A product onboarded from a received manifest must reach the
+   * register with exactly the same flags it would have had coming through the
+   * Cultivera import, which is what tests/compliance/receiving-classification-
+   * parity.test.ts pins.
+   */
+  low_thc_liquid: boolean | null;
+  unit_thc_mg: number | null;
+  otherwise_taken: boolean | null;
+  units_per_package: number | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -463,6 +491,13 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       package_cbd_mg: packageCbdMg,
       ratio_label: ratioLabel,
       fact_provenance: factProvenance,
+      // SLICE 18-0: the compliance classification, carried verbatim from the
+      // approval gate. `?? null` only normalises "absent" (a pre-0218 database)
+      // to null; it never converts a real false into a null or the reverse.
+      low_thc_liquid: d.chosen_low_thc_liquid ?? null,
+      unit_thc_mg: d.chosen_unit_thc_mg ?? null,
+      otherwise_taken: d.chosen_otherwise_taken ?? null,
+      units_per_package: d.chosen_units_per_package ?? null,
       // Same copy shape as transform.ts genericDescription (verified :586).
       description: `${d.name}${brand ? ` from ${brand}` : ""}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
       price_label: priceLabel,

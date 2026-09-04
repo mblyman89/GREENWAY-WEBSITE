@@ -550,6 +550,19 @@ export async function stageManifest(
       unit: line.unit,
       unit_cost_minor_units: line.unit_cost_minor_units,
       expires_on: line.expires_on,
+      // SLICE 18-0 — the compliance classification columns (migrations 0216 /
+      // 0217) were added to inventory_lots but nothing on the receiving path
+      // ever wrote them, so they were dead on every received lot. They are
+      // carried here rather than derived: the parser always sets them null
+      // (a WA manifest has no such field), and the real answer arrives later
+      // from the Product Onboarding gate. Writing them explicitly means the
+      // column is part of the row's shape from day one instead of appearing
+      // only after somebody classifies, which keeps the "has anyone looked at
+      // this?" query honest.
+      low_thc_liquid: line.low_thc_liquid,
+      unit_thc_mg: line.unit_thc_mg,
+      otherwise_taken: line.otherwise_taken,
+      units_per_package: line.units_per_package,
       status: "quarantine", // held until the manifest is accepted
       created_by: actorId,
       updated_by: actorId,
@@ -1450,7 +1463,11 @@ export async function listManifestLots(manifestId: string) {
     .select(
       // SLICE 39: + unit_cost_minor_units for the intake review summary
       // (honest "confirm pricing" flags instead of a hardcoded null).
-      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, strain_type, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units",
+      // SLICE 18-0: + otherwise_taken so the review summary can tell "nobody
+      // has classified this suppository yet" apart from "somebody already
+      // answered". Without it the dock would nag about every lot forever,
+      // which is how a compliance checklist becomes noise people scroll past.
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, strain_type, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units, otherwise_taken",
     )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
@@ -1476,6 +1493,12 @@ export async function listManifestLots(manifestId: string) {
           reject_reason: string | null;
           reject_reason_code: string | null;
           unit_cost_minor_units: number | null;
+          // SLICE 18-0: the human's answer to "is this taken otherwise into the
+          // body?" — or null when nobody has been asked yet. The review summary
+          // treats null as "still needs classifying" and a real boolean as
+          // "answered, stop nagging". Keep it nullable: collapsing null into
+          // false would silently mark every unasked lot as ordinary.
+          otherwise_taken: boolean | null;
         }[]
       | null) ?? []
   );

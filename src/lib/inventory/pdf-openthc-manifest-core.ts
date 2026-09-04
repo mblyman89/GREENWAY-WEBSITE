@@ -186,6 +186,12 @@ export function parseOpenThcInvoiceManifest(text: string): ParsedManifest | null
       is_medical: false,
       inventory_type: strainType,
       expires_on: null,
+      // SLICE 18-0: compliance classification is never read from a manifest
+      // (WA manifests carry no such field). Collected at Product Onboarding.
+      low_thc_liquid: null,
+      unit_thc_mg: null,
+      otherwise_taken: null,
+      units_per_package: null,
       lab: null,
       warnings: lineWarnings,
       // QA% on this layout is a headline potency figure whose exact metric isn't

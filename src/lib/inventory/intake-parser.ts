@@ -60,6 +60,23 @@ export type ParsedLine = {
   is_medical: boolean;
   inventory_type: string | null;
   expires_on: string | null;
+  /**
+   * SLICE 18-0 — the four compliance-classification flags (migrations 0216 /
+   * 0217). ALWAYS null out of the parser, and that is deliberate:
+   *
+   * A WA transfer manifest carries no route-of-administration field and no
+   * per-container THC figure. There is nothing here to read. Deriving these
+   * from a product name would be exactly the SLICE 16 servings-vs-units
+   * mistake — a guess that silently rescales a statutory limit.
+   *
+   * They exist on the shape so the receiving pipeline can CARRY a human's
+   * answer end to end. The answer itself is collected at Product Onboarding
+   * (receiving-classification-core.ts), never inferred at the door.
+   */
+  low_thc_liquid: boolean | null;
+  unit_thc_mg: number | null;
+  otherwise_taken: boolean | null;
+  units_per_package: number | null;
   lab: ParsedLab | null;
   /** Per-line warnings surfaced to the reviewer. */
   warnings: string[];
@@ -408,6 +425,12 @@ function parseWciaLine(item: unknown): ParsedLine {
     is_medical,
     inventory_type,
     expires_on,
+    // SLICE 18-0: compliance classification is never read from a manifest
+    // (WA manifests carry no such field). Collected at Product Onboarding.
+    low_thc_liquid: null,
+    unit_thc_mg: null,
+    otherwise_taken: null,
+    units_per_package: null,
     lab,
     warnings,
     raw: item,
@@ -476,6 +499,12 @@ function blankLine(raw: unknown, warnings: string[]): ParsedLine {
     is_medical: false,
     inventory_type: null,
     expires_on: null,
+    // SLICE 18-0: compliance classification is never read from a manifest
+    // (WA manifests carry no such field). Collected at Product Onboarding.
+    low_thc_liquid: null,
+    unit_thc_mg: null,
+    otherwise_taken: null,
+    units_per_package: null,
     lab: null,
     warnings,
     raw,
@@ -594,6 +623,12 @@ function parseGenericLine(raw: unknown): ParsedLine {
     is_medical: false,
     inventory_type: null,
     expires_on,
+    // SLICE 18-0: compliance classification is never read from a manifest
+    // (WA manifests carry no such field). Collected at Product Onboarding.
+    low_thc_liquid: null,
+    unit_thc_mg: null,
+    otherwise_taken: null,
+    units_per_package: null,
     lab,
     warnings,
     raw,

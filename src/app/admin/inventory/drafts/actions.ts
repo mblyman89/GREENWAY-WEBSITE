@@ -32,6 +32,14 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   // Validated server-side against the canonical taxonomy in
   // approveDraftWithPrice - the form is never trusted.
   const chosenStrainType = (formData.get("strain_type") as string | null)?.trim() || null;
+  // SLICE 18-0: the approver's COMPLIANCE picks. Passed through as RAW form
+  // strings on purpose - approveDraftWithPrice re-derives what was actually
+  // required and validates/refuses every value there. Parsing them here would
+  // duplicate the rules, and duplicated compliance rules drift.
+  const otherwiseTaken = (formData.get("otherwise_taken") as string | null) ?? null;
+  const unitsPerPackage = (formData.get("units_per_package") as string | null) ?? null;
+  const lowThcLiquid = (formData.get("low_thc_liquid") as string | null) ?? null;
+  const unitThcMg = (formData.get("unit_thc_mg") as string | null) ?? null;
 
   // SLICE 78: "__new__" = create the category right here, mid-onboarding.
   // Same pure gatekeeper as Settings → Types (label required, slug derivation,
@@ -148,6 +156,10 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
     chosenWebsiteCategory,
     chosenHouseType,
     chosenStrainType,
+    otherwiseTaken,
+    unitsPerPackage,
+    lowThcLiquid,
+    unitThcMg,
   });
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {

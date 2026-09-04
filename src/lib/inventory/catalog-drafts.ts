@@ -20,6 +20,13 @@ import {
   assessDraftClassification,
   validateClassificationChoice,
 } from "@/lib/inventory/draft-approval-gate-core";
+// SLICE 18-0: the COMPLIANCE classification gate. Product Onboarding is the
+// only classification step a RECEIVED lot can reach - fact review is scoped to
+// an import_id, which a manifest-sourced lot never has.
+import {
+  assessReceivingClassification,
+  validateReceivingClassificationChoice,
+} from "@/lib/inventory/receiving-classification-core";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 // SLICE 92: owner-created product types (inventory_types) are legal picks too.
@@ -77,6 +84,17 @@ export type CatalogDraft = {
    * card. Optional - absent on databases where 0146 hasn't run.
    */
   chosen_strain_type?: string | null;
+  /**
+   * SLICE 18-0 (migration 0218): the HUMAN's compliance classification from
+   * the approval card - the only classification step a RECEIVED lot can reach.
+   * Optional - absent on databases where 0218 hasn't run.
+   */
+  chosen_otherwise_taken?: boolean | null;
+  chosen_units_per_package?: number | null;
+  chosen_low_thc_liquid?: boolean | null;
+  chosen_unit_thc_mg?: number | null;
+  /** How each value came to exist - see receiving-classification-core.ts. */
+  chosen_classification_provenance?: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 };
@@ -477,6 +495,16 @@ export async function approveDraftWithPrice(
     chosenHouseType?: string | null;
     /** SLICE 93: the approver's strain-type pick (canonical taxonomy value). */
     chosenStrainType?: string | null;
+    /**
+     * SLICE 18-0: the approver's COMPLIANCE picks. Raw form strings, validated
+     * server-side against the assessment - "yes" / "no" / absent, never
+     * coerced. See receiving-classification-core.ts for why one of these is a
+     * gate and the other only a prompt.
+     */
+    otherwiseTaken?: string | null;
+    unitsPerPackage?: string | null;
+    lowThcLiquid?: string | null;
+    unitThcMg?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
@@ -553,6 +581,31 @@ export async function approveDraftWithPrice(
     return { ok: false, error: strainChoice.error };
   }
 
+  // SLICE 18-0: the COMPLIANCE classification gate.
+  //
+  // Assessed against the category this product will ACTUALLY sit in, which is
+  // the human's pick when they made one and the resolver's verdict otherwise.
+  // Using the resolver's value alone would let somebody re-shelve a product
+  // onto `topical` in the same submission that skips the suppository question.
+  //
+  // Re-derived server-side from the row we already loaded - the form's idea of
+  // what was required is never trusted, exactly as with SLICE 64 above.
+  const complianceAssessment = assessReceivingClassification({
+    productName: row?.name ?? null,
+    inventoryType: row?.inventory_type ?? null,
+    resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory,
+  });
+  const compliance = validateReceivingClassificationChoice({
+    assessment: complianceAssessment,
+    otherwiseTaken: classification?.otherwiseTaken ?? null,
+    unitsPerPackage: classification?.unitsPerPackage ?? null,
+    lowThcLiquid: classification?.lowThcLiquid ?? null,
+    unitThcMg: classification?.unitThcMg ?? null,
+  });
+  if (!compliance.ok) {
+    return { ok: false, error: compliance.error };
+  }
+
   // Persist the picks ONLY when the human made one - on a pre-0141 database
   // an approval without picks keeps working exactly as before, and an
   // approval WITH picks fails with a friendly pointer at the migration.
@@ -566,6 +619,24 @@ export async function approveDraftWithPrice(
   // SLICE 93 (migration 0146): the strain-type pick, only when made.
   if (strainChoice.value !== null) update.chosen_strain_type = strainChoice.value;
 
+  // SLICE 18-0 (migration 0218): the compliance classification.
+  //
+  // Unlike the picks above, otherwise_taken is written on EVERY approval, not
+  // only when a human answered. That is the point: after this slice, an
+  // approved product always carries a definite answer, so the ten-unit limit
+  // can never fail to engage merely because nobody filled a box in. What
+  // distinguishes the two cases is the provenance column, not the absence of
+  // a value - "the machine assumed no" and "a person said no" are both
+  // recorded, and 18A's worklist reads them apart.
+  update.chosen_otherwise_taken = compliance.otherwiseTaken;
+  update.chosen_classification_provenance = compliance.provenance;
+  if (compliance.unitsPerPackage !== null) update.chosen_units_per_package = compliance.unitsPerPackage;
+  // The low-THC pair stays absent when unanswered - here silence is safe (the
+  // product simply keeps the tighter liquid limit) and inventing a `false`
+  // would be a claim nobody made.
+  if (compliance.lowThcLiquid !== null) update.chosen_low_thc_liquid = compliance.lowThcLiquid;
+  if (compliance.unitThcMg !== null) update.chosen_unit_thc_mg = compliance.unitThcMg;
+
   const { error } = await admin
     .from("catalog_product_drafts")
     .update(update)
@@ -574,6 +645,18 @@ export async function approveDraftWithPrice(
     const missingColumn =
       error.code === "42703" ||
       /column .* does not exist|could not find .* column/i.test(error.message ?? "");
+    // SLICE 18-0 (0218) is checked FIRST because it is the only one of the
+    // three that is written on every approval - on a database missing 0218
+    // every approval fails, so naming 0141 or 0146 would send the owner to
+    // the wrong migration.
+    if (missingColumn && update.chosen_otherwise_taken !== undefined) {
+      return {
+        ok: false,
+        error:
+          "Saving the compliance classification needs database migration 0218 " +
+          "(supabase/migrations/0218_receiving_classification.sql). Run it, then approve again.",
+      };
+    }
     if (missingColumn && update.chosen_strain_type !== undefined) {
       return {
         ok: false,

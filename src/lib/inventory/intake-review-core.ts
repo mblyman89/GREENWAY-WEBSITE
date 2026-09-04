@@ -17,6 +17,7 @@
  */
 
 import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
+import { suspectsOtherwiseTaken } from "@/lib/compliance/sales-limits-core";
 
 export type IntakeReviewSeverity = "error" | "warning" | "info";
 
@@ -38,6 +39,12 @@ export type IntakeReviewSummary = {
   sampleCount: number;
   missingCoaCount: number;
   failedLabCount: number;
+  /**
+   * SLICE 18-0 — lines that LOOK like a suppository and carry no
+   * classification yet. Counted separately so the receiving page can surface
+   * it as its own number rather than burying it among the other warnings.
+   */
+  otherwiseTakenSuspectCount: number;
   /** true iff there are NO error-severity flags — safe for the employee to
    * proceed to acceptance (they still confirm warnings). */
   readyForReview: boolean;
@@ -99,6 +106,7 @@ export function summarizeIntakeForReview(manifest: ParsedManifest): IntakeReview
   let sampleCount = 0;
   let missingCoaCount = 0;
   let failedLabCount = 0;
+  let otherwiseTakenSuspectCount = 0;
 
   lines.forEach((line, i) => {
     const label = lineLabel(line, i);
@@ -131,6 +139,36 @@ export function summarizeIntakeForReview(manifest: ParsedManifest): IntakeReview
       add("error", "Lab result is marked FAILED — do NOT accept for retail sale.");
     }
 
+    // SLICE 18-0 — an unclassified suppository suspect at the receiving dock.
+    //
+    // This is a WARNING, never an error: a name regex is evidence, not a fact,
+    // and refusing a delivery on a regex hit would be wrong. The actual GATE
+    // sits at Product Onboarding, where a human is already answering
+    // classification questions and can give a real answer.
+    //
+    // The warning matters because the fail-safe here is INVERTED (0217): an
+    // unflagged suppository is filed as an ordinary topical, lands in the
+    // 2016 g liquid bucket, and the ten-unit maximum silently never engages.
+    // Every other flag in this checklist fails closed; this one does not, so
+    // "nobody looked at it yet" has to be said out loud.
+    //
+    // Only null/undefined counts as unclassified. An explicit `false` means a
+    // human already considered it and said no, and nagging them again is how a
+    // checklist becomes noise people stop reading.
+    if (line.otherwise_taken == null && suspectsOtherwiseTaken({
+      name: line.product_name,
+      inventoryType: line.inventory_type,
+    })) {
+      otherwiseTakenSuspectCount += 1;
+      add(
+        "warning",
+        "This looks like a suppository, which has its own ten-item transaction limit " +
+          "(WAC 314-55-095(1)(d)(i)(D)). Until somebody classifies it, it is treated as an " +
+          "ordinary topical and that limit will not apply. Classify it in Product Onboarding " +
+          "before it goes on the shelf.",
+      );
+    }
+
     if (!(line.received_qty > 0)) {
       add("warning", "Received quantity is zero or missing — confirm the count.");
     }
@@ -151,6 +189,7 @@ export function summarizeIntakeForReview(manifest: ParsedManifest): IntakeReview
     sampleCount,
     missingCoaCount,
     failedLabCount,
+    otherwiseTakenSuspectCount,
     readyForReview,
     flags,
   };
@@ -188,6 +227,10 @@ export function __runIntakeReviewTests(): { passed: number; failed: number } {
     is_medical: false,
     inventory_type: "Usable Cannabis",
     expires_on: null,
+    low_thc_liquid: null,
+    unit_thc_mg: null,
+    otherwise_taken: null,
+    units_per_package: null,
     lab: {
       labtest_external_identifier: "LAB-1",
       lab_name: "Testing Co",
@@ -261,6 +304,55 @@ export function __runIntakeReviewTests(): { passed: number; failed: number } {
   // Zero quantity → warning.
   const zeroQty = summarizeIntakeForReview(baseManifest({ lines: [baseLine({ received_qty: 0 })] }));
   assert(zeroQty.flags.some((f) => /quantity/i.test(f.message)), "zero qty flagged");
+
+  // SLICE 18-0 — unclassified suppository suspect at the dock.
+  {
+    const suspect = summarizeIntakeForReview(
+      baseManifest({
+        lines: [baseLine({ product_name: "Relief Suppositories 6ct", otherwise_taken: null })],
+      }),
+    );
+    assert(suspect.otherwiseTakenSuspectCount === 1, "suppository suspect counted");
+    assert(
+      suspect.flags.some((f) => f.severity === "warning" && /suppositor/i.test(f.message)),
+      "suppository suspect flagged as a WARNING",
+    );
+    // Never an error: a name regex is evidence, not a fact, and a delivery
+    // must not be refused on it. The real gate is at Product Onboarding.
+    assert(suspect.readyForReview === true, "a suspect never blocks acceptance");
+    assert(
+      suspect.flags.some((f) => /Product Onboarding/.test(f.message)),
+      "the warning names the screen where it can actually be fixed",
+    );
+
+    // The CCRS inventory type alone is enough, even with an innocent name.
+    const byType = summarizeIntakeForReview(
+      baseManifest({ lines: [baseLine({ product_name: "Evening Relief", inventory_type: "Suppository" })] }),
+    );
+    assert(byType.otherwiseTakenSuspectCount === 1, "CCRS type alone triggers the suspect flag");
+
+    // An ANSWERED line is never nagged again - false is a human's answer, and
+    // repeating the question is how a checklist becomes noise people ignore.
+    const answeredNo = summarizeIntakeForReview(
+      baseManifest({ lines: [baseLine({ product_name: "Relief Suppositories 6ct", otherwise_taken: false })] }),
+    );
+    assert(answeredNo.otherwiseTakenSuspectCount === 0, "an explicit NO silences the warning");
+    const answeredYes = summarizeIntakeForReview(
+      baseManifest({ lines: [baseLine({ product_name: "Relief Suppositories 6ct", otherwise_taken: true })] }),
+    );
+    assert(answeredYes.otherwiseTakenSuspectCount === 0, "an explicit YES silences the warning");
+
+    // An ordinary product is never flagged.
+    assert(clean.otherwiseTakenSuspectCount === 0, "ordinary flower is not a suspect");
+
+    // The two commonly-mistaken products must NOT be flagged: WAC
+    // 314-55-010(40) excludes external application to the skin and oral
+    // ingestion, so a patch and a sublingual tincture both belong elsewhere.
+    const patch = summarizeIntakeForReview(
+      baseManifest({ lines: [baseLine({ product_name: "Transdermal Patch 20mg", inventory_type: "Topical" })] }),
+    );
+    assert(patch.otherwiseTakenSuspectCount === 0, "a transdermal patch is not a suspect");
+  }
 
   if (failed === 0) console.log(`intake-review-core: all ${passed} tests passed`);
   return { passed, failed };
