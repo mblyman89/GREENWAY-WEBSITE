@@ -282,7 +282,41 @@ describe("SLICE 18-0 — stage 5: the gate is actually invoked at approval", () 
 
   it("always writes otherwise_taken, plus the provenance that explains it", () => {
     expect(src).toMatch(/update\.chosen_otherwise_taken\s*=\s*compliance\.otherwiseTaken/);
-    expect(src).toMatch(/update\.chosen_classification_provenance\s*=\s*compliance\.provenance/);
+    // SLICE 18F widened this. Provenance is no longer assigned straight from
+    // `compliance.provenance`; it is seeded from it and may be upgraded to
+    // `remembered` when the human's answer matches a prior human answer for
+    // the same product identity. The INVARIANT this test defends is unchanged
+    // and is now pinned in two halves, which is strictly stronger than the
+    // single spelling it replaced:
+    //   1. the value written must ORIGINATE from the server-side assessment,
+    //      never from the form (the original attack this guarded against);
+    //   2. the write must still be UNCONDITIONAL, so no approval can land
+    //      with an otherwise_taken that nothing explains.
+    // `toMatch` takes no message argument, so the explanation rides on the
+    // boolean form -- a bare regex failure here would be genuinely cryptic.
+    expect(
+      /let\s+classificationProvenance:[^=]*=\s*compliance\.provenance/.test(src),
+      "provenance must still be SEEDED from the server-derived assessment; " +
+        "sourcing it from the form is the attack 18-0 closed.",
+    ).toBe(true);
+    expect(
+      /update\.chosen_classification_provenance\s*=\s*classificationProvenance/.test(src),
+      "provenance must still be written on every approval.",
+    ).toBe(true);
+    // And the write must not have become conditional. Rather than scan a
+    // character window (which would spill into the NEXT statement and produce
+    // a false alarm), assert the assignment sits at the function's TOP LEVEL:
+    // a statement nested inside an `if` would be indented deeper than 2.
+    const assignLine = src
+      .split("\n")
+      .find((ln) => ln.includes("update.chosen_classification_provenance ="));
+    expect(assignLine, "the provenance write must still exist").toBeDefined();
+    expect(
+      /^ {2}update\.chosen_classification_provenance =/.test(assignLine ?? ""),
+      "the provenance write must stay unconditional at the function's top " +
+        "level; nesting it inside a branch would let an approval land with an " +
+        "otherwise_taken that nothing explains.",
+    ).toBe(true);
   });
 
   it("names migration 0218 when the columns are missing", () => {

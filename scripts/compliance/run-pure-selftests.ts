@@ -263,6 +263,11 @@ import { __runTypeRegistryCoreTests } from "../../src/lib/pos/type-registry-core
 import { __runHouseTypeCoreTests } from "../../src/lib/inventory/house-type-core";
 import { __runDraftApprovalGateTests } from "../../src/lib/inventory/draft-approval-gate-core";
 import { __runReceivingClassificationTests } from "../../src/lib/inventory/receiving-classification-core";
+// SLICE 18F - the MEMORY for the same question. The 18-0 gate is REQUIRED,
+// and a required question with no memory is a question answered under time
+// pressure at a dock every week. This core decides what may be remembered
+// and, more importantly, what may NOT: a machine default is not an answer.
+import { __runClassificationMemoryTests } from "../../src/lib/inventory/classification-memory-core";
 // SLICE 18A — the other end of the same question. receiving-classification-core
 // asks it at the dock; these two find the products nobody was ever asked about
 // and shape them into a worklist.
@@ -608,6 +613,7 @@ async function main() {
   __runHouseTypeCoreTests();
   __runDraftApprovalGateTests();
   { const r = __runReceivingClassificationTests(); if (r.passed < 1) throw new Error("receiving-classification-core: no assertions ran"); console.log(`receiving-classification-core: ${r.passed} assertions passed`); }
+  { const r = __runClassificationMemoryTests(); if (r.passed < 1) throw new Error("classification-memory-core: no assertions ran"); console.log(`classification-memory-core: ${r.passed} assertions passed`); }
   // SLICE 18A. The `passed < 1` guard is not ceremony: a self-test function
   // that silently returns 0 assertions would otherwise register as a pass, and
   // the sweep would report green while testing nothing.

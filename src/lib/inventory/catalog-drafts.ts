@@ -26,6 +26,7 @@ import {
 import {
   assessReceivingClassification,
   validateReceivingClassificationChoice,
+  RECEIVING_CLASSIFICATION_PROVENANCE,
 } from "@/lib/inventory/receiving-classification-core";
 // SLICE 18E: mirror the approver's compliance answers back onto the LOT row as
 // provenance. Pure policy; the write below obeys it. See migration 0219 - this
@@ -45,6 +46,12 @@ import {
   STRAIN_TYPE_AUTO_MIN_CONFIDENCE,
 } from "@/lib/inventory/strain-type-intel-core";
 import { recordAudit } from "@/lib/auth/audit";
+// SLICE 18F: the onboarding memory. This module only SUPPLIES rows to it.
+import {
+  recallClassification,
+  CLASSIFICATION_MEMORY_PROVENANCE,
+  type PriorClassification,
+} from "@/lib/inventory/classification-memory-core";
 import {
   getPricingSettings,
   getVelocityForProduct,
@@ -376,6 +383,85 @@ export async function listCatalogDrafts(status = "draft"): Promise<CatalogDraft[
   return (data as CatalogDraft[] | null) ?? [];
 }
 
+/**
+ * SLICE 18F — prior compliance classifications, for the onboarding memory.
+ *
+ * READ-ONLY. This function writes nothing and decides nothing; it hands rows
+ * to `recallClassification()` in classification-memory-core.ts, which owns
+ * every rule about what may and may not be remembered.
+ *
+ * WHY THIS READS `approved` DRAFTS AND NOT `menu_items`
+ * -----------------------------------------------------
+ * `menu_items` carries the four ENFORCEMENT columns but has NO classification
+ * provenance column — verified: 0138 added `fact_provenance` for dose facts,
+ * and 0216/0217/0219 added no provenance for the classification flags. Only
+ * `catalog_product_drafts.chosen_classification_provenance` (0218) records
+ * whether a human answered or the machine defaulted.
+ *
+ * That distinction is the whole safety property of the memory: replaying a
+ * machine default as a remembered human answer would launder a non-answer
+ * into an answer. A source that cannot tell the two apart is therefore
+ * unusable here, however convenient it looks.
+ *
+ * Approved drafts are never deleted (nothing in this module deletes a draft),
+ * so the history is durable.
+ */
+export async function listPriorClassifications(limit = 1000): Promise<PriorClassification[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("catalog_product_drafts")
+    .select(
+      "name, brand_name, vendor_name, category, chosen_website_category, chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg, chosen_classification_provenance, updated_by, updated_at",
+    )
+    .eq("status", "approved")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    // A missing 0218 column must NOT break the approval card. The gate still
+    // works exactly as it did before this slice; it simply has no memory.
+    console.error("[catalog-drafts] prior-classification read failed:", error.message);
+    return [];
+  }
+
+  type PriorRow = {
+    name: string | null;
+    brand_name: string | null;
+    vendor_name: string | null;
+    category: string | null;
+    chosen_website_category: string | null;
+    chosen_otherwise_taken: boolean | null;
+    chosen_units_per_package: number | null;
+    chosen_low_thc_liquid: boolean | null;
+    chosen_unit_thc_mg: number | null;
+    chosen_classification_provenance: Record<string, string> | null;
+    updated_by: string | null;
+    updated_at: string | null;
+  };
+
+  return ((data as PriorRow[] | null) ?? []).map((r) => ({
+    vendorName: r.vendor_name,
+    brandName: r.brand_name,
+    productName: r.name,
+    // The human's shelf pick wins over the raw LCB value when one was made —
+    // it is the category the product ACTUALLY sits in, which is what the
+    // memory key must agree with on the next delivery.
+    category: r.chosen_website_category ?? r.category,
+    // `?? null` throughout, never `||`: a human's literal `false` is a real
+    // answer ("no, not a suppository") and must survive the trip.
+    otherwiseTaken: r.chosen_otherwise_taken ?? null,
+    unitsPerPackage: r.chosen_units_per_package ?? null,
+    lowThcLiquid: r.chosen_low_thc_liquid ?? null,
+    unitThcMg: r.chosen_unit_thc_mg ?? null,
+    decidedAt: r.updated_at,
+    decidedBy: r.updated_by,
+    // The per-field provenance blob records otherwiseTaken separately from
+    // lowThcLiquid. The otherwise-taken value is the gated one, so it decides
+    // recallability.
+    provenance: r.chosen_classification_provenance?.otherwiseTaken ?? null,
+  }));
+}
+
 export async function countCatalogDrafts(): Promise<{ draft: number; approved: number; dismissed: number }> {
   const empty = { draft: 0, approved: 0, dismissed: 0 };
   if (!isSupabaseServiceConfigured) return empty;
@@ -517,7 +603,10 @@ export async function approveDraftWithPrice(
   const { data } = await admin
     .from("catalog_product_drafts")
     .select(
-      "unit_cost_minor_units, manifest_id, pos_product_key, name, inventory_type, category, strain_name, lot_id",
+      // SLICE 18F: vendor_name + brand_name are read because the memory key is
+      // rebuilt from product IDENTITY, not from pos_product_key (which is
+      // `sku ?? lot_code` and therefore unstable across deliveries).
+      "unit_cost_minor_units, manifest_id, pos_product_key, name, brand_name, vendor_name, inventory_type, category, strain_name, lot_id",
     )
     .eq("id", draftId)
     .maybeSingle();
@@ -526,6 +615,8 @@ export async function approveDraftWithPrice(
     manifest_id: string | null;
     pos_product_key: string | null;
     name: string;
+    brand_name: string | null;
+    vendor_name: string | null;
     inventory_type: string | null;
     category: string | null;
     strain_name: string | null;
@@ -633,7 +724,40 @@ export async function approveDraftWithPrice(
   // a value - "the machine assumed no" and "a person said no" are both
   // recorded, and 18A's worklist reads them apart.
   update.chosen_otherwise_taken = compliance.otherwiseTaken;
-  update.chosen_classification_provenance = compliance.provenance;
+  // SLICE 18F: was this answer CONFIRMED FROM MEMORY rather than freshly
+  // asserted? The owner chose Option B, so the two must not look identical in
+  // the audit trail.
+  //
+  // THE MEMORY IS RE-DERIVED SERVER-SIDE, exactly as the assessment above is.
+  // The form never gets to claim "this was remembered" - a client that could
+  // assert its own provenance could launder a fresh guess into a value that
+  // reads as corroborated by history. We re-read the history, recompute the
+  // recall, and only then decide.
+  //
+  // It counts as remembered ONLY when a real memory existed AND the human's
+  // submitted answer matches it. If they changed the answer, that is a fresh
+  // human decision about a product whose formulation may have changed - and
+  // recording it as `remembered` would credit it to a prior decision that in
+  // fact disagreed.
+  let classificationProvenance: Record<string, string> = compliance.provenance;
+  if (compliance.provenance.otherwiseTaken === RECEIVING_CLASSIFICATION_PROVENANCE.human) {
+    const remembered = recallClassification({
+      candidate: {
+        vendorName: row?.vendor_name ?? null,
+        brandName: row?.brand_name ?? null,
+        productName: row?.name ?? null,
+        category: choice.chosenWebsiteCategory ?? resolution.websiteCategory ?? row?.category ?? null,
+      },
+      history: await listPriorClassifications(),
+    });
+    if (remembered !== null && remembered.otherwiseTaken === compliance.otherwiseTaken) {
+      classificationProvenance = {
+        ...classificationProvenance,
+        otherwiseTaken: CLASSIFICATION_MEMORY_PROVENANCE.remembered,
+      };
+    }
+  }
+  update.chosen_classification_provenance = classificationProvenance;
   if (compliance.unitsPerPackage !== null) update.chosen_units_per_package = compliance.unitsPerPackage;
   // The low-THC pair stays absent when unanswered - here silence is safe (the
   // product simply keeps the tighter liquid limit) and inventing a `false`

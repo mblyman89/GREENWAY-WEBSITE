@@ -7,7 +7,12 @@ import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Input, Select } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
-import { listCatalogDrafts, countCatalogDrafts, loadStrainTypeSuggestions } from "@/lib/inventory/catalog-drafts";
+import {
+  listCatalogDrafts,
+  countCatalogDrafts,
+  loadStrainTypeSuggestions,
+  listPriorClassifications,
+} from "@/lib/inventory/catalog-drafts";
 // SLICE 93: strain-type intelligence - the picker's honest placeholder + the
 // canonical dropdown choices (strain-taxonomy, the single source of truth).
 import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-core";
@@ -35,6 +40,15 @@ import {
   lowThcPickerPlaceholder,
   type ReceivingClassificationAssessment,
 } from "@/lib/inventory/receiving-classification-core";
+// SLICE 18F: the memory for that same gate. Pure - it only decides what MAY be
+// remembered (never a machine default, never silence), and the human still
+// confirms every pre-filled answer.
+import {
+  recallClassification,
+  prefillFromMemory,
+  describeMemory,
+  type PriorClassification,
+} from "@/lib/inventory/classification-memory-core";
 // SLICE 78: the category picker lists the DB-backed registry (owner's
 // categories from /admin/settings/types), not the hardcoded taxonomy — the
 // registry falls back to the hardcoded list on an empty/unconfigured DB.
@@ -117,6 +131,16 @@ export default async function CatalogDraftsPage({
   // liquid_edible shelves and on a detector hit, and nowhere else, because a
   // gate that interrupts every flower delivery is a gate staff click through.
   const complianceAssessments = new Map<string, ReceivingClassificationAssessment>();
+  // SLICE 18F: the MEMORY. `pos_product_key` is `sku ?? lot_code`
+  // (intake-parser.ts:414), so for any manifest without a SKU the key changes
+  // every delivery and the gate above re-asks a question this owner has
+  // already answered - sometimes many times. One batched read of prior
+  // APPROVED decisions lets the picker arrive pre-filled and labelled.
+  //
+  // OPTION B (owner's decision): pre-fill the ANSWER, never the DECISION. The
+  // pick below stays `required`, so the fail-permissive gate is not weakened.
+  const priorClassifications = await listPriorClassifications();
+  const memories = new Map<string, PriorClassification | null>();
   drafts.forEach((d, i) => {
     assessments.set(
       d.id,
@@ -132,6 +156,20 @@ export default async function CatalogDraftsPage({
         productName: d.name,
         inventoryType: d.inventory_type,
         resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+      }),
+    );
+    memories.set(
+      d.id,
+      recallClassification({
+        candidate: {
+          vendorName: d.vendor_name,
+          brandName: d.brand_name,
+          productName: d.name,
+          // Match on the shelf the product will ACTUALLY sit in, which is what
+          // the earlier decision was recorded against.
+          category: resolutions[i]?.websiteCategory ?? d.category,
+        },
+        history: priorClassifications,
       }),
     );
   });
@@ -286,6 +324,11 @@ export default async function CatalogDraftsPage({
                   const a = assessments.get(d.id);
                   // SLICE 18-0: the compliance assessment for this row.
                   const ca = complianceAssessments.get(d.id);
+                  // SLICE 18F: the remembered answer for THIS product, if a
+                  // human ever gave one. Null when nothing qualifies - a
+                  // machine default is deliberately not recalled.
+                  const memory = memories.get(d.id) ?? null;
+                  const prefill = prefillFromMemory(memory);
                   const displayCategory =
                     d.chosen_website_category ?? a?.resolvedWebsiteCategory ?? null;
                   const autoType =
@@ -507,7 +550,11 @@ export default async function CatalogDraftsPage({
                                       id={`otherwise-taken-${d.id}`}
                                       name="otherwise_taken"
                                       required
-                                      defaultValue=""
+                                      /* SLICE 18F: pre-filled from the last
+                                         answer a human gave for this product.
+                                         `required` STAYS - Option B saves the
+                                         typing, never the decision. */
+                                      defaultValue={prefill.otherwiseTaken}
                                       className="text-xs"
                                       aria-label="Otherwise taken into the body"
                                     >
@@ -525,7 +572,18 @@ export default async function CatalogDraftsPage({
                                       placeholder="Units per package (a box of 6 = 6)"
                                       className="text-xs"
                                       aria-label="Units per package"
+                                      defaultValue={prefill.unitsPerPackage}
                                     />
+                                    {/* SLICE 18F: never a silent pre-fill. The
+                                        operator is told WHOSE answer this is
+                                        and HOW OLD it is, so a stale
+                                        classification can be spotted and
+                                        overridden rather than rubber-stamped. */}
+                                    {prefill.isRemembered ? (
+                                      <span className="text-[10px] text-[var(--admin-accent)]">
+                                        {describeMemory(memory)}
+                                      </span>
+                                    ) : null}
                                     {ca.suspected ? (
                                       <span className="text-[10px] text-[var(--admin-warning,#b45309)]">
                                         This name looks like a suppository — please confirm.
