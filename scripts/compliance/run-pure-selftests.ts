@@ -268,6 +268,12 @@ import { __runReceivingClassificationTests } from "../../src/lib/inventory/recei
 // and shape them into a worklist.
 import { __runClassificationStatusTests } from "../../src/lib/inventory/classification-status-core";
 import { __runClassificationWorklistTests } from "../../src/lib/inventory/classification-worklist-core";
+// SLICE 18E - the provenance mirror. Decides what an approver's compliance
+// answers write back onto the LOT row. Never enforcement (migration 0219).
+import { __runClassificationMirrorTests } from "../../src/lib/inventory/classification-mirror-core";
+// SLICE 18E - reports lot-vs-menu classification conflicts AS conflicts.
+// Display only; a disagreement is never an input to a limit.
+import { __runClassificationDisagreementTests } from "../../src/lib/inventory/classification-disagreement-core";
 import { __runStrainFieldsCoreTests } from "../../src/lib/inventory/strain-fields-core";
 import { __runStrainTypeIntelTests } from "../../src/lib/inventory/strain-type-intel-core";
 import { __runBankingVaultUiTests } from "../../src/lib/payments/banking-vault-ui-core";
@@ -607,6 +613,8 @@ async function main() {
   // the sweep would report green while testing nothing.
   { const r = __runClassificationStatusTests(); if (r.passed < 1) throw new Error("classification-status-core: no assertions ran"); console.log(`classification-status-core: ${r.passed} assertions passed`); }
   { const r = __runClassificationWorklistTests(); if (r.passed < 1) throw new Error("classification-worklist-core: no assertions ran"); console.log(`classification-worklist-core: ${r.passed} assertions passed`); }
+  { const r = __runClassificationMirrorTests(); if (r.passed < 1) throw new Error("classification-mirror-core: no assertions ran"); console.log(`classification-mirror-core: ${r.passed} assertions passed`); }
+  { const r = __runClassificationDisagreementTests(); if (r.passed < 1) throw new Error("classification-disagreement-core: no assertions ran"); console.log(`classification-disagreement-core: ${r.passed} assertions passed`); }
   __runStrainFieldsCoreTests();
   __runStrainTypeIntelTests();
   __runBankingVaultUiTests();

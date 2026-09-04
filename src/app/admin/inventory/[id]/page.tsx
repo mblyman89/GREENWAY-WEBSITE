@@ -46,6 +46,9 @@ import {
   classificationBadgeLabel,
 } from "@/lib/inventory/classification-status-core";
 import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
+// SLICE 18E: report a lot-vs-menu classification conflict AS a conflict.
+// Display only — the register always enforces the menu answer.
+import { assessClassificationDisagreement } from "@/lib/inventory/classification-disagreement-core";
 // SLICE 2: received-date vocabulary (floor date + provenance labels) comes
 // from the pure core so the UI and the validator can never disagree.
 import {
@@ -175,6 +178,36 @@ export default async function LotDetailPage({
     unitsPerPackage: menuFlags?.unitsPerPackage ?? null,
     lowThcLiquid: menuFlags?.lowThcLiquid ?? null,
     unitThcMg: menuFlags?.unitThcMg ?? null,
+  });
+
+  // ── SLICE 18E: lot-vs-menu disagreement.
+  //
+  // This does NOT walk back the decision above. The STATUS still comes from
+  // the menu, and a NULL lot value is treated as silence, never as a
+  // contradiction — so the thousands of historical lots that were never
+  // mirrored stay quiet exactly as 18A intended.
+  //
+  // What this adds is the one case 18A could not produce and 18E now can:
+  // since the approver's answers are mirrored onto the lot row (migration
+  // 0219), a lot can hold a REAL answer that CONTRADICTS what the register is
+  // enforcing. Showing the two values side by side without comment would make
+  // the reader adjudicate it; reporting it as a disagreement, with the menu
+  // named as the one in force, does not.
+  const classificationDisagreement = assessClassificationDisagreement({
+    menu: menuFlags
+      ? {
+          otherwiseTaken: menuFlags.otherwiseTaken ?? null,
+          unitsPerPackage: menuFlags.unitsPerPackage ?? null,
+          lowThcLiquid: menuFlags.lowThcLiquid ?? null,
+          unitThcMg: menuFlags.unitThcMg ?? null,
+        }
+      : null,
+    lot: {
+      otherwiseTaken: lot.otherwise_taken ?? null,
+      unitsPerPackage: lot.units_per_package ?? null,
+      lowThcLiquid: lot.low_thc_liquid ?? null,
+      unitThcMg: lot.unit_thc_mg ?? null,
+    },
   });
 
   const adjustAction = adjustLotAction.bind(null, id);
@@ -955,6 +988,34 @@ export default async function LotDetailPage({
                 </span>
               </div>
             </div>
+
+            {/* ── SLICE 18E: the receiving paperwork disagrees ─────────────
+                Only rendered when the lot row holds a REAL answer that
+                contradicts the enforced one. A missing lot answer is silence,
+                not a contradiction, so historical lots never trigger this. */}
+            {classificationDisagreement.disagrees ? (
+              <div className="mb-4 rounded-[var(--admin-radius)] border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-[12px] font-semibold text-amber-200">
+                  This lot&rsquo;s paperwork says something different
+                </p>
+                <dl className="mt-2 space-y-1">
+                  {classificationDisagreement.items.map((d) => (
+                    <div key={d.label} className="flex flex-wrap gap-x-2 text-[12px]">
+                      <dt className="font-medium text-[var(--admin-text)]">{d.label}:</dt>
+                      <dd className="text-[var(--admin-text-muted)]">
+                        register is enforcing <strong className="text-[var(--admin-text)]">{d.menu}</strong>
+                        {" · "}
+                        this lot&rsquo;s paperwork said{" "}
+                        <strong className="text-[var(--admin-text)]">{d.lot}</strong>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-2 text-[11px] leading-relaxed text-[var(--admin-text-muted)]">
+                  {classificationDisagreement.message}
+                </p>
+              </div>
+            ) : null}
 
             <form action={complianceAction} className="space-y-4">
               <Field

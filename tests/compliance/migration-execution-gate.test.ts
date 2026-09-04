@@ -623,18 +623,30 @@ describe("the migration list is ordered the way the database will see it", () =>
     //
     // SLICE 18-0 re-ran the ENTIRE ritual from scratch rather than inheriting
     // the line above, exactly as that paragraph demands. Fresh results, from
-    // supabase/migrations: `ls [0-9]*.sql | wc -l` returns 218 (was 217, +1 for
-    // 0218_receiving_classification.sql); `ls [0-9]*.sql | grep -cvE
+    // supabase/migrations: `ls [0-9]*.sql | wc -l` returns 219 (was 218, +1 for
+    // 0219_classification_provenance_doctrine.sql); `ls [0-9]*.sql | grep -cvE
     // '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql | sort -c` exits clean; and
     // `ls [0-9]*.sql | cut -c1-4 | sort | uniq -d | wc -l` returns 0.
     //
-    // One NEW fact this time, worth recording because it briefly looked like a
-    // discrepancy: `ls supabase/migrations | wc -l` returns 219, not 218. The
-    // extra entry is a pre-existing `editor-safe` DIRECTORY, not a migration.
+    // The same NEW fact re-confirmed in 18E, worth keeping because it briefly
+    // looked like a discrepancy: `ls supabase/migrations | wc -l` returns 220,
+    // one more than the migration count. The extra entry is a pre-existing
+    // `editor-safe` DIRECTORY, not a migration.
     // That is why every command in this ritual globs `[0-9]*.sql` rather than
     // listing the directory — a raw count would drift the moment anyone adds a
     // subfolder, and a drifting number in a compliance ritual is worse than no
     // number, because it gets explained away instead of investigated.
+    //
+    // 0219 exists because the lot-side copies of the four classification
+    // columns were commented 'See menu_items.low_thc_liquid', which reads as
+    // "these two columns mean the same thing". They do not: menu_items is what
+    // the register enforces from, and inventory_lots is provenance that nothing
+    // reads to decide a limit. A reader who trusted that comment could write
+    // the lot column, see it succeed, and change nothing at the point of sale.
+    // 0219 rewrites those four comments (and states the enforcement role on the
+    // menu side) so the doctrine travels WITH the database. It changes no data
+    // and no structure - it is comments only, asserted in
+    // tests/compliance/classification-provenance.test.ts.
     //
     // 0218 exists because SLICES 16 and 17 were both unreachable for anything
     // received after the Cultivera cutover. Their rules were correct and their
@@ -645,7 +657,7 @@ describe("the migration list is ordered the way the database will see it", () =>
     // five choice/provenance columns to catalog_product_drafts so the receiving
     // door can ask the question at Product Onboarding, and so the answer
     // records WHO decided: a person, or a machine default.
-    expect(listed[listed.length - 1]).toMatch(/^0218_/);
+    expect(listed[listed.length - 1]).toMatch(/^0219_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

@@ -27,6 +27,10 @@ import {
   assessReceivingClassification,
   validateReceivingClassificationChoice,
 } from "@/lib/inventory/receiving-classification-core";
+// SLICE 18E: mirror the approver's compliance answers back onto the LOT row as
+// provenance. Pure policy; the write below obeys it. See migration 0219 - this
+// is a paper trail, never enforcement.
+import { planClassificationMirror } from "@/lib/inventory/classification-mirror-core";
 import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 // SLICE 92: owner-created product types (inventory_types) are legal picks too.
@@ -676,6 +680,97 @@ export async function approveDraftWithPrice(
     }
     return { ok: false, error: error.message };
   }
+
+  // SLICE 18E: MIRROR THE CLASSIFICATION ONTO THE LOT ROW (provenance).
+  //
+  // Until this slice the approver's answers stopped at the draft and the menu.
+  // The receiving dock reads `inventory_lots.otherwise_taken` to tell "nobody
+  // has classified this yet" from "somebody already answered"
+  // (intake-store.ts:1470, intake-review-core.ts:158), and the receiving insert
+  // always writes null there because a WA manifest has no such field
+  // (intake-store.ts:562-565). So the column could never stop being null and
+  // the suppository warning could never be silenced - on the very product a
+  // human had just classified. That is warning fatigue, and a checklist people
+  // scroll past is worse than no checklist.
+  //
+  // ORDER MATTERS, and it is the same order actions.ts:756-790 uses for the
+  // manager-facing correction:
+  //
+  //   1. the AUTHORITATIVE write (the draft update above, which the staging
+  //      path carries to `menu_items` - the surface the register enforces
+  //      from) happens FIRST and may fail the approval;
+  //   2. this PROVENANCE write happens after and is BEST-EFFORT.
+  //
+  // It must never fail the approval. By this point the answer is already
+  // saved; aborting here would tell the owner nothing was recorded when in
+  // fact the classification IS in force. A failure is recorded in the audit
+  // trail instead - the `lot_row_write_failed` precedent - so a reader can
+  // see that the lot row disagrees rather than being quietly misled.
+  let mirrorOutcome: Record<string, unknown> = {};
+  try {
+    const mirror = planClassificationMirror({
+      lotId: row?.lot_id ?? null,
+      otherwiseTaken: compliance.otherwiseTaken,
+      unitsPerPackage: compliance.unitsPerPackage,
+      lowThcLiquid: compliance.lowThcLiquid,
+      unitThcMg: compliance.unitThcMg,
+    });
+    if (!mirror.write) {
+      mirrorOutcome = { lot_mirror_skipped: mirror.code };
+    } else {
+      const { error: mErr } = await admin
+        .from("inventory_lots")
+        .update({ ...mirror.patch, updated_by: actorId })
+        .eq("id", mirror.lotId);
+      if (mErr) {
+        // A database missing 0216/0217 has no columns to mirror into. Name the
+        // migrations rather than surfacing a raw PostgREST string, and keep
+        // going - the classification is already saved where it counts.
+        const missing =
+          mErr.code === "42703" ||
+          /column .* does not exist|could not find .* column/i.test(mErr.message ?? "");
+        mirrorOutcome = {
+          lot_row_write_failed: missing
+            ? "The compliance columns aren't in the database yet (migrations 0216 and 0217)."
+            : mErr.message,
+        };
+      } else {
+        mirrorOutcome = {
+          lot_mirrored: mirror.lotId,
+          lot_mirror_patch: mirror.patch,
+        };
+      }
+    }
+  } catch (err) {
+    mirrorOutcome = {
+      lot_row_write_failed: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // The provenance write is auditable on its own terms: what was mirrored,
+  // where, or precisely why not. Without this record a silent skip would be
+  // indistinguishable from a successful mirror.
+  await recordAudit({
+    actorId,
+    action: "catalog_draft.classification_mirrored",
+    entityType: "inventory_lot",
+    entityId: row?.lot_id ?? draftId,
+    after: {
+      draft_id: draftId,
+      pos_product_key: row?.pos_product_key ?? null,
+      otherwise_taken: compliance.otherwiseTaken,
+      units_per_package: compliance.unitsPerPackage,
+      low_thc_liquid: compliance.lowThcLiquid,
+      unit_thc_mg: compliance.unitThcMg,
+      provenance: compliance.provenance,
+      ...mirrorOutcome,
+      basis:
+        "WAC 314-55-095(1)(d)(i)(D) ten-unit 'otherwise taken into the body' limit and (E)/(F) " +
+        "low-THC liquid limit. Answered by a human at Product Onboarding. The enforcement copy " +
+        "lives on menu_items; this lot-row write is provenance only (migration 0219) and never " +
+        "changes what the register does.",
+    },
+  }).catch(() => {});
 
   // SLICE 93: "It should save to the kb as well so it auto attaches on that
   // product when we get new lots in." Fold the machine signals (curated KB >
