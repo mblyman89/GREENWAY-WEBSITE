@@ -38,6 +38,11 @@ import {
   type LotGapRow,
   type LotGapKey,
 } from "@/lib/inventory/lot-gap-core";
+// SLICE 13: the page's knob wiring moved into this pure core.
+import {
+  buildInventoryPage,
+  __testPageLot,
+} from "@/lib/inventory/inventory-page-core";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
 import type { InventoryStats } from "@/lib/inventory/store";
 
@@ -363,10 +368,96 @@ describe("SLICE 7 — lot enrichment worklists", () => {
       expect(src).toContain('query.is("unit_cost_minor_units", null)');
     });
 
-    it("the page parses the knobs and passes them to the store", () => {
+    /**
+     * SLICE 13 moved this wiring, so this pin moved with it.
+     *
+     * The page no longer hands `gaps: activeGaps` to a PostgREST query. It
+     * loads the whole hydrated lot set and filters in pure code, because
+     * vendor / brand / THC / CBD live in other tables and were resolved AFTER
+     * paging — a query cannot filter or sort by a value it never saw. The gap
+     * knobs are now parsed by `parseLegacyFilters` and applied by
+     * `matchesLegacyFilters`, both in inventory-page-core.ts.
+     *
+     * The DOCTRINE this test exists to defend is unchanged: a correct core
+     * that nothing calls is not a fix. So rather than pin a new string, the
+     * wiring is now proven BEHAVIOURALLY below — string pins can be satisfied
+     * by a comment, but a behavioural test cannot.
+     */
+    it("the page still routes the gap knobs through the shared core", () => {
       const src = SRC("src/app/admin/inventory/page.tsx");
-      expect(src).toContain("parseGapFlag");
-      expect(src).toContain("gaps: activeGaps");
+      // The page must not re-implement gap parsing locally any more.
+      expect(src).not.toContain("const activeGaps = LOT_GAP_DEFINITIONS.filter");
+      // It delegates the whole knob set to the tested core.
+      expect(src).toContain("buildInventoryPage");
+      const core = SRC("src/lib/inventory/inventory-page-core.ts");
+      expect(core).toContain("parseGapFlag");
+      // And the core REUSES the counter's predicate rather than restating it,
+      // which is what keeps the badge and the list from ever disagreeing.
+      expect(core).toContain("def.matches(gapRow(lot))");
+    });
+
+    it("every gap knob still isolates exactly the lots its counter counts", () => {
+      // Behavioural proof of the wiring: run the page's real pipeline over a
+      // set built to hit each gap's edge cases, and require that the rows it
+      // returns are EXACTLY the rows the shared counter counts.
+      const lots = [
+        __testPageLot({ id: "ok", status: "active" }),
+        __testPageLot({ id: "nullKey", status: "active", pos_product_key: null }),
+        // The empty string is the edge case the SLICE 6A defect missed.
+        __testPageLot({ id: "emptyKey", status: "active", pos_product_key: "" }),
+        __testPageLot({ id: "zeroQty", status: "active", on_hand_qty: 0 }),
+        __testPageLot({ id: "negQty", status: "active", on_hand_qty: -3 }),
+        __testPageLot({ id: "noExpiry", status: "active", expires_on: null }),
+        __testPageLot({ id: "noCost", status: "active", unit_cost_minor_units: null }),
+        // A deliberate 0 cost is KNOWN, not unknown.
+        __testPageLot({ id: "zeroCost", status: "active", unit_cost_minor_units: 0 }),
+        // Non-active lots are out of scope for every gap.
+        __testPageLot({ id: "soldOut", status: "sold_out", pos_product_key: "", expires_on: null }),
+        __testPageLot({ id: "destroyed", status: "destroyed", unit_cost_minor_units: null }),
+      ];
+      const NOW = new Date("2026-06-01T12:00:00Z");
+
+      for (const def of LOT_GAP_DEFINITIONS) {
+        const view = buildInventoryPage({
+          lots,
+          params: { [def.param]: "1" },
+          page: 1,
+          pageSize: 500,
+          now: NOW,
+        });
+        const shown = view.rows.map((l) => l.id).sort();
+        const counted = lots
+          .filter((l) =>
+            def.matches({
+              status: l.status,
+              on_hand_qty: l.on_hand_qty,
+              unit_cost_minor_units: l.unit_cost_minor_units,
+              lab_result_id: l.lab_result_id,
+              pos_product_key: l.pos_product_key,
+              expires_on: l.expires_on,
+            }),
+          )
+          .map((l) => l.id)
+          .sort();
+        expect(counted.length).toBeGreaterThan(0);
+        expect(shown).toEqual(counted);
+      }
+    });
+
+    it("the received-date worklist link still excludes destroyed lots", () => {
+      const lots = [
+        __testPageLot({ id: "missing", received_on: null, status: "active" }),
+        __testPageLot({ id: "hasDate", received_on: "2026-01-02", status: "active" }),
+        __testPageLot({ id: "destroyed", received_on: null, status: "destroyed" }),
+      ];
+      const view = buildInventoryPage({
+        lots,
+        params: { needsReceivedDate: "1" },
+        page: 1,
+        pageSize: 500,
+        now: new Date("2026-06-01T12:00:00Z"),
+      });
+      expect(view.rows.map((l) => l.id)).toEqual(["missing"]);
     });
 
     it("the page discloses an understated on-hand total", () => {

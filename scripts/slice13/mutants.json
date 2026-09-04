@@ -1,0 +1,200 @@
+[
+  {
+    "id": "search-fuzzy-threshold-loosened",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "export const FUZZY_TOKEN_THRESHOLD = 0.58;",
+    "replace": "export const FUZZY_TOKEN_THRESHOLD = 0.30;",
+    "why": "A sloppier threshold. Must be caught by the resin/rosin separation and by 'an unrelated query returns no rows'."
+  },
+  {
+    "id": "search-fuzzy-threshold-tightened",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "export const FUZZY_TOKEN_THRESHOLD = 0.58;",
+    "replace": "export const FUZZY_TOKEN_THRESHOLD = 0.95;",
+    "why": "Typo tolerance switched off in practice. The owner's 'dreem' complaint must fail."
+  },
+  {
+    "id": "search-min-token-length-dropped",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "export const FUZZY_MIN_TOKEN_LENGTH = 4;",
+    "replace": "export const FUZZY_MIN_TOKEN_LENGTH = 2;",
+    "why": "Short tokens become fuzzy and drag in the whole shelf. Pinned by the 'grn' case."
+  },
+  {
+    "id": "search-min-token-length-raised",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "export const FUZZY_MIN_TOKEN_LENGTH = 4;",
+    "replace": "export const FUZZY_MIN_TOKEN_LENGTH = 9;",
+    "why": "Ordinary typos stop being forgiven."
+  },
+  {
+    "id": "search-score-ladder-flattened",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  \"word-prefix\": 0.8,",
+    "replace": "  \"word-prefix\": 0.7,",
+    "why": "Relevance ladder no longer strictly descending; a word-prefix hit ties a mere substring."
+  },
+  {
+    "id": "search-ladder-word-prefix-removed",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "    if (w.startsWith(token)) return \"word-prefix\";",
+    "replace": "    if (false && w.startsWith(token)) return \"word-prefix\";",
+    "why": "The rung that answers 'a middle WORD of the name'."
+  },
+  {
+    "id": "search-ladder-substring-removed",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  if (fieldText.includes(token)) return \"substring\";",
+    "replace": "  if (false && fieldText.includes(token)) return \"substring\";",
+    "why": "The owner's literal complaint: a MIDDLE PART of a word must still match.",
+    "equivalent": true,
+    "proof": "PROVEN EQUIVALENT, not a test gap. The glue-free check on the next lines subsumes this one: squashing spaces out of both sides can only make a match easier, so any token that matches here also matches there. Verified exhaustively over every (field, token) pair on the alphabet {a,b,space} up to lengths 5 and 4 = 44,044 pairs; 804 disagreements, ALL with whitespace-only tokens (scripts/slice13/probe-substring-subsumption.ts). Whitespace-only tokens are impossible: searchTokens never emits one (scripts/slice13/probe-token-whitespace.ts, 26 hostile inputs) and scoreTokenInField now refuses them outright. Investigating this survivor found a REAL latent defect \u2014 the guard was !token, so a single-space token returned \"substring\" \u2014 now fixed and pinned."
+  },
+  {
+    "id": "search-ladder-reordered-substring-first",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  const words = fieldText.split(\" \").filter(Boolean);\n  for (const w of words) {",
+    "replace": "  const words = fieldText.split(\" \").filter(Boolean);\n  if (fieldText.includes(token)) return \"substring\";\n  for (const w of words) {",
+    "why": "The EXACT bug found and fixed earlier in this slice: substring shadowing word-prefix."
+  },
+  {
+    "id": "search-glue-insensitive-removed",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  if (squashedToken && squashedField.includes(squashedToken)) return \"substring\";",
+    "replace": "  if (false && squashedToken && squashedField.includes(squashedToken)) return \"substring\";",
+    "why": "Typing 'gg4' would stop finding 'GG 4'."
+  },
+  {
+    "id": "search-strict-pass-allows-fuzzy",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  const strict = run(false);",
+    "replace": "  const strict = run(true);",
+    "why": "Collapses the two-tier design. 'resin' would return 'rosin' as a first-class hit with didYouMean=false."
+  },
+  {
+    "id": "search-didyoumean-always-false",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  return { rows: fuzzy, didYouMean: fuzzy.length > 0 };",
+    "replace": "  return { rows: fuzzy, didYouMean: false };",
+    "why": "The guess is no longer disclosed to the owner."
+  },
+  {
+    "id": "search-tie-order-unstable",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "    hits.sort((a, b) => (b.score - a.score) || (a.index - b.index));",
+    "replace": "    hits.sort((a, b) => (b.score - a.score) || (b.index - a.index));",
+    "why": "Equal-scoring rows silently reverse, scrambling the column sort underneath the search."
+  },
+  {
+    "id": "search-relevance-ignored",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "    hits.sort((a, b) => (b.score - a.score) || (a.index - b.index));",
+    "replace": "    hits.sort((a, b) => (a.index - b.index));",
+    "why": "Results stop being ranked by relevance."
+  },
+  {
+    "id": "search-empty-query-returns-nothing",
+    "file": "src/lib/inventory/inventory-search-core.ts",
+    "find": "  if (tokens.length === 0) return { rows: items.map((i) => i.row), didYouMean: false };",
+    "replace": "  if (tokens.length === 0) return { rows: [], didYouMean: false };",
+    "why": "Empty search must mean 'no filter', never 'no rows'."
+  },
+  {
+    "id": "filter-unset-sentinel-emptied",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "export const UNSET_FACET_VALUE = \"__unset__\";",
+    "replace": "export const UNSET_FACET_VALUE = \"\";",
+    "why": "An empty sentinel is indistinguishable from 'no selection', so the (Unset) facet stops filtering."
+  },
+  {
+    "id": "filter-unknown-counts-as-no",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "  if (value == null) return false; // unknown is never \"yes\" and never \"no\"",
+    "replace": "  if (value == null) return want === \"no\";",
+    "why": "Violates the doctrine NULL means UNKNOWN, never 'no'. An untested lot would be reported as 'not medical'."
+  },
+  {
+    "id": "filter-range-includes-unknown",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "  if (value == null || !Number.isFinite(value)) return false;",
+    "replace": "  if (value == null || !Number.isFinite(value)) return true;",
+    "why": "A THC range would silently include lots with NO potency on file, reading unknown as in-range."
+  },
+  {
+    "id": "filter-range-min-exclusive",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "  if (min !== undefined && value < min) return false;",
+    "replace": "  if (min !== undefined && value <= min) return false;",
+    "why": "Off-by-one boundary: a lot exactly at the minimum would be excluded."
+  },
+  {
+    "id": "filter-range-max-exclusive",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "  if (max !== undefined && value > max) return false;",
+    "replace": "  if (max !== undefined && value >= max) return false;",
+    "why": "Off-by-one boundary at the top of the range."
+  },
+  {
+    "id": "filter-facets-or-across-instead-of-and",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "    if (!selected.includes(key)) return false;",
+    "replace": "    if (!selected.includes(key)) continue;",
+    "why": "Facets stop being AND-across; selecting a vendor AND a type would no longer narrow."
+  },
+  {
+    "id": "filter-facet-blank-not-mapped-to-unset",
+    "file": "src/lib/inventory/inventory-filter-core.ts",
+    "find": "    const key = value === \"\" ? UNSET_FACET_VALUE : value;",
+    "replace": "    const key = value;",
+    "why": "The '(Unset)' choice would match nothing, hiding exactly the gaps the owner wants to find."
+  },
+  {
+    "id": "sort-first-click-not-honoured",
+    "file": "src/lib/inventory/inventory-sort-core.ts",
+    "find": "    return { key: column.key, direction: column.firstClick };",
+    "replace": "    return { key: column.key, direction: column.firstClick === \"asc\" ? \"desc\" : \"asc\" };",
+    "why": "Clicking THC would sort lowest-first. The owner asked specifically for 'thc high low'."
+  },
+  {
+    "id": "sort-second-click-does-not-flip",
+    "file": "src/lib/inventory/inventory-sort-core.ts",
+    "find": "    return { key: column.key, direction: column.firstClick === \"asc\" ? \"desc\" : \"asc\" };\n  }\n  return null;",
+    "replace": "    return { key: column.key, direction: column.firstClick };\n  }\n  return null;",
+    "why": "The three-state header cycle collapses; you could never reverse a column."
+  },
+  {
+    "id": "sort-nulls-float-to-top",
+    "file": "src/lib/inventory/inventory-sort-core.ts",
+    "find": "  if (aBad) return 1;\n  if (bBad) return -1;",
+    "replace": "  if (aBad) return -1;\n  if (bBad) return 1;",
+    "why": "Lots with UNKNOWN potency would top a 'highest THC' sort, the opposite of useful."
+  },
+  {
+    "id": "sort-nulls-flip-with-direction",
+    "file": "src/lib/inventory/inventory-sort-core.ts",
+    "find": "  if (aBad && bBad) return 0;\n  if (aBad) return 1;\n  if (bBad) return -1;\n  return flip * (av - bv);",
+    "replace": "  if (aBad && bBad) return 0;\n  return flip * ((aBad ? Number.NEGATIVE_INFINITY : av) - (bBad ? Number.NEGATIVE_INFINITY : bv));",
+    "why": "Unknowns must sink in BOTH directions, not swap ends when you reverse the column."
+  },
+  {
+    "id": "sort-potency-groups-flip-with-direction",
+    "file": "src/lib/inventory/inventory-sort-core.ts",
+    "find": "    if (ab !== bb) return ab - bb; // grouping is NOT flipped by direction",
+    "replace": "    if (ab !== bb) return flip * (ab - bb);",
+    "why": "mg-dosed edibles and percent-dosed flower are different quantities; the grouping must not invert."
+  },
+  {
+    "id": "list-page-clamp-removed",
+    "file": "src/lib/inventory/inventory-list-core.ts",
+    "find": "  const page = Math.min(Math.max(1, requested), totalPages);",
+    "replace": "  const page = Math.max(1, requested);",
+    "why": "?page=999 would render an empty table instead of the last page."
+  },
+  {
+    "id": "url-page-not-reset-on-filter-change",
+    "file": "src/lib/inventory/inventory-url-core.ts",
+    "find": "function resetPage(params: URLSearchParams): void {\n  params.delete(\"page\");",
+    "replace": "function resetPage(params: URLSearchParams): void {\n  if (String(1) === \"2\") params.delete(\"page\");",
+    "why": "Changing a filter while on page 7 would land on an empty page 7 of the new result set."
+  }
+]

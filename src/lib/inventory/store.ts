@@ -166,6 +166,119 @@ export async function listLotsPaged(
   return { rows: await hydrateLots(admin, lots), total };
 }
 
+/**
+ * SLICE 13 — load EVERY lot, fully hydrated, for the inventory page's
+ * filter/sort/search engine.
+ *
+ * WHY THIS EXISTS AND WHY IT IS NOT WASTEFUL
+ * -----------------------------------------------------------------------
+ * `listLotsPaged` fetches one 100-row page and then calls `hydrateLots` to
+ * resolve vendor name, brand name and the COA for THAT PAGE ONLY. That
+ * ordering makes the owner's request impossible to satisfy: you cannot filter
+ * or sort by vendor name, brand, THC or CBD when the query that does the
+ * filtering and sorting has never seen those values. Pushing them into SQL is
+ * not available either — they live in three other tables and the page's
+ * "type" column is a derived label, not a column at all.
+ *
+ * So the whole set is loaded, then filtered, sorted and paginated in pure
+ * code. The cost is real but already being paid: `computeInventoryStats()`
+ * (store.ts, SLICE 2) and `getInventoryCommandCenter()` each ALREADY walk
+ * every lot row via `pagedAll` on every single load of this page. This adds a
+ * third walk of the same table plus three small id-keyed lookups, and in
+ * exchange every field on the row becomes filterable and sortable.
+ *
+ * Completeness is not assumed. `pagedAll` walks `.range()` until a short page
+ * returns, and the `.order("id")` is required for that walk to be
+ * deterministic (chunked-in.ts:33-34) — without a stable sort PostgREST may
+ * return rows in an arbitrary order per page and pages can overlap or skip.
+ * `hydrateLotsChunked` then resolves the joins in id chunks so a 4,000-lot
+ * store cannot overflow the PostgREST query string.
+ */
+export async function listAllLotsForFiltering(): Promise<LotWithDetail[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+
+  const lots = await pagedAll<InventoryLot>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("*")
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as InventoryLot[] | null) ?? [];
+  });
+  if (lots.length === 0) return [];
+  return hydrateLotsChunked(admin, lots);
+}
+
+/**
+ * `hydrateLots` for an arbitrarily large lot list. Identical resolution rules
+ * — same tables, same columns, same "id not found means null" behaviour — but
+ * the three lookups are chunked so the id lists cannot overflow the query
+ * string (the M-4 truncation family; see chunked-in.ts).
+ */
+async function hydrateLotsChunked(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  lots: InventoryLot[],
+): Promise<LotWithDetail[]> {
+  const vendorIds = [...new Set(lots.map((l) => l.vendor_id).filter(Boolean))] as string[];
+  const brandIds = [...new Set(lots.map((l) => l.brand_id).filter(Boolean))] as string[];
+  const labIds = [...new Set(lots.map((l) => l.lab_result_id).filter(Boolean))] as string[];
+
+  const vendorMap = new Map<string, string>();
+  const brandMap = new Map<string, string>();
+  const labMap = new Map<string, LabResult>();
+
+  if (vendorIds.length > 0) {
+    const rows = await chunkedIn<string, { id: string; display_name: string }>(
+      vendorIds,
+      async (chunk, from, to) => {
+        const { data } = await admin
+          .from("vendors")
+          .select("id, display_name")
+          .in("id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        return (data as { id: string; display_name: string }[] | null) ?? [];
+      },
+    );
+    for (const v of rows) vendorMap.set(v.id, v.display_name);
+  }
+  if (brandIds.length > 0) {
+    const rows = await chunkedIn<string, { id: string; display_name: string }>(
+      brandIds,
+      async (chunk, from, to) => {
+        const { data } = await admin
+          .from("brands")
+          .select("id, display_name")
+          .in("id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        return (data as { id: string; display_name: string }[] | null) ?? [];
+      },
+    );
+    for (const b of rows) brandMap.set(b.id, b.display_name);
+  }
+  if (labIds.length > 0) {
+    const rows = await chunkedIn<string, LabResult>(labIds, async (chunk, from, to) => {
+      const { data } = await admin
+        .from("lab_results")
+        .select("*")
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as LabResult[] | null) ?? [];
+    });
+    for (const r of rows) labMap.set(r.id, r);
+  }
+
+  return lots.map((l) => ({
+    ...l,
+    vendor_name: l.vendor_id ? vendorMap.get(l.vendor_id) ?? null : null,
+    brand_name: l.brand_id ? brandMap.get(l.brand_id) ?? null : null,
+    lab: l.lab_result_id ? labMap.get(l.lab_result_id) ?? null : null,
+  }));
+}
+
 export async function listLots(opts?: LotFilter): Promise<LotWithDetail[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();

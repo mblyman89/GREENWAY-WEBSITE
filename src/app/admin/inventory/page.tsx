@@ -5,20 +5,20 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Input, Select, Button } from "@/components/admin/ui";
+import { Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
-import { listLotsPaged, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
+import { listAllLotsForFiltering, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
+// SLICE 13 — enterprise filtering, sorting and smart search. All pure cores.
+import { buildInventoryPage, type PageLot } from "@/lib/inventory/inventory-page-core";
+import { InventoryFilterPanel } from "@/components/admin/inventory/InventoryFilterPanel";
+import { SortableHeader } from "@/components/admin/inventory/SortableHeader";
+import { paramsFrom, clearAllFiltersHref, type RawParams } from "@/lib/inventory/inventory-url-core";
 import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel, lotStrainTypeLabel, lotPotencyLabel } from "@/lib/inventory/lot-table-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
-import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
-import {
-  LOT_GAP_DEFINITIONS,
-  parseGapFlag,
-  describeCostIncompleteness,
-} from "@/lib/inventory/lot-gap-core";
+import { describeCostIncompleteness } from "@/lib/inventory/lot-gap-core";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
 import { receivedDateFlagMessage } from "@/lib/inventory/received-date-core";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
@@ -110,32 +110,19 @@ export default async function InventoryPage({
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const { q, status, back, page } = sp;
+  const { status, back, page } = sp;
   const activeStatus = status ?? "all";
   const rawPage = parsePageParam(page);
-  // SLICE 26: every filter knob validated by the pure grammar — garbage
-  // params silently mean "filter off", never an exception.
-  const sort = resolveSort(sp.sort, LOT_SORTS);
-  const hasCoa = parseYesNo(sp.coa);
-  const isSample = parseYesNo(sp.sample);
-  const isMedical = parseYesNo(sp.medical);
-  const expiringWithinDays =
-    sp.expiring && /^\d{1,3}$/.test(sp.expiring) ? Number(sp.expiring) : undefined;
-  // SLICE 77: the vendors ⇄ inventory cross-link. Only a UUID shape is
-  // accepted — junk params silently mean "filter off", like every other knob.
+  /**
+   * SLICE 13 — the knob parsing that used to live here (COA, sample, medical,
+   * expiring, vendor uuid, the received-date worklist and the four gap flags)
+   * now lives in `parseLegacyFilters`, with the SAME rules and the same
+   * "garbage silently means filter off" doctrine, but under test. Two copies
+   * of a filter definition is how a list and the badge that links to it start
+   * disagreeing, so there is now exactly one.
+   */
   const vendorId =
     sp.vendor && /^[0-9a-f-]{36}$/i.test(sp.vendor) ? sp.vendor : undefined;
-  // SLICE 2: the received-date worklist filter. Only the literal "1" turns it
-  // on; anything else silently means "filter off", matching every other knob
-  // on this page. `undefined` (not `false`) so the store never emits a
-  // pointless `received_on is not null` predicate when the flag is absent.
-  const needsReceivedDate = sp.needsReceivedDate === "1" ? true : undefined;
-  // SLICE 7: gather whichever enrichment-gap knobs are switched on. Only the
-  // literal "1" enables one (parseGapFlag), so junk params silently mean
-  // "filter off" exactly like every other knob on this page.
-  const activeGaps = LOT_GAP_DEFINITIONS.filter(
-    (def) => parseGapFlag(sp[def.param as keyof typeof sp] as string | undefined) === true,
-  ).map((def) => def.key);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -151,36 +138,38 @@ export default async function InventoryPage({
     );
   }
 
-  // GW-033: fetch the requested page window plus the exact total. If the
-  // requested page is past the end (stale link), clamp and refetch the real
-  // last page so the screen is never empty while rows exist.
-  const queryFilter = {
-    q,
-    status: activeStatus,
-    sort: sort.columns,
-    hasCoa,
-    isSample,
-    isMedical,
-    expiringWithinDays,
-    vendorId,
-    needsReceivedDate,
-    gaps: activeGaps,
-  };
-  const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
-  const [firstPage, stats, intel] = await Promise.all([
-    listLotsPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
+  /**
+   * SLICE 13 — load the whole (hydrated) lot set and do the work in pure code.
+   *
+   * WHY THE WHOLE SET. `listLotsPaged` resolved vendor name, brand name and
+   * the COA only for the 100 rows it had already chosen, which made the
+   * owner's request impossible to satisfy: a query cannot filter or sort by a
+   * value it has never seen. Those three fields live in other tables and the
+   * "Type" column is a derived label, not a column at all.
+   *
+   * The extra read is real but modest in context: `computeInventoryStats()`
+   * and `getInventoryCommandCenter()` below ALREADY walk every lot row on
+   * every load of this page. This is a third walk of the same table, in
+   * parallel with them, and in exchange every field becomes filterable and
+   * sortable. See docs/slice-13-inventory-filtering-recon.md.
+   */
+  const [allLots, stats, intel] = await Promise.all([
+    listAllLotsForFiltering(),
     computeInventoryStats(),
     getInventoryCommandCenter(),
   ]);
-  let { rows: lots, total } = firstPage;
-  const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
-  if (win.page !== rawPage && total > 0) {
-    ({ rows: lots, total } = await listLotsPaged({
-      ...queryFilter,
-      from: win.from,
-      to: win.to,
-    }));
-  }
+
+  // Every knob — legacy and new — is parsed and applied by pure, tested code.
+  const view = buildInventoryPage({
+    lots: allLots as PageLot[],
+    params: sp as RawParams,
+    page: rawPage,
+    pageSize: DEFAULT_PAGE_SIZE,
+    now: new Date(),
+  });
+  const lots = view.rows;
+  const total = view.total;
+  const win = listWindow(total, view.page, DEFAULT_PAGE_SIZE);
   // SLICE 2 — banner text for lots with no evidenced received date. Returns
   // null when there is nothing to flag, so a clean store shows no badge at all
   // rather than a green "0 problems" row that trains the eye to skip it.
@@ -189,18 +178,23 @@ export default async function InventoryPage({
     missingWithStock: stats.missingReceivedDateWithStock,
   });
 
-  /** Current filter state as URL params (page excluded — added per link). */
+  /**
+   * Current view state as URL params (page excluded — added per link).
+   *
+   * SLICE 13: this used to rebuild the query string from a hand-written
+   * whitelist of the five filters that existed at the time. With twelve
+   * facets, ten flags and seven ranges added, a whitelist is a liability: any
+   * knob someone forgets to list is silently dropped the moment the owner
+   * pages forward or switches a status tab, and the list changes underneath
+   * them for no visible reason.
+   *
+   * So it now carries EVERY incoming param through verbatim (repeated keys
+   * included, so a comma-bearing vendor name survives), and only `page` is
+   * managed per-link. Adding a filter can no longer break pagination.
+   */
   const filterParams = () => {
-    const params = new URLSearchParams();
-    if (activeStatus !== "all") params.set("status", activeStatus);
-    if (q) params.set("q", q);
-    if (sort.key !== LOT_SORTS[0].key) params.set("sort", sort.key);
-    if (sp.coa === "yes" || sp.coa === "no") params.set("coa", sp.coa);
-    if (sp.sample === "yes" || sp.sample === "no") params.set("sample", sp.sample);
-    if (sp.medical === "yes" || sp.medical === "no") params.set("medical", sp.medical);
-    if (expiringWithinDays != null) params.set("expiring", String(expiringWithinDays));
-    if (vendorId) params.set("vendor", vendorId);
-    if (needsReceivedDate) params.set("needsReceivedDate", "1");
+    const params = paramsFrom(sp as RawParams);
+    params.delete("page");
     return params;
   };
   const pageHref = (p: number) => {
@@ -229,14 +223,6 @@ export default async function InventoryPage({
     const qs = params.toString();
     return `/admin/inventory${qs ? `?${qs}` : ""}`;
   };
-  const hasExtraFilters = Boolean(
-    hasCoa !== undefined ||
-      isSample !== undefined ||
-      isMedical !== undefined ||
-      expiringWithinDays != null ||
-      vendorId !== undefined ||
-      sort.key !== LOT_SORTS[0].key,
-  );
   // SLICE 77: name the vendor being filtered so the banner reads plainly.
   const vendorFilterName = vendorId
     ? lots.find((l) => l.vendor_id === vendorId)?.vendor_name ?? "this vendor"
@@ -422,88 +408,23 @@ export default async function InventoryPage({
           })}
         </div>
 
-        <form className="flex flex-wrap items-end gap-3" method="get">
-          {activeStatus !== "all" && <input type="hidden" name="status" value={activeStatus} />}
-          {/* SLICE 77: keep the vendor cross-link filter when other knobs change. */}
-          {vendorId && <input type="hidden" name="vendor" value={vendorId} />}
-          {/* SLICE 2: keep the received-date worklist filter when other knobs
-              change. Without this hidden field, searching inside the worklist
-              would silently drop it and the owner would think the compliance
-              queue had emptied itself. */}
-          {needsReceivedDate && <input type="hidden" name="needsReceivedDate" value="1" />}
-          <div className="min-w-52 flex-1">
-            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-              Search
-            </label>
-            <Input name="q" defaultValue={q ?? ""} placeholder="Product, lot code, or POS key…" />
-          </div>
-          <div>
-            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-              COA
-            </label>
-            <Select name="coa" defaultValue={sp.coa === "yes" || sp.coa === "no" ? sp.coa : ""} aria-label="COA filter">
-              <option value="">Any</option>
-              <option value="yes">Has COA</option>
-              <option value="no">Missing COA</option>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-              Sample
-            </label>
-            <Select name="sample" defaultValue={sp.sample === "yes" || sp.sample === "no" ? sp.sample : ""} aria-label="Sample filter">
-              <option value="">Any</option>
-              <option value="yes">Samples only</option>
-              <option value="no">Exclude samples</option>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-              Medical
-            </label>
-            <Select name="medical" defaultValue={sp.medical === "yes" || sp.medical === "no" ? sp.medical : ""} aria-label="Medical filter">
-              <option value="">Any</option>
-              <option value="yes">Medical only</option>
-              <option value="no">Non-medical</option>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-              Expiring
-            </label>
-            <Select name="expiring" defaultValue={expiringWithinDays != null ? String(expiringWithinDays) : ""} aria-label="Expiry window">
-              <option value="">Any date</option>
-              <option value="7">Within 7 days</option>
-              <option value="14">Within 14 days</option>
-              <option value="30">Within 30 days</option>
-              <option value="60">Within 60 days</option>
-              <option value="90">Within 90 days</option>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-              Sort by
-            </label>
-            <Select name="sort" defaultValue={sort.key} aria-label="Sort lots">
-              {LOT_SORTS.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Button type="submit" variant="neutral">
-            Apply
-          </Button>
-          {(q || hasExtraFilters) && (
-            <Link
-              href={activeStatus !== "all" ? `/admin/inventory?status=${activeStatus}` : "/admin/inventory"}
-              className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
-            >
-              Clear
-            </Link>
-          )}
-        </form>
+        {/*
+          SLICE 13 — the filter panel replaces the old five-control strip.
+
+          The owner asked to "refine my inventory list in every way
+          imaginable": twelve multi-select facets built from the real data with
+          live counts, ten tri-state flag filters, five numeric ranges, two
+          date ranges, and removable chips for whatever is engaged. Every
+          control is a link or a GET field, so the URL stays the single source
+          of truth and a filtered view can still be bookmarked or shared.
+        */}
+        <InventoryFilterPanel
+          raw={sp as RawParams}
+          state={view.filters}
+          allLots={view.facetSource}
+          activeCount={view.activeFilterCount}
+          open={view.activeFilterCount > 0}
+        />
 
         {/*
           SLICE 8 — BULK FILL MODE.
@@ -539,6 +460,23 @@ export default async function InventoryPage({
           )
         )}
 
+        {/*
+          SLICE 13 — the "did you mean" disclosure.
+
+          The owner asked for a search that shows its "best guess rather than
+          showing me nothing". It does — but a guess must SAY it is a guess.
+          This banner appears only when the exact-match pass found nothing and
+          the typo-tolerant pass had to rescue the search, so the owner always
+          knows whether they are looking at what they asked for or at what the
+          system thinks they meant.
+        */}
+        {view.didYouMean && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-2.5 text-xs text-[var(--admin-gold)]">
+            No exact match for <span className="font-semibold">{sp.q}</span>. Showing the closest
+            matches instead.
+          </div>
+        )}
+
         {/* GW-033: exact result count + pager (server-side pagination). */}
         <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />
 
@@ -559,21 +497,25 @@ export default async function InventoryPage({
                     (import backdates created_at to the POS Received date); Sold = received
                     minus on hand, never negative. All values come straight from the lot row
                     via the pure lot-table-core helpers — nothing invented. */}
+                {/* SLICE 13: every header is now a link that sorts the list.
+                    Click once for the sensible direction (names A→Z, dates
+                    newest-first, numbers highest-first), again to reverse,
+                    again to turn the sort off. */}
                 <tr>
-                  <th className="px-4 py-3">Product / lot</th>
-                  <th className="px-4 py-3">Vendor · brand</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Strain</th>
+                  <SortableHeader columnKey="product" label="Product / lot" raw={sp as RawParams} />
+                  <SortableHeader columnKey="vendor" label="Vendor · brand" raw={sp as RawParams} />
+                  <SortableHeader columnKey="type" label="Type" raw={sp as RawParams} />
+                  <SortableHeader columnKey="strain" label="Strain" raw={sp as RawParams} />
                   {/* SLICE 54: strain TYPE from its own column (migration 0138, Rule 1.4). */}
-                  <th className="px-4 py-3">Strain Type</th>
-                  <th className="px-4 py-3">Size</th>
-                  <th className="px-4 py-3 text-center">COA</th>
-                  <th className="px-4 py-3 text-right">THC</th>
-                  <th className="px-4 py-3">Received</th>
-                  <th className="px-4 py-3 text-right">On hand</th>
-                  <th className="px-4 py-3 text-right">Sold</th>
-                  <th className="px-4 py-3">Expires</th>
-                  <th className="px-4 py-3 text-center">Status</th>
+                  <SortableHeader columnKey="strainType" label="Strain Type" raw={sp as RawParams} />
+                  <SortableHeader columnKey="size" label="Size" raw={sp as RawParams} />
+                  <SortableHeader columnKey="coa" label="COA" raw={sp as RawParams} align="center" />
+                  <SortableHeader columnKey="thc" label="THC" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="received" label="Received" raw={sp as RawParams} />
+                  <SortableHeader columnKey="onhand" label="On hand" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="sold" label="Sold" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="expires" label="Expires" raw={sp as RawParams} />
+                  <SortableHeader columnKey="status" label="Status" raw={sp as RawParams} align="center" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-border)]">
@@ -651,7 +593,34 @@ export default async function InventoryPage({
           <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />
         )}
         {lots.length === 0 && stats.total > 0 && (
-          <p className="text-sm text-white/50">No lots match your filter.</p>
+          /*
+            SLICE 13 — a dead end must offer a way out. The old message said
+            only "No lots match your filter", which leaves the owner to work
+            out which of twenty-odd knobs is responsible. Now it says how many
+            are engaged and gives one click to clear them.
+          */
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-5 text-center">
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              No lots match {view.activeFilterCount > 0 || sp.q ? "these filters" : "your filter"}.
+            </p>
+            {(view.activeFilterCount > 0 || sp.q) && (
+              <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
+                {view.activeFilterCount > 0 && (
+                  <>
+                    {view.activeFilterCount} filter
+                    {view.activeFilterCount === 1 ? " is" : "s are"} active.{" "}
+                  </>
+                )}
+                <Link
+                  href={clearAllFiltersHref(sp as RawParams)}
+                  className="text-[var(--admin-accent)] underline-offset-2 hover:underline"
+                >
+                  Clear everything
+                </Link>{" "}
+                to see the full list.
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
