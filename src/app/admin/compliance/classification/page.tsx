@@ -48,6 +48,12 @@ import {
   describeClassificationGap,
 } from "@/lib/inventory/classification-status-core";
 import { LOW_THC_UNIT_MAX_MG } from "@/lib/compliance/sales-limits-core";
+// SLICE 18B — the shop facet's labels + deep links, so the back office and the
+// customer menu speak with one vocabulary and link to one place.
+import {
+  CLASSIFICATION_FILTER_LABELS,
+  classificationShopHref,
+} from "@/lib/menu/menu-classification-filter-core";
 
 export const dynamic = "force-dynamic";
 
@@ -233,6 +239,7 @@ export default async function ClassificationWorklistPage({
                       <th className="py-2 pr-4 font-semibold">Status</th>
                       <th className="py-2 pr-4 font-semibold">What is missing</th>
                       <th className="py-2 pr-4 font-semibold">Stock</th>
+                      <th className="py-2 pr-4 font-semibold">On the website</th>
                       <th className="py-2 font-semibold">&nbsp;</th>
                     </tr>
                   </thead>
@@ -284,6 +291,28 @@ export default async function ClassificationWorklistPage({
                             <span className="mt-0.5 block">
                               {row.lotCount} lot{row.lotCount === 1 ? "" : "s"}
                             </span>
+                          </td>
+                          {/* SLICE 18B — where the CUSTOMER sees this product.
+                              `shopLane` is computed with the same predicates as
+                              the shop facet and the register's limit meter, so
+                              this column can never promise a lane the website
+                              would not actually render. A product whose flags
+                              are set but whose figures do not qualify shows the
+                              honest dash, which is exactly the signal the owner
+                              needs that his edit did not take effect. */}
+                          <td className="py-2.5 pr-4 text-xs">
+                            {row.shopLane ? (
+                              <Link
+                                href={classificationShopHref(row.shopLane)}
+                                className="font-semibold text-[var(--admin-accent)] underline underline-offset-2"
+                              >
+                                {CLASSIFICATION_FILTER_LABELS[row.shopLane]}
+                              </Link>
+                            ) : (
+                              <span className="text-[var(--admin-muted)]">
+                                &mdash; not in a filter lane
+                              </span>
+                            )}
                           </td>
                           <td className="py-2.5">
                             <Link

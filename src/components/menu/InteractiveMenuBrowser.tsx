@@ -24,6 +24,15 @@ import {
   itemMatchesDohFilter,
   findDohFilterOption,
 } from "@/lib/menu/menu-doh-filter-core";
+// SLICE 18B — the dynamic sales-limit classification facet ("Product Type").
+// Same shape as the DOH facet above; lanes are derived from the register's own
+// qualifiesAs* predicates so the shop can never advertise a classification the
+// point of sale would not honor.
+import {
+  resolveClassificationFilterOptions,
+  itemMatchesClassificationFilter,
+  findClassificationFilterOption,
+} from "@/lib/menu/menu-classification-filter-core";
 import { merchProductDefs } from "@/lib/merch/merch-catalog";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
@@ -561,6 +570,10 @@ type InitialMenuSearchParams = {
   // SLICE E (SHOP-5): the active DOH filter lane id (umbrella "doh" or a
   // per-category "doh:<category>"). Shareable/persisted like the others.
   doh?: string;
+  // SLICE 18B: the active sales-limit classification lane id ("low-thc" or
+  // "otherwise-taken"). Shareable/persisted like the others, so a budtender can
+  // hand a customer a link straight to the low-THC drinks.
+  classification?: string;
 };
 
 const SORT_OPTION_VALUES: SortOption[] = [
@@ -625,6 +638,7 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
     maxPrice: pick("maxPrice") ?? undefined,
     sort: pick("sort") ?? undefined,
     doh: pick("doh") ?? undefined,
+    classification: pick("classification") ?? undefined,
   };
 }
 
@@ -672,6 +686,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const persistedMaxPrice = parsePersistedNumber(initialParams.maxPrice);
   const persistedSort = parsePersistedSort(initialParams.sort);
   const persistedDoh = (initialParams.doh ?? "").trim() || null;
+  // SLICE 18B: the persisted sales-limit classification lane.
+  const persistedClassification = (initialParams.classification ?? "").trim() || null;
 
   const [query, setQuery] = useState(initialSearchQuery);
   const [selectedCategories, setSelectedCategories] = useState<GreenwayCategory[]>(
@@ -742,6 +758,21 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const dohOptions = useMemo(() => resolveDohFilterOptions(items), [items]);
   const activeDohOption = findDohFilterOption(dohOptions, activeDohId);
 
+  // SLICE 18B: the dynamic sales-limit classification facet. Lanes are derived
+  // from the live items via the REGISTER's own qualifiesAs* predicates, so a
+  // lane only exists when the point of sale would actually route products to
+  // that bucket. No qualifying products (the state of the menu until the owner
+  // classifies some) ⇒ empty list ⇒ the sidebar section never renders. Same
+  // one-at-a-time selection as Specials and DOH.
+  const [activeClassificationId, setActiveClassificationId] = useState<string | null>(
+    persistedClassification,
+  );
+  const classificationOptions = useMemo(() => resolveClassificationFilterOptions(items), [items]);
+  const activeClassificationOption = findClassificationFilterOption(
+    classificationOptions,
+    activeClassificationId,
+  );
+
   // --- Filter persistence (Task G) ---------------------------------------
   // State is hydrated from forwarded URL params above (server + client agree,
   // so no hydration mismatch). Here we write the current state BACK to the URL
@@ -769,6 +800,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     if (maxPrice < maxAvailablePrice) params.set("maxPrice", String(maxPrice));
     if (sortBy !== "featured-shuffle") params.set("sort", sortBy);
     if (activeDohId) params.set("doh", activeDohId);
+    if (activeClassificationId) params.set("classification", activeClassificationId);
     const queryString = params.toString();
     const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}${window.location.hash}`;
     window.history.replaceState(window.history.state, "", newUrl);
@@ -785,6 +817,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     maxPrice,
     sortBy,
     activeDohId,
+    activeClassificationId,
     maxAvailableThc,
     maxAvailableCbd,
     maxAvailablePrice,
@@ -833,6 +866,10 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
 
       setActiveDohId((params.get("doh") ?? "").trim() || null);
 
+      // SLICE 18B: restore the classification lane on back/forward too, or the
+      // shopper's "Low-THC Beverages" selection would silently vanish.
+      setActiveClassificationId((params.get("classification") ?? "").trim() || null);
+
       // The next URL-write effect run must not clobber what we just restored.
       firstWriteRef.current = true;
     };
@@ -875,8 +912,16 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       pool = pool.filter((item) => itemMatchesDohFilter(item, activeDohId));
     }
 
+    // SLICE 18B — sales-limit classification facet. A no-op when nothing is
+    // selected. Delegates to the shared pure matcher, which in turn delegates
+    // to the register's qualifiesAs* predicates, so the grid a shopper sees and
+    // the bucket the till counts are the same fact.
+    if (activeClassificationId) {
+      pool = pool.filter((item) => itemMatchesClassificationFilter(item, activeClassificationId));
+    }
+
     return sortItems(pool.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
-  }, [activeDealRules, allDealRules, activeSpecialFilter, activeDohId, cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
+  }, [activeDealRules, allDealRules, activeSpecialFilter, activeDohId, activeClassificationId, cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
@@ -966,7 +1011,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedVendors.length > 0 ||
     selectedWeights.length > 0 ||
     activeSpecialId !== null ||
-    activeDohId !== null;
+    activeDohId !== null ||
+    activeClassificationId !== null;
   // Accessories/merch are catalog collections (not filterable by THC/strain/etc),
   // so only surface them at the bottom when no narrowing filters are applied.
   const surfaceBottomCollections = !hasOtherFiltersActive;
@@ -1031,6 +1077,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     setSortBy("featured-shuffle");
     setActiveSpecialId(null);
     setActiveDohId(null);
+    setActiveClassificationId(null);
   };
 
   // Specials selection is one-at-a-time (mutually exclusive): clicking the
@@ -1043,6 +1090,13 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // are mutually exclusive; clicking the active one clears it (SLICE E).
   const toggleDoh = (id: string) => {
     setActiveDohId((current) => (current === id ? null : id));
+  };
+
+  // SLICE 18B: the classification facet is one-at-a-time as well — the two
+  // lanes are different statutory buckets, so selecting both would always
+  // return nothing. Clicking the active one clears it.
+  const toggleClassification = (id: string) => {
+    setActiveClassificationId((current) => (current === id ? null : id));
   };
 
   const strainTagLabel = (strain: string) => (strain === HIGH_CBD_VALUE ? "CBD" : strain.charAt(0).toUpperCase() + strain.slice(1));
@@ -1068,6 +1122,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
             label: "DOH",
             value: activeDohOption.label,
             onRemove: () => setActiveDohId(null),
+          },
+        ]
+      : []),
+    // SLICE 18B: the active classification lane shows as a removable pill, so
+    // the shopper can always see WHY the grid narrowed and undo it in one tap.
+    ...(activeClassificationOption
+      ? [
+          {
+            key: `classification-${activeClassificationOption.id}`,
+            label: "Product Type",
+            value: activeClassificationOption.label,
+            onRemove: () => setActiveClassificationId(null),
           },
         ]
       : []),
@@ -1182,6 +1248,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       dohOptions={dohOptions}
       activeDohId={activeDohId}
       onDohToggle={toggleDoh}
+      classificationOptions={classificationOptions}
+      activeClassificationId={activeClassificationId}
+      onClassificationToggle={toggleClassification}
     />
   );
 

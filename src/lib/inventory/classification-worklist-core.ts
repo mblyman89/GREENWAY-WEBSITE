@@ -62,6 +62,13 @@ import {
   type ClassificationStatus,
   type ProductClassificationFacts,
 } from "@/lib/inventory/classification-status-core";
+// SLICE 18B — the shop facet's lane resolver. Imported (not re-implemented) so
+// the "where does the customer see this?" column on the worklist is decided by
+// the exact same predicates as the shop sidebar and the register's limit meter.
+import {
+  classificationKindForItem,
+  type ClassificationFilterKind,
+} from "@/lib/menu/menu-classification-filter-core";
 
 /**
  * One inventory lot as the worklist assembler hands it over: the lot's own
@@ -110,6 +117,19 @@ export type ClassificationWorklistEntry = {
   representativeLotId: string;
   /** True when every lot behind this product came from the Cultivera import. */
   allFromImport: boolean;
+  /**
+   * SLICE 18B — the customer-facing shop lane this product now appears in, or
+   * null when the register would not route it to a special bucket.
+   *
+   * This closes the loop the owner actually cares about: "I answered the
+   * question" → "here is the lane the customer sees". It is computed with the
+   * SAME predicates the shop facet and the till use
+   * (classificationKindForItem → qualifiesAs*), so the back office can never
+   * promise a lane the shop would not render. A product whose flags are set but
+   * whose figures do not qualify reports null — which is the honest answer, and
+   * the one that tells the owner his edit did not take effect.
+   */
+  shopLane: ClassificationFilterKind | null;
 };
 
 /** Which slice of the list to show. */
@@ -277,6 +297,15 @@ export function buildClassificationWorklist(
       onHandTotal: group.reduce((sum, l) => sum + (l.onHandQty ?? 0), 0),
       representativeLotId,
       allFromImport: group.every((l) => l.fromImport),
+      // SLICE 18B — ask the SHOP/register predicates, not the raw flags, so
+      // this column reports what a customer would actually see.
+      shopLane: classificationKindForItem({
+        category: rep.resolvedWebsiteCategory ?? null,
+        lowThcLiquid: flags?.lowThcLiquid ?? null,
+        unitThcMg: flags?.unitThcMg ?? null,
+        otherwiseTaken: flags?.otherwiseTaken ?? null,
+        unitsPerPackage: flags?.unitsPerPackage ?? null,
+      } as Parameters<typeof classificationKindForItem>[0]),
     });
   }
 
@@ -503,6 +532,52 @@ export function __runClassificationWorklistTests(): { passed: number } {
     absent[0].status.reasons.includes("otherwise_taken_unanswered"),
     "absent menu row did not raise the unanswered reason",
   );
+
+  // ── SLICE 18B: the shopLane column reports what a CUSTOMER would see ──────
+  {
+    // A fully-qualifying low-THC drink surfaces in the low-THC lane.
+    const drink = buildClassificationWorklist(
+      [lot({ posProductKey: "k-drink", resolvedWebsiteCategory: "edible-liquid" })],
+      new Map([
+        [
+          "k-drink",
+          { otherwiseTaken: false, unitsPerPackage: null, lowThcLiquid: true, unitThcMg: 4 },
+        ],
+      ]),
+    );
+    check(drink[0].shopLane === "low_thc_liquid", "qualifying drink reports the low-THC shop lane");
+
+    // Flags set but the FIGURE does not qualify (9 mg > 4 mg): the register
+    // would leave this in the 72 oz bucket, so the back office must say null
+    // rather than promising a lane the shop will not render. This is the
+    // assertion that stops the admin from lying to the owner.
+    const overDosed = buildClassificationWorklist(
+      [lot({ posProductKey: "k-over", resolvedWebsiteCategory: "edible-liquid" })],
+      new Map([
+        [
+          "k-over",
+          { otherwiseTaken: false, unitsPerPackage: null, lowThcLiquid: true, unitThcMg: 9 },
+        ],
+      ]),
+    );
+    check(overDosed[0].shopLane === null, "over-4mg drink reports NO shop lane");
+
+    // A qualifying suppository surfaces in the otherwise-taken lane.
+    const supp = buildClassificationWorklist(
+      [lot({ posProductKey: "k-supp", resolvedWebsiteCategory: "topical" })],
+      new Map([
+        ["k-supp", { otherwiseTaken: true, unitsPerPackage: 6, lowThcLiquid: null, unitThcMg: null }],
+      ]),
+    );
+    check(supp[0].shopLane === "otherwise_taken", "qualifying suppository reports its shop lane");
+
+    // An unanswered product has no lane at all.
+    const unanswered = buildClassificationWorklist(
+      [lot({ posProductKey: "k-none", resolvedWebsiteCategory: "edible-liquid" })],
+      new Map(),
+    );
+    check(unanswered[0].shopLane === null, "unanswered product reports no shop lane");
+  }
 
   // ── out of scope is excluded from EVERY scope, including "all" ────────────
   const flowerRow = buildClassificationWorklist(

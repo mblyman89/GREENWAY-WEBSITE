@@ -37,6 +37,11 @@ import {
 } from "@/lib/compliance/sales-limits-core";
 import type { SalesHoursWindow } from "@/lib/compliance/sales-hours-core";
 import { clampToStock } from "@/lib/pos/stock-ceiling-core";
+// SLICE 18B — classification search keywords, so a budtender can find a
+// suppository or a low-THC beverage by typing what it IS. Safe to import as a
+// value: classification-search-core depends only on sales-limits-core (already
+// imported above) and imports nothing from this module, so no runtime cycle.
+import { classificationSearchText } from "@/lib/pos/classification-search-core";
 // Type-only (erased at compile time) — medical-pos-core imports PricedSaleLine
 // from this module, so a VALUE import here would create a runtime cycle.
 import type { PosMedicalConfig } from "./medical-pos-core";
@@ -295,12 +300,31 @@ export function setCartQuantity(
   return cart.map((e) => (e.product.variantId === variantId ? { ...e, quantity: q } : e));
 }
 
-/** Case-insensitive token search over name / brand / category / variant label. */
+/**
+ * Case-insensitive token search over name / brand / category / variant label,
+ * PLUS (SLICE 18B) the product's sales-limit classification keywords.
+ *
+ * The classification tail is what lets a budtender type "suppository" or
+ * "low thc" and actually find those products. Before 18B the register CARRIED
+ * the flags (they ride in the menu bundle for the limit meter) but offered no
+ * way to search them, so the only products findable by those words were the
+ * ones whose vendor happened to put the word in the product name.
+ *
+ * Strictly additive: classificationSearchText() returns "" for any product the
+ * register would not actually route to a special bucket, so an ordinary
+ * product's haystack is byte-for-byte what it was before — every pre-existing
+ * query returns exactly the same rows. And because the keywords come from the
+ * register's own qualifiesAs* predicates, the words a budtender searches and
+ * the bucket the limit meter uses are the SAME fact, never two opinions.
+ */
 export function searchProducts(products: PosMenuProduct[], query: string): PosMenuProduct[] {
   const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return products;
   return products.filter((p) => {
-    const hay = `${p.name} ${p.brand ?? ""} ${p.category} ${p.variantLabel ?? ""}`.toLowerCase();
+    const classification = classificationSearchText(p);
+    const hay = `${p.name} ${p.brand ?? ""} ${p.category} ${p.variantLabel ?? ""}${
+      classification ? ` ${classification}` : ""
+    }`.toLowerCase();
     return tokens.every((t) => hay.includes(t));
   });
 }

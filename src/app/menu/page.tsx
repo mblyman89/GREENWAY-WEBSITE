@@ -95,6 +95,13 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
     maxCbd: firstSearchParamValue(resolvedSearchParams?.maxCbd),
     maxPrice: firstSearchParamValue(resolvedSearchParams?.maxPrice),
     sort: firstSearchParamValue(resolvedSearchParams?.sort),
+    // SLICE E (SHOP-5): the DOH lane, so a shared /menu?doh=... link renders
+    // already-filtered on the server instead of flashing the full grid.
+    doh: firstSearchParamValue(resolvedSearchParams?.doh),
+    // SLICE 18B: same for the sales-limit classification lane, so
+    // /menu?classification=low-thc is shareable and deep-linkable (the back
+    // office links straight to it).
+    classification: firstSearchParamValue(resolvedSearchParams?.classification),
   };
   return (
     <main id="top">

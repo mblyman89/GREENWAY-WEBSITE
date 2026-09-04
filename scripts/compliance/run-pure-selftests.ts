@@ -410,6 +410,10 @@ import { __runShopCarouselCoreTests } from "../../src/lib/cms/shop-carousel-core
 import { __runMenuSpecialFiltersTests } from "../../src/lib/menu/menu-special-filters-core";
 import { __runMenuDohCoreTests } from "../../src/lib/menu/menu-doh-core";
 import { __runMenuDohFilterCoreTests } from "../../src/lib/menu/menu-doh-filter-core";
+// SLICE 18B — the sales-limit classification shop facet + the register's
+// classification search keywords.
+import { __runMenuClassificationFilterTests } from "../../src/lib/menu/menu-classification-filter-core";
+import { __runPosClassificationSearchTests } from "../../src/lib/pos/classification-search-core";
 import { __runMenuDohBadgeCoreTests } from "../../src/lib/menu/menu-doh-badge-core";
 import { __runCcrsIdentifierTests } from "../../src/lib/compliance/ccrs-identifiers";
 import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventory-adjustment-core";
@@ -733,6 +737,8 @@ async function main() {
   { const r = __runMenuSpecialFiltersTests(); if (r.passed < 1) throw new Error("menu-special-filters-core: no assertions ran"); console.log(`menu-special-filters-core: ${r.passed} assertions passed`); }
   { const r = __runMenuDohCoreTests(); if (r.passed < 1) throw new Error("menu-doh-core: no assertions ran"); console.log(`menu-doh-core: ${r.passed} assertions passed`); }
   { const r = __runMenuDohFilterCoreTests(); if (r.passed < 1) throw new Error("menu-doh-filter-core: no assertions ran"); console.log(`menu-doh-filter-core: ${r.passed} assertions passed`); }
+  { const r = __runMenuClassificationFilterTests(); if (r.passed < 1) throw new Error("menu-classification-filter-core: no assertions ran"); console.log(`menu-classification-filter-core: ${r.passed} assertions passed`); }
+  { const r = __runPosClassificationSearchTests(); if (r.passed < 1) throw new Error("classification-search-core: no assertions ran"); console.log(`classification-search-core: ${r.passed} assertions passed`); }
   { const r = __runMenuDohBadgeCoreTests(); if (r.passed < 1) throw new Error("menu-doh-badge-core: no assertions ran"); console.log(`menu-doh-badge-core: ${r.passed} assertions passed`); }
   assertNoFailures("ccrs-identifiers", __runCcrsIdentifierTests());
   __runCcrsAdjustmentTests();

@@ -5,6 +5,7 @@ import { FilterCheckboxGroup, type FilterCheckboxOption } from "./FilterCheckbox
 import { FilterSection } from "./FilterSection";
 import type { MenuSpecialFilter } from "@/lib/menu/menu-special-filters-core";
 import type { DohFilterOption } from "@/lib/menu/menu-doh-filter-core";
+import type { ClassificationFilterOption } from "@/lib/menu/menu-classification-filter-core";
 
 type FilterMobileProps = {
   activeCount: number;
@@ -133,6 +134,16 @@ export type MenuFilterControlsProps = {
   dohOptions?: DohFilterOption[];
   activeDohId?: string | null;
   onDohToggle?: (id: string) => void;
+  /**
+   * SLICE 18B: the dynamic sales-limit classification facet ("Product Type").
+   * Lanes are derived from the live menu using the REGISTER's own qualifying
+   * rules, so a lane only exists when products would actually be routed to
+   * that bucket at the till. Empty array (nothing classified yet, or nothing
+   * fully qualifying) ⇒ the section never renders — no dead checkbox.
+   */
+  classificationOptions?: ClassificationFilterOption[];
+  activeClassificationId?: string | null;
+  onClassificationToggle?: (id: string) => void;
 };
 
 export function MenuFilterControls({
@@ -171,9 +182,15 @@ export function MenuFilterControls({
   dohOptions = [],
   activeDohId = null,
   onDohToggle,
+  classificationOptions = [],
+  activeClassificationId = null,
+  onClassificationToggle,
 }: MenuFilterControlsProps) {
   const specialsEnabled = Boolean(onSpecialToggle) && specialFilters.length > 0;
   const dohEnabled = Boolean(onDohToggle) && dohOptions.length > 0;
+  // SLICE 18B: same two-part dynamic gate as DOH — a handler must be wired AND
+  // the live menu must actually contain qualifying products.
+  const classificationEnabled = Boolean(onClassificationToggle) && classificationOptions.length > 0;
   return (
     <>
       <div className="flex items-center justify-between gap-4">
@@ -267,6 +284,50 @@ export function MenuFilterControls({
                       value={option.id}
                       checked={active}
                       onChange={() => onDohToggle?.(option.id)}
+                      className="peer sr-only"
+                    />
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
+                      ✓
+                    </span>
+                    <span className="truncate font-bold">{option.label}</span>
+                  </span>
+                  <span className="shrink-0 text-[0.7rem] font-bold uppercase tracking-[0.1em] text-zinc-500" aria-hidden="true">
+                    {option.count}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </FilterSection>
+      ) : null}
+
+      {classificationEnabled ? (
+        <FilterSection title="Product Type">
+          {/* SLICE 18B: the dynamic sales-limit classification facet, sitting
+              next to DOH because both are compliance traits. Lanes come from
+              the register's own qualifying rules, so "Low-THC Beverages" here
+              means exactly what it means at the till — never just "somebody
+              ticked a box". One-at-a-time (the two lanes are different
+              statutory buckets, so selecting both would always return nothing).
+              Only appears when the live menu actually has qualifying products. */}
+          <div className="grid gap-2">
+            {classificationOptions.map((option) => {
+              const active = activeClassificationId === option.id;
+              return (
+                <label
+                  key={option.id}
+                  title={option.help}
+                  className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                    active ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="classification"
+                      value={option.id}
+                      checked={active}
+                      onChange={() => onClassificationToggle?.(option.id)}
                       className="peer sr-only"
                     />
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
