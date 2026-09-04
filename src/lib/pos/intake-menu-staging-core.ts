@@ -98,6 +98,29 @@ export type CarryForwardItem = {
   net_weight_grams?: number | null;
   net_volume_ml?: number | null;
   fact_provenance?: Record<string, string> | null;
+  /**
+   * SLICE 18G (DEFECT 3): the four sales-limit classification columns
+   * (migrations 0216 / 0217), carried forward for the same reason as the
+   * SLICE 62 facts above and with far worse consequences if they are not.
+   *
+   * The register reads these off the MENU row and nothing else, and NULL is
+   * the fail-open — 0216 says "NULL = not yet classified; the engine treats
+   * NULL as a normal liquid". So before 18G, re-staging silently reverted every
+   * classification in the shop to "nobody has answered" and the ten-unit and
+   * low-THC limits stopped applying, with no error anywhere.
+   *
+   * NEVER coalesce null to false when carrying these. For otherwise_taken
+   * there are three distinct states: null (unanswered — the receiving dock
+   * must keep asking), false (a human said no — the dock must go quiet), and
+   * true (the limit engages). Collapsing null into false would silence a
+   * question nobody ever answered.
+   *
+   * Optional so historical fixtures keep compiling; missing means null.
+   */
+  low_thc_liquid?: boolean | null;
+  unit_thc_mg?: number | null;
+  otherwise_taken?: boolean | null;
+  units_per_package?: number | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -144,6 +167,22 @@ export type StagedSnapshotItem = {
   net_weight_grams: number | null;
   net_volume_ml: number | null;
   fact_provenance: Record<string, string>;
+  /**
+   * SLICE 18G (DEFECT 3): the sales-limit classification columns
+   * (migrations 0216 / 0217) as they will be PERSISTED to menu_items.
+   *
+   * Required here, not optional, and deliberately so: this is the shape the
+   * insert is built from, so a producer that forgets one is a TYPE ERROR
+   * rather than a silently NULL column in production. That is the whole
+   * difference between how the compliance flags and the SLICE 62 facts are
+   * declared, and it is the reason this defect could exist at all.
+   *
+   * null means "not classified" and must be preserved as null.
+   */
+  low_thc_liquid: boolean | null;
+  unit_thc_mg: number | null;
+  otherwise_taken: boolean | null;
+  units_per_package: number | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -214,6 +253,18 @@ function masteredToSnapshot(it: MasteredNewCard, sortOrder: number): StagedSnaps
     net_weight_grams: null,
     net_volume_ml: null,
     fact_provenance: it.fact_provenance,
+    // SLICE 18G (DEFECT 3): the SECOND producer, and the one the 18E writeup
+    // missed. SLICE 18-0 deliberately plumbed the approver's compliance answers
+    // all the way to PlannedInjectedItem, and standaloneCard() preserves them
+    // through `...rest` — but this mapper dropped them, so a newly approved
+    // product reached the register unclassified even though a human had just
+    // answered the question. Carried straight through; never derived here,
+    // because the two flags' fail-safes point in OPPOSITE directions and
+    // guessing either one is how a limit silently stops applying.
+    low_thc_liquid: it.low_thc_liquid,
+    unit_thc_mg: it.unit_thc_mg,
+    otherwise_taken: it.otherwise_taken,
+    units_per_package: it.units_per_package,
     description: it.description,
     price_label: it.price_label,
     price_minor_units: it.price_minor_units,
@@ -288,6 +339,19 @@ function carryForward(item: CarryForwardItem, sortOrder: number): StagedSnapshot
     net_weight_grams: item.net_weight_grams ?? null,
     net_volume_ml: item.net_volume_ml ?? null,
     fact_provenance: item.fact_provenance ?? {},
+    // SLICE 18G (DEFECT 3): carry the sales-limit classification forward.
+    //
+    // `?? null` here normalises a MISSING property (an older fixture, or a
+    // read that predates 0216/0217) to an explicit null. It does NOT convert
+    // false to null: `false ?? null` is false, which is the behaviour required
+    // — false is a human's answer and it is what silences the receiving dock.
+    // Using `||` instead of `??` would destroy that distinction, which is why
+    // tests/compliance/classification-survives-restage.test.ts asserts a
+    // literal false survives.
+    low_thc_liquid: item.low_thc_liquid ?? null,
+    unit_thc_mg: item.unit_thc_mg ?? null,
+    otherwise_taken: item.otherwise_taken ?? null,
+    units_per_package: item.units_per_package ?? null,
     description: item.description,
     price_label: item.price_label,
     price_minor_units: item.price_minor_units,

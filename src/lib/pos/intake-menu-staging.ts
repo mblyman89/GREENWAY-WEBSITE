@@ -583,6 +583,20 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardIte
     net_weight_grams: it.net_weight_grams,
     net_volume_ml: it.net_volume_ml,
     fact_provenance: (it.fact_provenance ?? {}) as Record<string, string>,
+    // SLICE 18G (DEFECT 3): read the sales-limit classification off the
+    // published row so it can be carried forward.
+    //
+    // The query above is `select("*")`, so these four values were ALWAYS
+    // present in `it` — the loss was purely in this hand-written mapping.
+    // That is why the fix is four lines and no query change: nothing had to be
+    // fetched, only stopped from being thrown away.
+    //
+    // MenuItemRow already declares all four (src/lib/pos/db-types.ts), so
+    // these are typed reads, not casts.
+    low_thc_liquid: it.low_thc_liquid,
+    unit_thc_mg: it.unit_thc_mg,
+    otherwise_taken: it.otherwise_taken,
+    units_per_package: it.units_per_package,
     description: it.description,
     price_label: it.price_label,
     price_minor_units: it.price_minor_units,
@@ -648,6 +662,19 @@ async function persistSnapshotItems(
       net_weight_grams: it.net_weight_grams,
       net_volume_ml: it.net_volume_ml,
       fact_provenance: it.fact_provenance,
+      // SLICE 18G (DEFECT 3): persist the sales-limit classification onto the
+      // new version's rows. Without this the planner could carry the values
+      // perfectly and the INSERT would still drop them, leaving every column
+      // NULL on the menu that auto-publishes moments later.
+      //
+      // These are the columns migration 0219 labels "ENFORCEMENT SOURCE OF
+      // TRUTH": what the register reads to decide whether a cart is over a
+      // statutory limit. null is written as null on purpose — it means "not
+      // yet classified", which is what makes the receiving dock ask.
+      low_thc_liquid: it.low_thc_liquid,
+      unit_thc_mg: it.unit_thc_mg,
+      otherwise_taken: it.otherwise_taken,
+      units_per_package: it.units_per_package,
       description: it.description,
       price_label: it.price_label,
       price_minor_units: it.price_minor_units,

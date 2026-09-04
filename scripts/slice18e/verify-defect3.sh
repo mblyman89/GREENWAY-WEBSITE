@@ -11,18 +11,88 @@
 # files. Run from the repo root. Exit 0 = every citation holds.
 #
 # Standing rule: do not guess, do not assume. Build from fact, not memory.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS SCRIPT IS PINNED TO A COMMIT  (added by SLICE 18G)
+# ---------------------------------------------------------------------------
+# SLICE 18G FIXED this defect. The moment it did, this script went red: seven
+# assertions failed, and every one of them failed BECAUSE THE FIX LANDED. The
+# `absent` checks ("carryForward copies none of the four columns") now find
+# four matches each, and the exact-line pins shifted because the fix added
+# lines above them.
+#
+# There were three ways to respond, and two of them are dishonest:
+#
+#   1. Delete the script. That destroys the evidence that the defect was real.
+#      The writeup would then rest on my say-so, which is precisely what this
+#      script existed to avoid.
+#   2. "Update" it to match the fixed tree. That silently rewrites a factual
+#      record of the past into something it never said, and quietly converts a
+#      proof-of-defect into a proof-of-nothing.
+#   3. Pin it to the commit where the claim was made, and say so out loud.
+#
+# This file takes option 3. Every assertion below now runs against the files as
+# they existed at DEFECT_COMMIT, read straight out of git rather than off the
+# working tree. So it keeps proving exactly what it always proved -- that
+# docs/slice-18e-defect3.md described the real code at the time it was written
+# -- and it will keep proving that no matter how much the tree moves on.
+#
+# A final section then asserts, against the CURRENT tree, that the defect is
+# gone. That part is deliberately a floor and not a ceiling: the real proof of
+# the fix is behavioural and lives in
+# tests/compliance/classification-survives-restage.test.ts, which executes the
+# planner and inspects actual values. Text matching can only show a line
+# exists; it can never show a value is right.
 # ---------------------------------------------------------------------------
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
+# The commit whose tree docs/slice-18e-defect3.md describes: the SLICE 18E
+# merge, which is the last commit before the SLICE 18G fix.
+DEFECT_COMMIT="${DEFECT_COMMIT:-bd5272fa}"
+
+if ! git rev-parse --verify --quiet "${DEFECT_COMMIT}^{commit}" >/dev/null; then
+  echo "FATAL: cannot resolve DEFECT_COMMIT=$DEFECT_COMMIT."
+  echo "       This verifier reads the historical tree out of git. Without that"
+  echo "       commit it cannot check anything, and it must not pretend to."
+  exit 2
+fi
+
+# Materialise the historical files into a temp tree, preserving paths so every
+# assertion below keeps its original file:line citation verbatim.
+BASE_DIR="$(mktemp -d)"
+trap 'rm -rf "$BASE_DIR"' EXIT
+
+for f in $(git ls-tree -r --name-only "$DEFECT_COMMIT"); do
+  case "$f" in
+    src/*|supabase/migrations/*)
+      mkdir -p "$BASE_DIR/$(dirname "$f")"
+      git show "$DEFECT_COMMIT:$f" > "$BASE_DIR/$f" 2>/dev/null || true
+      ;;
+  esac
+done
+
+echo "Reading source as of $DEFECT_COMMIT ($(git log -1 --format=%s "$DEFECT_COMMIT" | cut -c1-60))"
+echo
+
 pass=0
 fail=0
+
+# at <path> -> the same path inside the pinned historical tree.
+#
+# Every assertion below still cites its real repo path, so the citations remain
+# readable and checkable by hand. This one function is the only place the
+# redirection happens.
+at() {
+  echo "$BASE_DIR/$1"
+}
 
 # chk <label> <file> <line> <needle>
 # Asserts the EXACT line number contains the needle (fixed-string).
 chk() {
   local label="$1" file="$2" line="$3" needle="$4"
   local got
+  file="$(at "$file")"
   got=$(sed -n "${line}p" "$file" 2>/dev/null)
   if printf '%s' "$got" | grep -qF -- "$needle"; then
     pass=$((pass+1))
@@ -42,6 +112,7 @@ chk() {
 absent() {
   local label="$1" file="$2" start="$3" end="$4" pat="$5"
   local n
+  file="$(at "$file")"
   n=$(awk -v a="$start" -v b="$end" 'NR>=a && NR<=b' "$file" 2>/dev/null | grep -cE "$pat")
   if [[ "$n" == "0" ]]; then
     pass=$((pass+1))
@@ -56,6 +127,7 @@ absent() {
 present() {
   local label="$1" file="$2" start="$3" end="$4" pat="$5" want="$6"
   local n
+  file="$(at "$file")"
   n=$(awk -v a="$start" -v b="$end" 'NR>=a && NR<=b' "$file" 2>/dev/null | grep -cE "$pat")
   if [[ "$n" == "$want" ]]; then
     pass=$((pass+1))
@@ -190,6 +262,55 @@ absent "import-service.ts never writes the four columns" \
 present "exactly one caller of applyClassificationToMenu (human-triggered)" \
   src/app/admin/inventory/actions.ts 759 759 'applyClassificationToMenu' 1
 
+# ---------------------------------------------------------------------------
+# LINK 7 - THE PRESENT TENSE. Everything above is history; this is now.
+#
+# Added by SLICE 18G. Deliberately a FLOOR, not a ceiling: it asserts the four
+# columns are copied in all four layers of the CURRENT tree. It cannot prove
+# the values are correct, and it does not claim to. The behavioural proof is
+# tests/compliance/classification-survives-restage.test.ts, which runs the real
+# planner; the mutation evidence is scripts/slice18g/mutate.sh (22 killed).
+# ---------------------------------------------------------------------------
+echo "-- Link 7: and the CURRENT tree no longer has the defect --"
+
+# now_has <label> <file> <fn-signature> <needle>
+# Scoped to the function body via awk brace counting, so a mention in a comment
+# elsewhere in the file cannot satisfy it. Unscoped searching is exactly how a
+# guard becomes vacuously true.
+now_has() {
+  local label="$1" file="$2" sig="$3" needle="$4"
+  local body
+  body=$(awk -v sig="$sig" '
+    index($0, sig) { on = 1 }
+    on {
+      print
+      n = gsub(/\{/, "{"); m = gsub(/\}/, "}")
+      depth += n - m
+      if (started && depth <= 0) exit
+      if (n > 0) started = 1
+    }
+  ' "$file" 2>/dev/null)
+  if printf '%s' "$body" | grep -qF -- "$needle"; then
+    pass=$((pass+1))
+  else
+    fail=$((fail+1))
+    echo "FAIL: $label"
+    echo "      $file :: $sig"
+    echo "      expected the body to contain: $needle"
+  fi
+}
+
+for col in low_thc_liquid unit_thc_mg otherwise_taken units_per_package; do
+  now_has "FIXED: read mapping carries $col" \
+    src/lib/pos/intake-menu-staging.ts "async function loadCarryForwardItems" "$col: it.$col"
+  now_has "FIXED: carryForward() carries $col" \
+    src/lib/pos/intake-menu-staging-core.ts "function carryForward(" "$col: item.$col"
+  now_has "FIXED: masteredToSnapshot() carries $col" \
+    src/lib/pos/intake-menu-staging-core.ts "function masteredToSnapshot(" "$col: it.$col"
+  now_has "FIXED: insert payload persists $col" \
+    src/lib/pos/intake-menu-staging.ts "async function persistSnapshotItems" "$col: it.$col"
+done
+
 echo
 echo "-------------------------------------------------------------"
 echo "PASS: $pass    FAIL: $fail"
@@ -198,4 +319,5 @@ if [[ "$fail" != "0" ]]; then
   echo "VERIFICATION FAILED - do not trust the writeup until this is 0."
   exit 1
 fi
-echo "All DEFECT 3 citations verified against primary source."
+echo "DEFECT 3 citations verified against the source as of $DEFECT_COMMIT,"
+echo "and the current tree verified to carry all four columns in all four layers."

@@ -2,6 +2,40 @@
 
 **Found during Slice 18E recon. NOT fixed in 18E. Proposed as its own slice (18G).**
 
+> ## STATUS UPDATE — FIXED IN SLICE 18G
+>
+> This document is left as written, because it is the record of what was known
+> at the time. Two things must be added rather than edited in:
+>
+> **1. The fix is in.** See `docs/slice-18g-defect3-fix.md`. All four layers
+> carry the four columns, guarded behaviourally by
+> `tests/compliance/classification-survives-restage.test.ts` and mutation-tested
+> at 32 killed / 0 survived.
+>
+> **2. This document understates the defect.** It describes a carry-forward
+> bug. It is not one. A staged row has **two** producers, and both dropped all
+> four columns:
+>
+> - `carryForward()` — the carried live product, which is what this document
+>   describes.
+> - `masteredToSnapshot()` — the **newly approved** product. Slice 18-0 had
+>   deliberately plumbed these values through to `PlannedInjectedItem`, and
+>   `standaloneCard()` preserved them via its `...rest` spread, and then this
+>   mapper dropped them on the final hop.
+>
+> So the answer the approver gave *at the gate, minutes earlier*, never reached
+> the register either. Fixing only the path described below would have looked
+> like a fix and still lost data.
+>
+> The omission is recorded here rather than quietly corrected, because a
+> writeup that was incomplete should say so.
+>
+> **3. `scripts/slice18e/verify-defect3.sh` is now pinned to `bd5272fa`.** It
+> reads its files out of git at the commit this document describes, so it keeps
+> proving what it always proved even though the working tree has moved on. A
+> new Link 7 asserts the *current* tree no longer has the defect. It reports
+> 50 passed, 0 failed.
+
 ## Numbering key (read this first)
 
 `docs/slice-18e-recon.md` was written before this defect was found, and it
