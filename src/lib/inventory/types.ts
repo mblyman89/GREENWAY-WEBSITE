@@ -147,6 +147,32 @@ export type InventoryLot = {
   received_on_set_by: string | null;
   /** When `received_on` was set. */
   received_on_set_at: string | null;
+  /**
+   * SLICE 16/17 (migrations 0216 :100-103, 0217 :162-170) — the two special
+   * sales-limit classifications, mirrored onto the lot.
+   *
+   * These columns have existed since 0216/0217 but were never declared on this
+   * type, which is why nothing could read them back in TypeScript. SLICE 18A
+   * declares them because the inventory detail page now edits them.
+   *
+   * READ THE ROLE CAREFULLY: on the lot row these are PROVENANCE, not the
+   * enforced value. The register reads the limit flags off the MENU row
+   * (live-menu.ts:94-100); nothing enforces from here. They exist so the
+   * receiving dock's warning and CCRS-style reporting can tell "a human
+   * answered this" from "nobody has been asked".
+   *
+   * `null` therefore means UNKNOWN, never "no" — the same doctrine
+   * `received_on` above establishes. In particular every lot created by the
+   * one-time Cultivera import carries NULL here (import-service.ts:588-616
+   * writes none of them), which is NOT evidence that the product is ordinary.
+   */
+  low_thc_liquid: boolean | null;
+  /** mg of active delta-9 THC in ONE sealed container. Null = not stated. */
+  unit_thc_mg: number | null;
+  /** True = taken otherwise into the body (WAC 314-55-095(1)(d)(i)(D)). */
+  otherwise_taken: boolean | null;
+  /** Units inside one sellable package; the 10-unit limit counts in units. */
+  units_per_package: number | null;
   status: string; // active | quarantine | recalled | sold_out | destroyed
   notes: string | null;
   created_by: string | null;

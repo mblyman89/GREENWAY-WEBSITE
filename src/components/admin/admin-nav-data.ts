@@ -179,6 +179,11 @@ export const adminNav: AdminNavItem[] = [
   { label: "Chart of Accounts", href: "/admin/books/accounts", permission: "books.view", icon: "\ud83d\uddc3\ufe0f", group: "Accounting" }, // card file index
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udda8\ufe0f", group: "Admin" }, // 🖨️ hardware
   { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal limits
+  // SLICE 18A. Gated on inventory.manage, NOT settings.manage like the row
+  // above: this page lists work whose only fix is the editor on the lot detail
+  // page, which is inventory.manage. Listing work the reader cannot action is a
+  // dead end, so the two permissions must match.
+  { label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "Admin" }, // 🏷️ classify products
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "\ud83e\udde0", group: "Admin" }, // 🧠 AI
   { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "\u2699\ufe0f", group: "Admin" }, // ⚙️ settings
   { label: "Help & FAQ", href: "/admin/help", permission: "dashboard.view", icon: "\ud83d\udca1", group: "Admin" }, // 💡 help

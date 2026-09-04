@@ -42,6 +42,16 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // T-324: after-tax price correction (pure math + write path).
 import { parsePriceCorrection } from "@/lib/inventory/price-correction-core";
 import { applyLotAfterTaxPrice } from "@/lib/inventory/price-write-store";
+// SLICE 18A: the compliance-classification editor. The RULES are the same pure
+// gate the receiving door uses (18-0) — imported, never re-implemented, so the
+// two doors into this store cannot drift apart.
+import {
+  assessReceivingClassification,
+  validateReceivingClassificationChoice,
+} from "@/lib/inventory/receiving-classification-core";
+// The write goes to the menu because that is the only surface the register
+// enforces from (live-menu.ts:94-100).
+import { applyClassificationToMenu } from "@/lib/inventory/classification-status-store";
 
 const VALID_REASONS = new Set([
   "receive",
@@ -665,4 +675,152 @@ export async function bulkFillLotsAction(formData: FormData) {
     bulkSkipped: String(plan.skip.length + raced),
     ...(failures.length ? { bulkFailed: String(failures.length) } : {}),
   });
+}
+
+/**
+ * SLICE 18A — set the COMPLIANCE CLASSIFICATION for one product, from the
+ * Inventory Detail corrections section.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WHY THIS WRITES TO THE MENU AND NOT JUST THE LOT
+ *
+ * The register enforces the two special limits from the MENU row
+ * (live-menu.ts:94-100). Nothing reads those flags back off `inventory_lots`
+ * to decide a limit. So an edit that only touched the lot would report
+ * "Saved", show the new value on this page, and change nothing at all at the
+ * till — a silent no-op, which is worse than an error because nobody
+ * investigates a success.
+ *
+ * The write therefore goes to `menu_items` on the published version plus any
+ * staged intake versions, exactly like the after-tax price correction does
+ * (price-write-store.ts:259-313), and the lot row is updated alongside it as
+ * PROVENANCE so the receiving dock's warning and CCRS-style reporting stay
+ * honest about this product.
+ *
+ * The validation rules are NOT re-implemented here. They come from the same
+ * pure gate the receiving door uses (18-0), so the answer a manager gives on
+ * this page and the answer a receiver gives at onboarding are checked by one
+ * set of rules. tests/compliance/classification-status-parity.test.ts pins
+ * that agreement.
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+export async function updateLotComplianceClassificationAction(
+  lotId: string,
+  formData: FormData,
+) {
+  const session = await requirePermission("inventory.manage");
+
+  const lot = await getLotById(lotId);
+  if (!lot) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("That lot no longer exists."));
+  }
+  const key = (lot.pos_product_key ?? "").trim();
+  if (!key) {
+    redirect(
+      `/admin/inventory/${lotId}?error=` +
+        encodeURIComponent(
+          "This lot isn't linked to a POS product key yet, so there's no menu listing to classify.",
+        ),
+    );
+  }
+
+  // Re-derive the shelf SERVER-SIDE. The form is never trusted to say whether
+  // a product is in scope: a stale tab, or a hand-edited request, could
+  // otherwise disable the gate for a product that needs it most.
+  const resolution = await resolveWebsiteCategoryForLot({
+    posProductKey: lot.pos_product_key,
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    category: lot.category,
+  });
+  const override = await getOverrideForKey(key);
+  const effectiveCategory = override?.website_category ?? resolution.websiteCategory;
+
+  const assessment = assessReceivingClassification({
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    resolvedWebsiteCategory: effectiveCategory,
+  });
+
+  const choice = validateReceivingClassificationChoice({
+    assessment,
+    otherwiseTaken: formData.get("otherwise_taken") as string | null,
+    unitsPerPackage: formData.get("units_per_package") as string | null,
+    lowThcLiquid: formData.get("low_thc_liquid") as string | null,
+    unitThcMg: formData.get("unit_thc_mg") as string | null,
+  });
+  if (!choice.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(choice.error));
+  }
+
+  // 1. THE ENFORCEMENT WRITE. Do this FIRST: if the menu can't be updated the
+  //    change has not taken effect anywhere that matters, and we must not
+  //    leave the lot row claiming a classification the register isn't using.
+  const applied = await applyClassificationToMenu(key, {
+    otherwiseTaken: choice.otherwiseTaken,
+    unitsPerPackage: choice.unitsPerPackage,
+    lowThcLiquid: choice.lowThcLiquid,
+    unitThcMg: choice.unitThcMg,
+  });
+  if (!applied.ok) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(applied.error));
+  }
+
+  // 2. THE PROVENANCE WRITE. Best-effort by design: the enforcement write has
+  //    already succeeded, so failing the whole action here would tell the
+  //    owner nothing was saved when in fact the register IS enforcing the new
+  //    answer. Record the shortfall in the audit instead of lying.
+  let lotWriteError: string | null = null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("inventory_lots")
+      .update({
+        otherwise_taken: choice.otherwiseTaken,
+        units_per_package: choice.unitsPerPackage,
+        low_thc_liquid: choice.lowThcLiquid,
+        unit_thc_mg: choice.unitThcMg,
+        updated_by: session.userId,
+      })
+      .eq("id", lotId);
+    if (error) lotWriteError = error.message;
+  } catch (err) {
+    lotWriteError = err instanceof Error ? err.message : String(err);
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.compliance_classification_edited",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: {
+      pos_product_key: key,
+      otherwise_taken: lot.otherwise_taken ?? null,
+      units_per_package: lot.units_per_package ?? null,
+      low_thc_liquid: lot.low_thc_liquid ?? null,
+      unit_thc_mg: lot.unit_thc_mg ?? null,
+    },
+    after: {
+      pos_product_key: key,
+      otherwise_taken: choice.otherwiseTaken,
+      units_per_package: choice.unitsPerPackage,
+      low_thc_liquid: choice.lowThcLiquid,
+      unit_thc_mg: choice.unitThcMg,
+      provenance: choice.provenance,
+      resolved_website_category: effectiveCategory,
+      menu_versions_updated: applied.versionsUpdated,
+      menu_rows_updated: applied.rowsUpdated,
+      // Present ONLY when the provenance write failed, so a reader can tell
+      // "the register is enforcing this but the lot row disagrees".
+      ...(lotWriteError ? { lot_row_write_failed: lotWriteError } : {}),
+      basis:
+        "WAC 314-55-095(1)(d)(i)(D) ten-unit 'otherwise taken into the body' limit and (E)/(F) low-THC liquid limit. Set by a manager on the inventory detail page; written to the published menu (the surface the register enforces from) and mirrored onto the lot row as provenance.",
+    },
+  });
+
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePath("/menu");
+  redirect(`/admin/inventory/${lotId}?saved=1`);
 }

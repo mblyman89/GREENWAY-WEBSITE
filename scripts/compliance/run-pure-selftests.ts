@@ -263,6 +263,11 @@ import { __runTypeRegistryCoreTests } from "../../src/lib/pos/type-registry-core
 import { __runHouseTypeCoreTests } from "../../src/lib/inventory/house-type-core";
 import { __runDraftApprovalGateTests } from "../../src/lib/inventory/draft-approval-gate-core";
 import { __runReceivingClassificationTests } from "../../src/lib/inventory/receiving-classification-core";
+// SLICE 18A — the other end of the same question. receiving-classification-core
+// asks it at the dock; these two find the products nobody was ever asked about
+// and shape them into a worklist.
+import { __runClassificationStatusTests } from "../../src/lib/inventory/classification-status-core";
+import { __runClassificationWorklistTests } from "../../src/lib/inventory/classification-worklist-core";
 import { __runStrainFieldsCoreTests } from "../../src/lib/inventory/strain-fields-core";
 import { __runStrainTypeIntelTests } from "../../src/lib/inventory/strain-type-intel-core";
 import { __runBankingVaultUiTests } from "../../src/lib/payments/banking-vault-ui-core";
@@ -591,6 +596,11 @@ async function main() {
   __runHouseTypeCoreTests();
   __runDraftApprovalGateTests();
   { const r = __runReceivingClassificationTests(); if (r.passed < 1) throw new Error("receiving-classification-core: no assertions ran"); console.log(`receiving-classification-core: ${r.passed} assertions passed`); }
+  // SLICE 18A. The `passed < 1` guard is not ceremony: a self-test function
+  // that silently returns 0 assertions would otherwise register as a pass, and
+  // the sweep would report green while testing nothing.
+  { const r = __runClassificationStatusTests(); if (r.passed < 1) throw new Error("classification-status-core: no assertions ran"); console.log(`classification-status-core: ${r.passed} assertions passed`); }
+  { const r = __runClassificationWorklistTests(); if (r.passed < 1) throw new Error("classification-worklist-core: no assertions ran"); console.log(`classification-worklist-core: ${r.passed} assertions passed`); }
   __runStrainFieldsCoreTests();
   __runStrainTypeIntelTests();
   __runBankingVaultUiTests();

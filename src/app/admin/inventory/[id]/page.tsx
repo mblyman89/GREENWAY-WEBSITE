@@ -36,7 +36,16 @@ import {
   updateLotWebsiteClassificationAction,
   updateLotAfterTaxPriceAction,
   updateLotReceivedDateAction,
+  updateLotComplianceClassificationAction,
 } from "../actions";
+// SLICE 18A: the compliance-classification panel. Status is derived by the
+// pure core from MENU truth (the only surface the register enforces from).
+import {
+  assessClassificationStatus,
+  describeClassificationGap,
+  classificationBadgeLabel,
+} from "@/lib/inventory/classification-status-core";
+import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
 // SLICE 2: received-date vocabulary (floor date + provenance labels) comes
 // from the pure core so the UI and the validator can never disagree.
 import {
@@ -142,10 +151,37 @@ export default async function LotDetailPage({
     category: lot.category,
   });
 
+  // ── SLICE 18A: the compliance classification, read from the surface that
+  // actually enforces it.
+  //
+  // We deliberately do NOT show lot.otherwise_taken here. The register reads
+  // the limit flags off the MENU row (live-menu.ts:94-100), and every lot from
+  // the one-time Cultivera import carries NULL lot-flags whether or not a
+  // human already classified it in fact review (import-service.ts:588-616
+  // writes none of them). Showing the lot column would tell the owner a
+  // product is unclassified when the register is already enforcing an answer —
+  // and would send him to re-do settled work.
+  const menuFlags = lot.pos_product_key
+    ? (await getMenuClassificationFlags([lot.pos_product_key])).get(lot.pos_product_key) ?? null
+    : null;
+  const effectiveWebsiteCategory =
+    override?.website_category ?? categoryResolution.websiteCategory;
+  const complianceStatus = assessClassificationStatus({
+    posProductKey: lot.pos_product_key,
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    resolvedWebsiteCategory: effectiveWebsiteCategory,
+    otherwiseTaken: menuFlags?.otherwiseTaken ?? null,
+    unitsPerPackage: menuFlags?.unitsPerPackage ?? null,
+    lowThcLiquid: menuFlags?.lowThcLiquid ?? null,
+    unitThcMg: menuFlags?.unitThcMg ?? null,
+  });
+
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
   const detailsAction = updateLotDetailsAction.bind(null, id);
   const classificationAction = updateLotWebsiteClassificationAction.bind(null, id);
+  const complianceAction = updateLotComplianceClassificationAction.bind(null, id);
   const priceAction = updateLotAfterTaxPriceAction.bind(null, id);
   // SLICE 2: the owner's received-date entry form.
   const receivedDateAction = updateLotReceivedDateAction.bind(null, id);
@@ -836,6 +872,166 @@ export default async function LotDetailPage({
             </p>
           )}
         </div>
+
+        {/* ── SLICE 18A: compliance classification ──────────────────────────
+            Only rendered when the answer could change a legal outcome (the
+            liquid-edible shelf, or a suspected suppository). Showing it on
+            every flower SKU would train the reader to scroll past the one
+            place in the back office that carries a statutory consequence. */}
+        {complianceStatus.inScope && lot.pos_product_key ? (
+          // id="classification" is the landing target for the worklist's
+          // "Classify →" link. Without it the link drops the reader at the top
+          // of a 900-line page and they have to hunt for the panel they were
+          // sent to fill in — which is how a worklist stops getting used.
+          <div
+            id="classification"
+            className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"
+          >
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">
+                Sales-limit classification
+              </h2>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  complianceStatus.settled
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : complianceStatus.urgent
+                      ? "bg-red-500/15 text-red-300"
+                      : "bg-amber-500/15 text-amber-300"
+                }`}
+              >
+                {classificationBadgeLabel(complianceStatus)}
+              </span>
+            </div>
+            <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
+              Washington gives two kinds of product their own transaction limit:
+              low-THC beverages (WAC 314-55-095(1)(d)(i)(E)/(F)) and products
+              taken otherwise into the body, such as suppositories
+              (WAC 314-55-095(1)(d)(i)(D)). This product is on a shelf where one
+              of those could apply. Saving here updates the live menu, which is
+              what the register enforces from.
+            </p>
+
+            {complianceStatus.reasons.length > 0 ? (
+              <ul className="mb-4 space-y-2">
+                {complianceStatus.reasons.map((r) => (
+                  <li
+                    key={r}
+                    className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-xs text-[var(--admin-text)]"
+                  >
+                    {describeClassificationGap(r)}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="mb-4 grid gap-2 text-xs sm:grid-cols-2">
+              <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2">
+                <span className="text-[var(--admin-text-faint)]">
+                  Taken otherwise into the body:{" "}
+                </span>
+                <span className="font-medium text-[var(--admin-text)]">
+                  {menuFlags?.otherwiseTaken == null
+                    ? "— not answered"
+                    : menuFlags.otherwiseTaken
+                      ? `Yes${
+                          menuFlags.unitsPerPackage != null
+                            ? ` · ${menuFlags.unitsPerPackage} units per package`
+                            : ""
+                        }`
+                      : "No"}
+                </span>
+              </div>
+              <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2">
+                <span className="text-[var(--admin-text-faint)]">Low-THC beverage: </span>
+                <span className="font-medium text-[var(--admin-text)]">
+                  {menuFlags?.lowThcLiquid == null
+                    ? "— not answered"
+                    : menuFlags.lowThcLiquid
+                      ? `Yes${
+                          menuFlags.unitThcMg != null ? ` · ${menuFlags.unitThcMg} mg per unit` : ""
+                        }`
+                      : "No"}
+                </span>
+              </div>
+            </div>
+
+            <form action={complianceAction} className="space-y-4">
+              <Field
+                label="Is this taken otherwise into the body?"
+                help="Suppositories and similar products. Answer honestly: leaving it unanswered makes the register sell it under the 100-unit limit instead of the 10-unit one."
+                htmlFor="otherwise_taken"
+                required
+              >
+                <Select
+                  id="otherwise_taken"
+                  name="otherwise_taken"
+                  defaultValue={
+                    menuFlags?.otherwiseTaken == null
+                      ? ""
+                      : menuFlags.otherwiseTaken
+                        ? "yes"
+                        : "no"
+                  }
+                >
+                  <option value="">Pick yes or no…</option>
+                  <option value="no">No — ordinary product</option>
+                  <option value="yes">Yes — taken otherwise into the body</option>
+                </Select>
+              </Field>
+              <Field
+                label="Units per package"
+                help="Required when you answer yes. One suppository is one unit; a 6-pack is 6 units."
+                htmlFor="units_per_package"
+              >
+                <Input
+                  id="units_per_package"
+                  name="units_per_package"
+                  inputMode="numeric"
+                  placeholder="e.g. 6"
+                  defaultValue={menuFlags?.unitsPerPackage ?? ""}
+                />
+              </Field>
+              {complianceStatus.isLiquidShelf ? (
+                <>
+                  <Field
+                    label="Is this a low-THC beverage?"
+                    help="Only when each sealed container holds 4 mg or less of active delta-9 THC. Leaving it blank is safe — the product simply stays in the stricter 72 oz bucket."
+                    htmlFor="low_thc_liquid"
+                  >
+                    <Select
+                      id="low_thc_liquid"
+                      name="low_thc_liquid"
+                      defaultValue={
+                        menuFlags?.lowThcLiquid == null ? "" : menuFlags.lowThcLiquid ? "yes" : "no"
+                      }
+                    >
+                      <option value="">Not answered</option>
+                      <option value="no">No — ordinary liquid</option>
+                      <option value="yes">Yes — low-THC beverage</option>
+                    </Select>
+                  </Field>
+                  <Field
+                    label="Active delta-9 THC per unit (mg)"
+                    help="The mg in ONE sealed container, from the label. One can is one unit; a 4-pack is 4 units."
+                    htmlFor="unit_thc_mg"
+                  >
+                    <Input
+                      id="unit_thc_mg"
+                      name="unit_thc_mg"
+                      inputMode="decimal"
+                      placeholder="e.g. 2"
+                      defaultValue={menuFlags?.unitThcMg ?? ""}
+                    />
+                  </Field>
+                </>
+              ) : null}
+              <Button type="submit" variant="save" size="sm">
+                Save sales-limit classification
+              </Button>
+            </form>
+          </div>
+        ) : null}
 
         {/* Adjustment + status controls */}
         <div className="grid gap-6 lg:grid-cols-2">
