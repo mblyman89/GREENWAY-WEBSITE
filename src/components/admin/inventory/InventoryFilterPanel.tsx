@@ -7,6 +7,8 @@ import {
   type FilterableLot,
   type InventoryFilterState,
 } from "@/lib/inventory/inventory-filter-core";
+import { FacetCombobox } from "@/components/admin/inventory/FacetCombobox";
+import { countActiveIn } from "@/lib/inventory/facet-typeahead-core";
 import {
   activeFilterChips,
   clearAllFiltersHref,
@@ -44,8 +46,112 @@ import {
  * ────────────────────────────────────────────────────────────────────────────
  */
 
-/** How many facet values to show before the list collapses behind a scroll. */
-const FACET_VISIBLE_ROWS = 8;
+/**
+ * ───────────────────────────────────────────────────────────────────────────
+ * SLICE 14 — CONTAINING THE POWER.
+ *
+ * The owner's verdict on Slice 13 was "great, but very overwhelming", and that
+ * is a correctness problem, not a decorating problem: "if my employees are
+ * overwhelmed, they won't use it and it'll all be for naught."
+ *
+ * What made it overwhelming was not the number of filters, it was that ALL of
+ * them were on screen simultaneously — twelve open, scrolling facet boxes plus
+ * ten tri-state dropdowns plus seven range pairs. Nothing was hidden, so
+ * nothing had priority, and the eye had nowhere to land.
+ *
+ * Three changes, each grounded in published enterprise-UX guidance rather than
+ * taste:
+ *
+ * 1. EVERY FACET IS NOW ONE CLOSED CONTROL (FacetCombobox). Click to open a
+ *    searchable list, type to narrow, click to add, and selections appear as
+ *    removable pills. "Provide a search mechanism for dropdown menus with a
+ *    large number of values"; "additive lozenges … are a great way to convey
+ *    that meaning." (Pencil & Paper, Filter UX Design Patterns.)
+ *
+ * 2. PROGRESSIVE DISCLOSURE. The everyday controls — search and the facets —
+ *    are visible immediately. Flags, potency/stock/cost ranges and dates are
+ *    real filters but not daily ones, so they collapse into labelled sections
+ *    that OPEN THEMSELVES when they contain something active. Power stays; the
+ *    wall does not.
+ *
+ * 3. THE COUNT STAYS VISIBLE. Each collapsed section shows how many of its
+ *    filters are engaged, and the existing chip row still lists every active
+ *    filter with a one-click removal. Redundancy is the point: "it's easy for
+ *    a user to forget they even selected filters at all."
+ *
+ * What did NOT change: the URL is still the single source of truth, every
+ * option is still a real link, and facet counts still come from the unfiltered
+ * set. Those doctrines are why this page can be bookmarked and trusted.
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+
+/** Param keys owned by each collapsible section, for the "N active" badge. */
+const FLAG_PARAMS = [
+  "coaState",
+  "sampleState",
+  "medicalState",
+  "lowThc",
+  "otherwiseTaken",
+  "labPassed",
+  "hasExpiry",
+  "hasReceived",
+  "hasCost",
+  "hasStrainType",
+] as const;
+
+const RANGE_PARAMS = [
+  "thcMin",
+  "thcMax",
+  "cbdMin",
+  "cbdMax",
+  "qtyMin",
+  "qtyMax",
+  "soldMin",
+  "soldMax",
+  "costMin",
+  "costMax",
+] as const;
+
+const DATE_PARAMS = ["recvFrom", "recvTo", "expFrom", "expTo", "expiring"] as const;
+
+/**
+ * A collapsible group of advanced controls.
+ *
+ * `defaultOpen` is driven by whether the section actually holds an active
+ * filter, so a filter can never be applied-but-hidden. Built on <details> so
+ * the disclosure needs no JavaScript and survives a reload.
+ */
+function AdvancedSection({
+  title,
+  hint,
+  activeCount,
+  children,
+}: {
+  title: string;
+  hint: string;
+  activeCount: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      open={activeCount > 0}
+      className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+        <span className="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+          {title}
+          {activeCount > 0 && (
+            <span className="rounded-full bg-[var(--admin-accent-soft)] px-1.5 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
+              {activeCount}
+            </span>
+          )}
+        </span>
+        <span className="text-[0.65rem] text-[var(--admin-text-faint)]">{hint}</span>
+      </summary>
+      <div className="border-t border-[var(--admin-border)] px-3 py-3">{children}</div>
+    </details>
+  );
+}
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -239,10 +345,11 @@ export function InventoryFilterPanel({
             </div>
 
             {/* ── Flags (tri-state) ──────────────────────────────────────── */}
-            <div>
-              <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                Flags &amp; paperwork
-              </p>
+            <AdvancedSection
+              title="Flags & paperwork"
+              hint="COA, samples, medical, lab results, missing fields"
+              activeCount={countActiveIn(raw, FLAG_PARAMS)}
+            >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <TriStateField
                   name="coaState"
@@ -325,13 +432,14 @@ export function InventoryFilterPanel({
                   unknownLabel="Missing"
                 />
               </div>
-            </div>
+            </AdvancedSection>
 
             {/* ── Numeric ranges ─────────────────────────────────────────── */}
-            <div>
-              <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                Potency, stock &amp; cost
-              </p>
+            <AdvancedSection
+              title="Potency, stock & cost"
+              hint="THC, CBD, on hand, sold, unit cost"
+              activeCount={countActiveIn(raw, RANGE_PARAMS)}
+            >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <RangeField
                   label="THC %"
@@ -386,13 +494,14 @@ export function InventoryFilterPanel({
                   help="Stored in cents, so $12.50 is 1250."
                 />
               </div>
-            </div>
+            </AdvancedSection>
 
             {/* ── Date ranges ────────────────────────────────────────────── */}
-            <div>
-              <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                Dates
-              </p>
+            <AdvancedSection
+              title="Dates"
+              hint="Received, expiry, expiring soon"
+              activeCount={countActiveIn(raw, DATE_PARAMS)}
+            >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <RangeField
                   label="Received between"
@@ -426,7 +535,7 @@ export function InventoryFilterPanel({
                   </Select>
                 </div>
               </div>
-            </div>
+            </AdvancedSection>
 
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -444,88 +553,34 @@ export function InventoryFilterPanel({
             </div>
           </form>
 
-          {/* ── Facets (links, outside the form) ─────────────────────────── */}
+          {/* ── Facets ─────────────────────────────────────────────────
+              Each facet is ONE CLOSED CONTROL that opens into a searchable
+              list. Twelve of these fit in a few rows instead of filling the
+              screen with twelve open scrollboxes.
+
+              Still links, still outside the <form>: clicking an option
+              navigates, so the URL remains the single source of truth. The
+              typeahead only narrows what is displayed — it never becomes the
+              mechanism by which a filter is applied. */}
           <div className="mt-5 border-t border-[var(--admin-border)] pt-4">
             <p className="mb-2 text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
               Narrow by value
             </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {INVENTORY_FACETS.map((facet) => {
                 const options = facetOptions(allLots, facet);
                 if (options.length === 0) return null;
                 const selected = state.facets[facet.param] ?? [];
                 return (
-                  <div
+                  <FacetCombobox
                     key={facet.param}
-                    className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                        {facet.label}
-                        {selected.length > 0 && (
-                          <span className="ml-1 text-[var(--admin-accent)]">
-                            ({selected.length})
-                          </span>
-                        )}
-                      </span>
-                      {selected.length > 0 && (
-                        <Link
-                          href={clearFacetHref(raw, facet.param)}
-                          className="text-[0.65rem] text-[var(--admin-text-faint)] hover:text-[var(--admin-text)]"
-                        >
-                          clear
-                        </Link>
-                      )}
-                    </div>
-                    <div
-                      className="space-y-0.5 overflow-y-auto pr-1"
-                      style={{ maxHeight: `${FACET_VISIBLE_ROWS * 1.75}rem` }}
-                    >
-                      {options.map((opt) => {
-                        const isOn = selected.includes(opt.value);
-                        return (
-                          <Link
-                            key={opt.value}
-                            href={toggleFacetHref(raw, facet.param, opt.value, selected)}
-                            className={`flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs transition ${
-                              isOn
-                                ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
-                                : "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]"
-                            }`}
-                          >
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              {/*
-                                A real checkbox glyph, but the whole row is the
-                                link — the click target is the entire row, not
-                                a 12px box.
-                              */}
-                              <span
-                                aria-hidden="true"
-                                className={`inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] border text-[8px] leading-none ${
-                                  isOn
-                                    ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
-                                    : "border-[var(--admin-border-strong)]"
-                                }`}
-                              >
-                                {isOn ? "\u2713" : ""}
-                              </span>
-                              <span
-                                className={`truncate ${
-                                  opt.value === UNSET_FACET_VALUE ? "italic" : ""
-                                }`}
-                                title={opt.label}
-                              >
-                                {opt.label}
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-[0.65rem] text-[var(--admin-text-faint)]">
-                              {opt.count}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    label={facet.label}
+                    options={options}
+                    selected={selected}
+                    unsetValue={UNSET_FACET_VALUE}
+                    clearHref={clearFacetHref(raw, facet.param)}
+                    hrefFor={(value) => toggleFacetHref(raw, facet.param, value, selected)}
+                  />
                 );
               })}
             </div>
