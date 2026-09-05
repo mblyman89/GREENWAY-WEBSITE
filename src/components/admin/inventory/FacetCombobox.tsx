@@ -57,8 +57,11 @@ export type FacetComboboxProps = {
   options: readonly TypeaheadOption[];
   /** Currently selected values. */
   selected: readonly string[];
-  /** Href that toggles a value on/off — the real navigation. */
-  hrefFor: (value: string) => string;
+  /**
+   * NOTE: there is deliberately no `hrefFor` callback here. Each option
+   * carries its own precomputed `href`, because this is a Client Component and
+   * React cannot serialise a function sent from a Server Component parent.
+   */
   /** Href that clears this facet entirely. */
   clearHref: string;
   /** Value treated as "(not set)", rendered in italics. */
@@ -72,7 +75,6 @@ export function FacetCombobox({
   label,
   options,
   selected,
-  hrefFor,
   clearHref,
   unsetValue,
 }: FacetComboboxProps) {
@@ -98,6 +100,16 @@ export function FacetCombobox({
     const map = new Map(options.map((o) => [o.value, o.label]));
     return (v: string) => map.get(v) ?? v;
   }, [options]);
+
+  /**
+   * Toggle link for a value, looked up from the server-precomputed hrefs.
+   * Falls back to `clearHref` only if an option somehow arrived without one,
+   * so a pill is never a dead link.
+   */
+  const hrefOf = useMemo(() => {
+    const map = new Map(options.map((o) => [o.value, o.href]));
+    return (v: string) => map.get(v) ?? clearHref;
+  }, [options, clearHref]);
 
   const summary = facetSummary(selected, labelFor);
 
@@ -164,7 +176,7 @@ export function FacetCombobox({
     } else if (e.key === "Enter") {
       if (active >= 0 && active < shown.length) {
         e.preventDefault();
-        go(hrefFor(shown[active]!.value));
+        go(hrefOf(shown[active]!.value));
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
@@ -231,7 +243,7 @@ export function FacetCombobox({
           {selected.map((v) => (
             <a
               key={v}
-              href={hrefFor(v)}
+              href={hrefOf(v)}
               title={`Remove ${labelFor(v)}`}
               className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--admin-accent)] bg-[var(--admin-accent-soft)] px-2 py-0.5 text-[0.65rem] text-[var(--admin-accent)] transition hover:border-[var(--admin-danger)]"
             >
@@ -289,7 +301,7 @@ export function FacetCombobox({
                     id={optionId(i)}
                     role="option"
                     aria-selected={isOn}
-                    href={hrefFor(o.value)}
+                    href={o.href ?? hrefOf(o.value)}
                     onMouseEnter={() => setActive(i)}
                     className={`flex items-center justify-between gap-2 rounded px-1.5 py-1 text-xs transition ${
                       i === active

@@ -571,15 +571,29 @@ export function InventoryFilterPanel({
                 const options = facetOptions(allLots, facet);
                 if (options.length === 0) return null;
                 const selected = state.facets[facet.param] ?? [];
+                /*
+                  Compute the toggle link for every option HERE, on the server.
+
+                  This used to be `hrefFor={(value) => ...}`, and it took the
+                  page down: React cannot serialise a function from a Server
+                  Component into a Client Component, so the render threw with
+                  "Functions cannot be passed directly to Client Components."
+                  Sending plain strings keeps the boundary crossable, and every
+                  option stays a real <a href> so filtering still works with no
+                  JavaScript at all.
+                */
+                const withHrefs = options.map((option) => ({
+                  ...option,
+                  href: toggleFacetHref(raw, facet.param, option.value, selected),
+                }));
                 return (
                   <FacetCombobox
                     key={facet.param}
                     label={facet.label}
-                    options={options}
+                    options={withHrefs}
                     selected={selected}
                     unsetValue={UNSET_FACET_VALUE}
                     clearHref={clearFacetHref(raw, facet.param)}
-                    hrefFor={(value) => toggleFacetHref(raw, facet.param, value, selected)}
                   />
                 );
               })}
