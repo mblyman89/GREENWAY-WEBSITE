@@ -186,7 +186,7 @@ export function scoreTokenInField(
 ): TokenMatchKind | null {
   // A blank token must never match. `!token` alone catches "" but NOT " ",
   // and a single-space token would otherwise sail through the substring rung
-  // below and report a match against every field containing a space \u2014 i.e.
+  // below and report a match against every field containing a space — i.e.
   // nearly the whole shelf. searchTokens() never emits a blank today
   // (measured: scripts/slice13/probe-token-whitespace.ts, 26 hostile inputs,
   // zero blank tokens), but this function is EXPORTED and must be safe for
@@ -204,12 +204,12 @@ export function scoreTokenInField(
   // this function's output for ANY token containing a real character: the
   // glue-free check below subsumes it, because squashing spaces out of both
   // sides can only make the match easier. Verified exhaustively over every
-  // (field, token) pair on the alphabet {a, b, space} up to lengths 5 and 4 \u2014
+  // (field, token) pair on the alphabet {a, b, space} up to lengths 5 and 4 —
   // 44,044 pairs, 804 disagreements, ALL of them whitespace-only tokens,
   // which the guard above now refuses (scripts/slice13/probe-substring-
   // subsumption.ts). The line is kept because it states the plain intent and
   // avoids two string allocations on the common path, not because it is
-  // load-bearing. Its mutant is EQUIVALENT, not a test gap \u2014 proven, not
+  // load-bearing. Its mutant is EQUIVALENT, not a test gap — proven, not
   // assumed.
   if (fieldText.includes(token)) return "substring";
   // Glue-insensitive: "gg4" against "gg 4", "3.5g" against "3 5 g".

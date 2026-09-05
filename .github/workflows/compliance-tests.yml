@@ -46,6 +46,37 @@ jobs:
       # name so it cannot quietly disappear again.
       - name: Verbatim quote verifier (rule 24/35)
         run: npx tsx scripts/verify-verbatim-quotes.ts
+      # ======================================================================
+      # STANDING RULE 39 AGAIN, IN THE ONE PLACE IT WAS STILL MISSING.
+      #
+      # `next build` type-checks the app, and the `build` job below runs it, so
+      # for a long time it looked like TypeScript was covered. It is not, and
+      # the gap is not a matter of opinion - it is written into Next itself.
+      # node_modules/next/dist/lib/typescript/runTypeCheck.js builds this filter:
+      #
+      #     const ignoreRegex = [
+      #       /[\\/]__(?:tests|mocks)__[\\/]/,
+      #       /(?<=[\\/.])(?:spec|test)\.[^\\/]+$/
+      #     ];
+      #     ... .filter((d) => !(d.file && regexIgnoredFile.test(d.file.fileName)))
+      #
+      # Every diagnostic whose file matches `*.test.ts` is DISCARDED before the
+      # first error is chosen. So a type error in tests/ cannot fail `next build`,
+      # cannot fail Vercel, and - because vitest transpiles without type-checking
+      # - cannot fail the test suite either. It was invisible to all three.
+      #
+      # That is not hypothetical. Slice 13 merged green with three real errors in
+      # tests/compliance/slice13-inventory-filtering.test.ts (TS2353: 'fields'
+      # does not exist in type 'InventoryListInput<PageLot>'), and `npx tsc
+      # --noEmit` reported all three in seconds. tsconfig.json deliberately
+      # includes tests, so the types were always meant to be checked; nothing was
+      # doing it.
+      #
+      # This step is the whole-repo type check on the same config the editor uses.
+      # tests/compliance/ci-runs-the-typechecker.test.ts pins it by name so it
+      # cannot quietly disappear the way the verbatim verifier once did.
+      - name: Type check (tsc --noEmit, includes tests/)
+        run: npm run typecheck
       # Scoped lint: the harness + the pure statute-encoding modules it tests.
       # (Full-repo `npm run lint` carries pre-existing UI warnings/errors that
       # predate this workflow and are tracked separately — linting the whole

@@ -111,5 +111,30 @@ public class GreenwayBridgeViewController: CAPBridgeViewController {
         // no PluginHeaders entry, no window.Capacitor.Plugins.StarPrinter, no
         // way for the budtender to pair the TSP143IIIBi, no receipt, no drawer.
         bridge?.registerPluginInstance(StarPrinterPlugin())
+
+        // SLICE 12 FOLLOW-UP: the same line, for the scanner.
+        //
+        // Everything the comment block above says about StarPrinterPlugin is
+        // true word-for-word of SocketScannerPlugin, and it was missed. The
+        // owner paired an S720, confirmed it decodes in Socket's Companion app,
+        // and then got silence in the register. That is the exact signature of
+        // this omission: the JS side calls registerPlugin("SocketScanner"), and
+        // src/lib/pos/socket-scanner.ts only trusts it if a matching entry
+        // exists in window.Capacitor.PluginHeaders. PluginHeaders is populated
+        // ONLY by JSExport.exportJS, which runs ONLY from registerPlugin /
+        // registerPluginInstance. Nothing called either one for the scanner, so
+        // the header never appeared, getSocketPlugin() returned null,
+        // isSocketScanningAvailable() was false, and the register quietly fell
+        // back to the keyboard-wedge path exactly as it is designed to.
+        //
+        // Nothing was broken about the scanner, the pairing, the Info.plist
+        // protocol string, or the SDK. The plugin was simply never introduced
+        // to the bridge.
+        //
+        // This is registerPluginInstance and not registerPluginType for the
+        // same reason given above: registerPluginType returns immediately while
+        // autoRegisterPlugins is true, which it always is here, so it would
+        // look like a fix and change nothing.
+        bridge?.registerPluginInstance(SocketScannerPlugin())
     }
 }

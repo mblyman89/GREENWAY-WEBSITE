@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "seed:vendors": "tsx scripts/seed/seed_vendors_brands.ts",
     "seed:vendors:cultivera": "tsx scripts/seed/seed_vendors_from_cultivera.ts",
     "test": "vitest run",

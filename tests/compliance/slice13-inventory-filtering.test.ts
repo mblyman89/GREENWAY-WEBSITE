@@ -412,7 +412,6 @@ describe("the search finds things without the exact product name", () => {
       direction: "desc",
       page: 1,
       pageSize: 2,
-      fields: searchFieldsForLot,
     });
     // Page 1 of a 2-per-page view over the whole shelf.
     expect(listed.rows.length).toBe(2);
@@ -420,7 +419,7 @@ describe("the search finds things without the exact product name", () => {
     expect(listed.totalPages).toBe(Math.ceil(lots.length / 2));
     expect(listed.page).toBe(1);
 
-    // Page 2 continues the SAME ordering \u2014 no row repeated, none skipped.
+    // Page 2 continues the SAME ordering — no row repeated, none skipped.
     const page2 = buildInventoryList<PageLot>({
       lots,
       filters: parseInventoryFilters({}),
@@ -429,7 +428,6 @@ describe("the search finds things without the exact product name", () => {
       direction: "desc",
       page: 2,
       pageSize: 2,
-      fields: searchFieldsForLot,
     });
     const seen = [...listed.rows, ...page2.rows].map((l) => l.id);
     expect(new Set(seen).size).toBe(seen.length);
@@ -444,7 +442,6 @@ describe("the search finds things without the exact product name", () => {
       direction: "desc",
       page: 999,
       pageSize: 2,
-      fields: searchFieldsForLot,
     });
     expect(far.page).toBe(far.totalPages);
     expect(far.rows.length).toBeGreaterThan(0);
