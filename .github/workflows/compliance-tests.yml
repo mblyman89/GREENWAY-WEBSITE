@@ -15,6 +15,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # fetch-depth 0 (full history) is required by the commit authorship
+          # check below. The default shallow checkout has no merge base, so the
+          # check could only ever see HEAD. See the comment on that step.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -25,6 +30,36 @@ jobs:
         run: npm run test:compliance
       - name: Pure self-test runner (tsx)
         run: npx tsx scripts/compliance/run-pure-selftests.ts
+      # ======================================================================
+      # THE COMMIT AUTHOR EMAIL IS A DEPLOYMENT PRECONDITION.
+      #
+      # Slice 13 passed every job in this file and Vercel never built it. The
+      # dashboard said BLOCKED, not "failed", and there were no build logs at
+      # all - because no build ever started.
+      #
+      # The cause was the git author email:
+      #
+      #   3d25026  dev@greenwaymarijuana.com  -> GitHub user mblyman89  -> deployed
+      #   10eb1a6  superninja@ninjatech.ai    -> no GitHub user         -> BLOCKED
+      #
+      # Vercel's troubleshooting documentation, under "Build Logs not
+      # available", lists the preconditions that make a deployment fail without
+      # producing logs. One of them is that commits were made from a
+      # contributor that is not a team member. Vercel resolves the git author
+      # email to a GitHub account and checks that account against the team; an
+      # address belonging to no account cannot resolve, so the deployment is
+      # refused before a build container is allocated.
+      #
+      # Nothing in CI looked at the author email, so a green pipeline and an
+      # undeployable commit were indistinguishable from the inside. That is
+      # exactly the failure mode standing rule 39 exists to prevent, so the
+      # check runs here where it can fail a pull request.
+      #
+      # tests/compliance/ci-checks-commit-authorship.test.ts pins this step and
+      # the fetch-depth above by name so neither can quietly disappear.
+      # ======================================================================
+      - name: Commit authorship (the Vercel deployment precondition)
+        run: npx tsx scripts/compliance/verify-commit-authorship.ts
       # ======================================================================
       # STANDING RULE 39: a verifier nobody runs is a verifier that approves
       # everything.
