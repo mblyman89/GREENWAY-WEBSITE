@@ -88,25 +88,83 @@ of your domain. All four were caught. I also confirmed it does **not** fire on
 GitHub's own squash-merge commits, since a check that blocked every legitimate
 merge would be turned off within a week.
 
-## On squash merging
+## On squash merging: you asked, and the answer turned out to be no
 
-You asked whether squash merging is the proper professional approach, and
-whether to make it a standing rule. It is, and I have written it into the rules
-as rule 6.
+You asked whether squash merging is the professional way to add slices to your
+repository, and told me I could write it into the standing rules. I did write it
+in. Then I tested it before relying on it, and the test said I was wrong. I am
+telling you this plainly because you have asked me not to guess, and because a
+rule I had already written down was about to break your deployment again.
 
-There is one detail worth knowing, because it interacts directly with the
-problem above. When a pull request contains a single commit, GitHub's squash
-merge fast-forwards, meaning the commit lands on `main` exactly as it was — same
-hash, same author. That is what happened with your recent slices. The practical
-consequence is that **the author email has to be correct on the branch, before
-the merge**; the merge will not correct it for you. That is precisely why the
-new check runs on pull requests rather than after merging.
+Squash merging is a perfectly respectable practice in general, and in most
+repositories I would have left the rule exactly as you suggested. It is wrong
+for *this* repository, for one specific reason that has nothing to do with taste
+and everything to do with the blocking problem above.
 
-## What to expect
+Here is what I had believed. Your recent slices were merged, kept the correct
+author email, and deployed. Each of those pull requests contained a single
+commit, and each one finished with the merge commit having the same identifier
+as the branch. From that I concluded that a squash merge of a single-commit pull
+request "fast-forwards" and preserves the author. That is a reasonable-sounding
+story, and it was wrong. I had inferred a mechanism from an outcome, which is
+the exact reasoning your standing rules forbid.
 
-Once this merges, the resulting commit on `main` will be authored
-`dev@greenwaymarijuana.com`, which Vercel resolves to your account, and the
-build should start normally instead of being blocked. If it still does not
-build, the cause will be something other than authorship, and the empty-versus-
-populated build log will tell us immediately which of the two situations we are
-in.
+So I stopped inferring and ran the experiment three times, on throwaway
+branches that pointed at a throwaway target, so your `main` and the real pull
+request were never exposed. Every branch was deleted afterward and `main` was
+re-checked each time to confirm it had not moved.
+
+The first test squash-merged a two-commit pull request. The author came out as
+`superninja-app[bot]`, an account that is not a member of your team, which is
+the precise condition that produces a blocked deployment.
+
+The second test is the one that mattered. I squash-merged a pull request
+containing exactly one commit, the case I had assumed was safe. The author came
+out as `superninja-app[bot]` again. There is no fast-forward. A squash merge
+always creates a brand-new commit and always re-stamps it with the identity of
+whoever performed the merge, which in this setup is the automation, not you. Had
+I merged your work on my original rule, the deployment would have been blocked a
+second time, for the same reason, after I had just told you it was fixed.
+
+That result also explains your earlier slices honestly: they were never
+squash-merged at all. A squash cannot produce a merge commit with the same
+identifier as the branch, because it always makes a new one. They went in by a
+different route.
+
+The third test used a rebase merge on a three-commit pull request. All three
+commits landed with the author `Greenway Dev <dev@greenwaymarijuana.com>`, and
+all three resolved to your GitHub account. A rebase does re-stamp the
+*committer* field as the automation, but it leaves the *author* field untouched,
+and the author field is the one Vercel reads. That is the entire difference
+between a deployment that runs and one that is refused before it starts.
+
+Rule 6 now requires rebase merges and forbids squash merges outright, with that
+table of results written into the rule itself so no future session has to
+rediscover this or is tempted to re-derive it from a plausible-sounding story.
+If you would still prefer squashed history for tidiness, it is achievable, but
+it requires a change on the Vercel or GitHub side so the automation account is
+recognized as a team member. I would not make that change without asking you
+first.
+
+## What happened when it merged
+
+The work is merged. Your `main` now carries six new commits, and every one of
+them is authored `dev@greenwaymarijuana.com` and resolves to your GitHub account
+`mblyman89`. Directly beneath them sits the Slice 13 commit that started all of
+this, still showing no associated account, which makes the contrast easy to see
+in the history.
+
+The rebase changed the commit identifiers, which is normal and expected. I
+verified that the file content on `main` is byte-for-byte identical to the
+content that passed the checks, so nothing was altered in transit. The full
+suite then ran again on `main` itself and passed on all three jobs.
+
+One limitation I want to be straight about: this environment has no Vercel
+credentials, and the GitHub token here is not permitted to read deployment
+status, so I could not watch the build from inside the sandbox. What I could
+verify, I did verify, and it is the specific thing that was broken: the author
+of every new commit on `main` now resolves to a real team member. When you open
+Vercel, the meaningful signal is whether there are build logs at all. Logs
+present means the deployment started and authorship is no longer the obstacle.
+A blocked status with no logs would mean something else is involved, and that
+would be new information rather than a repeat of this problem.
