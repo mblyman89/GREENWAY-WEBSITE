@@ -62,6 +62,28 @@ export interface CommitIdentity {
   readonly authorEmail: string;
   readonly committerName: string;
   readonly committerEmail: string;
+  /**
+   * Number of parents. Two or more means a merge commit.
+   *
+   * This matters because of a real false positive this check produced on its
+   * own first CI run. On a `pull_request` event GitHub does not check out the
+   * branch; it checks out a SYNTHETIC MERGE COMMIT of the branch into the base,
+   * at refs/pull/<n>/merge, and it authors that commit itself:
+   *
+   *   61ca7cf  parents 10eb1a6 + 5b77837
+   *            author  223766961+superninja-app[bot]@users.noreply.github.com
+   *            subject "Merge 5b78375... into 10eb1a6d..."
+   *
+   * That commit exists on ZERO branches (the branches-where-head API returns an
+   * empty list), is discarded when the PR is merged, and is never the commit
+   * Vercel builds. Failing a PR because of it would be failing on an artefact
+   * of the CI runner, which would make the check useless noise.
+   *
+   * Merge commits made by the squash-merge protocol do not reach main either -
+   * a squash merge produces a single-parent commit. So skipping multi-parent
+   * commits costs no real coverage.
+   */
+  readonly parentCount: number;
 }
 
 export interface AuthorshipPolicy {
@@ -105,6 +127,12 @@ export interface AuthorshipWarning {
 export interface AuthorshipVerdict {
   readonly ok: boolean;
   readonly checked: number;
+  /**
+   * Merge commits that were deliberately not checked. Reported rather than
+   * hidden, so "checked 4" and "skipped 1" always account for every commit and
+   * nobody has to wonder whether something was silently ignored.
+   */
+  readonly skippedMerges: number;
   readonly violations: readonly AuthorshipViolation[];
   readonly warnings: readonly AuthorshipWarning[];
 }
@@ -149,8 +177,19 @@ export function evaluateCommitAuthorship(
 ): AuthorshipVerdict {
   const violations: AuthorshipViolation[] = [];
   const warnings: AuthorshipWarning[] = [];
+  let skippedMerges = 0;
+  let checked = 0;
 
   for (const c of commits) {
+    // See CommitIdentity.parentCount: on a pull_request event the checked-out
+    // HEAD is a synthetic merge commit that GitHub authors and then throws
+    // away. It is never built by Vercel, so judging it would be a false alarm.
+    if (c.parentCount >= 2) {
+      skippedMerges += 1;
+      continue;
+    }
+    checked += 1;
+
     const email = c.authorEmail.trim();
 
     if (email === "") {
@@ -203,7 +242,8 @@ export function evaluateCommitAuthorship(
 
   return {
     ok: violations.length === 0,
-    checked: commits.length,
+    checked,
+    skippedMerges,
     violations,
     warnings,
   };
@@ -213,10 +253,16 @@ export function evaluateCommitAuthorship(
 export function formatAuthorshipVerdict(verdict: AuthorshipVerdict): string {
   const lines: string[] = [];
 
+  const skipNote =
+    verdict.skippedMerges > 0
+      ? ` (${verdict.skippedMerges} merge commit(s) skipped: GitHub authors the` +
+        " synthetic pull_request merge commit itself and it never reaches main)"
+      : "";
+
   if (verdict.ok) {
     lines.push(
       `OK: all ${verdict.checked} commit(s) are authored ` +
-        `${REQUIRED_AUTHOR_NAME} <${REQUIRED_AUTHOR_EMAIL}>.`,
+        `${REQUIRED_AUTHOR_NAME} <${REQUIRED_AUTHOR_EMAIL}>.${skipNote}`,
     );
   } else {
     lines.push(
@@ -255,11 +301,16 @@ export function formatAuthorshipVerdict(verdict: AuthorshipVerdict): string {
 
 /**
  * Parse the output of:
- *   git log --format='%H%x1f%s%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1e' <range>
+ *   git log --format='%H%x1f%s%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f%P%x1e' <range>
  *
  * Unit separator (0x1f) between fields and record separator (0x1e) between
  * commits, because subjects legitimately contain every printable character
- * including the em dashes this repository uses in prose. Pure.
+ * including the em dashes this repository uses in prose.
+ *
+ * %P is the space-separated parent list, which is how a merge commit is
+ * identified. A record without it is treated as single-parent, so an older
+ * format string degrades to checking everything rather than skipping it.
+ * Pure.
  */
 export function parseCommitLog(raw: string): CommitIdentity[] {
   const out: CommitIdentity[] = [];
@@ -268,6 +319,10 @@ export function parseCommitLog(raw: string): CommitIdentity[] {
     if (trimmed.trim() === "") continue;
     const f = trimmed.split("\u001f");
     if (f.length < 6) continue;
+
+    const parents = (f[6] ?? "").trim();
+    const parentCount = parents === "" ? 1 : parents.split(/\s+/).length;
+
     out.push({
       sha: (f[0] ?? "").trim(),
       subject: f[1] ?? "",
@@ -275,6 +330,7 @@ export function parseCommitLog(raw: string): CommitIdentity[] {
       authorEmail: f[3] ?? "",
       committerName: f[4] ?? "",
       committerEmail: f[5] ?? "",
+      parentCount,
     });
   }
   return out;
@@ -294,6 +350,7 @@ export function __runCommitAuthorshipTests(): void {
     authorEmail: REQUIRED_AUTHOR_EMAIL,
     committerName: REQUIRED_AUTHOR_NAME,
     committerEmail: REQUIRED_AUTHOR_EMAIL,
+    parentCount: 1,
   };
 
   // 1. The known-good commit passes.
@@ -389,9 +446,9 @@ export function __runCommitAuthorshipTests(): void {
   const raw =
     `abc1234\u001fSLICE 18E \u2014 classification provenance\u001f` +
     `${REQUIRED_AUTHOR_NAME}\u001f${REQUIRED_AUTHOR_EMAIL}\u001f` +
-    `${REQUIRED_AUTHOR_NAME}\u001f${REQUIRED_AUTHOR_EMAIL}\u001e\n` +
+    `${REQUIRED_AUTHOR_NAME}\u001f${REQUIRED_AUTHOR_EMAIL}\u001f0000001\u001e\n` +
     `def5678\u001fSlice 13\u001fSuperNinja\u001fsuperninja@ninjatech.ai\u001f` +
-    `SuperNinja\u001fsuperninja@ninjatech.ai\u001e\n`;
+    `SuperNinja\u001fsuperninja@ninjatech.ai\u001f0000002\u001e\n`;
   const parsed = parseCommitLog(raw);
   assert(parsed.length === 2, "must parse exactly two commits");
   assert(
@@ -425,5 +482,90 @@ export function __runCommitAuthorshipTests(): void {
   assert(
     formatAuthorshipVerdict(evaluateCommitAuthorship([good])).startsWith("OK:"),
     "a clean verdict must render as OK",
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 15-19. THE SYNTHETIC pull_request MERGE COMMIT.
+  //
+  // These cases exist because the check produced a false positive on its own
+  // first CI run. On a pull_request event the runner checks out
+  // refs/pull/<n>/merge - a merge commit GitHub creates and authors itself:
+  //
+  //   61ca7cf  parents 10eb1a6 + 5b77837
+  //            author  223766961+superninja-app[bot]@users.noreply.github.com
+  //
+  // It exists on zero branches and is discarded on merge, so Vercel never
+  // builds it. Failing a PR because of it would be failing on an artefact of
+  // the CI runner rather than on anything that can reach production.
+  // ─────────────────────────────────────────────────────────────────────────
+  const syntheticMerge: CommitIdentity = {
+    sha: "61ca7cf",
+    subject: "Merge 5b78375 into 10eb1a6d",
+    authorName: "superninja-app[bot]",
+    authorEmail: "223766961+superninja-app[bot]@users.noreply.github.com",
+    committerName: "GitHub",
+    committerEmail: "noreply@github.com",
+    parentCount: 2,
+  };
+
+  // 15. The exact commit that produced the false positive must now pass.
+  const v15 = evaluateCommitAuthorship([syntheticMerge]);
+  assert(v15.ok, "the synthetic pull_request merge commit must not fail the gate");
+  assert(v15.skippedMerges === 1, "it must be counted as a skipped merge");
+  assert(v15.checked === 0, "and must not be counted as checked");
+
+  // 16. Skipping must be reported, never silent.
+  assert(
+    formatAuthorshipVerdict(v15).includes("skipped"),
+    "the report must disclose that a merge commit was skipped",
+  );
+
+  // 17. Skipping a merge must NOT excuse a real offender beside it.
+  const v17 = evaluateCommitAuthorship([syntheticMerge, blocked, good]);
+  assert(!v17.ok, "a real offender must still fail when a merge is present");
+  assert(v17.checked === 2, "two non-merge commits must be checked");
+  assert(v17.skippedMerges === 1, "one merge must be skipped");
+
+  // 18. An octopus merge (3+ parents) is still a merge.
+  assert(
+    evaluateCommitAuthorship([{ ...syntheticMerge, parentCount: 3 }]).ok,
+    "a merge with three parents must also be skipped",
+  );
+
+  // 19. A ROOT commit has zero parents and must still be checked - skipping
+  //     anything that is not >= 2 parents would create a real blind spot.
+  const v19 = evaluateCommitAuthorship([
+    { ...blocked, parentCount: 0 },
+  ]);
+  assert(!v19.ok, "a parentless root commit must still be checked");
+
+  // 20. parseCommitLog must read %P and count parents from it.
+  const mergeRaw =
+    `61ca7cf\u001fMerge a into b\u001fsuperninja-app[bot]\u001f` +
+    `223766961+superninja-app[bot]@users.noreply.github.com\u001f` +
+    `GitHub\u001fnoreply@github.com\u001f10eb1a6 5b77837\u001e\n`;
+  const mergeParsed = parseCommitLog(mergeRaw);
+  assert(mergeParsed.length === 1, "the merge record must parse");
+  assert(
+    mergeParsed[0]?.parentCount === 2,
+    "two space-separated parents must yield parentCount 2",
+  );
+  assert(
+    evaluateCommitAuthorship(mergeParsed).ok,
+    "a parsed synthetic merge commit must not fail the gate",
+  );
+
+  // 21. A single-parent record must parse as parentCount 1 and be checked.
+  const singleRaw =
+    `def5678\u001fSlice 13\u001fSuperNinja\u001fsuperninja@ninjatech.ai\u001f` +
+    `SuperNinja\u001fsuperninja@ninjatech.ai\u001f10eb1a6\u001e\n`;
+  const singleParsed = parseCommitLog(singleRaw);
+  assert(
+    singleParsed[0]?.parentCount === 1,
+    "one parent must yield parentCount 1",
+  );
+  assert(
+    !evaluateCommitAuthorship(singleParsed).ok,
+    "a single-parent bad commit must still fail",
   );
 }
