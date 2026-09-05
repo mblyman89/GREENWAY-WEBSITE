@@ -22,6 +22,10 @@ import { describeCostIncompleteness } from "@/lib/inventory/lot-gap-core";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
 import { receivedDateFlagMessage } from "@/lib/inventory/received-date-core";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
+// SLICE 16 — the owner found the register/back-office divergence by scanning
+// packages at the counter. This surfaces the same answer here, before a shift.
+import { RegisterSellabilityBanner } from "@/components/admin/inventory/RegisterSellabilityBanner";
+import { getRegisterSellabilityReport } from "@/lib/inventory/register-sellability-store";
 // SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
 import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
 
@@ -153,10 +157,19 @@ export default async function InventoryPage({
    * parallel with them, and in exchange every field becomes filterable and
    * sortable. See docs/slice-13-inventory-filtering-recon.md.
    */
-  const [allLots, stats, intel] = await Promise.all([
+  /**
+   * SLICE 16 — `getRegisterSellabilityReport()` joins the same lot set to the
+   * PUBLISHED menu snapshot and reports the lots that hold real stock but that
+   * the register still cannot sell. It runs in parallel with the three reads
+   * above and returns an empty report (summary `null`) on any failure, so a
+   * degraded read can never invent a verdict. See
+   * docs/slice-16-register-inventory-parity.md.
+   */
+  const [allLots, stats, intel, sellability] = await Promise.all([
     listAllLotsForFiltering(),
     computeInventoryStats(),
     getInventoryCommandCenter(),
+    getRegisterSellabilityReport(),
   ]);
 
   // Every knob — legacy and new — is parsed and applied by pure, tested code.
@@ -362,6 +375,13 @@ export default async function InventoryPage({
         {/* Task L — professional inventory intelligence (ABC, FEFO, aging,
             months-of-supply vs the WAC 4-month ceiling, shrink telemetry). */}
         <InventoryIntelPanel center={intel.center} sellFirst={intel.sellFirst} />
+
+        {/* SLICE 16 — lots with real stock that the register still cannot
+            sell, each with the one action that fixes it. Silent when clean. */}
+        <RegisterSellabilityBanner
+          summary={sellability.summary}
+          blocked={sellability.blocked}
+        />
 
         {/* SLICE 77: vendors ⇄ inventory cross-link banner. When the list is
             filtered to one vendor's lots, say so in plain English and offer a
